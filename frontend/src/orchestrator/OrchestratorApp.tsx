@@ -411,40 +411,33 @@ export function OrchestratorApp() {
   const runCommand = useCallback(async () => {
     const trimmed = cmd.trim();
     if (!trimmed) return;
-    // A `>` prefix = straight to the raw command (the original console — the power-user and E2E
-    // path). The default is a natural-language turn.
-    if (trimmed.startsWith(">")) {
-      const rawCmd = trimmed.slice(1).trim();
-      if (!rawCmd) return;
-      const sp = rawCmd.indexOf(" ");
-      const name = sp < 0 ? rawCmd : rawCmd.slice(0, sp);
-      let params: Record<string, unknown> = {};
-      if (sp >= 0) {
-        try {
-          params = JSON.parse(rawCmd.slice(sp + 1)) as Record<string, unknown>;
-        } catch (e) {
-          setResult(t("orch.paramsJsonError", { error: String(e) }));
-          return;
-        }
+    // The console runs one registry command. A leading ">" is accepted and dropped: it used to be
+    // the escape from a natural-language default, and the default is now the command itself.
+    const rawCmd = (trimmed.startsWith(">") ? trimmed.slice(1) : trimmed).trim();
+    if (!rawCmd) return;
+    const sp = rawCmd.indexOf(" ");
+    const name = sp < 0 ? rawCmd : rawCmd.slice(0, sp);
+    let params: Record<string, unknown> = {};
+    if (sp >= 0) {
+      try {
+        params = JSON.parse(rawCmd.slice(sp + 1)) as Record<string, unknown>;
+      } catch (e) {
+        setResult(t("orch.paramsJsonError", { error: String(e) }));
+        return;
       }
-      // The console is a human hand — ui origin (the danger gate is remote-only). Instrumentation
-      // records the execution in the feed.
-      const out = await execute(name, params, { remote: false });
-      setResult(JSON.stringify(out, null, 2));
+    }
+    if (!getSpec(name)) {
+      // Refused by name, with where the list is. A line that is not a command used to be handed to
+      // an agent CLI the core spawned — 617 lines about what a turn is and which product performs
+      // one (CORE-CENSUS 2). A plugin that reads a sentence registers a command, and this console
+      // runs it.
+      setResult(t("orch.notACommand", { name }));
       return;
     }
-    // Natural-language turn — the feed's chat card shows progress and the answer
-    // (chat.prompt→…→chat.answer). The stage is not passed along: a rail selection is only a feed
-    // filter (filter ≠ intent). The default stage is the "last focused workspace window" the core
-    // tracks (orchestrator/agent.ts).
-    setCmd("");
-    setResult("");
-    const out = await execute("orchestrator.ask", { text: trimmed }, { remote: false });
-    // Only a rejection before the set opens (BUSY and the like) goes to the result box — errors
-    // after the set closed are shown by the card.
-    if (!out.ok && (out.code === "BUSY" || out.code === "INVALID_PARAMS")) {
-      setResult(`${out.code}: ${out.message}`);
-    }
+    // The console is a human hand — ui origin (the danger gate is remote-only). Instrumentation
+    // records the execution in the feed.
+    const out = await execute(name, params, { remote: false });
+    setResult(JSON.stringify(out, null, 2));
   }, [cmd, t]);
 
   return (

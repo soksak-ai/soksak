@@ -99,6 +99,7 @@ has watched fail is a claim, not a gate.
 | Gate | What it holds |
 | --- | --- |
 | `coupling_gate_test.go` | the core names no plugin and no rendering engine (C1) — `frameworks/` is scanned too, with a per-file allowlist that states a reason for each; and no **domain concept** (C6), comments stripped, exemptions empty |
+| `docs/tech/CORE-CENSUS.md` | every core surface counted and judged by C6 — the register the next addition is measured against |
 | `history_gate_test.go` | the core does not act on a browser's history, and writes down no surface kind |
 | plugin `manifest_gate_test.go` | a source writing `data-native-surface` has a manifest declaring it, and the reverse |
 | `prose_gate_test.go` | comments and bundle values stay out of the banned register (§6-3) |
@@ -128,14 +129,13 @@ Written here so it is not rediscovered (L2).
   up with a saved picture.
 - **`rail.settled` is a check, not a command.** It reports inside the validation
   surface.
-- **Bookmarks have no implementation.** The core held the store, three
-  `bookmark.*` commands, a `bookmarks.changed` event and the browser panel's
-  stylesheet; all of it is removed (C6), and the browser plugin has not written
-  its own. Nothing in the tree saves a page today.
-- **A workspace still carries a `shell` field.** `shell` names the argument a
-  PTY takes, so it is on the mechanism's side of C6's first question, and the
-  five shell paths the core suggested beside it are gone. Whether a workspace's
-  default program belongs in the core's workspace record at all is unjudged.
+- **Four things the core used to do, nobody does yet.** Each left as a feature
+  under C6 (`CORE-CENSUS.md`), and no plugin has written its replacement:
+  bookmarks, opening a file in a tab, a natural-language console, and a media
+  proxy. The seams they need are all in place — a plugin view, a registered
+  command, `app.data`, the activity stream.
+- **Nothing measures a plugin's status-bar item.** The bar draws only registered
+  items now, and no gate refuses a core-drawn one coming back.
 - **Plugin loading beyond these two plugins is untried.** The terminal and the
   browser are installed and driven; nothing has exercised a third.
 - **Two plugin types are still in the host's own signatures.** `register.go`

@@ -48,6 +48,10 @@ What cannot be expressed through these four is what a plugin must not do. **If a
 real plugin cannot be built within them, the core is missing a general
 capability** — add the capability. Never add a private path.
 
+The census that applied C6 to every surface is [`CORE-CENSUS.md`](CORE-CENSUS.md): 242 commands, 17
+Go packages, 32 components, 43 stores, each with a verdict and a reason. Six were features and all
+six left on 2026-08-16.
+
 ## Principles
 
 All of these are hard.

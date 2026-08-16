@@ -19,7 +19,6 @@ import {
   subscribeAnyCommandStarted,
 } from "../terminal/ptyBridge";
 import { busOn } from "./bus";
-import { configureIdleTurnDetector } from "../terminal/idleTurnDetector";
 import type { PluginPermission } from "./spec";
 
 type SessionsState = ReturnType<(typeof useSessions)["getState"]>;
@@ -484,15 +483,9 @@ export function startPluginHooks(): void {
     });
   });
 
-  // idle provider wiring (OFF by default — turned on by the turn.idleDetection command). emit/projectInfo injected (avoids a circular import).
-  configureIdleTurnDetector({
-    emit: (p) => emitPluginEvent("turn.ended", p),
-    projectInfoOf: (paneId) => projectInfoOfTab(paneId),
-  });
-
-  // acp provider channel merge — mirrors the open bus "turn.ended" (published by the ACP plugin) into
-  // the hooks channel. The mailbox subscribes at one place, app.events.on("turn.ended"), and receives
-  // all 3 providers (window-local).
+  // A plugin's "turn ended" on the open bus is mirrored into the hooks channel, so a subscriber
+  // reads one place: app.events.on("turn.ended"). What a turn is has no definition here — the core
+  // held an output-gap heuristic until 2026-08-16, and that opinion is a plugin's (CORE-CENSUS 3).
   busOn("turn.ended", (payload) => {
     if (payload && typeof payload === "object") {
       emitPluginEvent("turn.ended", payload as PluginEventMap["turn.ended"]);

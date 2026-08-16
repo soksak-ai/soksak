@@ -64,10 +64,7 @@ var unbuilt = map[string]string{
 	"update_apply":           "this build has no updater",
 
 	// The control plane's own facts that need a running listener to answer.
-	"ipc_socket_path":         "the control plane's address is the launcher's, and it is not published back through a command",
-	"ipc_cli_dir":             "this build installs no CLI directory",
 	"ipc_hello_info":          "the control plane answers system.hello on its own transport, not as a command",
-	"ipc_last_workspace_window": "this build keeps no per-workspace window history",
 
 	// Application lifecycle.
 	"app_relaunch":         "this build cannot relaunch itself; the launcher owns the process",

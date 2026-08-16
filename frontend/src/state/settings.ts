@@ -91,13 +91,8 @@ interface SettingsState {
   // appFontFamily → --app-font (root font-family), appFontSize → --app-font-size (root font-size).
   appFontFamily: string;
   windowZoom: number;
-  // Agent CLI the orchestrator natural-language console spawns (resolved from the login shell
-  // PATH). Default claude — E2E passes a scripted stub path for deterministic verification
-  // (orchestrator/agent.ts).
-  orchestratorAgent: string;
   // Agent model (--model). Command routing turns round-trip often, so a fast model dominates
   // perceived latency — default haiku. "" = the agent CLI's own default model.
-  orchestratorModel: string;
   setLanguage: (l: Language) => void;
   setWorkspaceTabPosition: (p: TabPosition) => void;
   setContentTabPosition: (p: TabPosition) => void;
@@ -121,8 +116,6 @@ interface SettingsState {
   setDimBlocked: (v: number) => void;
   setAppFontFamily: (v: string) => void;
   setWindowZoom: (v: number) => void;
-  setOrchestratorAgent: (v: string) => void;
-  setOrchestratorModel: (v: string) => void;
 }
 
 const DEFAULTS = {
@@ -156,8 +149,6 @@ const DEFAULTS = {
   // Whole-window zoom factor (⌘± when the frame is selected) — one value shared by every surface
   // (main plus child webviews).
   windowZoom: 1,
-  orchestratorAgent: "claude",
-  orchestratorModel: "haiku",
 };
 
 /** Folds into 0..1 — a non-number is not turned into 0; a separate slot rejects it (settings.set). */
@@ -203,8 +194,6 @@ export function serialize(s: SettingsState): PersistedSettings {
     dimBlocked: s.dimBlocked,
     appFontFamily: s.appFontFamily,
     windowZoom: s.windowZoom,
-    orchestratorAgent: s.orchestratorAgent,
-    orchestratorModel: s.orchestratorModel,
   };
 }
 
@@ -341,14 +330,6 @@ export const useSettings = moduleState("state/settings#store", () =>
       // Clamp the window zoom factor (0.5..2.0). Persist is debounced (300ms) against key-repeat storms.
       set({ windowZoom: Math.max(0.5, Math.min(2, windowZoom)) });
       saveDebounced();
-    },
-    setOrchestratorAgent: (orchestratorAgent) => {
-      set({ orchestratorAgent });
-      save();
-    },
-    setOrchestratorModel: (orchestratorModel) => {
-      set({ orchestratorModel });
-      save();
     },
   };
 }),

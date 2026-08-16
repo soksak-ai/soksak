@@ -10,8 +10,9 @@ Taken 2026-08-16 over `frontend/src`, `core`, `frameworks`. **The core holds no 
 feature is code that holds an opinion about what content means or how it should behave. This
 enumerates what is in the core and puts each entry to C6.
 
-A verdict here is a decision, not an observation. Where the answer is REMOVE, the entry names the
-work and `GATES.md` carries it until it is gone.
+A verdict here is a decision, not an observation. **All six REMOVE entries were carried out on
+2026-08-16**; each keeps its entry below with what went where, so the next surface proposed for the
+core has the reasoning to be measured against.
 
 ## Counted
 
@@ -22,7 +23,7 @@ work and `GATES.md` carries it until it is gone.
 | Go packages under `core/` | 17 |
 | `frameworks/wails` sources | 30 |
 
-## REMOVE — a feature in the core
+## REMOVED — a feature that was in the core
 
 ### 1. `kind: "file"` — a second content kind
 
@@ -37,8 +38,13 @@ mode and a preview mode, that unsaved is a status a tab shows. A browser and a t
 reach the screen as `kind: "plugin"`, and a file viewer is the same shape. The second code path
 exists for one content kind and no other.
 
-**Goes to:** a file-viewer plugin, mounting as a plugin view. The core keeps the slot and the
-registry seam it already has for every other view.
+**Done.** The arm, the host, the registry, the `contributes.fileViewers` declaration,
+`ui.intent.open`, `file.opened/closed/saved`, `setFileMode` and 286 lines of stylesheet are gone. A
+file-viewer plugin mounts as a plugin view, through the same seam as every other view. `--toolbar-h`
+and `--toolbar-pad-x` are now declared in `:root`: a plugin's toolbar consumes them and they had
+never been defined anywhere, so every plugin reading them got nothing.
+
+**Nothing opens a file today.** Written here rather than left to be discovered.
 
 ### 2. The orchestrator — 1,416 lines, and it spawns one product by name
 
@@ -51,8 +57,20 @@ Fails question one, and it is opinion end to end — what a turn is, what an ans
 CLI performs it. A plugin can spawn a process through `app.pty` and publish through the activity
 stream, so nothing here needs the core's address space.
 
-**Goes to:** an orchestrator plugin. The core keeps the activity stream, the command registry and
-the parent-id correlation, which every plugin uses.
+**Done, by cutting where the opinion starts.** The control-plane window keeps its screen — the
+window map, the activity feed, and a console that runs one registry command — because all three read
+core registries and hold no view about content. What left is the agent: `agent.ts`, `agentStream.ts`,
+`orchestrator.ask/stop`, the two agent settings, `turn.signal`, and the output-gap turn heuristic.
+
+A line that is not a command is now refused by name. A plugin that reads a sentence registers a
+command, and the console already runs commands.
+
+`feedFold` folded a set by the two kinds that one console published — `chat.prompt` opened and
+`chat.answer` closed. A plugin publishing its own conversation got no card. The shape is the rule
+now: `turnId` opens, `parentId` joins, `closesTurn` ends, which is MESSAGE-PROTOCOL §2 read rather
+than a domain named.
+
+**No natural-language console today.**
 
 ### 3. Terminal rule in the core — 308 lines
 
@@ -69,7 +87,14 @@ the OSC 7/133/633 byte-stream parser: it decodes a protocol and decides nothing,
 reading PTY output would otherwise write it again. What leaves is the opinion built on top of it —
 that a gap means a turn ended, that a running command should read as a view's status line.
 
-**Goes to:** the terminal plugin, which registers its own commands and reports its own status.
+**Done.** The terminal plugin registers `read`, `exec`, `cwd` beside `send` and `clear`, reports its
+own status through the view context, and places its working directory in the status bar as an item.
+The status bar draws only registered items now — the two it drew itself were a branch on the content
+kind, and a third kind of content had no way in.
+
+Two capabilities were added rather than worked around, which is what ARCHITECTURE requires when a
+plugin cannot be built within the seams: a plugin command handler receives the caller's `pane`, and
+a status bar item may be a reading rather than a control.
 
 ### 4. `media.proxy.*` — a mechanism wearing a content kind's name
 
@@ -77,13 +102,15 @@ A loopback HTTP proxy that fetches with caller-supplied headers and rewrites pla
 proxy is a mechanism and stays; the name fails question one, and the m3u8 rewriting is one format's
 rule — an opinion about what a playlist is.
 
-**Becomes:** `net.proxy.*`, with the format-specific rewriting in the plugin that needs it.
+**Removed.** `media_proxy_info` was declared unserved, so the three commands answered a proxy this
+build does not run. A proxy can come back as `net.proxy.*` when a plugin needs one; the m3u8
+rewriting will not.
 
 ### 5. `explorer.list` — a directory listing named after a UI
 
 Reads a directory. The mechanism is `core/files`; "explorer" is a panel.
 
-**Becomes:** part of the files surface.
+**Done** — it is `fs.list`.
 
 ### 6. `workspace.shell` — dead
 
@@ -113,6 +140,13 @@ host-owned or something every plugin would write again.
 | `core/` Go packages (17) | Host-independent answers, reachable with no window at all. |
 
 `fixture.*`, `d.fixture` and `resolver.fixture.*` appear only inside test files and ship in no build.
+
+## What is left, named
+
+- `frameworks/wails/register.go` types `HostDeps.Sessions` as `terminalcmd.Sessions`, and
+  `terminal_sink.go` takes `terminal.Handle`. Both are entered in `couplingWiring` marked DEBT: the
+  core owns no session contract and no trace contract for them to be typed against yet.
+- A workspace record no longer carries `shell`, and no core surface names a shell.
 
 ## The pattern in all six
 

@@ -240,33 +240,6 @@ func TestTheManifestUpsertAnswersWhetherItChanged(t *testing.T) {
 	}
 }
 
-// A caller that receives only "unknown command" re-investigates settled ground
-// or imitates the command. Answering null would be worse: this build has one
-// window, main, which is the control plane and never a workspace, so the ledger
-// would be permanently empty and "not wired" would be indistinguishable from
-// "no workspace window" — and the orchestrator routes a turn on that value.
-func TestTheLastWorkspaceWindowIsRefusedWithItsReason(t *testing.T) {
-	registry, _, _, _ := wired(t)
-
-	answer, err := registry.Invoke("ipc_last_workspace_window", control.Args{})
-	if err == nil {
-		t.Fatalf("ipc_last_workspace_window answered %v", answer)
-	}
-	if !strings.Contains(err.Error(), "focus ledger") {
-		t.Errorf("the refusal did not carry its reason: %v", err)
-	}
-	table := registry.Describe()
-	found := false
-	for _, entry := range table.Unserved {
-		if entry.Name == "ipc_last_workspace_window" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("the refusal is not in the table, so the gap is not counted")
-	}
-}
-
 // Boot-time wiring is a programming fact. Discovering it when a user opens a
 // workspace is worse than discovering it at startup.
 func TestRegisterRefusesIncompleteWiring(t *testing.T) {

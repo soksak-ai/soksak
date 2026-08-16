@@ -17,7 +17,7 @@ describe("foldFeed — the conversation set (parentId is the source of truth)", 
     const prompt = entry("chat.prompt", { text: "list the windows", turnId: "wsp-aaaaaa", window: "main" });
     const delta = entry("command.progress", { command: "orchestrator.ask", delta: "checking", parentId: "wsp-aaaaaa", window: "main" });
     const child = entry("command.executed", { command: "window.workspaces", ok: true, parentId: "wsp-aaaaaa", window: "win-abc" });
-    const answer = entry("chat.answer", { text: "three are open", parentId: "wsp-aaaaaa", window: "main" });
+    const answer = entry("chat.answer", { text: "three are open", parentId: "wsp-aaaaaa", window: "main", closesTurn: true });
     const other = entry("view.activated", { viewId: "tab-aaaaaa", window: "win-abc" });
 
     const items = foldFeed([prompt, delta, child, answer, other]);
@@ -39,7 +39,7 @@ describe("foldFeed — the conversation set (parentId is the source of truth)", 
     expect(open[0].kind).toBe("chat");
     expect((open[0] as { closed: boolean }).closed).toBe(false);
 
-    const answer = entry("chat.answer", { text: "stopped", parentId: "wsp-aaaaaa", ok: false, window: "main" });
+    const answer = entry("chat.answer", { text: "stopped", parentId: "wsp-aaaaaa", ok: false, window: "main", closesTurn: true });
     const late = entry("command.executed", { command: "late.cmd", ok: true, parentId: "wsp-aaaaaa", window: "main" });
     const closed = foldFeed([prompt, child, answer, late]);
     const card = closed[0];

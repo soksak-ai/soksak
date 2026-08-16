@@ -10,7 +10,6 @@ import { listenThisWindow } from "../lib/windowEvents";
 import { useSettings } from "../state/settings";
 import { registerCatalog } from "./catalog";
 import { registerDebugCatalog } from "./catalogDebug";
-import { registerOrchestratorCatalog } from "./catalogOrchestrator";
 import { registerRemoteCatalog } from "./catalogRemote";
 import { registerRemoteConfirmDevCatalog } from "./catalogRemoteConfirmDev";
 import { getSpec, execute, setPermissionGate } from "./registry";
@@ -123,7 +122,6 @@ export function startExecutor(): void {
   // The natural-language console (orchestrator.*) is control plane (main) only — it is a capability
   // that does not exist in workspace windows (UNKNOWN_COMMAND is the correct answer). The socket
   // targets it explicitly with --window main.
-  if (currentWindowLabel() === "main") registerOrchestratorCatalog();
   // Permission gate: reads the per-danger-class policy from the settings store and resolves
   // allow/deny.
   setPermissionGate((danger) => {

@@ -39,8 +39,6 @@ export function registerSettingsCatalog(): void {
     "dimBlocked",
     "appFontFamily",
     "windowZoom",
-    "orchestratorAgent",
-    "orchestratorModel",
   ] as const;
 
   register("settings.get", {
@@ -82,7 +80,7 @@ export function registerSettingsCatalog(): void {
       value: {
         type: "json",
         description:
-          "Value — language:ko|en, workspaceTabPosition:top|left, contentTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, railRelation:tint|moment|stroke (rail-pane relation surface — tint fill only, moment flash on rebind, stroke outline+label), railFill:none|faint (bound-pane background in stroke mode — none is the default, faint is a 1% accent tint), focusDim:boolean (spotlight — every pane dims except the active one), railSeamStyle:seam|edge (how a manufactured FLOW adjacency is marked: seam dashes the inner shared edge, edge dashes the outer right edge), railPullFocused:boolean (FLOW-only blocked-line policy: true minimally swaps a leaf pane to preserve adjacency; false preserves pane order and stops the rail at the nearest clean line. PIN always preserves both the rail station and pane layout), railSolidColor:string (CSS color for a solid relation seam — empty leaves it to the theme), dimIdle:number (0-1 — how far a pane that is not focused sinks), dimBlocked:number (0-1 — how far a pane stranded between the rail and the focused pane sinks; deeper than dimIdle, or being covered is invisible), appFontFamily:string (CSS font-family stack), windowZoom:number (0.5-2.0 — whole-window zoom factor applied to the main webview and every child webview), orchestratorAgent:string (agent CLI command or path the natural-language console spawns), orchestratorModel:string (--model alias for the agent; empty = CLI default)",
+          "Value — language:ko|en, workspaceTabPosition:top|left, contentTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, railRelation:tint|moment|stroke (rail-pane relation surface — tint fill only, moment flash on rebind, stroke outline+label), railFill:none|faint (bound-pane background in stroke mode — none is the default, faint is a 1% accent tint), focusDim:boolean (spotlight — every pane dims except the active one), railSeamStyle:seam|edge (how a manufactured FLOW adjacency is marked: seam dashes the inner shared edge, edge dashes the outer right edge), railPullFocused:boolean (FLOW-only blocked-line policy: true minimally swaps a leaf pane to preserve adjacency; false preserves pane order and stops the rail at the nearest clean line. PIN always preserves both the rail station and pane layout), railSolidColor:string (CSS color for a solid relation seam — empty leaves it to the theme), dimIdle:number (0-1 — how far a pane that is not focused sinks), dimBlocked:number (0-1 — how far a pane stranded between the rail and the focused pane sinks; deeper than dimIdle, or being covered is invisible), appFontFamily:string (CSS font-family stack), windowZoom:number (0.5-2.0 — whole-window zoom factor applied to the main webview and every child webview)",
         required: true,
       },
     },
@@ -171,15 +169,6 @@ export function registerSettingsCatalog(): void {
             return bad(tmsg("msg.settings.set.needWindowZoom"));
           s.setWindowZoom(v);
           await applyWindowZoom(useSettings.getState().windowZoom);
-          break;
-        case "orchestratorAgent":
-          if (typeof v !== "string" || !v.trim())
-            return bad(tmsg("msg.settings.set.needAgentCommand"));
-          s.setOrchestratorAgent(v.trim());
-          break;
-        case "orchestratorModel":
-          if (typeof v !== "string") return bad(tmsg("msg.settings.set.needModelAlias"));
-          s.setOrchestratorModel(v.trim());
           break;
         default:
           // **A key on the list with no matching branch succeeds silently.** The caller then

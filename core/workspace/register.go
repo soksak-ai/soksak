@@ -179,23 +179,6 @@ func Register(registry *control.Registry, deps Deps) {
 			return manifest.Upsert(entry, focused)
 		},
 	})
-
-	// ipc_last_workspace_window reads a focus ledger, and in this build that
-	// ledger has no writer: its writers are window focus and destroy events,
-	// which belong to the window group, and the same ledger answers command
-	// routing. A second copy here would send a turn to a different window than
-	// the router picks — not an error, a wrong answer.
-	//
-	// Answering null instead is not available. This build has one window, main,
-	// which is the control plane and by rule never a workspace, so the ledger
-	// would be permanently empty, and a permanent null cannot be told apart
-	// from "the ledger is not wired".
-	if err := registry.DeclareUnserved(
-		"ipc_last_workspace_window",
-		"the focus ledger it reads has no writer here: window focus and destroy events belong to the window group, and the same ledger routes commands, so a second copy would pick a different window",
-	); err != nil {
-		panic(err)
-	}
 }
 
 // argument decodes one named parameter. The registry is typed per command

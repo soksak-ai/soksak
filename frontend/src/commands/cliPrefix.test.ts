@@ -7,7 +7,6 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { catalogJson, execute } from "./registry";
 import { registerCatalog } from "./catalog";
 import { registerDebugCatalog } from "./catalogDebug";
-import { registerOrchestratorCatalog } from "./catalogOrchestrator";
 import { registerRemoteCatalog } from "./catalogRemote";
 import { registerRemoteConfirmDevCatalog } from "./catalogRemoteConfirmDev";
 import { __setCliNameForTest, cliName } from "../lib/cliIdentity";
@@ -16,12 +15,11 @@ import { __setCliNameForTest, cliName } from "../lib/cliIdentity";
 const LEADING_BIN = /^sok(-dev|-debug)?( |$)/;
 
 beforeAll(() => {
-  // Same registration sequence as executor.startExecutor — puts the whole core surface (plus dev and orchestrator) in the catalog.
+  // Same registration sequence as executor.startExecutor — puts the whole core surface (plus dev) in the catalog.
   registerCatalog();
   registerRemoteCatalog();
   registerRemoteConfirmDevCatalog();
   registerDebugCatalog();
-  registerOrchestratorCatalog();
 });
 
 describe("CLI prefix is presenter identity, not data", () => {

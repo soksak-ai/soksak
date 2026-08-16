@@ -76,7 +76,6 @@ import { registerDomCatalog } from "./catalogDom";
 import { registerDataCatalog } from "./catalogData";
 import { registerPtySessionCatalog } from "./catalogPtySession";
 import { registerSecretsCatalog } from "./catalogSecrets";
-import { registerTurnCatalog } from "./catalogTurn";
 import { registerNetworkCatalog } from "./catalogNetwork";
 import { registerClipboardCatalog } from "./catalogClipboard";
 import { registerNotifyCatalog } from "./catalogNotify";
@@ -2450,7 +2449,6 @@ export function registerCatalog(): void {
   registerDataCatalog();
   registerPtySessionCatalog();
   registerSecretsCatalog();
-  registerTurnCatalog();
   registerNetworkCatalog();
   registerClipboardCatalog();
   registerNotifyCatalog();
