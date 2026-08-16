@@ -322,6 +322,15 @@ const defaultRuntimeDeps: RegistryRuntimeDeps = { load: loadRegistryDocument, no
 // The injection slot must survive the module-swap boundary — if only this slot resets, the injector
 // treats it as already filled and does not refill it. What is left is silence, and silence is not an error.
 const runtimeDepsSlot = moduleState("state/registry#runtimeDepsSlot.v", () => ({ v: defaultRuntimeDeps }));
+
+// The fetch each registry is in the middle of. A second caller awaits this one rather than being
+// answered `fetching` at once: that answer was a catalogue of nothing with no error in it, and from
+// outside a busy registry read the same as an empty one (measured 2026-08-16). One fetch per
+// registry either way — what changes is that everyone waits for the same one.
+const inFlight = moduleState(
+  "state/registry#inFlight",
+  () => new Map<string, Promise<RegistryRefreshResult>>(),
+);
 export function setRegistryRuntimeDeps(patch: Partial<RegistryRuntimeDeps>): () => void {
   const previous = runtimeDepsSlot.v;
   runtimeDepsSlot.v = { ...runtimeDepsSlot.v, ...patch };
@@ -433,9 +442,12 @@ export const useRegistry = moduleState("state/registry#store", () =>
     return await Promise.all(selected.map(async (descriptor): Promise<RegistryRefreshResult> => {
       const source = get().registries[descriptor.id];
       if (!source) return { registryId: descriptor.id, status: "error", error: "registry not found" };
-      if (source.status === "fetching" || (source.fetchedOnce && !force)) {
+      const running = inFlight.get(descriptor.id);
+      if (running) return await running;
+      if (source.fetchedOnce && !force) {
         return { registryId: descriptor.id, status: source.status, skipped: true };
       }
+      const run = (async (): Promise<RegistryRefreshResult> => {
       const startedAt = runtimeDepsSlot.v.now();
       set((state) => {
         const current = state.registries[descriptor.id];
@@ -559,6 +571,13 @@ export const useRegistry = moduleState("state/registry#store", () =>
           };
         });
         return { registryId: descriptor.id, status: "error", error };
+      }
+      })();
+      inFlight.set(descriptor.id, run);
+      try {
+        return await run;
+      } finally {
+        inFlight.delete(descriptor.id);
       }
     }));
   },
