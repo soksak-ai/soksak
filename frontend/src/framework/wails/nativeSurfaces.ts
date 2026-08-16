@@ -83,18 +83,46 @@ export async function resetNativeSurfaces(): Promise<void> {
   startNativeSurfaces(root);
 }
 
+/** How long a wait for a frame may go on before it states what did not arrive. */
+const SETTLE_LIMIT_MS = 5_000;
+
+/** Status the wait reads. Replaced only by a test — the observer is the writer in a running build. */
+let statusOverride: (() => ReturnType<NativeSurfaceObserverController["status"]>) | null = null;
+
+export function __setNativeSurfaceStatusForTest(
+  read: (() => ReturnType<NativeSurfaceObserverController["status"]>) | null,
+): void {
+  statusOverride = read;
+}
+
 /**
  * Waits until the declared surfaces are reflected in an actual frame.
  *
  * The observer has one writer, and events that arrive during a commit collect into the next full snapshot.
  * So settled means "the applied sequence has caught up with the declared sequence and nothing is pending" —
  * the sequence is the test, not elapsed time.
+ *
+ * A commit that never catches up used to spin here without end, and the command awaiting it never
+ * answered: `workspace.rightbar.toggle` closed the sidebar on screen and replied nothing, twice, in
+ * 20 seconds (measured 2026-08-16). A command that does its work and never replies is dead from
+ * outside. The wait still ends on the sequence; what is added is that a wait which cannot end names
+ * the two numbers instead of never returning.
  */
-export async function nativeSurfacesSettled(): Promise<void> {
+export async function nativeSurfacesSettled(limitMs: number = SETTLE_LIMIT_MS): Promise<void> {
+  const startedAt = Date.now();
   for (;;) {
-    const status = controller?.status();
+    const status = statusOverride ? statusOverride() : controller?.status();
     if (!status) return; // No observer means no surfaces.
     if (!status.dirty && status.committedSequence >= status.sequence) return;
+    if (Date.now() - startedAt >= limitMs) {
+      throw new Error(
+        `native surfaces did not reach a frame in ${limitMs}ms: declared ${status.sequence}, ` +
+          `committed ${status.committedSequence}` +
+          (status.dirty ? ", still dirty" : "") +
+          (status.running ? "" : ", observer not running") +
+          (status.error ? `, last error: ${String(status.error)}` : ""),
+      );
+    }
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   }
 }
