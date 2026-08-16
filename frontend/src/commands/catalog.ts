@@ -13,6 +13,7 @@ import { registerBootCatalog } from "./catalogBoot";
 import { registerWindowCatalog } from "./catalogWindow";
 import { invoke, frameworkPath } from "../framework";
 import { recordWindowFrames } from "./windowRecorder";
+import { tabIconOf } from "../lib/tabIcon";
 import { tmsg } from "../i18n";
 import { computeSplitLayout } from "../lib/splitLayout";
 import { railJournal } from "../lib/railJournal";
@@ -291,12 +292,18 @@ function exampleProgramId(): string {
 // ── Serialization (state.tree) ────────────────────────────────────────────────
 
 function serializeTab(v: Tab) {
+  // drawnIcon is what the tab bar draws, from the same function it draws by. `icon` alone answered
+  // only what a view reported, so two tabs of one view drawing different icons was visible on screen
+  // and unreadable from outside (EVIDENCE E2 — a surface with no number is unfinished).
+  const drawn = tabIconOf(v);
   return {
     id: v.id,
     kind: v.kind,
     title: v.title,
     customLabel: v.customLabel,
     icon: v.icon,
+    drawnIcon: drawn.source,
+    drawnIconValue: drawn.value,
     plugin: v.pluginId,
     view: v.view,
   };

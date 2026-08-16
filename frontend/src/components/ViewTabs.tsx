@@ -11,13 +11,9 @@ import { useCloseConfirm } from "../state/closeConfirm";
 import { getRegisteredView } from "../plugins/viewRegistry";
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { Icon } from "../ui/icons/Icon";
+import { tabIconOf } from "../lib/tabIcon";
+import type { Tab } from "../state/sessions";
 import { useT } from "../i18n";
-
-// Plugin view tab icon: the manifest-declared icon(string — external contract).
-// null when the provider is unregistered(inactive) — the caller falls back to the standard plugin icon.
-function pluginIconOf(pluginId: string, view: string): string | null {
-  return getRegisteredView(`${pluginId}.${view}`)?.decl.icon ?? null;
-}
 
 // Tab icon — draws the icon a view reported (v.icon), falling back to the manifest icon on load
 // failure. Hiding the failure(blank) makes it undiagnosable and shifts tab alignment. A changed src
@@ -41,6 +37,20 @@ function TabIcon({ viewId, src, fallback }: { viewId: string; src: string; fallb
 // (mousedown), not HTML5 DnD(avoids conflict with Tauri native file drag-drop + actually works).
 // Tab click(released without movement)=switch, drag=move that view — GroupArea makes that determination.
 // Horizontal overflow hides the native overlay scrollbar and draws a 3px custom thumb.
+
+/** Draws what tabIconOf decided, and `tab.list` reads that same function — a second copy would agree
+ *  with itself while disagreeing with the screen (E6). A reported icon that fails to load falls back
+ *  to the manifest glyph; hiding the failure would make it undiagnosable and shift the alignment. */
+function renderTabIcon(v: Tab): React.ReactNode {
+  const decided = tabIconOf(v);
+  const manifest = getRegisteredView(`${v.pluginId}.${v.view}`)?.decl.icon;
+  const fallback = manifest ?? <Icon name="plugin" size="sm" />;
+  if (decided.source === "reported") {
+    return <TabIcon viewId={v.id} src={decided.value} fallback={fallback} />;
+  }
+  if (decided.source === "manifest") return decided.value;
+  return <Icon name="plugin" size="sm" />;
+}
 
 // memo boundary(principle 2): onTabPointerDown must be a stable callback from GroupArea.
 export const ViewTabs = memo(function ViewTabs({
@@ -162,20 +172,8 @@ export const ViewTabs = memo(function ViewTabs({
               `${v.pluginId}.${v.view}`
             }
           >
-            <span className="tab-icon icon-inline">
-              {v.icon ? (
-                // Content fact icon — a setIcon report takes precedence over the manifest icon.
-                <TabIcon
-                  viewId={v.id}
-                  src={v.icon}
-                  fallback={pluginIconOf(v.pluginId, v.view) ?? <Icon name="plugin" size="sm" />}
-                />
-              ) : (
-                // The plugin icon is the manifest-declared string(external contract) — fallback only when unregistered.
-                (pluginIconOf(v.pluginId, v.view) ?? (
-                  <Icon name="plugin" size="sm" />
-                ))
-              )}
+            <span className="tab-icon icon-inline" data-tab-icon={tabIconOf(v).source}>
+              {renderTabIcon(v)}
             </span>
             <span className="tab-title">{viewDisplayTitle(v)}</span>
             {v.status?.code === "dirty" && (
