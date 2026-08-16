@@ -129,10 +129,11 @@ Gate: `frontend/src/state/restoreKeepsIds.test.ts`.
 
 # V. Verdict
 
-## V1. `sok state.fingerprint`
+## V1. `sok state.fingerprint` — two numbers, never mixed
 
 ```
-digest                 one number over everything below
+digest                 the shape: everything below, and no identifier
+ids                    every identifier the window holds, sorted
 workspaces[].root      the workspace's identity (P4), not an id
              mode      flow | pin
              station   the effective rail line
@@ -140,8 +141,18 @@ workspaces[].root      the workspace's identity (P4), not an id
              spaces[].panes[].{ rect, active }
 ```
 
-**GREEN: the digest before a restart equals the digest after.** The parts are
-carried beside it so a mismatch names which one moved.
+**GREEN: both numbers before a restart equal both numbers after.** The parts are
+carried beside `digest` so a mismatch names which one moved.
+
+Two numbers, because there are two questions. `digest` is what a person sees —
+a rename moves nothing in it, correctly, because two windows holding the same
+rectangles under different names look the same. `ids` is what the things are: a
+terminal session is keyed by `windowLabel + "|" + paneId`, so a pane back under
+a new name has lost its shell while every rectangle is where it was.
+
+They are answered side by side and never combined. One number covering both
+would move on a rename and on a resize alike, and a caller told only that
+"something moved" has to find out which — the reading would name no defect.
 
 Rectangles are rounded to the ninth place — two runs of the same solve differ in
 the last bits of a double, and a digest counting those would never match twice.
@@ -150,8 +161,11 @@ order is not reported as a difference.
 
 Gate: `restore_gate_test.go`, run by `task verify:restore`. It builds the two binaries, starts the
 application against a home of its own, opens a workspace window, reads the digest, quits through
-`app.shutdown.commit`, starts again and reads it a second time. It also asserts that every id
-changed — a digest that matched because nothing moved would prove nothing about R3.
+`app.shutdown.commit`, starts again and reads them a second time.
+
+It compares what the command answers and assembles no verdict of its own. A gate that walked the
+tree and judged the names itself would be a second rule about the same restart, and the two would
+disagree the day one of them was edited — the reason `digest` exists at all (V1 opening).
 
 Quitting through the command rather than killing the process is the whole reason this gate can
 exist. A kill skips the drain and the save, and what came back would be the measurement of a crash.

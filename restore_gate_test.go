@@ -63,11 +63,7 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 	gate.start()
 	window := gate.openWorkspace()
 
-	// The ids before, so the equality below is read beside the names that have to
-	// come back with it. The digest alone would pass a build that renamed
-	// everything.
-	before := gate.ids(window)
-	first := gate.digest(window)
+	before := gate.fingerprint(window)
 
 	gate.quit()
 	gate.start()
@@ -76,27 +72,24 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 	// one was.
 	gate.awaitWindow(window)
 
-	after := gate.ids(window)
-	second := gate.digest(window)
+	after := gate.fingerprint(window)
 
-	if first == "" || second == "" {
-		t.Fatalf("state.fingerprint answered no digest: %q then %q", first, second)
+	if before.Digest == "" || before.IDs == "" {
+		t.Fatalf("state.fingerprint answered no digest: %+v", before)
 	}
-	if first != second {
-		t.Errorf("the digest moved across a restart: %s then %s", first, second)
+	// Two numbers, because there are two questions (RESTORE V1). The shape is
+	// what a person sees; the identifiers are what things are, and a terminal
+	// session is keyed by the window label and the pane id — a pane back under a
+	// new name has lost its shell while every rectangle is where it was.
+	//
+	// Read from the command rather than compared here. A gate that assembled its
+	// own verdict would be a second rule about the same restart, and the two
+	// would disagree the day one of them was edited.
+	if before.Digest != after.Digest {
+		t.Errorf("the shape moved across a restart: %s then %s", before.Digest, after.Digest)
 	}
-	// R3 — the identifiers are kept. A terminal session's key is the window label
-	// and the pane id, so a pane that came back under a new name cannot reattach
-	// to the shell it had. The digest cannot see that: state.fingerprint holds no
-	// id, which is correct for the shape it judges and is why this is checked
-	// beside it rather than through it.
-	if len(before) == 0 {
-		t.Fatal("the restored window holds no ids to compare")
-	}
-	for id := range before {
-		if !after[id] {
-			t.Errorf("%s did not survive the restart; a pane id is half a session's key", id)
-		}
+	if before.IDs != after.IDs {
+		t.Errorf("the identifiers moved across a restart: %s then %s", before.IDs, after.IDs)
 	}
 }
 
@@ -230,68 +223,20 @@ func (gate *restoreGate) openWorkspace() string {
 	return answer.Data.Label
 }
 
-func (gate *restoreGate) digest(window string) string {
+// fingerprintOf is what `state.fingerprint` answers: the shape and the identifiers.
+type fingerprint struct {
+	Digest string `json:"digest"`
+	IDs    string `json:"ids"`
+}
+
+func (gate *restoreGate) fingerprint(window string) fingerprint {
 	gate.t.Helper()
 	var answer struct {
-		Data struct {
-			Digest string `json:"digest"`
-		} `json:"data"`
-		Digest string `json:"digest"`
+		Data fingerprint `json:"data"`
 	}
 	out := gate.run("state.fingerprint", "window="+window)
 	if err := json.Unmarshal([]byte(out), &answer); err != nil {
 		gate.t.Fatalf("state.fingerprint: %v\n%s", err, out)
 	}
-	if answer.Data.Digest != "" {
-		return answer.Data.Digest
-	}
-	return answer.Digest
-}
-
-// ids is every identifier the window's tree holds, as a set.
-func (gate *restoreGate) ids(window string) map[string]bool {
-	gate.t.Helper()
-	out := gate.run("state.tree", "window="+window)
-	var tree any
-	if err := json.Unmarshal([]byte(out), &tree); err != nil {
-		gate.t.Fatalf("state.tree: %v\n%s", err, out)
-	}
-	found := map[string]bool{}
-	var walk func(any)
-	walk = func(node any) {
-		switch value := node.(type) {
-		case map[string]any:
-			for key, inner := range value {
-				if id, ok := inner.(string); ok && key == "id" && identifierShaped(id) {
-					found[id] = true
-				}
-				walk(inner)
-			}
-		case []any:
-			for _, inner := range value {
-				walk(inner)
-			}
-		}
-	}
-	walk(tree)
-	return found
-}
-
-// identifierShaped is NAMING N1: three letters, a dash, six base32 characters.
-// A window name is excluded by the same expression — it is the store key and is
-// deliberately reused (RESTORE K1).
-func identifierShaped(value string) bool {
-	if len(value) != 10 || value[3] != '-' || strings.HasPrefix(value, "win-") {
-		return false
-	}
-	for index, r := range value {
-		switch {
-		case index == 3:
-		case index < 3 && r >= 'a' && r <= 'z':
-		case index > 3 && (r >= 'a' && r <= 'z' || r >= '2' && r <= '7'):
-		default:
-			return false
-		}
-	}
-	return true
+	return answer.Data
 }
