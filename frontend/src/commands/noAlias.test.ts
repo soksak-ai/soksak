@@ -291,7 +291,6 @@ describe("the boundary — verb comparison does not blind the gate", () => {
   it("antonym pairs with the same signature exist — calling those violations makes GREEN unreachable", () => {
     const raw = collisions().map((group) => group.map((c) => c.name).sort().join(" ≡ ")).sort();
     expect(raw).toContain("plugin.disable ≡ plugin.enable");
-    expect(raw).toContain("ui.projection.pin ≡ ui.projection.unpin");
   });
 
   it("a pair sharing a verb cannot hide in that antonym list", () => {

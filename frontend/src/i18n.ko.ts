@@ -685,6 +685,7 @@ export const ko = {
   "msg.plugin.settings.schema": "설정 항목 {n}개",
   "msg.plugin.settings.set": "{key} 설정을 {value} 로 변경했습니다",
   "msg.plugin.update": "{id} 플러그인을 {version} 으로 갱신했습니다",
+  "msg.plugin.view.notOpenable": "{key} 는 {placement} 에 배치되어 있습니다 — 탭으로 열리는 것은 center 뷰뿐입니다",
   "msg.plugin.view.close": "{view} 를 {n}곳에서 닫았습니다",
   "msg.plugin.view.open": "{view} 를 {placement} 에 열었습니다",
   "msg.program.list": "프로그램 {n}개",

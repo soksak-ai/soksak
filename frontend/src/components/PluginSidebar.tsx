@@ -18,7 +18,6 @@ import { useSessions } from "../state/sessions";
 import { useSettings } from "../state/settings";
 import { useUi } from "../state/ui";
 import { PluginViewHost } from "./PluginViewHost";
-import { ProjectionSlots } from "./ProjectionSlots";
 import { ViewBadge } from "./ViewBadge";
 import { PluginConsentModal } from "./PluginConsentModal";
 import { localize, useT } from "../i18n";
@@ -35,9 +34,11 @@ export const PluginSidebar = memo(function PluginSidebar({
 }) {
   const t = useT();
   const version = useViewRegistry((s) => s.version);
-  // The right icon rail lists resident rail views — the current form of the right pin surface.
+  // Every view a plugin placed on the right. It listed rail-placed views carrying a `resident` flag
+  // until 2026-08-16 — the right side borrowing the left's placement, with a flag standing in for a
+  // region. `right` is a region now, and a plugin declares it.
   const sidebarViews = useMemo(
-    () => viewsForPlacement("rail").filter(({ view }) => view.decl.resident),
+    () => viewsForPlacement("right"),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [version],
   );
@@ -116,13 +117,6 @@ export const PluginSidebar = memo(function PluginSidebar({
         </button>
       </div>
       <div className="plugin-side-main">
-        {/* Projection slots (R1) — the right-sidebar declaration of an attached view. Coexists with the pinned (icon rail selection) view (R4). */}
-        <ProjectionSlots
-          projectId={projectId}
-          root={root ?? null}
-          paneId={null}
-          side="right"
-        />
         <div className="plugin-side-head">{activeTitle}</div>
         <div className="plugin-side-body">
           {opened.map((k) => (

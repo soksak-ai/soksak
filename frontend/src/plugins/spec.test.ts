@@ -72,7 +72,7 @@ describe("parseManifest — accept", () => {
               id: "diff",
               title: "Diff",
               icon: "D",
-              placements: ["content", "rail"],
+              placements: ["center", "left"],
               decoration: true,
             },
           ],
@@ -81,12 +81,12 @@ describe("parseManifest — accept", () => {
       "demo",
     );
     expect(manifest?.contributes.views[0]).toMatchObject({
-      placements: ["rail"],
-      defaultPlacement: "rail",
+      placements: ["left"],
+      defaultPlacement: "left",
     });
     expect(manifest?.contributes.views[1]).toMatchObject({
-      placements: ["content", "rail"],
-      defaultPlacement: "content",
+      placements: ["center", "left"],
+      defaultPlacement: "center",
     });
   });
 
@@ -98,7 +98,7 @@ describe("parseManifest — accept", () => {
         minAppVersion: "0.1.0",
         permissions: ["ui", "commands"],
         contributes: {
-          views: [{ id: "v", title: "View", icon: "V", defaultPlacement: "rail" }],
+          views: [{ id: "v", title: "View", icon: "V", defaultPlacement: "left" }],
           commands: [{ name: "do.it", title: "Run" }],
         },
       }),
@@ -377,7 +377,7 @@ describe("parseManifest — contribution item validation", () => {
   });
 
   it("bad view placements(empty array, unknown value) → rejected", () => {
-    for (const placements of [[], ["left"]]) {
+    for (const placements of [[], ["sidebar-left"]]) {
       const errors = errorsOf(
         base({
           permissions: ["ui"],
@@ -398,8 +398,8 @@ describe("parseManifest — contribution item validation", () => {
               id: "v",
               title: "View",
               icon: "V",
-              placements: ["rail"],
-              defaultPlacement: "content",
+              placements: ["left"],
+              defaultPlacement: "center",
             },
           ],
         },
@@ -987,216 +987,4 @@ describe("parseManifest — sidecars(engine module dependency declaration)", () 
   });
 });
 
-describe("parseManifest — sidebar projection contract(§3.1)", () => {
-  // Manifest builder for a content view + sidebar declaration. blocks = rail view targeted by the self reference.
-  const withSidebar = (sidebar: unknown, blocksPlacements: string[] = ["rail"]) =>
-    base({
-      permissions: ["ui"],
-      contributes: {
-        views: [
-          { id: "term", title: "Terminal", icon: "T", placements: ["content"], sidebar },
-          { id: "blocks", title: "Blocks", icon: "B", placements: blocksPlacements },
-        ],
-      },
-    });
 
-  it("accepts a named view and a self reference, normalizes defaults(right=[], template=stack)", () => {
-    const { manifest, validation } = parseManifest(
-      withSidebar({
-        left: [
-          { plugin: "soksak-plugin-file-tree", view: "tree", instance: "shared" },
-          { ref: "self.blocks", instance: "per-view" },
-        ],
-      }),
-      "demo",
-    );
-    expect(validation.errors).toEqual([]);
-    const term = manifest?.contributes.views.find((v) => v.id === "term");
-    expect(term?.sidebar).toEqual({
-      left: [
-        { plugin: "soksak-plugin-file-tree", view: "tree", instance: "shared" },
-        { ref: "self.blocks", instance: "per-view" },
-      ],
-      right: [],
-      template: "stack",
-    });
-  });
-
-  it("accepts the rail and rail-footer placement", () => {
-    expect(
-      errorsOf(
-        base({
-          permissions: ["ui"],
-          contributes: {
-            views: [
-              { id: "a", title: "A", icon: "a", placements: ["rail"] },
-              { id: "b", title: "B", icon: "b", placements: ["rail-footer"] },
-            ],
-          },
-        }),
-      ),
-    ).toEqual([]);
-  });
-
-
-  it("decoration flag — default false, true accepted, non-boolean rejected", () => {
-    const on = parseManifest(
-      base({
-        permissions: ["ui"],
-        contributes: { views: [{ id: "fx", title: "FX", icon: "f", placements: ["content"], decoration: true }] },
-      }),
-      "demo",
-    );
-    expect(on.validation.errors).toEqual([]);
-    expect(on.manifest?.contributes.views[0].decoration).toBe(true);
-    const off = parseManifest(
-      base({
-        permissions: ["ui"],
-        contributes: { views: [{ id: "v", title: "V", icon: "v", placements: ["rail"] }] },
-      }),
-      "demo",
-    );
-    expect(off.manifest?.contributes.views[0].decoration).toBe(false);
-    expect(
-      errorsOf(
-        base({
-          permissions: ["ui"],
-          contributes: { views: [{ id: "v", title: "V", icon: "v", placements: ["content"], decoration: "yes" }] },
-        }),
-      ).some((e) => e.includes("decoration")),
-    ).toBe(true);
-  });
-
-  it("rejected: a slot declares both ref and contract, or neither", () => {
-    expect(
-      errorsOf(
-        withSidebar({ left: [{ ref: "self.blocks", contract: "c-x", range: "^1.0.0", instance: "shared" }] }),
-      ).some((e) => e.includes("sidebar")),
-    ).toBe(true);
-    expect(
-      errorsOf(withSidebar({ left: [{ instance: "shared" }] })).some((e) => e.includes("sidebar")),
-    ).toBe(true);
-  });
-
-  it("rejected: contract without range", () => {
-    expect(
-      errorsOf(withSidebar({ left: [{ contract: "c-tree", instance: "shared" }] })).length,
-    ).toBeGreaterThan(0);
-  });
-
-  it("rejected: contract without view, or a view syntax violation", () => {
-    expect(
-      errorsOf(
-        withSidebar({
-          left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", instance: "shared" }],
-        }),
-      ).some((e) => e.includes("view")),
-    ).toBe(true);
-    expect(
-      errorsOf(
-        withSidebar({
-          left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "Bad_Id", instance: "shared" }],
-        }),
-      ).some((e) => e.includes("view")),
-    ).toBe(true);
-  });
-
-  it("rejected: a name-pinned reference(a ref other than self)", () => {
-    expect(
-      errorsOf(withSidebar({ left: [{ ref: "soksak-plugin-file-tree.tree", instance: "shared" }] })).some(
-        (e) => e.includes("self"),
-      ),
-    ).toBe(true);
-  });
-
-  it("rejected: instance missing or a bad value", () => {
-    expect(
-      errorsOf(withSidebar({ left: [{ ref: "self.blocks" }] })).some((e) => e.includes("instance")),
-    ).toBe(true);
-    expect(
-      errorsOf(withSidebar({ left: [{ ref: "self.blocks", instance: "per-panel" }] })).some((e) =>
-        e.includes("instance"),
-      ),
-    ).toBe(true);
-  });
-
-  it("rejected: empty left array, bad template value", () => {
-    expect(errorsOf(withSidebar({ left: [] })).some((e) => e.includes("left"))).toBe(true);
-    expect(
-      errorsOf(
-        withSidebar({ left: [{ ref: "self.blocks", instance: "shared" }], template: "grid" }),
-      ).some((e) => e.includes("template")),
-    ).toBe(true);
-  });
-
-  it("rejected: a sidebar declaration on a non-content view", () => {
-    expect(
-      errorsOf(
-        base({
-          permissions: ["ui"],
-          contributes: {
-            views: [
-              {
-                id: "side", title: "S", icon: "s", placements: ["rail"],
-                sidebar: { left: [{ contract: "c-tree", range: "^1.0.0", instance: "shared" }] },
-              },
-            ],
-          },
-        }),
-      ).some((e) => e.includes("content")),
-    ).toBe(true);
-  });
-
-  it("rejected: the self reference target view is undeclared or not on rail", () => {
-    expect(
-      errorsOf(
-        base({
-          permissions: ["ui"],
-          contributes: {
-            views: [
-              {
-                id: "term", title: "T", icon: "t", placements: ["content"],
-                sidebar: { left: [{ ref: "self.nope", instance: "shared" }] },
-              },
-            ],
-          },
-        }),
-      ).some((e) => e.includes("nope")),
-    ).toBe(true);
-    expect(
-      errorsOf(
-        withSidebar({ left: [{ ref: "self.blocks", instance: "shared" }] }, ["rail-footer"]),
-      ).some((e) => e.includes("rail")),
-    ).toBe(true);
-  });
-});
-
-describe("parseManifest — resident axis(explicit pinnable resident view)", () => {
-  it("accepts resident:true on a rail view(default false), rejects it on a non-rail view", () => {
-    const on = parseManifest(
-      base({
-        permissions: ["ui"],
-        contributes: { views: [{ id: "inbox", title: "Mail", icon: "M", placements: ["rail"], resident: true }] },
-      }),
-      "demo",
-    );
-    expect(on.validation.errors).toEqual([]);
-    expect(on.manifest?.contributes.views[0].resident).toBe(true);
-    const off = parseManifest(
-      base({
-        permissions: ["ui"],
-        contributes: { views: [{ id: "tree", title: "Tree", icon: "T", placements: ["rail"] }] },
-      }),
-      "demo",
-    );
-    expect(off.manifest?.contributes.views[0].resident).toBe(false);
-    expect(
-      errorsOf(
-        base({
-          permissions: ["ui"],
-          contributes: { views: [{ id: "v", title: "V", icon: "v", placements: ["content"], resident: true }] },
-        }),
-      ).some((e) => e.includes("resident")),
-    ).toBe(true);
-  });
-});

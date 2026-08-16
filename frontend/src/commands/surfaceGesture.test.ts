@@ -53,7 +53,7 @@ import { registerDomCatalog } from "./catalogDom";
 import { registerSurfaceInputProvider } from "../lib/surfaceInputProviders";
 import { catalogJson, execute, unregister } from "./registry";
 
-const VIEW = "content/view/test.v";
+const VIEW = "center/view/test.v";
 const at = (el: Element, x: number, y: number, w: number, h: number) => {
   el.getBoundingClientRect = () =>
     ({ x, y, left: x, top: y, width: w, height: h, right: x + w, bottom: y + h }) as DOMRect;

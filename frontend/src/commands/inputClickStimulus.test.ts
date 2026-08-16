@@ -48,11 +48,11 @@ vi.mock("./windowRecorder", async (importOriginal) => ({
 import { __resetMultiDomTraceForTest, registerDomCatalog } from "./catalogDom";
 import { catalogJson, execute, getSpec, unregister } from "./registry";
 
-const ADDR = "win/main/content/view/test.v/node/btn";
+const ADDR = "win/main/center/view/test.v/node/btn";
 
 function mountNode(html: string): void {
   document.body.innerHTML =
-    `<div class="tab-viewer" data-view-addr="content/view/test.v">${html}</div>`;
+    `<div class="tab-viewer" data-view-addr="center/view/test.v">${html}</div>`;
 }
 
 beforeEach(() => {

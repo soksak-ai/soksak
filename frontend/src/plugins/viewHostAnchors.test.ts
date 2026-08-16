@@ -12,8 +12,8 @@ import { viewHostAnchors } from "./viewHostAnchors";
 
 describe("viewHostAnchors — content view host DOM anchor contract", () => {
   it("data-view-addr is exposed as the node-scan baseAddress in every placement", () => {
-    expect(viewHostAnchors("content/view/soksak-plugin-x.main", "tab-aaaaaa")).toMatchObject({
-      "data-view-addr": "content/view/soksak-plugin-x.main",
+    expect(viewHostAnchors("center/view/soksak-plugin-x.main", "tab-aaaaaa")).toMatchObject({
+      "data-view-addr": "center/view/soksak-plugin-x.main",
     });
   });
 
@@ -21,9 +21,9 @@ describe("viewHostAnchors — content view host DOM anchor contract", () => {
     // With the tab id issued by statusBarItem and command.started, a plugin finds this host through
     // querySelector('[data-tab-id="tab-aaaaaa"]') (symmetry).
     expect(
-      viewHostAnchors("content/view/soksak-plugin-terminal-xterm.content", "tab-aaaaaa"),
+      viewHostAnchors("center/view/soksak-plugin-terminal-xterm.content", "tab-aaaaaa"),
     ).toEqual({
-      "data-view-addr": "content/view/soksak-plugin-terminal-xterm.content",
+      "data-view-addr": "center/view/soksak-plugin-terminal-xterm.content",
       "data-tab-id": "tab-aaaaaa",
     });
   });

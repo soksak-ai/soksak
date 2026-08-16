@@ -1094,7 +1094,7 @@ export function registerPluginCatalog(): void {
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
       'plugin.view.open \'{"viewKey":"soksak-plugin-<id>.<view>"}\'',
-      'plugin.view.open \'{"viewKey":"soksak-plugin-<id>.<view>","placement":"content"}\'',
+      'plugin.view.open \'{"viewKey":"soksak-plugin-<id>.<view>","placement":"center"}\'',
     ],
     handler: (p) => {
       const s = useSessions.getState();
@@ -1117,16 +1117,11 @@ export function registerPluginCatalog(): void {
           }),
         );
       }
-      // A rail view appears only as the declaration projection of the content feature it is attached
-      // to (left rail = projection only). A resident surface is the right rail's job and is not an
-      // open target until that renderer exists.
-      if (placement === "rail") {
-        return invalid(tmsg("msg.plugin.view.railNotOpenable", { key }));
+      // A view placed left or right is already in that region; opening is what a center view does,
+      // as a tab of the pane, where drag, split and close behave like any other tab.
+      if (placement !== "center") {
+        return invalid(tmsg("msg.plugin.view.notOpenable", { key, placement }));
       }
-      if (placement === "rail-footer") {
-        return invalid(tmsg("msg.plugin.view.railFooterNotOpenable", { key }));
-      }
-      // content: as a tab of the pane — drag, split, and close behave like any other tab.
       const r = s.openPluginView(
         projectId,
         reg.pluginId,

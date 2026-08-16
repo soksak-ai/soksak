@@ -520,10 +520,10 @@ describe("ui — an undeclared view is rejected and the registry is updated", ()
   it("delegates openView to plugin.view.open with the global key and placement", async () => {
     const d = fakeDeps();
     const { api } = buildPluginApi(uiManifest(), "/d", d);
-    await api.ui!.openView("panel", "content");
+    await api.ui!.openView("panel", "center");
     expect(d.execute).toHaveBeenCalledWith(
       "plugin.view.open",
-      { viewKey: "demo.panel", placement: "content" },
+      { viewKey: "demo.panel", placement: "center" },
       {},
     );
   });

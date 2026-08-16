@@ -16,9 +16,7 @@ import {
   type WorkspaceSnapshot,
 } from "./windowSnapshot";
 import type { Workspace } from "./sessions";
-import type { Pins } from "./projection";
 
-export type ProjectionSeed = { pins: Pins };
 
 export interface WindowSnapshot {
   activeId: string;
@@ -45,11 +43,10 @@ export interface WindowManifest {
 export function snapshotWindow(
   workspaces: Workspace[],
   activeId: string,
-  projections?: Record<string, ProjectionSeed>,
 ): WindowSnapshot {
   return {
     activeId,
-    workspaces: workspaces.map((p) => serializeWorkspace(p, projections?.[p.id])),
+    workspaces: workspaces.map((p) => serializeWorkspace(p)),
   };
 }
 
@@ -58,17 +55,12 @@ export function snapshotWindow(
 export function restoreWindow(snap: WindowSnapshot): {
   workspaces: Workspace[];
   activeId: string;
-  projections: Record<string, ProjectionSeed>;
 } {
   const workspaces = snap.workspaces.map(deserializeWorkspace);
   const activeId = workspaces.some((t) => t.id === snap.activeId)
     ? snap.activeId
     : (workspaces[0]?.id ?? "");
-  const projections: Record<string, ProjectionSeed> = {};
-  for (const p of snap.workspaces) {
-    if (p.projection) projections[p.id] = p.projection;
-  }
-  return { workspaces, activeId, projections };
+  return { workspaces, activeId };
 }
 
 // This window's manifest entry = label + the list of held roots + the active root.

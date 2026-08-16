@@ -149,7 +149,7 @@ describe("activatePlugin — transparency rules (manifest static) at the activat
         manifestOf({
           permissions: ["ui", "commands"],
           contributes: {
-            views: [{ id: "canvas", title: "Canvas", icon: "C", placements: ["content"], decoration: true }],
+            views: [{ id: "canvas", title: "Canvas", icon: "C", placements: ["center"], decoration: true }],
             commands: [{ name: "open", title: "Open" }],
             nodes: [{ id: "send" }],
           },

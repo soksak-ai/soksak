@@ -129,155 +129,27 @@ export type { LocalizedText } from "./localizedText";
 // View provider and placement are orthogonal (§0-6). placements = supported placements, default right sidebar.
 
 // Projection model (plans/sidebar-projection-spec.md §3.3): content = content plane,
-// rail = rail view (projection reference target — the left rail is projection-only, resident marks
-// a right-side resident surface, and left/right direction is a placement-time decision so it is not
-// in the declaration), rail-footer = resident slot at the bottom of the rail.
+// A view declares the regions it can be placed in, and defaultPlacement is where it goes. Several
+// declared regions mean the view works in each; an undeclared region is one it is never placed in.
 // The old sidebar-* names do not exist.
-export type ViewPlacement = "content" | "rail" | "rail-footer";
+// Where a view is placed: a region of the window, and nothing about what it is for.
+//
+// It read "content" | "rail" | "rail-footer" until 2026-08-16. "content" and "rail" claim a role —
+// this one is the main thing, that one is auxiliary — and the core holds no view about content
+// (A1). A region is a place. `rail-footer` is gone: a position inside the left region is an order
+// the person arranged, not a region of its own.
+export type ViewPlacement = "left" | "center" | "right";
 
-export const VIEW_PLACEMENTS: readonly ViewPlacement[] = [
-  "content",
-  "rail",
-  "rail-footer",
-];
+export const VIEW_PLACEMENTS: readonly ViewPlacement[] = ["left", "center", "right"];
 
 // ── §2.5 Sidebar projection contract ─────────────────────────────────────────
 // Sidebar declaration of content views and file viewers (plans/sidebar-projection-spec.md §3.1).
 // Only two reference forms exist: "self.<viewId>" (own rail view) | {contract, range} (contract address).
 // The `<pluginId>.<viewId>` name-pin is forbidden (C3 L1) — cross-plugin references use the contract
 // address only, and the core resolves it to the active implementation. instance is the instance
-// axis (A9): shared | per-view.
 
-export type SidebarInstance = "shared" | "per-view";
-export type SidebarTemplate = "stack" | "tabs";
 
-export interface SidebarSlot {
-  ref?: string; // "self.<viewId>" — a rail view of this plugin
-  // Another plugin's rail view, named: its id and the view inside it.
-  //
-  // It was a contract address — {contract, range, view} — until 2026-08-16, so that a slot could
-  // accept any implementation of an interface. Not one contract ever had both a provider and a
-  // consumer, and the interface id was a second identity for what the plugin id already names
-  // (C3, C4). A slot names a plugin; if two implementations of one thing ever exist, that is the
-  // day to design a choice between them.
-  plugin?: string;
-  view?: string; // required together with plugin
-  instance: SidebarInstance;
-}
 
-export interface ContributedSidebar {
-  left: SidebarSlot[]; // at least one (A1 — left is required)
-  right: SidebarSlot[]; // parse default []
-  template: SidebarTemplate; // parse default "stack" — the core owns the vocabulary (A5)
-}
-
-const SIDEBAR_SELF_REF_RE = /^self\.[a-z0-9][a-z0-9-]*$/;
-const SIDEBAR_INSTANCES: readonly SidebarInstance[] = ["shared", "per-view"];
-const SIDEBAR_TEMPLATES: readonly SidebarTemplate[] = ["stack", "tabs"];
-
-function parseSidebarSlot(
-  raw: unknown,
-  label: string,
-  errors: string[],
-): SidebarSlot | null {
-  if (!isRecord(raw)) {
-    errors.push(`${label}: object required`);
-    return null;
-  }
-  for (const k of Object.keys(raw)) {
-    if (!["ref", "plugin", "view", "instance"].includes(k)) {
-      errors.push(`${label}: unknown key "${k}"`);
-      return null;
-    }
-  }
-  const hasRef = raw.ref !== undefined;
-  const hasOther = raw.plugin !== undefined || raw.view !== undefined;
-  if (hasRef === hasOther) {
-    errors.push(`${label}: exactly one of ref("self.<viewId>") or {plugin, view}`);
-    return null;
-  }
-  if (
-    typeof raw.instance !== "string" ||
-    !SIDEBAR_INSTANCES.includes(raw.instance as SidebarInstance)
-  ) {
-    errors.push(`${label}: instance must be ${SIDEBAR_INSTANCES.join("|")}`);
-    return null;
-  }
-  const instance = raw.instance as SidebarInstance;
-  if (hasRef) {
-    if (typeof raw.ref !== "string" || !SIDEBAR_SELF_REF_RE.test(raw.ref)) {
-      errors.push(`${label}: ref must be "self.<viewId>" — another plugin's view is {plugin, view}`);
-      return null;
-    }
-    return { ref: raw.ref, instance };
-  }
-  // Another plugin's view, by both names.
-  if (typeof raw.plugin !== "string" || !PLUGIN_ID_RE.test(raw.plugin)) {
-    errors.push(`${label}: plugin must be a plugin id (^soksak-plugin-[a-z0-9][a-z0-9-]*$)`);
-    return null;
-  }
-  if (typeof raw.view !== "string" || !VIEW_ID_RE.test(raw.view)) {
-    errors.push(
-      `${label}: view must be a view id in that plugin (^[a-z0-9][a-z0-9-]*$) — required together with plugin`,
-    );
-    return null;
-  }
-  return { plugin: raw.plugin, view: raw.view, instance };
-}
-
-function parseSidebarDecl(
-  raw: unknown,
-  label: string,
-  errors: string[],
-): ContributedSidebar | null {
-  if (!isRecord(raw)) {
-    errors.push(`${label}: object required`);
-    return null;
-  }
-  for (const k of Object.keys(raw)) {
-    if (!["left", "right", "template"].includes(k)) {
-      errors.push(`${label}: unknown key "${k}"`);
-      return null;
-    }
-  }
-  if (!Array.isArray(raw.left) || raw.left.length === 0) {
-    errors.push(`${label}.left: array of at least one slot (left sidebar required — A1)`);
-    return null;
-  }
-  const parseSide = (arr: unknown[], side: string): SidebarSlot[] | null => {
-    const out: SidebarSlot[] = [];
-    for (let i = 0; i < arr.length; i++) {
-      const s = parseSidebarSlot(arr[i], `${label}.${side}[${i}]`, errors);
-      if (!s) return null;
-      out.push(s);
-    }
-    return out;
-  };
-  const left = parseSide(raw.left, "left");
-  if (!left) return null;
-  let right: SidebarSlot[] = [];
-  if (raw.right !== undefined) {
-    if (!Array.isArray(raw.right)) {
-      errors.push(`${label}.right: array required`);
-      return null;
-    }
-    const r = parseSide(raw.right, "right");
-    if (!r) return null;
-    right = r;
-  }
-  let template: SidebarTemplate = "stack";
-  if (raw.template !== undefined) {
-    if (
-      typeof raw.template !== "string" ||
-      !SIDEBAR_TEMPLATES.includes(raw.template as SidebarTemplate)
-    ) {
-      errors.push(`${label}.template: ${SIDEBAR_TEMPLATES.join("|")}`);
-      return null;
-    }
-    template = raw.template as SidebarTemplate;
-  }
-  return { left, right, template };
-}
 
 export interface ContributedView {
   id: string; // unique within the plugin. Global key is "<pluginId>.<id>"
@@ -307,10 +179,8 @@ export interface ContributedView {
   // Resident marker (R4) — a rail view the user can pin to the rail. An undeclared rail view is
   // declaration-projection only (the sidebar is subordinate to content function — arbitrary
   // mounting restricted). Allowed on rail-family placements only.
-  resident: boolean; // parse default false
   // Sidebar projection declaration (§2.5) — content placement views only. A1 enforcement (reject on
   // absence) turns on at migration step 4; until then absence is tolerated as runtime downgrade (R5).
-  sidebar?: ContributedSidebar;
 }
 
 export interface ContributedCommand extends ServiceCommandFields {
@@ -1206,7 +1076,7 @@ export function parseManifest(
       views = parseEntries(c.views, {
         label: "contributes.views",
         required: ["id", "title", "icon"],
-        optional: ["placements", "defaultPlacement", "transparent", "nativeSurface", "status", "decoration", "resident", "sidebar"],
+        optional: ["placements", "defaultPlacement", "transparent", "nativeSurface", "status", "decoration"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
             errs.push("contributes.views: id must be ^[a-z0-9][a-z0-9-]*$");
@@ -1214,7 +1084,7 @@ export function parseManifest(
           }
           if (!validateLocalizedText(v.title, "contributes.views.title", errs)) return null;
           if (!isNonEmptyString(v.icon)) return null;
-          let placements: ViewPlacement[] = ["rail"];
+          let placements: ViewPlacement[] = ["left"];
           if (v.placements !== undefined) {
             if (
               !Array.isArray(v.placements) ||
@@ -1282,23 +1152,6 @@ export function parseManifest(
             checkDuplicates(status, `contributes.views["${v.id}"].status`, errs);
             if (offCode.length > 0) return null;
           }
-          let resident = false;
-          if (v.resident !== undefined) {
-            if (typeof v.resident !== "boolean") {
-              errs.push(`contributes.views["${v.id}"].resident: boolean`);
-              return null;
-            }
-            if (
-              v.resident === true &&
-              !placements.some((pl) => pl === "rail" || pl === "rail-footer")
-            ) {
-              errs.push(
-                `contributes.views["${v.id}"].resident: declarable on rail-family placement views only`,
-              );
-              return null;
-            }
-            resident = v.resident;
-          }
           let decoration = false;
           if (v.decoration !== undefined) {
             if (typeof v.decoration !== "boolean") {
@@ -1306,30 +1159,6 @@ export function parseManifest(
               return null;
             }
             decoration = v.decoration;
-          }
-          let sidebar: ContributedSidebar | undefined;
-          if (v.sidebar !== undefined) {
-            if (!placements.includes("content")) {
-              errs.push(
-                `contributes.views["${v.id}"].sidebar: declarable on content placement views only`,
-              );
-              return null;
-            }
-            const sb = parseSidebarDecl(
-              v.sidebar,
-              `contributes.views["${v.id}"].sidebar`,
-              errs,
-            );
-            if (!sb) return null;
-            sidebar = sb;
-          }
-          // A1 enforcement (spec §3.1 — every content view has a left sidebar declaration). The only
-          // exception is an explicit decoration. transparent/nativeSurface are not exception grounds.
-          if (placements.includes("content") && sidebar === undefined && !decoration) {
-            errs.push(
-              `contributes.views["${v.id}"]: a content view requires a sidebar.left declaration (A1) — mark a decoration view with decoration: true`,
-            );
-            return null;
           }
           return {
             id: v.id.trim(),
@@ -1341,8 +1170,6 @@ export function parseManifest(
             nativeSurface,
             ...(status !== undefined ? { status } : {}),
             decoration,
-            resident,
-            ...(sidebar !== undefined ? { sidebar } : {}),
           };
         },
       }, errors);
@@ -1437,33 +1264,6 @@ export function parseManifest(
       checkDuplicates(iconSets.map((v) => v.id), "contributes.iconSets.id", errors);
       if (iconSets.length > 0 && !has("ui")) {
         errors.push('contributes.iconSets: declare the "ui" permission');
-      }
-
-      // sidebar self-reference consistency (§3.1) — the target view must be declared and must
-      // support rail placement.
-      {
-        const declaredViews = new Map(views.map((v) => [v.id, v] as const));
-        const checkSelfRefs = (
-          sb: ContributedSidebar | undefined,
-          label: string,
-        ) => {
-          if (!sb) return;
-          for (const slot of [...sb.left, ...sb.right]) {
-            if (slot.ref === undefined) continue;
-            const target = slot.ref.slice("self.".length);
-            const tv = declaredViews.get(target);
-            if (!tv) {
-              errors.push(`${label}: self reference target view "${target}" is not declared`);
-            } else if (!tv.placements.includes("rail")) {
-              errors.push(
-                `${label}: self reference target view "${target}" requires "rail" in placements`,
-              );
-            }
-          }
-        };
-        for (const v of views) {
-          checkSelfRefs(v.sidebar, `contributes.views["${v.id}"].sidebar`);
-        }
       }
 
       // DOM exposed nodes (declaration) — mirrors the command/view pattern. id regex and duplicate

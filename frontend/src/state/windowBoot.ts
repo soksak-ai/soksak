@@ -24,7 +24,6 @@ import { claimRoots } from "./workspaceRegistry";
 import { beginRestoreHydration } from "./hydration";
 import { releaseWebviewGcHold } from "../lib/webviewGc";
 import { reseedSessionsSnapshot } from "../plugins/hooks";
-import { useProjection, type Pins } from "./projection";
 import { listRecentWorkspaces } from "./recentWorkspaces";
 import {
   useSessions,
@@ -141,7 +140,7 @@ export async function initWorkspacePersistence(
     snapshot = snapshotRead(snap.workspaces.length);
     bootFact(`restore:hydrated:${snap.workspaces.length}`);
     if (snap.workspaces.length > 0) {
-      const { workspaces, activeId, projections } = restoreWindow(snap);
+      const { workspaces, activeId } = restoreWindow(snap);
       // root existence check — an absent or invalid root demotes the tab to rootMissing instead of deleting it
       // (no unauthorized deletion). A banner reports it, and a returning path resolves it naturally on the next restore.
       await Promise.all(
@@ -174,11 +173,6 @@ export async function initWorkspacePersistence(
         ? activeId
         : (owned[0]?.id ?? "");
       if (owned.length > 0) {
-        // Rail pin restore (§4.5, R9) — seeding before the tracking sweep (guaranteed by the main boot order).
-        for (const t of owned) {
-          const seed = projections[t.id];
-          if (seed) useProjection.getState().seedWorkspace(t.id, seed);
-        }
         useSessions.getState().restoreWorkspaces(owned, active);
         // Restore is not creation (§5 replay != observation) — reseeds the diff baseline to now, so a restore delta is
         // never mistaken for workspace.created (which would auto-run plugin git.init and the like).
@@ -231,17 +225,11 @@ export async function initWorkspacePersistence(
     if (!mayPersist({ snapshot, restoredWorkspaces, liveWorkspaces: workspaces.length })) {
       return;
     }
-    const projections: Record<string, { pins: Pins }> = {};
-    for (const [pid, e] of Object.entries(useProjection.getState().byWorkspace)) {
-      projections[pid] = { pins: e.pins };
-    }
-    await persistNow(label, workspaces, activeId, projections, winStore);
+    await persistNow(label, workspaces, activeId, winStore);
   };
   const doPersist = () => void persistOnce();
   const persist = debounce(doPersist, 400);
   useSessions.subscribe(persist);
-  // Pin and seen changes also trigger a save (§4.5) — coalesced by the same debounce.
-  useProjection.subscribe(persist);
   window.addEventListener("pagehide", doPersist);
   // And on demand, awaited. `pagehide` fires as the process is going and the write is asynchronous,
   // so on that path alone the record raced the exit and lost. Quitting waits for it.
@@ -264,11 +252,10 @@ async function persistNow(
   label: string,
   workspaces: Workspace[],
   activeId: string,
-  projections: Record<string, { pins: Pins }>,
   winStore: ReturnType<typeof makeCoreStore<WindowSnapshot>>,
 ): Promise<void> {
   try {
-    const snap = snapshotWindow(workspaces, activeId, projections);
+    const snap = snapshotWindow(workspaces, activeId);
     // Keeping the previous value is the store's job (kv_past — for every write, unconditionally).
     // This site once picked out only "losing writes" and kept a copy aside, but then ① a write the picking rule
     // misses has nowhere to roll back to and ② the same fact is stored twice, so updating one returns a wrong value.

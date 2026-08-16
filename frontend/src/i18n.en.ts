@@ -680,6 +680,7 @@ export const en: Record<MsgKey, string> = {
   "msg.plugin.settings.schema": "{n, plural, one {# setting} other {# settings}}",
   "msg.plugin.settings.set": "Set {key} to {value}",
   "msg.plugin.update": "Updated {id} to {version}",
+  "msg.plugin.view.notOpenable": "{key} is placed {placement} — only a center view opens as a tab",
   "msg.plugin.view.close": "{n, plural, one {Closed {view} in # placement} other {Closed {view} in # placements}}",
   "msg.plugin.view.open": "Opened {view} in {placement}",
   "msg.program.list": "{n, plural, one {# program} other {# programs}}",

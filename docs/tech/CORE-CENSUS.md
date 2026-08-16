@@ -254,6 +254,37 @@ Gate: `TestTheCoreHoldsNoSecondIdentityNamespace` refuses any `soksak-spec-` lit
 Measured on a running build: both plugins enable with no error, `ui.validate` passes, a terminal
 opens with a live shell, and the browser draws.
 
+### 11. A window has three regions, and the plugin declares which one
+
+The sidebar was a shell with nothing in it and two mechanisms behind it. `leftLayout` — a split tree
+of views the person arranges, the same machine the pane area uses — and a *projection*, where a
+content view declared what belonged in the sidebar beside it, resolved per binding.
+
+The second is a view about content, which is the one thing A1 forbids, and it is what produced a slot
+pointing at a plugin that does not exist.
+
+**A plugin declares the region.** `placements` reads `left` | `center` | `right`, one or several, and
+`defaultPlacement` is where the view goes. A region is a place; `content` and `rail` were roles —
+this one is the main thing, that one is auxiliary — and the core holds no such view. One vocabulary
+throughout: a placement declares a region, an address names one (`win/<label>/center/view/…`), a view
+host is handed one.
+
+`rail-footer` is gone — a position inside a region is an order the person arranged. The footer
+*frame* stays, empty, because the frame is the contract (measured 2026-08-15: a window with no
+plugins had no footer and sat one row off from its neighbour). `resident` is gone with it: the right
+sidebar borrowed left-placed views carrying that flag, a flag standing in for a region.
+
+Removed: `projection.ts`, `projectionWiring.ts`, `ProjectionSlots.tsx`, `catalogProjection.ts`,
+`ui.projection.*`, the `sidebar` declaration with its slots, instances and templates, the persisted
+pins, and A1's clause requiring a content view to declare a sidebar.
+
+Measured on a running build: the left sidebar stands as an empty frame — the "no sidebar provider"
+line (`projection.degraded.unresolved`) is gone, because there is no provider to look for —
+`ui.validate` passes, addresses read `center`, and both plugins draw.
+
+**Nothing is placed left or right yet.** No plugin declares those regions, so both sidebars are empty
+frames. A file tree, a daemon list, bookmarks: each is a view its plugin declares, and none exists.
+
 ## What is left, named
 
 - `frameworks/wails/register.go` types `HostDeps.Sessions` as `terminalcmd.Sessions`, and
@@ -262,12 +293,8 @@ opens with a live shell, and the browser draws.
 - A workspace record no longer carries `shell`, and no core surface names a shell.
 - **A plugin cannot declare a keybinding.** ⌘T is the frame's own shortcut and names nothing, so it
   stays; a plugin that wants its own has no way to ask, and nothing needs one yet.
-- **The sidebar is empty and always has been.** The core owns the rail — position, travel,
-  projection, pins (G4) — and no plugin draws in it. `ui.projection.state` answers one slot,
-  `soksak-plugin-file-tree.tree`, `degraded`. That plugin does not exist: the slot named a contract
-  nobody implemented until entry 10, and the id it names now was written while converting the
-  declaration. A1 requires a content view to declare a left slot, so the declaration cannot simply
-  go; what it points at is unsettled.
+- **Both sidebars are empty.** The core owns the frame — regions, split, tabs, order, persistence —
+  and no plugin declares `left` or `right` (entry 11).
 - **Nobody installs a missing binary.** The core publishes `program.missing` and `library.missing`
   with the exact command; no plugin subscribes, so a person reads the stream and runs it.
 

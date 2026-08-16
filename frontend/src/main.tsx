@@ -48,7 +48,6 @@ import { recordRecentWorkspace } from "./state/recentWorkspaces";
 import { useSessions } from "./state/sessions";
 import { daemonOnWorkspaceOpen } from "./commands/catalogDaemon";
 import { initSkillRefresh } from "./state/skillRefresh";
-import { startProjectionTracking } from "./state/projectionWiring";
 import {
   initWorkspacePersistence,
   respawnSavedWindows,
@@ -366,7 +365,6 @@ async function boot(): Promise<void> {
   initSkillRefresh();
   // Sidebar projection tracking (A8, R1) — observes the binding through the session active chain subscription and
   // fires projection.changed. Once per window.
-  startProjectionTracking();
   // Respawn and first-run bootstrap are the control plane's (main) — a workspace window is responsible only for its
   // own restore (snapshot or initRoot), and with neither it starts in the empty state (exception).
   // StrictMode off: in dev, double-run effects would run plugin mount / PTY spawn twice and briefly create

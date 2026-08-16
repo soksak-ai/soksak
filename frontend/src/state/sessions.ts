@@ -38,7 +38,6 @@ import {
   hasSidebarView,
 } from "./sidebarLayout";
 import { viewIdFromSurfaceLabel } from "../lib/surfaceLabels";
-import { useProjection } from "./projection";
 import { invalidateLayout } from "../lib/layoutSettlement";
 import { publishLayoutTransitionIntent } from "../lib/layoutTransitionIntent";
 import { computeSplitLayout } from "../lib/splitLayout";
@@ -1521,29 +1520,6 @@ export const useSessions = moduleState("state/sessions#store", () =>
       // of this workspace (the end of the active chain), move the binding back to the most recent
       // surviving view in the focusHistory of the same space. The adjacent tab is the next fallback
       // (the default succession of removeView above already did that).
-      const wasBound =
-        content.id === t.activeSpaceId &&
-        grp?.id === content.activePaneId &&
-        grp?.activeTabId === viewId;
-      if (wasBound) {
-        const history =
-          useProjection.getState().byWorkspace[projectId]?.focusHistory ?? [];
-        for (const hv of history) {
-          if (hv === viewId) continue;
-          const hg = findGroupOfView(next.layout, hv);
-          if (hg) {
-            next = {
-              ...next,
-              activePaneId: hg.id,
-              layout: mapGroupNode(next.layout, hg.id, (g) => ({
-                ...g,
-                activeTabId: hv,
-              })),
-            };
-            break;
-          }
-        }
-      }
       const activeGroup = findGroup(next.layout, next.activePaneId);
       const nextWorkspace = mapContent(t, content.id, () => next);
       const conflict = leftRailLayoutConflict(nextWorkspace);

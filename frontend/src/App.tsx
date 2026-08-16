@@ -72,7 +72,6 @@ import { railGeometryScopeId, railPresentation } from "./lib/railMotion";
 import { useAppChromeLayoutReflow } from "./lib/appChromeLayoutReflow";
 import { useArrangementPhase } from "./components/useArrangementPhase";
 import {
-  arrangementMoves,
   resolvePresentedRailRelation,
   viewIdsOfMoves,
 } from "./lib/railArrangement";
@@ -293,16 +292,8 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // new projection and is then pushed into the departing slot — the origin of the measured defect where the departing
   // slot closed while holding the new projection.
   const railTraveling = dragStation === null && phase.traveling && phase.glide;
-  // A change the phase has not accepted yet — focus already changed, but the journey starts on the next commit.
-  // If the standing rail commits the new projection during that one render, on the next commit that instance becomes
-  // the departing slot and **closes while holding the new projection** (measured: the file tree closed in the slot
-  // where favorites had been standing). The phase owns the display — content, like geometry, changes when the phase accepts it.
-  const arrangementPending =
-    !!solved &&
-    !!phase.displayed &&
-    arrangementMoves(phase.displayed, solved).length > 0;
   // The rail is one persistent DOM node. Settle the target position first, then rewind from the start point with the
-  // same FLIP phase as tabs. Duplicating source/target remounts ProjectionSlots and plugin views and produces empty frames.
+  // same FLIP phase as tabs. Duplicating source/target remounts the sidebar views and produces empty frames.
   const rail = railPresentation(
     phase.from?.station ?? renderedStation,
     renderedStation,
@@ -506,7 +497,6 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   <LeftSidebarHost
                     workspace={workspace}
                     paneId={cwdTabOf(workspace) ?? ""}
-                    commitProjection={!arrangementPending}
                   />
                   {workspace.sidebarOpen && (
                     <div className="left-rail-controls">

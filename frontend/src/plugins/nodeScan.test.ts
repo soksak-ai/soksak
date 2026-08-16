@@ -10,7 +10,7 @@ function container(html: string): HTMLElement {
   return div;
 }
 
-const BASE = "content/view/soksak-plugin-x.main";
+const BASE = "center/view/soksak-plugin-x.main";
 
 describe("scanNodes — collecting exposed nodes", () => {
   it("gives every data-node element an absolute address", () => {

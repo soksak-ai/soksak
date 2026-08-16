@@ -17,8 +17,8 @@ import { pluginViewSurfacePlacementLedger } from "../plugins/viewSurfacePlacemen
 const DECL = {
   id: "content",
   title: { en: "Browser" },
-  placements: ["content"],
-  defaultPlacement: "content",
+  placements: ["center"],
+  defaultPlacement: "center",
   nativeSurface: true,
 } as unknown as ContributedView;
 
@@ -59,7 +59,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
           viewKey="browser.content"
           projectId="p1"
           root="/workspace"
-          region="content"
+          region="center"
           viewId="tab-1"
         />,
       );
@@ -95,7 +95,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
           viewKey="browser.content"
           projectId="p1"
           root="/workspace"
-          region="content"
+          region="center"
           viewId="tab-1"
           logicalPaneId="pan-left"
         />,
@@ -116,7 +116,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
           viewKey="browser.content"
           projectId="p1"
           root="/workspace"
-          region="content"
+          region="center"
           viewId="tab-1"
           logicalPaneId="pan-right"
         />,
@@ -130,7 +130,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
           viewKey="browser.content"
           projectId="p1"
           root="/workspace"
-          region="content"
+          region="center"
           viewId="tab-1"
           logicalPaneId="pan-right"
           surfacePlacement={{
@@ -182,9 +182,9 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
       root = createRoot(host);
       root.render(<>
         <PluginViewHost viewKey="browser.content" projectId="p1" root="/workspace"
-          region="content" viewId="actual-left" />
+          region="center" viewId="actual-left" />
         <PluginViewHost viewKey="browser.content" projectId="p1" root="/workspace"
-          region="content" viewId="actual-right" />
+          region="center" viewId="actual-right" />
       </>);
     });
     await act(async () => Promise.resolve());

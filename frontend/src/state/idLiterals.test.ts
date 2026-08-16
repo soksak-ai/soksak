@@ -250,7 +250,7 @@ describe("fixture surface labels are the shape the product actually issues", () 
     for (const notAnIdentifier of [
       "https://example.org",
       "plugin-view-container",
-      "window/win-1/view/tab-gggggg/content/browser-win-1-tab-gggggg",
+      "window/win-1/view/tab-gggggg/center/browser-win-1-tab-gggggg",
       "view.presentation.trace.close",
       "window_focus_set",
       "browser-chromium",

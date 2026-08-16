@@ -203,9 +203,9 @@ describe("deepElementFromPoint — hit test through shadow", () => {
 // .tab-viewer[data-view-addr] as absolute addresses. The test sets up that structure and calls by address.
 function mountNode(html: string): void {
   document.body.innerHTML =
-    `<div class="tab-viewer" data-view-addr="content/view/test.v">${html}</div>`;
+    `<div class="tab-viewer" data-view-addr="center/view/test.v">${html}</div>`;
 }
-const ADDR = "win/main/content/view/test.v/node/btn";
+const ADDR = "win/main/center/view/test.v/node/btn";
 
 type NodeIdentityData = {
   nodeIdentity?: string;
@@ -330,7 +330,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
       mountNode(`<div data-node="slot"></div>`);
 
       const armed = await execute("ui.trace.multi.start", {
-        addresses: ["win/main/content/view/test.v/node/slot"],
+        addresses: ["win/main/center/view/test.v/node/slot"],
         maxMs: 5_000,
         producers: { interval: false },
       }, {});
@@ -357,7 +357,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
         startTime: 75,
         currentTime: 25,
       }] as unknown as Animation[]);
-      const address = "win/main/content/view/test.v/node/slot";
+      const address = "win/main/center/view/test.v/node/slot";
       const armed = await execute("ui.trace.multi.start", {
         addresses: [address], maxMs: 5_000, producers: { interval: false },
       }, {});
@@ -420,7 +420,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
         startTime: 75,
         currentTime: 25,
       }] as unknown as Animation[]);
-      const address = "win/main/content/view/test.v/node/slot";
+      const address = "win/main/center/view/test.v/node/slot";
       const armed = await execute("ui.trace.multi.start", {
         addresses: [address],
         maxMs: 5_000,
@@ -493,13 +493,13 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
             <div class="pane" data-node="layout/pane/pane-a"></div>
             <div class="pane-border" data-node="layout/frame/pane-a"></div>
             <div class="pane-focus-boundary" data-node="layout/focus-boundary/pane-a"></div>
-            <div class="tab-viewer" data-view-addr="content/view/test.v">
+            <div class="tab-viewer" data-view-addr="center/view/test.v">
               <div data-node="slot"></div>
             </div>
           </div>
         </div>
       </div>`;
-    const address = "win/main/content/view/test.v/node/slot";
+    const address = "win/main/center/view/test.v/node/slot";
     const armed = await execute("ui.trace.multi.start", {
       addresses: ["win/main/proj/workspace-a/chrome/rail/left", address],
       maxMs: 5_000,
@@ -578,13 +578,13 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
         <div class="content" data-content="active">
           <div class="left-rail-plane" data-node="rail/plane"></div>
           <div class="space" data-node="layout/space/space-a" data-traveling="true">
-            <div class="tab-viewer" data-view-addr="content/view/test.v">
+            <div class="tab-viewer" data-view-addr="center/view/test.v">
               <div data-node="slot"></div>
             </div>
           </div>
         </div>
       </div>`;
-    const address = "win/main/content/view/test.v/node/slot";
+    const address = "win/main/center/view/test.v/node/slot";
     const armed = await execute("ui.trace.multi.start", {
       addresses: [address],
       maxMs: 5_000,
@@ -620,7 +620,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
         currentTime: 25,
       } as unknown as Animation;
       slot.getAnimations = vi.fn(() => [animation]);
-      const address = "win/main/content/view/test.v/node/slot";
+      const address = "win/main/center/view/test.v/node/slot";
       const armed = await execute("ui.trace.multi.start", {
         addresses: [address],
         maxMs: 5_000,
@@ -687,7 +687,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
         currentTime: 178.683,
       } as unknown as Animation;
       slot.getAnimations = vi.fn(() => [animation]);
-      const address = "win/main/content/view/test.v/node/slot";
+      const address = "win/main/center/view/test.v/node/slot";
       const armed = await execute("ui.trace.multi.start", {
         addresses: [address], maxMs: 5_000, producers: { interval: false },
       }, {});
@@ -732,7 +732,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
         top: 80, left: 110, right: 670, bottom: 500,
         toJSON: () => ({}),
       } as DOMRect));
-      const address = "win/main/content/view/test.v/node/slot";
+      const address = "win/main/center/view/test.v/node/slot";
       const armed = await execute("ui.trace.multi.start", {
         addresses: [address],
         maxMs: 5_000,
@@ -779,7 +779,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
       }));
       vi.stubGlobal("cancelAnimationFrame", vi.fn());
       mountNode(`<div data-node="slot"></div>`);
-      const address = "win/main/content/view/test.v/node/slot";
+      const address = "win/main/center/view/test.v/node/slot";
       const armed = await execute("ui.trace.multi.start", {
         addresses: [address],
         maxMs: 5_000,
@@ -837,7 +837,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
       vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
       vi.stubGlobal("cancelAnimationFrame", vi.fn());
       mountNode(`<div data-node="slot"></div>`);
-      const address = "win/main/content/view/test.v/node/slot";
+      const address = "win/main/center/view/test.v/node/slot";
       const armed = await execute("ui.trace.multi.start", {
         addresses: [address],
         maxMs: 5_000,
@@ -912,7 +912,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
         }));
       }
       const addresses = ["rail", "pane", "slot"]
-        .map((node) => `win/main/content/view/test.v/node/${node}`);
+        .map((node) => `win/main/center/view/test.v/node/${node}`);
       const armed = await execute("ui.trace.multi.start", { addresses, maxMs: 5_000 }, {});
       expect(armed).toMatchObject({
         ok: true,
@@ -1033,7 +1033,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
           toJSON: () => ({}),
         } as DOMRect;
       });
-      const addresses = ["win/main/content/view/test.v/node/slot"];
+      const addresses = ["win/main/center/view/test.v/node/slot"];
       const armed = await execute("ui.trace.multi.start", { addresses, maxMs: 5_000 }, {});
       const traceId = (armed.data as { traceId: string }).traceId;
       const prepared = await prepareLayoutMove([{ viewId: "test.v", dx: -160 }]);
@@ -1701,7 +1701,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
     // The outer capture listener = the same positional relation as GroupArea's body slot click activation path.
     const container = document.createElement("div");
     container.className = "tab-viewer";
-    container.dataset.viewAddr = "content/view/tplug.v";
+    container.dataset.viewAddr = "center/view/tplug.v";
     container.dataset.tabId = "tab-p1";
     document.body.appendChild(container);
     const host = document.createElement("div");
@@ -1959,7 +1959,7 @@ describe("ui.input.key — drive surface for paths open only to the keyboard", (
 
   it("NOT_EXPOSED for an unexposed address, INVALID_PARAMS for an empty key — no guessing", async () => {
     mountNode(`<div data-node="btn">x</div>`);
-    const ghost = await execute("ui.input.key", { address: "win/main/content/view/test.v/node/nope", key: "Enter" }, {});
+    const ghost = await execute("ui.input.key", { address: "win/main/center/view/test.v/node/nope", key: "Enter" }, {});
     expect(ghost.ok).toBe(false);
     expect(ghost.code).toBe("NOT_EXPOSED");
     const empty = await execute("ui.input.key", { address: ADDR, key: "" }, {});
@@ -2142,7 +2142,7 @@ describe("ui.input.click — projected realm coordinates use the producer's surf
     });
 
     const result = await execute("ui.input.click", {
-      address: "win/main/content/view/test.v/node/plugin-view/rlm-realm/urlbar",
+      address: "win/main/center/view/test.v/node/plugin-view/rlm-realm/urlbar",
     }, {});
 
     expect(result.ok).toBe(true);

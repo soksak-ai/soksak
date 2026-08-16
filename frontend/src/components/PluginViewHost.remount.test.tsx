@@ -16,8 +16,8 @@ const DECL = {
   id: "canvas",
   title: { en: "T" },
   icon: "▤",
-  placements: ["content"],
-  defaultPlacement: "content",
+  placements: ["center"],
+  defaultPlacement: "center",
   transparent: false,
   nativeSurface: false,
 } as unknown as ContributedView;
@@ -62,7 +62,7 @@ describe("PluginViewHost — container generation isolation", () => {
           viewKey="test-plugin.canvas"
           projectId="p1"
           root={null}
-          region="content"
+          region="center"
         />,
       );
     });

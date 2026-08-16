@@ -40,7 +40,7 @@ function mountView(viewId: string): HTMLElement {
   // Both names, same as production — the commands-layer check (viewContainerOf) still splits views by the old name.
   // A fixture ahead of production makes a passing test blind to the production defect.
   c.className = "tab-viewer plugin-view-container";
-  c.dataset.viewAddr = "content/view/test.v";
+  c.dataset.viewAddr = "center/view/test.v";
   c.dataset.tabId = viewId;
   const input = document.createElement("textarea");
   c.appendChild(input);

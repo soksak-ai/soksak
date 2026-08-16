@@ -16,18 +16,18 @@ const ok = (s: string): AddressParts => {
 
 describe("parseAddress — structural decomposition", () => {
   it("full view node path", () => {
-    expect(ok("win/main/proj/myproj/content/pane/0/view/soksak-plugin-acp-studio.studio/node/submit")).toEqual({
+    expect(ok("win/main/proj/myproj/center/pane/0/view/soksak-plugin-acp-studio.studio/node/submit")).toEqual({
       window: "main",
       workspace: "myproj",
-      region: "content",
+      region: "center",
       pane: "0",
       view: "soksak-plugin-acp-studio.studio",
       node: "submit",
     });
   });
   it("short form — relative to the active one (win/proj/pane omitted)", () => {
-    expect(ok("content/view/soksak-plugin-mailbox.inbox/node/msg/3")).toEqual({
-      region: "content",
+    expect(ok("center/view/soksak-plugin-mailbox.inbox/node/msg/3")).toEqual({
+      region: "center",
       view: "soksak-plugin-mailbox.inbox",
       node: "msg/3",
     });
@@ -39,14 +39,14 @@ describe("parseAddress — structural decomposition", () => {
     });
   });
   it("chrome may omit win", () => {
-    expect(ok("chrome/tab/content/c1")).toEqual({ chrome: "tab/content/c1" });
+    expect(ok("chrome/tab/center/c1")).toEqual({ chrome: "tab/center/c1" });
   });
   it("pane active", () => {
-    expect(ok("content/pane/active/view/x.y/node/n").pane).toBe("active");
+    expect(ok("center/pane/active/view/x.y/node/n").pane).toBe("active");
   });
   it("leading and trailing slash normalization", () => {
-    expect(ok("/content/view/a.b/node/n/")).toEqual({
-      region: "content",
+    expect(ok("/center/view/a.b/node/n/")).toEqual({
+      region: "center",
       view: "a.b",
       node: "n",
     });
@@ -55,8 +55,8 @@ describe("parseAddress — structural decomposition", () => {
 
 describe("round-trip identity — parse∘format", () => {
   const cases = [
-    "win/main/proj/p/content/pane/0/view/a.b/node/submit",
-    "content/view/x.y/node/msg/3",
+    "win/main/proj/p/center/pane/0/view/a.b/node/submit",
+    "center/view/x.y/node/msg/3",
     "win/w2/chrome/modal/consent/agree",
     "chrome/tab/left/files",
     "left/view/soksak-plugin-memo.panel/node/save",
@@ -74,12 +74,12 @@ describe("bad input — an explicit error (zero guessing)", () => {
     "   ",
     "win", // no label
     "win/main", // no path after the window
-    "content/region/middle", // a region typo is an unknown segment
-    "content/pane/x", // pane is neither idx nor active
-    "content/view/noplugin", // no dot in the view key
-    "content/node/", // no node path
+    "center/region/middle", // a region typo is an unknown segment
+    "center/pane/x", // pane is neither idx nor active
+    "center/view/noplugin", // no dot in the view key
+    "center/node/", // no node path
     "win/BAD UPPER/content", // uppercase or space in the label
-    "content/view/a.b/node/Bad", // uppercase in the node path
+    "center/view/a.b/node/Bad", // uppercase in the node path
   ];
   for (const b of bad) {
     it(`reject: "${b}"`, () => {
@@ -104,8 +104,8 @@ describe("NODE_PATH_RE — node path form", () => {
 
 describe("multi-window — the win segment namespace", () => {
   it("a different window is a different address", () => {
-    const a = ok("win/main/content/view/x.y/node/n");
-    const b = ok("win/w2/content/view/x.y/node/n");
+    const a = ok("win/main/center/view/x.y/node/n");
+    const b = ok("win/w2/center/view/x.y/node/n");
     expect(a.window).toBe("main");
     expect(b.window).toBe("w2");
     expect(formatAddress(a)).not.toBe(formatAddress(b));

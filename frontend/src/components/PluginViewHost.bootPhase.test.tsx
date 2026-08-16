@@ -24,7 +24,7 @@ function mountHost(host: HTMLElement): Root {
         viewKey="nope.canvas"
         projectId="p1"
         root={null}
-        region="content"
+        region="center"
       />,
     );
   });

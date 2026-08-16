@@ -70,7 +70,6 @@ import { registerPluginCatalog } from "./catalogPlugins";
 import { registerDaemonCatalog } from "./catalogDaemon";
 import { registerUpdateCatalog } from "./catalogUpdate";
 import { registerUiCatalog } from "./catalogUi";
-import { registerProjectionCatalog } from "./catalogProjection";
 import { registerDomCatalog } from "./catalogDom";
 import { registerDataCatalog } from "./catalogData";
 import { registerPtySessionCatalog } from "./catalogPtySession";
@@ -2404,7 +2403,6 @@ export function registerCatalog(): void {
   registerDaemonCatalog();
   registerUpdateCatalog();
   registerUiCatalog();
-  registerProjectionCatalog();
   registerDomCatalog();
   registerDataCatalog();
   registerPtySessionCatalog();

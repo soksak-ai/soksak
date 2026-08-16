@@ -15,7 +15,6 @@ vi.mock("../framework", async (importOriginal) => ({
 }));
 
 import { registerPluginCatalog } from "./catalogPlugins";
-import { tmsg } from "../i18n";
 import { execute, getSpec } from "./registry";
 import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { useSessions, type Workspace, type Tab } from "../state/sessions";
@@ -127,7 +126,7 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
             id: "canvas",
             title: "Canvas",
             icon: "C",
-            placements: ["content"], decoration: true,
+            placements: ["center"], decoration: true,
             ...(status !== undefined ? { status } : {}),
           },
         ],
@@ -227,7 +226,7 @@ describe("plugin.conformance — C2 static rules (command-surface, view-nodes)",
     const manifest = manifestOf(id, {
       permissions: ["ui"],
       contributes: {
-        views: [{ id: "image", title: { en: "Image", ko: "Image" }, icon: "file", placements: ["content"], sidebar: { left: [{ plugin: "soksak-plugin-file-tree", view: "tree", instance: "shared" }] } }],
+        views: [{ id: "image", title: { en: "Image", ko: "Image" }, icon: "file", placements: ["center"] }],
       },
     });
     usePlugins.setState({ plugins: { [id]: runtimeOf(manifest) } });
@@ -282,8 +281,8 @@ describe("plugin.dev.load — home lane gate (dev identity only)", () => {
   });
 });
 
-describe("plugin.view.open — a rail placement is not an open target (left rail projection only)", () => {
-  it("INVALID_PARAMS even for a resident rail view — it appears only through declaration-projection", async () => {
+describe("plugin.view.open — only a center view opens as a tab", () => {
+  it("a view placed left is refused, and the refusal names where it is", async () => {
     const { useViewRegistry } = await import("../plugins/viewRegistry");
     useViewRegistry.getState().register(
       "railplug",
@@ -291,12 +290,11 @@ describe("plugin.view.open — a rail placement is not an open target (left rail
         id: "tree",
         title: "tree",
         icon: "x",
-        placements: ["rail"],
-        defaultPlacement: "rail",
+        placements: ["left"],
+        defaultPlacement: "left",
         transparent: false,
         nativeSurface: false,
         decoration: false,
-        resident: true,
       },
       { mount: () => {} },
     );
@@ -308,7 +306,8 @@ describe("plugin.view.open — a rail placement is not an open target (left rail
     };
     expect(r.ok).toBe(false);
     expect(r.code).toBe("INVALID_PARAMS");
-    expect(String(r.message)).toBe(tmsg("msg.plugin.view.railNotOpenable", { key: "railplug.tree" }));
+    // The refusal names where the view actually is — a caller told only "no" looks for a bug.
+    expect(r.message).toContain("left");
   });
 });
 

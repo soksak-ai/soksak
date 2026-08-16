@@ -19,7 +19,6 @@ import {
 } from "./splitTree";
 import type { SidebarGroup } from "./sidebarLayout";
 import type { Workspace, Space, Pane, Tab } from "./sessions";
-import type { Pins } from "./projection";
 import { DEFAULT_RAIL_PLACEMENT,
   normalizeRailPlacement,
   type RailPlacement,
@@ -76,7 +75,7 @@ export interface WorkspaceSnapshot {
   // era's default, so it is dropped once (removal condition: no marker-less snapshot left in the field).
   railPlacementNormalized?: true;
   sidebarOpen: boolean;
-  // Rail frame position PIN. Orthogonal to projection.pins (ref pinning). Optional for old-snapshot compatibility.
+  // Rail frame position PIN.
   leftRailPlacement?: RailPlacement;
   rightOpen: boolean;
   rightView: string | null;
@@ -84,7 +83,6 @@ export interface WorkspaceSnapshot {
   activeContentId: string;
   contents: ContentSnapshot[];
   // Rail pins (§4.5) — persisted with the workspace.
-  projection?: { pins: Pins };
 }
 
 // ── serialize ─────────────────────────────────────────────────────────────────
@@ -126,12 +124,8 @@ const serializeContent = (c: Space): ContentSnapshot => ({
   layout: serializeSplitTree(c.layout, serializeViewGroup), // PaneNode(leaf=Pane)
 });
 
-export function serializeWorkspace(
-  p: Workspace,
-  projection?: { pins: Pins },
-): WorkspaceSnapshot {
+export function serializeWorkspace(p: Workspace): WorkspaceSnapshot {
   return {
-    ...(projection ? { projection } : {}),
     id: p.id,
     title: p.title,
     root: p.root,

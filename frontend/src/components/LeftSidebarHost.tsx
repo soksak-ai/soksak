@@ -32,8 +32,6 @@ import {
   viewsForPlacement,
   getRegisteredView,
 } from "../plugins/viewRegistry";
-import { ProjectionSlots } from "./ProjectionSlots";
-import { useProjection } from "../state/projection";
 import { useSessions, type Workspace } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useViewLabels, resolveViewLabel } from "../state/viewLabels";
@@ -58,34 +56,23 @@ const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 6 };
 export const LeftSidebarHost = memo(function LeftSidebarHost({
   workspace,
   paneId,
-  commitProjection,
 }: {
   workspace: Workspace;
   paneId: string;
-  commitProjection: boolean;
 }) {
   const version = useViewRegistry((s) => s.version);
   // The same pane-inset as the content group (theme paneStyle) — for row2 alignment.
   const paneStyle = useTheme((s) => s.spec.chrome.paneStyle);
   const paneInset = PANE_INSET[paneStyle] ?? 0;
-  // Pin stack (§7.1) — this grid now arranges only pinned refs, not "everything registered".
-  // ProjectionSlots above owns the projection slots (which switch with the binding). Pin adoption and legacy
-  // auto-pinning are handled by the tracking sweep in projectionWiring.
-  const pinnedLeft = useProjection(
-    (s) => s.byWorkspace[workspace.id]?.pins.left,
-  );
-  const registeredKeys = useMemo(() => {
-    // Pin render targets = resident rail views only (②). Non-resident pin records are filtered out (harmless).
-    const residentish = new Set(
-      viewsForPlacement("rail")
-        .filter(({ view }) => view.decl.resident)
-        .map((v) => v.key),
-    );
-    return (pinnedLeft ?? []).filter((k) => residentish.has(k));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, pinnedLeft]);
-  const footerViews = useMemo(
-    () => viewsForPlacement("rail-footer"),
+  // Every view a plugin placed here. The person arranges them — split, tab, order — and the
+  // arrangement is the workspace's (leftLayout).
+  //
+  // The grid arranged pinned refs until 2026-08-16, and a projection above it swapped a slot as the
+  // bound content view changed: a content view declared what belonged beside it, which is a view
+  // about content and produced a slot pointing at a plugin that does not exist. A plugin declares
+  // which region it is placed in, and nothing else.
+  const registeredKeys = useMemo(
+    () => viewsForPlacement("left").map((v) => v.key),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [version],
   );
@@ -275,14 +262,6 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
       {/* Header band — same height as the content header (lib/chromeBands). No plugin fills this
           slot today, and empty is a legitimate state for this band. */}
       <div className="sidebar-left-header" data-node="sidebar/header" />
-      {/* Projection slots (R1) — the bound view's left sidebar declaration renders here. Coexists with the pin stack (R4). */}
-      <ProjectionSlots
-        projectId={workspace.id}
-        root={workspace.root}
-        paneId={paneId}
-        side="left"
-        commitProjection={commitProjection}
-      />
       {/* Grid of %-absolute cells (same model as a content space) — the footer is below it, outside the flow. */}
       <div
         className="left-panes"
@@ -347,18 +326,10 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
 
       {/* The frame is the contract and the body is the plugin's share — an empty footer is the frame,
           not an absence. Made conditional, only a window with no plugin gets a different skeleton, and
-          next to another window it is off by one row (measured 2026-08-15). */}
-      <div className="sidebar-left-footer" data-node="sidebar/footer">
-        {footerViews.length > 0 && (
-          <PluginViewHost
-            viewKey={footerViews[0].key}
-            projectId={workspace.id}
-            root={workspace.root}
-            region="left"
-            paneId={paneId}
-          />
-        )}
-      </div>
+          next to another window it is off by one row (measured 2026-08-15).
+          Nothing fills it: `rail-footer` was a placement a plugin asked for, and a position inside a
+          region is an order the person arranged, not a place (2026-08-16). */}
+      <div className="sidebar-left-footer" data-node="sidebar/footer" />
     </div>
   );
 });

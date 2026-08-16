@@ -56,13 +56,13 @@ export interface TransparencyContributes {
   nodes: readonly unknown[];
 }
 
-// Content view test — placements contains "content". The definition was fixed by measuring
+// Center view test — placements contains "center". The definition was fixed by measuring
 // installed manifests (40 measured in the dev home: content views are identified by placements
 // alone, with no separate marker. 9 content-only, 1 mixed with sidebar — a mixed one still rides in
 // a content tab, so it is a content view). setStatus is valid only in content placement (no-op in
 // the sidebar), so the scope of the status declaration duty matches this test.
 export function isContentView(view: { placements: readonly string[] }): boolean {
-  return view.placements.includes("content");
+  return view.placements.includes("center");
 }
 
 // The capability predicate counts every render/program contribution axis. An overlay also renders

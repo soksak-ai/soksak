@@ -156,11 +156,8 @@ describe("windowSnapshot round trip", () => {
 
 describe("left rail FLOW/PIN persistence", () => {
   it("round-trips the position PIN independently from projection ref pins", () => {
-    const snap = serializeWorkspace(workspace, {
-      pins: { left: ["plugin.tree"], right: [] },
-    });
+    const snap = serializeWorkspace(workspace);
     expect(snap.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
-    expect(snap.projection?.pins.left).toEqual(["plugin.tree"]);
 
     const back = deserializeWorkspace(snap);
     expect(back.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
@@ -358,23 +355,3 @@ describe("restore normalization — one migration per snapshot (the no-vertical-
   });
 });
 
-describe("projection pin persistence (§4.5) — snapshot round trip", () => {
-  it("a projection put on serializeWorkspace stays in the snapshot and an old snapshot has no such field", async () => {
-    const { serializeWorkspace } = await import("./windowSnapshot");
-    const tab = {
-      id: "wsp-iiiiii", title: "P", root: "<local-evidence>/p", sidebarOpen: true, rightOpen: false,
-      rightView: null,
-      leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
-      activeSpaceId: "spc-aaaaaa",
-      spaces: [{ id: "spc-aaaaaa", title: "1", activePaneId: "pan-aaaaaa", layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [], activeTabId: "" } } }],
-    } as never;
-    const withProj = serializeWorkspace(tab, {
-      pins: { left: ["a.t"], right: [] },
-    });
-    expect(withProj.projection).toEqual({
-      pins: { left: ["a.t"], right: [] },
-    });
-    const without = serializeWorkspace(tab);
-    expect(without).not.toHaveProperty("projection");
-  });
-});

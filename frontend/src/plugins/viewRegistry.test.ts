@@ -12,7 +12,7 @@ import type { ContributedView } from "./spec";
 const provider: PluginViewProvider = { mount: () => {} };
 
 function decl(id: string, placements: ContributedView["placements"]): ContributedView {
-  return { id, title: id, icon: "P", placements, defaultPlacement: placements[0], transparent: false, nativeSurface: false, decoration: false, resident: false };
+  return { id, title: id, icon: "P", placements, defaultPlacement: placements[0], transparent: false, nativeSurface: false, decoration: false };
 }
 
 beforeEach(() => {
@@ -21,9 +21,9 @@ beforeEach(() => {
 
 describe("registeredViewIds — observing the actual side of declared≡actual", () => {
   it("view ids this plugin registered, in registration order — other plugins excluded", () => {
-    useViewRegistry.getState().register("memo", decl("panel", ["rail"]), provider);
-    useViewRegistry.getState().register("memo", decl("side", ["rail"]), provider);
-    useViewRegistry.getState().register("other", decl("x", ["content"]), provider);
+    useViewRegistry.getState().register("memo", decl("panel", ["left"]), provider);
+    useViewRegistry.getState().register("memo", decl("side", ["left"]), provider);
+    useViewRegistry.getState().register("other", decl("x", ["center"]), provider);
     expect(registeredViewIds("memo")).toEqual(["panel", "side"]);
     expect(registeredViewIds("none")).toEqual([]);
   });
@@ -32,22 +32,22 @@ describe("registeredViewIds — observing the actual side of declared≡actual",
 describe("viewRegistry", () => {
   it("register → lookup by global key succeeds and version increments", () => {
     const v0 = useViewRegistry.getState().version;
-    useViewRegistry.getState().register("memo", decl("panel", ["rail"]), provider);
+    useViewRegistry.getState().register("memo", decl("panel", ["left"]), provider);
     expect(getRegisteredView("memo.panel")?.pluginId).toBe("memo");
     expect(useViewRegistry.getState().version).toBe(v0 + 1);
   });
 
   it("duplicate registration is refused (§0-3 no silent collision)", () => {
-    useViewRegistry.getState().register("memo", decl("panel", ["rail"]), provider);
+    useViewRegistry.getState().register("memo", decl("panel", ["left"]), provider);
     expect(() =>
-      useViewRegistry.getState().register("memo", decl("panel", ["rail"]), provider),
+      useViewRegistry.getState().register("memo", decl("panel", ["left"]), provider),
     ).toThrow(/memo\.panel/);
   });
 
   it("unregister is idempotent and version increments only on a real change", () => {
     const remove = useViewRegistry
       .getState()
-      .register("memo", decl("panel", ["rail"]), provider);
+      .register("memo", decl("panel", ["left"]), provider);
     remove();
     expect(getRegisteredView("memo.panel")).toBeNull();
     const v = useViewRegistry.getState().version;
@@ -57,7 +57,7 @@ describe("viewRegistry", () => {
 
   it("setViewBadge — set and clear, 0 normalized away, version unchanged (no view remount), badge cleared when the view is unregistered", () => {
     const st = useViewRegistry.getState();
-    const remove = st.register("memo", decl("panel", ["rail"]), provider);
+    const remove = st.register("memo", decl("panel", ["left"]), provider);
     const v = useViewRegistry.getState().version;
 
     st.setViewBadge("memo.panel", 3);
@@ -77,15 +77,16 @@ describe("viewRegistry", () => {
   });
 
   it("viewsForPlacement filters by declared placement", () => {
-    useViewRegistry.getState().register("memo", decl("panel", ["rail"]), provider);
+    useViewRegistry.getState().register("memo", decl("panel", ["left"]), provider);
     useViewRegistry
       .getState()
-      .register("diff", decl("view", ["content", "rail"]), provider);
-    expect(viewsForPlacement("rail").map((x) => x.key)).toEqual([
+      .register("diff", decl("view", ["center", "left"]), provider);
+    expect(viewsForPlacement("left").map((x) => x.key)).toEqual([
       "memo.panel",
       "diff.view",
     ]);
-    expect(viewsForPlacement("content").map((x) => x.key)).toEqual(["diff.view"]);
-    expect(viewsForPlacement("rail-footer")).toEqual([]);
+    expect(viewsForPlacement("center").map((x) => x.key)).toEqual(["diff.view"]);
+    // A region nobody declared answers empty rather than everything.
+    expect(viewsForPlacement("right")).toEqual([]);
   });
 });

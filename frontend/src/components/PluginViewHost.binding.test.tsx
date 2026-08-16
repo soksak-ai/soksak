@@ -128,7 +128,7 @@ describe("PluginViewHost — a changed binding is delivered to the view", () => 
           viewKey="p.list"
           projectId="p1"
           root="/r"
-          region="content"
+          region="center"
           viewId="v-a"
           surfacePlacement={viewSurfacePlacement(false, false)}
         />,
@@ -143,7 +143,7 @@ describe("PluginViewHost — a changed binding is delivered to the view", () => 
           viewKey="p.list"
           projectId="p1"
           root="/r"
-          region="content"
+          region="center"
           viewId="v-a"
           surfacePlacement={viewSurfacePlacement(true, false)}
         />,
@@ -212,7 +212,7 @@ describe("PluginViewHost — a changed binding is delivered to the view", () => 
             viewKey="p.list"
             projectId="p1"
             root="/r"
-            region="content"
+            region="center"
             viewId="v-a"
             restore={{ cwd: "/r", state }}
           />,

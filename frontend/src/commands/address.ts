@@ -24,7 +24,10 @@
 // node/<nodePath> and chrome/<chromePath> allow multiple slash-separated segments (to the end).
 // Everything else is a single token.
 
-export const REGIONS = ["left", "content", "right"] as const;
+// The three regions of a window, and the one vocabulary for them: a placement declares one, an
+// address names one, a view host is handed one. The middle one was "content" until 2026-08-16 — a
+// role rather than a place, and the core holds no view about content (A1).
+export const REGIONS = ["left", "center", "right"] as const;
 export type Region = (typeof REGIONS)[number];
 
 // Node/chrome path segments — alphanumerics, hyphen, dot (qualifiedViewId), slash (hierarchy),

@@ -57,6 +57,12 @@ six left on 2026-08-16.
 All of these are hard.
 
 - **A1.** The core renders no concrete content. A slot is an empty container.
+  A window has three regions — `left`, `center`, `right` — and a plugin declares
+  which of them its view is placed in, one or several. The region is a place, not
+  a role: the core neither knows nor asks what a view is for. Until 2026-08-16
+  the vocabulary read `content` / `rail` / `rail-footer`, and a content view also
+  declared what belonged in the sidebar beside it — a view about content, which
+  is the one thing A1 forbids.
 - **A2.** View context is the only channel into a view. No core store, no layout tree.
 - **A3.** General capabilities only. A capability named after one consumer is lock-in.
 - **A4.** No core lock-in. Adding a content subsystem costs the core zero edits.

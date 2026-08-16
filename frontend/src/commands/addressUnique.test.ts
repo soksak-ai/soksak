@@ -28,8 +28,8 @@ beforeEach(() => {
 
 describe("A1 uniqueness — two nodes cannot hold the same address", () => {
   it("mounting the same view key twice keeps the addresses apart on the inst axis", () => {
-    mountView("content/view/p.browser/tab/tab-aaaaaa", ["urlbar"]);
-    mountView("content/view/p.browser/tab/tab-bbbbbb", ["urlbar"]);
+    mountView("center/view/p.browser/tab/tab-aaaaaa", ["urlbar"]);
+    mountView("center/view/p.browser/tab/tab-bbbbbb", ["urlbar"]);
     const addrs = collectExposed().map((n) => n.address);
     expect(new Set(addrs).size).toBe(addrs.length);
   });
@@ -37,28 +37,28 @@ describe("A1 uniqueness — two nodes cannot hold the same address", () => {
 
 describe("A2 no guessing — 0 matches is absent, 2 or more is ambiguous", () => {
   it("a unique match is returned", () => {
-    mountView("content/view/p.browser/tab/tab-aaaaaa", ["urlbar"]);
-    const r = resolveExposed("content/view/p.browser/tab/tab-aaaaaa/node/urlbar");
+    mountView("center/view/p.browser/tab/tab-aaaaaa", ["urlbar"]);
+    const r = resolveExposed("center/view/p.browser/tab/tab-aaaaaa/node/urlbar");
     expect("el" in r).toBe(true);
   });
 
   it("no match answers NOT_EXPOSED and does not guess with a selector", () => {
-    const r = resolveExposed("content/view/p.browser/tab/tab-aaaaaa/node/urlbar");
+    const r = resolveExposed("center/view/p.browser/tab/tab-aaaaaa/node/urlbar");
     expect(r).toMatchObject({ code: "NOT_EXPOSED" });
   });
 
   it("two matches answer AMBIGUOUS and do not pick the visible one", () => {
-    mountView("content/view/p.browser", ["urlbar"]);
-    mountView("content/view/p.browser", ["urlbar"]);
-    const r = resolveExposed("content/view/p.browser/node/urlbar");
+    mountView("center/view/p.browser", ["urlbar"]);
+    mountView("center/view/p.browser", ["urlbar"]);
+    const r = resolveExposed("center/view/p.browser/node/urlbar");
     expect(r).toMatchObject({ code: "AMBIGUOUS" });
   });
 
   it("the ambiguous message reports how many matched — an answer must be diagnosable to be fixable", () => {
-    mountView("content/view/p.browser", ["urlbar"]);
-    mountView("content/view/p.browser", ["urlbar"]);
-    mountView("content/view/p.browser", ["urlbar"]);
-    const r = resolveExposed("content/view/p.browser/node/urlbar");
+    mountView("center/view/p.browser", ["urlbar"]);
+    mountView("center/view/p.browser", ["urlbar"]);
+    mountView("center/view/p.browser", ["urlbar"]);
+    const r = resolveExposed("center/view/p.browser/node/urlbar");
     expect("message" in r && r.message).toMatch(/3/);
   });
 });
