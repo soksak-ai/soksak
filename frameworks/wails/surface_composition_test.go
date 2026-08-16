@@ -14,14 +14,14 @@ import (
 // without the thing that produces them.
 type stubComposition struct{ latest Composition }
 
-func (s stubComposition) Latest() Composition { return s.latest }
+func (s stubComposition) Latest(string) Composition { return s.latest }
 
 func surfaceRegistry(t *testing.T, latest Composition, parent bool) *control.Registry {
 	t.Helper()
 	registry := control.NewRegistry()
 	RegisterSurface(registry, SurfaceDeps{
 		Composition:  stubComposition{latest: latest},
-		NativeParent: func() bool { return parent },
+		NativeParent: func(string) bool { return parent },
 	})
 	return registry
 }
@@ -31,7 +31,8 @@ func surfaceRegistry(t *testing.T, latest Composition, parent bool) *control.Reg
 // by another name is missing to the page whatever the struct calls it.
 func surfaceStatsPayload(t *testing.T, registry *control.Registry) map[string]any {
 	t.Helper()
-	answer, err := registry.Invoke("engine_surface_stats", nil)
+	// Named, because a surface reading is about one window (see surfaceWindow).
+	answer, err := registry.Invoke("engine_surface_stats", control.Args{"window": jsonString("main")})
 	if err != nil {
 		t.Fatalf("engine_surface_stats: %v", err)
 	}
@@ -345,7 +346,7 @@ func TestTheSurfaceCommandBelongsToTheFramework(t *testing.T) {
 
 func TestTheSurfaceGroupRefusesToRegisterHalfWired(t *testing.T) {
 	for name, deps := range map[string]SurfaceDeps{
-		"no composition":   {NativeParent: func() bool { return true }},
+		"no composition":   {NativeParent: func(string) bool { return true }},
 		"no native parent": {Composition: stubComposition{}},
 	} {
 		func() {
@@ -356,5 +357,55 @@ func TestTheSurfaceGroupRefusesToRegisterHalfWired(t *testing.T) {
 			}()
 			RegisterSurface(control.NewRegistry(), deps)
 		}()
+	}
+}
+
+// A surface in the wrong window is reported, and it is not reported as a distance.
+//
+// Measured 2026-08-16: a browser declared by a workspace window was attached to the orchestrator.
+// Declared and applied frames agreed to zero drift, visible was true and alpha was 1, so every
+// number the composition published said the layer was correct while the pane on screen was empty.
+// The window was the one coordinate nobody read back.
+func TestASurfaceInAnotherWindowIsNamedAndCountedDisplaced(t *testing.T) {
+	judgement := compositionJudgementOf(Composition{
+		Sequence: 4,
+		Placements: []SurfacePlacement{{
+			ID: "brw-a", Kind: "browser", Generation: 1,
+			Declared:        SurfaceFrame{X: 10, Y: 10, W: 100, H: 100},
+			Applied:         SurfaceFrame{X: 10, Y: 10, W: 100, H: 100},
+			DeclaredVisible: true, AppliedVisible: true,
+			DeclaredAlpha: 1, AppliedAlpha: 1,
+			Misparented: true,
+		}},
+	}, true)
+
+	if judgement.Worst != 0 {
+		t.Errorf("worst is %v; a window is not a distance and must not become one", judgement.Worst)
+	}
+	if len(judgement.Misparented) != 1 || judgement.Misparented[0] != "brw-a" {
+		t.Errorf("misparented is %v, not [brw-a]", judgement.Misparented)
+	}
+	if judgement.Displaced != 1 {
+		t.Errorf("displaced is %d; a surface in the wrong window is not where it was declared", judgement.Displaced)
+	}
+	if len(judgement.Surfaces) != 1 || !judgement.Surfaces[0].Misparented {
+		t.Errorf("the surface entry does not carry it: %+v", judgement.Surfaces)
+	}
+}
+
+func TestASurfaceInItsOwnWindowIsNotNamed(t *testing.T) {
+	judgement := compositionJudgementOf(Composition{
+		Sequence: 4,
+		Placements: []SurfacePlacement{{
+			ID: "brw-a", Kind: "browser", Generation: 1,
+			Declared: SurfaceFrame{X: 10, Y: 10, W: 100, H: 100},
+			Applied:  SurfaceFrame{X: 10, Y: 10, W: 100, H: 100},
+		}},
+	}, true)
+	if len(judgement.Misparented) != 0 {
+		t.Errorf("misparented is %v on a surface nobody moved", judgement.Misparented)
+	}
+	if judgement.Displaced != 0 {
+		t.Errorf("displaced is %d on a surface with zero drift", judgement.Displaced)
 	}
 }

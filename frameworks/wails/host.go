@@ -66,14 +66,22 @@ const (
 // Run builds the application, registers the plugin services, opens the first
 // window, and blocks until the application exits.
 func Run(options Options) error {
-	// The window is captured by reference: the compositor needs a native handle,
-	// and that handle does not exist until the window is created below.
+	// The window host is captured by reference: the compositor resolves a window
+	// by name, and no window — not even the host that holds them — exists until
+	// the application is built below.
+	//
+	// By name, never by "the window this host happens to hold". Measured
+	// 2026-08-16: one captured handle answered every commit, so a workspace
+	// window's browser was created inside the orchestrator — a 1128×718 surface
+	// inside a 999×617 window — and the pane the person was looking at stayed
+	// empty while every reading reported the surface applied with zero drift.
 	var window application.Window
-	nativeWindow := func() unsafe.Pointer {
-		if window == nil {
+	var windowHost WindowHost
+	nativeWindow := func(name string) unsafe.Pointer {
+		if windowHost == nil {
 			return nil
 		}
-		return window.NativeWindow()
+		return windowHost.NativeHandle(name)
 	}
 
 	browserBackend := nativebrowser.NewBackend()
@@ -104,7 +112,12 @@ func Run(options Options) error {
 			// The capture finishes its image with content that draws outside this process. Without
 			// it a browser pane is a flat rectangle in every screenshot while the page behind it
 			// is loading correctly.
-			application.NewService(NewCaptureService(nativeWindow).withSurfaces(surfaceImages)),
+			// Bound to the control plane's window by name, because a bound service has no
+			// caller to ask. Every other capture arrives through the command path, which
+			// names the window it is a capture of.
+			application.NewService(NewCaptureService(controlPlaneWindow, func() unsafe.Pointer {
+				return nativeWindow(controlPlaneWindow)
+			}).withSurfaces(surfaceImages)),
 			application.NewService(NewControlService(options.Registry)),
 		},
 		Assets: application.AssetOptions{
@@ -129,7 +142,7 @@ func Run(options Options) error {
 	// Built before the run loop, because it subscribes to the event marking that
 	// the run loop started. Created afterwards it would never hear it, and every
 	// window command would refuse forever.
-	windowHost := NewWindowHost(app, windowTemplate)
+	windowHost = NewWindowHost(app, windowTemplate)
 
 	// Filled here, before Run, so that the commands the core registered against
 	// it start answering the moment the application exists rather than at the
@@ -150,7 +163,7 @@ func Run(options Options) error {
 		Sessions:     terminalplugin.CommandSessions(options.Terminal),
 		Composition:  surfaceComposition,
 		Surfaces:     surfaceImages,
-		NativeParent: func() bool { return nativeWindow() != nil },
+		NativeParent: func(name string) bool { return nativeWindow(name) != nil },
 		Dispatch: func(target, event string, payload any) error {
 			return dispatchToWindow(app, target, event, payload)
 		},
@@ -217,7 +230,9 @@ func Run(options Options) error {
 	// a boot defect stay separable — otherwise a failed boot hides whether the
 	// capture path works at all.
 	if target := options.CaptureProbe; target != "" {
-		capture := NewCaptureService(nativeWindow)
+		capture := NewCaptureService(controlPlaneWindow, func() unsafe.Pointer {
+			return nativeWindow(controlPlaneWindow)
+		})
 		go func() {
 			time.Sleep(3 * time.Second)
 			note, err := capture.Snapshot(target)

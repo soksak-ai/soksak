@@ -9,6 +9,7 @@ export {
 };
 
 export {
+    CaptureNote,
     Rect,
     Reply
 } from "./models.js";

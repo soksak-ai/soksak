@@ -8,10 +8,14 @@
 // pane was an empty rectangle with nothing reporting why.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const commits: Array<{ sequence: number; surfaces: unknown[] }> = [];
+// The window a commit names. A snapshot that named none let the host resolve whichever window it
+// held, and a workspace window's browser was created inside the orchestrator (measured 2026-08-16).
+vi.mock("../../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test" }));
+
+const commits: Array<{ window: string; sequence: number; surfaces: unknown[] }> = [];
 vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/service", () => ({
-  Commit: vi.fn(async (snapshot: { sequence: number; surfaces: unknown[] }) => {
-    commits.push({ sequence: snapshot.sequence, surfaces: snapshot.surfaces });
+  Commit: vi.fn(async (snapshot: { window: string; sequence: number; surfaces: unknown[] }) => {
+    commits.push({ window: snapshot.window, sequence: snapshot.sequence, surfaces: snapshot.surfaces });
     return { sequence: snapshot.sequence, accepted: true, surfaces: snapshot.surfaces };
   }),
 }));

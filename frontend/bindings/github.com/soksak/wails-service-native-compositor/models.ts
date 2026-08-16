@@ -178,11 +178,22 @@ export class Receipt {
 }
 
 export class Snapshot {
+    /**
+     * Window names the window whose document declared these surfaces.
+     * 
+     * A surface is attached to one window's content view and its frame is in that document's
+     * coordinates. Without the name a host with two windows attaches every surface to whichever
+     * one it happened to hand over, and the frames are read against the wrong box.
+     */
+    "window": string;
     "sequence": number;
     "surfaces": Surface[];
 
     /** Creates a new Snapshot instance. */
     constructor($$source: Partial<Snapshot> = {}) {
+        if (!("window" in $$source)) {
+            this["window"] = "";
+        }
         if (!("sequence" in $$source)) {
             this["sequence"] = 0;
         }
@@ -197,10 +208,10 @@ export class Snapshot {
      * Creates a new Snapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): Snapshot {
-        const $$createField1_0 = $$createType6;
+        const $$createField2_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("surfaces" in $$parsedSource) {
-            $$parsedSource["surfaces"] = $$createField1_0($$parsedSource["surfaces"]);
+            $$parsedSource["surfaces"] = $$createField2_0($$parsedSource["surfaces"]);
         }
         return new Snapshot($$parsedSource as Partial<Snapshot>);
     }

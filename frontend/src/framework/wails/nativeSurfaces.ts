@@ -3,6 +3,7 @@ import type { NativeSurfaceCommit, NativeSurfaceObserverController } from "@soks
 
 import * as CompositorService from "../../../bindings/github.com/soksak/wails-service-native-compositor/service";
 import { Snapshot } from "../../../bindings/github.com/soksak/wails-service-native-compositor/models";
+import { currentWindowLabel } from "../../lib/webviewLabels";
 
 const commit: NativeSurfaceCommit = async (snapshot) => {
   const receipt = await CompositorService.Commit(Snapshot.createFrom(snapshot));
@@ -21,10 +22,31 @@ let controller: NativeSurfaceObserverController | null = null;
 let sequenceFloor = 0;
 let watching: Document | null = null;
 
+/**
+ * The window this document is.
+ *
+ * Every surface declared here is attached to this window's content view. The commit states the
+ * name and the host resolves that window's handle. Measured 2026-08-16, with no name in the
+ * snapshot: the host held a single handle, a workspace window's browser was created inside the
+ * orchestrator — 1128×718 inside a 999×617 window — and the pane a person was looking at stayed
+ * empty while every reading reported the surface applied with zero drift.
+ */
+function declaringWindow(): string {
+  const label = currentWindowLabel();
+  if (!label) {
+    // Refused here rather than at the commit. Boot resolves the name before it installs this
+    // adapter (main.tsx awaits resolveWindowLabel first), so an empty one is a broken boot order,
+    // and the commit would fail inside a microtask where the only witness is
+    // `controller.status().error` — an unhandled rejection and a screen with no surfaces on it.
+    throw new Error("native surfaces: this window has no name yet; the commit would name no window");
+  }
+  return label;
+}
+
 export function startNativeSurfaces(root: Document = document): void {
   controller?.stop();
   watching = root;
-  controller = startNativeSurfaceObserver(nativeSurfaceDOMRuntime(root), commit, sequenceFloor);
+  controller = startNativeSurfaceObserver(nativeSurfaceDOMRuntime(root), commit, declaringWindow(), sequenceFloor);
 }
 
 /**
@@ -40,7 +62,7 @@ export async function clearNativeSurfaces(): Promise<void> {
   controller?.stop();
   controller = null;
   sequenceFloor += 1;
-  await commit({ sequence: sequenceFloor, surfaces: [] });
+  await commit({ window: declaringWindow(), sequence: sequenceFloor, surfaces: [] });
 }
 
 /**

@@ -28,12 +28,12 @@ func NewCompositorImages(
 // The applied half, not the declared one. The declaration is where a surface was asked to go, and
 // drawing a page at a rectangle it is not at would put the difference G3 measures into the image
 // as if it were not there.
-func (images *CompositorImages) Placed() []SurfacePixels {
+func (images *CompositorImages) Placed(window string) []SurfacePixels {
 	if images == nil || images.composition == nil {
 		return nil
 	}
 	var placed []SurfacePixels
-	for _, placement := range images.composition.Latest().Placements {
+	for _, placement := range images.composition.Latest(window).Placements {
 		if placement.EffectivelyHidden() {
 			continue
 		}

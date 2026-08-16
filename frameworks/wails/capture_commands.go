@@ -55,7 +55,7 @@ func RegisterCapture(registry *control.Registry, host WindowHost, surfaces Surfa
 		if handle == nil {
 			return nil, i18n.Errorf("wails.capture.noPixels", map[string]string{"window": name})
 		}
-		return NewCaptureService(func() unsafe.Pointer { return handle }).withSurfaces(surfaces), nil
+		return NewCaptureService(name, func() unsafe.Pointer { return handle }).withSurfaces(surfaces), nil
 	}
 
 	registry.MustRegister(control.Command{

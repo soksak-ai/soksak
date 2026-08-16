@@ -8,6 +8,10 @@
 // and the window was blank with no message on screen.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// A commit names the window that declared the surfaces; the install starts the observer, so this
+// window needs a name for that first commit to be made at all.
+vi.mock("../../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test" }));
+
 vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/service", () => ({
   Commit: vi.fn(async () => ({ sequence: 1, accepted: true, surfaces: [] })),
 }));

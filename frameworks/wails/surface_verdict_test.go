@@ -16,7 +16,7 @@ import (
 // maximum, taken once, next to the coordinate system it is measured in.
 func compositionPayload(t *testing.T, registry *control.Registry) map[string]any {
 	t.Helper()
-	answer, err := registry.Invoke("surface.composition", nil)
+	answer, err := registry.Invoke("surface.composition", control.Args{"window": jsonString("main")})
 	if err != nil {
 		t.Fatalf("surface.composition: %v", err)
 	}

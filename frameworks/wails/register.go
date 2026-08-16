@@ -23,8 +23,9 @@ type HostDeps struct {
 	// Surfaces is where a capture gets the pixels of content that draws outside this process.
 	// Absent, a capture is the window layer alone and a native pane comes back flat.
 	Surfaces SurfaceImages
-	// NativeParent reports whether the native container exists right now.
-	NativeParent func() bool
+	// NativeParent reports whether the named window's native container exists
+	// right now.
+	NativeParent func(window string) bool
 	// Dispatch delivers one request to one window's page.
 	Dispatch func(target, event string, payload any) error
 }

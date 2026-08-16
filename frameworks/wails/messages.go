@@ -256,6 +256,10 @@ func init() {
 			EN: "capture needs a window: name one, or call from a window",
 			KO: "capture 에는 창이 필요합니다 — 창을 지정하거나 창 안에서 호출하십시오",
 		},
+		"wails.surface.needsWindow": {
+			EN: "a surface reading needs a window: name one, or call from a window",
+			KO: "서피스 조회에는 창이 필요합니다 — 창을 지정하거나 창 안에서 호출하십시오",
+		},
 		"wails.capture.noPixels": {
 			EN: "window {window} has no native lifetime and no pixels",
 			KO: "창 {window} 에 네이티브 수명이 없어 픽셀도 없습니다",

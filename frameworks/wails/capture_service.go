@@ -15,6 +15,13 @@ import (
 // A capability with no command cannot be verified from outside, and "there was
 // no command for it" is not a reason to leave something unobserved.
 type CaptureService struct {
+	// name is the window this capture is of. The handle below is the same
+	// window's, and the surfaces drawn into the image are the ones that window
+	// declared — measured 2026-08-16, a capture that asked for every window's
+	// surfaces drew a workspace window's browser into a picture of the
+	// orchestrator, and into a picture of the workspace window whose pane was
+	// in fact empty.
+	name   string
 	window func() unsafe.Pointer
 	// surfaces finishes the image with content that draws outside this process. Absent, the
 	// capture is the window layer alone, which is what it was before native surfaces existed.
@@ -26,14 +33,17 @@ type CaptureService struct {
 
 // SurfaceImages is where a capture gets the pixels of content that is not in the document.
 type SurfaceImages interface {
-	// Placed names every surface the native layer holds and where it is, in CSS points.
-	Placed() []SurfacePixels
+	// Placed names every surface the native layer holds for one window and where it is, in CSS
+	// points. Per window, because a capture is of one window: reading every window's surfaces drew
+	// the workspace browser into a picture of the orchestrator and into a picture of the workspace
+	// window alike, and the second of those is a screenshot of an empty pane with a browser in it.
+	Placed(window string) []SurfacePixels
 	// Image answers one surface's own PNG.
 	Image(id string) ([]byte, error)
 }
 
-func NewCaptureService(window func() unsafe.Pointer) *CaptureService {
-	return &CaptureService{window: window, size: contentSize}
+func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureService {
+	return &CaptureService{name: name, window: window, size: contentSize}
 }
 
 // withSurfaces names where the capture gets content that draws outside this process.
@@ -79,7 +89,7 @@ func (service *CaptureService) finish(handle unsafe.Pointer, windowPNG []byte, r
 	if rect != Whole {
 		return windowPNG, note
 	}
-	placed := service.surfaces.Placed()
+	placed := service.surfaces.Placed(service.name)
 	note.Surfaces = len(placed)
 	if len(placed) == 0 {
 		return windowPNG, note

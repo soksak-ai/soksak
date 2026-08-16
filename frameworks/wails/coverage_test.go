@@ -76,7 +76,7 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		NewID:        counter("1"),
 		Sessions:     idleSessions{},
 		Composition:  stubComposition{},
-		NativeParent: func() bool { return false },
+		NativeParent: func(string) bool { return false },
 		Dispatch:     func(string, string, any) error { return nil },
 	})
 

@@ -31,13 +31,20 @@ export function Pixels(rect: $models.Rect): $CancellablePromise<string> {
  * The path is returned rather than assumed, so a caller verifies from the
  * response instead of guessing where the file went.
  */
-export function Snapshot(path: string): $CancellablePromise<string> {
-    return $Call.ByID(3039522845, path);
+export function Snapshot(path: string): $CancellablePromise<$models.CaptureNote> {
+    return $Call.ByID(3039522845, path).then(($result: any) => {
+        return $$createType0($result);
+    });
 }
 
 /**
  * SnapshotRegion writes a PNG cropped to a window-relative rect in CSS points.
  */
-export function SnapshotRegion(path: string, rect: $models.Rect): $CancellablePromise<string> {
-    return $Call.ByID(3826199269, path, rect);
+export function SnapshotRegion(path: string, rect: $models.Rect): $CancellablePromise<$models.CaptureNote> {
+    return $Call.ByID(3826199269, path, rect).then(($result: any) => {
+        return $$createType0($result);
+    });
 }
+
+// Private type creation functions
+const $$createType0 = $models.CaptureNote.createFrom;

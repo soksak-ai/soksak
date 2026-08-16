@@ -28,11 +28,11 @@ func NewCompositorSource(service *compositor.Service) *CompositorSource {
 // A declared surface the native layer did not report is named in Unapplied
 // rather than dropped: a count that agreed while the screen did not is what
 // that list exists to prevent.
-func (source *CompositorSource) Latest() Composition {
+func (source *CompositorSource) Latest(window string) Composition {
 	if source == nil || source.service == nil {
 		return Composition{}
 	}
-	committed := source.service.Latest()
+	committed := source.service.Latest(window)
 
 	applied := make(map[string]compositor.AppliedSurface, len(committed.Applied.Surfaces))
 	for _, surface := range committed.Applied.Surfaces {
@@ -63,6 +63,7 @@ func (source *CompositorSource) Latest() Composition {
 			Applied:         compositorFrame(reported.Frame),
 			AppliedVisible:  reported.Visible,
 			AppliedAlpha:    reported.Alpha,
+			Misparented:     reported.Misparented,
 		})
 	}
 	// A surface the native layer holds that the document never asked for. It is

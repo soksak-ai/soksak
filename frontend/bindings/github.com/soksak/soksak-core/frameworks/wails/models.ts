@@ -6,6 +6,59 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * CaptureNote is what a capture contains, beside the file.
+ * 
+ * A capture that quietly left a pane empty is the defect this whole path exists to remove, so the
+ * answer states how many surfaces it drew and why any were left out. Without it a caller looking
+ * at a flat rectangle cannot tell a page that failed to load from a composite that never ran.
+ */
+export class CaptureNote {
+    "path": string;
+
+    /**
+     * Surfaces is how many native surfaces the inventory held at capture time.
+     */
+    "surfaces": number;
+
+    /**
+     * Drawn is how many of them were drawn into the image.
+     */
+    "drawn": number;
+
+    /**
+     * Skipped names each one that was not, with the reason.
+     */
+    "skipped"?: string[];
+
+    /** Creates a new CaptureNote instance. */
+    constructor($$source: Partial<CaptureNote> = {}) {
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("surfaces" in $$source)) {
+            this["surfaces"] = 0;
+        }
+        if (!("drawn" in $$source)) {
+            this["drawn"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CaptureNote instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CaptureNote {
+        const $$createField3_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("skipped" in $$parsedSource) {
+            $$parsedSource["skipped"] = $$createField3_0($$parsedSource["skipped"]);
+        }
+        return new CaptureNote($$parsedSource as Partial<CaptureNote>);
+    }
+}
+
+/**
  * Rect is a window-relative region in CSS points with a top-left origin, the
  * same coordinate contract the DOM and the compositor already share. A zero
  * rect means the whole window.
@@ -75,3 +128,6 @@ export class Reply {
         return new Reply($$parsedSource as Partial<Reply>);
     }
 }
+
+// Private type creation functions
+const $$createType0 = $Create.Array($Create.Any);

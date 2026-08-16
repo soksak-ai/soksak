@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // The surface group: what the native composition currently is.
@@ -65,6 +66,14 @@ type SurfacePlacement struct {
 	AppliedVisible bool
 	AppliedAlpha   float64
 
+	// Misparented reports that the surface is in a different window from the one
+	// whose document declared it, read off the native object rather than restated
+	// from the declaration.
+	//
+	// Every other number here describes a rectangle inside some window, so all of
+	// them read correct while the rectangle is inside a window nobody is looking at.
+	Misparented bool
+
 	// Undeclared marks a surface the native layer holds that the document never
 	// asked for. It is the defect a ledger-only ghost hunt cannot see: the
 	// application walks its own records, so a surface that left the records and
@@ -90,11 +99,12 @@ func (placement SurfacePlacement) Drift() SurfaceFrame {
 
 // Displaced reports that this surface is not where it was declared to be.
 //
-// A surface with no declaration is always displaced: it cannot match a
-// rectangle that does not exist, and answering false would make an undeclared
-// surface the one thing on the list that looks correct.
+// Three ways: a rectangle that does not match, a window that does not match, or
+// no declaration at all. A surface with no declaration cannot match a rectangle
+// that does not exist, and answering false would make it the one thing on the
+// list that looks correct.
 func (placement SurfacePlacement) Displaced() bool {
-	return placement.Undeclared || placement.Drift() != SurfaceFrame{}
+	return placement.Undeclared || placement.Misparented || placement.Drift() != SurfaceFrame{}
 }
 
 // EffectivelyHidden reports that this surface puts no light on the screen.
@@ -134,8 +144,13 @@ type Composition struct {
 // An interface rather than the compositor itself, because the compositor is a
 // separate module with its own release and its own native backend — a rule that
 // names it can only be checked by building the whole application.
+// Per window. One window's inventory is no answer about another's: measured
+// 2026-08-16, a window-blind reading answered `main` and
+// `win-8ed56cd7d9305935` with the same single surface at the same rectangle
+// with zero drift, while only one of those windows had a browser in it and
+// neither had it in the right place.
 type CompositionSource interface {
-	Latest() Composition
+	Latest(window string) Composition
 }
 
 // SurfaceDeps is what the process supplies.
@@ -147,11 +162,40 @@ type SurfaceDeps struct {
 	// window full of them.
 	Composition CompositionSource
 	// NativeParent reports whether the native container these surfaces attach
-	// to exists right now — this host's window content view. A nil one is
+	// to exists right now — the named window's content view. A nil one is
 	// refused for the same reason: answering false with nobody to ask makes
 	// "the window is not up yet" and "the window is gone" one answer, and a
 	// caller cannot act on either.
-	NativeParent func() bool
+	//
+	// By name, because the question is about the window being asked about. A
+	// host that answered for whichever window it happened to hold would report
+	// a present parent for a window that has none, which is the difference
+	// between "this pane declared nothing" and "this pane has nowhere to draw".
+	NativeParent func(window string) bool
+}
+
+// surfaceWindow is the window a surface reading is about.
+//
+// The caller's own by default, because a page asking what it declared means its
+// own window; an outside operator names one, because it has no window and every
+// window is equally its business. Neither is guessed: a reading that answered
+// about whichever window the host happened to hold is what let a workspace
+// window's browser be reported present while its pane was empty.
+func surfaceWindow(args control.Args) (string, error) {
+	name, err := control.OptionalArg(args, "window", "")
+	if err != nil {
+		return "", err
+	}
+	if name == "" {
+		name, err = control.OptionalArg(args, control.CallerWindowArgument, "")
+		if err != nil {
+			return "", err
+		}
+	}
+	if name == "" {
+		return "", i18n.Errorf("wails.surface.needsWindow", nil)
+	}
+	return name, nil
 }
 
 // RegisterSurface adds the surface group to the registry.
@@ -187,8 +231,12 @@ func RegisterSurface(registry *control.Registry, deps SurfaceDeps) {
 		Owner: control.OwnerFramework,
 		// Framework-owned: a process with no window has no native layer, so
 		// there is no host-independent answer to what it applied.
-		Handler: func(control.Args) (any, error) {
-			return surfaceStatsOf(deps.Composition.Latest(), deps.NativeParent()), nil
+		Handler: func(args control.Args) (any, error) {
+			window, err := surfaceWindow(args)
+			if err != nil {
+				return nil, err
+			}
+			return surfaceStatsOf(deps.Composition.Latest(window), deps.NativeParent(window)), nil
 		},
 	})
 
@@ -197,8 +245,12 @@ func RegisterSurface(registry *control.Registry, deps SurfaceDeps) {
 		Owner: control.OwnerFramework,
 		// Framework-owned for the same reason as engine_surface_stats: a
 		// process with no window applied nothing.
-		Handler: func(control.Args) (any, error) {
-			return compositionJudgementOf(deps.Composition.Latest(), deps.NativeParent()), nil
+		Handler: func(args control.Args) (any, error) {
+			window, err := surfaceWindow(args)
+			if err != nil {
+				return nil, err
+			}
+			return compositionJudgementOf(deps.Composition.Latest(window), deps.NativeParent(window)), nil
 		},
 	})
 
@@ -239,6 +291,11 @@ type compositionJudgement struct {
 	Unapplied  []string `json:"unapplied"`
 	Undeclared []string `json:"undeclared"`
 
+	// Misparented names the surfaces in a window other than the one that
+	// declared them. Not a difference either — a window is not a distance — so it
+	// is its own list rather than a number folded into worst.
+	Misparented []string `json:"misparented"`
+
 	// Failure names the most recent attempt that did not land. The compositor
 	// keeps answering with the last inventory that did, so a layer refusing
 	// every new one reports zero difference forever without this.
@@ -261,8 +318,11 @@ type compositionPlace struct {
 	AppliedVisible bool         `json:"appliedVisible"`
 	AppliedAlpha   float64      `json:"appliedAlpha"`
 
-	Drift SurfaceFrame `json:"drift"`
-	Worst float64      `json:"worst"`
+	// Misparented is the surface being in a window other than the one that
+	// declared it. Separate from drift: drift is a distance and this is not.
+	Misparented bool         `json:"misparented"`
+	Drift       SurfaceFrame `json:"drift"`
+	Worst       float64      `json:"worst"`
 }
 
 // compositionJudgementOf takes the maximum over one recorded composition.
@@ -271,6 +331,7 @@ func compositionJudgementOf(composition Composition, parentPresent bool) composi
 	// null gets an error where it asked a question.
 	places := make([]compositionPlace, 0, len(composition.Placements))
 	undeclared := make([]string, 0)
+	misparented := make([]string, 0)
 	unapplied := make([]string, 0, len(composition.Unapplied))
 	unapplied = append(unapplied, composition.Unapplied...)
 
@@ -290,6 +351,9 @@ func compositionJudgementOf(composition Composition, parentPresent bool) composi
 		if placement.Displaced() {
 			displaced++
 		}
+		if placement.Misparented {
+			misparented = append(misparented, placement.ID)
+		}
 		places = append(places, compositionPlace{
 			ID:              placement.ID,
 			Kind:            placement.Kind,
@@ -301,6 +365,7 @@ func compositionJudgementOf(composition Composition, parentPresent bool) composi
 			Applied:         placement.Applied,
 			AppliedVisible:  placement.AppliedVisible,
 			AppliedAlpha:    placement.AppliedAlpha,
+			Misparented:     placement.Misparented,
 			Drift:           drift,
 			Worst:           here,
 		})
@@ -315,6 +380,7 @@ func compositionJudgementOf(composition Composition, parentPresent bool) composi
 		Surfaces:            places,
 		Unapplied:           unapplied,
 		Undeclared:          undeclared,
+		Misparented:         misparented,
 		Failure:             composition.Failure,
 		FailedSequence:      composition.FailedSequence,
 	}
