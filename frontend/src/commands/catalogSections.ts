@@ -57,12 +57,24 @@ export function registerSectionsCatalog(): void {
       "The section sets this installation holds, where each plugin's set stands, the mode, and the fixed one. A set is a named, ordered list of sections; a section is a view a plugin placed in a region.",
     triggers: { ko: "섹션 세트 목록 조합 목록" },
     params: {},
-    returns: "{ mode, fixed, sets: [{id,title,sections}], byPlugin }",
+    returns: "{ mode, fixed, sets: [{id,title,sections}], byPlugin, available: {left,right} }",
     message: (d) => tmsg("msg.sections.list", { n: ((d.sets as unknown[]) ?? []).length }),
     examples: ["sections.list"],
     handler: () => {
       const s = useSectionSets.getState();
-      return { mode: s.mode, fixed: s.fixed, sets: s.sets, byPlugin: s.byPlugin };
+      return {
+        mode: s.mode,
+        fixed: s.fixed,
+        sets: s.sets,
+        byPlugin: s.byPlugin,
+        // What there is to compose from. Without it a person putting a set together has to know the
+        // section keys already, and nothing outside can name one that exists — the same list the
+        // host filters by, so an offered section is one that can actually stand.
+        available: {
+          left: viewsForPlacement("left").map((v) => v.key),
+          right: viewsForPlacement("right").map((v) => v.key),
+        },
+      };
     },
   });
 

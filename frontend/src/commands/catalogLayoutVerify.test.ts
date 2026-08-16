@@ -39,9 +39,8 @@ function workspace(): Workspace {
     id: "wsp-aaaaaa",
     title: "P",
     root: "<local-evidence>/verify",
-    sidebarOpen: false,
+    regionOpen: { left: false, right: false },
     leftRailPlacement: { mode: "flow" },
-    rightOpen: false,
     sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [
       {

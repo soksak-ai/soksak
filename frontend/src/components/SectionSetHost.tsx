@@ -273,7 +273,7 @@ export const SectionSetHost = memo(function SectionSetHost({
     <div className="sidebar-left">
       {/* Header band — same height as the content header (lib/chromeBands). No plugin fills this
           slot today, and empty is a legitimate state for this band. */}
-      <div className="sidebar-left-header" data-node="sidebar/header" />
+      <div className="sidebar-left-header" data-node={`sidebar/${region}/header`} />
       {/* Grid of %-absolute cells (same model as a content space) — the footer is below it, outside the flow. */}
       <div
         className="left-panes"
@@ -303,6 +303,7 @@ export const SectionSetHost = memo(function SectionSetHost({
             style={cellVars(rect) as CSSProperties}
           >
             <SidebarLeaf
+              region={region}
               group={group}
               workspace={workspace}
               paneId={paneId}
@@ -341,13 +342,14 @@ export const SectionSetHost = memo(function SectionSetHost({
           next to another window it is off by one row (measured 2026-08-15).
           Nothing fills it: `rail-footer` was a placement a plugin asked for, and a position inside a
           region is an order the person arranged, not a place (2026-08-16). */}
-      <div className="sidebar-left-footer" data-node="sidebar/footer" />
+      <div className="sidebar-left-footer" data-node={`sidebar/${region}/footer`} />
     </div>
   );
 });
 
 // One leaf = the tab row (that group's views) + the active view body. keep-alive: opened views stay mounted, display toggles.
 function SidebarLeaf({
+  region,
   group,
   workspace,
   paneId,
@@ -355,6 +357,9 @@ function SidebarLeaf({
   dragging,
   startDrag,
 }: {
+  /** The region this leaf is drawn in. It was written `left` at the view host below, so a section
+   *  the right region drew answered `left` when asked where it is — measured 2026-08-17. */
+  region: SidebarRegion;
   group: SidebarGroup;
   workspace: Workspace;
   paneId: string;
@@ -433,7 +438,7 @@ function SidebarLeaf({
               viewKey={k}
               projectId={workspace.id}
               root={workspace.root}
-              region="left"
+              region={region}
               paneId={paneId}
             />
           </div>

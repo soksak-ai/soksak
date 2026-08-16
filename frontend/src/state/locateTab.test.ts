@@ -15,8 +15,7 @@ const term = (viewId: string): Tab => ({
 const tab = (id: string, tabs: Tab[]): Workspace => ({
   id,
   title: id,
-  sidebarOpen: false,
-  rightOpen: false,
+  regionOpen: { left: false, right: false },
   sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   root: "/r",
   spaces: [

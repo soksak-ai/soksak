@@ -450,7 +450,7 @@ function serializeTree() {
         title: t.title,
         root: t.root ?? null,
         color: t.color ?? null,
-        sidebarOpen: t.sidebarOpen,
+        sidebarOpen: t.regionOpen.left,
         leftRailPosition,
         active: t.id === s.activeId,
         activeSpaceId: t.activeSpaceId,
@@ -459,7 +459,7 @@ function serializeTree() {
             c,
             t.activeSpaceId,
             c.id === t.activeSpaceId ? arrangement : null,
-            t.sidebarOpen,
+            t.regionOpen.left,
             leftRailPosition.mode,
           ),
         ),
@@ -596,7 +596,7 @@ export function registerCatalog(): void {
       if (!t) return notFound("msg.workspace.notFound");
       const solved = projectArrangement(t);
       if (!solved) return notFound("msg.space.notFound");
-      const railOpen = t.sidebarOpen;
+      const railOpen = t.regionOpen.left;
       return {
         projectId: t.id,
         spaceId: t.activeSpaceId,
@@ -1097,21 +1097,49 @@ export function registerCatalog(): void {
       ),
   });
 
-  register("workspace.sidebar.toggle", {
-    description: tmsg("cmd.workspace.sidebar.toggle.desc"),
-    triggers: { ko: "사이드바 파일트리 열기 닫기 토글" },
-    params: { workspace: P.workspace },
-    returns: "{ projectId, sidebarOpen }",
+  register("workspace.region.toggle", {
+    description: tmsg("cmd.workspace.region.toggle.desc"),
+    triggers: { ko: "사이드바 영역 열기 닫기 토글 좌측 우측" },
+    params: {
+      workspace: P.workspace,
+      region: {
+        type: "string",
+        enum: ["left", "right"],
+        description: tmsg("cmd.sidebar.param.region"),
+        required: true,
+      },
+      open: { type: "boolean", description: tmsg("cmd.workspace.region.toggle.param.open") },
+    },
+    returns: "{ projectId, region, open }",
     message: (d) =>
-      d.sidebarOpen
-        ? tmsg("msg.workspace.sidebar.toggle.opened")
-        : tmsg("msg.workspace.sidebar.toggle.closed"),
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ["workspace.sidebar.toggle"],
-    handler: (p, ctx) => {
+      d.open
+        ? tmsg("msg.workspace.region.toggle.opened", { region: String(d.region) })
+        : tmsg("msg.workspace.region.toggle.closed", { region: String(d.region) }),
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'workspace.region.toggle \'{"region":"left"}\'',
+      'workspace.region.toggle \'{"region":"right","open":true}\'',
+    ],
+    handler: async (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
       if (!t) return notFound("msg.workspace.notFound");
-      return withTargets(S().toggleSidebar(t.id), { projectId: t.id });
+      const region = p.region as SidebarRegion;
+      const result = S().toggleRegion(t.id, region, p.open as boolean | undefined);
+      if (!result.ok) return result;
+      // The answer waits for the frame, so a caller that reads the screen next reads the new one.
+      // It waits for what it changed: a region being open is not the same as being drawn, which also
+      // needs a set standing there, and waiting on the width would never end for a region a person
+      // opened with nothing linked to it.
+      //
+      // Both regions carry `data-region`; the elements have names of their own (`rail/left`,
+      // `sidebar/right`) that other readers depend on.
+      await waitForDomCommit(() => {
+        const element = [...document.querySelectorAll<HTMLElement>(`[data-region="${region}"]`)]
+          .find((el) => el.closest<HTMLElement>("[data-workspace-plane]")?.dataset.workspacePlane === t.id);
+        return element?.dataset.regionOpen === String(result.open);
+      });
+      if (hasContentViewHost()) await contentViewHost().chromePresentationSettled();
+      return withTargets(result, { projectId: t.id });
     },
   });
 
@@ -1139,39 +1167,6 @@ export function registerCatalog(): void {
           (typeof p.window !== "string" || r.window === p.window),
       );
       return { processes, count: processes.length };
-    },
-  });
-
-  register("workspace.rightbar.toggle", {
-    description: tmsg("cmd.workspace.rightbar.toggle.desc"),
-    triggers: { ko: "우측 사이드바 오른쪽 패널 플러그인 바 열기 닫기" },
-    params: {
-      workspace: P.workspace,
-      open: { type: "boolean", description: "When provided, force open or closed" },
-    },
-    returns: "{ projectId, rightOpen }",
-    message: (d) =>
-      d.rightOpen
-        ? tmsg("msg.workspace.rightbar.toggle.opened")
-        : tmsg("msg.workspace.rightbar.toggle.closed"),
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ["workspace.rightbar.toggle", 'workspace.rightbar.toggle \'{"open":true}\''],
-    handler: async (p, ctx) => {
-      const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound("msg.workspace.notFound");
-      const result = S().toggleRightSidebar(t.id, p.open as boolean | undefined);
-      if (!result.ok) return result;
-      await waitForDomCommit(() => {
-        const sidebar = [...document.querySelectorAll<HTMLElement>('[data-node="sidebar/right"]')]
-          .find((element) => element.closest<HTMLElement>("[data-workspace-plane]")?.dataset.workspacePlane === t.id);
-        if (!sidebar) return false;
-        return sidebar.classList.contains("open") === result.rightOpen
-          && (sidebar.getBoundingClientRect().width > 0) === result.rightOpen;
-      });
-      if (hasContentViewHost()) await contentViewHost().chromePresentationSettled();
-      return withTargets(result, {
-        projectId: t.id,
-      });
     },
   });
 
@@ -1707,7 +1702,7 @@ export function registerCatalog(): void {
         c,
         t.activeSpaceId,
         arrangement,
-        t.sidebarOpen,
+        t.regionOpen.left,
         (t.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT).mode,
       );
       return {

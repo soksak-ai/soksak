@@ -74,10 +74,9 @@ export interface WorkspaceSnapshot {
   // (pin@0) even for workspaces with no placement set. The placement in a snapshot without the marker may be that
   // era's default, so it is dropped once (removal condition: no marker-less snapshot left in the field).
   railPlacementNormalized?: true;
-  sidebarOpen: boolean;
+  regionOpen: Record<SidebarRegion, boolean>;
   // Rail frame position PIN.
   leftRailPlacement?: RailPlacement;
-  rightOpen: boolean;
   // One arrangement per region. The right held a single active view and drew an icon rail of
   // everything placed there until 2026-08-16 — a region with a rule of its own (A2a).
   sidebarLayouts: Record<SidebarRegion, SplitSnapshot<SidebarGroup>>;
@@ -133,9 +132,8 @@ export function serializeWorkspace(p: Workspace): WorkspaceSnapshot {
     ...(p.color ? { color: p.color } : {}),
     vlNormalized: true,
     railPlacementNormalized: true,
-    sidebarOpen: p.sidebarOpen,
+    regionOpen: p.regionOpen,
     leftRailPlacement: p.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT,
-    rightOpen: p.rightOpen,
     // Sidebar layout (SplitTree<SidebarGroup>) — the leaf payload is plain JSON.
     sidebarLayouts: {
       left: serializeSplitTree(p.sidebarLayouts.left, (g) => g),
@@ -213,14 +211,13 @@ export function deserializeWorkspace(s: WorkspaceSnapshot): Workspace {
     title: s.title,
     root: s.root,
     ...(s.color ? { color: s.color } : {}),
-    sidebarOpen: s.sidebarOpen,
+    regionOpen: { left: s.regionOpen?.left ?? true, right: s.regionOpen?.right ?? false },
     // The stored value of an old snapshot without the marker is not trusted — there is no way to separate the
     // withdrawn era's default (pin@0) from an anchor the user chose, so it is reset once to the default (flow).
     // With the marker present the stored value is honored.
     leftRailPlacement: s.railPlacementNormalized
       ? normalizeRailPlacement(s.leftRailPlacement)
       : DEFAULT_RAIL_PLACEMENT,
-    rightOpen: s.rightOpen,
     sidebarLayouts: {
       left: sidebarLayoutOf(s.sidebarLayouts?.left),
       right: sidebarLayoutOf(s.sidebarLayouts?.right),

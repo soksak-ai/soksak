@@ -36,6 +36,7 @@ tasks:
       - task: verify:go
       - task: verify:restore
       - task: verify:quiet
+      - task: verify:drawn
       - task: verify:headless
       - task: verify:windows
       - task: verify:frontend
@@ -62,6 +63,25 @@ tasks:
       - task: build
       - task: build:sok
       - go test ./ -run TestTheDigestSurvivesARestart -count=1
+
+  verify:drawn:
+    summary: What a link names is what the window draws
+    desc: |
+      Every test of the standing rule read state or a component on its own, and
+      none of them read the window. So the rule held in three places and failed
+      on screen more than once — a tab drew one icon while the command reported
+      another, and the right region answered OK to a link it never drew. Both
+      were found by eye, which is not a verdict (EVIDENCE E1).
+
+      This links a section to the focused view's plugin, region by region, and
+      reads the exposed DOM, which addresses a view by the region it is drawn in
+      and gives it a rectangle. Drawn is a box a person can see, not a node that
+      exists.
+    deps:
+      - task: build
+      - task: build:sok
+    cmds:
+      - go test -count=1 -run TestWhatTheLinkSaysIsWhatIsDrawn -timeout 600s .
 
   verify:quiet:
     summary: A running build reports nothing wrong about itself
@@ -164,6 +184,7 @@ tasks:
           [
             "../soksak-plugins/soksak-plugin-browser-native",
             "../soksak-plugins/soksak-plugin-terminal-xterm",
+            "{{.HOME}}/.soksak-dev/plugins/soksak-plugin-file-tree",
           ]
         cmd: |
           set -e

@@ -19,8 +19,7 @@ const STORED_BEFORE = {
       id: "wsp-a1b2c3",
       title: "w",
       root: "<local-evidence>/w",
-      sidebarOpen: true,
-      rightOpen: false,
+      regionOpen: { left: true, right: false },
       // The shape of that day: one region's layout, and the other region's single active view.
       rightView: null,
       leftLayout: { t: "l", v: { viewKeys: [], activeViewKey: "" } },

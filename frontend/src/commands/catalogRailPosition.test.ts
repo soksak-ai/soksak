@@ -43,9 +43,8 @@ function workspace(
     id: "wsp-aaaaaa",
     title: "P",
     root: "<local-evidence>/rail-position",
-    sidebarOpen: true,
+    regionOpen: { left: true, right: false },
     ...(placement ? { leftRailPlacement: placement } : {}),
-    rightOpen: false,
     sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [
       {
@@ -332,7 +331,7 @@ describe("state.tree — the solution is a public fact", () => {
 
   it("states a none/0 state with no binding and no drawing when the sidebar is closed", async () => {
     const closed = workspace({ mode: "pin", station: 0 });
-    closed.sidebarOpen = false;
+    closed.regionOpen = { ...closed.regionOpen, left: false };
     closed.spaces[0] = {
       ...closed.spaces[0],
       activePaneId: "pan-aaaaaa",

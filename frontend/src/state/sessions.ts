@@ -213,12 +213,13 @@ function withSidebarLayout(
 export interface Workspace {
   id: string;
   title: string; // alias
-  sidebarOpen: boolean;
+  // Whether each region is open. One shape for both: `sidebarOpen` and `rightOpen` were two fields,
+  // two actions and two commands for one question, and the two drifted — the left had no way to be
+  // set to a state, only flipped.
+  regionOpen: Record<SidebarRegion, boolean>;
   // Position mode of the left rail frame. A separate axis from the projection ref pin (the content
   // inside the rail). Absence in old snapshots and test fixtures is read as FLOW.
   leftRailPlacement?: RailPlacement;
-  // Right region: open or not. What stands in it is the section set, the same as the left.
-  rightOpen: boolean;
   // How the sections of the set standing in each region are arranged (B2) — SplitTree<SidebarGroup>,
   // tab bundle + split + active, the same drag-merge as the content area. Reconciled against
   // registration changes by the host.
@@ -286,16 +287,16 @@ interface SessionsStore {
       color?: string | null;
     },
   ) => CmdResult;
-  toggleSidebar: (id: string) => CmdResult<{ sidebarOpen: boolean }>;
+  // With open given, set that state (idempotent); omitted, flip it.
+  toggleRegion: (
+    id: string,
+    region: SidebarRegion,
+    open?: boolean,
+  ) => CmdResult<{ region: SidebarRegion; open: boolean }>;
   setLeftRailPlacement: (
     id: string,
     placement: RailPlacement,
   ) => CmdResult<{ placement: RailPlacement }>;
-  // Right plugin sidebar. With open given, set that state (idempotent); omitted, toggle.
-  toggleRightSidebar: (
-    id: string,
-    open?: boolean,
-  ) => CmdResult<{ rightOpen: boolean }>;
   // Sidebar active tab — make viewKey the active one in the leaf group that holds it.
   setSidebarTab: (
     id: string,
@@ -722,7 +723,7 @@ export function projectArrangement(
     layout: content.layout,
     focusId: content.activePaneId,
     placement: workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT,
-    railOpen: workspace.sidebarOpen,
+    railOpen: workspace.regionOpen.left,
     // Maximize is not a move on top of the underlying split but an atomic switch to the single
     // [rail | feature] plane. The filling panel is the group holding the maximized view — not the
     // active group. The two can diverge (double-clicking a tab of another group does exactly that),
@@ -948,9 +949,8 @@ function makeWorkspace(id: string, opts: NewWorkspaceOpts): Workspace {
   return {
     id,
     title: alias,
-    sidebarOpen: true,
+    regionOpen: { left: true, right: false },
     leftRailPlacement: DEFAULT_RAIL_PLACEMENT, // flow — the rail attaches to the focused panel
-    rightOpen: false,
     sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     root: opts.root,
     spaces: [c],
@@ -1102,15 +1102,17 @@ export const useSessions = moduleState("state/sessions#store", () =>
     return r;
   },
 
-  toggleSidebar: (id) => {
-    let r: CmdResult<{ sidebarOpen: boolean }> = noWorkspace(id);
+  toggleRegion: (id, region, open) => {
+    let r: CmdResult<{ region: SidebarRegion; open: boolean }> = noWorkspace(id);
     set((s) => {
       const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
-      r = ok({ sidebarOpen: !t.sidebarOpen });
+      const next = open ?? !t.regionOpen[region];
+      r = ok({ region, open: next });
+      if (next === t.regionOpen[region]) return s; // idempotent
       return {
         workspaces: s.workspaces.map((x) =>
-          x.id === id ? { ...x, sidebarOpen: !x.sidebarOpen } : x,
+          x.id === id ? { ...x, regionOpen: { ...x.regionOpen, [region]: next } } : x,
         ),
       };
     });
@@ -1158,21 +1160,6 @@ export const useSessions = moduleState("state/sessions#store", () =>
         workspaces: s.workspaces.map((item) =>
           item.id === id ? { ...item, leftRailPlacement: placement } : item,
         ),
-      };
-    });
-    return r;
-  },
-
-  toggleRightSidebar: (id, open) => {
-    let r: CmdResult<{ rightOpen: boolean }> = noWorkspace(id);
-    set((s) => {
-      const t = s.workspaces.find((x) => x.id === id);
-      if (!t) return s;
-      const rightOpen = open ?? !t.rightOpen;
-      r = ok({ rightOpen });
-      if (rightOpen === t.rightOpen) return s; // idempotent
-      return {
-        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, rightOpen } : x)),
       };
     });
     return r;

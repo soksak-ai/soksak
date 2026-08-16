@@ -16,9 +16,8 @@ const workspace: Workspace = {
   id: "wsp-aaaaaa",
   title: "proj",
   root: "/repo",
-  sidebarOpen: true,
+  regionOpen: { left: true, right: false },
   leftRailPlacement: { mode: "pin", station: 60 },
-  rightOpen: false,
   sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   activeSpaceId: "spc-aaaaaa",
   spaces: [
@@ -79,7 +78,7 @@ describe("windowSnapshot round trip", () => {
     const back = deserializeWorkspace(snap);
     expect(back.root).toBe("/repo");
     expect(back.title).toBe("proj");
-    expect(back.sidebarOpen).toBe(true);
+    expect(back.regionOpen.left).toBe(true);
     expect(back.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
     expect(back.activeSpaceId).toBe("spc-aaaaaa");
 

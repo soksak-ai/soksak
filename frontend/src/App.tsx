@@ -200,7 +200,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
       (s.mode === "fixed" ? s.fixed : s.byPlugin[focusedPluginId ?? ""])?.region === "left",
   );
   // The left region is present when the person has it open **and** a set stands there.
-  const leftOpen = workspace.sidebarOpen && leftStands;
+  const leftOpen = workspace.regionOpen.left && leftStands;
 
   const activeContent =
     workspace.spaces.find((content) => content.id === workspace.activeSpaceId) ??
@@ -479,6 +479,8 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   className={`sidebar rail-${railLook}`}
                   data-wv-occlusion="rail"
                   data-node="rail/left"
+                  data-region="left"
+                  data-region-open={String(workspace.regionOpen.left)}
                   data-rail-role={rail.visible ? "resting" : "traveling-hidden"}
                   data-focus-lighting="exempt"
                   // Ownership of the vertical border depends on station (at an edge the outer side is omitted — §B2).
@@ -604,7 +606,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
       </div>
 
       {/* Right plugin sidebar (⌥⌘B). Closed = width 0 (not unmounted — keep-alive). */}
-      {workspace.rightOpen && (
+      {workspace.regionOpen.right && (
         <div
           className="sidebar-right-resizer"
           data-node="sidebar/right/resizer"
@@ -615,13 +617,15 @@ const WorkspacePlane = memo(function WorkspacePlane({
         />
       )}
       <div
-        className={`sidebar-right${workspace.rightOpen ? " open" : ""}${rightMode === "push" ? " push" : ""}`}
+        className={`sidebar-right${workspace.regionOpen.right ? " open" : ""}${rightMode === "push" ? " push" : ""}`}
         data-node="sidebar/right"
+        data-region="right"
+        data-region-open={String(workspace.regionOpen.right)}
         data-wv-occlusion="sidebar-right"
         data-focus-lighting="exempt"
         style={{
-          width: workspace.rightOpen ? rightW : 0,
-          borderLeftWidth: workspace.rightOpen ? 1 : 0,
+          width: workspace.regionOpen.right ? rightW : 0,
+          borderLeftWidth: workspace.regionOpen.right ? 1 : 0,
         }}
       >
         <SectionSetHost
@@ -834,8 +838,7 @@ function App() {
   const workspaces = useSessions((s) => s.workspaces);
   const activeId = useSessions((s) => s.activeId);
   const setActive = useSessions((s) => s.setActive);
-  const toggleSidebar = useSessions((s) => s.toggleSidebar);
-  const toggleRightSidebar = useSessions((s) => s.toggleRightSidebar);
+  const toggleRegion = useSessions((s) => s.toggleRegion);
   const addViewToGroup = useSessions((s) => s.addViewToGroup);
   const closeView = useSessions((s) => s.closeView);
   // Target workspace id for the workspace settings modal (name/color).
@@ -882,7 +885,7 @@ function App() {
   // full size (the old webview width clamp workaround was removed — see browser.rs).
   // In push mode the sidebar takes space in flow (content and webview are already narrower) → no overlay hole needed.
   const rightRect =
-    activeWorkspace?.rightOpen && rightSidebarMode !== "push" ? rightW : 0;
+    activeWorkspace?.regionOpen.right && rightSidebarMode !== "push" ? rightW : 0;
   useLayoutEffect(() => {
     // Opening, closing and widening the sidebar is **the layout being laid out again** — publish that fact. What to
     // do with it is up to the listener (a framework with surfaces outside the document resends its hole list, and a
@@ -902,7 +905,7 @@ function App() {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onWinResize);
     };
-    // rightRect is the single derivation of rightOpen and rightW — notify again when either changes.
+    // rightRect is the single derivation of the right region being open and rightW — notify again when either changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rightRect]);
 
@@ -943,7 +946,7 @@ function App() {
       // ⌥⌘B right plugin sidebar. With ⌥ the e.key is a composed character ("∫"), so the check uses e.code.
       if (e.altKey && !e.shiftKey && e.code === "KeyB") {
         e.preventDefault();
-        toggleRightSidebar(workspace.id);
+        toggleRegion(workspace.id, "right");
         return;
       }
       const groups = allGroups(content.layout);
@@ -966,12 +969,12 @@ function App() {
         if (space?.activePaneId) useAddTabIntent.getState().open(space.activePaneId);
       } else if (key === "b" && !e.shiftKey) {
         e.preventDefault();
-        toggleSidebar(workspace.id);
+        toggleRegion(workspace.id, "left");
       }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [closeView, addViewToGroup, toggleSidebar, toggleRightSidebar]);
+  }, [closeView, addViewToGroup, toggleRegion]);
 
   // Paths dropped on this window are published. What a drop means is not settled here.
   //
@@ -1161,20 +1164,20 @@ function App() {
           <PluginHeaderActions />
           <button
             type="button"
-            className={`icon-btn sidebar-toggle${activeWorkspace?.sidebarOpen ? " active" : ""}`}
+            className={`icon-btn sidebar-toggle${activeWorkspace?.regionOpen.left ? " active" : ""}`}
             title={t("sidebar.toggle")}
             aria-label={t("sidebar.toggle")}
-            onClick={() => activeWorkspace && toggleSidebar(activeWorkspace.id)}
+            onClick={() => activeWorkspace && toggleRegion(activeWorkspace.id, "left")}
           >
             <Icon name="panel-left" />
           </button>
           <button
             type="button"
-            className={`icon-btn sidebar-toggle${activeWorkspace?.rightOpen ? " active" : ""}`}
+            className={`icon-btn sidebar-toggle${activeWorkspace?.regionOpen.right ? " active" : ""}`}
             title={t("plugin.sidebar.toggle")}
             aria-label={t("plugin.sidebar.toggle")}
             onClick={() =>
-              activeWorkspace && toggleRightSidebar(activeWorkspace.id)
+              activeWorkspace && toggleRegion(activeWorkspace.id, "right")
             }
           >
             <Icon name="panel-right" />
