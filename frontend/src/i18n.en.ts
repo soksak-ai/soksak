@@ -1312,6 +1312,8 @@ export const en: Record<MsgKey, string> = {
   "plugin.consent.dependencyNotice": "The plugin you are enabling depends on this one. Check its permissions and consent to it first.",
   "plugin.consent.dependencyRemaining": "{n, plural, one {(# consent remaining)} other {(# consents remaining)}}",
   "plugin.consent.reconsentRequired": "Re-consent required (a version or permission change in this plugin or a dependency): {pending}",
+  "plugin.program.missing": "{bin} is not installed — install it with: {install}",
+  "plugin.library.missing": "a required library is missing — install it with: {install}",
   "plugin.consent.required": "{id} needs activation consent",
   "plugin.consent.requiredChain": "Activating {id} needs consent for {pending}",
   "plugin.contrib.noun.command": "command",

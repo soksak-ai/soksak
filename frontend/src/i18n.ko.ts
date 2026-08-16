@@ -1318,6 +1318,8 @@ export const ko = {
   "plugin.consent.dependencyNotice": "활성화하려는 플러그인이 이 플러그인에 의존합니다. 먼저 권한을 확인하고 동의해야 합니다.",
   "plugin.consent.dependencyRemaining": "(남은 동의 {n}개)",
   "plugin.consent.reconsentRequired": "재동의 필요(자신 또는 의존 플러그인의 버전·권한 변경): {pending}",
+  "plugin.program.missing": "{bin} 이(가) 설치되어 있지 않습니다 — 설치 명령: {install}",
+  "plugin.library.missing": "필요한 라이브러리가 없습니다 — 설치 명령: {install}",
   "plugin.consent.required": "{id} 활성화 동의가 필요합니다",
   "plugin.consent.requiredChain": "{id} 활성화 시 {pending} 동의가 필요합니다",
   "plugin.contrib.noun.command": "명령",

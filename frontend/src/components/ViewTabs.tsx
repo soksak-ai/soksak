@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { execute } from "../commands/registry";
 import { ProgramMenu } from "./ProgramMenu";
 import {
@@ -6,6 +6,7 @@ import {
   type Program,
   type Pane,
 } from "../state/sessions";
+import { useAddTabIntent } from "../state/addTabIntent";
 import { useCloseConfirm } from "../state/closeConfirm";
 import { getRegisteredView } from "../plugins/viewRegistry";
 import { useProgramRegistry } from "../plugins/programRegistry";
@@ -55,6 +56,20 @@ export const ViewTabs = memo(function ViewTabs({
   const requestCloseView = useCloseConfirm((s) => s.requestCloseView);
   const hasPrograms = useProgramRegistry((s) => s.order.length > 0);
   const addBtnRef = useRef<HTMLButtonElement>(null);
+  // The menu opens under the + button, wherever the request came from — the button itself, or the
+  // shortcut, which arrives through addTabIntent because it fires at the window.
+  const openAddMenu = useCallback(() => {
+    const r = addBtnRef.current?.getBoundingClientRect();
+    if (r) setMenuPos({ left: r.left, top: r.bottom + 2 });
+  }, []);
+  const addRequest = useAddTabIntent((s2) => s2.request);
+  const clearAddRequest = useAddTabIntent((s2) => s2.clear);
+  useEffect(() => {
+    if (addRequest?.paneId !== group.id) return;
+    clearAddRequest();
+    openAddMenu();
+  }, [addRequest, group.id, clearAddRequest, openAddMenu]);
+
   const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(
     null,
   );
@@ -197,8 +212,7 @@ export const ViewTabs = memo(function ViewTabs({
                 setMenuPos(null);
                 return;
               }
-              const r = addBtnRef.current?.getBoundingClientRect();
-              if (r) setMenuPos({ left: r.left, top: r.bottom + 2 });
+              openAddMenu();
             }}
           >
             <Icon name="add" />

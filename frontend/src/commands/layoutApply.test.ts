@@ -19,7 +19,7 @@ import { useProgramRegistry } from "../plugins/programRegistry";
 import { usePlugins, type PluginRuntime } from "../state/plugins";
 import type { ContributedProgram, PluginManifest } from "../plugins/spec";
 
-// The first panel of the dev preset resolves the terminal contract (soksak-spec-plugin-terminal)
+// A terminal-engine plugin is registered so a named program resolves
 // through the configured engine — no specific program id is hardcoded. The test environment has no
 // plugin loader, so the contract implementation is set up directly:
 //   ① register the engine program in useProgramRegistry,
@@ -81,20 +81,30 @@ function firstWorkspace() {
 }
 
 describe("layout.apply", () => {
-  it("preset dev — a terminal engine (by contract) and a browser build two panels in one space", async () => {
+  // A pane whose program is registered is built; one whose program is not is skipped by name. The
+  // caller names the programs — a `dev` preset naming a terminal and a browser stood here until
+  // 2026-08-16, and what a working layout looks like is not the core's view (CORE-CENSUS 9).
+  it("builds a pane for each program the caller named", async () => {
     unregBrowser = registerBrowser();
-    const r = await execute("layout.apply", { preset: "dev" }, {});
+    const r = await execute(
+      "layout.apply",
+      { spaces: [{ title: "dev", panes: [{ program: XTERM_PROGRAM }, { program: "browser", side: "right" }] }] },
+      {},
+    );
     expect(r.ok).toBe(true);
     const spaces = (r.data as { spaces: { title: string; panes: { program: string }[] }[] }).spaces;
     expect(spaces).toHaveLength(1);
     expect(spaces[0].title).toBe("dev");
-    // The terminal panel is filled by the configured engine's program (contract resolution) — no specific program id assumed.
     expect(spaces[0].panes.map((p) => p.program)).toEqual([XTERM_PROGRAM, "browser"]);
     expect((r.data as Record<string, unknown>).skipped).toBeUndefined();
   });
 
-  it("preset dev — a missing browser skips that panel and records the reason in skipped", async () => {
-    const r = await execute("layout.apply", { preset: "dev" }, {});
+  it("a pane whose program is not registered is skipped, by name and with a reason", async () => {
+    const r = await execute(
+      "layout.apply",
+      { spaces: [{ title: "dev", panes: [{ program: XTERM_PROGRAM }, { program: "browser", side: "right" }] }] },
+      {},
+    );
     expect(r.ok).toBe(true);
     const data = r.data as {
       spaces: { panes: { program: string }[] }[];
@@ -103,40 +113,13 @@ describe("layout.apply", () => {
     expect(data.spaces[0].panes.map((p) => p.program)).toEqual([XTERM_PROGRAM]);
     expect(data.skipped).toBeDefined();
     expect(data.skipped![0].program).toBe("browser");
-    expect(typeof data.skipped![0].reason).toBe("string");
     expect(data.skipped![0].reason.length).toBeGreaterThan(0);
   });
 
-  it("preset dev — no active terminal engine skips the terminal panel and records the contract in skipped", async () => {
-    unregBrowser = registerBrowser();
-    // Remove the enabled terminal implementation — contract resolution becomes null and the terminal panel cannot be built.
-    usePlugins.setState({ plugins: {} });
-    const r = await execute("layout.apply", { preset: "dev" }, {});
-    expect(r.ok).toBe(true);
-    const data = r.data as {
-      spaces: { panes: { program: string }[] }[];
-      skipped?: { program: string; reason: string }[];
-    };
-    // The browser exists, so only that panel remains and the terminal is skipped.
-    expect(data.spaces[0].panes.map((p) => p.program)).toEqual(["browser"]);
-    expect(data.skipped).toBeDefined();
-    const terminalSkip = data.skipped!.find((s) => s.program === "soksak-spec-plugin-terminal");
-    expect(terminalSkip).toBeDefined();
-    expect(terminalSkip!.reason.length).toBeGreaterThan(0);
-  });
-
-  it("base syntax — one value (dev) is taken as the positional preset argument", async () => {
-    unregBrowser = registerBrowser();
-    const r = await execute("layout.apply", { _: "dev" }, {});
-    expect(r.ok).toBe(true);
-    expect((r.data as { spaces: unknown[] }).spaces).toHaveLength(1);
-  });
-
-  it("preset facets — builds the named spaces the spaces argument declares", async () => {
+  it("builds the named spaces the spaces argument declares", async () => {
     const r = await execute(
       "layout.apply",
       {
-        preset: "facets",
         spaces: [
           { title: "a", panes: [{ program: XTERM_PROGRAM }] },
           { title: "b", panes: [{ program: XTERM_PROGRAM }, { program: XTERM_PROGRAM, side: "bottom" }] },
@@ -154,8 +137,8 @@ describe("layout.apply", () => {
     expect(b[0].paneId).not.toBe(b[1].paneId);
   });
 
-  it("preset facets — a missing spaces argument answers INVALID_PARAMS", async () => {
-    const r = await execute("layout.apply", { preset: "facets" }, {});
+  it("a missing spaces argument answers INVALID_PARAMS", async () => {
+    const r = await execute("layout.apply", {}, {});
     expect(r.ok).toBe(false);
     expect(r.code).toBe("INVALID_PARAMS");
   });
@@ -163,7 +146,11 @@ describe("layout.apply", () => {
   it("does not destroy the existing spaces — it adds a new one", async () => {
     const before = firstWorkspace().spaces.length; // one space from boot
     const beforeId = firstWorkspace().spaces[0].id;
-    const r = await execute("layout.apply", { preset: "dev" }, {});
+    const r = await execute(
+      "layout.apply",
+      { spaces: [{ title: "dev", panes: [{ program: XTERM_PROGRAM }, { program: "browser", side: "right" }] }] },
+      {},
+    );
     expect(r.ok).toBe(true);
     const after = firstWorkspace().spaces;
     expect(after.length).toBe(before + 1);
@@ -173,7 +160,11 @@ describe("layout.apply", () => {
 
   it("hint stays at 3 or fewer, and a success adds a suggestion", async () => {
     unregBrowser = registerBrowser();
-    const r = await execute("layout.apply", { preset: "dev" }, {});
+    const r = await execute(
+      "layout.apply",
+      { spaces: [{ title: "dev", panes: [{ program: XTERM_PROGRAM }, { program: "browser", side: "right" }] }] },
+      {},
+    );
     expect(r.ok).toBe(true);
     expect(r.hint).toBeDefined();
     expect(r.hint!.length).toBeGreaterThan(0);
@@ -184,7 +175,11 @@ describe("layout.apply", () => {
   });
 
   it("a skipped panel puts the install hint first", async () => {
-    const r = await execute("layout.apply", { preset: "dev" }, {});
+    const r = await execute(
+      "layout.apply",
+      { spaces: [{ title: "dev", panes: [{ program: XTERM_PROGRAM }, { program: "browser", side: "right" }] }] },
+      {},
+    );
     expect(r.ok).toBe(true);
     expect(r.hint!.length).toBeLessThanOrEqual(3);
     expect(r.hint!.some((h) => h.cmd === "sok plugin.catalog")).toBe(true);

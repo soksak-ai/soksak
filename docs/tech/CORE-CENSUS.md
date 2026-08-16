@@ -190,19 +190,45 @@ registration seam today would be an extension point with no consumer (4-2).
 Gate: `TestTheCoreAnswersNoMediaType` refuses an extension literal and a `type/subtype` literal on
 one line. A media type alone stays legitimate — a capture writes `image/png` because it made a PNG.
 
+### 9. A contract id the core spelled out, and a preset that named two domains
+
+Raised as a question — "we don't even have `soksak-spec-plugin-terminal`, did we invent it?" The id
+was real: the terminal plugin declared `implements`. What was wrong is that the **core** held it.
+
+`plugins/terminalEngine.ts` kept `soksak-spec-plugin-terminal` as a constant for three affordances,
+and the generic machinery beside it — discovery, selection, resolution — never named one and did not
+change. A contract's definition is owned by whoever implements it (PLUGIN-CONTRACT P5); the core
+naming another's is the same coupling as naming the plugin, one level up.
+
+- **⌘T** opened a terminal. It opens the add-tab menu on the active pane now, and the person picks.
+  A tab is the frame's; which content fills it is not. The shortcut fires at the window and the menu
+  is drawn by the tab bar, so `state/addTabIntent.ts` is the channel between them.
+- **Two install paths** ran a command in "the configured terminal engine". They publish the fact and
+  the exact command into the activity stream now — `program.missing` and `library.missing`. Where a
+  command runs is not the core's decision, and every window, plugin and CLI reads that stream.
+- **`layout.apply preset=dev`** built a terminal and a browser side by side, resolving one through
+  the contract and matching the other against the conventional id `browser`. Gone: `spaces` is the
+  only form, and a caller that wants that layout names those two programs. `findBrowserProgram` went
+  with it.
+- **The plugin's `implements` declaration is gone too.** With the core no longer asking, the contract
+  had a provider and no consumer — a declaration nobody reads, which is the extension point 4-2
+  forbids. When a plugin needs "a terminal", that plugin defines the contract and the implementer
+  owns the definition.
+
+Gate: `TestTheCoreNamesOnlyItsOwnSpecs` lists the six ids this repository defines and refuses any
+other `soksak-spec-` literal. It caught one more on the way in — a `plugin.implementers` example
+naming `soksak-spec-plugin-git`, a contract nobody implements. The example reads the registry now.
+
 ## What is left, named
 
 - `frameworks/wails/register.go` types `HostDeps.Sessions` as `terminalcmd.Sessions`, and
   `terminal_sink.go` takes `terminal.Handle`. Both are entered in `couplingWiring` marked DEBT: the
   core owns no session contract and no trace contract for them to be typed against yet.
 - A workspace record no longer carries `shell`, and no core surface names a shell.
-- **`TERMINAL_CONTRACT` is a domain name in the core.** `plugins/terminalEngine.ts` holds
-  `soksak-spec-plugin-terminal` for three affordances: ⌘T, and running a plugin's or a library's
-  install command where a person can watch. The engine is resolved through the contract, so no plugin
-  is named — but "terminal" is a domain, so C6's first question fails. ⌘T deciding that a keystroke
-  means a terminal is the core holding an opinion; a plugin cannot declare a keybinding today, which
-  is the capability that would have to exist first (A9). Unjudged, and named here rather than left to
-  be found.
+- **A plugin cannot declare a keybinding.** ⌘T is the frame's own shortcut and names nothing, so it
+  stays; a plugin that wants its own has no way to ask, and nothing needs one yet.
+- **Nobody installs a missing binary.** The core publishes `program.missing` and `library.missing`
+  with the exact command; no plugin subscribes, so a person reads the stream and runs it.
 
 ## The pattern in all six
 

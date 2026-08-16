@@ -16,7 +16,6 @@ import { rafThrottle } from "./lib/rafThrottle";
 import { railEdgeWidths } from "./ui/railEdges";
 import { parkedStyle } from "./lib/layerPark";
 import { emitPathsDropped, emitPluginEvent } from "./plugins/hooks";
-import { resolveTerminalProgram } from "./plugins/terminalEngine";
 import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
 import { beginLayoutMotion, endLayoutMotion } from "./lib/layoutMotion";
@@ -80,6 +79,7 @@ import {
 import { prepareLayoutChange, viewLayoutChange } from "./lib/layoutTransitionHost";
 import { registerLayoutTransitionIntentHost } from "./lib/layoutTransitionIntent";
 import { ownsNativeSurfaceFromManifests } from "./lib/nativeSurfaceOwnership";
+import { useAddTabIntent } from "./state/addTabIntent";
 import "./App.css";
 
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
@@ -938,10 +938,14 @@ function App() {
         if (view) closeView(workspace.id, view.id);
       } else if (key === "t" && !e.shiftKey) {
         e.preventDefault();
-        // ⌘T = new terminal tab. The core names no specific engine — it opens the configured terminal engine (contract resolution).
-        // With no active terminal engine it opens nothing (no stray empty tabs — ⌘T means terminal only).
-        const terminalProgram = resolveTerminalProgram();
-        if (terminalProgram) addViewToGroup(workspace.id, terminalProgram);
+        // ⌘T opens the add-tab menu on the active pane, and the person picks.
+        //
+        // It opened a terminal until 2026-08-16, resolved through a contract id the core spelled
+        // out. A tab is the frame's, which the core owns; which content fills it is not, and a
+        // plugin's own spec is not the core's to name (PLUGIN-CONTRACT P5). The menu is the program
+        // registry's projection, so the core names nothing and an empty registry draws no menu.
+        const space = workspace.spaces.find((c) => c.id === workspace.activeSpaceId);
+        if (space?.activePaneId) useAddTabIntent.getState().open(space.activePaneId);
       } else if (key === "b" && !e.shiftKey) {
         e.preventDefault();
         toggleSidebar(workspace.id);

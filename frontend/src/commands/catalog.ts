@@ -49,7 +49,6 @@ import type { SidebarLayout } from "../state/sidebarLayout";
 import type { SplitTree } from "../state/splitTree";
 import { addWorkspaceClaimed, closeWorkspaceReleased } from "../state/workspaceRegistry";
 import { getRegisteredProgram, listPrograms } from "../plugins/programRegistry";
-import { resolveTerminalProgram, TERMINAL_CONTRACT } from "../plugins/terminalEngine";
 import {
   activeSessionViewId,
   transferViewFocus,
@@ -282,25 +281,11 @@ function resolvePane(
 }
 
 
-// Browser-family program id resolution (layout.apply dev preset). Programs are all plugin
-// contributions, so the core has no notion of browser kinds (zero lock-in) — identification is by
-// the registered program id convention ("browser"). Missing returns undefined, and the caller skips
-// that panel and records the reason (no hiding).
-// A real program for hint examples — the first entry of the registered list. No specific program id
-// is assumed (the core is program-agnostic) — a hardcoded example becomes broken guidance where it
-// is not installed (measured: claude). With no registered program, the placeholder (<program>) makes
-// the example obvious.
+
+// A program id for an example line — the first one registered, and "<program>" when none is.
+// The registry answers; no id is written down here.
 function exampleProgramId(): string {
   return listPrograms()[0]?.decl.id ?? "<program>";
-}
-
-// Browser pane resolution for the dev preset — only the conventional program id "browser" (the same
-// mechanism as terminal). No substring-matching fallback: an arbitrary id containing "browser" could
-// be mistaken for the default browser (engine variants, tool programs), and terminal works off one
-// conventional id without such a fallback — symmetry kept.
-// Unregistered returns undefined — the caller skips that pane and records the reason (no hiding).
-function findBrowserProgram(): string | undefined {
-  return listPrograms().find((p) => p.decl.id === "browser")?.decl.id;
 }
 
 // ── Serialization (state.tree) ────────────────────────────────────────────────
@@ -2069,20 +2054,14 @@ export function registerCatalog(): void {
 
   register("layout.apply", {
     description:
-      "Apply a layout by building fresh spaces — never destroys existing spaces. Hierarchy: first-level spaces are independent switchable screens; second-level panes are the splits inside each space. preset dev = a terminal plus a browser side by side (if no browser program is installed, that pane is skipped and reported in skipped). preset facets = build the named spaces you pass in (spaces required). Verify by switching to a space with space.activate, then capturing with window.snapshot.",
-    triggers: { ko: "화면 구성 레이아웃 적용 스페이스 배치 개발 화면 나란히 배치 dev facets" },
+      "Apply a layout by building fresh spaces — never destroys existing spaces. Hierarchy: first-level spaces are independent switchable screens; second-level panes are the splits inside each space. A pane whose program is not registered is skipped and reported in skipped. Verify by switching to a space with space.activate, then capturing with window.snapshot.",
+    triggers: { ko: "화면 구성 레이아웃 적용 스페이스 배치 나란히 배치" },
     params: {
-      preset: {
-        type: "string",
-        enum: ["dev", "facets"],
-        required: true,
-        description:
-          "dev = a terminal plus a browser side by side; facets = build the named spaces passed in spaces",
-      },
       spaces: {
         type: "json",
+        required: true,
         description:
-          "Named spaces to build (required for facets): [{ title, panes?: [{ program, side? }] }]",
+          "Named spaces to build: [{ title, panes?: [{ program, side? }] }]",
       },
       workspace: P.workspace,
     },
@@ -2105,8 +2084,7 @@ export function registerCatalog(): void {
       return out;
     },
     examples: [
-      "layout.apply dev",
-      'layout.apply \'{"preset":"facets","spaces":[{"title":"docs","panes":[{"program":"browser"}]}]}\'',
+      `layout.apply '{"spaces":[{"title":"docs","panes":[{"program":"${exampleProgramId()}"}]}]}'`,
     ],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
@@ -2118,32 +2096,14 @@ export function registerCatalog(): void {
         reason: string;
       }[] = [];
       let spaceSpecs: LayoutSpaceSpec[];
-      if (p.preset === "dev") {
-        // dev shorthand — terminal + browser (right). The terminal resolves through the contract
-        // (settings engine), the browser through the conventional id — the core privileges no specific
-        // program. If either is missing, only that pane is skipped and the reason is recorded (no hiding
-        // — symmetric with browser).
-        const terminalId = resolveTerminalProgram();
-        const browserId = findBrowserProgram();
-        const panes: LayoutPaneSpec[] = [];
-        if (terminalId) panes.push({ program: terminalId });
-        else
-          skipped.push({
-            space: "dev",
-            program: TERMINAL_CONTRACT.id,
-            reason: tmsg("layout.skip.unregistered", { program: TERMINAL_CONTRACT.id }),
-          });
-        if (browserId) panes.push({ program: browserId, side: "right" });
-        else
-          skipped.push({
-            space: "dev",
-            program: "browser",
-            side: "right",
-            reason: tmsg("layout.skip.noBrowser"),
-          });
-        spaceSpecs = [{ title: "dev", panes }];
-      } else {
-        // facets — an alias that uses the spaces argument as is. spaces is required.
+      {
+        // The spaces the caller named, as they were named.
+        //
+        // A `dev` preset stood beside this until 2026-08-16: a terminal and a browser side by side,
+        // resolved through a contract id the core spelled out and a conventional program id it
+        // matched by hand. What a working layout looks like is a view about content, and the two
+        // names were the core privileging two kinds of it (CORE-CENSUS 9). A caller that wants that
+        // layout passes those two programs.
         const raw = p.spaces;
         if (!Array.isArray(raw) || raw.length === 0) {
           return {

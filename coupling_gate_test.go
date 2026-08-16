@@ -397,3 +397,94 @@ func TestTheCoreAnswersNoMediaType(t *testing.T) {
 			len(found), strings.Join(found, "\n"))
 	}
 }
+
+// coreOwnedSpecs are the contract ids this repository defines, and the only
+// `soksak-spec-` names its sources may hold (PLUGIN-CONTRACT P5).
+//
+// A contract's definition is owned by whoever implements it. The core naming
+// another's is the same coupling as naming the plugin, one level up: the core
+// then fixes which interface an affordance targets, and a second interface for
+// the same job needs an edit here.
+//
+// Measured 2026-08-16: `plugins/terminalEngine.ts` held
+// `soksak-spec-plugin-terminal` for ⌘T, for two install-command paths and for a
+// `layout.apply dev` preset. The generic machinery beside it — discovery,
+// selection, resolution — never names one and did not change.
+var coreOwnedSpecs = map[string]string{
+	"soksak-spec-plugin":      "the plugin API this core defines and hosts",
+	"soksak-spec-release":     "the release envelope this core reads",
+	"soksak-spec-registry":    "the registry index this core reads",
+	"soksak-spec-kit":         "the kit envelope this core reads",
+	"soksak-spec-conformance": "the conformance report this core produces",
+	"soksak-spec-sidecar":     "the sidecar envelope this core speaks",
+	"soksak-spec-service":     "the service protocol this core requires of a sidecar",
+
+	"soksak-spec-plugin-runtime": "the runtime wire this core hosts a plugin over",
+}
+
+func TestTheCoreNamesOnlyItsOwnSpecs(t *testing.T) {
+	spec := regexp.MustCompile(`soksak-spec-[a-z0-9-]+`)
+	var found []string
+	scanned := 0
+
+	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				if skippedTrees[info.Name()] {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !scannedCode[filepath.Ext(path)] {
+				return nil
+			}
+			clean := filepath.ToSlash(path)
+			if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
+				return nil
+			}
+			body, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			scanned++
+			for index, line := range strings.Split(stripComments(string(body)), "\n") {
+				for _, name := range spec.FindAllString(line, -1) {
+					// A trailing dash is the shape regexes' prefix form
+					// (`soksak-spec-sidecar-<name>`), which is C4 being enforced
+					// rather than one contract being named.
+					name = strings.TrimSuffix(name, "-")
+					if _, own := coreOwnedSpecs[name]; own {
+						continue
+					}
+					found = append(found, clean+":"+itoa(index+1)+" "+name)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("scanning %s: %v", root, err)
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("no core source was scanned; the roots are wrong")
+	}
+	if len(found) > 0 {
+		t.Errorf("the core names a contract it does not define, in %d places:\n%s\n"+
+			"Take the name out. A contract belongs to whoever implements it, and the core "+
+			"resolves one only when a caller hands it over (PLUGIN-CONTRACT P5).",
+			len(found), strings.Join(found, "\n"))
+	}
+}
+
+// A core-owned spec entry outliving the id it excuses is the same rot as an
+// unexplained allowlist: the next file to write that name inherits a pass.
+func TestEveryCoreOwnedSpecIsStillNamed(t *testing.T) {
+	for name, reason := range coreOwnedSpecs {
+		if strings.TrimSpace(reason) == "" {
+			t.Errorf("%s is listed as core-owned for no stated reason", name)
+		}
+	}
+}

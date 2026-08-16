@@ -28,7 +28,6 @@ import {
   setActive,
 } from "../plugins/loader";
 import { syncServiceLedger } from "../plugins/serviceProxy";
-import { resolveTerminalProgram } from "../plugins/terminalEngine";
 import { defaultPluginDeps } from "../plugins/deps";
 import {
   activationChain,
@@ -37,7 +36,8 @@ import {
   activationLevels,
   type DepNode,
 } from "../plugins/dependencyGraph";
-import { err, ok, useSessions, type CmdResult } from "./sessions";
+import { publishActivity } from "./activityFeed";
+import { err, ok, type CmdResult } from "./sessions";
 import { tmsg } from "../i18n";
 
 // Installed/dev runtime → dependency graph nodes (from manifest dependencies). Consumed by the resolver.
@@ -189,8 +189,13 @@ export function consentRequiredMessage(id: string, pending: string[]): string {
 }
 
 // Program ensure (§2.6) — guarantees prerequisite binaries at activation time. Checks the user's
-// login shell PATH (shell_which), and when missing runs the official install command visibly in a new
-// terminal tab (no hiding — exactly the command shown on the consent screen).
+// login shell PATH (shell_which) and, when one is missing, publishes the fact and the exact command
+// that installs it (no hiding — the command shown on the consent screen).
+//
+// It opened a terminal tab and ran the command there until 2026-08-16, resolving a contract id the
+// core spelled out. Where a command runs is not the core's decision, and a plugin's own spec is not
+// the core's to name (PLUGIN-CONTRACT P5). The fact goes into the activity stream, which every
+// window, plugin and CLI reads; whoever wants to run it can, and a person who reads it can too.
 // Failures go to the console only (§0-4 — plugin activation itself is not blocked).
 async function ensureProgramBinaries(manifest: PluginManifest): Promise<void> {
   for (const prog of manifest.contributes.programs) {
@@ -202,18 +207,12 @@ async function ensureProgramBinaries(manifest: PluginManifest): Promise<void> {
         bin: prog.ensure.bin,
       });
       if (found) continue;
-      const s = useSessions.getState();
-      // The install command runs visibly in the configured terminal engine (contract resolution) — the core names no specific engine.
-      // With no active terminal engine, skip the visible run but do not stay silent (§0-3 — console notice).
-      const terminalProgram = resolveTerminalProgram();
-      if (!terminalProgram) {
-        console.warn(
-          `no active terminal engine — cannot run the ${prog.ensure.bin} install command visibly (enable an engine, then run it from the + menu)`,
-        );
-        continue;
-      }
-      s.addViewToGroup(s.activeId, terminalProgram, undefined, {
-        command: `${install}; echo "[soksak] ${tmsg("plugin.program.installDone", { bin: prog.ensure.bin })}"`,
+      publishActivity("program.missing", "plugins", {
+        plugin: manifest.id,
+        program: prog.id,
+        bin: prog.ensure.bin,
+        install,
+        message: tmsg("plugin.program.missing", { bin: prog.ensure.bin, install }),
       });
     } catch (e) {
       console.error(`ensure failed (${manifest.id}/${prog.id}):`, e);
@@ -773,14 +772,13 @@ export const usePlugins = moduleState("state/plugins#store", () =>
         // Program and library ensure (§2.6) — at activation time, exactly the command shown on the consent screen.
         void ensureProgramBinaries(cp.manifest);
         void reconcileDependencies(cp.manifest, get().plugins, (command) => {
-          const s = useSessions.getState();
-          // Library install commands also run visibly in the configured terminal engine (contract resolution). With no engine, do not stay silent.
-          const terminalProgram = resolveTerminalProgram();
-          if (!terminalProgram) {
-            console.warn("no active terminal engine — cannot run the library install command visibly:", command);
-            return;
-          }
-          s.addViewToGroup(s.activeId, terminalProgram, undefined, { command });
+          // Same rule as ensureProgramBinaries: the fact and the command, published. Where it runs
+          // is not decided here.
+          publishActivity("library.missing", "plugins", {
+            plugin: cid,
+            install: command,
+            message: tmsg("plugin.library.missing", { install: command }),
+          });
         });
       }
       persist();

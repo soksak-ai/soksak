@@ -82,6 +82,16 @@ function implementsNodes(): ImplementsNode[] {
   }));
 }
 
+// A contract id for an example line — the first one a plugin declares, and "<contract>" when none
+// does. The registry answers; no id is written down here.
+function declaredContractId(): string {
+  for (const node of implementsNodes()) {
+    const first = node.implements[0];
+    if (first) return first.id;
+  }
+  return "<contract>";
+}
+
 const invalid = (what: string) => ({
   ok: false as const,
   code: "INVALID_PARAMS" as const,
@@ -745,9 +755,12 @@ export function registerPluginCatalog(): void {
             n: ((d.contracts as unknown[]) ?? []).length,
           }),
     errors: ["INVALID_PARAMS"],
+    // The example names whatever a plugin declares here, and "<contract>" when none does. A written
+    // id would be the core naming a contract it does not define (PLUGIN-CONTRACT P5), and the one
+    // written here named a contract nobody implements.
     examples: [
       "plugin.implementers",
-      'plugin.implementers \'{"id":"soksak-spec-plugin-git","range":"0.0.1"}\'',
+      `plugin.implementers '{"id":"${declaredContractId()}","range":"0.0.1"}'`,
     ],
     handler: (p) => {
       const nodes = implementsNodes();
