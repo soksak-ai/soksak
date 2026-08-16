@@ -70,9 +70,9 @@ through every transport, and a permission gates a capability.
 ## P5. A contract is declared by the plugin that implements it
 
 `implements` and `consumes` name a contract id. The implementing plugin owns the definition; a
-consumer pins `id@range`. Contract ids start with `soksak-spec-`, which is why they never collide
-with a plugin id (`soksak-plugin-<name>`) — the C1 scan looks for plugin id tokens in core sources
-and skips contract ids.
+consumer pins `id@range`. A contract id is a plain name (C4) — the field it appears in says what it
+is, and the core names no contract it does not define, so nothing has to tell one from a plugin id
+by its spelling.
 
 The definition is not a separate repository. It belongs to whoever implements it, for the same
 reason the manifest format belongs to the core: the implementation is the authority, and a copy

@@ -219,6 +219,31 @@ Gate: `TestTheCoreNamesOnlyItsOwnSpecs` lists the six ids this repository define
 other `soksak-spec-` literal. It caught one more on the way in — a `plugin.implementers` example
 naming `soksak-spec-plugin-git`, a contract nobody implements. The example reads the registry now.
 
+### 10. A contract id wore a prefix that served a scanner
+
+Raised as a question — a plugin's spec does not need `xxxx-xxx-xxx-spec`, it is just a spec.
+
+Two different things wore one prefix. `soksak-spec-release@0.0.1` and its siblings stamp an
+envelope's **format version**: the core reads and writes them, they are recorded in files on disk,
+and they are not names two plugins meet at. `soksak-spec-plugin-browser` and
+`soksak-spec-plugin-sidebar-file-tree` are **interface names** — what a provider and a consumer meet
+at, with no version in the id.
+
+The written reason for the prefix on the second kind was that a scanner could then tell a contract id
+from a plugin id in core sources (PLUGIN-CONTRACT P5, as it stood). A rule shaped to suit a scanner
+is the scanner writing the rule, and entry 9's gate had already made the confusion impossible: the
+core names no contract it does not define, so no contract id appears in core sources at all.
+
+C4 now reads: a contract id is a plain name, `^[a-z0-9][a-z0-9-]*$`. `browser`.
+`sidebar-file-tree`. The kind is out of the name too — whether a plugin or a sidecar provides a thing
+is the provider's business, and a consumer that had to know would be coupled to the implementation
+(C3), so the three kind-specific grammars became one.
+
+Format version stamps keep their prefix, stated as the different namespace they are.
+
+Measured on a running build: `plugin.implementers` answers `{ id: "browser", version: "0.0.1" }` with
+its implementer, conformance reports no violation, and the page draws.
+
 ## What is left, named
 
 - `frameworks/wails/register.go` types `HostDeps.Sessions` as `terminalcmd.Sessions`, and

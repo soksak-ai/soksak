@@ -95,9 +95,22 @@ All of these are hard.
   order. Never hardcode a plugin id as a capability boundary: providers declare
   `implements` and consumers declare `consumes`, and conformance proves declared
   equals actual.
-- **C4.** Contract identity is `soksak-spec-<kind>-<domain>`. Providers publish a
-  full SemVer version, consumers a range. The `0.0.1` baseline promises no
-  compatibility, so first-party consumers pin exactly `0.0.1`.
+- **C4.** A contract id is a plain name — `^[a-z0-9][a-z0-9-]*$`, so `browser` and
+  `sidebar-file-tree`. Providers publish a full SemVer version, consumers a range.
+  The `0.0.1` baseline promises no compatibility, so first-party consumers pin
+  exactly `0.0.1`.
+
+  It was `soksak-spec-<kind>-<domain>` until 2026-08-16, and the reason written
+  down for the prefix was that a scanner could then tell a contract id from a
+  plugin id in core sources. The core names no contract it does not define, so
+  nothing in core sources can be confused — and a rule shaped to suit a scanner
+  is the scanner writing the rule. The kind is out of the name too: whether a
+  plugin or a sidecar provides a thing is the provider's business, and a consumer
+  that had to know would be coupled to the implementation (C3).
+
+  Platform schema ids are a different namespace and keep theirs:
+  `soksak-spec-plugin@0.0.1` and its siblings stamp an envelope's format version,
+  are written into files on disk, and are not names two plugins meet at.
 - **C5.** Standards do not weaken silently. A red test against a correct standard
   means fixing the implementation, the fixture, or the exposed interface. A
   standard that is itself wrong changes in the open, with the evidence and the

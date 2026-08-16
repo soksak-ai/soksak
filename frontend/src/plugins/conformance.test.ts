@@ -251,27 +251,28 @@ describe("implementsViolations — generic checks on the C3 implements declarati
   it("a valid declaration → no violation", () => {
     expect(
       implementsViolations([
-        { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
-        { id: "soksak-spec-plugin-fixture-board", version: "0.0.1" },
+        { id: "fixture-notes", version: "0.0.1" },
+        { id: "fixture-board", version: "0.0.1" },
       ]),
     ).toEqual([]);
   });
 
   it("not an array → implements-shape; the other checks have no item and stay silent", () => {
-    expect(implementsViolations("soksak-spec-plugin-fixture-notes@0.0.1").map((v) => v.rule)).toEqual([
+    expect(implementsViolations("fixture-notes@0.0.1").map((v) => v.rule)).toEqual([
       "implements-shape",
     ]);
   });
 
   it("a non-object item → implements-shape, and the object items are still checked", () => {
-    const v = implementsViolations([{ id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" }, 7]);
+    const v = implementsViolations([{ id: "fixture-notes", version: "0.0.1" }, 7]);
     expect(v.map((x) => x.rule)).toEqual(["implements-shape"]);
   });
 
   it("an item breaking the grammar → implements-grammar, listing every offending id", () => {
+    // An id a name cannot be, and a version a SemVer cannot be.
     const v = implementsViolations([
-      { id: "fixture-notes", version: "0.0.1" },
-      { id: "soksak-spec-plugin-fixture-board", version: "bad" },
+      { id: "Fixture-Notes", version: "0.0.1" },
+      { id: "fixture-board", version: "bad" },
     ]);
     expect(v.map((x) => x.rule)).toEqual(["implements-grammar"]);
     expect(v[0].detail).toContain("0");
@@ -280,19 +281,19 @@ describe("implementsViolations — generic checks on the C3 implements declarati
 
   it("a duplicate declaration → implements-duplicate", () => {
     const v = implementsViolations([
-      { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
-      { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
+      { id: "fixture-notes", version: "0.0.1" },
+      { id: "fixture-notes", version: "0.0.1" },
     ]);
     expect(v.map((x) => x.rule)).toEqual(["implements-duplicate"]);
-    expect(v[0].detail).toContain("soksak-spec-plugin-fixture-notes");
+    expect(v[0].detail).toContain("fixture-notes");
   });
 
   it("multiple violations are all reported — none hidden", () => {
     const v = implementsViolations([
       7,
-      { id: "bad", version: "0.0.1" },
-      { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
-      { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
+      { id: "-bad", version: "0.0.1" },
+      { id: "fixture-notes", version: "0.0.1" },
+      { id: "fixture-notes", version: "0.0.1" },
     ]);
     expect(v.map((x) => x.rule)).toEqual([
       "implements-shape",

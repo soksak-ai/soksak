@@ -238,7 +238,7 @@ describe("enforceImplements — C3 implements at the activation boundary", () =>
     await expect(
       activatePlugin(
         { activate: () => {} },
-        withImplements([{ id: "not-a-contract", version: "0.0.1" }]),
+        withImplements([{ id: "Not A Contract", version: "0.0.1" }]),
         "/d",
         fakeDeps(),
       ),
@@ -249,7 +249,7 @@ describe("enforceImplements — C3 implements at the activation boundary", () =>
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await activatePlugin(
       { activate: () => {} },
-      withImplements([{ id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" }]),
+      withImplements([{ id: "fixture-notes", version: "0.0.1" }]),
       "/d",
       fakeDeps(),
     );
@@ -261,8 +261,8 @@ describe("enforceImplements — C3 implements at the activation boundary", () =>
   it("throws on a blocking rule violation (activation refused — mechanism verified with an injected table)", () => {
     expect(() =>
       enforceImplements(withImplements([
-        { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
-        { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
+        { id: "fixture-notes", version: "0.0.1" },
+        { id: "fixture-notes", version: "0.0.1" },
       ]), {
         "implements-shape": "blocking",
         "implements-grammar": "blocking",
