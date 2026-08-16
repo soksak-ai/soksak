@@ -18,7 +18,7 @@ describe("window resize sequence", () => {
     let markReady!: () => void;
     const finished = new Promise<number>((resolve) => { finishRecording = resolve; });
     const ready = new Promise<void>((resolve) => { markReady = resolve; });
-    const recording = Object.assign(finished, { ready });
+    const recording = Object.assign(finished, { ready, stopped: Promise.resolve(undefined) });
     const record = vi.fn(() => {
       order.push("record:start");
       return recording;
@@ -82,6 +82,7 @@ describe("window resize sequence", () => {
     const readinessError = new Error("baseline capture failed");
     const recording = Object.assign(finished.promise, {
       ready: Promise.reject(readinessError),
+      stopped: Promise.resolve(undefined),
     });
     const order: string[] = [];
 
@@ -118,7 +119,7 @@ describe("window resize sequence", () => {
 
   it("returns every resize and observation result even when the final recording fails after baseline", async () => {
     const finished = deferred<number>();
-    const recording = Object.assign(finished.promise, { ready: Promise.resolve() });
+    const recording = Object.assign(finished.promise, { ready: Promise.resolve(), stopped: Promise.resolve(undefined) });
     const setSize = vi.fn(async (w: number) => {
       if (w === 1200) finished.reject(new Error("disk budget exhausted"));
     });

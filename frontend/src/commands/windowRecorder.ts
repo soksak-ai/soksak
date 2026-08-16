@@ -14,7 +14,21 @@ export type WindowRecordRequest = {
   onFrame?: (frame: number) => void;
 };
 
-export type WindowRecording = Promise<number> & { ready: Promise<void> };
+/**
+ * A recording: the frame count, the readiness of the first frame, and why it stopped.
+ *
+ * The count alone is what landed on disk, which is not always what was asked for. `stopped`
+ * names the difference — a deadline every frame missed, a byte budget, a grab that failed —
+ * and without it a short recording and a complete one are one answer (measured 2026-08-16:
+ * frameTimeoutMs=1 answered frames 0 with no reason and wrote no directory).
+ *
+ * Undefined when every requested frame landed. Absent rather than empty, so nothing went wrong
+ * is readable without inspecting a string.
+ */
+export type WindowRecording = Promise<number> & {
+  ready: Promise<void>;
+  stopped: Promise<string | undefined>;
+};
 
 export type WindowRecordingReport =
   | { status: "not-requested"; mode: "realtime" }
@@ -228,5 +242,7 @@ export function recordWindowFrames({
   // report names why that differs from what was asked for.
   const counted = finished.then((report) => report.frames);
   counted.catch(() => {});
-  return Object.assign(counted, { ready });
+  const stopped = finished.then((report) => report.stopped);
+  stopped.catch(() => {});
+  return Object.assign(counted, { ready, stopped });
 }

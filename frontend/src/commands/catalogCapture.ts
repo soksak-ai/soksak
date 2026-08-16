@@ -641,17 +641,24 @@ export function registerCaptureCatalog(): void {
           }),
         };
       }
+      const recording = recordWindowFrames({
+        dir,
+        frames,
+        intervalMs,
+        ...(maxBytes === undefined ? {} : { maxBytes }),
+        frameTimeoutMs,
+      });
+      const landed = await recording;
+      // Why fewer frames landed than were asked for. Dropped here until
+      // 2026-08-16, so a deadline every frame missed answered ok:true, frames 0,
+      // and nothing a caller could act on.
+      const stopped = await recording.stopped;
       return {
         dir,
         maxBytes: maxBytes ?? null,
         frameTimeoutMs,
-        frames: await recordWindowFrames({
-          dir,
-          frames,
-          intervalMs,
-          ...(maxBytes === undefined ? {} : { maxBytes }),
-          frameTimeoutMs,
-        }),
+        frames: landed,
+        ...(stopped ? { stopped } : {}),
       };
     },
   });

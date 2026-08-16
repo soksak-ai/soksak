@@ -49,10 +49,7 @@ vi.mock("../lib/contentViews", () => ({
     },
   }),
 }));
-vi.mock("../lib/webviewLabels", () => ({
-  currentWindowLabel: () => "main",
-  browserLabel: (viewId: string) => `brw-main-${viewId}`,
-}));
+vi.mock("../lib/webviewLabels", () => ({ currentWindowLabel: () => "main" }));
 // The framework is mocked at one boundary. Window geometry is kept in a holder so a test can swap it —
 // static imports are bound at module load, so doMock (a late replacement) does not apply.
 const shellWin = vi.hoisted(() => ({
@@ -1253,7 +1250,7 @@ describe("ui.input.drag — realtime reproduction surface", () => {
       width: 20, height: 20, toJSON: () => ({}),
     });
     vi.mocked(recordWindowFrames).mockImplementationOnce(() =>
-      Object.assign(Promise.resolve(7), { ready: Promise.resolve() })
+      Object.assign(Promise.resolve(7), { ready: Promise.resolve(), stopped: Promise.resolve(undefined) })
     );
     const result = await execute(
       "ui.input.drag",
@@ -1302,6 +1299,7 @@ describe("ui.input.drag — realtime reproduction surface", () => {
     vi.mocked(recordWindowFrames).mockImplementationOnce(() =>
       Object.assign(Promise.resolve(1), {
         ready: new Promise<void>((resolve) => { releaseReady = resolve; }),
+        stopped: Promise.resolve(undefined),
       })
     );
 
@@ -1331,8 +1329,8 @@ describe("ui.input.drag — realtime reproduction surface", () => {
     window.addEventListener("mouseup", onUp);
     vi.mocked(recordWindowFrames).mockImplementationOnce(() =>
       phase === "ready"
-        ? Object.assign(Promise.resolve(0), { ready: Promise.reject(new Error("ready failed")) })
-        : Object.assign(Promise.reject(new Error("final failed")), { ready: Promise.resolve() })
+        ? Object.assign(Promise.resolve(0), { ready: Promise.reject(new Error("ready failed")), stopped: Promise.resolve(undefined) })
+        : Object.assign(Promise.reject(new Error("final failed")), { ready: Promise.resolve(), stopped: Promise.resolve(undefined) })
     );
 
     try {
@@ -1515,7 +1513,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
     node.addEventListener("click", () => order.push("click"));
     vi.mocked(recordWindowFrames).mockImplementationOnce(() => {
       order.push("record");
-      return Object.assign(Promise.resolve(9), { ready: Promise.resolve() });
+      return Object.assign(Promise.resolve(9), { ready: Promise.resolve(), stopped: Promise.resolve(undefined) });
     });
 
     const result = await execute("ui.input.click", {
@@ -1558,6 +1556,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
     vi.mocked(recordWindowFrames).mockImplementationOnce(() =>
       Object.assign(Promise.resolve(1), {
         ready: new Promise<void>((resolve) => { releaseReady = resolve; }),
+        stopped: Promise.resolve(undefined),
       })
     );
 
@@ -1590,8 +1589,8 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
     node.addEventListener("click", () => clicks.push("click"));
     vi.mocked(recordWindowFrames).mockImplementationOnce(() =>
       phase === "ready"
-        ? Object.assign(Promise.resolve(0), { ready: Promise.reject(new Error("ready failed")) })
-        : Object.assign(Promise.reject(new Error("final failed")), { ready: Promise.resolve() })
+        ? Object.assign(Promise.resolve(0), { ready: Promise.reject(new Error("ready failed")), stopped: Promise.resolve(undefined) })
+        : Object.assign(Promise.reject(new Error("final failed")), { ready: Promise.resolve(), stopped: Promise.resolve(undefined) })
     );
 
     const result = await execute("ui.input.click", {
@@ -1634,7 +1633,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
           resolve(2);
         };
       });
-      return Object.assign(finished, { ready: Promise.resolve() });
+      return Object.assign(finished, { ready: Promise.resolve(), stopped: Promise.resolve(undefined) });
     });
     const executing = execute("ui.input.click", {
       address: ADDR,
@@ -1664,6 +1663,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
       request.onFrame?.(1);
       return Object.assign(Promise.reject(new Error("record tail failed")), {
         ready: Promise.resolve(),
+        stopped: Promise.resolve(undefined),
       });
     });
 
@@ -2062,6 +2062,9 @@ describe("ui.input.click — pointing at a content view puts the input inside it
     mountNode(`<div data-node="layout/tab/tab-probe"></div>`);
     const view = document.createElement("div");
     view.setAttribute("data-content-view", "brw-main-tab-probe");
+    // The plugin declares the surface and its label; the core reads that rather than rebuilding one.
+    view.setAttribute("data-native-surface", "browser");
+    view.setAttribute("data-native-surface-id", "brw-main-tab-probe");
     view.id = "cv";
     Object.defineProperty(view, "getBoundingClientRect", {
       value: () => ({ left: 100, top: 50, width: 200, height: 100, right: 300, bottom: 150 }),

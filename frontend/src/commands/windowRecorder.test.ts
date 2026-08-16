@@ -150,6 +150,7 @@ it("a ready failure closes as failed without awaiting an unfinished final, and c
   const final = new Promise<number>((_resolve, reject) => { rejectFinal = reject; });
   const recorder = vi.fn(() => Object.assign(final, {
     ready: Promise.reject(new Error("baseline failed")),
+    stopped: Promise.resolve(undefined),
   }));
 
   const transaction = startWindowRecording({
@@ -179,7 +180,7 @@ it("after ready succeeds, final success and failure close under the same public 
   }, (request) => {
     request.onFrame?.(0);
     request.onFrame?.(1);
-    return Object.assign(Promise.resolve(2), { ready: Promise.resolve() });
+    return Object.assign(Promise.resolve(2), { ready: Promise.resolve(), stopped: Promise.resolve(undefined) });
   });
   await expect(complete.ready).resolves.toBe(true);
   await expect(complete.report).resolves.toMatchObject({
@@ -194,7 +195,7 @@ it("after ready succeeds, final success and failure close under the same public 
     intervalMs: 0,
   }, (request) => {
     request.onFrame?.(0);
-    return Object.assign(Promise.reject(new Error("disk failed")), { ready: Promise.resolve() });
+    return Object.assign(Promise.reject(new Error("disk failed")), { ready: Promise.resolve(), stopped: Promise.resolve(undefined) });
   });
   await expect(failed.ready).resolves.toBe(true);
   await expect(failed.report).resolves.toMatchObject({
@@ -224,7 +225,7 @@ it("a synchronous recorder failure and a frame observer failure surface as recor
     onFrame: () => { throw new Error("observer failed"); },
   }, (request) => {
     request.onFrame?.(0);
-    return Object.assign(Promise.resolve(1), { ready: Promise.resolve() });
+    return Object.assign(Promise.resolve(1), { ready: Promise.resolve(), stopped: Promise.resolve(undefined) });
   });
   await expect(observer.report).resolves.toMatchObject({
     status: "failed",
