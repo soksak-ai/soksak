@@ -227,10 +227,15 @@ collects specs. The core has the core's spec; a plugin has the plugin's.
 Three things existed where one was needed.
 
 **Interface ids.** `implements` and `consumes` named a contract a provider offered and a consumer
-asked for, so either side could be swapped without knowing the other. Measured: `browser` had a
-provider and no consumer, `sidebar-file-tree` two consumers and no provider — not one interface ever
-had both sides. The id duplicated the plugin id, and the core ended up holding one as a constant
-(entry 9). Removed: the fields, the grammar, discovery, selection, resolution,
+asked for, so either side could be swapped without knowing the other. The id duplicated the plugin
+id, and the core ended up holding one as a constant (entry 9).
+
+The measurement written here first was wrong and is corrected: it read the two plugins installed in
+the run home and concluded no interface ever had both sides. The corpus is 47 plugins in the
+development home, and nine interfaces have both — three browsers implement one, two terminals
+implement another, seven plugins consume git. What that changes is the sentence, not the entry:
+a sample is brought to the rule, not the rule to the sample. Those manifests are the list of things
+to bring into conformance. Removed: the fields, the grammar, discovery, selection, resolution,
 `ContractEngineSettings`, `plugin.implementers`, the activation-boundary enforcement, and the
 installer's provider axis. A plugin that needs another names it in `dependencies` — one route across
 the boundary, and the call gate checks that one thing.
@@ -246,8 +251,8 @@ manifest says `"spec": "0.0.1"`.
 **The prefix itself.** The reason written down for it was that a scanner could tell a contract id
 from a plugin id in core sources — a rule shaped to suit a scanner. Gone with the thing it named.
 
-Nothing was swappable, so nothing stopped being swappable. The machinery had no traffic through it.
-A mechanism for choosing between two implementations gets built when there are two.
+A mechanism for choosing between two implementations gets built against the case that needs it. The
+sample corpus holds three browsers and two terminals, so that case is real and is not this entry's.
 
 Gate: `TestTheCoreHoldsNoSecondIdentityNamespace` refuses any `soksak-spec-` literal in core sources.
 
