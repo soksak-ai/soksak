@@ -283,7 +283,15 @@ line (`projection.degraded.unresolved`) is gone, because there is no provider to
 `ui.validate` passes, addresses read `center`, and both plugins draw.
 
 **Nothing is placed left or right yet.** No plugin declares those regions, so both sidebars are empty
-frames. A file tree, a daemon list, bookmarks: each is a view its plugin declares, and none exists.
+frames.
+
+A plugin may live in a sidebar and nowhere else, and a shared thing has to. A file list is used by a
+terminal, an editor and a browser alike, so it is not one of theirs to provide: the plugin that draws
+it declares `left` and has no view in the centre. Which pane it follows arrives at mount as view
+context, so it names no plugin either. `sidebarOnly.test.ts` holds that shape.
+
+A daemon list or a browser's bookmarks are the opposite case — one plugin's own, declared beside its
+centre view. Both are the same mechanism; what differs is who the thing belongs to.
 
 ## What is left, named
 
