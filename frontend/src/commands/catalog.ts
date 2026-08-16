@@ -968,7 +968,6 @@ export function registerCatalog(): void {
       },
       alias: { type: "string", description: "Tab alias (omit = folder name)" },
       program: { ...P.program, description: "Initial view program (omit = empty space tab)" },
-      shell: { type: "string", description: "Terminal shell path (omit = global setting → $SHELL)" },
     },
     returns:
       "{ projectId, spaceId, paneId, tabId, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)",
@@ -1041,7 +1040,6 @@ export function registerCatalog(): void {
       const r = await addWorkspaceClaimed({
         alias,
         root,
-        shell: p.shell as string | undefined,
         program: p.program as Program | undefined,
       });
       if (!r.ok || "existingWindow" in r || "routedWindow" in r) return r;
@@ -1123,20 +1121,18 @@ export function registerCatalog(): void {
     params: {
       workspace: { ...P.workspace, required: true },
       title: { type: "string", description: "Alias (empty string is ignored)" },
-      shell: { type: "string", description: 'Terminal shell path ("" = default)' },
       color: { type: "string", description: 'Accent color ("" = remove)' },
     },
     returns: "{ projectId }",
     message: () => tmsg("msg.workspace.update"),
     errors: ["TARGET_NOT_FOUND"],
     examples: [
-      'workspace.update \'{"workspace":"wsp-a2b3c4","title":"backend","shell":"$SHELL"}\'',
+      'workspace.update \'{"workspace":"wsp-a2b3c4","title":"backend"}\'',
     ],
     handler: (p) =>
       withTargets(
         S().updateWorkspace(p.workspace as string, {
           title: p.title as string | undefined,
-          shell: p.shell === undefined ? undefined : (p.shell as string) || null,
           color: p.color === undefined ? undefined : (p.color as string) || null,
         }),
         { projectId: p.workspace as string },

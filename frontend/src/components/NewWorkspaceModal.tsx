@@ -33,7 +33,6 @@ type FolderMode = "auto" | "manual";
 export interface CreateWorkspaceArgs {
   alias: string;
   root: string;
-  shell?: string;
 }
 
 export function NewWorkspaceModal({
@@ -50,7 +49,6 @@ export function NewWorkspaceModal({
   const [name, setName] = useState(""); // auto = folder name slug / manual = free-form alias
   const [root, setRoot] = useState<string | undefined>(undefined);
   const [rootError, setRootError] = useState<string | null>(null);
-  const [shell, setShell] = useState("");
   const { cardRef, cardStyle, onHeaderDown } = useDraggableModal();
 
   useEffect(() => {
@@ -94,7 +92,6 @@ export function NewWorkspaceModal({
     const args = {
       alias: nameValue, // Empty falls back to the folder name in makeWorkspace.
       root: finalRoot,
-      shell: shell.trim() || undefined,
     };
     // P6 (globally single open) gate — if it is open in another window, that window is focused.
     if (createOverride) await createOverride(args);
@@ -193,18 +190,6 @@ export function NewWorkspaceModal({
                 : t("workspace.folderNameHint", { name: nameValue || t("workspace.folderNamePlaceholder") })}
             </div>
           ) : null}
-
-          <div className="drow">
-            <span className="drow-label">{t("settings.shell")}</span>
-            <input
-              className="dctl dctl-mono"
-              data-node="modal/workspace-new/shell"
-              type="text"
-              value={shell}
-              placeholder={t("shell.default")}
-              onChange={(e) => setShell(e.target.value)}
-            />
-          </div>
 
           <div className="dmodal-actions">
             <button

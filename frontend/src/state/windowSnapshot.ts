@@ -74,7 +74,6 @@ export interface WorkspaceSnapshot {
   id: string;
   title: string;
   root: string;
-  shell?: string;
   color?: string;
   // Vertical-line normalization migration marker — serialization always writes it. Only an old snapshot without
   // the marker is healed once on restore by normalizeVerticalLines; a restore with the marker is identity —
@@ -153,7 +152,6 @@ export function serializeWorkspace(
     id: p.id,
     title: p.title,
     root: p.root,
-    ...(p.shell ? { shell: p.shell } : {}),
     ...(p.color ? { color: p.color } : {}),
     vlNormalized: true,
     railPlacementNormalized: true,
@@ -227,7 +225,6 @@ export function deserializeWorkspace(s: WorkspaceSnapshot): Workspace {
     id: s.id,
     title: s.title,
     root: s.root,
-    ...(s.shell ? { shell: s.shell } : {}),
     ...(s.color ? { color: s.color } : {}),
     sidebarOpen: s.sidebarOpen,
     // The stored value of an old snapshot without the marker is not trusted — there is no way to separate the

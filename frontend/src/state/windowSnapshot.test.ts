@@ -16,7 +16,6 @@ const workspace: Workspace = {
   id: "wsp-aaaaaa",
   title: "proj",
   root: "/repo",
-  shell: "/bin/zsh",
   sidebarOpen: true,
   leftRailPlacement: { mode: "pin", station: 60 },
   rightOpen: false,
@@ -81,7 +80,6 @@ describe("windowSnapshot round trip", () => {
     const back = deserializeWorkspace(snap);
     expect(back.root).toBe("/repo");
     expect(back.title).toBe("proj");
-    expect(back.shell).toBe("/bin/zsh");
     expect(back.sidebarOpen).toBe(true);
     expect(back.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
     expect(back.activeSpaceId).toBe("spc-aaaaaa");

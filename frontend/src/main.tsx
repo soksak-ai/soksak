@@ -299,18 +299,13 @@ async function boot(): Promise<void> {
       const clean = new URL(window.location.href);
       clean.searchParams.delete("root");
       clean.searchParams.delete("alias");
-      clean.searchParams.delete("shell");
       window.history.replaceState(null, "", clean.toString());
     }
     try {
       const denied = await claimRoots([initRoot]);
       if (!denied.has(initRoot)) {
         const initAlias = bootParams.get("alias") ?? "";
-        const initShell = bootParams.get("shell") ?? undefined;
-        useSessions.getState().bootstrapFirstWorkspace(initRoot, {
-          alias: initAlias,
-          shell: initShell,
-        });
+        useSessions.getState().bootstrapFirstWorkspace(initRoot, { alias: initAlias });
         void recordRecentWorkspace(initRoot, initAlias); // recent list (explicit open)
       } else {
         console.warn(`[P6] the instructed workspace is open in another window — degraded to empty state: ${initRoot}`);

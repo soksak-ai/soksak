@@ -1,4 +1,4 @@
-// Workspace settings modal — manages every creation-time setting: folder (read-only), alias, identity color, shell.
+// Workspace settings modal — manages every creation-time setting: folder (read-only), alias, identity color.
 // Opened by double-clicking a tab or rail chip (replaces inline rename).
 import { execute } from "../commands/registry";
 import { useEffect, useState } from "react";
@@ -38,7 +38,6 @@ export function WorkspaceSettingsModal({
   const defaultWorkspaceRoot = useSettings((s) => s.defaultWorkspaceRoot);
   const setDefaultWorkspaceRoot = useSettings((s) => s.setDefaultWorkspaceRoot);
   const [name, setName] = useState(workspace?.title ?? "");
-  const [shell, setShell] = useState(workspace?.shell ?? "");
   const { cardRef, cardStyle, onHeaderDown } = useDraggableModal();
 
   useEffect(() => {
@@ -61,7 +60,6 @@ export function WorkspaceSettingsModal({
       workspace: projectId,
       // An empty alias falls back to the folder name (P4 — a display name always exists).
       title: name.trim() || baseName(workspace.root),
-      shell: shell.trim() || "",
     }, {});
     onClose();
   };
@@ -156,17 +154,6 @@ export function WorkspaceSettingsModal({
             </div>
           </div>
 
-
-          <div className="drow">
-            <span className="drow-label">{t("settings.shell")}</span>
-            <input
-              className="dctl dctl-mono"
-              type="text"
-              value={shell}
-              placeholder={t("shell.default")}
-              onChange={(e) => setShell(e.target.value)}
-            />
-          </div>
 
           <div className="dmodal-actions">
             <button type="button" className="dbtn" onClick={onClose}>

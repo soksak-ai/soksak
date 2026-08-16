@@ -222,8 +222,6 @@ export interface Workspace {
   // the tabs, report it with a banner, and let the user clean up (no unauthorized delete — B1
   // consistency). Resolved on the next restart restore once the path is back.
   rootMissing?: boolean;
-  // Terminal shell of the workspace (unset falls back to the global setting shell → system $SHELL).
-  shell?: string;
   // Workspace identity color (rail chip/tab accent). Unset falls back to the theme default.
   color?: string;
   // Content tabs + the active one.
@@ -234,7 +232,6 @@ export interface Workspace {
 export interface NewWorkspaceOpts {
   alias: string;
   root: string; // P1 — the caller has already validated and normalized this path (validateWorkspaceRoot)
-  shell?: string; // undefined = follow the global setting
   // Initial view program of the first content. Omitted = empty skeleton (same as the makeContent
   // contract).
   program?: Program;
@@ -253,7 +250,7 @@ interface SessionsStore {
 
   // Workspace level
   // Once at boot: create the first workspace (t1/"P1") at the default root — main.tsx only (P3).
-  bootstrapFirstWorkspace: (root: string, opts?: { alias?: string; shell?: string }) => void;
+  bootstrapFirstWorkspace: (root: string, opts?: { alias?: string }) => void;
   // Restore the persisted layout (A5) — the main.tsx boot deserializes the snapshot and injects it
   // whole. Exclusive with bootstrap: use this when a restore exists, bootstrap otherwise. reseed is
   // the caller's job (persistence).
@@ -273,7 +270,6 @@ interface SessionsStore {
     id: string,
     patch: {
       title?: string;
-      shell?: string | null;
       color?: string | null;
     },
   ) => CmdResult;
@@ -950,7 +946,6 @@ function makeWorkspace(id: string, opts: NewWorkspaceOpts): Workspace {
     rightView: null,
     leftLayout: initialSidebarLayout([]),
     root: opts.root,
-    shell: opts.shell,
     spaces: [c],
     activeSpaceId: c.id,
   };
@@ -981,7 +976,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
     // and the workspace every pane and space hangs off was the one entity
     // outside N1 (measured 2026-08-16: state.tree answered "t1" beside
     // pan-axhgio and spc-tbsgmi).
-    const t = makeWorkspace(issueId("workspace"), { alias, root, shell: opts?.shell });
+    const t = makeWorkspace(issueId("workspace"), { alias, root });
     set({ workspaces: [t], activeId: t.id });
   },
 
@@ -1089,9 +1084,6 @@ export const useSessions = moduleState("state/sessions#store", () =>
           // Ignore an empty title (keeps the invariant that a title is never empty).
           if (patch.title !== undefined && patch.title.trim()) {
             next.title = patch.title.trim();
-          }
-          if (patch.shell !== undefined) {
-            next.shell = patch.shell ?? undefined;
           }
           if (patch.color !== undefined) {
             next.color = patch.color ?? undefined;

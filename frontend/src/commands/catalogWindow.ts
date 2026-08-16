@@ -364,10 +364,6 @@ export function registerWindowCatalog(): void {
         type: "string",
         description: tmsg("cmd.window.open.param.alias"),
       },
-      shell: {
-        type: "string",
-        description: tmsg("cmd.window.open.param.shell"),
-      },
       mode: {
         type: "string",
         description:
@@ -453,7 +449,6 @@ export function registerWindowCatalog(): void {
       }
       let init = `root=${encodeURIComponent(root)}`;
       if (typeof p.alias === "string" && p.alias) init += `&alias=${encodeURIComponent(p.alias)}`;
-      if (typeof p.shell === "string" && p.shell) init += `&shell=${encodeURIComponent(p.shell)}`;
       return {
         label: await invoke<string>("window_create", {
           init,

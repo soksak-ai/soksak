@@ -366,7 +366,7 @@ export function OrchestratorApp() {
   const createWorkspace = useCallback(async (args: CreateWorkspaceArgs) => {
     await execute(
       "window.open",
-      { root: args.root, ...(args.alias ? { alias: args.alias } : {}), ...(args.shell ? { shell: args.shell } : {}) },
+      { root: args.root, ...(args.alias ? { alias: args.alias } : {}) },
       { remote: false },
     );
   }, []);

@@ -69,7 +69,8 @@ that on the same date and the gate landed against it.
 | Document | Contents |
 | --- | --- |
 | [`tech/GATES.md`](tech/GATES.md) | Which of G0–G5 stand, the command that judges each, and what it answered |
-| [`tech/ARCHITECTURE.md`](tech/ARCHITECTURE.md) | What the core owns, the four seams a plugin attaches through, principles A1–A9, coupling law C1–C5, one registry with several transports, identity |
+| [`tech/CORE-CENSUS.md`](tech/CORE-CENSUS.md) | Every core surface counted and judged by C6 — what stays, what is a feature and where it goes |
+| [`tech/ARCHITECTURE.md`](tech/ARCHITECTURE.md) | What the core owns, the four seams a plugin attaches through, principles A1–A9, coupling law C1–C6, one registry with several transports, identity |
 | [`tech/NAMING.md`](tech/NAMING.md) | Identifier format and prefixes, natural-key axes, labels, fixtures, public vocabulary, folder names — each with its gate |
 | [`tech/NATIVE-LAYER.md`](tech/NATIVE-LAYER.md) | Why cgo is present, N1–N3, why purego is not used, capture, native surfaces |
 | [`tech/NATIVE-SURFACES.md`](tech/NATIVE-SURFACES.md) | Content outside the document — the seven-attribute declaration, the label shape, one inventory per window per delivery, and the declared-versus-applied numbers the seam is judged by |
