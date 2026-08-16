@@ -79,6 +79,7 @@ import { prepareLayoutChange, viewLayoutChange } from "./lib/layoutTransitionHos
 import { registerLayoutTransitionIntentHost } from "./lib/layoutTransitionIntent";
 import { ownsNativeSurfaceFromManifests } from "./lib/nativeSurfaceOwnership";
 import { useAddTabIntent } from "./state/addTabIntent";
+import { useSectionSets } from "./state/sectionSets";
 import "./App.css";
 
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
@@ -183,6 +184,24 @@ const WorkspacePlane = memo(function WorkspacePlane({
   const railPlaneRef = useRef<HTMLDivElement>(null);
   const railGridSurfaceRef = useRef<RailGridSurfaceHandle>(null);
   const placement = workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
+  // The plugin of the focused centre view, and the set standing on the left because of it.
+  //
+  // A plugin with no link has no sidebar at all — not an empty one. Composing nothing and reserving
+  // width for it leaves a hole on the screen, and a person reads that as a view that failed to draw.
+  const focusedPluginId = useMemo(() => {
+    const space = workspace.spaces.find((c) => c.id === workspace.activeSpaceId);
+    if (!space) return null;
+    const group = allGroups(space.layout).find((g) => g.id === space.activePaneId);
+    const view = group?.tabs.find((v) => v.id === group.activeTabId);
+    return view?.pluginId ?? null;
+  }, [workspace.spaces, workspace.activeSpaceId]);
+  const leftStands = useSectionSets(
+    (s) =>
+      (s.mode === "fixed" ? s.fixed : s.byPlugin[focusedPluginId ?? ""])?.region === "left",
+  );
+  // The left region is present when the person has it open **and** a set stands there.
+  const leftOpen = workspace.sidebarOpen && leftStands;
+
   const activeContent =
     workspace.spaces.find((content) => content.id === workspace.activeSpaceId) ??
     workspace.spaces[0];
@@ -233,10 +252,10 @@ const WorkspacePlane = memo(function WorkspacePlane({
         to,
         groups,
         hostWidth,
-        workspace.sidebarOpen ? sidebarW : 0,
+        leftOpen ? sidebarW : 0,
       ), signal);
     },
-    [workspace.sidebarOpen, sidebarW],
+    [leftOpen, sidebarW],
   );
   useLayoutEffect(
     () => registerLayoutTransitionIntentHost<Pane>(workspace.id, {
@@ -267,7 +286,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
         destination: solved,
         bindingTabId: activeContent.railBindingTabId,
         placement: placement.mode,
-        railOpen: workspace.sidebarOpen,
+        railOpen: leftOpen,
         station: renderedStation,
       })
     : null;
@@ -291,6 +310,8 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // representation between 1 and 2 instances mid-phase, and in that 1-instance render the standing sidebar commits the
   // new projection and is then pushed into the departing slot — the origin of the measured defect where the departing
   // slot closed while holding the new projection.
+
+
   const railTraveling = dragStation === null && phase.traveling && phase.glide;
   // The rail is one persistent DOM node. Settle the target position first, then rewind from the start point with the
   // same FLIP phase as tabs. Duplicating source/target remounts the sidebar views and produces empty frames.
@@ -324,7 +345,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
 
   const startRailStationDrag = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button !== 0 || !workspace.sidebarOpen) return;
+      if (e.button !== 0 || !leftOpen) return;
       e.preventDefault();
       e.stopPropagation();
       const plane = railPlaneRef.current;
@@ -368,7 +389,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
       effectiveStation,
       phase.rebase,
       workspace.id,
-      workspace.sidebarOpen,
+      leftOpen,
       railCleanLines,
       setLeftRailPlacement,
       sidebarW,
@@ -391,7 +412,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
     activeContent?.activePaneId,
     activeContent?.maximizedTabId,
     workspace.activeSpaceId,
-    workspace.sidebarOpen,
+    leftOpen,
     isActiveWorkspace,
     renderedStation,
     railTraveling,
@@ -478,16 +499,16 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   style={
                     {
                       left: `calc(${rail.station}% - ${(sidebarW * rail.station) / 100}px)`,
-                      width: workspace.sidebarOpen ? sidebarW : 0,
+                      width: leftOpen ? sidebarW : 0,
                       borderLeftWidth: railEdgeWidths(
                         railLook,
-                        workspace.sidebarOpen,
+                        leftOpen,
                         rail.station,
                         paneStyle,
                       ).left,
                       borderRightWidth: railEdgeWidths(
                         railLook,
-                        workspace.sidebarOpen,
+                        leftOpen,
                         rail.station,
                         paneStyle,
                       ).right,
@@ -497,8 +518,9 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   <LeftSidebarHost
                     workspace={workspace}
                     paneId={cwdTabOf(workspace) ?? ""}
+                    focusedPluginId={focusedPluginId}
                   />
-                  {workspace.sidebarOpen && (
+                  {leftOpen && (
                     <div className="left-rail-controls">
                       <button
                         type="button"
@@ -517,7 +539,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                       </button>
                     </div>
                   )}
-                  {workspace.sidebarOpen && (
+                  {leftOpen && (
                     <div
                       className="sidebar-resizer"
                       data-wv-occlusion="sidebar-resizer"
@@ -571,7 +593,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   // The maximize fact comes from the **same solution** as station — mixing them makes the render throw.
                   displayMaximizedId={isActiveContent ? (arrangement?.maximizedId ?? null) : undefined}
                   railWidthPx={
-                    isActiveContent && workspace.sidebarOpen ? sidebarW : 0
+                    isActiveContent && leftOpen ? sidebarW : 0
                   }
                 />
               </div>

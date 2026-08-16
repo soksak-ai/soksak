@@ -66,6 +66,7 @@ import {
 import { catalogJson, register, type CommandContext, type CommandHint } from "./registry";
 import { notFound } from "./refuse";
 import { registerFsWatchCatalog } from "./catalogFsWatch";
+import { registerSectionsCatalog } from "./catalogSections";
 import { registerPluginCatalog } from "./catalogPlugins";
 import { registerDaemonCatalog } from "./catalogDaemon";
 import { registerUpdateCatalog } from "./catalogUpdate";
@@ -2395,6 +2396,7 @@ export function registerCatalog(): void {
   // ----- explorer (file explorer) -----
   // ----- Delegated catalogs (split into files — the single truth is the same registry) -----
   registerFsWatchCatalog();
+  registerSectionsCatalog();
   registerHealthCatalog();
   registerWindowCatalog();
   registerCaptureCatalog();

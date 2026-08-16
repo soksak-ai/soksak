@@ -52,12 +52,15 @@ const IN_SCOPE: Record<string, string> = {
   tab: "tab-",
   split: "spl-",
   shellSession: "shl-",
+  // A named list of sections a plugin is linked to. In scope because it is addressed by command and
+  // outlives the screen: a title cannot address one, since two may be called the same thing.
+  sectionSet: "set-",
   streamReceiver: "stm-",
   window: "win-",
 };
 
 /** Prefixes issued in this module. `win-` is absent: the host issues it. */
-const ISSUED_HERE = new Set(["wsp", "spc", "pan", "tab", "spl", "shl"]);
+const ISSUED_HERE = new Set(["wsp", "spc", "pan", "tab", "spl", "shl", "set"]);
 
 /** §1-4d ② axes that keep a natural key — issuing a prefixed id here is a violation. */
 const NATURAL_KEY_AXES = [

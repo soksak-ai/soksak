@@ -32,6 +32,7 @@ import {
   viewsForPlacement,
   getRegisteredView,
 } from "../plugins/viewRegistry";
+import { useSectionSets } from "../state/sectionSets";
 import { useSessions, type Workspace } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useViewLabels, resolveViewLabel } from "../state/viewLabels";
@@ -56,26 +57,32 @@ const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 6 };
 export const LeftSidebarHost = memo(function LeftSidebarHost({
   workspace,
   paneId,
+  focusedPluginId,
 }: {
   workspace: Workspace;
   paneId: string;
+  /** The plugin of the focused centre view — what `individual` reads. null = none focused. */
+  focusedPluginId: string | null;
 }) {
   const version = useViewRegistry((s) => s.version);
   // The same pane-inset as the content group (theme paneStyle) — for row2 alignment.
   const paneStyle = useTheme((s) => s.spec.chrome.paneStyle);
   const paneInset = PANE_INSET[paneStyle] ?? 0;
-  // Every view a plugin placed here. The person arranges them — split, tab, order — and the
-  // arrangement is the workspace's (leftLayout).
+  // The sections of the set standing here, in the order the set holds them.
   //
-  // The grid arranged pinned refs until 2026-08-16, and a projection above it swapped a slot as the
-  // bound content view changed: a content view declared what belonged beside it, which is a view
-  // about content and produced a slot pointing at a plugin that does not exist. A plugin declares
-  // which region it is placed in, and nothing else.
-  const registeredKeys = useMemo(
-    () => viewsForPlacement("left").map((v) => v.key),
+  // Which set that is comes from settings — the one linked to the focused view's plugin, or the
+  // fixed one. With none standing this host is not rendered at all, which App settles.
+  // Sections outside what is placed here are dropped: a set is linked to a region only when every
+  // section is placed there, so this can only differ after a plugin is disabled, and the arrangement
+  // is reconciled the same way it always was.
+  const standing = useSectionSets((s) => (s.mode === "fixed" ? s.fixed : s.byPlugin[focusedPluginId ?? ""]));
+  const sets = useSectionSets((s) => s.sets);
+  const registeredKeys = useMemo(() => {
+    const placed = new Set(viewsForPlacement("left").map((v) => v.key));
+    const set = standing ? sets.find((x) => x.id === standing.set) : undefined;
+    return (set?.sections ?? []).filter((k) => placed.has(k));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [version],
-  );
+  }, [version, standing, sets]);
   const reconcileSidebar = useSessions((s) => s.reconcileSidebar);
   const setLeftTab = useSessions((s) => s.setLeftTab);
 

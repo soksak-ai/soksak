@@ -30,6 +30,9 @@ export const ID_PREFIX = {
   // That was not true of canonicalLayout.
   split: "spl-",
   shellSession: "shl-",
+  // A named, ordered list of sections a plugin is linked to (A2a). It is addressed by command and
+  // stored in settings, so it is an id and not a title: two sets may be called the same thing.
+  sectionSet: "set-",
   // Issued by frontend/src/framework/wails/streams.ts, not by issueId. A stream
   // receiver is minted where the frames arrive, and it is listed here so one
   // table covers every prefix and no two kinds can take the same one.
@@ -108,6 +111,8 @@ export function issueId(kind: IssuedKind): string {
       return `tab-${body}`;
     case "split":
       return `spl-${body}`;
+    case "sectionSet":
+      return `set-${body}`;
     case "shellSession":
       return `shl-${body}`;
   }

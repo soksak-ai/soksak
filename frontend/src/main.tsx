@@ -1,3 +1,4 @@
+import { initSectionSetsPersistence } from "./state/sectionSets";
 import ReactDOM from "react-dom/client";
 import {
   installFramework,
@@ -218,6 +219,7 @@ async function boot(): Promise<void> {
     initSettingsPersistence(coreStoreDeps);
     initThemePersistence(coreStoreDeps);
     initPluginSettingsPersistence(coreStoreDeps);
+    initSectionSetsPersistence(coreStoreDeps);
     initPluginsPersistence(coreStoreDeps);
     initRegistryPersistence(coreStoreDeps);
     initViewLabelsPersistence(coreStoreDeps);
