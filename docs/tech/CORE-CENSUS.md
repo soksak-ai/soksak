@@ -285,13 +285,16 @@ line (`projection.degraded.unresolved`) is gone, because there is no provider to
 **Nothing is placed left or right yet.** No plugin declares those regions, so both sidebars are empty
 frames.
 
-A plugin may live in a sidebar and nowhere else, and a shared thing has to. A file list is used by a
-terminal, an editor and a browser alike, so it is not one of theirs to provide: the plugin that draws
-it declares `left` and has no view in the centre. Which pane it follows arrives at mount as view
-context, so it names no plugin either. `sidebarOnly.test.ts` holds that shape.
+Each plugin defines its own sections. A terminal may declare a file tree, a daemon list and a TUI
+state; an editor may declare a file tree of its own; a browser may declare bookmarks. A plugin that
+draws nothing in the centre and only a section on the left is equally valid — `sidebarOnly.test.ts`
+holds that shape.
 
-A daemon list or a browser's bookmarks are the opposite case — one plugin's own, declared beside its
-centre view. Both are the same mechanism; what differs is who the thing belongs to.
+**The mechanism does not decide which.** A section is a view with a region declared, and who declares
+it is the author's choice, not a rule here. Two plugins declaring a file tree each is two sections,
+and one plugin declaring it for everyone is one; both are the same mechanism.
+
+Which pane a section follows arrives at mount as view context, so a section names no plugin.
 
 ## What is left, named
 
