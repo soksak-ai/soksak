@@ -310,6 +310,11 @@ identifiers, logs, error codes, test names, API field names.
 
 The only place Korean remains is the `ko` values of the resource bundle. Nowhere else.
 
+Two gates hold it: `korean_gate_test.go` reads the files, `record_language_gate_test.go` reads
+`git log`. Messages were the half nobody checked, and that is the half that was broken — measured
+2026-08-16, a commit body carried a Korean word for a status bar label. History is the one part of
+the record that hardens: a branch nobody has pulled can still be rewritten, and after that it cannot.
+
 ### 6-2. Dry, short, exact
 
 Applies to comments, commit logs, resource bundle values and documents, in every locale.
