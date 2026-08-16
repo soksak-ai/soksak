@@ -300,6 +300,41 @@ declares a region and no companion; which sections are open, split or tabbed and
 workspace's state, arranged by the person and restored with the workspace. Which pane a section
 follows arrives at mount as view context, so a section names no plugin either.
 
+### 12. The sample corpus, brought to the rules
+
+Forty-six plugins in the development home, and not one of them parsed under the rules this session
+settled. They were not rewritten: what each does is unchanged, and what changed is what the core no
+longer holds.
+
+| Broke | Plugins |
+| --- | --- |
+| `spec` read `soksak-spec-plugin@0.0.1` | 46 |
+| `placements` read `content` / `rail` / `rail-footer` | 26 |
+| `consumes` | 20 |
+| a view's `sidebar` declaration | 18 |
+| `implements` | 12 |
+| `version` other than `0.0.1` | 8 |
+| `resident` | 2 |
+
+Two named a contract where a plugin belongs — `agent-claude` and `agent-codex` opened their view
+through `viewContract: soksak-spec-plugin-terminal`, and they name the terminal plugin in
+`viewPlugin` and `dependencies` now.
+
+`corpus.check.test.ts` reads every manifest through this build's parser. Two remain unparsed and are
+named there: `editor-codemirror` and `media-viewer` declare `contributes.fileViewers`, which was how
+a plugin said it draws a file (entry 1). Converting those is a source change — a centre view and an
+`open` command — not a manifest edit.
+
+Sources still call commands the core no longer serves: `plugin.implementers` in 22, `turn.signal` in
+11, `term.exec` in 9, `bookmark.*` in 15, `media.proxy` in 5, `orchestrator.*` in 3. Those plugins
+load and fail at the call. They are fixed as they are installed and run, one proven at a time.
+
+**The file tree is the one proven.** Its manifest, its git seam and its open path were brought to the
+rules, it was built, installed, consented to and enabled, and its tree stands in the left region of a
+section set linked to the terminal. The git seam reads `dependencies` instead of asking who
+implements a contract; opening routes to the viewer named in `dependencies` and refuses by name when
+none is declared.
+
 ## What is left, named
 
 - `frameworks/wails/register.go` types `HostDeps.Sessions` as `terminalcmd.Sessions`, and
@@ -312,7 +347,10 @@ follows arrives at mount as view context, so a section names no plugin either.
   convenience given up. Chromium and a platform webview do not have the same spec — what they expose
   and how they behave differ in fact — so a shared one would force a rule onto the parts that differ.
   Whoever needs a browser names the plugin.
-- **Both sidebars are empty.** The core owns the frame — regions, split, tabs, order, persistence —
+- **Forty of the samples call commands the core no longer serves** (entry 12), and are fixed as they
+  are installed and run.
+- **Two samples do not parse**: `editor-codemirror` and `media-viewer` declare `contributes.fileViewers`.
+- **The right sidebar is empty.** The core owns the frame — regions, split, tabs, order, persistence —
   and no plugin declares `left` or `right` (entry 11).
 - **Nobody installs a missing binary.** The core publishes `program.missing` and `library.missing`
   with the exact command; no plugin subscribes, so a person reads the stream and runs it.
