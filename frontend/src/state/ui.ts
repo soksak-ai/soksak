@@ -51,8 +51,16 @@ export const useUi = moduleState("state/ui#store", () =>
 })),
 );
 
-// Registers an overlay while mounted (while active is true) — every modal/menu/
-// dropdown must use this hook (it is an input gate, not display control).
+// Registers an overlay while active — every modal, menu and dropdown holds this hook.
+//
+// It read "an input gate, not display control" until 2026-08-17, and nothing read the count at all:
+// it was neither. A native surface is composited above the document, so no z-index puts an overlay
+// over one, and one fact settles both. `surfaceShown` takes it as a layer, so what is registered
+// here is what an overlay covers.
+//
+// Pass whether the overlay is showing when its component is mounted for the whole session. Two were
+// registered unconditionally and held the count at 2 with nothing open, which parked every view in
+// the window — `state.health` answers `overlays` so that is readable from outside.
 export function useOverlayActive(active = true): void {
   const push = useUi((s) => s.pushOverlay);
   const pop = useUi((s) => s.popOverlay);
