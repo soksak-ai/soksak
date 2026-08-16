@@ -27,6 +27,11 @@ Native capability stays in the core because a PTY's kernel object and a
 platform webview cannot cross a plugin boundary. The core exposes them as
 general capabilities and plugins consume them as thin clients.
 
+That is C6's third question and it is the narrowest of the three, not a door.
+The core owns the PTY; it owns no shell's prompt protocol, no list of shell
+paths, and no rule about what a byte from a shell means. Whatever a plugin
+*could* hold, a plugin holds.
+
 ## The four seams
 
 A plugin attaches through exactly these. There is no private channel, no direct
@@ -64,11 +69,23 @@ All of these are hard.
 ## Coupling law
 
 - **C1.** The core knows no specific plugin and no specific feature.
-  Gate: scanning core sources for a plugin id finds nothing outside the
-  composition root.
-- **C2.** Every feature exposes three surfaces — command, status, and DOM.
+  Gate: `coupling_gate_test.go` scans core sources — `frameworks/` included —
+  for a plugin id, a rendering engine, and a **domain concept**. A name and a
+  concept are two separate readings, because a core that writes no plugin id and
+  still holds `Bookmark { url, title }` is coupled to a browser exactly as hard.
+  Measured 2026-08-16: the id scan had been green for a day while the core held
+  a bookmarks store, three `bookmark.*` commands, a `bookmarks.changed` plugin
+  event, and the browser panel's stylesheet.
+- **C2.** Every feature exposes three surfaces — command, status, and DOM — and
+  the exposure is operable, not decorative.
   A view with no command fails. A view no status axis can see fails. An element
   reachable only by guessing a selector is not shipped.
+  **Operable** means an exposed node is driven from outside: `ui.input.click`,
+  `ui.input.drag`, `ui.input.dnd`, `ui.input.key`, `ui.input.fill` act on the
+  address `ui.tree` answers, and `ui.input.observe` reports what arrived. An
+  address that can only be read is a picture, and a picture is not a seam — two
+  builds that answer the same tree and behave differently are indistinguishable
+  through it.
 - **C3.** Plugins couple to each other by contract only.
   Never reach into another plugin's DOM, internal state, file layout, or load
   order. Never hardcode a plugin id as a capability boundary: providers declare
@@ -81,6 +98,30 @@ All of these are hard.
   means fixing the implementation, the fixture, or the exposed interface. A
   standard that is itself wrong changes in the open, with the evidence and the
   tests in the same commit.
+
+- **C6.** Common goes in the core, a feature never does — and the boundary is
+  decided by three questions, not by taste. A capability belongs to the core
+  when **all three** hold:
+
+  1. **It is named after no domain.** `app.data`, `app.pty`, `ui.input` name a
+     mechanism. `bookmark`, `favicon`, `tabstrip` name one kind of content, and
+     the name alone shows which plugin the code was written for.
+  2. **A plugin that never heard of the first consumer can use it unchanged.**
+     A store keyed by namespace serves a browser and a mail client equally. A
+     store that holds `{ url, title }` serves one of them.
+  3. **It cannot cross the plugin boundary.** A PTY's kernel object and a
+     platform webview are the core's because the process that owns the window
+     owns them. Anything a plugin *could* hold, a plugin holds.
+
+  Fail any one and it belongs to a plugin. Passing all three is the only reason
+  the core takes work off a plugin, and that is the point of taking it: every
+  plugin would otherwise write the same thing, differently.
+
+  The failure mode this closes is the pleasant one. A feature reaches the core
+  because the core is where it is easiest to write — one store, one command
+  table, one stylesheet already there — and nothing about the result looks
+  wrong. Then the second plugin of that kind cannot use any of it, because it
+  was shaped for the first.
 
 ## One backend, several transports
 

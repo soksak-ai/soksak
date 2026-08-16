@@ -78,6 +78,12 @@ and the loop continues. **The record is left where it is**, not rewritten: this
 build keeps no old paths (L11c), and one it cannot read is not one it may
 reshape on its author's behalf.
 
+Refusing is what AGENTS 4-3 requires here, not an exception to it. The no-migrations
+rule governs code paths; a record on disk is data. Filling in what an old record
+lacks — `snap.id ?? mint()` — is the second code path 4-3 forbids, kept alive by
+every old record and hiding a renamed id behind an expression that reads as
+caution. One reader, one shape, and a record outside it is named and skipped.
+
 ## R2. Unread is not empty
 
 A snapshot that could not be read is reported unread. Written as 0 workspaces it

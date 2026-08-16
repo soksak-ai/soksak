@@ -1,6 +1,3 @@
-| `coupling_gate_test.go` | the core names no plugin and no rendering engine (C1) — `frameworks/` included, with an allowlist of composition files each stating a reason |
-| `history_gate_test.go` | the core does not act on a browser's history, and writes down no surface kind |
-| plugin `manifest_gate_test.go` | a source that writes `data-native-surface` has a manifest that declares it, and the reverse |
 ---
 kind: canonical
 status: active
@@ -101,7 +98,7 @@ has watched fail is a claim, not a gate.
 
 | Gate | What it holds |
 | --- | --- |
-| `coupling_gate_test.go` | the core names no plugin and no rendering engine (C1) — `frameworks/` is scanned too, with a per-file allowlist that states a reason for each |
+| `coupling_gate_test.go` | the core names no plugin and no rendering engine (C1) — `frameworks/` is scanned too, with a per-file allowlist that states a reason for each; and no **domain concept** (C6), comments stripped, exemptions empty |
 | `history_gate_test.go` | the core does not act on a browser's history, and writes down no surface kind |
 | plugin `manifest_gate_test.go` | a source writing `data-native-surface` has a manifest declaring it, and the reverse |
 | `prose_gate_test.go` | comments and bundle values stay out of the banned register (§6-3) |
@@ -131,6 +128,14 @@ Written here so it is not rediscovered (L2).
   up with a saved picture.
 - **`rail.settled` is a check, not a command.** It reports inside the validation
   surface.
+- **Bookmarks have no implementation.** The core held the store, three
+  `bookmark.*` commands, a `bookmarks.changed` event and the browser panel's
+  stylesheet; all of it is removed (C6), and the browser plugin has not written
+  its own. Nothing in the tree saves a page today.
+- **A workspace still carries a `shell` field.** `shell` names the argument a
+  PTY takes, so it is on the mechanism's side of C6's first question, and the
+  five shell paths the core suggested beside it are gone. Whether a workspace's
+  default program belongs in the core's workspace record at all is unjudged.
 - **Plugin loading beyond these two plugins is untried.** The terminal and the
   browser are installed and driven; nothing has exercised a third.
 - **Two plugin types are still in the host's own signatures.** `register.go`

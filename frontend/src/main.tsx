@@ -64,7 +64,6 @@ import { initViewLabelsPersistence } from "./state/viewLabels";
 import { initSettingsPersistence } from "./state/settings";
 import { initContractSelectionPersistence } from "./state/contractSelection";
 import { initThemePersistence } from "./state/theme";
-import { initBookmarksPersistence } from "./state/bookmarks";
 import { initPluginSettingsPersistence } from "./state/pluginSettings";
 import { initPluginsPersistence } from "./state/plugins";
 import { initRegistryPersistence } from "./state/registry";
@@ -216,14 +215,13 @@ async function boot(): Promise<void> {
   // On failure it falls back to sok (absorbed internally). A prerequisite, not a gate, so it does not block render.
   await loadCliName();
   bootStamp("cli-name");
-  // Syncs core persisted state (settings, theme, bookmarks, plugin settings, plugin consent/enabled) with app.data
+  // Syncs core persisted state (settings, theme, plugin settings, plugin consent/enabled) with app.data
   // authority + multi-window broadcast (coreSync). The synchronous initial state is already loaded from the ls
   // cache — here it starts app.data hydrate + subscription to other windows' changes. Before the plugin host (which consumes enabledIds).
   try {
     initSettingsPersistence(coreStoreDeps);
     initContractSelectionPersistence(coreStoreDeps);
     initThemePersistence(coreStoreDeps);
-    initBookmarksPersistence(coreStoreDeps);
     initPluginSettingsPersistence(coreStoreDeps);
     initPluginsPersistence(coreStoreDeps);
     initRegistryPersistence(coreStoreDeps);

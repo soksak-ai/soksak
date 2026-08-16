@@ -139,7 +139,7 @@ export interface ContentViewHost {
 /**
  * Attribute declaring **where a content view is placed** — the value is the label.
  *
- *   <div className="bv-area" data-content-view-body={label} />
+ *   <div className="<the plugin's own class>" data-content-view-body={label} />
  *
  * One declaration, two readers: for an implementation that pushes coordinates this slot is a
  * **follow anchor**; for one placed inside the document it is the **parent**. The declaring side

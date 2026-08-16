@@ -58,7 +58,6 @@ import { useSettings } from "../state/settings";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { awaitViewMounted } from "../plugins/viewFocus";
 import { useViewLabels } from "../state/viewLabels";
-import { useBookmarks } from "../state/bookmarks";
 import { hasPtyObservation } from "../terminal/ptyObservationStore";
 import { resolveTermTab } from "./termResolve";
 import { computeLayout } from "../components/GroupArea";
@@ -1131,7 +1130,7 @@ export function registerCatalog(): void {
     message: () => tmsg("msg.workspace.update"),
     errors: ["TARGET_NOT_FOUND"],
     examples: [
-      'workspace.update \'{"workspace":"wsp-a2b3c4","title":"backend","shell":"/bin/zsh"}\'',
+      'workspace.update \'{"workspace":"wsp-a2b3c4","title":"backend","shell":"$SHELL"}\'',
     ],
     handler: (p) =>
       withTargets(
@@ -2565,59 +2564,6 @@ export function registerCatalog(): void {
       const r = resolveTermTab(p, ctx, terminalContextTab);
       if (!r) return notFound("msg.term.tabNotFound");
       return { tabId: r.tabId, cwd: r.getCwd() ?? null };
-    },
-  });
-
-  // ----- bookmark -----
-  register("bookmark.list", {
-    description: tmsg("cmd.bookmark.list.desc"),
-    triggers: { ko: "즐겨찾기 목록 북마크 목록" },
-    params: {},
-    returns: "{ bookmarks: [{url,title}] }",
-    message: (d) => tmsg("msg.bookmark.list", { n: ((d.bookmarks as unknown[]) ?? []).length }),
-    examples: ["bookmark.list"],
-    handler: () => ({ bookmarks: useBookmarks.getState().list }),
-  });
-
-  register("bookmark.add", {
-    description: tmsg("cmd.bookmark.add.desc"),
-    triggers: { ko: "즐겨찾기 추가 북마크 추가 저장" },
-    params: {
-      url: { type: "string", description: "URL", required: true },
-      title: { type: "string", description: "Display name (omit = hostname)" },
-    },
-    returns: "{}",
-    message: () => tmsg("msg.bookmark.add"),
-    examples: ['bookmark.add \'{"url":"https://example.com"}\''],
-    handler: (p) => {
-      const url = p.url as string;
-      const bm = useBookmarks.getState();
-      if (!bm.has(url)) {
-        const title =
-          (p.title as string) ??
-          (() => {
-            try {
-              return new URL(url).host;
-            } catch {
-              return url;
-            }
-          })();
-        bm.toggle(url, title);
-      }
-      return {};
-    },
-  });
-
-  register("bookmark.remove", {
-    description: tmsg("cmd.bookmark.remove.desc"),
-    triggers: { ko: "즐겨찾기 삭제 북마크 제거 삭제" },
-    params: { url: { type: "string", description: "URL", required: true } },
-    returns: "{}",
-    message: () => tmsg("msg.bookmark.remove"),
-    examples: ['bookmark.remove \'{"url":"https://example.com"}\''],
-    handler: (p) => {
-      useBookmarks.getState().remove(p.url as string);
-      return {};
     },
   });
 

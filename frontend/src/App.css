@@ -1442,105 +1442,6 @@ body,
   background: rgba(127, 127, 127, 0.16);
 }
 
-/* ── Browser panel: child webview, URL bar and bookmarks ──
-   The container is transparent (the layer rule) — .bv-area is the hole, and the
-   webview below shows through it. The URL bar and bookmarks each own an opaque
-   background. The container itself, the browser plugin's view root, is declared
-   in that plugin's own CSS; the core does not own a second copy of the same
-   declaration. */
-.bv-bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--bd-soft);
-  -webkit-user-select: none;
-  user-select: none;
-}
-.bv-btn {
-  flex: 0 0 auto;
-  border: none;
-  background: transparent;
-  color: var(--fg);
-  opacity: 0.7;
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  width: 24px;
-  height: 22px;
-  border-radius: 4px;
-}
-.bv-btn:hover {
-  opacity: 1;
-  background: rgba(127, 127, 127, 0.2);
-}
-.bv-btn.on {
-  opacity: 1;
-  color: #e2b93d;
-}
-.bv-url {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 22px;
-  padding: 0 10px;
-  background: rgba(127, 127, 127, 0.12);
-  border: 1px solid transparent;
-  border-radius: 11px;
-  color: var(--fg);
-  font-size: 12px;
-  outline: none;
-}
-.bv-url:focus {
-  border-color: var(--acc);
-}
-/* The bookmarks list is a flex sibling, so opening it shrinks the webview body
-   (.bv-area) by the same amount. */
-.bv-bm-list {
-  flex: 0 0 auto;
-  max-height: 50%;
-  overflow-y: auto;
-  background: var(--bg);
-  border-bottom: 1px solid var(--bd-soft);
-  padding: 4px;
-}
-.bv-bm-item {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-.bv-bm-item:hover {
-  background: rgba(127, 127, 127, 0.16);
-}
-.bv-bm-title {
-  flex: 0 0 auto;
-}
-.bv-bm-url {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.55;
-  font-size: 11px;
-}
-.bv-bm-empty {
-  padding: 8px 10px;
-  font-size: 12px;
-  opacity: 0.6;
-}
-/* The hole: only this area is transparent, and the child webview below shows
-   through it (the layer rule). The ancestor chain — html, #root, .app-root, the
-   slot — must paint no background here either. */
-.bv-area {
-  flex: 1 1 auto;
-  min-height: 0;
-  background: transparent;
-}
-
 /* File viewer. */
 .file-viewer {
   width: 100%;
@@ -2278,12 +2179,8 @@ body,
   background: var(--card);
   border-color: var(--bd);
 }
-.bv-bm-list {
-  background: var(--card);
-}
 
 /* ── Inset surfaces: inputs ── */
-.bv-url,
 .cmf-input {
   background: var(--inset);
   color: var(--fg);
@@ -2296,8 +2193,7 @@ body,
 }
 
 /* ── Accent, made consistent ── */
-.cmf-input:focus,
-.bv-url:focus {
+.cmf-input:focus {
   border-color: var(--acc);
 }
 /* One state owns the highlight; GroupArea writes it as data-hover. With :hover,

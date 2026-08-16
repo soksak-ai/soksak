@@ -200,18 +200,10 @@ export function NewWorkspaceModal({
               className="dctl dctl-mono"
               data-node="modal/workspace-new/shell"
               type="text"
-              list="np-shell-options"
               value={shell}
               placeholder={t("shell.default")}
               onChange={(e) => setShell(e.target.value)}
             />
-            <datalist id="np-shell-options">
-              <option value="/bin/zsh" />
-              <option value="/bin/bash" />
-              <option value="/bin/sh" />
-              <option value="/opt/homebrew/bin/fish" />
-              <option value="/opt/homebrew/bin/nu" />
-            </datalist>
           </div>
 
           <div className="dmodal-actions">

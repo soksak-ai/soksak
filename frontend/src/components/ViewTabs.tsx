@@ -18,9 +18,11 @@ function pluginIconOf(pluginId: string, view: string): string | null {
   return getRegisteredView(`${pluginId}.${view}`)?.decl.icon ?? null;
 }
 
-// Tab favicon — draws the reported content icon(v.icon), falling back to the manifest icon on load failure.
-// Hiding the failure(blank) makes it undiagnosable and shifts tab alignment. A changed src resets the failure state.
-function TabFavicon({ viewId, src, fallback }: { viewId: string; src: string; fallback: React.ReactNode }) {
+// Tab icon — draws the icon a view reported (v.icon), falling back to the manifest icon on load
+// failure. Hiding the failure(blank) makes it undiagnosable and shifts tab alignment. A changed src
+// resets the failure state. Any view reports one; a page's own icon is one caller of this, not what
+// it is for (C6).
+function TabIcon({ viewId, src, fallback }: { viewId: string; src: string; fallback: React.ReactNode }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
   if (failed) return <>{fallback}</>;
@@ -149,8 +151,8 @@ export const ViewTabs = memo(function ViewTabs({
               {v.kind === "file" ? (
                 <Icon name="file" size="sm" />
               ) : v.icon ? (
-                // Content fact icon(favicon) — a setIcon report takes precedence over the manifest icon.
-                <TabFavicon
+                // Content fact icon — a setIcon report takes precedence over the manifest icon.
+                <TabIcon
                   viewId={v.id}
                   src={v.icon}
                   fallback={pluginIconOf(v.pluginId, v.view) ?? <Icon name="plugin" size="sm" />}

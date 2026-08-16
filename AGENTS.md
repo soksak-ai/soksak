@@ -161,6 +161,23 @@ No compatibility layers, fallbacks or migrations. The old path is deleted.
 This is about internal code. A breaking change in a published API is not hidden — it is made and
 marked honestly as a semver MAJOR (§7-5).
 
+**The rule governs code paths, and stored data is not a code path.** Deleting the old path means
+this build stops reading a shape it no longer writes. It does not mean a record on disk is reshaped
+on its author's behalf, and it does not license a fallback that invents what an old record lacks.
+A record this build cannot read is refused by name and left where it is, and it costs that record
+only — RESTORE R1.
+
+Two ways to break the rule, and only one of them looks like breaking it:
+
+- `snap.id ?? mint()` is the migration. It reads as caution and it is a second code path, kept
+  alive by every old record; nothing ever deletes it, and the defect it hides is a renamed id.
+- Refusing the record is not. One reader, one shape, and what cannot be read is reported rather
+  than guessed at.
+
+Measured 2026-08-16: a split-node fallback was added for snapshots written before ids existed. It
+was made visible first — reported as a boot fact — and visible was still a second path. Removed,
+and the shape check refuses the record instead.
+
 ### 4-4. Dependencies
 
 In order:

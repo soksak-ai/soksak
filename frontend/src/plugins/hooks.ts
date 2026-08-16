@@ -1,5 +1,5 @@
 // Plugin events — the single channel that notifies plugins of host state changes.
-// Implementation rule: subscribe to the sessions/theme/bookmarks stores and synthesize the diff.
+// Implementation rule: subscribe to the sessions and theme stores and synthesize the diff.
 // No emit is injected into existing store code (surgical — the only explicit emit is
 // emitFileSaved at the FileViewer save-success point).
 // A listener failure cannot kill the host (§0-4) — try/catch per callback.
@@ -13,7 +13,6 @@ import { currentWindowLabel } from "../lib/webviewLabels";
 import { allGroups, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
-import { useBookmarks, type Bookmark } from "../state/bookmarks";
 import { setAnyOutputSink } from "../terminal/ptyObservationStore";
 import {
   subscribeAnyCommandFinished,
@@ -96,7 +95,6 @@ export interface PluginEventMap {
     state: "recovering" | "open" | "closed";
     attempt: number | null;
   };
-  "bookmarks.changed": { bookmarks: Bookmark[] };
   // Terminal command start (OSC 633;E from the shell preexec — command line and cwd included, no polling).
   // [RULE] Per-command domain handling (claude etc.) is owned by plugins subscribing to this event,
   // not by the core — the same rule as workspace.created. The core provides only the generic socket
@@ -169,7 +167,6 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "window.zoom",
   "view.parked",
   "webview.health",
-  "bookmarks.changed",
   "command.started",
   "command.finished",
   "command.progress",
@@ -441,7 +438,6 @@ export function startPluginHooks(): void {
     }
   });
 
-  let prevBookmarks = useBookmarks.getState().list;
   // B3 — PTY output is activity too (evidence from process output). Persisting is throttled to 30s
   // per pane: output is high frequency, so writing the store every time causes a save/re-render storm
   // (the live vs durable separation principle).
@@ -458,13 +454,6 @@ export function startPluginHooks(): void {
       useSessions.getState().setViewRuntime(null, paneId, { lastActivity: now });
     });
   }
-
-  useBookmarks.subscribe((state) => {
-    if (state.list !== prevBookmarks) {
-      prevBookmarks = state.list;
-      emitPluginEvent("bookmarks.changed", { bookmarks: state.list });
-    }
-  });
 
   // Terminal command start → plugin event (a generic socket — claude-GUI etc. subscribe). A discrete event.
   subscribeAnyCommandStarted((paneId, commandLine, cwd) => {

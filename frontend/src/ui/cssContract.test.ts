@@ -349,7 +349,6 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     ".space-tab-rename",
     ".workspace-tab-rename",
     ".rail-rename",
-    ".bv-url",
     ".cmf-input",
     ".cmf-field",
     ".icon-btn",

@@ -325,20 +325,6 @@ export const BORDER_RULES: readonly BorderRule[] = [
 
   // ── Panel inner auxiliary bands (B2, tone bd-soft) ────────────────────────
   {
-    id: "bv-bar-bottom",
-    selector: ".bv-bar",
-    kind: "edges",
-    edges: { bottom: "bd-soft" },
-    note: tmsg("msg.ui.border.bvBarBottom"),
-  },
-  {
-    id: "bv-bm-list-bottom",
-    selector: ".bv-bm-list",
-    kind: "edges",
-    edges: { bottom: "bd-soft" },
-    note: tmsg("msg.ui.border.bvBmListBottom"),
-  },
-  {
     id: "fv-toolbar-bottom",
     selector: ".fv-toolbar",
     kind: "edges",
