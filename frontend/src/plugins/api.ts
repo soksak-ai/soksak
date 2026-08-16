@@ -1954,13 +1954,22 @@ export function buildPluginApi(
             // [RULE] Watching is part of reading (when to read again) → shares the "fs:read" gate.
             watch: has("fs:read")
               ? (dir, cb) => {
-                  void deps.invoke("watch_dir", { path: dir });
+                  // A refused subscription is reported, not thrown into the void.
+                  //
+                  // `void invoke(...)` left the rejection unhandled, so a build with no watcher —
+                  // this one refuses `watch_dir` by name — turned every subscription into a
+                  // renderer error and the plugin was handed a Disposable for a watch that does not
+                  // exist. Measured 2026-08-16: three of them sat in the activity stream while the
+                  // file tree's live refresh was dead and every test was green.
+                  void deps.invoke("watch_dir", { path: dir }).catch((cause: unknown) => {
+                    console.warn(`[plugin:${id}] this build does not watch ${dir}: ${String(cause)}`);
+                  });
                   const un = deps.onFsChange((changed) => {
                     if (changed === dir) cb(dir);
                   });
                   return tracker.wrap(() => {
                     un();
-                    void deps.invoke("unwatch_dir", { path: dir });
+                    void deps.invoke("unwatch_dir", { path: dir }).catch(() => {});
                   });
                 }
               : undefined,

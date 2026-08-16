@@ -46,20 +46,7 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 		t.Skip("no session to open a window in")
 	}
 
-	gate := &restoreGate{t: t, app: app, client: client}
-	// A home of its own, emptied first: a digest compared against a store some
-	// earlier run left behind is comparing two different layouts.
-	if err := os.RemoveAll(restoreGateHome); err != nil {
-		t.Fatalf("clearing the gate home: %v", err)
-	}
-	if err := os.MkdirAll(restoreGateHome, 0o755); err != nil {
-		t.Fatalf("creating the gate home: %v", err)
-	}
-	t.Cleanup(func() {
-		gate.quit()
-		_ = os.RemoveAll(restoreGateHome)
-	})
-
+	gate := newGate(t, restoreGateHome, restoreGateIdentifier)
 	gate.start()
 	window := gate.openWorkspace()
 
@@ -93,19 +80,117 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 	}
 }
 
+// One harness, used by every gate that has to ask a running build something. A second copy would be
+// a second answer to "how is the application started and quit", and the two would disagree the day
+// one of them was edited.
 type restoreGate struct {
-	t      *testing.T
-	app    string
-	client string
-	proc   *exec.Cmd
+	t          *testing.T
+	app        string
+	client     string
+	home       string
+	identifier string
+	proc       *exec.Cmd
+}
+
+// quietGate is the same harness under the name its own gate reads by.
+type quietGate = restoreGate
+
+func newQuietGate(t *testing.T) *quietGate {
+	return newGate(t, quietGateHome, quietGateIdentifier)
 }
 
 // socket is the address the identity derives from the home and the identifier:
 // `<home>/.soksak-<axis>/<identifier>.sock`. Derived here rather than asked for,
 // because the application has to be answering before it can be asked anything.
+// newGate prepares a home of its own, emptied first: a reading taken against a
+// store some earlier run left behind is a reading about that run.
+func newGate(t *testing.T, home string, identifier string) *restoreGate {
+	t.Helper()
+	app := filepath.Join("bin", "soksak")
+	client := filepath.Join("bin", "sok")
+	for _, binary := range []string{app, client} {
+		if _, err := os.Stat(binary); err != nil {
+			t.Skipf("%s is not built; run `wails3 task build` and `wails3 task build:sok` first", binary)
+		}
+	}
+	gate := &restoreGate{t: t, app: app, client: client, home: home, identifier: identifier}
+	if err := os.RemoveAll(home); err != nil {
+		t.Fatalf("clearing the gate home: %v", err)
+	}
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("creating the gate home: %v", err)
+	}
+	t.Cleanup(func() {
+		gate.quit()
+		_ = os.RemoveAll(home)
+	})
+	return gate
+}
+
+// installPlugins puts the sibling plugins in the gate's home, the same two files `task
+// install:plugins` copies. A gate that ran against an empty home would be asking a build with
+// nothing in it how it is, and every question about a plugin would answer "no such program".
+func (gate *restoreGate) installPlugins() []string {
+	gate.t.Helper()
+	sources, err := filepath.Glob(filepath.Join("..", "soksak-plugins", "*"))
+	if err != nil {
+		gate.t.Fatalf("looking for the sibling plugins: %v", err)
+	}
+	var installed []string
+	for _, source := range sources {
+		name := filepath.Base(source)
+		manifest := filepath.Join(source, "plugin.json")
+		bundle := filepath.Join(source, "main.js")
+		if _, err := os.Stat(manifest); err != nil {
+			continue
+		}
+		target := filepath.Join(gate.installationHome(), "plugins", name)
+		if err := os.MkdirAll(target, 0o755); err != nil {
+			gate.t.Fatalf("making the plugin directory: %v", err)
+		}
+		for _, file := range []string{manifest, bundle} {
+			body, err := os.ReadFile(file)
+			if err != nil {
+				gate.t.Fatalf("reading %s: %v", file, err)
+			}
+			if err := os.WriteFile(filepath.Join(target, filepath.Base(file)), body, 0o644); err != nil {
+				gate.t.Fatalf("writing %s: %v", file, err)
+			}
+		}
+		marker := filepath.Join(target, ".soksak.json")
+		if err := os.WriteFile(marker, []byte(`{"version":"0.0.1","source":"local"}`), 0o644); err != nil {
+			gate.t.Fatalf("writing the install marker: %v", err)
+		}
+		installed = append(installed, name)
+	}
+	if len(installed) == 0 {
+		gate.t.Skip("no sibling plugin is built; run `wails3 task install:plugins` first")
+	}
+	return installed
+}
+
+// consentAndEnable is the human act a plugin needs before it runs, performed through the same
+// commands a person's click goes through. A gate that skipped it would measure a build with every
+// plugin off, which is not the build anybody runs.
+func (gate *restoreGate) consentAndEnable(window string, plugins []string) {
+	gate.t.Helper()
+	for _, id := range plugins {
+		gate.run("plugin.consent.grant", "window="+window, "id="+id)
+		if _, err := gate.try("plugin.enable", "window="+window, "id="+id); err != nil {
+			gate.t.Fatalf("enabling %s: %v", id, err)
+		}
+	}
+}
+
+// installationHome is where this identity keeps what it owns — the same derivation the application
+// makes from its identifier, written once so the gate and the application cannot disagree about it.
+func (gate *restoreGate) installationHome() string {
+	axis := strings.TrimPrefix(gate.identifier, "com.soksak.")
+	return filepath.Join(gate.home, ".soksak-"+axis)
+}
+
 func (gate *restoreGate) socket() string {
-	axis := strings.TrimPrefix(restoreGateIdentifier, "com.soksak.")
-	return filepath.Join(restoreGateHome, ".soksak-"+axis, restoreGateIdentifier+".sock")
+	return filepath.Join(gate.installationHome(), gate.identifier+".sock")
 }
 
 // start runs the application against the gate's home and waits until its control
@@ -115,8 +200,8 @@ func (gate *restoreGate) start() {
 	gate.t.Helper()
 	cmd := exec.Command("./" + gate.app)
 	cmd.Env = append(os.Environ(),
-		"HOME="+restoreGateHome,
-		"SOKSAK_IDENTIFIER="+restoreGateIdentifier,
+		"HOME="+gate.home,
+		"SOKSAK_IDENTIFIER="+gate.identifier,
 	)
 	if err := cmd.Start(); err != nil {
 		gate.t.Fatalf("starting the application: %v", err)
@@ -198,6 +283,45 @@ func (gate *restoreGate) run(command string, args ...string) string {
 // openWorkspace gives the restore something to carry: a window with a layout of
 // its own. An empty orchestrator restores nothing and the digest would be equal
 // for the wrong reason.
+// programs are what the registry answers, so the gate opens what this build actually offers rather
+// than a list written here that would go stale the day a plugin is added.
+func (gate *restoreGate) programs(window string) []string {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Programs []struct {
+				ID string `json:"id"`
+			} `json:"programs"`
+		} `json:"data"`
+	}
+	out := gate.run("program.list", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("program.list: %v\n%s", err, out)
+	}
+	ids := make([]string, 0, len(answer.Data.Programs))
+	for _, p := range answer.Data.Programs {
+		ids = append(ids, p.ID)
+	}
+	return ids
+}
+
+// open puts a program in a tab and waits for the answer to name one. The gate does the ordinary
+// things a person does before asking the application how it is: a build that only ever opened an
+// empty window would be asked nothing about what a plugin does.
+func (gate *restoreGate) open(window string, program string) string {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			TabID string `json:"tabId"`
+		} `json:"data"`
+	}
+	out := gate.run("tab.open", "window="+window, "program="+program)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil || answer.Data.TabID == "" {
+		gate.t.Fatalf("tab.open %s named no tab: %v\n%s", program, err, out)
+	}
+	return answer.Data.TabID
+}
+
 func (gate *restoreGate) openWorkspace() string {
 	gate.t.Helper()
 	root, err := filepath.Abs(".")

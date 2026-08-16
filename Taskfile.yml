@@ -35,6 +35,7 @@ tasks:
     cmds:
       - task: verify:go
       - task: verify:restore
+      - task: verify:quiet
       - task: verify:headless
       - task: verify:windows
       - task: verify:frontend
@@ -61,6 +62,26 @@ tasks:
       - task: build
       - task: build:sok
       - go test ./ -run TestTheDigestSurvivesARestart -count=1
+
+  verify:quiet:
+    summary: A running build reports nothing wrong about itself
+    desc: |
+      Every other gate reads source or a stored record. None of them asks the
+      application, so a build can be green while it is failing on screen.
+
+      Measured 2026-08-16: three renderer errors sat in the activity stream
+      saying `watch_dir has no filesystem watcher in this build`, the file tree's
+      live refresh was dead, and `task verify` was clean. The reading existed and
+      nothing read it.
+
+      It installs the sibling plugins into a home of its own, consents, enables,
+      opens every program the registry offers, and then asks: the error stream,
+      the loader's rejections, the border contract, and whether the activity
+      ledger is taking writes.
+    cmds:
+      - task: build
+      - task: build:sok
+      - go test ./ -run TestARunningBuildReportsNothingWrong -count=1
 
   verify:headless:
     summary: The core answers with no window — the boundary a second host needs
