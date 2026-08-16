@@ -77,7 +77,16 @@ describe("read: missing and empty are separate answers", () => {
     expect(h.invoke.mock.calls.filter((c) => c[0] === "data_kv_set")).toHaveLength(0);
   });
 
-  it("content in the cache is moved to the authority — the uninterrupted migration path stays", async () => {
+  // A cache with no value behind it on this authority is not this installation's.
+  //
+  // The web view's localStorage is shared by origin, and one binary run against
+  // two homes has two stores and one cache. Measured 2026-08-16: a second home
+  // booted empty, took the first home's window ledger out of that cache and
+  // wrote it into its own store, naming three windows it had never opened.
+  //
+  // This carried a cache written by an older build into app.data once. AGENTS
+  // 4-3 has no migrations, and this one was the way in.
+  it("content in the cache is not adopted by an authority that holds nothing", async () => {
     const h = harness({ "ls.w4": JSON.stringify({ workspaces: [7] }) });
     const store = makeCoreStore<{ workspaces: number[] }>({
       key: "window/w-4",
@@ -87,8 +96,9 @@ describe("read: missing and empty are separate answers", () => {
       onDataChange: h.onDataChange,
       localStorage: h.localStorage,
     });
-    expect(await store.hydrate()).toEqual({ workspaces: [7] });
-    expect(h.remote.get("window/w-4")).toEqual({ workspaces: [7] });
+    expect(await store.hydrate()).toEqual({ workspaces: [] });
+    expect(h.remote.has("window/w-4")).toBe(false);
+    expect(h.invoke.mock.calls.filter((c) => c[0] === "data_kv_set")).toHaveLength(0);
   });
 
   it("a failed read throws — an unreadable authority is not folded into missing", async () => {
@@ -172,7 +182,7 @@ describe("makeCoreStore", () => {
     expect(JSON.parse(h.ls.get("soksak.settings")!)).toEqual({ a: 9 }); // cache updated
   });
 
-  it("hydrate: an empty app.data migrates the localStorage cache into app.data once", async () => {
+  it("hydrate: an empty app.data answers the fallback, and writes nothing", async () => {
     const h = harness({ "soksak.settings": JSON.stringify({ a: 7 }) });
     const store = makeCoreStore({
       key: "settings",
@@ -183,8 +193,11 @@ describe("makeCoreStore", () => {
       localStorage: h.localStorage,
     });
     const v = await store.hydrate();
-    expect(v).toEqual({ a: 7 });
-    expect(h.remote.get("settings")).toEqual({ a: 7 }); // migrated
+    expect(v).toEqual({ a: 0 });
+    // Nothing is written either way: an empty fallback written to the authority
+    // fixes "not there yet" as "empty", and a consumer reading that treats it as
+    // emptied by the user — window respawn deleted a ledger slot on that answer.
+    expect(h.remote.has("settings")).toBe(false);
   });
 
   // [read-your-writes] stage = sets the value this window just wrote as the in-memory authority at once (the caller
