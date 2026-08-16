@@ -15,15 +15,19 @@ import { allViews, useSessions } from "./sessions";
 import { useSettings } from "./settings";
 
 useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-closeconfirm");
+// The workspace identifier is issued (state/ids.ts), so it is read here rather
+// than written down. A literal is a shape the product does not produce, and code
+// that reads a prefix is then never run against it (NAMING N4).
+const WORKSPACE = useSessions.getState().activeId;
 const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
 let seq = 0;
 // Creates a new plugin view (unique name — avoids dedupe) plus an optional status → returns viewId.
 function mkView(status?: { code: string; message?: string }): string {
-  const r = useSessions.getState().openPluginView("t1", "p", `v${seq++}`, "T");
+  const r = useSessions.getState().openPluginView(WORKSPACE, "p", `v${seq++}`, "T");
   if (!r.ok) throw new Error("openPluginView failed");
-  if (status) useSessions.getState().setViewStatus("t1", r.viewId, status);
+  if (status) useSessions.getState().setViewStatus(WORKSPACE, r.viewId, status);
   return r.viewId;
 }
 
@@ -46,7 +50,7 @@ beforeEach(() => {
 describe("requestCloseView — branching on the setting and the status", () => {
   it("warn + blocking — sets pending and does not close", () => {
     const vid = mkView({ code: "busy", message: "a job is running" });
-    useCloseConfirm.getState().requestCloseView("t1", vid);
+    useCloseConfirm.getState().requestCloseView(WORKSPACE, vid);
     expect(useCloseConfirm.getState().pending).toMatchObject({
       kind: "view",
       id: vid,
@@ -57,7 +61,7 @@ describe("requestCloseView — branching on the setting and the status", () => {
 
   it("not blocking — closes immediately with no pending", () => {
     const vid = mkView(); // no status
-    useCloseConfirm.getState().requestCloseView("t1", vid);
+    useCloseConfirm.getState().requestCloseView(WORKSPACE, vid);
     expect(useCloseConfirm.getState().pending).toBeNull();
     expect(viewExists(vid)).toBe(false);
   });
@@ -65,7 +69,7 @@ describe("requestCloseView — branching on the setting and the status", () => {
   it("off — closes immediately even when blocking", () => {
     useSettings.getState().setTabCloseConfirm("off");
     const vid = mkView({ code: "busy", message: "a job is running" });
-    useCloseConfirm.getState().requestCloseView("t1", vid);
+    useCloseConfirm.getState().requestCloseView(WORKSPACE, vid);
     expect(useCloseConfirm.getState().pending).toBeNull();
     expect(viewExists(vid)).toBe(false);
   });
@@ -74,7 +78,7 @@ describe("requestCloseView — branching on the setting and the status", () => {
 describe("confirm / cancel", () => {
   it("confirm — closes and clears pending", () => {
     const vid = mkView({ code: "busy", message: "a job is running" });
-    useCloseConfirm.getState().requestCloseView("t1", vid);
+    useCloseConfirm.getState().requestCloseView(WORKSPACE, vid);
     useCloseConfirm.getState().confirm();
     expect(useCloseConfirm.getState().pending).toBeNull();
     expect(viewExists(vid)).toBe(false);
@@ -82,7 +86,7 @@ describe("confirm / cancel", () => {
 
   it("cancel — keeps the view and clears pending", () => {
     const vid = mkView({ code: "busy", message: "a job is running" });
-    useCloseConfirm.getState().requestCloseView("t1", vid);
+    useCloseConfirm.getState().requestCloseView(WORKSPACE, vid);
     useCloseConfirm.getState().cancel();
     expect(useCloseConfirm.getState().pending).toBeNull();
     expect(viewExists(vid)).toBe(true);

@@ -38,7 +38,7 @@ import {
   moveSidebarView as moveSidebarViewT,
   hasSidebarView,
 } from "./sidebarLayout";
-import { browserViewIdFromLabel } from "../lib/webviewLabels";
+import { viewIdFromSurfaceLabel } from "../lib/surfaceLabels";
 import { useProjection } from "./projection";
 import { invalidateLayout } from "../lib/layoutSettlement";
 import { publishLayoutTransitionIntent } from "../lib/layoutTransitionIntent";
@@ -833,7 +833,7 @@ export function findViewById(workspaces: Workspace[], viewId: string): Tab | nul
 // matching view it keeps the label as is (for a webview with no human name the identifier is the
 // only fact).
 export function webviewDisplayName(label: string, workspaces: Workspace[]): string {
-  const viewId = browserViewIdFromLabel(label);
+  const viewId = viewIdFromSurfaceLabel(label);
   const v = viewId ? findViewById(workspaces, viewId) : null;
   return v ? viewDisplayTitle(v) : label;
 }
@@ -976,8 +976,13 @@ export const useSessions = moduleState("state/sessions#store", () =>
     // Automatic workspace1 is "P1"; otherwise the default display name is the folder name — an alias
     // set by the creator (control plane) wins (init query alias).
     const alias = opts?.alias || (baseName(root) === "workspace1" ? "P1" : "");
-    const t = makeWorkspace("t1", { alias, root, shell: opts?.shell });
-    set({ workspaces: [t], activeId: "t1" });
+    // Issued, not written down. "t1" was a counter with no prefix — the one
+    // shape docs/tech/NAMING.md N4 names as the thing a fixture must never be,
+    // and the workspace every pane and space hangs off was the one entity
+    // outside N1 (measured 2026-08-16: state.tree answered "t1" beside
+    // pan-axhgio and spc-tbsgmi).
+    const t = makeWorkspace(issueId("workspace"), { alias, root, shell: opts?.shell });
+    set({ workspaces: [t], activeId: t.id });
   },
 
   restoreWorkspaces: (workspaces, activeId) => {

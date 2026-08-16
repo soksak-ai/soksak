@@ -15,15 +15,19 @@ import { execute } from "./registry";
 import { useSessions } from "../state/sessions";
 
 useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-statusquery");
+// The workspace identifier is issued (state/ids.ts), so it is read here rather
+// than written down. A literal is a shape the product does not produce, and code
+// that reads a prefix is then never run against it (NAMING N4).
+const WORKSPACE = useSessions.getState().activeId;
 registerCatalog();
 const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
 let seq = 0;
 function mkTab(status?: { code: string; message?: string }): string {
-  const r = useSessions.getState().openPluginView("t1", "p", `v${seq++}`, "T");
+  const r = useSessions.getState().openPluginView(WORKSPACE, "p", `v${seq++}`, "T");
   if (!r.ok) throw new Error("openPluginView failed");
-  if (status) useSessions.getState().setViewStatus("t1", r.viewId, status);
+  if (status) useSessions.getState().setViewStatus(WORKSPACE, r.viewId, status);
   return r.viewId;
 }
 

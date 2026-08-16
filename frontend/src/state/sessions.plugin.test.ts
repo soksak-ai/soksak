@@ -10,6 +10,10 @@ import { parseManifest } from "../plugins/spec";
 // Boot model (P3): tabs start empty and main.tsx creates the first workspace through
 // bootstrapFirstWorkspace — the test prepares t1 the same way, then snapshots.
 useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-test-root");
+// The workspace identifier is issued (state/ids.ts), so it is read here rather
+// than written down. A literal is a shape the product does not produce, and code
+// that reads a prefix is then never run against it (NAMING N4).
+const WORKSPACE = useSessions.getState().activeId;
 
 // Snapshot of the starting state (data only) — restored before each test.
 const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
@@ -33,7 +37,7 @@ describe("openPluginView", () => {
   it("creates a plugin view tab in the active group and activates it", () => {
     const r = useSessions
       .getState()
-      .openPluginView("t1", "soksak-plugin-memo", "panel", "Memo");
+      .openPluginView(WORKSPACE, "soksak-plugin-memo", "panel", "Memo");
     expect(r).toMatchObject({ ok: true, existing: false });
     if (!r.ok) return;
     const { c, groups } = activeLayout();
@@ -52,21 +56,21 @@ describe("openPluginView", () => {
   it("the same pluginId+view requested again reuses the existing tab and activates it", () => {
     const first = useSessions
       .getState()
-      .openPluginView("t1", "soksak-plugin-memo", "panel", "Memo");
+      .openPluginView(WORKSPACE, "soksak-plugin-memo", "panel", "Memo");
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     // Activate another view, then request again -> it must return to the existing plugin view.
     // (Empty group model — there is no automatic first view, so open a second plugin view and leave it active.)
     const other = useSessions
       .getState()
-      .openPluginView("t1", "soksak-plugin-git-diff", "view", "Diff");
+      .openPluginView(WORKSPACE, "soksak-plugin-git-diff", "view", "Diff");
     expect(other.ok).toBe(true);
     if (!other.ok) return;
     expect(other.viewId).not.toBe(first.viewId);
 
     const again = useSessions
       .getState()
-      .openPluginView("t1", "soksak-plugin-memo", "panel", "Memo");
+      .openPluginView(WORKSPACE, "soksak-plugin-memo", "panel", "Memo");
     expect(again).toMatchObject({
       ok: true,
       existing: true,
@@ -81,10 +85,10 @@ describe("openPluginView", () => {
   it("a different view id gives a separate tab — the dedupe key is pluginId+view", () => {
     const a = useSessions
       .getState()
-      .openPluginView("t1", "soksak-plugin-git-diff", "view", "Diff");
+      .openPluginView(WORKSPACE, "soksak-plugin-git-diff", "view", "Diff");
     const b = useSessions
       .getState()
-      .openPluginView("t1", "soksak-plugin-git-diff", "history", "History");
+      .openPluginView(WORKSPACE, "soksak-plugin-git-diff", "history", "History");
     expect(a.ok && b.ok).toBe(true);
     if (!a.ok || !b.ok) return;
     expect(a.viewId).not.toBe(b.viewId);
@@ -102,10 +106,10 @@ describe("closeView — plugin view", () => {
   it("closing a plugin view tab removes it from the group", () => {
     const r = useSessions
       .getState()
-      .openPluginView("t1", "soksak-plugin-memo", "panel", "Memo");
+      .openPluginView(WORKSPACE, "soksak-plugin-memo", "panel", "Memo");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const closed = useSessions.getState().closeView("t1", r.viewId);
+    const closed = useSessions.getState().closeView(WORKSPACE, r.viewId);
     expect(closed.ok).toBe(true);
     const { groups } = activeLayout();
     expect(
@@ -125,7 +129,7 @@ describe("addContent — kind=view program", () => {
       view: "canvas",
     });
     try {
-      const r = useSessions.getState().addContent("t1", "erd-prog-test");
+      const r = useSessions.getState().addContent(WORKSPACE, "erd-prog-test");
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       const { c, groups } = activeLayout();
@@ -157,7 +161,7 @@ describe("addContent — kind=view program", () => {
       ensure: { bin: "claude", install: { darwin: "curl … | bash" } },
     });
     try {
-      const r = useSessions.getState().addViewToGroup("t1", "claude-prog-test");
+      const r = useSessions.getState().addViewToGroup(WORKSPACE, "claude-prog-test");
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       const { groups } = activeLayout();
@@ -184,7 +188,7 @@ describe("addContent — kind=view program", () => {
       view: "content",
     });
     try {
-      const r = useSessions.getState().addViewToGroup("t1", "terminal-prog-test");
+      const r = useSessions.getState().addViewToGroup(WORKSPACE, "terminal-prog-test");
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       const { groups } = activeLayout();
@@ -326,7 +330,7 @@ describe("addViewToGroup — viewContract (contract-pin) resolution", () => {
   it("no selection → the first enabled implementer (xterm) view, with view id and autorun command passed", () => {
     const dispose = registerContractProgram();
     try {
-      const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
+      const r = useSessions.getState().addViewToGroup(WORKSPACE, "claude-contract-test");
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       expect(viewOf(r)).toMatchObject({
@@ -345,7 +349,7 @@ describe("addViewToGroup — viewContract (contract-pin) resolution", () => {
     const dispose = registerContractProgram();
     useContractSelection.getState().select(CONTRACT.id, GHOSTTY);
     try {
-      const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
+      const r = useSessions.getState().addViewToGroup(WORKSPACE, "claude-contract-test");
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       expect(viewOf(r).pluginId).toBe(GHOSTTY);
@@ -358,7 +362,7 @@ describe("addViewToGroup — viewContract (contract-pin) resolution", () => {
     const dispose = registerContractProgram();
     useContractSelection.getState().select(CONTRACT.id, "soksak-plugin-not-an-impl");
     try {
-      const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
+      const r = useSessions.getState().addViewToGroup(WORKSPACE, "claude-contract-test");
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       expect(viewOf(r).pluginId).toBe(XTERM);
@@ -376,7 +380,7 @@ describe("addViewToGroup — viewContract (contract-pin) resolution", () => {
     });
     const dispose = registerContractProgram();
     try {
-      const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
+      const r = useSessions.getState().addViewToGroup(WORKSPACE, "claude-contract-test");
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       expect(viewOf(r).pluginId).toBe(GHOSTTY);
@@ -389,7 +393,7 @@ describe("addViewToGroup — viewContract (contract-pin) resolution", () => {
     usePlugins.setState({ plugins: {} });
     const dispose = registerContractProgram();
     try {
-      const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
+      const r = useSessions.getState().addViewToGroup(WORKSPACE, "claude-contract-test");
       expect(r.ok).toBe(false);
       if (r.ok) return;
       expect(r.code).toBe("TARGET_NOT_FOUND");

@@ -70,12 +70,12 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
 
   it("does not complete before the renderer ACKs the state mutation revision", async () => {
     animations([]);
-    const revision = invalidateLayout("t1");
+    const revision = invalidateLayout("wsp-4h7kq2");
     let done = false;
     const waiting = waitLayoutSettled().then(() => { done = true; });
     await Promise.resolve();
     expect(done).toBe(false);
-    settleLayout("t1", revision);
+    settleLayout("wsp-4h7kq2", revision);
     await waiting;
     expect(done).toBe(true);
   });

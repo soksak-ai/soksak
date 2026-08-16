@@ -646,30 +646,30 @@ describe("useArrangementPhase", () => {
     });
     const prepareTravel = async () => prepareLayoutMove([]);
     for (let revision = 1; revision <= 6; revision += 1) {
-      invalidateLayout("t1");
-      settleLayout("t1", revision);
+      invalidateLayout("wsp-4h7kq2");
+      settleLayout("wsp-4h7kq2", revision);
     }
     act(() => root.render(<Probe
       arrangement={restored}
       scopeId={scopeOf(restored)}
       prepareTravel={prepareTravel}
-      settlementKey="t1"
+      settlementKey="wsp-4h7kq2"
     />));
 
-    invalidateLayout("t1");
+    invalidateLayout("wsp-4h7kq2");
     act(() => root.render(<Probe
       arrangement={maximized}
       scopeId={scopeOf(maximized)}
       prepareTravel={prepareTravel}
-      settlementKey="t1"
+      settlementKey="wsp-4h7kq2"
     />));
     await act(async () => {});
-    invalidateLayout("t1");
+    invalidateLayout("wsp-4h7kq2");
     act(() => root.render(<Probe
       arrangement={restored}
       scopeId={scopeOf(restored)}
       prepareTravel={prepareTravel}
-      settlementKey="t1"
+      settlementKey="wsp-4h7kq2"
     />));
     await act(async () => {});
 
@@ -678,10 +678,10 @@ describe("useArrangementPhase", () => {
       mode: entry.mode,
       settlement: entry.settlement,
     }))).toEqual([
-      { phase: "committed", mode: "snap", settlement: { ownerKey: "t1", revision: 7, status: "settled" } },
-      { phase: "committed", mode: "snap", settlement: { ownerKey: "t1", revision: 8, status: "settled" } },
+      { phase: "committed", mode: "snap", settlement: { ownerKey: "wsp-4h7kq2", revision: 7, status: "settled" } },
+      { phase: "committed", mode: "snap", settlement: { ownerKey: "wsp-4h7kq2", revision: 8, status: "settled" } },
     ]);
-    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("wsp-4h7kq2")).toEqual({ active: false, pending: [] });
   });
 
   it("the earlier transaction's snap commit does not ACK the next revision opened during a slow prepare", async () => {

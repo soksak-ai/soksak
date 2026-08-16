@@ -350,7 +350,7 @@ describe("arrangement solver — row mismatch exception (switching plus the dott
           id: "top",
           dir: "row",
           sizes: [0.5, 0.5],
-          children: [leaf("t1"), leaf("t2")],
+          children: [leaf("tab-4h7kq2"), leaf("tab-9m3xb5")],
         },
         {
           type: "split",
@@ -362,7 +362,7 @@ describe("arrangement solver — row mismatch exception (switching plus the dott
       ],
     };
     const to = solve(uneven, "astryx");
-    expect(order(to.displayLayout)).toEqual(["t1", "t2", "astryx", "about"]);
+    expect(order(to.displayLayout)).toEqual(["tab-4h7kq2", "tab-9m3xb5", "astryx", "about"]);
     const cells = to.cells;
     expect(cells.find((c) => c.id === "astryx")!.rect.width).toBeCloseTo(200 / 3, 5);
     expect(cells.find((c) => c.id === "about")!.rect.width).toBeCloseTo(100 / 3, 5);

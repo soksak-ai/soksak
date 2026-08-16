@@ -80,23 +80,23 @@ describe("A1 uniqueness — chrome addresses stay distinct with every workspace 
   }
 
   it("the canonical address includes the workspace axis", () => {
-    plane("t1", true, ["rail/left"]);
-    plane("t2", false, ["rail/left"]);
+    plane("wsp-4h7kq2", true, ["rail/left"]);
+    plane("wsp-9m3xb5", false, ["rail/left"]);
     const addrs = collectExposed().map((n) => n.address);
     expect(new Set(addrs).size).toBe(addrs.length);
     // The window prefix is added only when a name exists, so the address may start with `proj/`. What this
     // check pins down is that the workspace axis is present, not what precedes it.
-    expect(addrs.some((a) => a.endsWith("proj/t1/chrome/rail/left"))).toBe(true);
-    expect(addrs.some((a) => a.endsWith("proj/t2/chrome/rail/left"))).toBe(true);
+    expect(addrs.some((a) => a.endsWith("proj/wsp-4h7kq2/chrome/rail/left"))).toBe(true);
+    expect(addrs.some((a) => a.endsWith("proj/wsp-9m3xb5/chrome/rail/left"))).toBe(true);
   });
 
   it("the short form resolves to the active workspace — omitted means active in this syntax", () => {
-    plane("t1", true, ["rail/left"]);
-    plane("t2", false, ["rail/left"]);
+    plane("wsp-4h7kq2", true, ["rail/left"]);
+    plane("wsp-9m3xb5", false, ["rail/left"]);
     const r = resolveExposed("chrome/rail/left");
     expect("el" in r).toBe(true);
     if ("el" in r) {
-      expect(r.el.closest("[data-workspace-plane]")?.getAttribute("data-workspace-plane")).toBe("t1");
+      expect(r.el.closest("[data-workspace-plane]")?.getAttribute("data-workspace-plane")).toBe("wsp-4h7kq2");
     }
   });
 

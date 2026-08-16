@@ -18,6 +18,10 @@ import { allGroups, allViews, useSessions, type Tab } from "../state/sessions";
 import { useProgramRegistry } from "../plugins/programRegistry";
 
 useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-termstatus");
+// The workspace identifier is issued (state/ids.ts), so it is read here rather
+// than written down. A literal is a shape the product does not produce, and code
+// that reads a prefix is then never run against it (NAMING N4).
+const WORKSPACE = useSessions.getState().activeId;
 const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
@@ -54,7 +58,7 @@ describe("terminalStatus — command.started/finished → running status", () =>
   it("reportTerminalRunning sets that terminal view to status=running with the command line, and clear removes it", () => {
     const r = useSessions
       .getState()
-      .addViewToGroup("t1", "terminal-xterm", activeGroupId());
+      .addViewToGroup(WORKSPACE, "terminal-xterm", activeGroupId());
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("could not create the terminal view");
     // Pane key of a plugin terminal = view.id of its content view (single key after the core terminal removal).

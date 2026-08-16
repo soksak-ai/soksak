@@ -28,23 +28,23 @@ describe("layoutSettlement — the revision barrier between state mutation and t
   it("closes only when the latest per-workspace invalidation is settled", () => {
     const listener = vi.fn();
     const off = onLayoutSettlement(listener);
-    expect(invalidateLayout("t1")).toBe(1);
-    expect(invalidateLayout("t1")).toBe(2);
-    expect(invalidateLayout("t2")).toBe(1);
+    expect(invalidateLayout("wsp-4h7kq2")).toBe(1);
+    expect(invalidateLayout("wsp-4h7kq2")).toBe(2);
+    expect(invalidateLayout("wsp-9m3xb5")).toBe(1);
     expect(layoutSettlementFacts()).toMatchObject({ active: true });
-    settleLayout("t1", 2);
-    expect(layoutSettlementFacts().pending.map((item) => item.key)).toEqual(["t2"]);
-    settleLayout("t2", 1);
+    settleLayout("wsp-4h7kq2", 2);
+    expect(layoutSettlementFacts().pending.map((item) => item.key)).toEqual(["wsp-9m3xb5"]);
+    settleLayout("wsp-9m3xb5", 1);
     expect(layoutSettlementFacts()).toMatchObject({ active: false, pending: [] });
     expect(listener).toHaveBeenCalledTimes(5);
     expect(listener.mock.calls.map(([event]) => ({
       key: event.key, phase: event.phase, revision: event.revision,
     }))).toEqual([
-      { key: "t1", phase: "invalidated", revision: 1 },
-      { key: "t1", phase: "invalidated", revision: 2 },
-      { key: "t2", phase: "invalidated", revision: 1 },
-      { key: "t1", phase: "settled", revision: 2 },
-      { key: "t2", phase: "settled", revision: 1 },
+      { key: "wsp-4h7kq2", phase: "invalidated", revision: 1 },
+      { key: "wsp-4h7kq2", phase: "invalidated", revision: 2 },
+      { key: "wsp-9m3xb5", phase: "invalidated", revision: 1 },
+      { key: "wsp-4h7kq2", phase: "settled", revision: 2 },
+      { key: "wsp-9m3xb5", phase: "settled", revision: 1 },
     ]);
     expect(listener.mock.calls.every(([event]) => (
       event.clock === "unix-anchored-monotonic" && Number.isFinite(event.atUnixMs)
@@ -55,26 +55,26 @@ describe("layoutSettlement — the revision barrier between state mutation and t
   it("a transaction owner ACKs only the exact revision it opened and does not close a later revision on its behalf", () => {
     const listener = vi.fn();
     onLayoutSettlement(listener);
-    const maximizeRevision = invalidateLayout("t1");
-    const restoreRevision = invalidateLayout("t1");
+    const maximizeRevision = invalidateLayout("wsp-4h7kq2");
+    const restoreRevision = invalidateLayout("wsp-4h7kq2");
 
-    settleLayout("t1", maximizeRevision);
-    expect(layoutSettlementFacts("t1")).toMatchObject({
+    settleLayout("wsp-4h7kq2", maximizeRevision);
+    expect(layoutSettlementFacts("wsp-4h7kq2")).toMatchObject({
       active: true,
-      pending: [{ key: "t1", requested: restoreRevision, settled: maximizeRevision }],
+      pending: [{ key: "wsp-4h7kq2", requested: restoreRevision, settled: maximizeRevision }],
     });
-    settleLayout("t1", maximizeRevision);
+    settleLayout("wsp-4h7kq2", maximizeRevision);
     expect(listener).toHaveBeenCalledTimes(3);
 
-    settleLayout("t1", restoreRevision);
-    expect(layoutSettlementFacts("t1")).toMatchObject({ active: false, pending: [] });
+    settleLayout("wsp-4h7kq2", restoreRevision);
+    expect(layoutSettlementFacts("wsp-4h7kq2")).toMatchObject({ active: false, pending: [] });
     expect(listener.mock.calls.map(([event]) => ({
       key: event.key, phase: event.phase, revision: event.revision,
     }))).toEqual([
-      { key: "t1", phase: "invalidated", revision: maximizeRevision },
-      { key: "t1", phase: "invalidated", revision: restoreRevision },
-      { key: "t1", phase: "settled", revision: maximizeRevision },
-      { key: "t1", phase: "settled", revision: restoreRevision },
+      { key: "wsp-4h7kq2", phase: "invalidated", revision: maximizeRevision },
+      { key: "wsp-4h7kq2", phase: "invalidated", revision: restoreRevision },
+      { key: "wsp-4h7kq2", phase: "settled", revision: maximizeRevision },
+      { key: "wsp-4h7kq2", phase: "settled", revision: restoreRevision },
     ]);
   });
 });

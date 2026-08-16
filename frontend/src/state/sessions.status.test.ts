@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { allGroups, useSessions, type Tab } from "./sessions";
 
 useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-status-test");
+// The workspace identifier is issued (state/ids.ts), so it is read here rather
+// than written down. A literal is a shape the product does not produce, and code
+// that reads a prefix is then never run against it (NAMING N4).
+const WORKSPACE = useSessions.getState().activeId;
 const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
@@ -23,40 +27,40 @@ beforeEach(() => {
 
 describe("setViewStatus — the view status channel (R1 report / R4 withdraw)", () => {
   it("reports on that view with status set, and withdraws with null (the field disappears)", () => {
-    const r = useSessions.getState().openPluginView("t1", "p", "v", "T");
+    const r = useSessions.getState().openPluginView(WORKSPACE, "p", "v", "T");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const vid = r.viewId;
 
     const set = useSessions
       .getState()
-      .setViewStatus("t1", vid, { code: "busy", message: "syncing" });
+      .setViewStatus(WORKSPACE, vid, { code: "busy", message: "syncing" });
     expect(set.ok).toBe(true);
     expect(findView(vid)?.status).toEqual({ code: "busy", message: "syncing" });
 
-    useSessions.getState().setViewStatus("t1", vid, null);
+    useSessions.getState().setViewStatus(WORKSPACE, vid, null);
     expect(findView(vid)?.status).toBeUndefined();
   });
 
   it("an absent view is TARGET_NOT_FOUND (idempotent — the state is unchanged)", () => {
     const r = useSessions
       .getState()
-      .setViewStatus("t1", "no-such-view", { code: "busy" });
+      .setViewStatus(WORKSPACE, "no-such-view", { code: "busy" });
     expect(r.ok).toBe(false);
   });
 });
 
 describe("setFileDirty — file dirty folded into status.code dirty (one legacy path)", () => {
   it("dirty true → status {code:'dirty'}, false → withdrawn (no second truth)", () => {
-    const r = useSessions.getState().openPluginView("t1", "p", "v", "T");
+    const r = useSessions.getState().openPluginView(WORKSPACE, "p", "v", "T");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const vid = r.viewId;
 
-    useSessions.getState().setFileDirty("t1", vid, true);
+    useSessions.getState().setFileDirty(WORKSPACE, vid, true);
     expect(findView(vid)?.status).toEqual({ code: "dirty" });
 
-    useSessions.getState().setFileDirty("t1", vid, false);
+    useSessions.getState().setFileDirty(WORKSPACE, vid, false);
     expect(findView(vid)?.status).toBeUndefined();
   });
 });
