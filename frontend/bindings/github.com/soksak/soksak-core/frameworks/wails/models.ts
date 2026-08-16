@@ -59,6 +59,43 @@ export class CaptureNote {
 }
 
 /**
+ * CapturePixels is an image and the statement of what went into it.
+ * 
+ * The two travel together. This is the capture with no file left behind to
+ * inspect afterwards, so a caller that receives only the image has no way to
+ * ask later what was drawn — and it threw the note away entirely, which made
+ * the one path an agent looks through the one path with no evidence.
+ */
+export class CapturePixels {
+    "png": string;
+    "note": CaptureNote;
+
+    /** Creates a new CapturePixels instance. */
+    constructor($$source: Partial<CapturePixels> = {}) {
+        if (!("png" in $$source)) {
+            this["png"] = "";
+        }
+        if (!("note" in $$source)) {
+            this["note"] = (new CaptureNote());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CapturePixels instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CapturePixels {
+        const $$createField1_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("note" in $$parsedSource) {
+            $$parsedSource["note"] = $$createField1_0($$parsedSource["note"]);
+        }
+        return new CapturePixels($$parsedSource as Partial<CapturePixels>);
+    }
+}
+
+/**
  * Rect is a window-relative region in CSS points with a top-left origin, the
  * same coordinate contract the DOM and the compositor already share. A zero
  * rect means the whole window.
@@ -131,3 +168,4 @@ export class Reply {
 
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
+const $$createType1 = CaptureNote.createFrom;

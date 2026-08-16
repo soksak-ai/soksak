@@ -10,6 +10,7 @@ export {
 
 export {
     CaptureNote,
+    CapturePixels,
     Rect,
     Reply
 } from "./models.js";

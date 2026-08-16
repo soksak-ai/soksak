@@ -81,16 +81,33 @@ type CaptureNote struct {
 func (service *CaptureService) finish(handle unsafe.Pointer, windowPNG []byte, rect Rect) ([]byte, CaptureNote) {
 	note := CaptureNote{}
 	if service.surfaces == nil || service.size == nil {
+		// Said rather than left blank. This build composites no native surfaces, and a caller
+		// looking at a flat pane would otherwise read the same empty note as a build that
+		// composited and found none.
+		note.Skipped = append(note.Skipped, "this build draws no native surfaces into a capture")
 		return windowPNG, note
 	}
 	// A cropped capture would need every frame translated into the crop, and the one caller that
 	// crops is measuring a region of chrome. Compositing only the whole window keeps the
 	// arithmetic in one place.
 	if rect != Whole {
+		note.Skipped = append(note.Skipped, "a region is captured from the window layer alone; native surfaces are composited into the whole window only")
 		return windowPNG, note
 	}
 	placed := service.surfaces.Placed(service.name)
+	// Every surface this window holds, drawn or not. A count of the drawable ones alone answers
+	// zero for a window whose only pane is hidden, which is the same answer as a window with no
+	// pane — one of those is an empty rectangle a person is looking at.
 	note.Surfaces = len(placed)
+	lit := make([]SurfacePixels, 0, len(placed))
+	for _, surface := range placed {
+		if surface.Dark != "" {
+			note.Skipped = append(note.Skipped, surface.ID+": "+surface.Dark)
+			continue
+		}
+		lit = append(lit, surface)
+	}
+	placed = lit
 	if len(placed) == 0 {
 		return windowPNG, note
 	}
@@ -161,17 +178,28 @@ func (service *CaptureService) SnapshotRegion(path string, rect Rect) (CaptureNo
 	return note, nil
 }
 
+// CapturePixels is an image and the statement of what went into it.
+//
+// The two travel together. This is the capture with no file left behind to
+// inspect afterwards, so a caller that receives only the image has no way to
+// ask later what was drawn — and it threw the note away entirely, which made
+// the one path an agent looks through the one path with no evidence.
+type CapturePixels struct {
+	PNG  string      `json:"png"`
+	Note CaptureNote `json:"note"`
+}
+
 // Pixels answers with a base64 PNG instead of touching the disk, for callers
 // that only want to look.
-func (service *CaptureService) Pixels(rect Rect) (string, error) {
+func (service *CaptureService) Pixels(rect Rect) (CapturePixels, error) {
 	handle, err := service.target()
 	if err != nil {
-		return "", err
+		return CapturePixels{}, err
 	}
 	png, err := CaptureWindow(handle, rect)
 	if err != nil {
-		return "", err
+		return CapturePixels{}, err
 	}
-	composite, _ := service.finish(handle, png, rect)
-	return base64.StdEncoding.EncodeToString(composite), nil
+	composite, note := service.finish(handle, png, rect)
+	return CapturePixels{PNG: base64.StdEncoding.EncodeToString(composite), Note: note}, nil
 }

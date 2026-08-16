@@ -34,12 +34,33 @@ func (images *CompositorImages) Placed(window string) []SurfacePixels {
 	}
 	var placed []SurfacePixels
 	for _, placement := range images.composition.Latest(window).Placements {
-		if placement.EffectivelyHidden() {
-			continue
-		}
-		placed = append(placed, SurfacePixels{ID: placement.ID, Frame: placement.Applied})
+		placed = append(placed, SurfacePixels{
+			ID:    placement.ID,
+			Frame: placement.Applied,
+			Dark:  darkness(placement),
+		})
 	}
 	return placed
+}
+
+// darkness names why a surface puts no light on the screen, empty when it does.
+//
+// Three ways to arrive there and they are different defects: a pane whose tab is
+// not the front one is hidden on purpose, a surface at zero alpha is a fade that
+// did not finish, and one with no area is a layout that gave it nothing. A
+// capture that answered "not drawn" for all three would leave the caller to
+// guess which.
+func darkness(placement SurfacePlacement) string {
+	switch {
+	case !placement.AppliedVisible:
+		return "the native layer hid it"
+	case placement.AppliedAlpha == 0:
+		return "it is fully transparent"
+	case !placement.Applied.Area():
+		return "it has no area"
+	default:
+		return ""
+	}
 }
 
 // Image is one surface's own pixels.

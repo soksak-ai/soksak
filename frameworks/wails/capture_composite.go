@@ -11,6 +11,13 @@ import (
 type SurfacePixels struct {
 	ID    string
 	Frame SurfaceFrame
+	// Dark is why this surface puts no light on the screen, empty when it does.
+	//
+	// Carried rather than filtered out at the source. A surface dropped before
+	// the capture sees it is a surface the capture cannot count, and "this
+	// window declared no surface" then reads the same as "this window declared
+	// one and it is hidden" — the second is an empty pane and the first is not.
+	Dark string
 }
 
 // SurfacePixelSource answers with a surface's own PNG. An error leaves that surface's rectangle as

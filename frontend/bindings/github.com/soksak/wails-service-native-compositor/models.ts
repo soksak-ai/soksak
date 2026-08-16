@@ -13,6 +13,19 @@ export class AppliedSurface {
     "alpha": number;
     "layer": number;
 
+    /**
+     * Misparented reports that the surface is in a different window from the
+     * one that declared it. The compositor sets it; a backend's own value is
+     * overwritten.
+     * 
+     * Every other number here is a fact about a rectangle inside some window,
+     * so all of them read correct while the rectangle sits in a window nobody
+     * is looking at. Measured 2026-08-16: declared and applied frames agreed to
+     * zero drift, visible was true, alpha was 1, and the pane on screen was
+     * empty.
+     */
+    "misparented": boolean;
+
     /** Creates a new AppliedSurface instance. */
     constructor($$source: Partial<AppliedSurface> = {}) {
         if (!("id" in $$source)) {
@@ -32,6 +45,9 @@ export class AppliedSurface {
         }
         if (!("layer" in $$source)) {
             this["layer"] = 0;
+        }
+        if (!("misparented" in $$source)) {
+            this["misparented"] = false;
         }
 
         Object.assign(this, $$source);

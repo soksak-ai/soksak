@@ -21,8 +21,10 @@ import * as $models from "./models.js";
  * Pixels answers with a base64 PNG instead of touching the disk, for callers
  * that only want to look.
  */
-export function Pixels(rect: $models.Rect): $CancellablePromise<string> {
-    return $Call.ByID(970833820, rect);
+export function Pixels(rect: $models.Rect): $CancellablePromise<$models.CapturePixels> {
+    return $Call.ByID(970833820, rect).then(($result: any) => {
+        return $$createType0($result);
+    });
 }
 
 /**
@@ -33,7 +35,7 @@ export function Pixels(rect: $models.Rect): $CancellablePromise<string> {
  */
 export function Snapshot(path: string): $CancellablePromise<$models.CaptureNote> {
     return $Call.ByID(3039522845, path).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType1($result);
     });
 }
 
@@ -42,9 +44,10 @@ export function Snapshot(path: string): $CancellablePromise<$models.CaptureNote>
  */
 export function SnapshotRegion(path: string, rect: $models.Rect): $CancellablePromise<$models.CaptureNote> {
     return $Call.ByID(3826199269, path, rect).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType1($result);
     });
 }
 
 // Private type creation functions
-const $$createType0 = $models.CaptureNote.createFrom;
+const $$createType0 = $models.CapturePixels.createFrom;
+const $$createType1 = $models.CaptureNote.createFrom;
