@@ -9,7 +9,8 @@ import { invoke } from "../framework";
 import { register, type CommandHint } from "./registry";
 import { tmsg } from "../i18n";
 import { allViews, useSessions } from "../state/sessions";
-import { browserLabelPrefix, browserViewIdFromLabel, orphanBrowserLabels } from "../lib/webviewLabels";
+import { currentWindowLabel } from "../lib/webviewLabels";
+import { orphanSurfaceLabels, viewIdFromSurfaceLabel } from "../lib/surfaceLabels";
 import { CONTENT_VIEW_BODY, contentViewDomFacts, contentViewHost } from "../lib/contentViews";
 import { presentationNowUnixMs } from "../lib/presentationClock";
 
@@ -48,18 +49,22 @@ export function registerWebviewCatalog(): void {
       // set, so it is always "no ghosts" (measured 2026-08-03: 3 browser views on screen with
       // actual: []). The host has its own list under both implementations.
       const labels = await contentViewHost().list();
-      const mine = labels.filter((l) => l.startsWith(browserLabelPrefix()));
-      // Orphan child — a child (b-<win>-…) whose parent window is already closed matches no
+      // This window's, by the window part of the label rather than by a kind. Matching a kind would
+      // hide every surface of a kind this core has not been told about, and a hidden surface is
+      // exactly the ghost this command exists to find.
+      const here = `-${currentWindowLabel()}-`;
+      const mine = labels.filter((l) => l.includes(here));
+      // Orphan child — a surface whose parent window is already closed matches no
       // window's prefix, so the window-local comparison never sees it (real incident: a browser
       // from a closed harness window floated over an empty main window). Parent survival is judged
-      // by prefix match against the window list — label grammar b-<win>-<view>.
+      // by the window part of the label against the window list — grammar <kind>-<win>-<view>.
       const windows = await invoke<string[]>("window_list").catch(() => [] as string[]);
-      const orphans = orphanBrowserLabels(labels, windows);
+      const orphans = orphanSurfaceLabels(labels, windows);
       const viewIds = new Set<string>();
       for (const t of useSessions.getState().workspaces)
         for (const c of t.spaces) for (const v of allViews(c.layout)) viewIds.add(v.id);
       const ghosts = mine.filter((l) => {
-        const v = browserViewIdFromLabel(l);
+        const v = viewIdFromSurfaceLabel(l);
         return v !== null && !viewIds.has(v);
       });
       if (ghosts.length > 0 || orphans.length > 0) {
@@ -181,7 +186,7 @@ export function registerWebviewCatalog(): void {
       label: {
         type: "string",
         description:
-          "webview label — a window label for that window's main webview, or b-<win>-<view> for a browser child (list via webview.health.query or window.list)",
+          "webview label — a window label for that window's main webview, or <kind>-<win>-<view> for a native surface (list via webview.health.query or window.list)",
         required: true,
       },
     },
@@ -189,7 +194,7 @@ export function registerWebviewCatalog(): void {
     returns: "{ label, reloaded: true }",
     message: (d) => tmsg("msg.webview.recover", { label: String(d.label) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['webview.recover \'{"label":"brw-w-1234-v7"}\''],
+    examples: ['webview.recover \'{"label":"browser-w-1234-v7"}\''],
     handler: async (p) => {
       try {
         await invoke("webview_recover", { label: p.label });

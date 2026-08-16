@@ -23,10 +23,15 @@ import type {
 const REFRESH_120HZ = 8.333251953125;
 const REFRESH_60HZ = 16.680419921875;
 
+// A surface identity is the label the declaring plugin put on it — `<kind>-<window>-<viewId>`
+// (lib/surfaceLabels.ts). The audit compares identities across frames, so the fixture uses the
+// value an issuer produces: the plugin's kind, the host's window name, the view id from state/ids.ts.
+const SURFACE_ID = "browser.win-h3d5qm.tab-k6jivs";
+
 function surface(overrides: Record<string, unknown> = {}) {
   return {
     viewId: "tab-k6jivs",
-    surfaceId: "brw-main-tab-k6jivs",
+    surfaceId: SURFACE_ID,
     generation: 1,
     live: true,
     visible: true,
@@ -152,7 +157,7 @@ describe("close includes the audit in the receipt", () => {
         traceId, checkpointId: "checkpoint-1", trigger, registeredAfterFrameSequence: 0,
         registeredAfterPresentationRevision: 1, sourceGeneration: 1,
         baselineSurfaces: [{
-          viewId: "tab-k6jivs", surfaceId: "surface-1", generation: 1,
+          viewId: "tab-k6jivs", surfaceId: SURFACE_ID, generation: 1,
           domFrame: { x: 0, y: 0, w: 100, h: 100 },
           surfaceFrame: { x: 0, y: 0, w: 100, h: 100 },
         }],

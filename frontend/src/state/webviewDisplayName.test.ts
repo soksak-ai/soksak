@@ -1,12 +1,14 @@
 // webviewDisplayName — shows a webview under a human name on user surfaces (recovery badge and so
 // on). Label = manifest/content title rule (message protocol): the raw label
-// (brw-<window>-<viewId>) is never exposed to the user as is. For a browser view of this window it
+// (<kind>-<window>-<viewId>) is never exposed to the user as is. For a view of this window it
 // is the tab display name (customLabel first, title as fallback); with no matching view it is the
 // label itself (for a webview with no human name the identifier is the only fact).
 //
-// In jsdom currentWindowLabel() falls back to "", so this window's browser prefix is "brw--"
-// (see webviewLabels.ts) — fixture labels use that prefix.
-import { describe, expect, it } from "vitest";
+// The window name is mocked rather than left to jsdom's "": an unresolved window name is not an
+// answer, and a label read against it would match on a single dash — every label, or none.
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-a" }));
 import {
   viewDisplayTitle,
   webviewDisplayName,
@@ -55,20 +57,20 @@ describe("viewDisplayTitle", () => {
 describe("webviewDisplayName", () => {
   it("a browser label of this window resolves to the tab display name", () => {
     const tabs = [tab("wsp-aaaaaa", [browser("tab-cccccc", "GitHub")])];
-    expect(webviewDisplayName("brw--tab-cccccc", tabs)).toBe("GitHub");
+    expect(webviewDisplayName("browser.win-a.tab-cccccc", tabs)).toBe("GitHub");
   });
 
   it("uses customLabel when there is one", () => {
     const tabs = [tab("wsp-aaaaaa", [browser("tab-cccccc", "GitHub", "Work browser")])];
-    expect(webviewDisplayName("brw--tab-cccccc", tabs)).toBe("Work browser");
+    expect(webviewDisplayName("browser.win-a.tab-cccccc", tabs)).toBe("Work browser");
   });
 
   it("with no matching view the label stays as it is", () => {
     const tabs = [tab("wsp-aaaaaa", [browser("tab-cccccc", "GitHub")])];
-    expect(webviewDisplayName("brw--tab-iiiiii", tabs)).toBe("brw--tab-iiiiii");
+    expect(webviewDisplayName("browser.win-a.tab-iiiiii", tabs)).toBe("browser.win-a.tab-iiiiii");
   });
 
-  it("a label without the browser prefix stays as it is", () => {
+  it("a label naming another window stays as it is", () => {
     expect(webviewDisplayName("some-webview", [])).toBe("some-webview");
   });
 });

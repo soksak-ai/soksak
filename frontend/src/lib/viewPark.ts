@@ -10,7 +10,7 @@
 import { moduleState } from "../lib/moduleState";
 import { contentViewHost } from "./contentViews";
 import { emitPluginEvent } from "../plugins/hooks";
-import { browserLabel } from "./webviewLabels";
+import { surfaceLabelOfView } from "./surfaceLabels";
 import { parkedStyle } from "./layerPark";
 import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost";
 
@@ -71,8 +71,19 @@ export function commitViewVisibility(viewId: string, visible: boolean): void {
   // all — the previous view stays up after a tab switch and the new view is invisible (measured
   // 2026-07-30: 301 such rejections in the request ledger).
   // contentViews is the single owner of how the app presents content.
+  //
+  // The label is read off the declaration, not rebuilt. Rebuilding needs the surface's kind, which
+  // is the plugin's word, and a rebuild agrees with itself about a name the plugin never used — the
+  // host then refuses a label nobody created and the parking silently does not happen.
+  const label = surfaceLabelOfView(viewId);
+  if (label === null) {
+    // Most views declare no surface — a terminal, a plugin body. There is nothing to park, and the
+    // event is still emitted because the view's parked state did change.
+    emitPluginEvent("view.parked", { viewId, parked: !visible });
+    return;
+  }
   void contentViewHost()
-    .visible(browserLabel(viewId), visible)
+    .visible(label, visible)
     .catch((e: unknown) => {
       // Not swallowed — a parking that did not happen shows up only as "the previous browser does
       // not disappear", and there is no path back from that symptom to this site.

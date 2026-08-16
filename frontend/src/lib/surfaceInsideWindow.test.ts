@@ -60,16 +60,16 @@ describe("a surface is inside the window", () => {
 describe("a surface the app does not track", () => {
   it("returns by name a surface native holds and the app does not track", () => {
     expect(
-      unknownSurfaces([surface("brw-tab-gone", 0, 0), surface("brw-tab-live", 0, 0)], new Set(["brw-tab-live"])),
-    ).toEqual(["brw-tab-gone"]);
+      unknownSurfaces([surface("browser.win-main.tab-tab-gone", 0, 0), surface("browser.win-main.tab-tab-live", 0, 0)], new Set(["browser.win-main.tab-tab-live"])),
+    ).toEqual(["browser.win-main.tab-tab-gone"]);
   });
 
   it("returns nothing for a surface the app tracks", () => {
-    expect(unknownSurfaces([surface("brw-tab-live", 0, 0)], new Set(["brw-tab-live"]))).toEqual([]);
+    expect(unknownSurfaces([surface("browser.win-main.tab-tab-live", 0, 0)], new Set(["browser.win-main.tab-tab-live"]))).toEqual([]);
   });
 
   // A hidden surface is not a fact about the screen — not yet reclaimed differs from covering now.
   it("a hidden surface is not counted", () => {
-    expect(unknownSurfaces([surface("brw-tab-gone", 0, 0, 10, 10, true)], new Set())).toEqual([]);
+    expect(unknownSurfaces([surface("browser.win-main.tab-tab-gone", 0, 0, 10, 10, true)], new Set())).toEqual([]);
   });
 });

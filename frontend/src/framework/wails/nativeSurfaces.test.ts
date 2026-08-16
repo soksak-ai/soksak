@@ -56,7 +56,7 @@ describe("the native surface observer", () => {
   it("carries a surface declared after start", async () => {
     startNativeSurfaces();
     await settle();
-    declare("brw-a");
+    declare("browser.win-main.tab-a");
     await settle();
     expect(commits.at(-1)?.surfaces).toHaveLength(1);
   });
@@ -68,7 +68,7 @@ describe("the native surface observer", () => {
     await settle();
     await resetNativeSurfaces();
     await settle();
-    declare("brw-a");
+    declare("browser.win-main.tab-a");
     await settle();
     expect(commits.at(-1)?.surfaces, "the declaration after the reset never reached the compositor").toHaveLength(1);
   });
@@ -79,7 +79,7 @@ describe("the native surface observer", () => {
     // promise and report nothing.
     startNativeSurfaces();
     await settle();
-    declare("brw-old");
+    declare("browser.win-main.tab-old");
     await settle();
     expect(commits.at(-1)?.surfaces).toHaveLength(1);
 
@@ -94,7 +94,7 @@ describe("the native surface observer", () => {
     // document and put the children straight back into the ~150ms gap the clear exists to empty.
     startNativeSurfaces();
     await settle();
-    declare("brw-a");
+    declare("browser.win-main.tab-a");
     await settle();
     expect(commits.at(-1)?.surfaces).toHaveLength(1);
 
@@ -102,7 +102,7 @@ describe("the native surface observer", () => {
     await settle();
     expect(commits.at(-1)?.surfaces, "the clear did not empty the inventory").toHaveLength(0);
 
-    declare("brw-b");
+    declare("browser.win-main.tab-b");
     await settle();
     expect(commits.at(-1)?.surfaces, "a stopped observer committed again").toHaveLength(0);
   });
@@ -112,12 +112,12 @@ describe("the native surface observer", () => {
     // every commit after it rejected, and the screen would freeze at the last accepted inventory.
     startNativeSurfaces();
     await settle();
-    declare("brw-a");
+    declare("browser.win-main.tab-a");
     await settle();
     const before = commits.at(-1)!.sequence;
     await resetNativeSurfaces();
     await settle();
-    declare("brw-b");
+    declare("browser.win-main.tab-b");
     await settle();
     expect(commits.at(-1)!.sequence).toBeGreaterThan(before);
   });

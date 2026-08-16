@@ -95,9 +95,9 @@ describe("webview input surface (webview permission)", () => {
       fakeDeps(),
     );
 
-    await api.webview?.typeText("brw-window-view", "typed text");
+    await api.webview?.typeText("browser.win-main.tab-window-view", "typed text");
 
-    expect(typeText).toHaveBeenCalledExactlyOnceWith("brw-window-view", "typed text");
+    expect(typeText).toHaveBeenCalledExactlyOnceWith("browser.win-main.tab-window-view", "typed text");
   });
 
   it("exposes no input surface without the webview permission", () => {

@@ -89,12 +89,20 @@ describe("a parking commit goes through the content view host", () => {
       }),
     }));
     vi.doMock("../plugins/hooks", () => ({ emitPluginEvent: () => {} }));
+    // The plugin declared the surface, so the label exists to be read. Parking a label the core
+    // rebuilt instead would address a name the plugin never used — the host refuses it and the
+    // parking silently does not happen.
+    document.body.innerHTML = `
+      <div data-node="layout/tab/v-1">
+        <div data-native-surface="browser" data-native-surface-id="browser-win-a-v-1"></div>
+      </div>`;
     const { commitViewVisibility, dropViewVisibility } = await import("./viewPark");
 
     dropViewVisibility("v-1");
     commitViewVisibility("v-1", false);
     await Promise.resolve();
     expect(seen).toHaveLength(1);
+    expect(seen[0][0]).toBe("browser-win-a-v-1");
     expect(seen[0][1]).toBe(false);
 
     // Idempotent — recommitting the same value does nothing.

@@ -15,7 +15,8 @@ import {
   type PresentationDisplayFrame,
 } from "../lib/presentationDisplayFrames";
 import { currentWindow, invoke } from "../framework";
-import { browserLabel, currentWindowLabel } from "../lib/webviewLabels";
+import { currentWindowLabel } from "../lib/webviewLabels";
+import { surfaceLabelOfView } from "../lib/surfaceLabels";
 import { contentViewHost, hasContentViewHost, type SurfacePointerInput } from "../lib/contentViews";
 import { surfaceInputProvider } from "../lib/surfaceInputProviders";
 import { surfacesOutsideWindow, type SurfaceFrameFact } from "../lib/surfaceInsideWindow";
@@ -1363,13 +1364,17 @@ function gestureSurface(el: Element, addr: string): GestureSurface | UndeclaredP
   // A content view is not a descendant of its tab node — it is placed on a surface outside the cell
   // (measured 2026-08-02: it had no `[data-pane]` ancestor either). Searching descendants finds nothing
   // and silently becomes a DOM click.
-  // Ownership is in the label: `brw-<window>-<view>`. Build the label from the
+  // Ownership is in the label: `<kind>-<window>-<view>`. Read the label the plugin declared for the
   // view id the address names, then look for it.
   const viewId = el.getAttribute("data-node")?.match(/^layout\/tab\/(.+)$/)?.[1];
   // No value is interpolated into a selector — escaping exists in some environments and not others, and
   // the day a label contains a special character the selector silently picks something else. Read the
   // attribute and compare.
-  const wanted = viewId ? browserLabel(viewId) : null;
+  //
+  // The label comes from the declaration. Rebuilding it needs the surface's kind, and the kind is
+  // the plugin's word — a core that held one could only find the surfaces of the plugin it had been
+  // written against.
+  const wanted = viewId ? surfaceLabelOfView(viewId) : null;
   const byLabel = wanted
     ? Array.from(document.querySelectorAll<HTMLElement>("[data-content-view]")).find(
         (n) => n.getAttribute("data-content-view") === wanted,

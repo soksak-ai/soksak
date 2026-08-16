@@ -126,7 +126,7 @@ describe("ui.layout.status — public layout barrier diagnosis", () => {
   });
 
   it("exposes the same motion, revision, animation, and content label facts as the wait command", async () => {
-    document.body.innerHTML = '<div data-content-view-body="brw-current"></div>';
+    document.body.innerHTML = '<div data-content-view-body="browser.main.tab-current"></div>';
     const result = await execute("ui.layout.status", {}, {});
     expect(result.data).toMatchObject({
       settled: true,
@@ -138,16 +138,16 @@ describe("ui.layout.status — public layout barrier diagnosis", () => {
       decorationPresentations: [],
       decorationClearance: { owners: [], events: [], maxEvents: 64 },
       animations: [],
-      contentViewLabels: ["brw-current"],
+      contentViewLabels: ["browser.main.tab-current"],
     });
   });
 
   it("returns a structured receipt instead of mislabeling a provider reject as TIMEOUT", async () => {
-    document.body.innerHTML = '<div data-content-view-body="brw-current"></div>';
+    document.body.innerHTML = '<div data-content-view-body="browser.main.tab-current"></div>';
     settlementBarrier.mockRejectedValueOnce({
       code: "NATIVE_PRESENTATION_REJECTED",
       message: "content surface rejected",
-      data: { label: "brw-current" },
+      data: { label: "browser.main.tab-current" },
     });
     const result = await execute("ui.layout.wait-settled", { timeoutMs: 4_000 }, {});
     expect(result).toMatchObject({
@@ -156,7 +156,7 @@ describe("ui.layout.status — public layout barrier diagnosis", () => {
       data: {
         command: "ui.layout.wait-settled",
         barrier: "content",
-        labels: ["brw-current"],
+        labels: ["browser.main.tab-current"],
         providerError: {
           code: "NATIVE_PRESENTATION_REJECTED",
           message: "content surface rejected",
@@ -2061,10 +2061,10 @@ describe("ui.input.click — pointing at a content view puts the input inside it
   function plantContentView() {
     mountNode(`<div data-node="layout/tab/tab-probe"></div>`);
     const view = document.createElement("div");
-    view.setAttribute("data-content-view", "brw-main-tab-probe");
+    view.setAttribute("data-content-view", "browser.main.tab-probe");
     // The plugin declares the surface and its label; the core reads that rather than rebuilding one.
     view.setAttribute("data-native-surface", "browser");
-    view.setAttribute("data-native-surface-id", "brw-main-tab-probe");
+    view.setAttribute("data-native-surface-id", "browser.main.tab-probe");
     view.id = "cv";
     Object.defineProperty(view, "getBoundingClientRect", {
       value: () => ({ left: 100, top: 50, width: 200, height: 100, right: 300, bottom: 150 }),
@@ -2107,11 +2107,11 @@ describe("ui.input.click — pointing at a content view puts the input inside it
       data?: { surface?: string };
     };
     expect(r.ok).toBe(true);
-    expect(r.data?.surface).toBe("brw-main-tab-probe");
+    expect(r.data?.surface).toBe("browser.main.tab-probe");
     // A press and a release must be paired for a click — sending only the press leaves that surface half-pressed.
     expect(sentInput).toEqual([
-      ["brw-main-tab-probe", { x: 0, y: 0, kind: "down", button: "left", clickCount: 1 }],
-      ["brw-main-tab-probe", { x: 0, y: 0, kind: "up", button: "left", clickCount: 1 }],
+      ["browser.main.tab-probe", { x: 0, y: 0, kind: "down", button: "left", clickCount: 1 }],
+      ["browser.main.tab-probe", { x: 0, y: 0, kind: "up", button: "left", clickCount: 1 }],
     ]);
     expect(domClicks).toBe(0);
   });
@@ -2123,8 +2123,8 @@ describe("ui.input.click — pointing at a content view puts the input inside it
     const address = await probeAddress();
     await execute("ui.input.click", { address, x: 7, y: 9 }, {});
     expect(sentInput).toEqual([
-      ["brw-main-tab-probe", { x: 7, y: 9, kind: "down", button: "left", clickCount: 1 }],
-      ["brw-main-tab-probe", { x: 7, y: 9, kind: "up", button: "left", clickCount: 1 }],
+      ["browser.main.tab-probe", { x: 7, y: 9, kind: "down", button: "left", clickCount: 1 }],
+      ["browser.main.tab-probe", { x: 7, y: 9, kind: "up", button: "left", clickCount: 1 }],
     ]);
   });
 });

@@ -28,14 +28,14 @@ const provider = (owns: (label: string) => boolean) => ({
 
 describe("surface input owner", () => {
   it("answers none when there is no owner — the framework takes that place", () => {
-    expect(surfaceInputProvider("brw-main-t1")).toBeNull();
+    expect(surfaceInputProvider("browser.main.tab-4h7kq2")).toBeNull();
   });
 
   it("goes to the owner that claimed the label", () => {
     const p = provider((label) => label.startsWith("chromium-"));
     registerSurfaceInputProvider("soksak-plugin-browser-chromium", p);
     expect(surfaceInputProvider("chromium-tab-1")).toBe(p);
-    expect(surfaceInputProvider("brw-main-t1")).toBeNull();
+    expect(surfaceInputProvider("browser.main.tab-4h7kq2")).toBeNull();
   });
 
   // If two owners both claim the same surface, no value determines the delivery target.

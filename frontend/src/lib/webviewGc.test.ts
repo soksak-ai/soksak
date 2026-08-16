@@ -15,7 +15,8 @@ import type { Workspace, Tab, Pane, Space } from "../state/sessions";
 // Test label double: independent of the window namespace (currentWindowLabel) — viewId used as-is
 // for b-<id>. Built by string concatenation, not an inline template (the single-truth guard blocks
 // only inline templates — this is an injected test double, not a redefinition of the real label scheme).
-const labelOf = (viewId: string) => "brw-".concat(viewId);
+// The grammar the product issues (NAMING N3): kind, window, view, split by ".".
+const labelOf = (viewId: string) => ["browser", "win-main", viewId].join(".");
 
 // Declaration double — the exact shape of manifest contributes.views[].nativeSurface:
 // pluginId → (view id within the plugin → nativeSurface). The real runtime predicate derives from the usePlugins manifest.
@@ -65,7 +66,7 @@ describe("collectWebviewLabels — label set of webview-owning views, keyed on t
       ownsSurface,
       labelOf,
     );
-    expect([...live]).toEqual(["brw-tab-bbbbbb"]);
+    expect([...live]).toEqual(["browser.win-main.tab-bbbbbb"]);
   });
 
   it("does not count a non-owning view (terminal, undeclared plugin)", () => {
@@ -88,7 +89,7 @@ describe("collectWebviewLabels — label set of webview-owning views, keyed on t
       ownsSurface,
       labelOf,
     );
-    expect(live).toEqual(new Set(["brw-tab-aaaaaa"]));
+    expect(live).toEqual(new Set(["browser.win-main.tab-aaaaaa"]));
   });
 
   it("does not count a nativeSurface=false view (DOM canvas — not a GC target)", () => {
@@ -120,7 +121,7 @@ describe("collectWebviewLabels — label set of webview-owning views, keyed on t
     // Avoid an id collision on the second content
     t.spaces[1] = { ...t.spaces[1], id: "spc-bbbbbb" };
     const live = collectWebviewLabels([t], ownsSurface, labelOf);
-    expect(live).toEqual(new Set(["brw-tab-aaaaaa", "brw-tab-bbbbbb"]));
+    expect(live).toEqual(new Set(["browser.win-main.tab-aaaaaa", "browser.win-main.tab-bbbbbb"]));
   });
 });
 

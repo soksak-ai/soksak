@@ -41,7 +41,7 @@ vi.mock("../lib/contentViews", async (importOriginal) => ({
 vi.mock("../lib/webviewLabels", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/webviewLabels")>()),
   currentWindowLabel: () => "main",
-  browserLabel: (viewId: string) => `brw-main-${viewId}`,
+  browserLabel: (viewId: string) => `browser.main.${viewId}`,
 }));
 vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
@@ -63,7 +63,7 @@ const at = (el: Element, x: number, y: number, w: number, h: number) => {
 function mountSurface(): string {
   document.body.innerHTML =
     `<div class="tab-viewer" data-view-addr="${VIEW}">` +
-    `<div data-node="cv" data-content-view="brw-main-t1"></div></div>`;
+    `<div data-node="cv" data-content-view="browser.main.tab-4h7kq2"></div></div>`;
   at(document.querySelector("[data-node=cv]")!, 0, 0, 800, 600);
   return `win/main/${VIEW}/node/cv`;
 }
@@ -108,7 +108,7 @@ describe("gestures on a surface", () => {
     const addr = mountSurface();
     const out = await execute("ui.input.dblclick", { address: addr, x: 40, y: 12 }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
-    const seq = sent("brw-main-t1");
+    const seq = sent("browser.main.tab-4h7kq2");
     expect(seq.map((s) => `${s.kind}${s.clickCount}`)).toEqual(["down1", "up1", "down2", "up2"]);
     expect(seq.every((s) => s.x === 40 && s.y === 12)).toBe(true);
   });
@@ -117,7 +117,7 @@ describe("gestures on a surface", () => {
     const addr = mountSurface();
     const out = await execute("ui.input.click", { address: addr, x: 5, y: 6, button: "right" }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
-    expect(sent("brw-main-t1").map((s) => `${s.kind}:${s.button}`)).toEqual(["down:right", "up:right"]);
+    expect(sent("browser.main.tab-4h7kq2").map((s) => `${s.kind}:${s.button}`)).toEqual(["down:right", "up:right"]);
   });
 
   // No leading move — the press creates the hover at that spot, and on an engine that cannot take
@@ -126,7 +126,7 @@ describe("gestures on a surface", () => {
     const addr = mountSurface();
     const out = await execute("ui.input.drag", { from: addr, x: 10, y: 10, dx: 60, dy: 20, steps: 3 }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
-    const seq = sent("brw-main-t1");
+    const seq = sent("browser.main.tab-4h7kq2");
     expect(seq.map((s) => s.kind)).toEqual(["down", "drag", "drag", "drag", "up"]);
     expect(seq[0]).toMatchObject({ x: 10, y: 10 });
     expect(seq[seq.length - 1]).toMatchObject({ x: 70, y: 30 });
@@ -140,7 +140,7 @@ describe("gestures on a surface", () => {
     const out = await execute("ui.input.pointer", { address: addr, x: 33, y: 44 }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
     // Enter, then move — the order a human pointer follows, and the engine opens hover on that pair.
-    expect(sent("brw-main-t1")).toEqual([
+    expect(sent("browser.main.tab-4h7kq2")).toEqual([
       { x: 33, y: 44, kind: "enter", button: "left", clickCount: 1 },
       { x: 33, y: 44, kind: "move", button: "left", clickCount: 1 },
     ]);
@@ -287,7 +287,7 @@ describe("another owner's surface is refused with a name", () => {
     const out = await execute("ui.input.click", { address: addr }, {});
     expect(out.ok).toBe(false);
     expect(out.code).toBe("SURFACE_INPUT_UNAVAILABLE");
-    expect(String(out.message)).toContain("brw-main-t1");
+    expect(String(out.message)).toContain("browser.main.tab-4h7kq2");
     expect(String(out.message)).toContain("no webview");
   });
 
@@ -311,7 +311,7 @@ describe("delivery goes to the surface owner", () => {
   it("with an owner present the owner receives it, not the framework", async () => {
     const addr = mountSurface();
     const owner = {
-      owns: (label: string) => label === "brw-main-t1",
+      owns: (label: string) => label === "browser.main.tab-4h7kq2",
       sendInput: vi.fn(async () => {}),
       inputState: vi.fn(async () => ({ attached: true })),
     };

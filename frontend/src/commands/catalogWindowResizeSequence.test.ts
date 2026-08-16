@@ -20,15 +20,9 @@ vi.mock("../i18n", async (importOriginal) => ({
   tmsg: () => "resize sequence",
 }));
 vi.mock("../lib/workspaceRoot", () => ({ validateWorkspaceRoot: vi.fn() }));
-// Do not imitate the grammar — use the real derivation and replace only the window name with this test's.
-vi.mock("../lib/webviewLabels", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../lib/webviewLabels")>();
-  return {
-    ...actual,
-    browserLabelPrefix: (label: string) => actual.browserLabelPrefixIn(label ?? "main"),
-    currentWindowLabel: () => "main",
-  };
-});
+// Only the window name is replaced. The label grammar is not imitated here — surfaceLabels derives
+// it from this name, so a fixture spelling it out would pass while the derivation was wrong.
+vi.mock("../lib/webviewLabels", () => ({ currentWindowLabel: () => "main" }));
 vi.mock("../state/windowBoot", () => ({ forgetWindowSlot: vi.fn() }));
 vi.mock("../lib/windowResizeProbe", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/windowResizeProbe")>()),

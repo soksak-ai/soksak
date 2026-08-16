@@ -1,4 +1,4 @@
-// Native child webview GC — invariant: the set of existing `brw-<windowLabel>-<viewId>` webviews
+// Native surface GC — invariant: the set of existing `<kind>-<windowLabel>-<viewId>` surfaces
 // *of this window* ⊆ the set of webview-owning views in this window's store. Creation/destruction
 // happens in the browser plugin (content view) lifecycle, but an async creation overlapping a fast
 // close/move can leave an ownerless webview (a window nothing can close) — the invariant is
@@ -18,7 +18,8 @@ import { invoke } from "../framework";
 import { rafThrottle } from "./rafThrottle";
 import { allGroups, useSessions, type Workspace } from "../state/sessions";
 import { usePlugins } from "../state/plugins";
-import { browserLabel, browserLabelPrefix } from "./webviewLabels";
+import { currentWindowLabel } from "./webviewLabels";
+import { surfaceLabelOfView } from "./surfaceLabels";
 import { ownsNativeSurfaceFromManifests } from "./nativeSurfaceOwnership";
 
 // "Does view viewId of plugin pluginId own a native child surface" — the predicate form of the
@@ -31,17 +32,22 @@ export type OwnsSurface = (pluginId: string, viewId: string) => boolean;
 export function collectWebviewLabels(
   tabs: readonly Workspace[],
   ownsSurface: OwnsSurface,
-  labelOf: (viewId: string) => string = browserLabel,
+  // Required, with no default. The label a surface takes has the plugin's kind in it, and a default
+  // here would be the core naming one — every surface of a second kind would then be swept as dead.
+  labelOf: (viewId: string) => string | null,
 ): Set<string> {
   const live = new Set<string>();
   for (const t of tabs) {
     for (const c of t.spaces) {
       for (const g of allGroups(c.layout)) {
         for (const v of g.tabs) {
-          // A view declaring nativeSurface — it owns a child webview/surface under the
-          // browserLabel(view.id) scheme.
-          if (v.kind === "plugin" && ownsSurface(v.pluginId, v.view))
-            live.add(labelOf(v.id));
+          // A view declaring nativeSurface owns a surface, under whatever label the plugin declared.
+          if (v.kind === "plugin" && ownsSurface(v.pluginId, v.view)) {
+            const label = labelOf(v.id);
+            // A declared owner with no label on screen is not swept as dead: it has not mounted
+            // yet. Adding nothing would put a live surface on the reclaim list one frame later.
+            if (label !== null) live.add(label);
+          }
         }
       }
     }
@@ -50,7 +56,7 @@ export function collectWebviewLabels(
 }
 
 function liveBrowserLabels(): Set<string> {
-  return collectWebviewLabels(useSessions.getState().workspaces, ownsNativeSurfaceFromManifests);
+  return collectWebviewLabels(useSessions.getState().workspaces, ownsNativeSurfaceFromManifests, surfaceLabelOfView);
 }
 
 // The "already attached" record must survive the hot-swap boundary — if only this flag is lost,
@@ -113,14 +119,17 @@ export function startWebviewGc(): void {
     const key = [...live].sort().join(",");
     if (key === lastKey) return;
     lastKey = key;
-    const prefix = browserLabelPrefix();
+    // This window's labels, by the window part rather than by a kind. A kind-matching filter would
+    // leave every other kind of surface unreclaimed, and an unreclaimed surface is one on screen
+    // that nothing owns.
+    const mine = `-${currentWindowLabel()}-`;
     void invoke<string[]>("webview_list")
       .then((labels) => {
         for (const label of labels) {
           // webview_list returns app-wide (every window) browser webviews — only this window's
           // (prefix) are compared and reclaimed. Another window's browser is that window's GC
           // work, so it is never touched (no cross-window termination).
-          if (!label.startsWith(prefix)) continue;
+          if (!label.includes(mine)) continue;
           if (!live.has(label)) {
             invoke("webview_close", { label }).catch(() => {});
           }

@@ -78,7 +78,7 @@ const NATURAL_KEY_AXES = [
 /**
  * Prefixes of derived labels, not of issuance — not counted as violations.
  *   w = window label (`win-<uuid4>`, core-owned, kept as is, §1-1)
- *   b = webview label (`brw-<win>-<tab>`, derived from window and tab, §1-4d ②)
+ *   b = webview label (`browser.<win>.<tab>`, derived from window and tab, §1-4d ②)
  * Neither issues a new identity — each only points at something that already exists.
  */
 const DERIVED_LABEL_PREFIXES = new Set(["win", "brw"]);

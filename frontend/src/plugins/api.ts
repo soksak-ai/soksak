@@ -19,10 +19,8 @@ import { declarePluginRealm, type PluginRealm } from "./realm";
 import type { SurfacePointerInput } from "../lib/contentViews";
 import { contentViewHost } from "../lib/contentViews";
 import { registerSurfaceInputProvider } from "../lib/surfaceInputProviders";
-import {
-  browserLabel,
-  currentWindowLabel,
-} from "../lib/webviewLabels";
+import { currentWindowLabel } from "../lib/webviewLabels";
+import { surfaceLabel } from "../lib/surfaceLabels";
 import { busEmit, busOn } from "./bus";
 import {
   onPluginEvent,
@@ -540,9 +538,18 @@ export interface SoksakPluginApi {
       supportsDocumentStart: boolean;
       supportsInputInjection: boolean;
     }>;
-    /** viewId → globally unique label (window namespace `brw-<win>-<view>`). webviewLabels is the single
-     *  truth. */
-    label: (viewId: string) => string;
+    /**
+     * kind + viewId → a label unique across every window: `<kind>-<window>-<view>`.
+     *
+     * The shape is the core's, because the window part is what makes the value unique and a plugin
+     * rebuilding it inline would drop it — two windows then produce one label and the second
+     * addresses the first window's surface. The kind is the caller's word: pass the same one the
+     * declaration puts in `data-native-surface`.
+     *
+     * Until 2026-08-16 the core supplied the kind as well, so a browser was handed its own
+     * identifier and no second kind of surface had anywhere to get a label from.
+     */
+    label: (kind: string, viewId: string) => string;
     /** Create a content view. With a published slot the adapter owns the rect; x/y/w/h apply only to a
      *  slotless surface. */
     open: (
@@ -2083,14 +2090,14 @@ export function buildPluginApi(
       ? (provider) => registerSurfaceInputProvider(id, provider)
       : undefined,
     // Drives the core-owned child webview (browser plugin). Native commands are webview_* (capability
-    // prefix, docs/NAMING.md rule). Labels are derived only from the webviewLabels single truth.
+    // prefix, docs/NAMING.md rule). Labels are derived only from the surfaceLabels single truth.
     webview: has("webview")
       ? {
           capabilities: Object.freeze({
             supportsDocumentStart: engineProvision.supportsDocumentStart,
             supportsInputInjection: engineProvision.supportsInputInjection,
           }),
-          label: (viewId: string) => browserLabel(viewId),
+          label: (kind: string, viewId: string) => surfaceLabel(kind, viewId),
           open: (label, o) => contentViewHost().open(label, o as Record<string, unknown>),
           bounds: (label, x, y, w, h) =>
             contentViewHost().bounds(label, x, y, w, h) as unknown as Promise<void>,
