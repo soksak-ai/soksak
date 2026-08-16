@@ -51,8 +51,11 @@ function commandLabel(cmd: string, t: TFn, carried?: unknown): string {
 }
 
 // Response media render — draws only the display media the envelope declared (MESSAGE-PROTOCOL:
-// the consumer never guesses keys). base64 becomes a data URI immediately; path is lazily loaded
-// through read_file_base64 (on failure it is silently omitted — file deleted, and so on).
+// the consumer never guesses keys). base64 becomes a data URI immediately; path is lazily read.
+//
+// The type comes from the envelope's own `kind`, which the producer declared and which the image
+// test above already reads. The read used to answer one, from a table the core kept — so a format
+// outside that table drew nothing here while the envelope had said what it was (CORE-CENSUS 8).
 function MediaView({ media, seq, onZoom }: { media: unknown; seq: number; onZoom: (src: string) => void }) {
   const t = useT();
   const m = media as { kind?: string; base64?: string; path?: string } | undefined;
@@ -66,9 +69,9 @@ function MediaView({ media, seq, onZoom }: { media: unknown; seq: number; onZoom
     }
     if (m?.path) {
       let disposed = false;
-      void invoke<{ mime: string; base64: string }>("read_file_base64", { path: m.path })
+      void invoke<{ base64: string }>("read_file_base64", { path: m.path })
         .then((f) => {
-          if (!disposed) setSrc(`data:${f.mime};base64,${f.base64}`);
+          if (!disposed) setSrc(`data:${m.kind};base64,${f.base64}`);
         })
         .catch(() => {});
       return () => {

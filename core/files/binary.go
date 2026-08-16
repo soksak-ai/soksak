@@ -4,9 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/soksak/soksak-core/core/i18n"
 )
@@ -18,11 +16,21 @@ import (
 // the reader looking in the wrong place.
 const maxReadBytes int64 = 40_000_000
 
-// FileData is one binary read, as the caller receives it. The frontend builds a
-// data URL from the pair, so the mime has to arrive with the bytes.
+// FileData is one binary read, as the caller receives it.
+//
+// Bytes and their size, and no media type. The core held a table of 24
+// extensions until 2026-08-16 and answered application/octet-stream for
+// everything else, which meant a plugin for a format outside that list had to
+// edit the core to be answered — the missing capability A9 names, and C6's
+// second question failing outright.
+//
+// What a file *is* is answered by whoever renders it — an editor for its
+// languages, an image plugin for its formats, an HWP plugin for one. The caller
+// states the type it already holds; this reads the bytes and validates the path,
+// which is the part that cannot leave the process that owns the disk.
 type FileData struct {
-	Mime   string `json:"mime"`
 	Base64 string `json:"base64"`
+	Bytes  int64  `json:"bytes"`
 }
 
 // WriteResult is what a binary write answers. It names the file so the caller
@@ -32,50 +40,7 @@ type WriteResult struct {
 	Bytes int64  `json:"bytes"`
 }
 
-// mimeByExtension is data, not logic.
-//
-// It answers for the extensions measured to arrive here and falls back to
-// application/octet-stream for the rest, so a caller is never told nothing. The
-// list was curated for what one removed viewer drew; adding an extension is one
-// line and no rule changes with it.
-var mimeByExtension = map[string]string{
-	".png":  "image/png",
-	".jpg":  "image/jpeg",
-	".jpeg": "image/jpeg",
-	".gif":  "image/gif",
-	".webp": "image/webp",
-	".bmp":  "image/bmp",
-	".ico":  "image/x-icon",
-	".avif": "image/avif",
-	".apng": "image/apng",
-	".svg":  "image/svg+xml",
-	".pdf":  "application/pdf",
-	".mp4":  "video/mp4",
-	".webm": "video/webm",
-	".mov":  "video/quicktime",
-	".m4v":  "video/x-m4v",
-	".mkv":  "video/x-matroska",
-	".ogv":  "video/ogg",
-	".mp3":  "audio/mpeg",
-	".wav":  "audio/wav",
-	".ogg":  "audio/ogg",
-	".flac": "audio/flac",
-	".m4a":  "audio/mp4",
-	".aac":  "audio/aac",
-}
-
-// mimeFor maps an extension to a media type.
-//
-// The extension is lowercased first: a camera writes IMG_0001.JPG, and an
-// octet-stream answer for it renders as nothing at all.
-func mimeFor(path string) string {
-	if mime, known := mimeByExtension[strings.ToLower(filepath.Ext(path))]; known {
-		return mime
-	}
-	return "application/octet-stream"
-}
-
-// readBase64 reads a file as bytes, with the media type its extension names.
+// readBase64 reads a file as bytes.
 //
 // Refusing to expand `~` here and arguing continuity of
 // behaviour would be backward compatibility, which this repository forbids, and
@@ -110,10 +75,10 @@ func readBase64Limited(path string, home string, limit int64) (FileData, error) 
 		return FileData{}, fmt.Errorf("read_file_base64: %w", err)
 	}
 	return FileData{
-		Mime: mimeFor(real),
 		// Standard alphabet, padded — what a data: URL and every browser
 		// decoder expect.
 		Base64: base64.StdEncoding.EncodeToString(payload),
+		Bytes:  info.Size(),
 	}, nil
 }
 

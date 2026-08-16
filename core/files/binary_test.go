@@ -7,30 +7,10 @@ import (
 	"testing"
 )
 
-// The extension is lowercased before the lookup, because a camera writes
-// IMG_0001.JPG and the tree would otherwise hand the webview an
-// octet-stream that renders as nothing.
-func TestTheMimeComesFromTheExtensionCaseFolded(t *testing.T) {
-	for path, want := range map[string]string{
-		"/a/dot.PNG":     "image/png",
-		"/a/dot.png":     "image/png",
-		"/a/clip.MOV":    "video/quicktime",
-		"/a/paper.pdf":   "application/pdf",
-		"/a/x.unknown":   "application/octet-stream",
-		"/a/no-ext":      "application/octet-stream",
-		"/a/song.Flac":   "audio/flac",
-		"/a/photo.jpeg":  "image/jpeg",
-		"/a/vector.svg":  "image/svg+xml",
-		"/a/movie.WEBM":  "video/webm",
-		"/a/archive.tar": "application/octet-stream",
-	} {
-		if got := mimeFor(path); got != want {
-			t.Errorf("mimeFor(%q) = %q, want %q", path, got, want)
-		}
-	}
-}
-
-func TestAPreviewCarriesPaddedStandardBase64(t *testing.T) {
+// The bytes arrive padded and in the standard alphabet, and the size arrives
+// with them. No media type: what a file is comes from whoever renders it, and a
+// table here would have to name every format anyone ever adds (C6).
+func TestAReadCarriesPaddedStandardBase64AndItsSize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "dot.png")
 	if err := os.WriteFile(path, []byte{0, 1, 2}, 0o644); err != nil {
 		t.Fatalf("preparing the fixture: %v", err)
@@ -40,11 +20,11 @@ func TestAPreviewCarriesPaddedStandardBase64(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading: %v", err)
 	}
-	if got.Mime != "image/png" {
-		t.Errorf("mime = %q", got.Mime)
-	}
 	if got.Base64 != "AAEC" {
 		t.Errorf("base64 = %q, want AAEC", got.Base64)
+	}
+	if got.Bytes != 3 {
+		t.Errorf("bytes = %d, want 3", got.Bytes)
 	}
 }
 

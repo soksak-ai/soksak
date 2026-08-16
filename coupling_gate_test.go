@@ -330,3 +330,70 @@ func TestEveryDomainExemptionStillExcusesSomething(t *testing.T) {
 		}
 	}
 }
+
+// The core answers no media type (C6, A9).
+//
+// What a file is comes from whoever renders it. A table here answers for the
+// formats one consumer needed and application/octet-stream for the rest, so a
+// plugin for anything outside it has to edit the core to be answered — the
+// missing capability A9 names, not a default.
+//
+// Measured 2026-08-16: `core/files/binary.go` mapped 24 extensions and
+// `read_file_base64` carried the answer to every caller. An HWP viewer, an
+// editor for a language nobody listed, a CAD format — each would have arrived
+// here as a one-line edit, and the list would have been the record of who asked
+// loudest.
+//
+// What is refused is the pairing: an extension literal and a `type/subtype`
+// literal on one line. A media type alone is legitimate — a capture writes
+// image/png because it made a PNG, and a caller states the type it already has.
+func TestTheCoreAnswersNoMediaType(t *testing.T) {
+	extension := regexp.MustCompile(`"\.[a-z0-9]{1,8}"`)
+	mediaType := regexp.MustCompile(`"(application|image|video|audio|text|font|model)/[a-z0-9.+-]+"`)
+	var found []string
+	scanned := 0
+
+	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				if skippedTrees[info.Name()] {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !scannedCode[filepath.Ext(path)] {
+				return nil
+			}
+			clean := filepath.ToSlash(path)
+			if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
+				return nil
+			}
+			body, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			scanned++
+			for index, line := range strings.Split(stripComments(string(body)), "\n") {
+				if extension.MatchString(line) && mediaType.MatchString(line) {
+					found = append(found, clean+":"+itoa(index+1)+" "+strings.TrimSpace(line))
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("scanning %s: %v", root, err)
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("no core source was scanned; the roots are wrong")
+	}
+	if len(found) > 0 {
+		t.Errorf("the core maps an extension to a media type in %d places:\n%s\n"+
+			"Take the table out. The caller states the type it knows: an editor its languages, an "+
+			"image viewer its formats, an HWP plugin one (C6).",
+			len(found), strings.Join(found, "\n"))
+	}
+}

@@ -163,12 +163,46 @@ or a directory.
 but they were framed as "what a **preview** can render" and `maxPreviewBytes`, shaped and named for
 the viewer that left. The mechanism is the same; the framing was the residue.
 
+### 8. A media type table — the core said what a file is
+
+Raised as a question rather than found by a scan: should a preview live in the core at all?
+
+`core/files/binary.go` mapped 24 extensions to media types and `read_file_base64` carried the answer
+to every caller, `application/octet-stream` for everything else. An HWP viewer, an editor for an
+unlisted language, a CAD format — each would have arrived as a one-line edit here, which is the
+missing capability A9 names and C6's second question failing outright: a plugin that never heard of
+the first consumer **cannot** use it unchanged.
+
+The split:
+
+- **Core** — path validation against the home boundary, the read, the size ceiling, the blob URL with
+  its cache and revocation. The part that cannot leave the process owning the disk.
+- **Not core** — what the file is. `read_file_base64` answers `{ base64, bytes }`, and
+  `app.files.url(path, mime?)` takes the type from whoever knows it: an editor its languages, an
+  image viewer its formats, an HWP plugin one.
+
+**No new registry was added.** Which plugin can show which document is a contract between plugins
+(C3/C4): a viewer declares `implements`, a consumer resolves through `plugin.implementers` and picks.
+The core indexes the declaration and never interprets it — C4 constrains the *shape* of a contract id
+and nothing about its meaning. Routing lives in whoever wants to open something, not here. Building a
+registration seam today would be an extension point with no consumer (4-2).
+
+Gate: `TestTheCoreAnswersNoMediaType` refuses an extension literal and a `type/subtype` literal on
+one line. A media type alone stays legitimate — a capture writes `image/png` because it made a PNG.
+
 ## What is left, named
 
 - `frameworks/wails/register.go` types `HostDeps.Sessions` as `terminalcmd.Sessions`, and
   `terminal_sink.go` takes `terminal.Handle`. Both are entered in `couplingWiring` marked DEBT: the
   core owns no session contract and no trace contract for them to be typed against yet.
 - A workspace record no longer carries `shell`, and no core surface names a shell.
+- **`TERMINAL_CONTRACT` is a domain name in the core.** `plugins/terminalEngine.ts` holds
+  `soksak-spec-plugin-terminal` for three affordances: ⌘T, and running a plugin's or a library's
+  install command where a person can watch. The engine is resolved through the contract, so no plugin
+  is named — but "terminal" is a domain, so C6's first question fails. ⌘T deciding that a keystroke
+  means a terminal is the core holding an opinion; a plugin cannot declare a keybinding today, which
+  is the capability that would have to exist first (A9). Unjudged, and named here rather than left to
+  be found.
 
 ## The pattern in all six
 

@@ -445,12 +445,14 @@ export interface SoksakPluginApi {
       path: string,
       offset?: number,
     ) => Promise<{ text: string; truncated: boolean; totalBytes: number }>;
-    /** Read binary → { mime, base64 } (for building a data URL). Used by media viewers
-     *  (image/PDF/video/audio) when a plugin renders a file. "fs:read" permission. */
-    readBinary?: (path: string) => Promise<{ mime: string; base64: string }>;
-    /** Local file → a URL a webview can load (core standard). Idempotent per path. Gated on
-     *  "fs:read". */
-    url?: (path: string) => Promise<string>;
+    /** Read a file as bytes → { base64, bytes }. No media type: the core reads the disk and holds
+     *  no view of what a file is. Whoever renders it supplies that — an editor for its languages, an
+     *  image viewer for its formats, an HWP plugin for one. "fs:read" permission. */
+    readBinary?: (path: string) => Promise<{ base64: string; bytes: number }>;
+    /** Local file → a URL a webview can load (core standard). Idempotent per path. Pass the media
+     *  type this plugin reads the file as; without it the blob has none and the webview is left to
+     *  sniff. Gated on "fs:read". */
+    url?: (path: string, mime?: string) => Promise<string>;
     writeText?: (path: string, content: string) => Promise<void>;
     /** Direct children of a directory. With meta:true each child includes modified (unix seconds), for
      *  picking the newest file. */
@@ -1910,8 +1912,8 @@ export function buildPluginApi(
             readBinary: has("fs:read")
               ? (path) =>
                   deps.invoke("read_file_base64", { path }) as Promise<{
-                    mime: string;
                     base64: string;
+                    bytes: number;
                   }>
               : undefined,
             // [RULE] Local file → a URL a webview can load directly. The core standard: every plugin
@@ -1919,23 +1921,31 @@ export function buildPluginApi(
             // asset:// protocol blocks the hidden directory (.soksak) from its scope, so this builds a
             // blob URL over read_file_base64 (the validated path the editor uses). Idempotent: same path
             // → same URL (no re-read, no re-creation). Revoked on unload. Shares the "fs:read" gate.
+            //
+            // The media type is the caller's. The core answered one from a table of 24 extensions
+            // until 2026-08-16, so a plugin for anything outside it had to edit the core to be
+            // answered — a missing capability (A9), not a default. The cache key includes the
+            // type: two plugins may read the same bytes as different things.
             url: has("fs:read")
               ? (() => {
                   const urlCache = new Map<string, string>();
-                  return async (path: string): Promise<string> => {
-                    const hit = urlCache.get(path);
+                  return async (path: string, mime?: string): Promise<string> => {
+                    const key = `${mime ?? ""}\u0000${path}`;
+                    const hit = urlCache.get(key);
                     if (hit) return hit;
-                    const { mime, base64 } = (await deps.invoke("read_file_base64", {
+                    const { base64 } = (await deps.invoke("read_file_base64", {
                       path,
-                    })) as { mime: string; base64: string };
+                    })) as { base64: string };
                     const bin = atob(base64);
                     const bytes = new Uint8Array(bin.length);
                     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                    const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
-                    urlCache.set(path, objectUrl);
+                    const objectUrl = URL.createObjectURL(
+                      new Blob([bytes], mime ? { type: mime } : undefined),
+                    );
+                    urlCache.set(key, objectUrl);
                     tracker.wrap(() => {
                       URL.revokeObjectURL(objectUrl);
-                      urlCache.delete(path);
+                      urlCache.delete(key);
                     });
                     return objectUrl;
                   };
