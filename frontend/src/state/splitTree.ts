@@ -131,9 +131,7 @@ export type SplitSnapshot<S> =
   | { t: "l"; v: S }
   | {
       t: "s";
-      /** Optional only for a record written before the id was stored. Every save
-       *  since 2026-08-16 writes it, so it is absent on old snapshots alone. */
-      id?: string;
+      id: string;
       dir: "row" | "col";
       sizes: number[];
       children: SplitSnapshot<S>[];
@@ -158,23 +156,19 @@ export function serializeSplitTree<L, S>(
   };
 }
 
+// No generator. Every id is in the snapshot (NAMING N2a) and one that is not is a record this
+// build refuses before this point (windowSnapshotShape.ts), so a fallback would have nothing to do.
 export function deserializeSplitTree<L, S>(
   snap: SplitSnapshot<S>,
   deserializeLeaf: (v: S) => L,
-  newSplitId: () => string,
 ): SplitTree<L> {
   if (snap.t === "l") return { type: "leaf", value: deserializeLeaf(snap.v) };
   return {
     type: "split",
-    // The stored name, or a fresh one for a record written before it was stored.
-    // Minting there is not a fallback that hides anything: the tree is the same
-    // either way, and the next save writes the name down.
-    id: snap.id ?? newSplitId(),
+    id: snap.id,
     dir: snap.dir,
     sizes: snap.sizes,
-    children: snap.children.map((c) =>
-      deserializeSplitTree(c, deserializeLeaf, newSplitId),
-    ),
+    children: snap.children.map((c) => deserializeSplitTree(c, deserializeLeaf)),
   };
 }
 

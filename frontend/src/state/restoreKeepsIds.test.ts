@@ -62,8 +62,7 @@ function stored() {
 }
 
 function restored() {
-  let split = 0;
-  return deserializeWorkspace(stored(), () => `spl-fresh${split++}`);
+  return deserializeWorkspace(stored());
 }
 
 describe("what a restore carries across", () => {

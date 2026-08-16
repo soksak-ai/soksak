@@ -49,3 +49,59 @@ describe("reading a stored window snapshot", () => {
     expect(readableWindowSnapshot({ activeId: "", workspaces: [] }).ok).toBe(true);
   });
 });
+
+// A split node with no id is a record this build cannot read.
+//
+// Every id survives a restart (NAMING N2a), with no exception: a reader that had
+// to know which kind of id it was holding before it could tell whether the name
+// would still be there is the shape that cost a day on 2026-08-16.
+//
+// The split node's id went into the snapshot that day. A record written before
+// it has none, and this build keeps no old paths: no fallback
+// that mints a name, no migration that rewrites the record. It is refused by
+// name, it costs that record only, and the ledger slot stays (R1).
+describe("a split node with no id", () => {
+  const withLayout = (layout: unknown) => ({
+    activeId: "wsp-aaaaaa",
+    workspaces: [
+      {
+        id: "wsp-aaaaaa",
+        contents: [{ id: "spc-aaaaaa", activeGroupId: "pan-aaaaaa", layout }],
+      },
+    ],
+  });
+
+  it("is refused, and the reason names what is missing", () => {
+    const verdict = readableWindowSnapshot(
+      withLayout({ t: "s", dir: "row", sizes: [1], children: [{ t: "l", v: { id: "pan-aaaaaa" } }] }),
+    );
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) return;
+    expect(verdict.why).toContain("split");
+    expect(verdict.why).toContain("id");
+  });
+
+  it("is refused however deep it is", () => {
+    const verdict = readableWindowSnapshot(
+      withLayout({
+        t: "s",
+        id: "spl-aaaaaa",
+        dir: "row",
+        sizes: [1],
+        children: [{ t: "s", dir: "col", sizes: [1], children: [{ t: "l", v: { id: "pan-aaaaaa" } }] }],
+      }),
+    );
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("a record this build wrote is read", () => {
+    const verdict = readableWindowSnapshot(
+      withLayout({ t: "s", id: "spl-aaaaaa", dir: "row", sizes: [1], children: [{ t: "l", v: { id: "pan-aaaaaa" } }] }),
+    );
+    expect(verdict.ok).toBe(true);
+  });
+
+  it("a layout that is one leaf has no split to check", () => {
+    expect(readableWindowSnapshot(withLayout({ t: "l", v: { id: "pan-aaaaaa" } })).ok).toBe(true);
+  });
+});

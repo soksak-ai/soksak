@@ -170,7 +170,7 @@ export function serializeWorkspace(
 
 // ── deserialize (only split id regenerated; other ids and active references kept) ──
 
-function deserializeView(s: ViewSnapshot, _newSplitId: () => string): Tab {
+function deserializeView(s: ViewSnapshot): Tab {
   switch (s.kind) {
     case "file":
       return {
@@ -199,25 +199,14 @@ function deserializeView(s: ViewSnapshot, _newSplitId: () => string): Tab {
   }
 }
 
-const deserializeViewGroup = (
-  s: ViewGroupSnapshot,
-  newSplitId: () => string,
-): Pane => ({
+const deserializeViewGroup = (s: ViewGroupSnapshot): Pane => ({
   id: s.id,
   activeTabId: s.activeViewId,
-  tabs: s.views.map((v) => deserializeView(v, newSplitId)),
+  tabs: s.views.map(deserializeView),
 });
 
-const deserializeContent = (
-  s: ContentSnapshot,
-  newSplitId: () => string,
-  normalize: boolean,
-): Space => {
-  const layout = deserializeSplitTree(
-    s.layout,
-    (g) => deserializeViewGroup(g, newSplitId),
-    newSplitId,
-  );
+const deserializeContent = (s: ContentSnapshot, normalize: boolean): Space => {
+  const layout = deserializeSplitTree(s.layout, deserializeViewGroup);
   return {
     id: s.id,
     title: s.title,
@@ -233,12 +222,7 @@ const deserializeContent = (
   };
 };
 
-// newSplitId is injected by the caller (sessions) — the split id generator. The caller prevents collision with
-// preserved ids by raising the counter above the preserved maximum after restore (A5).
-export function deserializeWorkspace(
-  s: WorkspaceSnapshot,
-  newSplitId: () => string,
-): Workspace {
+export function deserializeWorkspace(s: WorkspaceSnapshot): Workspace {
   return {
     id: s.id,
     title: s.title,
@@ -254,10 +238,8 @@ export function deserializeWorkspace(
       : DEFAULT_RAIL_PLACEMENT,
     rightOpen: s.rightOpen,
     rightView: s.rightView,
-    leftLayout: deserializeSplitTree(s.leftLayout, (g) => g, newSplitId),
+    leftLayout: deserializeSplitTree(s.leftLayout, (g) => g),
     activeSpaceId: s.activeContentId,
-    spaces: s.contents.map((c) =>
-      deserializeContent(c, newSplitId, !s.vlNormalized),
-    ),
+    spaces: s.contents.map((c) => deserializeContent(c, !s.vlNormalized)),
   };
 }

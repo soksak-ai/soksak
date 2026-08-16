@@ -5,8 +5,6 @@ import type { Workspace, PaneNode, Tab } from "./sessions";
 // Serialization round-trip — the PaneNode serializeSplitTree path. ids preserved, only split ids regenerated,
 // live status excluded. The invariant: structure, order, sizes, active, and view parameters are preserved. A terminal is a plugin view too.
 
-let sid = 0;
-const newSplitId = () => `S${++sid}`;
 
 const leafOf = (n: PaneNode, i: number) => {
   const s = n as Extract<PaneNode, { type: "split" }>;
@@ -74,14 +72,13 @@ const workspace: Workspace = {
 
 describe("windowSnapshot round trip", () => {
   it("preserves structure, sizes, active and view params and every id, and does not persist the terminal command", () => {
-    sid = 0;
     const snap = serializeWorkspace(workspace);
     // Every id is stored, the split node included (NAMING N2a).
     expect(JSON.stringify(snap)).toContain("spl-gaaaaa");
     // command (auto-run) is not persisted (A6: a restored terminal does not re-run).
     expect(JSON.stringify(snap)).not.toContain("claude");
 
-    const back = deserializeWorkspace(snap, newSplitId);
+    const back = deserializeWorkspace(snap);
     expect(back.root).toBe("/repo");
     expect(back.title).toBe("proj");
     expect(back.shell).toBe("/bin/zsh");
@@ -124,7 +121,6 @@ describe("windowSnapshot round trip", () => {
   });
 
   it("live status is excluded from serialization", () => {
-    sid = 0;
     const p2: Workspace = {
       ...workspace,
       spaces: [
@@ -154,7 +150,7 @@ describe("windowSnapshot round trip", () => {
     };
     const snap = serializeWorkspace(p2);
     expect(JSON.stringify(snap)).not.toContain("busy");
-    const back = deserializeWorkspace(snap, newSplitId);
+    const back = deserializeWorkspace(snap);
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
     expect(g.tabs[0].status).toBeUndefined();
   });
@@ -168,7 +164,7 @@ describe("left rail FLOW/PIN persistence", () => {
     expect(snap.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
     expect(snap.projection?.pins.left).toEqual(["plugin.tree"]);
 
-    const back = deserializeWorkspace(snap, newSplitId);
+    const back = deserializeWorkspace(snap);
     expect(back.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
   });
 
@@ -182,7 +178,7 @@ describe("left rail FLOW/PIN persistence", () => {
       leftRailPlacement: { mode: "pin", station: 0 },
     });
     delete legacy.railPlacementNormalized;
-    expect(deserializeWorkspace(legacy, newSplitId).leftRailPlacement).toEqual({
+    expect(deserializeWorkspace(legacy).leftRailPlacement).toEqual({
       mode: "flow",
     });
   });
@@ -193,7 +189,7 @@ describe("left rail FLOW/PIN persistence", () => {
       leftRailPlacement: { mode: "pin", station: 60 },
     });
     expect(marked.railPlacementNormalized).toBe(true);
-    expect(deserializeWorkspace(marked, newSplitId).leftRailPlacement).toEqual({
+    expect(deserializeWorkspace(marked).leftRailPlacement).toEqual({
       mode: "pin",
       station: 60,
     });
@@ -205,7 +201,7 @@ describe("left rail FLOW/PIN persistence", () => {
       leftRailPlacement: { mode: "pin", station: 0 },
     });
     delete legacy.leftRailPlacement;
-    expect(deserializeWorkspace(legacy, newSplitId).leftRailPlacement).toEqual({
+    expect(deserializeWorkspace(legacy).leftRailPlacement).toEqual({
       mode: "flow",
     });
   });
@@ -243,7 +239,7 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
       ],
     };
     const snap = serializeWorkspace(tab);
-    const back = deserializeWorkspace(snap, newSplitId);
+    const back = deserializeWorkspace(snap);
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
     const v1 = g.tabs.find((v) => v.id === "tab-aaaaaa") as Extract<Tab, { kind: "plugin" }>;
     const v2 = g.tabs.find((v) => v.id === "tab-bbbbbb") as Extract<Tab, { kind: "plugin" }>;
@@ -284,7 +280,7 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
         },
       ],
     };
-    const back = deserializeWorkspace(serializeWorkspace(tab), newSplitId);
+    const back = deserializeWorkspace(serializeWorkspace(tab));
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
     const v1 = g.tabs.find((v) => v.id === "tab-aaaaaa") as Extract<Tab, { kind: "plugin" }>;
     const v2 = g.tabs.find((v) => v.id === "tab-bbbbbb") as Extract<Tab, { kind: "plugin" }>;
@@ -344,10 +340,9 @@ describe("restore normalization — one migration per snapshot (the no-vertical-
   };
 
   it("an old snapshot with no marker is healed once, and re-serialization stamps the marker", async () => {
-    sid = 0;
     const legacy = serializeWorkspace(torn);
     delete legacy.vlNormalized; // simulate an old snapshot from before the marker
-    const back = deserializeWorkspace(legacy, newSplitId);
+    const back = deserializeWorkspace(legacy);
     const xs = await rowXs(back);
     expect(xs).toHaveLength(2);
     for (const x of xs) expect(x).toBeCloseTo(40.6, 10);
@@ -356,10 +351,9 @@ describe("restore normalization — one migration per snapshot (the no-vertical-
   });
 
   it("a snapshot with the marker preserves a gap outside the drag rule (0.75~1.5) — restore is isomorphic", async () => {
-    sid = 0;
     const snap = serializeWorkspace(torn);
     expect(snap.vlNormalized).toBe(true); // serialization always records the marker
-    const back = deserializeWorkspace(snap, newSplitId);
+    const back = deserializeWorkspace(snap);
     const xs = await rowXs(back);
     expect(xs[0]).toBeCloseTo(40.6, 10);
     expect(xs[1]).toBeCloseTo(39.5, 10); // a separate line the user made — not rewritten

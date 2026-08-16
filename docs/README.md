@@ -48,6 +48,22 @@ Schemas are the single source of truth where a schema exists. Prose adds only wh
 cannot enforce. Never restate what the schema already enforces, and never invent a constraint
 the schema does not back.
 
+## A heading and its body are one claim
+
+Where they disagree, that disagreement **is** the defect, and neither half may be taken as the
+rule. The code is the arbiter: read what it does, decide which half is right, and correct the
+other — in the document and in the code if the code is the wrong one.
+
+Measured 2026-08-16. `RESTORE.md` R3 was headed "Ids are minted again, and that is the contract"
+while its body named split ids alone, and the code matched the body. Reading the heading as the
+rule and changing the code to match it broke the terminal reattach key — a session is keyed by
+`windowLabel + "|" + paneId` — and the restart gate could not see it, because the digest holds no
+id. The heading was the half that was wrong, and a whole day was spent on the wrong side of it.
+
+A rule with no gate rots the same way and is not stated without one. Where the gate has to be
+written, the document names the file that must hold it and what it must refuse; `NAMING.md` N3 did
+that on the same date and the gate landed against it.
+
 ## Register
 
 | Document | Contents |
@@ -68,7 +84,7 @@ the schema does not back.
 | [`tech/I18N.md`](tech/I18N.md) | Who reads a sentence decides where it lives, the key table and the Go mechanism, what a test may assert |
 | [`tech/UI-GEOMETRY.md`](tech/UI-GEOMETRY.md) | Bands, boxes, and which box draws which line — the alignment rules R1–R5, the border-ownership constitution B1–B8, and the layer principle |
 | [`manual/TESTING.md`](manual/TESTING.md) | What `task verify` runs, why gates only increase, red before green, where tests live |
-| [`manual/EVIDENCE.md`](manual/EVIDENCE.md) | A number decides a visual claim, captures take no focus, where evidence is kept, the frame clock |
+| [`manual/EVIDENCE.md`](manual/EVIDENCE.md) | A number decides a visual claim, captures take no focus, where evidence is kept, the frame clock, why an instrument may not share a source with its subject, and proving a gate bites |
 | [`manual/AGENT-CONTROL.md`](manual/AGENT-CONTROL.md) | The registry as single source, thin channels, one permission gate, event symmetry, what is visible |
 | [`manual/DEVELOPMENT.md`](manual/DEVELOPMENT.md) | Order of a change, no compatibility layers, deleting failed attempts, reverting, prose |
 

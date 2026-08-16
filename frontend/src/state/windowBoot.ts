@@ -28,7 +28,6 @@ import { useProjection, type Pins } from "./projection";
 import { listRecentWorkspaces } from "./recentWorkspaces";
 import {
   useSessions,
-  nextSplitIdGen,
   migrateSpaceTitle,
   type Workspace,
 } from "./sessions";
@@ -142,7 +141,7 @@ export async function initWorkspacePersistence(
     snapshot = snapshotRead(snap.workspaces.length);
     bootFact(`restore:hydrated:${snap.workspaces.length}`);
     if (snap.workspaces.length > 0) {
-      const { workspaces, activeId, projections } = restoreWindow(snap, nextSplitIdGen);
+      const { workspaces, activeId, projections } = restoreWindow(snap);
       // root existence check — an absent or invalid root demotes the tab to rootMissing instead of deleting it
       // (no unauthorized deletion). A banner reports it, and a returning path resolves it naturally on the next restore.
       await Promise.all(

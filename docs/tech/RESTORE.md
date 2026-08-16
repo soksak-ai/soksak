@@ -101,8 +101,15 @@ Keeping the id is what makes those durable.
 ground that nothing references it — and it was not in the snapshot at all,
 measured 2026-08-16, nor in `state.tree` or `ui.tree`. That left one kind of id
 whose name a restore changed, so a reader had to know which kind it was holding
-before it could tell whether the name would still be there. One rule is worth
-more than an exception nobody can act on, and the id costs one field.
+before it could tell whether the name would still be there.
+
+A record written before that field is refused rather than mended. No fallback
+mints the name and no migration rewrites the record: this build carries no old
+paths, and a fallback there would make a restore rename part of itself in
+silence, which is the shape that cost a day that same date. The refusal names
+what is missing, the record is left where it is, and it costs that record only
+(R1). The generator the deserializer took for this is gone with it — there is
+nothing left for it to do.
 
 Uniqueness and durability are not in tension here. They were only in tension
 while an id was a counter — `t1` was the workspace id of three separate window

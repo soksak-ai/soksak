@@ -9,8 +9,6 @@ import {
 } from "./windowPersistence";
 import type { Workspace, PaneNode } from "./sessions";
 
-let sid = 0;
-const newSplitId = () => `S${++sid}`;
 
 const leafGroup = (gid: string, vid: string): PaneNode => ({
   type: "leaf",
@@ -22,6 +20,10 @@ const leafGroup = (gid: string, vid: string): PaneNode => ({
     ],
   },
 });
+
+let sid = 0;
+const newSplitId = () => `spl-${sid++}`;
+void newSplitId;
 
 const proj = (id: string, root: string): Workspace => ({
   id,
@@ -40,7 +42,7 @@ describe("snapshot/restore round trip per window", () => {
     sid = 0;
     const workspaces = [proj("wsp-aaaaaa", "/a"), proj("wsp-bbbbbb", "/b")];
     const snap = snapshotWindow(workspaces, "wsp-bbbbbb");
-    const back = restoreWindow(snap, newSplitId);
+    const back = restoreWindow(snap);
     expect(back.activeId).toBe("wsp-bbbbbb");
     expect(back.workspaces.map((t) => t.root)).toEqual(["/a", "/b"]);
     expect(back.workspaces.map((t) => t.id)).toEqual(["wsp-aaaaaa", "wsp-bbbbbb"]);
@@ -49,12 +51,12 @@ describe("snapshot/restore round trip per window", () => {
   it("an activeId absent from the restored set falls back to the first workspace", () => {
     sid = 0;
     const snap = snapshotWindow([proj("wsp-aaaaaa", "/a")], "tZ");
-    expect(restoreWindow(snap, newSplitId).activeId).toBe("wsp-aaaaaa");
+    expect(restoreWindow(snap).activeId).toBe("wsp-aaaaaa");
   });
 
   it("an empty window restores empty", () => {
     const snap = snapshotWindow([], "");
-    const back = restoreWindow(snap, newSplitId);
+    const back = restoreWindow(snap);
     expect(back.workspaces).toEqual([]);
     expect(back.activeId).toBe("");
   });

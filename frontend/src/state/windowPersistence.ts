@@ -55,15 +55,12 @@ export function snapshotWindow(
 
 // Snapshot → Workspace[] (split ids are regenerated through the injected newSplitId). The caller
 // reseeds after restore.
-export function restoreWindow(
-  snap: WindowSnapshot,
-  newSplitId: () => string,
-): {
+export function restoreWindow(snap: WindowSnapshot): {
   workspaces: Workspace[];
   activeId: string;
   projections: Record<string, ProjectionSeed>;
 } {
-  const workspaces = snap.workspaces.map((p) => deserializeWorkspace(p, newSplitId));
+  const workspaces = snap.workspaces.map(deserializeWorkspace);
   const activeId = workspaces.some((t) => t.id === snap.activeId)
     ? snap.activeId
     : (workspaces[0]?.id ?? "");

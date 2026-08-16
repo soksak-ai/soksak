@@ -153,7 +153,7 @@ describe("serialize/deserialize round trip", () => {
     // omitted, which left one kind of id whose name a restore changed.
     expect(JSON.stringify(snap)).toContain("OLD-a");
     n = 100;
-    const back = deserializeSplitTree(snap, (s) => s, newId);
+    const back = deserializeSplitTree(snap, (s) => s);
     // Structure, order, sizes, and leaves identical
     expect(leavesOf(back)).toEqual(["p1", "p2", "p3"]);
     const bs = back as Extract<SplitTree<string>, { type: "split" }>;
@@ -168,7 +168,7 @@ describe("serialize/deserialize round trip", () => {
   it("the leaf converters map the payload (L→S, S→L)", () => {
     const t = split("a", "row", [0.5, 0.5], [splitLeaf(1), splitLeaf(2)]);
     const snap = serializeSplitTree(t, (v: number) => String(v));
-    const back = deserializeSplitTree(snap, (s) => Number(s), newId);
+    const back = deserializeSplitTree(snap, (s) => Number(s));
     expect(leavesOf(back)).toEqual([1, 2]);
   });
 });
