@@ -1,3 +1,6 @@
+| `coupling_gate_test.go` | the core names no plugin and no rendering engine (C1) — `frameworks/` included, with an allowlist of composition files each stating a reason |
+| `history_gate_test.go` | the core does not act on a browser's history, and writes down no surface kind |
+| plugin `manifest_gate_test.go` | a source that writes `data-native-surface` has a manifest that declares it, and the reverse |
 ---
 kind: canonical
 status: active
@@ -98,7 +101,9 @@ has watched fail is a claim, not a gate.
 
 | Gate | What it holds |
 | --- | --- |
-| `coupling_gate_test.go` | the core names no plugin and no rendering engine (C1) |
+| `coupling_gate_test.go` | the core names no plugin and no rendering engine (C1) — `frameworks/` is scanned too, with a per-file allowlist that states a reason for each |
+| `history_gate_test.go` | the core does not act on a browser's history, and writes down no surface kind |
+| plugin `manifest_gate_test.go` | a source writing `data-native-surface` has a manifest declaring it, and the reverse |
 | `prose_gate_test.go` | comments and bundle values stay out of the banned register (§6-3) |
 | `korean_gate_test.go` | Hangul stays in the bundles; the floor is 43 lines and every one accounted for |
 | `i18n_gate_test.go` | a sentence a person reads comes from a key |
@@ -128,3 +133,15 @@ Written here so it is not rediscovered (L2).
   surface.
 - **Plugin loading beyond these two plugins is untried.** The terminal and the
   browser are installed and driven; nothing has exercised a third.
+- **Two plugin types are still in the host's own signatures.** `register.go`
+  types `HostDeps.Sessions` as `terminalcmd.Sessions`, and `terminal_sink.go`
+  takes `terminal.Handle` and `terminal.InputTrace`. A second terminal plugin
+  would need a second field. Both are entered in `couplingWiring` marked DEBT
+  with the reason, so the gate refuses any *new* file in `frameworks/` that
+  names a plugin. The core owns no session contract and no trace contract for
+  them to be typed against yet.
+- **Nothing measures whether a person can see a surface.** `presence` reports
+  the window — visible, key, occluded, alpha — and `misparented` reports the
+  window a surface ended up in. Neither answers "is this rectangle in front of
+  the person right now"; a surface inside a visible, unoccluded window can still
+  be behind another surface in that window, and no reading covers that.
