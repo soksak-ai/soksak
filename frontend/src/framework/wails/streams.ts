@@ -37,8 +37,9 @@ const ID_BODY_LENGTH = 6;
  * Mints a receiver id — `stm-` plus six base32 characters, the N1 format of docs/tech/NAMING.md.
  *
  * Not a counter. A counter restarts at 1 in each window and on each reload, so two receivers take
- * one name. core/control/stream.go routes frames by this id and does not check its shape, so the
- * misrouted frames read as a receiver that produces nothing.
+ * one name, and the frames go to whichever holds it — the other reads as a receiver that produces
+ * nothing. core/control/stream.go refuses an id outside this shape as of 2026-08-16, so a
+ * malformed one is named at the boundary rather than routed.
  *
  * crypto.getRandomValues, not Math.random: a weak or seeded generator repeats, and a repeat here
  * routes one receiver's frames to another. Five bits per character spread the value evenly over

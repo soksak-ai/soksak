@@ -12,7 +12,7 @@
 //
 // [RULE] Rebuilding a label inline drops the window part, and two windows then produce the same
 // value (second window: no surface, or a surface nobody can address). Labels come from here only —
-// surfaceLabels.test.ts fails the build on an inline rebuild.
+// surfaceLabelGrammar.test.ts fails the build on an inline rebuild.
 import { currentWindowLabel } from "./webviewLabels";
 
 /** The delimiter, and the alphabets that keep it out of every field (NAMING N3).

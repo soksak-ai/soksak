@@ -78,10 +78,13 @@ const NATURAL_KEY_AXES = [
 /**
  * Prefixes of derived labels, not of issuance — not counted as violations.
  *   w = window label (`win-<uuid4>`, core-owned, kept as is, §1-1)
- *   b = webview label (`browser.<win>.<tab>`, derived from window and tab, §1-4d ②)
- * Neither issues a new identity — each only points at something that already exists.
+ * It does not issue a new identity — it points at something that already exists.
+ *
+ * A surface label was here too, under `brw`. The kind is the plugin's word as of 2026-08-16, so
+ * the core writes none down and there is no prefix of it to register; the label's own grammar is
+ * gated in `frontend/src/lib/surfaceLabelGrammar.test.ts`.
  */
-const DERIVED_LABEL_PREFIXES = new Set(["win", "brw"]);
+const DERIVED_LABEL_PREFIXES = new Set(["win"]);
 
 interface Site {
   file: string;

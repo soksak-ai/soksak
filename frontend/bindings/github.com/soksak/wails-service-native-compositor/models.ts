@@ -67,63 +67,68 @@ export class AppliedSurface {
 }
 
 /**
- * Declared is the inventory the document asked for on the last accepted commit,
- * and Applied is what the native layer reported back.
- * 
- * Both halves come from one commit. A consumer that measured drift against the
- * applied half alone would compare a value with itself and read zero every
- * time; a consumer that read the declared half from the document would be
- * reading a later frame than the one that was applied.
+ * Composition is one window's last commit read as a comparison.
  */
-export class Committed {
-    "declared": Snapshot;
-    "applied": Receipt;
+export class Composition {
+    /**
+     * Sequence is the commit these numbers came from. Zero means no inventory
+     * has ever been applied to this window, which is a different answer from an
+     * inventory that was applied and held nothing: one is a compositor that has
+     * never run, the other is a window whose document declares no surface.
+     */
+    "sequence": number;
 
     /**
-     * Failure is the backend's reason for the most recent attempt that did not
-     * land, empty when the last attempt landed. Without it a backend that
-     * refuses every new inventory keeps answering with the last healthy one,
-     * and every reading reports a healthy layer.
+     * Surfaces is one entry per surface either half holds.
      */
-    "failure": string;
+    "surfaces": Placement[];
+
+    /**
+     * Unapplied names the surfaces the document declared and the backend did
+     * not report back. A count that agreed while the screen did not is what
+     * this list prevents.
+     */
+    "unapplied": string[];
+
+    /**
+     * Failure names the most recent attempt that did not land.
+     */
+    "failure"?: string;
 
     /**
      * FailedSequence is the sequence of that attempt.
      */
-    "failedSequence": number;
+    "failedSequence"?: number;
 
-    /** Creates a new Committed instance. */
-    constructor($$source: Partial<Committed> = {}) {
-        if (!("declared" in $$source)) {
-            this["declared"] = (new Snapshot());
+    /** Creates a new Composition instance. */
+    constructor($$source: Partial<Composition> = {}) {
+        if (!("sequence" in $$source)) {
+            this["sequence"] = 0;
         }
-        if (!("applied" in $$source)) {
-            this["applied"] = (new Receipt());
+        if (!("surfaces" in $$source)) {
+            this["surfaces"] = [];
         }
-        if (!("failure" in $$source)) {
-            this["failure"] = "";
-        }
-        if (!("failedSequence" in $$source)) {
-            this["failedSequence"] = 0;
+        if (!("unapplied" in $$source)) {
+            this["unapplied"] = [];
         }
 
         Object.assign(this, $$source);
     }
 
     /**
-     * Creates a new Committed instance from a string or object.
+     * Creates a new Composition instance from a string or object.
      */
-    static createFrom($$source: any = {}): Committed {
-        const $$createField0_0 = $$createType1;
+    static createFrom($$source: any = {}): Composition {
         const $$createField1_0 = $$createType2;
+        const $$createField2_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("declared" in $$parsedSource) {
-            $$parsedSource["declared"] = $$createField0_0($$parsedSource["declared"]);
+        if ("surfaces" in $$parsedSource) {
+            $$parsedSource["surfaces"] = $$createField1_0($$parsedSource["surfaces"]);
         }
-        if ("applied" in $$parsedSource) {
-            $$parsedSource["applied"] = $$createField1_0($$parsedSource["applied"]);
+        if ("unapplied" in $$parsedSource) {
+            $$parsedSource["unapplied"] = $$createField2_0($$parsedSource["unapplied"]);
         }
-        return new Committed($$parsedSource as Partial<Committed>);
+        return new Composition($$parsedSource as Partial<Composition>);
     }
 }
 
@@ -160,6 +165,123 @@ export class Frame {
     }
 }
 
+/**
+ * Placement is one surface at one commit: both halves and their difference,
+ * read in the same instant.
+ * 
+ * Same instant is the point. Read from two places at two moments, a live resize
+ * turns a correct layer into a drift report and back again depending on which
+ * read won.
+ */
+export class Placement {
+    "id": string;
+    "kind": SurfaceKind;
+    "generation": number;
+    "layer": number;
+    "declared": Frame;
+    "declaredVisible": boolean;
+    "declaredAlpha": number;
+    "applied": Frame;
+    "appliedVisible": boolean;
+    "appliedAlpha": number;
+
+    /**
+     * Drift is the applied rectangle minus the declared one, per component.
+     * 
+     * Exact, with no tolerance. Both halves are the same float64 travelling one
+     * commit, so zero is reachable; a tolerance chosen without a measurement
+     * hides the first hundredth of a point of the next coordinate error. A
+     * caller that wants to forgive a rounding difference has the number.
+     * 
+     * Nil on an undeclared surface, rather than zero. Zero is the answer for a
+     * surface applied exactly where it was declared, and a surface no
+     * declaration asked for is the opposite of that. There is no second
+     * rectangle to subtract.
+     */
+    "drift": Frame | null;
+
+    /**
+     * Misparented reports that the surface is in a different window from the
+     * one whose document declared it, read off the native object rather than
+     * restated from the declaration. Not a difference — a window is not a
+     * distance — so it stays out of Drift.
+     */
+    "misparented": boolean;
+
+    /**
+     * Undeclared marks a surface the native layer holds that no declaration
+     * asked for. It is the defect a ledger-only check cannot find: an
+     * application walks its own records, so a surface that left the records and
+     * stayed on screen is invisible to every check the application makes.
+     */
+    "undeclared": boolean;
+
+    /** Creates a new Placement instance. */
+    constructor($$source: Partial<Placement> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("generation" in $$source)) {
+            this["generation"] = 0;
+        }
+        if (!("layer" in $$source)) {
+            this["layer"] = 0;
+        }
+        if (!("declared" in $$source)) {
+            this["declared"] = (new Frame());
+        }
+        if (!("declaredVisible" in $$source)) {
+            this["declaredVisible"] = false;
+        }
+        if (!("declaredAlpha" in $$source)) {
+            this["declaredAlpha"] = 0;
+        }
+        if (!("applied" in $$source)) {
+            this["applied"] = (new Frame());
+        }
+        if (!("appliedVisible" in $$source)) {
+            this["appliedVisible"] = false;
+        }
+        if (!("appliedAlpha" in $$source)) {
+            this["appliedAlpha"] = 0;
+        }
+        if (!("drift" in $$source)) {
+            this["drift"] = null;
+        }
+        if (!("misparented" in $$source)) {
+            this["misparented"] = false;
+        }
+        if (!("undeclared" in $$source)) {
+            this["undeclared"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Placement instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Placement {
+        const $$createField4_0 = $$createType0;
+        const $$createField7_0 = $$createType0;
+        const $$createField10_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("declared" in $$parsedSource) {
+            $$parsedSource["declared"] = $$createField4_0($$parsedSource["declared"]);
+        }
+        if ("applied" in $$parsedSource) {
+            $$parsedSource["applied"] = $$createField7_0($$parsedSource["applied"]);
+        }
+        if ("drift" in $$parsedSource) {
+            $$parsedSource["drift"] = $$createField10_0($$parsedSource["drift"]);
+        }
+        return new Placement($$parsedSource as Partial<Placement>);
+    }
+}
+
 export class Receipt {
     "sequence": number;
     "accepted": boolean;
@@ -184,7 +306,7 @@ export class Receipt {
      * Creates a new Receipt instance from a string or object.
      */
     static createFrom($$source: any = {}): Receipt {
-        const $$createField2_0 = $$createType4;
+        const $$createField2_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("surfaces" in $$parsedSource) {
             $$parsedSource["surfaces"] = $$createField2_0($$parsedSource["surfaces"]);
@@ -224,7 +346,7 @@ export class Snapshot {
      * Creates a new Snapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): Snapshot {
-        const $$createField2_0 = $$createType6;
+        const $$createField2_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("surfaces" in $$parsedSource) {
             $$parsedSource["surfaces"] = $$createField2_0($$parsedSource["surfaces"]);
@@ -278,7 +400,7 @@ export class Surface {
      */
     static createFrom($$source: any = {}): Surface {
         const $$createField3_0 = $$createType0;
-        const $$createField7_0 = $$createType7;
+        const $$createField7_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("frame" in $$parsedSource) {
             $$parsedSource["frame"] = $$createField3_0($$parsedSource["frame"]);
@@ -300,16 +422,18 @@ export type SurfaceSource = { [_ in string]?: string };
 
 // Private type creation functions
 const $$createType0 = Frame.createFrom;
-const $$createType1 = Snapshot.createFrom;
-const $$createType2 = Receipt.createFrom;
-const $$createType3 = AppliedSurface.createFrom;
-const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = Surface.createFrom;
+const $$createType1 = Placement.createFrom;
+const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = $Create.Array($Create.Any);
+const $$createType4 = $Create.Nullable($$createType0);
+const $$createType5 = AppliedSurface.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-var $$createType7 = (function $$initCreateType7(...args: any[]): any {
-    if ($$createType7 === $$initCreateType7) {
-        $$createType7 = $$createType8;
+const $$createType7 = Surface.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+var $$createType9 = (function $$initCreateType9(...args: any[]): any {
+    if ($$createType9 === $$initCreateType9) {
+        $$createType9 = $$createType10;
     }
-    return $$createType7(...args);
+    return $$createType9(...args);
 });
-const $$createType8 = $Create.Map($Create.Any, $Create.Any);
+const $$createType10 = $Create.Map($Create.Any, $Create.Any);

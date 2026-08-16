@@ -38,8 +38,8 @@ The split node is included because its identifier is stored and appears in `stat
 of `canonicalLayout`.
 
 The host issues the window name, and no other kind. A window outlives the document inside it, so
-no document can mint it; the name is the key of `window/<name>` in the snapshot store and the
-frontend's capability glob assumes `win-*`, so it is a wire fact on both sides.
+no document can mint it; the name is the key of `window/<name>` in the snapshot store, so it is a
+wire fact on both sides.
 
 Issuing it outside `ids.ts` is not licence to spell it differently. Measured 2026-08-16:
 `newWindowID` produced sixteen hex characters, so this product had two identifier formats and the
@@ -118,12 +118,14 @@ Scanning is the failure this rule exists for: `indexOf("-" + window + "-")` matc
 at whatever position it occurs, so a kind ending in a window name yields a view id taken from the
 wrong field. AGENTS 3-4 — a structure that has to be searched is a failure.
 
-Measured 2026-08-16, the running application: `browser-win-8ed56cd7d9305935-tab-2trqyu`, from a host
-started before the window body was corrected the same day (N1). The three fields are joined with
-`-`, each field contains `-`, `viewIdFromSurfaceLabel` locates the view with
-`indexOf("-" + windowLabel + "-")`, and `orphanSurfaceLabels` matches a window with
-`includes("-" + name + "-")` (`frontend/src/lib/surfaceLabels.ts`, lines 47 and 60). Neither
-decomposes the value.
+Measured 2026-08-16 on the running application, before: `surface.composition` answered
+`browser-win-8ed56cd7d9305935-tab-2trqyu`. The three fields were joined with `-` and each field
+held one, so `viewIdFromSurfaceLabel` located the view with `indexOf("-" + windowLabel + "-")` and
+`orphanSurfaceLabels` matched a window with `includes("-" + name + "-")`. Neither decomposed the
+value.
+
+After, the same command on the same window: `browser.win-8ed56cd7d9305935.tab-2trqyu`, and both
+readers split on the delimiter and index.
 
 ### Where the grammar is defined, and what the first field is
 
@@ -141,12 +143,18 @@ identifiers the second and third fields are built from, not the kind.
 
 Gates:
 
-- `history_gate_test.go` — `TestTheCoreWritesDownNoSurfaceKind` fails the build on a surface kind
-  written down under `core/`, `frameworks/` or `frontend/src`.
+- `history_gate_test.go` — `TestTheCoreWritesDownNoSurfaceKind` fails the build on the retired
+  kind `brw` under `core/`, `frameworks/` or `frontend/src`. It refuses that one word; a core
+  writing `browser` or `video` passes it (measured 2026-08-16).
 - `frontend/src/lib/surfaceLabels.test.ts` — the shape, and that a kind this core does not name
   still reads back to a view.
 - `frontend/src/lib/webviewLabels.test.ts` — no retired one- or two-letter prefix (`b-`, `w-`,
   `pv-`, `cv-`) anywhere under `src`, fixtures included.
+- `frontend/src/lib/surfaceLabelGrammar.test.ts` — the delimiter, the field alphabets, that a
+  reader splits rather than scans, and that a label is assembled nowhere but in the owner. The
+  single-source rule was gated by a search for `` `brw-${` `` exempting `webviewLabels.ts`; the
+  kind and the owning file both changed on 2026-08-16 and it stopped matching anything, so the
+  rule stood with nothing behind it.
 
 No gate judges the delimiter. Measured 2026-08-16: nothing in this repository refuses a field
 holding the delimiter, and nothing refuses a reader that scans. That gate goes in

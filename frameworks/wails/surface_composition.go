@@ -12,8 +12,14 @@ import (
 // The application declares native surfaces in the DOM and never positions them.
 // One delivery holds a complete inventory, and one receipt reports what was
 // actually applied. Both halves speak CSS points with a top-left origin, so the
-// compositing verdict is a subtraction rather than a conversion — and this file
-// is where the subtraction happens.
+// compositing verdict is a subtraction rather than a conversion.
+//
+// The subtraction is not here. The compositor holds both halves in one instant
+// and answers the difference per surface; this file takes those numbers and
+// answers what a caller wants from them — the largest difference anywhere,
+// how many surfaces are not where they were declared, and whether the window
+// has a native parent at all. It kept its own subtraction until 2026-08-16, so
+// one number had two definitions.
 //
 // The compositor is registered as a service, which makes it reachable from the
 // page and from nowhere else. A caller outside the process — an agent, a test,
@@ -76,6 +82,21 @@ type SurfacePlacement struct {
 	AppliedVisible bool
 	AppliedAlpha   float64
 
+	// Drift is the applied rectangle minus the declared one, per component, as
+	// the compositor subtracted it.
+	//
+	// Subtracted there because the compositor is what holds both halves in one
+	// instant. The core kept its own subtraction until 2026-08-16, so one number
+	// had two definitions, and the day they disagreed the drift a person read
+	// depended on which path answered.
+	//
+	// Exact, with no tolerance. Both halves are the same float64 travelling one
+	// commit, so zero is reachable; a tolerance chosen without a measurement
+	// would be a silent fallback that hides the first hundredth of a point of the
+	// next coordinate bug. A caller that wants to forgive a rounding difference
+	// has the number and can.
+	Drift SurfaceFrame
+
 	// Misparented reports that the surface is in a different window from the one
 	// whose document declared it, read off the native object rather than restated
 	// from the declaration.
@@ -91,22 +112,6 @@ type SurfacePlacement struct {
 	Undeclared bool
 }
 
-// Drift is the applied rectangle minus the declared one, per component.
-//
-// Exact, with no tolerance. Both halves are the same float64 travelling one
-// commit, so zero is reachable; a tolerance chosen without a measurement would
-// be a silent fallback that hides the first hundredth of a point of the next
-// coordinate bug. A caller that wants to forgive a rounding difference has the
-// number and can.
-func (placement SurfacePlacement) Drift() SurfaceFrame {
-	return SurfaceFrame{
-		X: placement.Applied.X - placement.Declared.X,
-		Y: placement.Applied.Y - placement.Declared.Y,
-		W: placement.Applied.W - placement.Declared.W,
-		H: placement.Applied.H - placement.Declared.H,
-	}
-}
-
 // Displaced reports that this surface is not where it was declared to be.
 //
 // Three ways: a rectangle that does not match, a window that does not match, or
@@ -114,7 +119,7 @@ func (placement SurfacePlacement) Drift() SurfaceFrame {
 // that does not exist, and answering false would make it the one thing on the
 // list that looks correct.
 func (placement SurfacePlacement) Displaced() bool {
-	return placement.Undeclared || placement.Misparented || placement.Drift() != SurfaceFrame{}
+	return placement.Undeclared || placement.Misparented || placement.Drift != SurfaceFrame{}
 }
 
 // EffectivelyHidden reports that this surface puts no light on the screen.
@@ -353,7 +358,7 @@ func compositionJudgementOf(composition Composition, parentPresent bool) composi
 			displaced++
 			continue
 		}
-		drift := placement.Drift()
+		drift := placement.Drift
 		here := largestComponent(drift)
 		if here > worst {
 			worst = here
@@ -508,7 +513,7 @@ func surfaceStatsOf(composition Composition, parentPresent bool) surfaceStats {
 			DeclaredVisible:   placement.DeclaredVisible,
 			Frame:             placement.Applied,
 			Declared:          placement.Declared,
-			Drift:             placement.Drift(),
+			Drift:             placement.Drift,
 			Displaced:         placement.Displaced(),
 			Undeclared:        placement.Undeclared,
 		}

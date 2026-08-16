@@ -47,11 +47,24 @@ func surfaceStatsPayload(t *testing.T, registry *control.Registry) map[string]an
 	return decoded
 }
 
+// placedSurface is one surface as the compositor answered it, difference and
+// all.
+//
+// The difference is stated rather than computed here. The compositor subtracts
+// it from the two halves of one commit (its composition.go), and a fixture that
+// recomputed it would prove the core agrees with a second implementation of the
+// number rather than that it reports the one it was given.
 func placedSurface(id string, declared, applied SurfaceFrame) SurfacePlacement {
 	return SurfacePlacement{
 		ID: id, Kind: "browser", Generation: 1, Layer: 10,
 		Declared: declared, DeclaredVisible: true, DeclaredAlpha: 1,
 		Applied: applied, AppliedVisible: true, AppliedAlpha: 1,
+		Drift: SurfaceFrame{
+			X: applied.X - declared.X,
+			Y: applied.Y - declared.Y,
+			W: applied.W - declared.W,
+			H: applied.H - declared.H,
+		},
 	}
 }
 
@@ -83,7 +96,7 @@ func TestTheCompositionReportsBothHalvesAndTheDifference(t *testing.T) {
 	registry := surfaceRegistry(t, Composition{
 		Sequence: 7,
 		Placements: []SurfacePlacement{
-			placedSurface("browser-1",
+			placedSurface("browser-main-tab-7k2qx3",
 				SurfaceFrame{X: 10, Y: 20, W: 300, H: 200},
 				SurfaceFrame{X: 10, Y: 26, W: 300, H: 200}),
 		},
@@ -124,7 +137,7 @@ func TestAnExactMatchIsZeroDifference(t *testing.T) {
 	frame := SurfaceFrame{X: 4, Y: 8, W: 100, H: 50}
 	registry := surfaceRegistry(t, Composition{
 		Sequence:   3,
-		Placements: []SurfacePlacement{placedSurface("browser-1", frame, frame)},
+		Placements: []SurfacePlacement{placedSurface("browser-main-tab-7k2qx3", frame, frame)},
 	}, true)
 
 	payload := surfaceStatsPayload(t, registry)
@@ -151,7 +164,7 @@ func TestTheRectangleKeysAreTheOnesThePageReads(t *testing.T) {
 	registry := surfaceRegistry(t, Composition{
 		Sequence: 1,
 		Placements: []SurfacePlacement{
-			placedSurface("browser-1", SurfaceFrame{W: 10, H: 10}, SurfaceFrame{W: 10, H: 10}),
+			placedSurface("browser-main-tab-7k2qx3", SurfaceFrame{W: 10, H: 10}, SurfaceFrame{W: 10, H: 10}),
 		},
 	}, true)
 
@@ -221,12 +234,12 @@ func TestAnApplyThatDidNotLandIsCarriedByName(t *testing.T) {
 // declaration the native layer never reported back, are different defects and
 // both carry the name of the surface.
 func TestUnmatchedHalvesAreNamed(t *testing.T) {
-	orphan := placedSurface("browser-9", SurfaceFrame{}, SurfaceFrame{X: 5, Y: 5, W: 20, H: 20})
+	orphan := placedSurface("browser-main-tab-nb6y4s", SurfaceFrame{}, SurfaceFrame{X: 5, Y: 5, W: 20, H: 20})
 	orphan.Undeclared = true
 	payload := surfaceStatsPayload(t, surfaceRegistry(t, Composition{
 		Sequence:   2,
 		Placements: []SurfacePlacement{orphan},
-		Unapplied:  []string{"browser-3"},
+		Unapplied:  []string{"browser-main-tab-2fjr7c"},
 	}, true))
 
 	row := surfaceRows(t, payload)[0]
@@ -237,8 +250,8 @@ func TestUnmatchedHalvesAreNamed(t *testing.T) {
 		t.Error("a surface with no declaration cannot match one, so it is displaced")
 	}
 	unapplied, _ := payload["unapplied"].([]any)
-	if len(unapplied) != 1 || unapplied[0] != "browser-3" {
-		t.Errorf("unapplied = %#v, want [browser-3]", payload["unapplied"])
+	if len(unapplied) != 1 || unapplied[0] != "browser-main-tab-2fjr7c" {
+		t.Errorf("unapplied = %#v, want [browser-main-tab-2fjr7c]", payload["unapplied"])
 	}
 }
 
@@ -246,13 +259,13 @@ func TestUnmatchedHalvesAreNamed(t *testing.T) {
 // the whole point of reading this is to catch the two disagreeing.
 func TestHiddenComesFromTheAppliedHalf(t *testing.T) {
 	frame := SurfaceFrame{W: 10, H: 10}
-	hidden := placedSurface("browser-1", frame, frame)
+	hidden := placedSurface("browser-main-tab-7k2qx3", frame, frame)
 	hidden.AppliedVisible = false
 
-	transparent := placedSurface("browser-2", frame, frame)
+	transparent := placedSurface("browser-main-tab-4mz6ph", frame, frame)
 	transparent.AppliedAlpha = 0
 
-	collapsed := placedSurface("browser-3", frame, SurfaceFrame{X: 4, Y: 4})
+	collapsed := placedSurface("browser-main-tab-qd53wv", frame, SurfaceFrame{X: 4, Y: 4})
 
 	registry := surfaceRegistry(t, Composition{
 		Sequence:   1,
@@ -370,7 +383,7 @@ func TestASurfaceInAnotherWindowIsNamedAndCountedDisplaced(t *testing.T) {
 	judgement := compositionJudgementOf(Composition{
 		Sequence: 4,
 		Placements: []SurfacePlacement{{
-			ID: "brw-a", Kind: "browser", Generation: 1,
+			ID: "browser-win-2trqyu-tab-hs5vkm", Kind: "browser", Generation: 1,
 			Declared:        SurfaceFrame{X: 10, Y: 10, W: 100, H: 100},
 			Applied:         SurfaceFrame{X: 10, Y: 10, W: 100, H: 100},
 			DeclaredVisible: true, AppliedVisible: true,
@@ -382,8 +395,8 @@ func TestASurfaceInAnotherWindowIsNamedAndCountedDisplaced(t *testing.T) {
 	if judgement.Worst != 0 {
 		t.Errorf("worst is %v; a window is not a distance and must not become one", judgement.Worst)
 	}
-	if len(judgement.Misparented) != 1 || judgement.Misparented[0] != "brw-a" {
-		t.Errorf("misparented is %v, not [brw-a]", judgement.Misparented)
+	if len(judgement.Misparented) != 1 || judgement.Misparented[0] != "browser-win-2trqyu-tab-hs5vkm" {
+		t.Errorf("misparented is %v, not [browser-win-2trqyu-tab-hs5vkm]", judgement.Misparented)
 	}
 	if judgement.Displaced != 1 {
 		t.Errorf("displaced is %d; a surface in the wrong window is not where it was declared", judgement.Displaced)
@@ -397,7 +410,7 @@ func TestASurfaceInItsOwnWindowIsNotNamed(t *testing.T) {
 	judgement := compositionJudgementOf(Composition{
 		Sequence: 4,
 		Placements: []SurfacePlacement{{
-			ID: "brw-a", Kind: "browser", Generation: 1,
+			ID: "browser-win-2trqyu-tab-hs5vkm", Kind: "browser", Generation: 1,
 			Declared: SurfaceFrame{X: 10, Y: 10, W: 100, H: 100},
 			Applied:  SurfaceFrame{X: 10, Y: 10, W: 100, H: 100},
 		}},

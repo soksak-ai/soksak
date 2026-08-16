@@ -35,8 +35,8 @@ func TestTheCompositionAnswersOneNumber(t *testing.T) {
 	registry := surfaceRegistry(t, Composition{
 		Sequence: 7,
 		Placements: []SurfacePlacement{
-			placedSurface("brw-a", SurfaceFrame{X: 10, Y: 20, W: 300, H: 400}, SurfaceFrame{X: 10, Y: 20, W: 300, H: 400}),
-			placedSurface("brw-b", SurfaceFrame{X: 0, Y: 0, W: 100, H: 100}, SurfaceFrame{X: 0, Y: 0, W: 100, H: 100}),
+			placedSurface("browser-main-tab-7k2qx3", SurfaceFrame{X: 10, Y: 20, W: 300, H: 400}, SurfaceFrame{X: 10, Y: 20, W: 300, H: 400}),
+			placedSurface("browser-main-tab-4mz6ph", SurfaceFrame{X: 0, Y: 0, W: 100, H: 100}, SurfaceFrame{X: 0, Y: 0, W: 100, H: 100}),
 		},
 	}, true)
 
@@ -59,15 +59,15 @@ func TestTheWorstDifferenceIsTheLargestOneAnywhere(t *testing.T) {
 	registry := surfaceRegistry(t, Composition{
 		Sequence: 3,
 		Placements: []SurfacePlacement{
-			placedSurface("brw-a", SurfaceFrame{X: 0, Y: 0, W: 100, H: 100}, SurfaceFrame{X: 1, Y: 0, W: 100, H: 100}),
-			placedSurface("brw-b", SurfaceFrame{X: 0, Y: 0, W: 100, H: 100}, SurfaceFrame{X: 0, Y: 0, W: 100, H: 88}),
-			placedSurface("brw-c", SurfaceFrame{X: 0, Y: 0, W: 100, H: 100}, SurfaceFrame{X: 0, Y: -4, W: 100, H: 100}),
+			placedSurface("browser-main-tab-7k2qx3", SurfaceFrame{X: 0, Y: 0, W: 100, H: 100}, SurfaceFrame{X: 1, Y: 0, W: 100, H: 100}),
+			placedSurface("browser-main-tab-4mz6ph", SurfaceFrame{X: 0, Y: 0, W: 100, H: 100}, SurfaceFrame{X: 0, Y: 0, W: 100, H: 88}),
+			placedSurface("browser-main-tab-qd53wv", SurfaceFrame{X: 0, Y: 0, W: 100, H: 100}, SurfaceFrame{X: 0, Y: -4, W: 100, H: 100}),
 		},
 	}, true)
 
 	payload := compositionPayload(t, registry)
 	if payload["worst"] != float64(12) {
-		t.Errorf("worst is %v; the largest difference anywhere is 12 (brw-b's height)", payload["worst"])
+		t.Errorf("worst is %v; the largest difference anywhere is 12 (the height of browser-main-tab-4mz6ph)", payload["worst"])
 	}
 	if payload["displaced"] != float64(3) {
 		t.Errorf("%v surfaces counted as displaced, not 3", payload["displaced"])
@@ -80,11 +80,11 @@ func TestASurfaceMissingFromOneHalfIsNotADifference(t *testing.T) {
 	// number for something that has none, and folding it into 0 would call a
 	// pane with no surface correct.
 	registry := surfaceRegistry(t, Composition{
-		Sequence:   4,
-		Unapplied:  []string{"brw-never"},
+		Sequence:  4,
+		Unapplied: []string{"browser-main-tab-2fjr7c"},
 		Placements: []SurfacePlacement{
-			placedSurface("brw-a", SurfaceFrame{X: 0, Y: 0, W: 10, H: 10}, SurfaceFrame{X: 0, Y: 0, W: 10, H: 10}),
-			{ID: "brw-ghost", Applied: SurfaceFrame{X: 5, Y: 5, W: 20, H: 20}, Undeclared: true},
+			placedSurface("browser-main-tab-7k2qx3", SurfaceFrame{X: 0, Y: 0, W: 10, H: 10}, SurfaceFrame{X: 0, Y: 0, W: 10, H: 10}),
+			{ID: "browser-main-tab-cw3lpd", Applied: SurfaceFrame{X: 5, Y: 5, W: 20, H: 20}, Undeclared: true},
 		},
 	}, true)
 
@@ -93,11 +93,11 @@ func TestASurfaceMissingFromOneHalfIsNotADifference(t *testing.T) {
 		t.Errorf("worst is %v; the one surface with both halves sits on its rectangle", payload["worst"])
 	}
 	unapplied, _ := payload["unapplied"].([]any)
-	if len(unapplied) != 1 || unapplied[0] != "brw-never" {
+	if len(unapplied) != 1 || unapplied[0] != "browser-main-tab-2fjr7c" {
 		t.Errorf("unapplied is %v, not the one surface that was declared and never applied", payload["unapplied"])
 	}
 	undeclared, _ := payload["undeclared"].([]any)
-	if len(undeclared) != 1 || undeclared[0] != "brw-ghost" {
+	if len(undeclared) != 1 || undeclared[0] != "browser-main-tab-cw3lpd" {
 		t.Errorf("undeclared is %v, not the one surface on screen that nobody asked for", payload["undeclared"])
 	}
 }
@@ -112,7 +112,7 @@ func TestAFailedApplyIsCarriedIntoTheJudgement(t *testing.T) {
 		Failure:        "the native parent went away",
 		FailedSequence: 10,
 		Placements: []SurfacePlacement{
-			placedSurface("brw-a", SurfaceFrame{X: 0, Y: 0, W: 10, H: 10}, SurfaceFrame{X: 0, Y: 0, W: 10, H: 10}),
+			placedSurface("browser-main-tab-7k2qx3", SurfaceFrame{X: 0, Y: 0, W: 10, H: 10}, SurfaceFrame{X: 0, Y: 0, W: 10, H: 10}),
 		},
 	}, true)
 

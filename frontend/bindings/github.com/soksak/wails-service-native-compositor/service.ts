@@ -40,9 +40,13 @@ export function Deliver(id: string, message: { [_ in string]?: any }): $Cancella
 }
 
 /**
- * Latest answers both halves of one window's last commit.
+ * Latest answers one window's last commit as a composition.
+ * 
+ * Per window. One window's inventory is no answer about another's: a
+ * window-blind reading answers two windows with the same single surface at the
+ * same rectangle and zero drift while only one of them holds it.
  */
-export function Latest(window: string): $CancellablePromise<$models.Committed> {
+export function Latest(window: string): $CancellablePromise<$models.Composition> {
     return $Call.ByID(2745712171, window).then(($result: any) => {
         return $$createType2($result);
     });
@@ -72,5 +76,5 @@ export function Windows(): $CancellablePromise<string[]> {
 // Private type creation functions
 const $$createType0 = $models.Receipt.createFrom;
 const $$createType1 = $Create.Map($Create.Any, $Create.Any);
-const $$createType2 = $models.Committed.createFrom;
+const $$createType2 = $models.Composition.createFrom;
 const $$createType3 = $Create.Array($Create.Any);

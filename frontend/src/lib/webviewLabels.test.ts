@@ -2,10 +2,16 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-// [rule enforcement] Browser webview labels derive only from the single source of truth in
-// webviewLabels.ts (browserLabel). Scattered inline `brw-${...}` definitions drop the window
-// namespace, so labels collide across multiple windows (second-window browser not created, zombies).
-// This test blocks that regression at build time — same track as the MW1 and capability guards.
+// A retired prefix is in neither source nor fixture.
+//
+// One and two character prefixes do not separate the kinds in this product (NAMING N1), and a
+// fixture holding one exercises a shape no issuer produces.
+//
+// The single-source rule was here too, as a search for an inline `` `brw-${…}` ``. Both the kind
+// and the owning file changed on 2026-08-16 — the grammar is lib/surfaceLabels.ts and the kind is
+// the plugin's word — so that search matched nothing and the rule stood with nothing behind it. It
+// moved to lib/surfaceLabelGrammar.test.ts, which refuses an assembly by its shape rather than by
+// one kind's name.
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -17,21 +23,6 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 describe("webview label — one single truth", () => {
-  it("no inline `brw-${...}` browser label is assembled outside webviewLabels", () => {
-    const offenders: string[] = [];
-    for (const f of walk("src")) {
-      if (f.endsWith("webviewLabels.ts")) continue; // the single truth itself
-      if (f.endsWith("webviewLabels.test.ts")) continue; // mentions this pattern as a string
-      const src = readFileSync(f, "utf8");
-      if (/`brw-\$\{/.test(src)) offenders.push(f);
-    }
-    expect(offenders).toEqual([]);
-  });
-
-  // **A retired prefix never comes back.** A label is an id too, and an id prefix is three characters
-  // (state/ids.ts). `b-`, `w-`, and `pv-` are the previous generation; one leftover is enough for the
-  // next person who reads that string to copy it as this repository's grammar. That is why fixtures
-  // are counted too.
   it("a one or two character label prefix is in neither source nor fixture", () => {
     const retired = /["'`](b|w|pv|cv)-[a-z0-9]/;
     const offenders: string[] = [];

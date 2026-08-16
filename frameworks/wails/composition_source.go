@@ -4,12 +4,17 @@ import (
 	compositor "github.com/soksak/wails-service-native-compositor"
 )
 
-// CompositorSource reads the compositor's last commit as a Composition.
+// CompositorSource renames the compositor's composition into this package's.
 //
 // The compositor is a separate module with its own release, so the surface
 // commands declare what they need (CompositionSource) and this translates. A
 // rule that named the compositor could only be checked by building the whole
 // application.
+//
+// Translation, and nothing else. Pairing the two halves of one commit, naming
+// the surfaces with only one half, and the difference between the halves are
+// the compositor's, next to the commit they are taken from — a caller of the
+// service reads the composition without this package.
 type CompositorSource struct {
 	service *compositor.Service
 }
@@ -19,74 +24,56 @@ func NewCompositorSource(service *compositor.Service) *CompositorSource {
 	return &CompositorSource{service: service}
 }
 
-// Latest pairs each declared surface with what the native layer reported.
-//
-// Both halves come from one commit. Reading the declared half from the document
-// instead would compare a later frame against an earlier application, and the
-// difference would be attributed to the native layer.
-//
-// A declared surface the native layer did not report is named in Unapplied
-// rather than dropped: a count that agreed while the screen did not is what
-// that list exists to prevent.
+// Latest renames one window's composition, field for field.
 func (source *CompositorSource) Latest(window string) Composition {
 	if source == nil || source.service == nil {
 		return Composition{}
 	}
-	committed := source.service.Latest(window)
-
-	applied := make(map[string]compositor.AppliedSurface, len(committed.Applied.Surfaces))
-	for _, surface := range committed.Applied.Surfaces {
-		applied[surface.ID] = surface
-	}
+	composed := source.service.Latest(window)
 
 	composition := Composition{
-		Sequence:       committed.Applied.Sequence,
-		Failure:        committed.Failure,
-		FailedSequence: committed.FailedSequence,
+		Sequence:       composed.Sequence,
+		Unapplied:      composed.Unapplied,
+		Failure:        composed.Failure,
+		FailedSequence: composed.FailedSequence,
 	}
-	declared := make(map[string]bool, len(committed.Declared.Surfaces))
-	for _, surface := range committed.Declared.Surfaces {
-		declared[surface.ID] = true
-		reported, landed := applied[surface.ID]
-		if !landed {
-			composition.Unapplied = append(composition.Unapplied, surface.ID)
-			continue
-		}
+	for _, placement := range composed.Surfaces {
 		composition.Placements = append(composition.Placements, SurfacePlacement{
-			ID:              surface.ID,
-			Kind:            string(surface.Kind),
-			Generation:      surface.Generation,
-			Layer:           surface.Layer,
-			Declared:        compositorFrame(surface.Frame),
-			DeclaredVisible: surface.Visible,
-			DeclaredAlpha:   surface.Alpha,
-			Applied:         compositorFrame(reported.Frame),
-			AppliedVisible:  reported.Visible,
-			AppliedAlpha:    reported.Alpha,
-			Misparented:     reported.Misparented,
-		})
-	}
-	// A surface the native layer holds that the document never asked for. It is
-	// the defect a ledger-only check cannot see: the application walks its own
-	// records, so a surface that left the records and stayed on screen is
-	// invisible to every check the application makes.
-	for _, surface := range committed.Applied.Surfaces {
-		if declared[surface.ID] {
-			continue
-		}
-		composition.Placements = append(composition.Placements, SurfacePlacement{
-			ID:             surface.ID,
-			Generation:     surface.Generation,
-			Layer:          surface.Layer,
-			Applied:        compositorFrame(surface.Frame),
-			AppliedVisible: surface.Visible,
-			AppliedAlpha:   surface.Alpha,
-			Undeclared:     true,
+			ID:              placement.ID,
+			Kind:            string(placement.Kind),
+			Generation:      placement.Generation,
+			Layer:           placement.Layer,
+			Declared:        compositorFrame(placement.Declared),
+			DeclaredVisible: placement.DeclaredVisible,
+			DeclaredAlpha:   placement.DeclaredAlpha,
+			Applied:         compositorFrame(placement.Applied),
+			AppliedVisible:  placement.AppliedVisible,
+			AppliedAlpha:    placement.AppliedAlpha,
+			Misparented:     placement.Misparented,
+			Undeclared:      placement.Undeclared,
+			// Read, not recomputed. The service subtracted it from the two
+			// halves of one commit; subtracting again here would be a second
+			// definition of one number.
+			Drift: driftOf(placement.Drift),
 		})
 	}
 	return composition
 }
 
+// compositorFrame renames one rectangle. The compositor spells the two sides
+// width and height; the page reads w and h.
 func compositorFrame(frame compositor.Frame) SurfaceFrame {
 	return SurfaceFrame{X: frame.X, Y: frame.Y, W: frame.Width, H: frame.Height}
+}
+
+// driftOf is the difference the compositor answered, in the page's spelling.
+//
+// Nil where the surface has only one half — an undeclared surface has no
+// declaration to subtract from, and a zero rectangle there would read as "in
+// exactly the right place" for a surface nobody asked for.
+func driftOf(drift *compositor.Frame) SurfaceFrame {
+	if drift == nil {
+		return SurfaceFrame{}
+	}
+	return compositorFrame(*drift)
 }

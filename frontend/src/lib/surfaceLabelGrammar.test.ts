@@ -16,8 +16,10 @@
 //
 // This is the gate NAMING.md N3 states must exist, refusing the three things it
 // names there.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+
+const SRC = join(__dirname, "..");
 import { describe, expect, it } from "vitest";
 
 import {
@@ -96,4 +98,52 @@ it("locates a field by splitting, never by scanning", () => {
     expect(source, `surfaceLabels.ts uses ${scan} — a label is split, not searched`)
       .not.toContain(scan);
   }
+});
+
+// The grammar is assembled in one place.
+//
+// NAMING N3: rebuilt anywhere else the window field is dropped, two windows
+// produce one value, and the second window addresses the first window's
+// surface. The gate that held this rule searched for `` `brw-${` `` and exempted
+// webviewLabels.ts — both the kind and the owning file changed on 2026-08-16, so
+// it stopped matching anything and the rule stood with nothing behind it.
+//
+// A rebuild is a value that puts a window name and a view id together. The
+// delimiter alone is not the mark: `${group}.${verb}` is a command name and
+// `${base}.${ext}` is a filename, and a gate that fired on those would be turned
+// off within a day. What no other value does is name both halves of a label's
+// identity.
+it("assembles a label nowhere but in surfaceLabels.ts", () => {
+  const OWNER = "lib/surfaceLabels.ts";
+  const SELF = "lib/surfaceLabelGrammar.test.ts";
+
+  const WINDOW = /window(?:Label|Name)?\b|currentWindowLabel|["'`]win-/i;
+  const VIEW = /\bview(?:Id)?\b|\btabId\b/i;
+  const JOINED = /\$\{[^}]*\}\.\$\{|\.join\(\s*["'`]\.["'`]\s*\)/;
+
+  const offenders: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(path);
+        continue;
+      }
+      if (!/\.tsx?$/.test(entry.name)) continue;
+      const rel = path.slice(SRC.length + 1);
+      // The assembler itself, and this gate, which writes the shapes down in
+      // order to refuse them.
+      if (rel === OWNER || rel === SELF) continue;
+      readFileSync(path, "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          if (JOINED.test(line) && WINDOW.test(line) && VIEW.test(line)) {
+            offenders.push(`${rel}:${index + 1}`);
+          }
+        });
+    }
+  };
+  walk(SRC);
+
+  expect(offenders, "a label is obtained from surfaceLabels.ts, never rebuilt").toEqual([]);
 });

@@ -11,12 +11,12 @@ import { describe, expect, it } from "vitest";
 import { collectWebviewLabels, gateAfterConsume, type OwnsSurface } from "./webviewGc";
 import { splitLeaf } from "../state/splitTree";
 import type { Workspace, Tab, Pane, Space } from "../state/sessions";
+import { surfaceLabelIn } from "./surfaceLabels";
 
 // Test label double: independent of the window namespace (currentWindowLabel) — viewId used as-is
 // for b-<id>. Built by string concatenation, not an inline template (the single-truth guard blocks
 // only inline templates — this is an injected test double, not a redefinition of the real label scheme).
-// The grammar the product issues (NAMING N3): kind, window, view, split by ".".
-const labelOf = (viewId: string) => ["browser", "win-main", viewId].join(".");
+const labelOf = (viewId: string) => surfaceLabelIn("browser", "win-main", viewId);
 
 // Declaration double — the exact shape of manifest contributes.views[].nativeSurface:
 // pluginId → (view id within the plugin → nativeSurface). The real runtime predicate derives from the usePlugins manifest.

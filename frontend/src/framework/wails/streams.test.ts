@@ -142,21 +142,31 @@ describe("the receiver id follows N1", () => {
   });
 
   it("does not restart after a reload — a reloaded window would name a new receiver the old name", async () => {
-    // A counter reseeds at 1 with the module, so the first receiver after a reload takes the name
-    // the first receiver before it had, while the backend still routes frames to the old one.
-    const before = createWailsStream<unknown>();
-    const first = idOf(before);
-    before.close();
-
+    // Two fresh module instances, each asked for its first receiver. A counter
+    // reseeds with the module, so both answer the same name while the backend
+    // still routes frames to the receiver of the first instance.
+    //
+    // Compared at the same position on purpose. Taking one id from this
+    // already-warm module and one from a reloaded instance compares a late
+    // counter value against an early one, and those differ under a counter too —
+    // the assertion would pass against the defect it exists to catch.
     const restore = handlers.get(STREAM_EVENT);
-    vi.resetModules();
     try {
-      const reloaded = await import("./streams");
-      const after = reloaded.createWailsStream<unknown>();
-      const second = idOf(after);
-      after.close();
-      expect(second).not.toBe(first);
-      expect(second).toMatch(RECEIVER_ID);
+      const firstOfInstance = async () => {
+        vi.resetModules();
+        const reloaded = await import("./streams");
+        const receiver = reloaded.createWailsStream<unknown>();
+        const id = idOf(receiver);
+        receiver.close();
+        return id;
+      };
+
+      const before = await firstOfInstance();
+      const after = await firstOfInstance();
+
+      expect(before).toMatch(RECEIVER_ID);
+      expect(after).toMatch(RECEIVER_ID);
+      expect(after).not.toBe(before);
     } finally {
       if (restore) handlers.set(STREAM_EVENT, restore);
     }
