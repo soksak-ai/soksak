@@ -31,6 +31,19 @@ Capture uses this process's own window content, so it needs no screen-recording 
 raise or focus a window, and works while the window is occluded. A capture that steals focus changes
 the thing it is measuring.
 
+## E3a. The application stays running, because a person is watching it
+
+E3 keeps a capture from taking focus. The same reason forbids more than that: the window on screen is
+someone's working environment, and observing it must not disturb what is being observed.
+
+Quitting the application is the largest form of that disturbance, and it was done about fifteen times
+on 2026-08-16 — before every rebuild, before `task verify`, and after a check, left closed. Two of
+the three reasons were wrong: a plugin change needs `plugin.reload`, not a restart, and `verify`
+collides with a stray instance rarely enough to handle when it happens rather than to pre-empt.
+
+A core rebuild is the one that needs a restart, because the running process holds the old image. So:
+restart for that, and **start it again when the check is done**. Never leave it closed.
+
 ## E4. Where evidence is kept
 
 Under `evidence/` in the workspace, outside the application repository, so generated images never
