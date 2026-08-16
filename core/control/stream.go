@@ -4,9 +4,21 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 
 	"github.com/soksak/soksak-core/core/i18n"
 )
+
+// streamID is the shape of a receiver id — docs/tech/NAMING.md N1: three
+// letters, a dash, and six characters of RFC 4648 lowercase base32.
+//
+// Checked where the id becomes a routing decision. It was accepted unread until
+// 2026-08-16, and the frontend minted "s-1" — one letter and a counter — so two
+// windows produced the same value and a reload produced it again for a
+// different receiver. Frames then went to whichever receiver held the name, and
+// the symptom is silence at the one that should have had them rather than an
+// error anywhere.
+var streamID = regexp.MustCompile("^[a-z]{3}-[a-z2-7]{6}$")
 
 // A stream is a receiver the caller creates and passes as a command argument.
 //
@@ -69,6 +81,13 @@ func StreamArg(args Args, name string) (string, error) {
 	}
 	if reference.ID == "" {
 		return "", i18n.Errorf("control.stream.noID", map[string]string{"name": name, "key": streamKey})
+	}
+	// The id is in the refusal. A caller holding several receivers cannot act on
+	// a message that does not name which of them is malformed.
+	if !streamID.MatchString(reference.ID) {
+		return "", fmt.Errorf(
+			"stream receiver %q is not an identifier: three letters, a dash, and six characters of a-z2-7",
+			reference.ID)
 	}
 	return reference.ID, nil
 }

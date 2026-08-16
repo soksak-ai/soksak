@@ -21,6 +21,13 @@ vi.mock("@wailsio/runtime", () => ({
 
 import { STREAM_EVENT, createWailsStream, openStreamCount } from "./streams";
 
+/** N1 identifier format — three letters, then six RFC 4648 lowercase base32 characters. */
+const RECEIVER_ID = /^stm-[a-z2-7]{6}$/;
+/** RFC 4648 lowercase base32 — the alphabet the body is drawn from. */
+const ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+/** Receivers minted per statistical test. */
+const COUNT = 256;
+
 function deliver(stream: string, frame: unknown): void {
   handlers.get(STREAM_EVENT)?.({ data: { stream, frame } });
 }
@@ -32,7 +39,7 @@ function idOf(stream: unknown): string {
 describe("a stream receiver", () => {
   it("serialises to the id the backend addresses frames to", () => {
     const stream = createWailsStream<unknown>();
-    expect(idOf(stream)).toMatch(/^s-\d+$/);
+    expect(idOf(stream)).toMatch(RECEIVER_ID);
   });
 
   it("receives frames sent to its own id and no other's", () => {
@@ -43,7 +50,7 @@ describe("a stream receiver", () => {
     other.onmessage = () => received.push("other");
 
     deliver(idOf(mine), { value: 1 });
-    deliver("s-nobody", { value: 2 });
+    deliver("stm-nobody", { value: 2 });
 
     expect(received).toEqual([{ value: 1 }]);
   });
@@ -92,5 +99,66 @@ describe("a stream receiver", () => {
     createWailsStream<unknown>();
     createWailsStream<unknown>();
     expect(handlers.size).toBeLessThanOrEqual(1);
+  });
+});
+
+// N1 (docs/tech/NAMING.md): `<three letters>-<six base32 characters>`, and an identifier is not a
+// counter. The Go router (core/control/stream.go) routes frames by this id and does not check its
+// shape, so two receivers under one name deliver one receiver's frames to the other and the loss
+// reads as a backend that produces nothing.
+describe("the receiver id follows N1", () => {
+  it("has a three-letter prefix and a six-character base32 body", () => {
+    const ids = Array.from({ length: 32 }, () => {
+      const stream = createWailsStream<unknown>();
+      const id = idOf(stream);
+      stream.close();
+      return id;
+    });
+    expect(ids.filter((id) => !RECEIVER_ID.test(id))).toEqual([]);
+  });
+
+  it("mints 256 receivers without a repeat", () => {
+    // 32^6 values, so 256 ids collide with probability 256*255/2 / 32^6 = 3e-5. A larger count
+    // raises that bound into flake territory without testing anything more.
+    const ids = new Set<string>();
+    for (let index = 0; index < COUNT; index++) {
+      const stream = createWailsStream<unknown>();
+      ids.add(idOf(stream));
+      stream.close();
+    }
+    expect(ids.size).toBe(COUNT);
+  });
+
+  it("uses all 32 letters of the base32 alphabet — a narrower body is a narrower value space", () => {
+    // 256 ids give 1536 body characters. One letter absent from a uniform draw has probability
+    // (31/32)^1536, about 1e-21, so a missing letter is a biased generator, not a run of luck.
+    const seen = new Set<string>();
+    for (let index = 0; index < COUNT; index++) {
+      const stream = createWailsStream<unknown>();
+      for (const character of idOf(stream).slice(4)) seen.add(character);
+      stream.close();
+    }
+    expect([...ALPHABET].filter((letter) => !seen.has(letter))).toEqual([]);
+  });
+
+  it("does not restart after a reload — a reloaded window would name a new receiver the old name", async () => {
+    // A counter reseeds at 1 with the module, so the first receiver after a reload takes the name
+    // the first receiver before it had, while the backend still routes frames to the old one.
+    const before = createWailsStream<unknown>();
+    const first = idOf(before);
+    before.close();
+
+    const restore = handlers.get(STREAM_EVENT);
+    vi.resetModules();
+    try {
+      const reloaded = await import("./streams");
+      const after = reloaded.createWailsStream<unknown>();
+      const second = idOf(after);
+      after.close();
+      expect(second).not.toBe(first);
+      expect(second).toMatch(RECEIVER_ID);
+    } finally {
+      if (restore) handlers.set(STREAM_EVENT, restore);
+    }
   });
 });

@@ -26,8 +26,31 @@ interface StreamFrame {
 }
 
 const receivers = new Map<string, (frame: unknown) => void>();
-let sequence = 0;
 let subscribed = false;
+
+/** RFC 4648 lowercase base32 (N1). The alphabet has no 0 or 1, so no body character is confused
+ *  with o or l. */
+const ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+const ID_BODY_LENGTH = 6;
+
+/**
+ * Mints a receiver id — `stm-` plus six base32 characters, the N1 format of docs/tech/NAMING.md.
+ *
+ * Not a counter. A counter restarts at 1 in each window and on each reload, so two receivers take
+ * one name. core/control/stream.go routes frames by this id and does not check its shape, so the
+ * misrouted frames read as a receiver that produces nothing.
+ *
+ * crypto.getRandomValues, not Math.random: a weak or seeded generator repeats, and a repeat here
+ * routes one receiver's frames to another. Five bits per character spread the value evenly over
+ * all 32 letters of the alphabet.
+ */
+function mintId(): string {
+  const buffer = new Uint8Array(ID_BODY_LENGTH);
+  globalThis.crypto.getRandomValues(buffer);
+  let body = "";
+  for (const byte of buffer) body += ID_ALPHABET[byte & 31];
+  return `stm-${body}`;
+}
 
 function bytesOf(value: unknown): ArrayBuffer | null {
   const encoded = (value as StreamBytes | null)?.bytes;
@@ -68,8 +91,7 @@ function subscribe(): void {
  */
 export function createWailsStream<T>(): Stream<T> & { close(): void } {
   subscribe();
-  sequence += 1;
-  const id = `s-${sequence}`;
+  const id = mintId();
   const stream = {
     onmessage: (() => {}) as (message: T) => void,
     toJSON: () => ({ __stream: id }),

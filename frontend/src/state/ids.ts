@@ -30,14 +30,24 @@ export const ID_PREFIX = {
   // That was not true of canonicalLayout.
   split: "spl-",
   shellSession: "shl-",
+  // Issued by frontend/src/framework/wails/streams.ts, not by issueId. A stream
+  // receiver is minted where the frames arrive, and it is listed here so one
+  // table covers every prefix and no two kinds can take the same one.
+  streamReceiver: "stm-",
   // Issued by the host, not here. `WINDOW_ID_RE` below is its format.
   window: "win-",
 } as const;
 
 export type IdKind = keyof typeof ID_PREFIX;
 
-/** The kinds this module issues. The window is issued by the host. */
-export type IssuedKind = Exclude<IdKind, "window">;
+/** The kinds this module issues.
+ *
+ *  Two are minted elsewhere and are excluded by name rather than by omission
+ *  from the table: the window by the host, and the stream receiver where the
+ *  frames arrive (framework/wails/streams.ts). Leaving them out of ID_PREFIX
+ *  instead would break the one promise that table makes — that it covers every
+ *  prefix, so no two kinds can take the same one. */
+export type IssuedKind = Exclude<IdKind, "window" | "streamReceiver">;
 
 /** Axes that keep natural keys. Issuing a prefixed id for one fails the idScope gate. */
 export const NATURAL_KEY_AXES = [

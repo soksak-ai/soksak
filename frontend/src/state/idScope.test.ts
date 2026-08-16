@@ -52,6 +52,7 @@ const IN_SCOPE: Record<string, string> = {
   tab: "tab-",
   split: "spl-",
   shellSession: "shl-",
+  streamReceiver: "stm-",
   window: "win-",
 };
 
