@@ -8,7 +8,7 @@ import {
 } from "../state/sessions";
 import { useAddTabIntent } from "../state/addTabIntent";
 import { useCloseConfirm } from "../state/closeConfirm";
-import { getRegisteredView } from "../plugins/viewRegistry";
+import { getRegisteredView, useViewRegistry } from "../plugins/viewRegistry";
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { Icon } from "../ui/icons/Icon";
 import { tabIconOf } from "../lib/tabIcon";
@@ -65,6 +65,11 @@ export const ViewTabs = memo(function ViewTabs({
   const t = useT();
   const requestCloseView = useCloseConfirm((s) => s.requestCloseView);
   const hasPrograms = useProgramRegistry((s) => s.order.length > 0);
+  // The icon comes from the view registry, which is read outside a selector in renderTabIcon. A pane
+  // that rendered before its plugin registered kept the fallback glyph and nothing told it otherwise
+  // — measured on the running build 2026-08-16, two panes of one view drawing two glyphs while
+  // `pane.list` answered `manifest` for both. `version` is the registry's rebuild signal.
+  useViewRegistry((s) => s.version);
   const addBtnRef = useRef<HTMLButtonElement>(null);
   // The menu opens under the + button, wherever the request came from — the button itself, or the
   // shortcut, which arrives through addTabIntent because it fires at the window.
