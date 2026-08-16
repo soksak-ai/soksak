@@ -11,6 +11,7 @@
 import { Events } from "@wailsio/runtime";
 
 import type { Stream } from "../contract";
+import { ID_PREFIX, randomBody } from "../../state/ids";
 
 /** The event the backend puts frames on. Same string as control.StreamEvent on the Go side. */
 export const STREAM_EVENT = "stream";
@@ -28,29 +29,19 @@ interface StreamFrame {
 const receivers = new Map<string, (frame: unknown) => void>();
 let subscribed = false;
 
-/** RFC 4648 lowercase base32 (N1). The alphabet has no 0 or 1, so no body character is confused
- *  with o or l. */
-const ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
-const ID_BODY_LENGTH = 6;
-
 /**
- * Mints a receiver id — `stm-` plus six base32 characters, the N1 format of docs/tech/NAMING.md.
+ * Mints a receiver id — the stream receiver prefix and an N1 body.
  *
  * Not a counter. A counter restarts at 1 in each window and on each reload, so two receivers take
  * one name, and the frames go to whichever holds it — the other reads as a receiver that produces
  * nothing. core/control/stream.go refuses an id outside this shape as of 2026-08-16, so a
  * malformed one is named at the boundary rather than routed.
  *
- * crypto.getRandomValues, not Math.random: a weak or seeded generator repeats, and a repeat here
- * routes one receiver's frames to another. Five bits per character spread the value evenly over
- * all 32 letters of the alphabet.
+ * The body comes from the issuer rather than from a copy here. Two generators are two definitions
+ * of one format, and they agree until one is edited.
  */
 function mintId(): string {
-  const buffer = new Uint8Array(ID_BODY_LENGTH);
-  globalThis.crypto.getRandomValues(buffer);
-  let body = "";
-  for (const byte of buffer) body += ID_ALPHABET[byte & 31];
-  return `stm-${body}`;
+  return `${ID_PREFIX.streamReceiver}${randomBody()}`;
 }
 
 function bytesOf(value: unknown): ArrayBuffer | null {

@@ -159,7 +159,7 @@ describe("id scope — a prefixed id is used only for layout entities and shell 
     });
   });
 
-  it("the issuer's prefix table has five layout entities and one shell session — the window is not in it", () => {
+  it("the declared prefix table is the one the gate judges against", () => {
     expect(declaredPrefixTable()).toEqual(IN_SCOPE);
   });
 

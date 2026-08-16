@@ -22,10 +22,12 @@
 // The rule stands without a registry or a window, so the app is not launched. Issued values are
 // read through newIds() (a non-destructive preview — exactly the next value to be issued), and the
 // shape of the issuers is counted by reading the source (the commandMessages.test approach).
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { newIds } from "./sessions";
+
+const SRC_ROOT = join(__dirname, "..");
 
 /** Entity id format — a three-character prefix plus 6 base32 (RFC4648 lowercase) characters. */
 const ENTITY_ID = /^(wsp|spc|pan|tab|spl|shl)-[a-z2-7]{6}$/;
@@ -97,4 +99,41 @@ describe("internal nodes of the layout tree take a prefix too", () => {
   it("two issues give two different values — counting does not restart at 1 per window", () => {
     expect(newIds().split).not.toBe(newIds().split);
   });
+});
+
+// The N1 body is generated in one place.
+//
+// docs/tech/NAMING.md N1 fixes one format for every identifier in this product.
+// A second generator is a second definition of it: the two agree until one is
+// edited, and the day they differ half the product's identifiers change shape
+// with nothing reporting it.
+//
+// Measured 2026-08-16: frontend/src/framework/wails/streams.ts held its own copy
+// — the same 32-letter alphabet, the same length, the same getRandomValues —
+// and idScope.test.ts scans src/state and src/commands only, so that copy was
+// under no gate at all.
+it("generates the identifier body nowhere but here", () => {
+  const OWNER = "state/ids.ts";
+  const SELF = "state/ids.test.ts";
+  // The alphabet is the mark. It cannot be written by accident and it has no
+  // other use: a file holding it is generating an N1 body.
+  const N1_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+
+  const offenders: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(path);
+        continue;
+      }
+      if (!/\.tsx?$/.test(entry.name)) continue;
+      const rel = path.slice(SRC_ROOT.length + 1);
+      if (rel === OWNER || rel === SELF) continue;
+      if (readFileSync(path, "utf8").includes(N1_ALPHABET)) offenders.push(rel);
+    }
+  };
+  walk(SRC_ROOT);
+
+  expect(offenders, "an identifier body comes from state/ids.ts").toEqual([]);
 });

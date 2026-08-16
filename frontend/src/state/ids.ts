@@ -69,10 +69,17 @@ export const NATURAL_KEY_AXES = [
 // confused with o or l. Six characters is 32^6, about 10^9. At this product's
 // scale (tens of entities per window) a collision is not expected, and one
 // resolves as `AMBIGUOUS` with candidates rather than as a wrong answer.
-const ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+export const ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 const LEN = 6;
 
-function randomBody(): string {
+/** The body of an N1 identifier: six characters of RFC 4648 lowercase base32.
+ *
+ *  Exported because a kind minted outside `issueId` — the window by the host, the stream receiver
+ *  where the frames arrive — still takes this body, and a second generator is a second definition
+ *  of the format. Measured 2026-08-16: framework/wails/streams.ts held its own copy, with the same
+ *  alphabet and length, under no gate at all (idScope scans src/state and src/commands only). The
+ *  two agreed until one was edited. */
+export function randomBody(): string {
   let body = "";
   // crypto.getRandomValues exists in the renderer and in node (tests).
   // Math.random is not used.
@@ -110,9 +117,12 @@ export function issueId(kind: IssuedKind): string {
  *  resolution. */
 export const ID_RE = /^(pjt|spc|pan|tab|spl|shl)-[a-z2-7]{6}$/;
 
-/** Format of a workspace window name. The body is host-issued hex rather than
- *  base32, and the reserved orchestrator name `main` is outside it. */
-export const WINDOW_ID_RE = /^win-[0-9a-f]{16}$/;
+/** Format of a workspace window name.
+ *
+ *  N1 like every other identifier. It described sixteen hex characters until 2026-08-16, when the
+ *  host stopped issuing that — an expression that no longer matches what is issued refuses every
+ *  real name, and no source outside this file read it, so nothing reported the drift. */
+export const WINDOW_ID_RE = /^win-[a-z2-7]{6}$/;
 
 /** Reads the kind from the prefix. null for anything outside the format. */
 export function kindOf(id: string): IdKind | null {

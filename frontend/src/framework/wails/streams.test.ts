@@ -24,7 +24,9 @@ import { STREAM_EVENT, createWailsStream, openStreamCount } from "./streams";
 /** N1 identifier format — three letters, then six RFC 4648 lowercase base32 characters. */
 const RECEIVER_ID = /^stm-[a-z2-7]{6}$/;
 /** RFC 4648 lowercase base32 — the alphabet the body is drawn from. */
-const ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+// The alphabet itself, not a copy: a coverage check against a second spelling would pass while
+// the issuer used a different one.
+import { ALPHABET } from "../../state/ids";
 /** Receivers minted per statistical test. */
 const COUNT = 256;
 
