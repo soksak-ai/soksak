@@ -243,10 +243,20 @@ the boundary, and the call gate checks that one thing.
 A sidebar slot named a contract; it names a plugin and a view. A program had `viewContract` beside
 `viewPlugin` — two ways to say one thing — and keeps `viewPlugin`.
 
-**Seven names for the core's own format.** `soksak-spec-release@0.0.1`, `-registry@`, one per unit
-kind, and so on: all defined in one file, all moving together at `0.0.1`, each announcing in its own
-value which document it was while the field's place already said so. One `CORE_SPEC` now, and a
-manifest says `"spec": "0.0.1"`.
+**Seven names for the core's own format — and six of them were not the core's.** `soksak-spec-release
+@0.0.1`, `-registry@`, one per unit kind: all defined in one file, all moving together at `0.0.1`.
+They were folded into one `CORE_SPEC` on the reasoning that a field's place already identifies its
+document.
+
+Reversed the same day. On the wire the place identifies nothing: a release manifest is fetched alone
+by URL and `spec` is the only thing in it that names the format. Measured against what is served —
+the index at `soksak-plugin-registry` (sequence 7, 54 units), a release manifest, its two conformance
+reports, and the manifest packaged inside the artifact — all four carry those names, and the running
+build answered `official -> INVALID_INDEX: registry.spec: 0.0.1 required` with an empty catalogue.
+
+What was actually invented was a format per plugin, `soksak-spec-plugin-terminal`, and that stays
+deleted. A format per document kind is not that. `CORE_SPEC` remains for the envelopes the core
+defines both ends of — the plugin-runtime transport.
 
 **The prefix itself.** The reason written down for it was that a scanner could tell a contract id
 from a plugin id in core sources — a rule shaped to suit a scanner. Gone with the thing it named.
@@ -254,7 +264,9 @@ from a plugin id in core sources — a rule shaped to suit a scanner. Gone with 
 A mechanism for choosing between two implementations gets built against the case that needs it. The
 sample corpus holds three browsers and two terminals, so that case is real and is not this entry's.
 
-Gate: `TestTheCoreHoldsNoSecondIdentityNamespace` refuses any `soksak-spec-` literal in core sources.
+Gate: `TestTheCoreHoldsNoSecondIdentityNamespace` reads three things — a spec stamp written outside
+`plugins/spec/unit.ts`, a stamp that names a plugin rather than a document kind, and a declared stamp
+gone missing. Proven to bite on all three.
 
 Measured on a running build: both plugins enable with no error, `ui.validate` passes, a terminal
 opens with a live shell, and the browser draws.

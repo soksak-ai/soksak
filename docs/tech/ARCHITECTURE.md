@@ -157,14 +157,26 @@ All of these are hard.
   in its place would charge every plugin for it.
 
 - **C4.** The core has one spec and a plugin has its own. `CORE_SPEC` is the
-  version the core stamps into every envelope it defines — a manifest, a release,
-  a registry index, a conformance report. A plugin's manifest is that plugin's
-  spec, and the plugin id names it.
+  version the core stamps into the envelopes it defines — the plugin-runtime
+  transport, both ends of which are the core's. A plugin's manifest is that
+  plugin's spec, and the plugin id names it.
+
+  A document the core reads and does not publish is stamped by its publisher, and
+  the core reads that stamp: the registry index, a release manifest, a conformance
+  report, and a unit manifest of each kind. Four formats, declared in
+  `plugins/spec/unit.ts` and nowhere else.
+
+  The four were folded into `CORE_SPEC` on 2026-08-16, on the reasoning that a
+  field's place already identifies its document. On the wire it does not — a
+  release manifest is fetched alone by URL and `spec` is its only identification —
+  and the fold made every published unit unreadable at four layers. A format is
+  per document kind: `soksak-spec-plugin@` is the manifest format every plugin
+  shares. A format per plugin, `soksak-spec-plugin-terminal@`, is a second name
+  for what the plugin id already names (C1), and that stays deleted.
 
   There was a third thing until 2026-08-16: `soksak-spec-<kind>-<domain>`
-  interface ids, plus seven separate names for the core's own format, each
-  announcing in its own value which document it was while the field's place
-  already said so. Nothing collects specs centrally, and nothing needs to.
+  interface ids that a provider declared and a consumer asked for. Nothing
+  collects specs centrally, and nothing needs to.
 - **C5.** Standards do not weaken silently. A red test against a correct standard
   means fixing the implementation, the fixture, or the exposed interface. A
   standard that is itself wrong changes in the open, with the evidence and the

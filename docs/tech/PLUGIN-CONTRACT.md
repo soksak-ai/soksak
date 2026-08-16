@@ -69,8 +69,12 @@ through every transport, and a permission gates a capability.
 
 ## P5. A plugin's spec is the plugin's, and the core's is the core's
 
-There is no place that collects specs. The core defines its own formats and stamps `CORE_SPEC` into
-them; a plugin's manifest is that plugin's spec, and the plugin id names it.
+There is no place that collects specs. `CORE_SPEC` is stamped into the envelopes the core defines
+both ends of; a plugin's manifest is that plugin's spec, and the plugin id names it.
+
+A document the core reads and does not publish is stamped by its publisher — a manifest is
+`soksak-spec-plugin@0.0.1`, and so are the release, index and conformance formats it travels with. A
+manifest arrives alone, so its `spec` is the only thing in it that names the format.
 
 A plugin that needs another declares it in `dependencies`. That is the whole coupling: one identity,
 declared, checked at the call boundary.
