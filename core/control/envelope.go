@@ -115,7 +115,32 @@ func Answer(registry *Registry, identity string, request Request) Response {
 		// picked a language before the caller was known.
 		return Response{ID: request.ID, Error: i18n.Render(err, language)}
 	}
-	return Response{ID: request.ID, Ok: true, Result: result}
+	return Response{ID: request.ID, Ok: true, Result: answerOf(registry, request.Command, result)}
+}
+
+// PlaneAnswer is the shape every control-plane answer has.
+//
+// A command handled in this process returns its value, and a window's command answers its own
+// envelope — `{ok, code, data, message, hint}` — which the relay passes through whole. Two shapes
+// reached the socket and nothing in the answer said which one it was, so a client had to know who
+// owned each command to parse it. Measured 2026-08-17: two readings in one session were taken
+// against the wrong shape and reported the opposite of what was on screen.
+//
+// The in-process caller is a different audience and keeps the value: a window calling `invoke` names
+// the command and has its type at the call site. This shape is for the plane whose caller is
+// generic.
+type PlaneAnswer struct {
+	Code string `json:"code"`
+	Data any    `json:"data"`
+}
+
+// answerOf gives a locally handled result the shape a window's answer already has. Which it is comes
+// from the registry, not from looking at the value.
+func answerOf(registry *Registry, command string, result any) any {
+	if !registry.ServesLocally(command) {
+		return result
+	}
+	return PlaneAnswer{Code: "OK", Data: result}
 }
 
 func greet(registry *Registry, identity string, request Request) Response {

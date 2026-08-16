@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"testing"
+	"time"
 )
 
 // The link and the screen agree.
@@ -83,6 +84,22 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 	// filter for its own reason, and a host that never reads the link's region passes anyway —
 	// measured 2026-08-17, a planted host that ignores the region survived this gate until a section
 	// stood in both.
+	// A modal covers the window, and a native surface is composited above the document — no z-index
+	// orders it under the card. The plugin manager opened with two browser pages drawn over it,
+	// measured 2026-08-17. The DOM behind a modal keeps its boxes, which is correct; what must go is
+	// the surface, so this reads the composition rather than the document.
+	gate.showASurface(window)
+	gate.run("plugin.manager", "window="+window, "open=true")
+	if during := gate.visibleSurfaces(window); len(during) > 0 {
+		t.Errorf("the plugin manager is open and %d native surfaces are still visible: %v\n"+
+			"A surface above the card is one a person cannot read or click past.", len(during), during)
+	}
+	gate.run("plugin.manager", "window="+window, "open=false")
+	if after := gate.visibleSurfaces(window); len(after) == 0 {
+		t.Errorf("the manager closed and no surface came back.\ncomposition: %s",
+			gate.run("surface.composition", "window="+window))
+	}
+
 	if tested < 2 {
 		t.Fatalf("sections stand in %d of 2 regions, so the region rule was not measured.\n"+
 			"available: %v\nA section placed in both is what separates the region from the placement.",
@@ -212,6 +229,26 @@ func (gate *drawnGate) drawnIn(window string, region string) []string {
 // focusASurface brings a pane forward until the compositor has one on screen. A surface that is not
 
 // surfaceAppears waits rather than reads once: a page is fetched and the surface is declared after,
+
+// showASurface brings a pane forward until the compositor has one on screen. A surface that is not
+// the tab its pane shows is already hidden, and hiding it again proves nothing about an overlay.
+func (gate *drawnGate) showASurface(window string) {
+	gate.t.Helper()
+	for _, pane := range gate.panes(window) {
+		for _, tab := range pane.Tabs {
+			gate.run("pane.activate", "window="+window, "pane="+pane.ID)
+			gate.run("tab.activate", "window="+window, "tab="+tab.ID)
+			for attempt := 0; attempt < 20; attempt++ {
+				if len(gate.visibleSurfaces(window)) > 0 {
+					return
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}
+	gate.t.Fatalf("no pane could be brought to show a native surface.\npanes: %s\ncomposition: %s",
+		gate.run("pane.list", "window="+window), gate.run("surface.composition", "window="+window))
+}
 
 // visibleSurfaces is what the compositor has on screen — declared and applied both true. The
 // document is not the reading: a native surface is composited above it.

@@ -128,6 +128,16 @@ func (registry *Registry) DeclareUnserved(name, blockedBy string) error {
 
 // Invoke runs a command. An unknown name fails carrying that name, and a
 // declared refusal states its reason.
+// ServesLocally answers whether this process handles the command itself, rather than forwarding it
+// to a window. The control plane needs the fact to give every answer one shape, and it is a fact the
+// registry holds — reading the payload and guessing at its shape would be a different thing.
+func (registry *Registry) ServesLocally(name string) bool {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	_, served := registry.served[name]
+	return served
+}
+
 func (registry *Registry) Invoke(name string, args Args) (any, error) {
 	registry.mu.RLock()
 	command, served := registry.served[name]

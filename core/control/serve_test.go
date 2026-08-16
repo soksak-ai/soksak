@@ -46,6 +46,16 @@ func served(t *testing.T, registry *Registry) net.Conn {
 	return client
 }
 
+// planeData is the value inside a control-plane answer. Every answer has one shape — `{code, data}`
+// — so a test that wants the value unwraps it here rather than in each assertion.
+func planeData(result any) any {
+	envelope, ok := result.(map[string]any)
+	if !ok {
+		return result
+	}
+	return envelope["data"]
+}
+
 func send(t *testing.T, client net.Conn, lines ...string) []Response {
 	t.Helper()
 	for _, line := range lines {
@@ -77,10 +87,10 @@ func TestOneLineInOneLineOut(t *testing.T) {
 		`{"id":"2","command":"echo","args":{"word":"two"}}`,
 	)
 
-	if answers[0].ID != "1" || answers[0].Result != "one" {
+	if answers[0].ID != "1" || planeData(answers[0].Result) != "one" {
 		t.Errorf("first = %+v", answers[0])
 	}
-	if answers[1].ID != "2" || answers[1].Result != "two" {
+	if answers[1].ID != "2" || planeData(answers[1].Result) != "two" {
 		t.Errorf("second = %+v", answers[1])
 	}
 }
@@ -128,7 +138,7 @@ func TestAMalformedLineDoesNotEndTheConversation(t *testing.T) {
 		`{not json`,
 		`{"id":"2","command":"echo","args":{"word":"still here"}}`,
 	)
-	if answers[1].Result != "still here" {
+	if planeData(answers[1].Result) != "still here" {
 		t.Errorf("the connection did not survive a bad line: %+v", answers[1])
 	}
 }
@@ -155,8 +165,9 @@ func TestTwoClientsReachTheSameRegistry(t *testing.T) {
 			t.Fatalf("dialling: %v", err)
 		}
 		answers := send(t, client, `{"id":"1","command":"count"}`)
-		if answers[0].Result != want {
-			t.Errorf("a second connection answered %v, want %v — two registries", answers[0].Result, want)
+		if planeData(answers[0].Result) != want {
+			t.Errorf("a second connection answered %v, want %v — two registries",
+				planeData(answers[0].Result), want)
 		}
 		_ = client.Close()
 	}
@@ -214,7 +225,9 @@ func TestAnOverlongLineDoesNotTakeTheProcessDown(t *testing.T) {
 	t.Cleanup(func() { _ = next.Close() })
 
 	answers := send(t, next, `{"id":"2","command":"echo","args":{"word":"alive"}}`)
-	if answers[0].Result != "alive" {
+	// One shape for every answer on this plane: a command this process serves answers
+	// `{code, data}`, the same as a window's.
+	if planeData(answers[0].Result) != "alive" {
 		t.Errorf("after an oversized request the plane answered %+v", answers[0])
 	}
 }

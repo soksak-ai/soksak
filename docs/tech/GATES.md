@@ -31,6 +31,7 @@ contract is in its own canonical document, linked below.
 | `go test ./core/...` | the core answers commands with no window |
 | `sok ui.tree` | every reachable node carries `data-node` |
 | `sok window.snapshot` | writes a PNG without taking focus |
+| `task verify:drawn` | what a link names is what the window draws, and an open modal leaves no surface above it |
 
 Contracts: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`CONTROL-PROTOCOL.md`](CONTROL-PROTOCOL.md),
 [`MESSAGE-PROTOCOL.md`](MESSAGE-PROTOCOL.md), [`NAMING.md`](NAMING.md),
@@ -146,8 +147,9 @@ Written here so it is not rediscovered (L2).
   with the reason, so the gate refuses any *new* file in `frameworks/` that
   names a plugin. The core owns no session contract and no trace contract for
   them to be typed against yet.
-- **Nothing measures whether a person can see a surface.** `presence` reports
-  the window — visible, key, occluded, alpha — and `misparented` reports the
-  window a surface ended up in. Neither answers "is this rectangle in front of
-  the person right now"; a surface inside a visible, unoccluded window can still
-  be behind another surface in that window, and no reading covers that.
+- **One surface behind another is still unmeasured.** A DOM overlay is covered:
+  `surfaceShown` takes the open-overlay count as a layer, and `verify:drawn`
+  opens the plugin manager and reads `surface.composition` for anything still
+  visible. What no reading covers is surface against surface — two native
+  rectangles in one window, where `presence` and `misparented` both answer about
+  the window rather than about the order inside it.

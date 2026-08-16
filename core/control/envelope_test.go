@@ -135,7 +135,9 @@ func TestArgumentsReachTheHandlerStillEncoded(t *testing.T) {
 	}
 	// Measured on the frontend door: encoding on the caller's side turns "core"
 	// into "\"core\"". One encoding, and it happens where the value entered.
-	if answer.Result != "core" {
-		t.Errorf("result = %#v, want the string it was sent", answer.Result)
+	// Every control-plane answer has one shape, so the value it was sent is under `data`.
+	envelope, wrapped := answer.Result.(PlaneAnswer)
+	if !wrapped || envelope.Data != "core" {
+		t.Errorf("result = %#v, want the string it was sent under data", answer.Result)
 	}
 }
