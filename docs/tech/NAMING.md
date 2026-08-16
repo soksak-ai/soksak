@@ -77,6 +77,33 @@ user-chosen name or an `(ns, key)` pair, which already identifies the entry.
 Gate: `idScope.test.ts` reads both tables from `ids.ts`. It fails when an axis appears in both,
 and when a prefixed identifier is issued outside the issuer.
 
+### N2a. Identity across a restart is the natural key, never an issued id
+
+An issued id is a handle inside one run. What identifies a thing across a restart is the key that
+already means something: a workspace is its **root path**, a window is the store key
+`window/<label>`, an axis in N2 is its own `(ns, key)`.
+
+This is not a preference, it is what the code already rests on. The window ledger stores `roots[]`
+and `activeRoot`; P5 refuses a duplicate workspace by `t.root === opts.root`; P6 claims global
+single-open with `claimRoots(workspaces.map(t => t.root))`; `state.fingerprint` — the one number a
+restore is judged by — holds no id at all. Idempotence and one-window-per-project are secured by
+the root, and were never secured by an id.
+
+So anything that must outlive a restart is keyed by the natural key, or carried inside the record
+it belongs to. Measured 2026-08-16, every case in this build: a tab's custom label travels inside
+the snapshot on its own node; a sidebar label is keyed `<pluginId>.<viewName>`; a projection seed is
+inside the snapshot and follows its workspace. No stored value anywhere in the store referenced a
+layout id from outside the snapshot that issued it.
+
+An id used as a durable key is not merely redundant — it stops being unique. `t1` was the workspace
+id of three separate window snapshots at the same time, because a value carried across restarts is
+issued once and copied for ever after.
+
+Gate: `frontend/src/state/restoreMintsIds.test.ts` — a restore mints every id again and rewrites
+every reference, which is only safe because of this rule and would break loudly if something durable
+were keyed by one. `restore_gate_test.go` runs it against the real binaries: every id changes across
+a restart and the digest does not.
+
 ## N3. Composite identifiers
 
 A composite identifier is one value built out of identifiers already issued. This product has one:

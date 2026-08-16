@@ -147,6 +147,16 @@ the last bits of a double, and a digest counting those would never match twice.
 Workspaces are ordered by root, so restoring the same workspaces in another
 order is not reported as a difference.
 
+Gate: `restore_gate_test.go`, run by `task verify:restore`. It builds the two binaries, starts the
+application against a home of its own, opens a workspace window, reads the digest, quits through
+`app.shutdown.commit`, starts again and reads it a second time. It also asserts that every id
+changed — a digest that matched because nothing moved would prove nothing about R3.
+
+Quitting through the command rather than killing the process is the whole reason this gate can
+exist. A kill skips the drain and the save, and what came back would be the measurement of a crash.
+Until 2026-08-16 quitting was not a command this build served, so this verdict was read by hand and
+written here: true on the day someone looked, and unowned every day after.
+
 ## V2. One cold restart is not the measurement
 
 Measured 2026-08-16, six cold restarts of a three-pane layout with a browser tab

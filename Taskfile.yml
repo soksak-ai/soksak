@@ -34,6 +34,7 @@ tasks:
       calls this same task.
     cmds:
       - task: verify:go
+      - task: verify:restore
       - task: verify:headless
       - task: verify:windows
       - task: verify:frontend
@@ -45,6 +46,21 @@ tasks:
       - go build ./...
       - go vet ./...
       - go test ./...
+
+  verify:restore:
+    summary: The digest before a restart equals the digest after (RESTORE V1)
+    desc: |
+      Runs the real binaries against a home of its own, so it neither reads nor
+      disturbs the store a person is using. It builds them first because a gate
+      that skipped when they were stale would be a gate that never ran.
+
+      It quits through `app.shutdown.commit` rather than killing the process. A
+      kill skips the drain and the save, and what came back afterwards would be
+      the measurement of a crash.
+    cmds:
+      - task: build
+      - task: build:sok
+      - go test ./ -run TestTheDigestSurvivesARestart -count=1
 
   verify:headless:
     summary: The core answers with no window — the boundary a second host needs

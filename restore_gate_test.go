@@ -1,0 +1,294 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// The digest before a restart equals the digest after.
+//
+// docs/tech/RESTORE.md V1: that equality is the whole verdict, and V2 adds that
+// one cold restart is not the measurement. It had no gate — the number was read
+// by hand and written into the document, so it was true on the day someone
+// looked and unowned every day after.
+//
+// It could not have had one until 2026-08-16, because quitting was not a command
+// this build served: `sok app.shutdown.commit` answered INTERNAL and the only
+// way to end the process was to kill it. A gate that killed the process would
+// skip the drain and the save, and would then be measuring a crash rather than a
+// restart.
+//
+// This runs the real binaries against a home of its own, so it neither reads nor
+// disturbs the store a person is using.
+
+// restoreGateHome is short on purpose. A unix socket path has 104 bytes on this
+// platform and the identity derives one from the home, so a home under the
+// repository or under a test temp directory overruns it and the application
+// refuses to start with a message about path length rather than about restore.
+const restoreGateHome = "<local-evidence>/soksak-restore-gate"
+
+const restoreGateIdentifier = "com.soksak.restoregate"
+
+func TestTheDigestSurvivesARestart(t *testing.T) {
+	app := filepath.Join("bin", "soksak")
+	client := filepath.Join("bin", "sok")
+	for _, binary := range []string{app, client} {
+		if _, err := os.Stat(binary); err != nil {
+			t.Skipf("%s is not built; run `wails3 task build` and `wails3 task build:sok` first", binary)
+		}
+	}
+	if os.Getenv("DISPLAY") == "" && os.Getenv("HOME") == "" {
+		t.Skip("no session to open a window in")
+	}
+
+	gate := &restoreGate{t: t, app: app, client: client}
+	// A home of its own, emptied first: a digest compared against a store some
+	// earlier run left behind is comparing two different layouts.
+	if err := os.RemoveAll(restoreGateHome); err != nil {
+		t.Fatalf("clearing the gate home: %v", err)
+	}
+	if err := os.MkdirAll(restoreGateHome, 0o755); err != nil {
+		t.Fatalf("creating the gate home: %v", err)
+	}
+	t.Cleanup(func() {
+		gate.quit()
+		_ = os.RemoveAll(restoreGateHome)
+	})
+
+	gate.start()
+	window := gate.openWorkspace()
+
+	// The ids before, so the equality below is read against names that actually
+	// changed. A digest that matched because nothing moved would prove nothing
+	// about R3.
+	before := gate.ids(window)
+	first := gate.digest(window)
+
+	gate.quit()
+	gate.start()
+	// The restored window declares its commands again, and the restore itself is
+	// what this gate is here to read — so it is waited for exactly as the first
+	// one was.
+	gate.awaitWindow(window)
+
+	after := gate.ids(window)
+	second := gate.digest(window)
+
+	if first == "" || second == "" {
+		t.Fatalf("state.fingerprint answered no digest: %q then %q", first, second)
+	}
+	if first != second {
+		t.Errorf("the digest moved across a restart: %s then %s", first, second)
+	}
+	// R3 — every id is minted again. Without this the gate would pass on a build
+	// that carried the names across, which is the defect the digest cannot see.
+	if len(before) == 0 {
+		t.Fatal("the restored window holds no ids to compare")
+	}
+	for id := range before {
+		if after[id] {
+			t.Errorf("%s survived the restart; RESTORE R3 mints every id again", id)
+		}
+	}
+}
+
+type restoreGate struct {
+	t      *testing.T
+	app    string
+	client string
+	proc   *exec.Cmd
+}
+
+// socket is the address the identity derives from the home and the identifier:
+// `<home>/.soksak-<axis>/<identifier>.sock`. Derived here rather than asked for,
+// because the application has to be answering before it can be asked anything.
+func (gate *restoreGate) socket() string {
+	axis := strings.TrimPrefix(restoreGateIdentifier, "com.soksak.")
+	return filepath.Join(restoreGateHome, ".soksak-"+axis, restoreGateIdentifier+".sock")
+}
+
+// start runs the application against the gate's home and waits until its control
+// plane answers. Waiting on the answer rather than on a duration is what makes
+// this repeatable on a loaded machine.
+func (gate *restoreGate) start() {
+	gate.t.Helper()
+	cmd := exec.Command("./" + gate.app)
+	cmd.Env = append(os.Environ(),
+		"HOME="+restoreGateHome,
+		"SOKSAK_IDENTIFIER="+restoreGateIdentifier,
+	)
+	if err := cmd.Start(); err != nil {
+		gate.t.Fatalf("starting the application: %v", err)
+	}
+	gate.proc = cmd
+
+	deadline := time.Now().Add(45 * time.Second)
+	for time.Now().Before(deadline) {
+		if out, err := gate.try("window.list", "window=main"); err == nil && strings.Contains(out, "main") {
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	gate.t.Fatal("the application did not answer within 45s")
+}
+
+// quit ends the process through the command, never by killing it. A kill skips
+// the drain and the save, and the run after it would be measuring a crash.
+func (gate *restoreGate) quit() {
+	if gate.proc == nil {
+		return
+	}
+	_, _ = gate.try("app.shutdown.commit", "window=main")
+	done := make(chan struct{})
+	go func() { _ = gate.proc.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		_ = gate.proc.Process.Kill()
+		<-done
+		gate.t.Fatal("app.shutdown.commit did not end the process within 20s")
+	}
+	gate.proc = nil
+}
+
+// awaitWindow waits until one window answers its own commands and its layout has
+// settled.
+//
+// Both waits end on an event inside the window; reaching the first takes a poll,
+// because a window that has not declared its commands has no command to
+// subscribe to and nothing outside the process publishes its arrival.
+func (gate *restoreGate) awaitWindow(label string) {
+	gate.t.Helper()
+	gate.until(45*time.Second, func() bool {
+		_, err := gate.try("app.boot.wait", "window="+label)
+		return err == nil
+	}, "window "+label+" never declared its commands")
+	gate.run("ui.layout.wait-settled", "window="+label)
+}
+
+// until waits for a condition, or fails by the name of what never happened.
+func (gate *restoreGate) until(limit time.Duration, ready func() bool, what string) {
+	gate.t.Helper()
+	deadline := time.Now().Add(limit)
+	for time.Now().Before(deadline) {
+		if ready() {
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	gate.t.Fatalf("%s within %s", what, limit)
+}
+
+func (gate *restoreGate) try(command string, args ...string) (string, error) {
+	full := append([]string{"--socket", gate.socket(), command}, args...)
+	out, err := exec.Command("./"+gate.client, full...).CombinedOutput()
+	return string(out), err
+}
+
+func (gate *restoreGate) run(command string, args ...string) string {
+	gate.t.Helper()
+	out, err := gate.try(command, args...)
+	if err != nil {
+		gate.t.Fatalf("%s: %v\n%s", command, err, out)
+	}
+	return out
+}
+
+// openWorkspace gives the restore something to carry: a window with a layout of
+// its own. An empty orchestrator restores nothing and the digest would be equal
+// for the wrong reason.
+func (gate *restoreGate) openWorkspace() string {
+	gate.t.Helper()
+	root, err := filepath.Abs(".")
+	if err != nil {
+		gate.t.Fatalf("resolving a workspace root: %v", err)
+	}
+	out := gate.run("window.open", "window=main", "root="+root)
+	var answer struct {
+		Data struct {
+			Label string `json:"label"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &answer); err != nil || answer.Data.Label == "" {
+		gate.t.Fatalf("window.open named no window: %v\n%s", err, out)
+	}
+	// A window answers its own commands only once its page has declared them, and
+	// the snapshot it must have written before the quit is written from the
+	// layout. Both waits below end on an event inside the window; reaching the
+	// first one takes a poll, because a window that has not declared its
+	// commands has no command to subscribe to and nothing outside the process
+	// publishes its arrival.
+	gate.awaitWindow(answer.Data.Label)
+	return answer.Data.Label
+}
+
+func (gate *restoreGate) digest(window string) string {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Digest string `json:"digest"`
+		} `json:"data"`
+		Digest string `json:"digest"`
+	}
+	out := gate.run("state.fingerprint", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("state.fingerprint: %v\n%s", err, out)
+	}
+	if answer.Data.Digest != "" {
+		return answer.Data.Digest
+	}
+	return answer.Digest
+}
+
+// ids is every identifier the window's tree holds, as a set.
+func (gate *restoreGate) ids(window string) map[string]bool {
+	gate.t.Helper()
+	out := gate.run("state.tree", "window="+window)
+	var tree any
+	if err := json.Unmarshal([]byte(out), &tree); err != nil {
+		gate.t.Fatalf("state.tree: %v\n%s", err, out)
+	}
+	found := map[string]bool{}
+	var walk func(any)
+	walk = func(node any) {
+		switch value := node.(type) {
+		case map[string]any:
+			for key, inner := range value {
+				if id, ok := inner.(string); ok && key == "id" && identifierShaped(id) {
+					found[id] = true
+				}
+				walk(inner)
+			}
+		case []any:
+			for _, inner := range value {
+				walk(inner)
+			}
+		}
+	}
+	walk(tree)
+	return found
+}
+
+// identifierShaped is NAMING N1: three letters, a dash, six base32 characters.
+// A window name is excluded by the same expression — it is the store key and is
+// deliberately reused (RESTORE K1).
+func identifierShaped(value string) bool {
+	if len(value) != 10 || value[3] != '-' || strings.HasPrefix(value, "win-") {
+		return false
+	}
+	for index, r := range value {
+		switch {
+		case index == 3:
+		case index < 3 && r >= 'a' && r <= 'z':
+		case index > 3 && (r >= 'a' && r <= 'z' || r >= '2' && r <= '7'):
+		default:
+			return false
+		}
+	}
+	return true
+}
