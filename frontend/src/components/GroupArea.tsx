@@ -152,9 +152,10 @@ export function isViewSurfaceVisible(
   maximizedId: string | null,
   viewId: string,
   activeTabId: string,
+  overlayed: boolean,
 ): boolean {
   const tabActive = maximizedId ? viewId === maximizedId : viewId === activeTabId;
-  return surfaceShown(surfaceActive, true, tabActive);
+  return surfaceShown(surfaceActive, true, tabActive, overlayed);
 }
 
 export const GroupArea = memo(function GroupArea({
@@ -208,6 +209,10 @@ export const GroupArea = memo(function GroupArea({
   /** Out-of-document surface view identities the manifest declared. The boundary above finishes any framework-internal lookup. */
   nativeSurfaceViewIds?: readonly string[];
 }) {
+  // A native surface is composited above the document, so no z-index puts it under a modal. The
+  // count of open overlays is the fourth layer of `surfaceShown` — nothing read this counter until
+  // 2026-08-17, and the plugin manager opened with two browser pages drawn over its card.
+  const overlayed = useUi((s) => s.overlayCount > 0);
   const t = useT();
   // JS interpolation (FLIP) of command-driven rect changes — on every commit flush compares against the previous rect (layoutRectMotion).
   const rectMotion = useRef(createRectMotionTracker(`${projectId}/${content.id}`)).current;
@@ -349,7 +354,7 @@ export const GroupArea = memo(function GroupArea({
     for (const { group } of cells) {
       for (const v of group.tabs) {
         const tabActive = maxCell ? v.id === maximizedId : v.id === group.activeTabId;
-        commitViewVisibility(v.id, surfaceShown(surfaceActive, true, tabActive));
+        commitViewVisibility(v.id, surfaceShown(surfaceActive, true, tabActive, overlayed));
       }
     }
   });
@@ -857,6 +862,7 @@ export const GroupArea = memo(function GroupArea({
             maxCell ? maximizedId : null,
             view.id,
             group.activeTabId,
+            overlayed,
           );
           const slotRect = maxCell && shown ? FULL_RECT : rect;
           // B4 restore hydration gate — a cold view (restored but not yet visible) defers its body mount

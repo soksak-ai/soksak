@@ -1,0 +1,39 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+// A component that draws a modal registers the overlay.
+//
+// `useOverlayActive` is the input gate: while it is held, a click over a native surface goes to the
+// DOM instead of through it. The plugin manager was moved out of the right sidebar on 2026-08-17 and
+// did not take the hook with it — inside that sidebar it had stood above the surfaces because the
+// panel declares `will-change: transform`, and mounted by App it did not. A browser drew over the
+// card, measured on the running build.
+//
+// So the rule is not about that one modal: a file that renders `dmodal-overlay` holds the hook.
+const COMPONENTS = join(process.cwd(), "src", "components");
+
+const files = readdirSync(COMPONENTS)
+  .filter((name) => name.endsWith(".tsx") && !name.includes(".test."))
+  .map((name) => ({ name, body: readFileSync(join(COMPONENTS, name), "utf8") }));
+
+const drawsAModal = files.filter((file) => file.body.includes('className="dmodal-overlay"'));
+
+// Whether the registration is released is not readable from the shape of the source: a modal its
+// parent renders conditionally may register for its whole life, and one App mounts always may not.
+// `TestARunningBuildReportsNothingWrong` reads the count itself — with nothing open it is 0.
+describe("a component that draws a modal", () => {
+  it("there is at least one, so this rule is measured", () => {
+    expect(drawsAModal.map((f) => f.name).length).toBeGreaterThan(0);
+  });
+
+  it.each(drawsAModal.map((f) => f.name))("%s registers the overlay input gate", (name) => {
+    const body = files.find((f) => f.name === name)!.body;
+    expect(
+      body.includes("useOverlayActive"),
+      `${name} draws a modal and does not hold useOverlayActive; a click over a native surface goes through the card`,
+    ).toBe(true);
+  });
+
+
+});

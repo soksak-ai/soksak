@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useOverlayActive } from "../state/ui";
 import {
   activeRequest,
   useRemoteConfirm,
@@ -22,6 +23,9 @@ export function RemoteConfirmModal() {
   const req = useRemoteConfirm(activeRequest);
   const resolve = useRemoteConfirm((s) => s.resolve);
   const expire = useRemoteConfirm((s) => s.expire);
+  // The input gate, and the fourth layer of `surfaceShown` — a native surface is composited above
+  // the document and no z-index puts it under this card.
+  useOverlayActive(!!req);
 
   // TTL countdown (mirror display of the core TTL) — reset whenever the request changes. At 0 the head expires → next one promoted.
   const ttl = req?.ttl_secs ?? DEFAULT_CONFIRM_TTL_SECS;

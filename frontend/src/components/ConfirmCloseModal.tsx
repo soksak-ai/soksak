@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useOverlayActive } from "../state/ui";
 import { useCloseConfirm } from "../state/closeConfirm";
 import { useT, type MsgKey } from "../i18n";
 
@@ -17,6 +18,9 @@ export function ConfirmCloseModal() {
   const pending = useCloseConfirm((s) => s.pending);
   const confirm = useCloseConfirm((s) => s.confirm);
   const cancel = useCloseConfirm((s) => s.cancel);
+  // The input gate, and the fourth layer of `surfaceShown` — a native surface is composited above
+  // the document and no z-index puts it under this card.
+  useOverlayActive(!!pending);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

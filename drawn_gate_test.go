@@ -209,6 +209,36 @@ func (gate *drawnGate) drawnIn(window string, region string) []string {
 	return found
 }
 
+// focusASurface brings a pane forward until the compositor has one on screen. A surface that is not
+
+// surfaceAppears waits rather than reads once: a page is fetched and the surface is declared after,
+
+// visibleSurfaces is what the compositor has on screen — declared and applied both true. The
+// document is not the reading: a native surface is composited above it.
+func (gate *drawnGate) visibleSurfaces(window string) []string {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Surfaces []struct {
+				ID              string `json:"id"`
+				DeclaredVisible bool   `json:"declaredVisible"`
+				AppliedVisible  bool   `json:"appliedVisible"`
+			} `json:"surfaces"`
+		} `json:"data"`
+	}
+	out := gate.run("surface.composition", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("surface.composition: %v\n%s", err, out)
+	}
+	var found []string
+	for _, surface := range answer.Data.Surfaces {
+		if surface.DeclaredVisible && surface.AppliedVisible {
+			found = append(found, surface.ID)
+		}
+	}
+	return found
+}
+
 func contains(list []string, want string) bool {
 	for _, v := range list {
 		if v == want {

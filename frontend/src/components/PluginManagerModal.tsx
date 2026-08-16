@@ -16,7 +16,7 @@ import { Icon } from "../ui/icons/Icon";
 import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { useRegistry } from "../state/registry";
 import { installState, isOfficial, type RegistryEntry } from "../plugins/registry";
-import { useUi } from "../state/ui";
+import { useOverlayActive, useUi } from "../state/ui";
 import { PluginConsentModal } from "./PluginConsentModal";
 import { localize, useT } from "../i18n";
 import { execute } from "../commands/registry";
@@ -25,6 +25,10 @@ export function PluginManagerModal() {
   const t = useT();
   const managerOpen = useUi((s) => s.pluginManagerOpen);
   const setManagerOpen = useUi((s) => s.setPluginManagerOpen);
+  // The input gate every modal registers. It hung inside the right sidebar, which declared
+  // `will-change: transform` and so stood above the native surfaces; mounted by App it does not, and
+  // a browser's surface drew over the card — measured 2026-08-17.
+  useOverlayActive(managerOpen);
 
   return (
     <>

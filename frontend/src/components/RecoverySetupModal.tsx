@@ -9,13 +9,16 @@ import { useT } from "../i18n";
 // (zero residue outside memory). store pending is the open state.
 export function RecoverySetupModal() {
   const t = useT();
-  useOverlayActive();
   const open = useVault((s) => s.openModal);
   const pending = useVault((s) => s.pendingCode);
   const close = useVault((s) => s.close);
   const [saved, setSaved] = useState(false);
 
   const showing = open === "setup" && pending !== null;
+  // App mounts this component always, so an unconditional registration holds the overlay for the
+  // whole session. `surfaceShown` reads that count, so every view was parked with nothing on
+  // screen and nothing open — measured 2026-08-17, `state.health` answered `overlays: 2` at rest.
+  useOverlayActive(showing);
 
   // Reset the gate on each open.
   useEffect(() => {

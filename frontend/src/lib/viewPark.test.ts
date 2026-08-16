@@ -8,19 +8,25 @@ import { surfaceShown, viewSurfacePlacement, viewSurfaceStyle } from "./viewPark
 
 describe("effective view visibility — all three layers", () => {
   it("an inactive workspace is not visible even when the space and the tab are active", () => {
-    expect(surfaceShown(false, true, true)).toBe(false);
+    expect(surfaceShown(false, true, true, false)).toBe(false);
   });
 
   it("an inactive space is not visible", () => {
-    expect(surfaceShown(true, false, true)).toBe(false);
+    expect(surfaceShown(true, false, true, false)).toBe(false);
   });
 
   it("an inactive tab is not visible", () => {
-    expect(surfaceShown(true, true, false)).toBe(false);
+    expect(surfaceShown(true, true, false, false)).toBe(false);
   });
 
   it("visible only when all three layers are active", () => {
-    expect(surfaceShown(true, true, true)).toBe(true);
+    expect(surfaceShown(true, true, true, false)).toBe(true);
+  });
+
+  // A native surface is composited above the document, so no z-index puts it under a modal — the
+  // plugin manager opened and two browser pages drew over its card, measured 2026-08-17.
+  it("an overlay over the window hides it, whatever the other three say", () => {
+    expect(surfaceShown(true, true, true, true)).toBe(false);
   });
 });
 

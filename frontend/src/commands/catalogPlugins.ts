@@ -245,6 +245,27 @@ export function registerPluginCatalog(): void {
     return [];
   });
 
+  // The manager hung off the right sidebar's icon rail until 2026-08-17. The rail went with the
+  // region rule (A2a) and the manager went to a modal — with nothing calling it, which left install,
+  // consent, enable, update and the refusal reasons unreachable from anywhere. A surface the core
+  // mounts and nothing opens is a surface that is gone.
+  register("plugin.manager", {
+    description:
+      "Open or close the plugin manager — verified release install, consent, enable and disable, update, remove, and the reason a plugin was refused. Omit open to flip it.",
+    triggers: { ko: "플러그인 관리 설치 마켓 열기 닫기" },
+    params: {
+      open: { type: "boolean", description: tmsg("cmd.plugin.manager.param.open") },
+    },
+    returns: "{ open }",
+    message: (d) => (d.open ? tmsg("msg.plugin.manager.opened") : tmsg("msg.plugin.manager.closed")),
+    examples: ["plugin.manager", 'plugin.manager \'{"open":false}\''],
+    handler: (p) => {
+      const open = typeof p.open === "boolean" ? p.open : !useUi.getState().pluginManagerOpen;
+      useUi.getState().setPluginManagerOpen(open);
+      return { open };
+    },
+  });
+
   register("plugin.list", {
     description:
       "List all installed and dev plugins with their runtime status, permissions, and rejection reasons. rejected holds one entry per directory whose manifest failed validation (dir = plugin folder, errors = the specific validation failures). Use to check which plugins exist and whether any failed to load.",

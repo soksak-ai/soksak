@@ -65,6 +65,16 @@ func TestARunningBuildReportsNothingWrong(t *testing.T) {
 			len(unreadable), strings.Join(unreadable, "\n"))
 	}
 
+	// Overlays held with nothing open. A native surface is composited above the document, so an open
+	// overlay parks every view — two modals App mounts for the whole session registered
+	// unconditionally, `state.health` answered `overlays: 2` at rest, and the window went blank the
+	// moment that count was read (measured 2026-08-17).
+	if held := gate.overlaysHeld(window); held > 0 {
+		t.Errorf("%d overlays are held with nothing open.\n"+
+			"Every view is parked while one is, so the window draws nothing and no command says why.",
+			held)
+	}
+
 	// The activity ledger. A publish that never lands means every observation above is blind.
 	if healthy, detail := gate.activityHealthy(window); !healthy {
 		t.Errorf("the activity ledger is not taking writes: %s", detail)
@@ -207,4 +217,18 @@ func (gate *quietGate) unreadableRegistries(window string) []string {
 		found = append(found, "  "+r.ID+" -> "+r.Status+" ("+r.Error+"), "+strconv.Itoa(r.UnitCount)+" units")
 	}
 	return found
+}
+
+func (gate *quietGate) overlaysHeld(window string) int {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Overlays int `json:"overlays"`
+		} `json:"data"`
+	}
+	out := gate.run("state.health", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("state.health: %v\n%s", err, out)
+	}
+	return answer.Data.Overlays
 }

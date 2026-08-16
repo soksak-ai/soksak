@@ -10,7 +10,6 @@ import { useT } from "../i18n";
 // Overlay click and Escape = cancel (no gate, unlike setup — closing input is always harmless).
 export function RecoveryEnterModal() {
   const t = useT();
-  useOverlayActive();
   const open = useVault((s) => s.openModal);
   const scope = useVault((s) => s.targetScope);
   const close = useVault((s) => s.close);
@@ -19,6 +18,9 @@ export function RecoveryEnterModal() {
   const [err, setErr] = useState<string | null>(null);
 
   const showing = open === "enter";
+  // App mounts this component always — see RecoverySetupModal. An unconditional registration parks
+  // every view for the whole session.
+  useOverlayActive(showing);
 
   useEffect(() => {
     if (!showing) return;

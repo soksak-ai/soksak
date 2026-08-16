@@ -1,6 +1,7 @@
 import { applyWindowZoom } from "../lib/zoomIntent";
 import { useEffect, useState } from "react";
 import { usePlugins } from "../state/plugins";
+import { useUi } from "../state/ui";
 import { PluginSettings } from "./PluginSettings";
 import { SecuritySettings } from "./SecuritySettings";
 import {
@@ -119,9 +120,18 @@ export function SettingsModal({
             >
               {t("settings.general")}
             </button>
-            {configPlugins.length > 0 ? (
-              <div className="settings-nav-head">{t("settings.plugins")}</div>
-            ) : null}
+            <div className="settings-nav-head">{t("settings.plugins")}</div>
+            {/* The way in to install, consent, enable and the refusal reasons. It hung off the right
+                sidebar's icon rail until 2026-08-17; the rail went with the region rule and the
+                manager was left with nothing calling it. */}
+            <button
+              type="button"
+              className="settings-nav-item"
+              data-node="settings/plugin-manager"
+              onClick={() => useUi.getState().setPluginManagerOpen(true)}
+            >
+              {t("plugin.manager")}
+            </button>
             {configPlugins.map((p) => (
               <button
                 key={p.manifest.id}

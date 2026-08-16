@@ -9,6 +9,7 @@ import { tmsg } from "../i18n";
 import { register } from "./registry";
 import { catalogJson } from "./registry";
 import { commandHealth, noteActivityPersist, noteLedgerAudit } from "./commandObservation";
+import { useUi } from "../state/ui";
 import { invoke } from "../framework";
 
 export function registerHealthCatalog(): void {
@@ -48,7 +49,15 @@ export function registerHealthCatalog(): void {
       }
       // Record it before the verdict — recorded later, that turn's degraded excludes the ledger.
       noteLedgerAudit(ledger);
-      return { ...commandHealth(catalogJson().length), ledger };
+      // Overlays decide whether anything is drawn at all: a native surface is composited above the
+      // document, so `surfaceShown` hides every view while one is open. A count nothing can read is
+      // a reason for a blank window that nobody can name — measured 2026-08-17, the manager closed
+      // and every pane stayed empty.
+      return {
+        ...commandHealth(catalogJson().length),
+        ledger,
+        overlays: useUi.getState().overlayCount,
+      };
     },
   });
 

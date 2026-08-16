@@ -14,15 +14,28 @@ import { surfaceLabelOfView } from "./surfaceLabels";
 import { parkedStyle } from "./layerPark";
 import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost";
 
-// Whether a view is actually visible — true **only when all three layers are true**: the workspace is
-// active, that space is active within the workspace, and that view is the active tab within the
-// space. Miss one layer and the core receives "visible" for an invisible view and leaves the native
-// child (browser webview, engine surface) on screen — that was exactly the defect where the
-// previous workspace's browser stayed up after a workspace switch (missing workspace layer).
+// Whether a view is actually visible — true **only when every layer is true**: the workspace is
+// active, that space is active within the workspace, that view is the active tab within the space,
+// and no overlay is drawn over it. Miss one layer and the core receives "visible" for an invisible
+// view and leaves the native child (browser webview, engine surface) on screen — that was exactly
+// the defect where the previous workspace's browser stayed up after a workspace switch (missing
+// workspace layer).
+//
+// The overlay layer is the same defect at the window level. A native surface is composited above the
+// document, so no z-index orders it under a modal: the plugin manager opened and two browser pages
+// drew over the card, measured 2026-08-17. A surface record has `visible` and `layer`, and the core
+// already answers a view about its own visibility, so the fact is one term of this expression rather
+// than a rule about modals.
+//
 // CSS hides these layers separately, but the native layer is outside CSS, so the judgment is
 // collected into one expression.
-export function surfaceShown(workspaceActive: boolean, spaceActive: boolean, tabActive: boolean): boolean {
-  return workspaceActive && spaceActive && tabActive;
+export function surfaceShown(
+  workspaceActive: boolean,
+  spaceActive: boolean,
+  tabActive: boolean,
+  overlayed: boolean,
+): boolean {
+  return workspaceActive && spaceActive && tabActive && !overlayed;
 }
 
 /**
