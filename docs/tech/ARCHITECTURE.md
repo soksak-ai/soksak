@@ -118,6 +118,21 @@ All of these are hard.
   ended up holding one as a constant. If two implementations of one thing ever
   exist, that is the day to design a choice between them — with the case in
   hand.
+- **C3a.** A family of implementations is the exception, and the exception does
+  not shape the general path. Terminals and browsers are families: xterm and
+  ghostty stand in the same place, as do chromium, native and offscreen, and each
+  family has to agree on how it behaves and what it exposes. That agreement is
+  real — the sample corpus holds three browsers and two terminals.
+
+  It is not the general case. Forty-two of the forty-seven sample plugins compete
+  with nothing, and until 2026-08-16 every one of them carried an interface id
+  because the exception had been built as the mechanism for all — which is how
+  the core came to hold one as a constant. The general path is C3: a plugin holds
+  its own contract, and whoever needs it names the plugin.
+
+  What a family needs is unbuilt and stays unbuilt until it is designed against a
+  family, not against a guess.
+
 - **C4.** The core has one spec and a plugin has its own. `CORE_SPEC` is the
   version the core stamps into every envelope it defines — a manifest, a release,
   a registry index, a conformance report. A plugin's manifest is that plugin's
