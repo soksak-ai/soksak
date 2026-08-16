@@ -118,20 +118,19 @@ All of these are hard.
   ended up holding one as a constant. If two implementations of one thing ever
   exist, that is the day to design a choice between them — with the case in
   hand.
-- **C3a.** A family of implementations is the exception, and the exception does
-  not shape the general path. Terminals and browsers are families: xterm and
-  ghostty stand in the same place, as do chromium, native and offscreen, and each
-  family has to agree on how it behaves and what it exposes. That agreement is
-  real — the sample corpus holds three browsers and two terminals.
+- **C3a.** Standing in the same place is not sharing a spec. Chromium and a
+  platform webview cannot have the same one — what they expose and how they
+  behave differ in fact, and a common spec over them is a convenience that
+  **forces a rule onto the parts that differ**. Each writes what it is; a
+  resemblance between two plugins is a resemblance, not an interface.
 
-  It is not the general case. Forty-two of the forty-seven sample plugins compete
-  with nothing, and until 2026-08-16 every one of them carried an interface id
-  because the exception had been built as the mechanism for all — which is how
-  the core came to hold one as a constant. The general path is C3: a plugin holds
-  its own contract, and whoever needs it names the plugin.
+  A shared spec is what the interface ids were, and the cost showed: all
+  forty-seven sample plugins carried one, forty-two of which stand beside nothing,
+  and the core itself came to hold one as a constant. A convenience for a few was
+  a rule for everyone.
 
-  What a family needs is unbuilt and stays unbuilt until it is designed against a
-  family, not against a guess.
+  Whoever needs a thing names the plugin (C3). Substituting one implementation
+  for another by declaration is the convenience being given up, knowingly.
 
 - **C4.** The core has one spec and a plugin has its own. `CORE_SPEC` is the
   version the core stamps into every envelope it defines — a manifest, a release,

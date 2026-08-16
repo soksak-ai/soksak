@@ -308,10 +308,10 @@ follows arrives at mount as view context, so a section names no plugin either.
 - A workspace record no longer carries `shell`, and no core surface names a shell.
 - **A plugin cannot declare a keybinding.** ⌘T is the frame's own shortcut and names nothing, so it
   stays; a plugin that wants its own has no way to ask, and nothing needs one yet.
-- **A family of implementations has no mechanism** (C3a). Three browsers stand in one place and two
-  terminals in another; they have to agree on how they behave and what they expose, and nothing
-  carries that agreement now. It is deliberately unbuilt: the interface ids that used to carry it
-  were worn by all forty-seven samples, forty-two of which compete with nothing.
+- **One implementation cannot be swapped for another by declaration** (C3a), and that is the
+  convenience given up. Chromium and a platform webview do not have the same spec — what they expose
+  and how they behave differ in fact — so a shared one would force a rule onto the parts that differ.
+  Whoever needs a browser names the plugin.
 - **Both sidebars are empty.** The core owns the frame — regions, split, tabs, order, persistence —
   and no plugin declares `left` or `right` (entry 11).
 - **Nobody installs a missing binary.** The core publishes `program.missing` and `library.missing`
