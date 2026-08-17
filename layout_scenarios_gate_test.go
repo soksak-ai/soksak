@@ -847,13 +847,16 @@ func judgeMove(t *testing.T, r moveResult) {
 	floor := drawnCadence(settled)
 	if os.Getenv("SOKSAK_GATE_FRONT") == "1" && floor > 0 && floor <= drawingCadenceMs {
 		gaps := drawnGaps(r.frames)
-		late := lateFrames(gaps, stalledFrameMs)
-		if stall := quantile(gaps, 1); late > 0 {
+		// Only the late frames something was moving across. A frame late while the window is still is
+		// a frame nobody could have seen.
+		late, stall := lateWhileMoving(r.frames, stalledFrameMs)
+		if late > 0 {
 			say := t.Logf
 			if judgeDrawing {
 				say = t.Errorf
 			}
-			say("%s: %d of %d drawn frames came late, the worst %.0fms, on a machine that draws "+
+			say("%s: %d of %d drawn frames came late while something moved, the worst %.0fms, on a "+
+				"machine that draws "+
 				"every %.0fms once it is still. The rest: median %.0fms, p90 %.0fms, p99 %.0fms.\n"+
 				"%s\nframes: %s\n"+
 				"Nothing on the screen moves while the window is not drawing, and the page a "+
@@ -986,4 +989,47 @@ func quantile(gaps []float64, share float64) float64 {
 		return 0
 	}
 	return gaps[int(float64(len(gaps)-1)*share)]
+}
+
+// lateWhileMoving is how many drawn frames came late while something on the screen was moving.
+//
+// A frame that is late over a stretch where nothing changed is a frame nobody could have seen. The
+// window is still, the page is where it was, and the compositor has nothing to present — measured
+// 2026-08-18 on the move that leaves a page for a terminal: one frame of eighty-eight came 45 to
+// 60ms late, three runs of three, and across every one of them the panes, the region and the page
+// held the same coordinates. Counted without that question, a window resting was called a window
+// stalling, and the number was chased through two wrong conclusions and a platform profile.
+//
+// What is asked is the frames a person could see: late, and something moving across them.
+func lateWhileMoving(frames []traceFrame, over float64) (int, float64) {
+	late, worst, last := 0, 0.0, -1
+	for i, frame := range frames {
+		if !frame.Drawn {
+			continue
+		}
+		if last >= 0 && frame.At-frames[last].At > over && somethingMoved(frames[last], frame) {
+			late++
+			if gap := frame.At - frames[last].At; gap > worst {
+				worst = gap
+			}
+		}
+		last = i
+	}
+	return late, worst
+}
+
+// somethingMoved answers whether any box a person watches is in a different place in the second
+// reading than in the first.
+func somethingMoved(before traceFrame, after traceFrame) bool {
+	if before.panesStart() != after.panesStart() || before.regionEnds("left") != after.regionEnds("left") {
+		return true
+	}
+	for _, was := range before.Surfaces {
+		for _, now := range after.Surfaces {
+			if was.ID == now.ID && (was.Dom.X != now.Dom.X || was.Dom.W != now.Dom.W) {
+				return true
+			}
+		}
+	}
+	return false
 }
