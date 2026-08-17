@@ -53,6 +53,8 @@ export interface LayoutTraceFrame {
   /** What the commit that carried the native half cost, from the rectangles being measured to the
    *  native layer answering. A page cannot be closer to its pane than this. */
   commitMs: number;
+  /** How long that commit took to reach the backend. -1 before the first stamped receipt. */
+  carriedMs: number;
   regions: LayoutAlignment["regions"];
   panes: LayoutAlignment["panes"];
   frames: LayoutAlignment["frames"];
@@ -100,11 +102,28 @@ const trace = moduleState<TraceState>("lib/layoutTrace#state", () => ({
 // taken after.
 const WALL_CLOCK_MS = 12;
 
+// Each clock re-arms only itself.
+//
+// Re-arming both from either cancelled whichever frame callback was already pending, and the
+// 12ms timer beats a 16.7ms frame every time — so the timer kept killing the frame clock and
+// the recording said the window had stopped drawing while it was drawing normally. Measured
+// 2026-08-17: three of six focus moves reported 50 to 136ms stalls in which the timer answered
+// every 13 to 17ms, our own paths cost under 5ms, and no commit went out. That gap was this
+// function.
+const scheduleFrame = (): void => {
+  trace.handle = requestAnimationFrame(() => tick(true));
+};
+
+const scheduleTimer = (): void => {
+  trace.timer = setTimeout(() => tick(false), WALL_CLOCK_MS);
+};
+
+// Both clocks, for a recording that is starting.
 const schedule = (): void => {
   if (trace.handle !== null) cancelAnimationFrame(trace.handle);
   if (trace.timer !== null) clearTimeout(trace.timer);
-  trace.handle = requestAnimationFrame(() => tick(true));
-  trace.timer = setTimeout(() => tick(false), WALL_CLOCK_MS);
+  scheduleFrame();
+  scheduleTimer();
 };
 
 /** How long a start waits for the window to draw its first frame before refusing. */
@@ -167,10 +186,13 @@ function tick(drawn: boolean): void {
   if (!trace.running) return;
   const atUnixMs = presentationNowUnixMs();
   // Both clocks are scheduled and either may arrive first. A second reading in the same breath as
-  // the last one measures nothing and doubles the record.
+  // the last one measures nothing and doubles the record — so the timer's is dropped. The frame's
+  // never is: whether the window drew is the verdict, and a frame thrown away for landing beside a
+  // timer reading is a gap this recording invented.
   const last = trace.frames[trace.frames.length - 1];
-  if (last && atUnixMs - last.atUnixMs < 4) {
-    schedule();
+  if (!drawn && last && atUnixMs - last.atUnixMs < 4) {
+    // Re-armed on the clock that fired, so a dropped reading costs that clock nothing.
+    scheduleTimer();
     return;
   }
   // The document half, inside the frame callback and before the paint: this is the geometry the
@@ -190,6 +212,7 @@ function tick(drawn: boolean): void {
     costs: mainThreadCosts(),
     appliedAgeMs: applied.atUnixMs === 0 ? -1 : Math.round(atUnixMs - applied.atUnixMs),
     commitMs: Math.round(applied.latencyMs),
+    carriedMs: Math.round(applied.carriedMs),
     appliedMs: Math.round(applied.appliedMs * 10) / 10,
     regions: alignment.regions,
     panes: alignment.panes,
@@ -210,5 +233,5 @@ function tick(drawn: boolean): void {
     stopLayoutTrace();
     return;
   }
-  schedule();
+  if (drawn) scheduleFrame(); else scheduleTimer();
 }

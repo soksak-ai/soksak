@@ -58,3 +58,39 @@ let committedAtUnixMs = 0;
 export function sinceCommitMs(now: number): number {
   return committedAtUnixMs === 0 ? -1 : Math.round(now - committedAtUnixMs);
 }
+
+/**
+ * What the engine spends on style and layout for the commit that just happened.
+ *
+ * The costs above are this application's own paths, and on a window that stopped drawing for 55ms
+ * they came to 5. The rest is the engine's half — style, layout, paint, compositing — and no timer
+ * inside a component can reach it: the thread is inside the engine, so the frame clock and the timer
+ * that would have measured the gap are both waiting with everything else.
+ *
+ * Reading a box forces style and layout to finish before the answer can be given, so calling it
+ * right after a commit and timing the call attributes that half. What is left over — the gap the
+ * frames still show minus this — is paint and compositing, which nothing in a document can time.
+ *
+ * The layout it forces is one the next frame would have done anyway. It is moved earlier, not added.
+ */
+export function useEngineLayoutCost(): void {
+  useLayoutEffect(() => {
+    timed("engine.layout", () => document.documentElement.getBoundingClientRect().height);
+  });
+}
+
+/**
+ * The same for work that is awaited.
+ *
+ * A round trip is not main-thread time by itself — but what comes back over it is handed to this
+ * thread to parse, and a picture arrives as a data URL half a megabyte long. Timing the await gives
+ * how long the answer took to become usable, which is the half a caller can do something about.
+ */
+export async function timedAwait<T>(name: string, work: Promise<T>): Promise<T> {
+  const started = performance.now();
+  try {
+    return await work;
+  } finally {
+    costs.set(name, Math.round((performance.now() - started) * 100) / 100);
+  }
+}

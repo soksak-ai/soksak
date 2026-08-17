@@ -54,6 +54,7 @@ type traceFrame struct {
 	At            float64            `json:"atUnixMs"`
 	AppliedAgeMs  float64            `json:"appliedAgeMs"`
 	CommitMs      float64            `json:"commitMs"`
+	CarriedMs     float64            `json:"carriedMs"`
 	AppliedMs     float64            `json:"appliedMs"`
 	SinceLastMs   float64            `json:"sinceLastMs"`
 	Drawn         bool               `json:"drawn"`
@@ -74,8 +75,13 @@ type traceFrame struct {
 		X    float64 `json:"x"`
 		W    float64 `json:"w"`
 	} `json:"panes"`
+	// The outline drawn around each pane. It is a separate element from the pane, and it is
+	// the one that survives a travel: mid-motion the pane elements are drawn by a stand-in and
+	// only one of three answers, while all three outlines are where a person sees them.
 	Frames []struct {
-		Pane string `json:"pane"`
+		Pane string  `json:"pane"`
+		X    float64 `json:"x"`
+		W    float64 `json:"w"`
 	} `json:"frames"`
 	Boundaries []struct {
 		Pane string `json:"pane"`
@@ -260,17 +266,24 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 	gate.consentAndEnable(window, plugins)
 	built := gate.buildGateWindow(window)
 
-	// The region stands for the browser's plugin, in the left region, open. Focus on a terminal then
-	// takes it away and focus on the browser brings it back — which is what makes the six moves
-	// different from each other.
-	set := gate.createSet(window, "scenarios")
-	sections := gate.availableSections(window)["left"]
-	if len(sections) == 0 {
-		t.Fatal("no section stands on the left, so no move can take a region away")
-	}
-	gate.run("sections.arrange", "window="+window, "set="+set, "sections="+jsonList(sections[0]))
+	// The sidebar stands for every plugin in this window, in the left region, open — stated on
+	// 2026-08-17 as the thing about this window that does not change: it is beside the view that
+	// was clicked, always. Linked to one plugin only, it left the screen on half the moves, and
+	// what this gate then measured was a region appearing and disappearing rather than the window
+	// a person uses. Both plugins are linked, so what each move changes is where the sidebar stands
+	// and what is in it.
+	browserSet := gate.createSet(window, "scenarios-browser")
+	browserSection := gate.sectionOf(window, "left", arrangementBrowserSectionPlugin)
+	gate.run("sections.arrange", "window="+window, "set="+browserSet,
+		"sections="+jsonList(browserSection))
 	gate.run("sections.link", "window="+window,
-		"plugin="+gate.pluginOfTab(window, built.browserTab), "set="+set, "region=left")
+		"plugin="+gate.pluginOfTab(window, built.browserTab), "set="+browserSet, "region=left")
+	terminalSet := gate.createSet(window, "scenarios-terminal")
+	terminalSection := gate.sectionOf(window, "left", arrangementTerminalSectionPlugin)
+	gate.run("sections.arrange", "window="+window, "set="+terminalSet,
+		"sections="+jsonList(terminalSection))
+	gate.run("sections.link", "window="+window,
+		"plugin="+gate.pluginOfTab(window, built.terminalTab), "set="+terminalSet, "region=left")
 	gate.run("workspace.region.toggle", "window="+window, "region=left", "open=true")
 
 	// The spotlight is a full-window SVG mask redrawn with the layout, and what it costs is the
@@ -450,6 +463,20 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 		// and in front, on the same build and the same six moves, it never stopped at all. What was
 		// reported here as a stall was the environment, and the correction is that this is only asked
 		// of a window someone is looking at.
+		// What this stall is not, measured 2026-08-17 on the six moves of the named window.
+		//
+		// It is 55 to 60ms, on exactly the four moves where a region appears or disappears, and
+		// on no other. It is there with the motion collapsed to nothing, so it is not the
+		// interpolation. It is the same with a section holding two rows as with the file tree, so
+		// it is not the section's own drawing. It survives taking no picture and hiding nothing,
+		// so it is neither half of the park. The page's box does not change across it — same x,
+		// same width — so it is not a resize. The commit crosses in 0ms and the native work is
+		// 0.2ms, and every path this build owns costs under 10ms over the whole stretch.
+		//
+		// And with no page in the window it is gone: twelve moves, two runs, not one stall. So
+		// what is left is the window relaying itself out while a web view is attached to it,
+		// which is the substrate's cost and not this application's arithmetic. Anything that
+		// claims to have fixed it has to move this number.
 		settled := r.frames[len(r.frames)*2/3:]
 		floor := drawnCadence(settled)
 		if os.Getenv("SOKSAK_GATE_FRONT") == "1" && floor > 0 && floor <= drawingCadenceMs {
@@ -462,8 +489,10 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 					"machine that draws every %.0fms once it is still.\n%s\nframes: %s\n"+
 					"Nothing on the screen moves while the window is not drawing, and the page a "+
 					"person watches is composited above a document that has stopped.\n"+
+					"inside the stall:\n%s\n"+
 					"what the paths this build owns cost: %s",
-					r.name, stall, floor, traceLines(r.frames, "left"), r.record, costLines(r.frames))
+					r.name, stall, floor, traceLines(r.frames, "left"), r.record,
+					stallLines(r.frames), costLines(r.frames))
 			}
 		}
 
@@ -522,12 +551,18 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				"out and come back.",
 				r.name, r.blink.worst, r.blink.ms, traceLines(r.frames, "left"), r.record)
 		}
-		// The seam is not judged here. A size settles at once and the panes travel into place, so the
-		// distance between the region's edge and the panes is the motion itself — judging it here
-		// called the animation a hole. It is asked of a settled window, by the arrangement gate.
-		if false && r.hole.ms > budgetMs && wholeWindow(r.frames, r.hole) {
+		// The sidebar and the panes travel together, or the gap between them is a hole.
+		//
+		// This was turned off on the grounds that the gap is the animation itself: the region
+		// gave up its width in one render while the panes travelled, so of course they were
+		// apart. That is the defect, not an excuse for it — stated on 2026-08-17 in one line,
+		// they do not travel together. Measured with the sidebar standing throughout, as it does in
+		// the window a person uses: 424 points belonged to nobody for 128ms while it moved
+		// from beside the left column to beside the right pane.
+		if r.hole.ms > budgetMs && wholeWindow(r.frames, r.hole) {
 			t.Errorf("%s: %.0f points belonged to nobody for %.0fms.\npanes seen:\n%s\n%s\nframes: %s\n"+
-				"The region gives up its width in one render while the panes travel over the motion.",
+				"The sidebar and the panes are one layout: what one gives up the other takes, over "+
+				"the same motion and not before it.",
 				r.name, r.hole.worst, r.hole.ms, panesSeen(r.frames, r.hole),
 				traceLines(r.frames, "left"), r.record)
 		}
@@ -743,6 +778,55 @@ func (gate *layoutScenariosGate) oneFrame(window string) traceFrame {
 
 // costLines is the worst each timed path reached while the window was watched. What the frame gaps
 // hold that these do not account for is the engine's own render and paint.
+
+// stallLines is every reading taken between the two drawn frames that bound the longest gap — which
+// clock took it, what this window's own paths cost over it, and how many commits went out. A window
+// that is not drawing while its timer keeps answering on time is a window whose thread is free, and
+// the stall is then in something no timer inside the document can reach.
+func stallLines(frames []traceFrame) string {
+	worst, from, last := 0.0, 0, -1
+	for i, frame := range frames {
+		if !frame.Drawn {
+			continue
+		}
+		if last >= 0 && frame.At-frames[last].At > worst {
+			worst, from = frame.At-frames[last].At, last
+		}
+		last = i
+	}
+	if worst == 0 {
+		return "  (the window never stopped)"
+	}
+	lines := []string{}
+	for i := from; i < len(frames) && frames[i].At <= frames[from].At+worst+1; i++ {
+		clock := "timer"
+		if frames[i].Drawn {
+			clock = "frame"
+		}
+		costs := make([]string, 0, len(frames[i].Costs))
+		for path, cost := range frames[i].Costs {
+			if cost >= 1 {
+				costs = append(costs, fmt.Sprintf("%s %.0f", path, cost))
+			}
+		}
+		sort.Strings(costs)
+		page := ""
+		for _, surface := range frames[i].Surfaces {
+			if surface.Dom.W > 0 {
+				page = fmt.Sprintf("page x=%.0f w=%.0f", surface.Dom.X, surface.Dom.W)
+				break
+			}
+		}
+		lines = append(lines, fmt.Sprintf("  f%03d %s +%.0fms watch=%.1f commit=%.0f carried=%.0f native=%.1f commits=%d %s %s",
+			frames[i].Frame, clock, frames[i].SinceLastMs, frames[i].TickMs, frames[i].CommitMs,
+			frames[i].CarriedMs,
+			frames[i].AppliedMs, frames[i].Commits, page, strings.Join(costs, ", ")))
+		if len(lines) >= 16 {
+			break
+		}
+	}
+	return strings.Join(lines, "\n")
+}
 func costLines(frames []traceFrame) string {
 	worst := map[string]float64{}
 	for _, frame := range frames {

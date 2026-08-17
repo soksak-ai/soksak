@@ -16,7 +16,7 @@ import { rafThrottle } from "./lib/rafThrottle";
 import { railEdgeWidths } from "./ui/railEdges";
 import { parkedStyle } from "./lib/layerPark";
 import { createRectMotionTracker } from "./lib/layoutRectMotion";
-import { timed, useRenderCost } from "./lib/mainThreadCost";
+import { timed, useEngineLayoutCost, useRenderCost } from "./lib/mainThreadCost";
 import { emitPathsDropped, emitPluginEvent } from "./plugins/hooks";
 import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
@@ -436,6 +436,9 @@ const WorkspacePlane = memo(function WorkspacePlane({
     sidebarW,
     contentTabPosition,
   ]);
+  // The engine's half of the same commit, measured last so what it forces is the DOM every flush
+  // above has already written.
+  useEngineLayoutCost();
   return (
     <div
       className="workspace-plane"

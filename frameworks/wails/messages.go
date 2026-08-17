@@ -32,6 +32,10 @@ func init() {
 			EN: `window {window} answered {command} without saying whether it succeeded`,
 			KO: `창 {window} 이(가) 성공 여부 없이 {command} 에 응답했습니다`,
 		},
+		"wails.renderer.refusedWithDetail": {
+			EN: `window {window} refused {command} — {code}: {message} ({detail})`,
+			KO: `창 {window} 이(가) {command} 을(를) 거부했습니다 — {code}: {message} ({detail})`,
+		},
 		"wails.renderer.refused": {
 			EN: `window {window} refused {command} — {code}: {message}`,
 			KO: `창 {window} 이(가) {command} 을(를) 거부했습니다 — {code}: {message}`,

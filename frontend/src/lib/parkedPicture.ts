@@ -14,6 +14,7 @@
 // instant old. That is the whole of what it claims to be, and it is why the surface is put back the
 // moment it can be.
 import { contentViewHost, hasContentViewHost } from "./contentViews";
+import { timedAwait } from "./mainThreadCost";
 import { moduleState } from "./moduleState";
 
 interface Held {
@@ -64,7 +65,7 @@ export async function holdParkedPicture(viewId: string, label: string): Promise<
   if (pictures.get(viewId)?.label === label) return;
   asking.add(viewId);
   try {
-    const url = await contentViewHost().picture(label);
+    const url = await timedAwait("picture", contentViewHost().picture(label));
     if (url) {
       pictures.set(viewId, { url, label });
       announce();

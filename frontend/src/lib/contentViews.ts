@@ -183,8 +183,11 @@ let lastApplied: {
   /** What the native layer itself held the commit for. The difference between this and `latencyMs`
    *  is the bridge and the wait for a thread that was busy with something else. */
   appliedMs: number;
+  /** How long the commit took to reach the backend from this document — the bridge and
+   *  whatever was ahead of it. -1 before the first receipt with a stamp on it. */
+  carriedMs: number;
   commits: number;
-} = { surfaces: [], atUnixMs: 0, latencyMs: 0, appliedMs: -1, commits: 0 };
+} = { surfaces: [], atUnixMs: 0, latencyMs: 0, appliedMs: -1, carriedMs: -1, commits: 0 };
 
 /** The framework writes down what came back with its commit, and what the round trip cost. */
 export function noteAppliedSurfaces(
@@ -192,8 +195,9 @@ export function noteAppliedSurfaces(
   atUnixMs: number,
   latencyMs: number,
   appliedMs: number,
+  carriedMs: number,
 ): void {
-  lastApplied = { surfaces, atUnixMs, latencyMs, appliedMs, commits: lastApplied.commits + 1 };
+  lastApplied = { surfaces, atUnixMs, latencyMs, appliedMs, carriedMs, commits: lastApplied.commits + 1 };
 }
 
 /** What came back last, with the instant it did and what it cost. Empty until the first commit is
@@ -203,6 +207,7 @@ export function lastAppliedSurfaces(): {
   atUnixMs: number;
   latencyMs: number;
   appliedMs: number;
+  carriedMs: number;
   commits: number;
 } {
   return lastApplied;

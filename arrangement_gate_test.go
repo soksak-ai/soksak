@@ -3,7 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -18,33 +21,61 @@ import (
 // the arrangement or the loss of it: the readings measured seams and lags in a window whose shape
 // nobody had stated.
 //
-// So the shape is stated. The window is a left column split into a terminal above a browser, and a
-// terminal filling the right. One set is linked to the browser's plugin in the **left** region and
-// another to the terminals' plugin in the **right**, and both regions are open. From that, what each
-// click must leave on the screen:
+// So the shape is stated, in the words it was given in: a left column split into a terminal above a
+// browser, and a terminal filling the right. Three panes, and the clicks between them.
 //
-//	click                 left region     right region    the panes
-//	terminal (top left)   not standing    standing        begin at the inset, end before the right one
-//	browser (bottom)      standing        not standing    begin where the left region ends
-//	terminal (right)      not standing    standing        begin at the inset, end before the right one
+// Where a sidebar goes was not part of that and is not asserted here. What is asserted is the rule
+// the product already has: a set is linked to a plugin in a region, and the section standing is the
+// one linked to the focused view's plugin. This window links both sets in the left region, because
+// a link must name one, and then:
 //
-// A region stands for the plugin of the focused view and for no other (`individual`), so which
-// region is on the screen is decided by what was clicked — that is the arrangement, and a window
-// that answers otherwise is what this gate is for. Everything else asked about a layout — how long a
-// motion takes, whether a page travels with its pane, whether a frame blinks — is a question about a
-// window that is already this one.
+//	click                 the sidebar             the panes
+//	terminal (top left)   the terminals' section  begin where the sidebar ends
+//	browser (bottom)      the browser's section   begin where the sidebar ends
+//	terminal (right)      the terminals' section  begin where the sidebar ends
+//
+// An earlier version of this file required a second region on the right. Nobody asked for it; it was
+// added here, and the window was then changed to satisfy it. A requirement invented in a gate costs
+// what a defect costs and is harder to see, because it passes.
+//
+// Whose section, and not only how wide. A region stands for the plugin of the focused view and for no
+// other (`individual`), and the set it stands is the one that plugin is linked to — measured
+// 2026-08-17, a browser was focused, a region stood beside it, and the file tree was in it, and this
+// gate passed because it asked the region for its width, and a width does not name whose section
+// it is holding. That is the reading it was missing and the reason it is here.
 const arrangementGateHome = "<local-evidence>/soksak-arrangement-gate"
 
 const arrangementGateIdentifier = "com.soksak.arrangementgate"
 
 type arrangementGate = restoreGate
 
+// The plugins whose sections the two sets are made of. A section is a plugin (A2a) and no plugin
+// declares what it stands beside, so which set a person gives the browser is a person's choice —
+// what this gate fixes is that the choice is the thing on the screen.
+const (
+	arrangementBrowserSectionPlugin  = "soksak-plugin-browser-native"
+	arrangementTerminalSectionPlugin = "soksak-plugin-file-tree"
+)
+
 // paneInset is the gap between the window's edge and the panes, and between a region and the panes
 // beside it. Read from the settled window rather than named here — a theme sets it.
 type arrangement struct {
 	regionEnds float64
 	panesStart float64
-	panes      map[string]paneBox
+	// bands is the vertical band each region occupies, and panesBand the one the panes do. A
+	// region stands beside the panes, so those two are the same band — and nothing here ever
+	// asked. Measured 2026-08-17 from this gate's own picture: the right region began at the
+	// space-tab row while the panes began 75 points below it, and every reading passed.
+	// starts is where each region begins, and panesEnd where the panes stop. The left region
+	// ends before the panes begin and the right one begins after they end — a region that
+	// overlaps them is drawn over the work rather than beside it.
+	starts    map[string]float64
+	panesEnd  float64
+	bands     map[string]band
+	panesBand band
+	panes     map[string]paneBox
+	// sections is what is on the screen in each region, keyed <pluginId>.<viewId>.
+	sections map[string][]string
 }
 
 func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
@@ -57,100 +88,154 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 	gate.consentAndEnable(window, plugins)
 	built := gate.buildGateWindow(window)
 
-	set := gate.createSet(window, "arrangement")
-	sections := gate.availableSections(window)["left"]
-	if len(sections) == 0 {
-		t.Fatal("no section stands on the left, so the region could never stand")
-	}
-	gate.run("sections.arrange", "window="+window, "set="+set, "sections="+jsonList(sections[0]))
+	// Two sets, both in the sidebar on the left: one holding the browser's own section, one holding
+	// the terminals'. Two sets of the same section would answer every question about which one
+	// stands with the same words.
+	browserSection := gate.sectionOf(window, "left", arrangementBrowserSectionPlugin)
+	browserSet := gate.createSet(window, "arrangement-browser")
+	gate.run("sections.arrange", "window="+window, "set="+browserSet,
+		"sections="+jsonList(browserSection))
 	gate.run("sections.link", "window="+window,
-		"plugin="+gate.pluginOfTab(window, built.browserTab), "set="+set, "region=left")
-	// And the other side, for the plugin the terminals are. Each region holds its own set, so a
-	// window that could only ever show one of them would pass a gate about the other by never
-	// being asked.
-	right := gate.createSet(window, "arrangement-right")
-	rightSections := gate.availableSections(window)["right"]
-	if len(rightSections) == 0 {
-		t.Fatal("no section stands on the right, so that region could never stand")
-	}
-	gate.run("sections.arrange", "window="+window, "set="+right, "sections="+jsonList(rightSections[0]))
+		"plugin="+gate.pluginOfTab(window, built.browserTab), "set="+browserSet, "region=left")
+	terminalSection := gate.sectionOf(window, "left", arrangementTerminalSectionPlugin)
+	terminalSet := gate.createSet(window, "arrangement-terminal")
+	gate.run("sections.arrange", "window="+window, "set="+terminalSet,
+		"sections="+jsonList(terminalSection))
 	gate.run("sections.link", "window="+window,
-		"plugin="+gate.pluginOfTab(window, built.terminalTab), "set="+right, "region=right")
+		"plugin="+gate.pluginOfTab(window, built.terminalTab), "set="+terminalSet, "region=left")
 	gate.run("workspace.region.toggle", "window="+window, "region=left", "open=true")
-	gate.run("workspace.region.toggle", "window="+window, "region=right", "open=true")
 
-	// The inset is measured from the window rather than assumed: it is what stands between the edge
-	// and the panes when no region does.
+	// The inset is measured from the window rather than assumed: it is what stands between the
+	// sidebar and the panes beside it.
 	gate.run("tab.activate", "window="+window, "tab="+built.terminalTab)
 	gate.settle(window)
-	inset := gate.arrangementNow(window).panesStart
+	inset := gate.arrangementNow(window).panesStart - gate.arrangementNow(window).regionEnds
 	if inset <= 0 || inset > 40 {
-		t.Fatalf("the panes begin %0.f from the window's edge, which is not an inset", inset)
+		t.Fatalf("the panes begin %0.f from where the sidebar ends, which is not an inset", inset)
 	}
 
-	for _, click := range []struct {
-		what     string
-		tab      string
-		stands   bool
-		andRight bool
+	// Every way a person can get from one pane to another: three starting points times three
+	// clicks, the click's own included. What the window must hold depends on what was clicked and
+	// on nothing else, so asking it from every starting point is what proves that — a click that
+	// only works from one place works from none of the others a person will click from.
+	// Every way a person can get from one pane to another: three starting points times three
+	// clicks, the click's own included. What the sidebar holds depends on what was clicked and on
+	// nothing else, so asking it from every starting point is what proves that — a click that only
+	// works from one place works from none of the others a person will click from.
+	panes := []struct {
+		what    string
+		tab     string
+		section string
 	}{
-		{"terminal (top left)", built.terminalTab, false, true},
-		{"browser (bottom)", built.browserTab, true, false},
-		{"terminal (right)", built.rightTab, false, true},
-		// Twice round, because a click that only works from one starting point works from none of
-		// the others a person will click from.
-		{"browser (bottom), again", built.browserTab, true, false},
-		{"terminal (right), again", built.rightTab, false, true},
-		{"browser (bottom), from the right", built.browserTab, true, false},
-	} {
-		gate.run("tab.activate", "window="+window, "tab="+click.tab)
-		gate.settle(window)
-		now := gate.arrangementNow(window)
+		{"terminal (top left)", built.terminalTab, terminalSection},
+		{"browser (bottom)", built.browserTab, browserSection},
+		{"terminal (right)", built.rightTab, terminalSection},
+	}
+	slug := strings.NewReplacer(" ", "-", "(", "", ")", "", ",", "")
+	for _, from := range panes {
+		for _, click := range panes {
+			// The starting point, settled, so what follows is one move and not the tail of another.
+			gate.run("tab.activate", "window="+window, "tab="+from.tab)
+			gate.settle(window)
 
-		if click.stands {
-			if now.regionEnds <= inset {
-				t.Errorf("clicking %s: the region stands for this view's plugin and it is not on the "+
-					"screen.\n%s\nThe set is linked and the region is open, so what is missing is the "+
-					"region itself.", click.what, gate.arrangementLines(window, built))
+			what := fmt.Sprintf("%s from %s", click.what, from.what)
+			name := slug.Replace(click.what) + "-from-" + slug.Replace(from.what)
+			// The whole move, not its end. The last frame of it is the still this case is kept by:
+			// a second capture of the same window right after this one times out, and two capture
+			// paths for one picture is one more than the picture needs.
+			//
+			// Absolute, because a relative path is resolved by the application against its own
+			// working directory and the frames land somewhere this run cannot look — measured
+			// 2026-08-17, nine recordings answered OK and left no frame anywhere here.
+			dir := gate.evidencePath("arrangement", "moves", name)
+			wait := gate.recording(window, dir, 14, 25)
+			gate.run("tab.activate", "window="+window, "tab="+click.tab)
+			said := wait()
+			gate.settle(window)
+			now := gate.arrangementNow(window)
+
+			// The sidebar is on the screen. Every plugin in this window has a set linked in the
+			// left region, so it stands whatever was clicked; what changes is what is in it.
+			if now.regionEnds <= 0 {
+				t.Errorf("clicking %s: the sidebar is not on the screen.\n%s\nThe set is linked and "+
+					"the region is open, so what is missing is the sidebar itself.",
+					what, gate.arrangementLines(window, built))
 				continue
 			}
-			if gap := now.panesStart - now.regionEnds; gap < 0 || gap > inset+1 {
-				t.Errorf("clicking %s: the region ends at %.0f and the panes begin at %.0f, %.0f apart "+
-					"where the window's own inset is %.0f.\n%s",
-					click.what, now.regionEnds, now.panesStart, gap, inset,
+			// It stands to the left of the pane that was clicked — stated on 2026-08-17 as the
+			// thing about this window that does not change and was never asked to. This gate had
+			// been measuring it against the window's left edge instead, and called the sidebar
+			// wrong every time it stood beside the right-hand pane, which is where it stands.
+			clicked := now.panes[gate.paneOfTab(window, click.tab)]
+			if gap := clicked.X - now.regionEnds; gap < 0 || gap > inset+1 {
+				t.Errorf("clicking %s: the sidebar ends at %.0f and the pane that was clicked begins "+
+					"at %.0f, %.0f apart where this window's own inset is %.0f.\n%s\n"+
+					"The sidebar stands to the left of the view that was clicked.",
+					what, now.regionEnds, clicked.X, gap, inset,
 					gate.arrangementLines(window, built))
 			}
-		} else if now.regionEnds > inset {
-			t.Errorf("clicking %s: no set stands for this view's plugin and the region is on the "+
-				"screen, ending at %.0f.\n%s\nA region with nothing standing in it takes width for "+
-				"nothing.", click.what, now.regionEnds, gate.arrangementLines(window, built))
-			continue
-		} else if now.panesStart > inset+1 {
-			t.Errorf("clicking %s: no region stands and the panes begin at %.0f rather than at the "+
-				"window's inset of %.0f.\n%s\nThe width the region gave up belongs to the panes.",
-				click.what, now.panesStart, inset, gate.arrangementLines(window, built))
-		}
 
-		// The other side, by the same definition.
-		if right := gate.rightRegionWidth(window); click.andRight != (right > 0) {
-			held := "is on the screen"
-			if right <= 0 {
-				held = "is not on the screen"
+			// And whose section is in it. A sidebar holding another plugin's section is what a
+			// person reported as "this is not the browser's sidebar", and it is a different window
+			// from the one defined here even though every rectangle in it measures right.
+			if got := now.sections["left"]; strings.Join(got, ",") != click.section {
+				t.Errorf("clicking %s: the sidebar holds %s where the set linked to this view's "+
+					"plugin is %s.\n%s\nA sidebar's width does not name whose section is in it.",
+					what, named(got), click.section, gate.arrangementLines(window, built))
 			}
-			t.Errorf("clicking %s: the right region %s, and the set linked to this view's plugin "+
-				"says otherwise.\n%s", click.what, held, gate.arrangementLines(window, built))
+
+			// And in the band the panes are in. The sidebar stands beside the panes, so it begins
+			// where they begin and ends where they end — reported 2026-08-17 as a sidebar attached
+			// at the overlay's place, and every reading here passed because none of them had ever
+			// asked for a y or a height.
+			if where, standing := now.bands["left"]; standing && !now.panesBand.empty() {
+				if apart := math.Max(math.Abs(where.top-now.panesBand.top),
+					math.Abs(where.bottom-now.panesBand.bottom)); apart > 1 {
+					t.Errorf("clicking %s: the sidebar holds %s where the panes hold %s, %.0f apart.\n%s\n"+
+						"A sidebar stands beside the panes; a band of its own is one drawn somewhere "+
+						"else and taking the width anyway.",
+						what, where, now.panesBand, apart, gate.arrangementLines(window, built))
+				}
+			}
+
+			// One node per address, whatever is standing.
+			gate.assertOneNodePerAddress(window, "clicking "+what)
+
+			// The three panes keep the shape they were built in, whatever the sidebar does.
+			gate.assertNamedWindow(window, built)
+
+			// The still this case is kept by: the last frame of its own recording. A second capture
+			// of the same window right after the first times out — measured 2026-08-17, six runs
+			// running, `RuntimeError: capture timed out` — and two capture paths for one picture is
+			// one more than the picture needs.
+			gate.keepLastFrame(dir, gate.evidencePath("arrangement", name+".png"), said)
 		}
-
-		// The three panes keep the shape they were built in, whatever the regions do.
-		gate.assertNamedWindow(window, built)
-
-		// One picture per click, kept. A capture nobody looks at is a ceremony; this one is named
-		// after the click that produced it and is kept beside the numbers, so the arrangement a person
-		// sees and the arrangement this gate judged can be put side by side.
-		shot := filepath.Join("evidence", "arrangement",
-			strings.NewReplacer(" ", "-", "(", "", ")", "", ",", "").Replace(click.what)+".png")
-		gate.run("window.snapshot", "window="+window, "path="+shot)
 	}
+}
+
+// named is a list of sections as a sentence, and "nothing" when there are none — an empty pair of
+// brackets beside another empty pair reads as two of the same thing.
+func named(sections []string) string {
+	if len(sections) == 0 {
+		return "nothing"
+	}
+	return strings.Join(sections, ", ")
+}
+
+// sectionOf is the section a named plugin placed in a region. A gate that took whichever section came
+// first took the file tree for the browser and asked nothing that could tell them apart.
+func (gate *arrangementGate) sectionOf(window string, region string, plugin string) string {
+	gate.t.Helper()
+	available := gate.availableSections(window)[region]
+	for _, key := range available {
+		if strings.HasPrefix(key, plugin+".") {
+			return key
+		}
+	}
+	gate.t.Fatalf("%s placed no section in the %s region, so nothing of its can stand there.\n"+
+		"placed there: %v\nThe plugin is installed from the development tree; a build without it "+
+		"cannot be asked whose section stands.", plugin, region, available)
+	return ""
 }
 
 // settle waits until the window has stopped changing shape, so what is read is what a person is
@@ -171,7 +256,8 @@ func (gate *arrangementGate) settle(window string) {
 	}, "the window to settle")
 }
 
-// arrangementNow is where the region ends and where the panes begin, from one reading.
+// arrangementNow is where the region ends, where the panes begin, and whose sections are standing,
+// from one reading.
 func (gate *arrangementGate) arrangementNow(window string) arrangement {
 	gate.t.Helper()
 	var answer struct {
@@ -180,7 +266,13 @@ func (gate *arrangementGate) arrangementNow(window string) arrangement {
 				Region string  `json:"region"`
 				X      float64 `json:"x"`
 				W      float64 `json:"w"`
+				H      float64 `json:"h"`
+				Y      float64 `json:"y"`
 			} `json:"regions"`
+			Sections []struct {
+				Region  string `json:"region"`
+				Section string `json:"section"`
+			} `json:"sections"`
 			Panes []struct {
 				Pane string `json:"pane"`
 				paneBox
@@ -191,20 +283,47 @@ func (gate *arrangementGate) arrangementNow(window string) arrangement {
 	if err := json.Unmarshal([]byte(out), &answer); err != nil {
 		gate.t.Fatalf("layout.alignment: %v\n%s", err, out)
 	}
-	now := arrangement{panesStart: -1, panes: map[string]paneBox{}}
+	now := arrangement{
+		panesStart: -1,
+		panes:      map[string]paneBox{},
+		sections:   map[string][]string{},
+		starts:     map[string]float64{},
+		bands:      map[string]band{},
+	}
 	// A region with no width is not on the screen, whatever x it is parked at. A collapsed rail
 	// stays at the station it last held, and reading its right edge as "where the region ends" makes
 	// an absent region look like a wide one — which is how this gate first accused the window of
 	// keeping a sidebar it had already given up.
 	for _, region := range answer.Data.Regions {
+		if region.W <= 0 || region.H <= 0 {
+			continue
+		}
+		now.bands[region.Region] = band{top: region.Y, bottom: region.Y + region.H}
+		now.starts[region.Region] = region.X
 		if region.Region == "left" && region.W > 0 && region.X+region.W > now.regionEnds {
 			now.regionEnds = region.X + region.W
 		}
+	}
+	for _, section := range answer.Data.Sections {
+		now.sections[section.Region] = append(now.sections[section.Region], section.Section)
 	}
 	for _, pane := range answer.Data.Panes {
 		now.panes[pane.Pane] = pane.paneBox
 		if pane.W <= 0 {
 			continue
+		}
+		if now.panesBand.empty() {
+			now.panesBand = band{top: pane.Y, bottom: pane.Y + pane.H}
+		} else {
+			if pane.Y < now.panesBand.top {
+				now.panesBand.top = pane.Y
+			}
+			if pane.Y+pane.H > now.panesBand.bottom {
+				now.panesBand.bottom = pane.Y + pane.H
+			}
+		}
+		if pane.X+pane.W > now.panesEnd {
+			now.panesEnd = pane.X + pane.W
 		}
 		if now.panesStart < 0 || pane.X < now.panesStart {
 			now.panesStart = pane.X
@@ -216,49 +335,154 @@ func (gate *arrangementGate) arrangementNow(window string) arrangement {
 	return now
 }
 
-// rightRegionWidth is how much of the window the right region holds. Zero is not standing.
-func (gate *arrangementGate) rightRegionWidth(window string) float64 {
-	gate.t.Helper()
-	var answer struct {
-		Data struct {
-			Regions []struct {
-				Region string  `json:"region"`
-				W      float64 `json:"w"`
-			} `json:"regions"`
-		} `json:"data"`
-	}
-	out := gate.run("layout.alignment", "window="+window)
-	if err := json.Unmarshal([]byte(out), &answer); err != nil {
-		gate.t.Fatalf("layout.alignment: %v\n%s", err, out)
-	}
-	widest := 0.0
-	for _, region := range answer.Data.Regions {
-		if region.Region == "right" && region.W > widest {
-			widest = region.W
-		}
-	}
-	return widest
-}
-
-// arrangementLines is the window as it stands — the region and every pane, named.
+// arrangementLines is the window as it stands — the region, whose sections are in it, and every
+// pane, named.
 func (gate *arrangementGate) arrangementLines(window string, built gateWindow) string {
 	gate.t.Helper()
 	now := gate.arrangementNow(window)
 	lines := []string{
 		fmt.Sprintf("  region ends at %.0f, panes begin at %.0f", now.regionEnds, now.panesStart),
+		fmt.Sprintf("  bands: left %s, right %s, panes %s", now.bands["left"], now.bands["right"], now.panesBand),
+		fmt.Sprintf("  standing: left %s, right %s",
+			named(now.sections["left"]), named(now.sections["right"])),
 		// Which plugin the window is reading the standing for, and what stands. A region on the
 		// screen with nothing in it and a region standing for the wrong plugin are two different
 		// defects that look the same from the outside.
 		"  focused view: " + gate.run("state.tree", "window="+window),
 		"  sections: " + gate.run("sections.list", "window="+window),
 	}
-	for _, named := range []struct {
+	for _, row := range []struct {
 		what string
 		pane string
 	}{{"terminal (top left)", built.terminal}, {"browser (bottom)", built.browser}, {"right", built.right}} {
-		box := now.panes[named.pane]
+		box := now.panes[row.pane]
 		lines = append(lines, fmt.Sprintf("  %-20s %s x=%.0f y=%.0f w=%.0f h=%.0f",
-			named.what, named.pane, box.X, box.Y, box.W, box.H))
+			row.what, row.pane, box.X, box.Y, box.W, box.H))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// band is the top and bottom of something, in the window's own coordinates.
+type band struct {
+	top    float64
+	bottom float64
+}
+
+func (b band) String() string {
+	return fmt.Sprintf("%.0f..%.0f", b.top, b.bottom)
+}
+
+func (b band) empty() bool { return b.bottom <= b.top }
+
+// recording captures the window while something happens to it, and returns the wait.
+//
+// The pictures this gate keeps are of settled windows — one per click, taken once nothing is moving.
+// A person watching the run sees everything between them, and on 2026-08-17 said none of it matched
+// while every reading here passed. A still of the end of a move is not evidence about the move.
+func (gate *arrangementGate) recording(window string, dir string, frames int, intervalMs int) func() string {
+	gate.t.Helper()
+	done := make(chan struct{})
+	var out string
+	var err error
+	go func() {
+		defer close(done)
+		out, err = gate.try("window.record", "window="+window, "dir="+dir,
+			fmt.Sprintf("frames=%d", frames), fmt.Sprintf("intervalMs=%d", intervalMs))
+	}()
+	// The capture is running before the thing it is meant to capture. Without the wait the first
+	// frames are of a window nothing has happened to yet.
+	time.Sleep(40 * time.Millisecond)
+	// A recording that failed is reported where it failed. Swallowed, it leaves a case with no
+	// evidence and a run with no reason in it.
+	return func() string {
+		<-done
+		if err != nil {
+			gate.t.Errorf("recording into %s: %v\n%s", dir, err, out)
+		}
+		return out
+	}
+}
+
+// assertOneNodePerAddress refuses a window that exposes the same address twice.
+//
+// The address is the only name anything outside has for a node, so two nodes under one name make
+// every command that uses it a coin toss and every reading ambiguous. Measured 2026-08-17: both
+// regions wrote their cells as pane/left/<i> and their bodies as body/left, so the right region
+// answered to the left region's name — and ui.tree had been reporting the collision all along with
+// nothing asking it.
+func (gate *arrangementGate) assertOneNodePerAddress(window string, what string) {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Duplicates []struct {
+				Address string `json:"address"`
+				Count   int    `json:"count"`
+			} `json:"duplicates"`
+		} `json:"data"`
+	}
+	out := gate.run("ui.tree", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("ui.tree: %v\n%s", err, out)
+	}
+	if len(answer.Data.Duplicates) == 0 {
+		return
+	}
+	lines := make([]string, 0, len(answer.Data.Duplicates))
+	for _, duplicate := range answer.Data.Duplicates {
+		lines = append(lines, fmt.Sprintf("  %s (%d nodes)", duplicate.Address, duplicate.Count))
+	}
+	gate.t.Errorf("after %s the window exposes %d address(es) more than once:\n%s\n"+
+		"An address names one node. Two under one name make every command that uses it a guess.",
+		what, len(answer.Data.Duplicates), strings.Join(lines, "\n"))
+}
+
+// keepLastFrame keeps a recording's final frame as this case's still.
+//
+// The frame is one the run actually drew, at the end of the move it recorded, rather than a second
+// capture taken afterwards. Two captures of one window back to back is how `window.snapshot` came to
+// answer `capture timed out` — the still is already in the recording, so it is taken from there.
+func (gate *arrangementGate) keepLastFrame(dir string, path string, said string) {
+	gate.t.Helper()
+	frames, err := filepath.Glob(filepath.Join(dir, "f*.png"))
+	if err != nil || len(frames) == 0 {
+		// A permission is a precondition, not a defect. This machine grants screen recording per
+		// application identity and a gate runs under its own, which no panel ever offers the person
+		// to grant — measured 2026-08-17: the same binary and window captured in 0.3s under the
+		// installation's identifier and timed out under any other. Said plainly and carried on;
+		// a run that fails for it would be reporting the machine as the window.
+		if strings.Contains(said, "screen recording is not permitted") {
+			gate.t.Logf("no picture for %s — this identity cannot capture:\n%s", filepath.Base(dir), said)
+			return
+		}
+		gate.t.Errorf("the recording in %s left no frame, so this case has no picture: %v\n"+
+			"what the window answered: %s", dir, err, said)
+		return
+	}
+	sort.Strings(frames)
+	body, err := os.ReadFile(frames[len(frames)-1])
+	if err != nil {
+		gate.t.Errorf("reading %s: %v", frames[len(frames)-1], err)
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		gate.t.Errorf("making %s: %v", filepath.Dir(path), err)
+		return
+	}
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		gate.t.Errorf("writing %s: %v", path, err)
+	}
+}
+
+// evidencePath is a path under this repository's evidence directory, absolute.
+//
+// A relative path handed to the application is resolved against the application's working
+// directory, which is not this one — measured 2026-08-17, nine recordings answered OK and left no
+// frame anywhere this run could find.
+func (gate *arrangementGate) evidencePath(parts ...string) string {
+	gate.t.Helper()
+	here, err := os.Getwd()
+	if err != nil {
+		gate.t.Fatalf("asking where this run is: %v", err)
+	}
+	return filepath.Join(append([]string{here, "evidence"}, parts...)...)
 }

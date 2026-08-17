@@ -721,8 +721,10 @@ body,
    hidden gives a clean edge while it collapses. */
 .sidebar {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  /* The panes' own band. The rail spans the grid and the panes are inset within it, so a rail
+     at the grid's edges stands 5 points taller than what it stands beside. */
+  top: var(--pane-inset, 0px);
+  bottom: var(--pane-inset, 0px);
   overflow: hidden;
   /* The rail's visual language, distinct from a split pane at a glance: a card
      tint background with elevation on both sides. Standing mid-grid in FLOW it

@@ -307,7 +307,7 @@ export const SectionSetHost = memo(function SectionSetHost({
             // Cell drop target (E2E/AI): ui.input.drag's `to` points at the cell (by index) and `zone` selects
             // split or join. Cells in the left area have no issued id, so they are addressed by index (content
             // uses layout/pane/<pan-id>).
-            data-node={`pane/left/${i}`}
+            data-node={`pane/${region}/${i}`}
             style={cellVars(rect) as CSSProperties}
           >
             <SidebarLeaf
@@ -398,7 +398,7 @@ function SidebarLeaf({
             <div
               key={key}
               className={`space-tab sidebar-left-tab${active === key ? " active" : ""}${editing ? " editing" : ""}${dragging === key ? " dragging" : ""}`}
-              data-node={`tab/left/${key}`}
+              data-node={`tab/${region}/${key}`}
               title={label}
               onMouseDown={editing ? undefined : startDrag(key)}
               onDoubleClick={() => setEditingKey(key)}
@@ -406,7 +406,7 @@ function SidebarLeaf({
               {editing ? (
                 <input
                   className="space-tab-rename"
-                  data-node={`tab/left/${key}/rename`}
+                  data-node={`tab/${region}/${key}/rename`}
                   defaultValue={label}
                   autoFocus
                   onMouseDown={(e) => e.stopPropagation()}
@@ -435,11 +435,16 @@ function SidebarLeaf({
           );
         })}
       </div>
-      <div className="sidebar-left-stack" data-node="body/left">
+      <div className="sidebar-left-stack" data-node={`body/${region}`}>
         {hosted.map((k) => (
           <div
             key={k}
             className="sidebar-left-body"
+            // Which section this is, on the screen. A region that stands is measured by its width, and
+            // a width does not name whose section is in it — a browser was focused and the file
+            // tree stood beside it, and every gate about the arrangement passed. So the key is on the
+            // element, and what stands can be read rather than assumed.
+            data-node={`section/${region}/${k}`}
             style={{ display: active === k ? "flex" : "none" }}
           >
             <PluginViewHost

@@ -298,6 +298,15 @@ export class Receipt {
      */
     "appliedMs": number;
 
+    /**
+     * CarriedMs is how long the commit took to reach the backend from the document that sent
+     * it — the bridge, the queue behind it, and whatever the main thread was doing instead.
+     * 
+     * -1 when the caller stamped nothing. A caller that stamps gets the round trip split in
+     * two: this, and AppliedMs. What is left over is the answer's way back.
+     */
+    "carriedMs": number;
+
     /** Creates a new Receipt instance. */
     constructor($$source: Partial<Receipt> = {}) {
         if (!("sequence" in $$source)) {
@@ -311,6 +320,9 @@ export class Receipt {
         }
         if (!("appliedMs" in $$source)) {
             this["appliedMs"] = 0;
+        }
+        if (!("carriedMs" in $$source)) {
+            this["carriedMs"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -341,6 +353,20 @@ export class Snapshot {
     "sequence": number;
     "surfaces": Surface[];
 
+    /**
+     * SentAtUnixMs is when the document handed this over, by its own wall clock.
+     * 
+     * A receipt says how long the backend held the commit and a caller measures the whole
+     * round trip, and the difference between those two is time nobody could name. Measured
+     * 2026-08-17 in a window changing its layout: 40ms round trip, 0.2ms of native work, and
+     * no reading that said where the other 39.8 went. Stamped here, the crossing can be
+     * subtracted from the round trip and what is left is the bridge.
+     * 
+     * Zero is a caller that does not stamp, and the receipt then reports no crossing rather
+     * than a number made from two clocks that never met.
+     */
+    "sentAtUnixMs": number;
+
     /** Creates a new Snapshot instance. */
     constructor($$source: Partial<Snapshot> = {}) {
         if (!("window" in $$source)) {
@@ -351,6 +377,9 @@ export class Snapshot {
         }
         if (!("surfaces" in $$source)) {
             this["surfaces"] = [];
+        }
+        if (!("sentAtUnixMs" in $$source)) {
+            this["sentAtUnixMs"] = 0;
         }
 
         Object.assign(this, $$source);

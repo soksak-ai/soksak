@@ -517,6 +517,13 @@ func rendererResult(window, command string, raw json.RawMessage) (any, error) {
 		Ok      *bool  `json:"ok"`
 		Code    string `json:"code"`
 		Message string `json:"message"`
+		// What the window's own engine said, which the command layer keeps out of the human
+		// sentence on purpose. A refusal that drops it sends its reader back to the window to
+		// find out why — measured 2026-08-17, `window.snapshot` answered INTERNAL six runs
+		// running and named nothing, and the reason was in this field the whole time.
+		Data struct {
+			Detail string `json:"detail"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
 		return nil, fmt.Errorf("window %s answered %s with something that is not a command envelope: %w",
@@ -533,6 +540,11 @@ func rendererResult(window, command string, raw json.RawMessage) (any, error) {
 		// non-zero on it and a shell can branch. The page's own code and
 		// message travel with it, because "it failed" alone sends the caller
 		// back to the window to find out why.
+		if envelope.Data.Detail != "" {
+			return nil, i18n.Errorf("wails.renderer.refusedWithDetail", map[string]string{
+				"window": window, "command": command, "code": envelope.Code,
+				"message": envelope.Message, "detail": envelope.Data.Detail})
+		}
 		return nil, i18n.Errorf("wails.renderer.refused", map[string]string{
 			"window": window, "command": command, "code": envelope.Code, "message": envelope.Message})
 	}

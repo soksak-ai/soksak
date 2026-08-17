@@ -26,6 +26,10 @@ const commit: NativeSurfaceCommit = async (snapshot) => {
     answeredAt,
     answeredAt - askedAt,
     receipt.appliedMs ?? -1,
+    // How long the commit took to reach the backend. The round trip minus this and the
+    // native work is the answer's way back; without it the two ends agree and the middle
+    // is time nobody can name.
+    receipt.carriedMs ?? -1,
   );
   // Publish the applied inventory on the document, so the composition check reads this one receipt instead
   // of recomputing the geometry from a second source.
@@ -82,7 +86,13 @@ export async function clearNativeSurfaces(): Promise<void> {
   controller?.stop();
   controller = null;
   sequenceFloor += 1;
-  await commit({ window: declaringWindow(), sequence: sequenceFloor, surfaces: [] });
+  // Stamped like every other commit, so a receipt for this one splits the same way.
+  await commit({
+    window: declaringWindow(),
+    sequence: sequenceFloor,
+    surfaces: [],
+    sentAtUnixMs: Date.now(),
+  });
 }
 
 /**

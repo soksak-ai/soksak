@@ -186,8 +186,8 @@ func (gate *restoreGate) consentAndEnable(window string, plugins []string) {
 	gate.t.Helper()
 	for _, id := range plugins {
 		gate.run("plugin.consent.grant", "window="+window, "id="+id)
-		if _, err := gate.try("plugin.enable", "window="+window, "id="+id); err != nil {
-			gate.t.Fatalf("enabling %s: %v", id, err)
+		if out, err := gate.try("plugin.enable", "window="+window, "id="+id); err != nil {
+			gate.t.Fatalf("enabling %s: %v\n%s\nWhat the refusal says is the reason; an exit status is not one.", id, err, out)
 		}
 	}
 }

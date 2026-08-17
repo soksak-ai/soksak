@@ -153,7 +153,18 @@ SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
   dispatch_time_t deadline =
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)timeout_ms * NSEC_PER_MSEC);
   if (dispatch_semaphore_wait(done, deadline) != 0) {
-    return failure(@"capture timed out");
+    // What a timeout here has meant every time it has happened: the screen recording
+    // permission is granted per application identity, and this identity does not have it.
+    // Measured 2026-08-17 — the same binary, the same window, the same code: with the
+    // installation's own identifier the capture answered in 0.3s, and with any other one it
+    // waited out the deadline and said only that it had. macOS asks for the permission by
+    // showing a panel to a foreground application; a gate's application is launched by a
+    // test and is not one, so nothing is ever asked and nothing is ever granted.
+    return failure([NSString stringWithFormat:
+        @"capture timed out after %.0fms — this usually means screen recording is not "
+         "permitted for this application identity. The permission is per identity: grant it "
+         "in System Settings > Privacy & Security > Screen Recording, or run under an "
+         "identity that already has it.", (double)timeout_ms]);
   }
 
   if (error != nil) {

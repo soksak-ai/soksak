@@ -36,6 +36,7 @@ tasks:
       - task: verify:go
       - task: verify:restore
       - task: verify:quiet
+      - task: verify:arrangement
       - task: verify:drawn
       - task: verify:headless
       - task: verify:windows
@@ -63,6 +64,27 @@ tasks:
       - task: build
       - task: build:sok
       - go test ./ -run TestTheDigestSurvivesARestart -count=1
+
+  verify:arrangement:
+    summary: Each click leaves the arrangement it is meant to
+    desc: |
+      The base every other layout question stands on. How long a motion takes,
+      whether a page travels with its pane, whether a frame blinks — each of
+      those asks about a window that is already the right window, and none of
+      them was asked first.
+
+      It states the window before measuring it: a terminal above a browser on
+      the left, a terminal filling the right, the browser's plugin linked to a
+      set holding the browser's own section and the terminals' to theirs. Then
+      it clicks each pane twice round and refuses anything but the stated
+      arrangement — including whose section is standing, which a region's width
+      does not name. Measured 2026-08-17: a browser was focused, a region stood
+      beside it, the file tree was in it, and the gate passed.
+    deps:
+      - task: build
+      - task: build:sok
+    cmds:
+      - go test -count=1 -run TestEachClickLeavesTheArrangementItIsMeantTo -timeout 600s .
 
   verify:drawn:
     summary: What a link names is what the window draws

@@ -11,11 +11,11 @@ import { register } from "./registry";
 export function registerLayoutAlignmentCatalog(): void {
   register("layout.alignment", {
     description:
-      "Where every native surface and every region is, at one instant. Per surface: dom = the declaring element's box now, declared = the box the last commit sent, applied = the box the native layer holds, lag = dom vs declared, drift = declared vs applied, off = dom vs applied. regions and panes are the boxes those surfaces sit beside, read in the same pass — two readings a frame apart cannot tell a window mid-motion from a window that is wrong. off is what a person sees as a page drawn away from its pane; a composition reading alone cannot state it, because declared and applied agree with each other while both are stale.",
+      "Where every native surface and every region is, at one instant. Per surface: dom = the declaring element's box now, declared = the box the last commit sent, applied = the box the native layer holds, lag = dom vs declared, drift = declared vs applied, off = dom vs applied. regions and panes are the boxes those surfaces sit beside, read in the same pass — two readings a frame apart cannot tell a window mid-motion from a window that is wrong. sections is what is on the screen in each region, keyed <pluginId>.<viewId>: a region's width says nothing about whose section is in it. off is what a person sees as a page drawn away from its pane; a composition reading alone cannot state it, because declared and applied agree with each other while both are stale.",
     triggers: { ko: "레이아웃 정렬 좌표 어긋남 리전 패널 페이지 위치 비교" },
     params: {},
     returns:
-      "{ worstOff, worstLag, worstDrift, sampledAtUnixMs, surfaces: [{ id, dom, declared, applied, lag, drift, off, visible }], regions: [{ region, x, w }], panes: [{ pane, x, w }] }",
+      "{ worstOff, worstLag, worstDrift, sampledAtUnixMs, surfaces: [{ id, dom, declared, applied, lag, drift, off, visible }], regions: [{ region, x, w }], sections: [{ region, section }], panes: [{ pane, x, w }] }",
     examples: ["layout.alignment"],
     message: (d) =>
       tmsg("msg.layout.alignment", {

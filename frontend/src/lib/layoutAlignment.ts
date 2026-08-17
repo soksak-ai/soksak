@@ -38,8 +38,19 @@ export interface SurfaceAlignment {
   off: number | null;
 }
 
+/** One section standing in a region, under the key that names whose it is. */
+export interface StandingSection {
+  /** left or right. */
+  region: string;
+  /** `<pluginId>.<viewId>` — the plugin is the half a region's width cannot state. */
+  section: string;
+}
+
 export interface LayoutAlignment {
   regions: Array<{ region: string } & Box>;
+  /** What is on the screen in each region. A region has a width whoever put a section in it:
+   *  measured 2026-08-17, a browser was focused, the region stood, and the file tree was in it. */
+  sections: StandingSection[];
   panes: Array<{ pane: string } & Box>;
   /** The lines drawn around the panes: one frame per pane, and the boundary on the focused one. They
    *  are a separate element from the pane they outline, so whether they are on the screen is a
@@ -73,6 +84,7 @@ export const boxOf = (rect: { left: number; top: number; width: number; height: 
 /** The document half: every declared surface, every region, every pane, measured in one pass. */
 export function documentAlignment(): {
   regions: LayoutAlignment["regions"];
+  sections: LayoutAlignment["sections"];
   panes: LayoutAlignment["panes"];
   frames: LayoutAlignment["frames"];
   boundaries: LayoutAlignment["boundaries"];
@@ -82,6 +94,14 @@ export function documentAlignment(): {
     region: box.node.endsWith("rail/left") ? "left" : "right",
     ...box.box,
   }));
+  // Whose sections are on the screen, in the region they are in. The hidden one of a stack is
+  // mounted with no box, so a section is counted by what it occupies rather than by what exists.
+  const sections = boxesOf("[data-node^='section/']")
+    .filter((box) => box.box.w > 0 && box.box.h > 0)
+    .map((box) => {
+      const parts = box.node.split("/");
+      return { region: parts[1] ?? "", section: parts.slice(2).join("/") };
+    });
   const panes = boxesOf("[data-node*='layout/pane/']").map((box) => ({
     pane: box.node.slice(box.node.lastIndexOf("/") + 1),
     ...box.box,
@@ -99,7 +119,7 @@ export function documentAlignment(): {
     dom: boxOf(element.getBoundingClientRect()),
     declared: declaredOf(element),
   }));
-  return { regions, panes, frames, boundaries, declarations };
+  return { regions, sections, panes, frames, boundaries, declarations };
 }
 
 /** The two halves put together. The applied side is passed in rather than fetched, so a caller that
@@ -147,6 +167,7 @@ export function alignmentOf(
   }
   return {
     regions: document.regions,
+    sections: document.sections,
     panes: document.panes,
     frames: document.frames,
     boundaries: document.boundaries,
