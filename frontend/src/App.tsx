@@ -15,6 +15,7 @@ import { removeRecentWorkspace, useRecentWorkspaces } from "./state/recentWorksp
 import { rafThrottle } from "./lib/rafThrottle";
 import { railEdgeWidths } from "./ui/railEdges";
 import { parkedStyle } from "./lib/layerPark";
+import { createRectMotionTracker } from "./lib/layoutRectMotion";
 import { emitPathsDropped, emitPluginEvent } from "./plugins/hooks";
 import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
@@ -183,6 +184,14 @@ const WorkspacePlane = memo(function WorkspacePlane({
   const t = useT();
   const setLeftRailPlacement = useSessions((s) => s.setLeftRailPlacement);
   const railPlaneRef = useRef<HTMLDivElement>(null);
+  // The rail travels with the panes, on the same interpolation they use.
+  //
+  // Its width was written by the render and the panes travel over the motion, so between the two was
+  // space belonging to nobody: measured 2026-08-17 across all six ways focus can move in a
+  // three-pane window, 165 points for 147–181ms every time the region left or arrived. One motion
+  // owns the layout, so the rail is given the same tracker rather than a transition of its own —
+  // a second timing source would meet the first somewhere in the middle of every change.
+  const railMotion = useMemo(() => createRectMotionTracker("rail"), []);
   const railGridSurfaceRef = useRef<RailGridSurfaceHandle>(null);
   const placement = workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
   // The plugin of the focused centre view, and the set standing on the left because of it.
@@ -407,6 +416,11 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // defects arrive together: (1) a newly activated view has no snap, so the glide precondition of the next journey
   // breaks and the whole grid teleports (2) a surface returning from parking is not re-snapped to the final anchor and
   // lags one beat (measured by the user: choosing another tab in a panel with several browser tabs looks off and flickers).
+  // The rail is measured on the commit that changed it, the same beat the panes are measured on. A
+  // render that changes nothing about its box produces the same values and starts no motion.
+  useLayoutEffect(() => {
+    railMotion.flush(phase.replacing ? "replace" : "animate");
+  }, [leftOpen, sidebarW, renderedStation, railLook, railTraveling, phase.replacing, railMotion]);
   useLayoutEffect(() => {
     emitPluginEvent("layout.reflow", { activeSpaceId: workspace.activeSpaceId });
   }, [
@@ -474,10 +488,11 @@ const WorkspacePlane = memo(function WorkspacePlane({
                 } as React.CSSProperties
               }
             >
-              {railTraveling || phase.replacing || decoration.railSurface !== "present"
+              {phase.replacing || decoration.railSurface !== "present"
                 ? null
                 : <div
                   key={rail.key}
+                  ref={railMotion.ref}
                   className={`sidebar rail-${railLook}`}
                   data-wv-occlusion="rail"
                   data-node="rail/left"
@@ -1202,6 +1217,7 @@ function App() {
           <button
             type="button"
             className={`icon-btn sidebar-toggle${activeWorkspace?.regionOpen.left ? " active" : ""}`}
+            data-node="titlebar/region/left"
             title={t("sidebar.toggle")}
             aria-label={t("sidebar.toggle")}
             onClick={() => activeWorkspace && toggleRegion(activeWorkspace.id, "left")}
@@ -1211,6 +1227,7 @@ function App() {
           <button
             type="button"
             className={`icon-btn sidebar-toggle${activeWorkspace?.regionOpen.right ? " active" : ""}`}
+            data-node="titlebar/region/right"
             title={t("plugin.sidebar.toggle")}
             aria-label={t("plugin.sidebar.toggle")}
             onClick={() =>

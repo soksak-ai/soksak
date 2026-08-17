@@ -5,24 +5,30 @@ import {
   railPresentation,
 } from "./railMotion";
 
-describe("rail presentation — one persistent DOM node, removed while moving and visible again at the destination", () => {
-  it("keeps identity while moving and does not expose the rail surface", () => {
+describe("rail presentation — one persistent DOM node that stays on screen while the panes travel", () => {
+  // Taking the rail off the screen for the phase left 165 points belonging to nobody for 183 to
+  // 194ms, on every move that changed which pane it follows — measured 2026-08-17 in a window with a
+  // terminal top left, a browser under it and a browser on the right, with the recorded frames
+  // showing the strip empty. What travels during a glide is a stand-in, so nothing native crosses
+  // the rail, and whether a page is ever drawn over it is a number rather than an assumption
+  // (`layout.alignment`, `over`).
+  it("keeps identity and stays on screen while moving", () => {
     expect(railPresentation(64, 20, true)).toEqual({
       key: "persistent-rail",
       station: 20,
       fromStation: 64,
       moving: true,
-      visible: false,
+      visible: true,
     });
   });
 
-  it("exposes neither the rail surface nor the structural outline while moving, even when only the pane moves and the station is unchanged", () => {
+  it("stays on screen when only the pane moves and the station is unchanged", () => {
     expect(railPresentation(50, 50, true)).toEqual({
       key: "persistent-rail",
       station: 50,
       fromStation: 50,
       moving: false,
-      visible: false,
+      visible: true,
     });
   });
 

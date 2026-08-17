@@ -32,6 +32,8 @@ import {
   viewsForPlacement,
   getRegisteredView,
 } from "../plugins/viewRegistry";
+import { useHeldWhileLeaving } from "../lib/heldWhileLeaving";
+import { LAYOUT_MOTION_MS } from "../lib/layoutMotion";
 import { useSectionSets } from "../state/sectionSets";
 import { useSessions, type Workspace, type SidebarRegion } from "../state/sessions";
 import { useTheme } from "../state/theme";
@@ -78,9 +80,13 @@ export const SectionSetHost = memo(function SectionSetHost({
   // Sections outside what is placed here are dropped: a set is linked to a region only when every
   // section is placed there, so this can only differ after a plugin is disabled, and the arrangement
   // is reconciled the same way it always was.
-  const standingId = useSectionSets((s) =>
+  const standsNow = useSectionSets((s) =>
     (s.mode === "fixed" ? s.fixed : (s.byPlugin[focusedPluginId ?? ""] ?? {}))[region],
   );
+  // The region's width travels with the panes, so what stands in it leaves when the space does. With
+  // the content decided by this render alone, the strip is empty for the whole closing motion —
+  // measured 2026-08-17, 160 points for 160ms.
+  const standingId = useHeldWhileLeaving(standsNow, LAYOUT_MOTION_MS, region);
   const sets = useSectionSets((s) => s.sets);
   const registeredKeys = useMemo(() => {
     if (!standingId) return [];

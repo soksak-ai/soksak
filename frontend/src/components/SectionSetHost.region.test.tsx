@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SectionSetHost } from "./SectionSetHost";
+import { LAYOUT_MOTION_MS } from "../lib/layoutMotion";
 import { useSectionSets } from "../state/sectionSets";
 
 // React refuses to treat act() as a test boundary without it, and prints that on every render.
@@ -111,7 +112,11 @@ describe("a region draws the set standing in it", () => {
     expect(host.textContent).not.toContain("Files");
   });
 
-  it("draws nothing once the link is removed", () => {
+  // What leaves, leaves with the space it stood in. The region's width travels with the panes, so a
+  // section that vanished in the render leaves an empty strip for the whole closing motion —
+  // measured 2026-08-17, 160 points for 160ms. It is drawn until the space has closed, and then it
+  // is gone.
+  it("draws the section until the closing motion has taken its space, and nothing after", async () => {
     stand("right");
     render("right");
     // Oracle liveness — it is on screen before the link goes.
@@ -119,7 +124,12 @@ describe("a region draws the set standing in it", () => {
 
     act(() => useSectionSets.getState().link(PLUGIN, "right", null));
     render("right");
+    expect(host.textContent).toContain("Files");
 
+    await act(async () => {
+      await new Promise((done) => setTimeout(done, LAYOUT_MOTION_MS + 40));
+    });
+    render("right");
     expect(host.textContent).not.toContain("Files");
   });
 });

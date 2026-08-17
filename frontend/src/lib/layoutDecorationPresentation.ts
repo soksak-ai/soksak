@@ -106,7 +106,15 @@ export function layoutDecorationPresentation(
     // swaps it to a new identity pinned at the destination, so it does not wait for rect
     // animation settlement.
     relationOverlay: "present",
-    railSurface: value,
+    // A region that owns width is not a decoration.
+    //
+    // An outline or a boundary can be taken away while the layout moves and nothing is missing from
+    // the screen. A rail holds a strip of the window, and taking it away leaves that strip to
+    // nobody: the panes are still travelling into it, so what a person sees is a hole. Measured
+    // 2026-08-17 in the named three-pane window, over all six ways focus can move — 165 points, for
+    // 147 to 182ms, every time the region arrived or left. It travels with the panes instead, on
+    // their tracker, which is why it is present through the motion rather than after it.
+    railSurface: "present",
   };
 }
 

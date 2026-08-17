@@ -47,9 +47,17 @@ export type RailPresentation = {
 };
 
 /**
- * The rail is one persistent DOM node that preserves lifetime, but it is not a moving object.
- * During the phase its surface is removed, and after settling it is visible again at the target
- * station. No source/target duplicate is created — a duplicate splits plugin lifetime.
+ * The rail is one persistent DOM node that preserves lifetime, and it stays on the screen while the
+ * panes travel. No source/target duplicate is created — a duplicate splits plugin lifetime.
+ *
+ * Its surface used to be removed for the phase, so a pane could pass behind it: a native surface is
+ * composited above the document, so a page crossing the rail would be drawn over it. What travels
+ * during a glide is a stand-in — the phase does not start unless every moving surface can be covered
+ * by one — so nothing native crosses the rail any more, and taking it away costs what taking it away
+ * always cost. Measured 2026-08-17 in the named three-pane window: 165 points of screen belonging to
+ * nobody for 183 to 194ms, on every move that changed which pane the rail follows, with the frames
+ * showing the strip empty. Whether a page is ever drawn over the region is a number now
+ * (`layout.alignment`, `over`), so the reason to remove it can be checked instead of assumed.
  */
 export function railPresentation(
   fromStation: number,
@@ -61,11 +69,9 @@ export function railPresentation(
     station: targetStation,
     fromStation: traveling ? fromStation : targetStation,
     moving: traveling && fromStation !== targetStation,
-    // During FLOW travel a pane surface can pass behind the rail even when the rail station itself is
-    // unchanged. So visibility is owned by the structural transition phase, not by the station delta.
-    // Keep the persistent host's lifetime, remove every visual surface, border, and input area, and
-    // open them again at the target station after landing.
-    visible: !traveling,
+    // A region that owns width is on the screen for as long as it owns it. The travel moves it; it
+    // does not take it away.
+    visible: true,
   };
 }
 

@@ -16,12 +16,16 @@ const movingReceipt: LayoutDecorationMotionReceipt = {
 };
 
 describe("layout decoration lifecycle", () => {
-  it("structure, focus, and rail are removed while moving, and the relation outline is present at once under the destination identity", () => {
+  // An outline or a boundary can be taken away while the layout moves and nothing is missing from
+  // the screen. A rail holds a strip of the window, and taking it away leaves that strip to nobody
+  // while the panes are still travelling into it — measured 2026-08-17, 165 points for 183 to 194ms
+  // on every move that changed which pane the rail follows.
+  it("structure and focus are removed while moving; the relation outline and the rail, which owns width, stay", () => {
     expect(layoutDecorationPresentation(movingReceipt)).toEqual({
       structuralFrames: "absent",
       focusBoundary: "absent",
       relationOverlay: "present",
-      railSurface: "absent",
+      railSurface: "present",
     });
     expect(layoutDecorationPresentation({
       status: "settled",
@@ -48,7 +52,9 @@ describe("layout decoration lifecycle", () => {
     expect(group).toContain("!replaceGeometry && decoration.focusBoundary");
     expect(app).toContain("decoration.relationOverlay === \"present\" && !phase.replacing");
     expect(app).toContain("railStation={effectiveRailRelation.station}");
-    expect(app).toContain("railTraveling || phase.replacing || decoration.railSurface !== \"present\"");
+    // The travel no longer takes the rail off the screen; it is the panes that move.
+    expect(app).toContain("phase.replacing || decoration.railSurface !== \"present\"");
+    expect(app).not.toContain("railTraveling || phase.replacing");
     expect(app).toContain("<div\n              ref={railPlaneRef}");
     expect(app).toContain("? null\n                : <div");
     expect(app).not.toContain("railPlane={\n            railTraveling");

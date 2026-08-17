@@ -91,11 +91,37 @@ Measured after: 118.2 unfocused, 223.2 focused, the same rectangle.
 
 # T. Travel
 
-## T1. The relationship outline is a destination mark, not a surface that moves
+## T1. The rail stays on the screen while the panes travel
 
-When a FLOW transition begins, the rail's visual surface, its border and its
-input area are removed. One surface appears at the destination after landing.
-The persistent host survives — a duplicate would split the plugin's lifetime.
+A region that owns width is not a decoration. An outline can be taken away for a
+transition and nothing is missing from the screen; a rail holds a strip of the
+window, and taking it away leaves that strip to nobody while the panes are still
+travelling into it.
+
+Its surface used to be removed for the phase, so a pane could pass behind it: a
+native surface is composited above the document, so a page crossing the rail
+would be drawn over it. What travels during a glide is a stand-in — the phase
+does not start unless every moving surface can be covered by one — so nothing
+native crosses the rail, and `layout.alignment` answers `over` for the case where
+one does.
+
+Measured 2026-08-17 in a window with a terminal top left, a browser under it and
+a browser on the right, over all six ways focus can move: with the rail removed,
+165 points belonged to nobody for 183–194ms on every move that changed which pane
+the rail follows, and the recorded frames show the strip empty. With the rail
+kept and travelling on the panes' own interpolation, the hole is 0 in all six and
+`over` is 0 in all six.
+
+The persistent host survives either way — a duplicate would split the plugin's
+lifetime.
+
+## T1a. What leaves, leaves with the space it stood in
+
+The sections standing in a region are decided by a render and the region's width
+travels with the panes, so a section removed in the render leaves an empty strip
+for the whole closing motion — 160 points for 160ms, measured the same day. The
+departing set is held for exactly that motion (`useHeldWhileLeaving`), and a set
+**replaced** by another is not held: the space it stands in never closes.
 
 ## T2. Two solves are never mixed
 
@@ -117,9 +143,10 @@ railSurfaces                                   — counted in the document
 frame                                          — the window.record frame, or null
 ```
 
-**GREEN**: a `traveling` record holds 0 rail surfaces and the record after it
-exactly 1; a PIN focus change leaves `dStation` 0 and `moved` empty; a FLOW
-focus change leaves the station on the focused pane's left clean line.
+**GREEN**: every record holds exactly 1 rail surface while a set stands in the
+region, `traveling` included (T1); a PIN focus change leaves `dStation` 0 and
+`moved` empty; a FLOW focus change leaves the station on the focused pane's left
+clean line.
 
 The surface is counted in the document rather than read from the declaration.
 The declaration is an intention and the count is what a person sees; they agree
@@ -132,7 +159,8 @@ against a rectangle that did not exist, and one measured against zero says a
 pane moved the width of the window.
 
 Measured 2026-08-16, three splits deep: settled/1, settled/1, traveling/0,
-settled/1 — every traveling record 0 and every settled record exactly 1.
+settled/1. The 0 was the rule of that day and is the defect now — T1 states what
+it cost and what the six moves answer since.
 
 ---
 

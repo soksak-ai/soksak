@@ -64,8 +64,10 @@ const state = moduleState("lib/railJournal", () => ({
 
 function railSurfacesNow(): number {
   if (typeof document === "undefined") return 0;
-  // The surface node exists only while nothing is travelling — the rail's host survives a
-  // transition, its surface does not.
+  // The rail is on the screen for as long as it owns width, travelling included. Its surface used
+  // to be removed for the phase, which left 165 points belonging to nobody while the panes travelled
+  // into them — measured 2026-08-17. So a travelling record holds one, the same as a settled one,
+  // and a record holding none while a region stands is the defect this counts.
   return document.querySelectorAll('[data-node="rail/left"]').length;
 }
 
