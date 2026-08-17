@@ -187,7 +187,23 @@ let lastApplied: {
    *  whatever was ahead of it. -1 before the first receipt with a stamp on it. */
   carriedMs: number;
   commits: number;
-} = { surfaces: [], atUnixMs: 0, latencyMs: 0, appliedMs: -1, carriedMs: -1, commits: 0 };
+  /** Every round trip added up, and the worst one, since this window started.
+   *
+   *  A last value cannot be read across a stretch: a move whose commits were all quick reported the
+   *  same 45ms as the move before it, because that was the last one answered. Totals subtract, so a
+   *  stretch reports how many commits it paid for and what they cost. */
+  latencyTotalMs: number;
+  latencyWorstMs: number;
+} = {
+  surfaces: [],
+  atUnixMs: 0,
+  latencyMs: 0,
+  appliedMs: -1,
+  carriedMs: -1,
+  commits: 0,
+  latencyTotalMs: 0,
+  latencyWorstMs: 0,
+};
 
 /** The framework writes down what came back with its commit, and what the round trip cost. */
 export function noteAppliedSurfaces(
@@ -197,7 +213,16 @@ export function noteAppliedSurfaces(
   appliedMs: number,
   carriedMs: number,
 ): void {
-  lastApplied = { surfaces, atUnixMs, latencyMs, appliedMs, carriedMs, commits: lastApplied.commits + 1 };
+  lastApplied = {
+    surfaces,
+    atUnixMs,
+    latencyMs,
+    appliedMs,
+    carriedMs,
+    commits: lastApplied.commits + 1,
+    latencyTotalMs: Math.round((lastApplied.latencyTotalMs + latencyMs) * 100) / 100,
+    latencyWorstMs: Math.max(lastApplied.latencyWorstMs, latencyMs),
+  };
 }
 
 /** What came back last, with the instant it did and what it cost. Empty until the first commit is
@@ -209,6 +234,8 @@ export function lastAppliedSurfaces(): {
   appliedMs: number;
   carriedMs: number;
   commits: number;
+  latencyTotalMs: number;
+  latencyWorstMs: number;
 } {
   return lastApplied;
 }

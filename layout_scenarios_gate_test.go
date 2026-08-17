@@ -55,6 +55,8 @@ type traceFrame struct {
 	AppliedAgeMs  float64            `json:"appliedAgeMs"`
 	CommitMs      float64            `json:"commitMs"`
 	CarriedMs     float64            `json:"carriedMs"`
+	CommitTotalMs float64            `json:"commitTotalMs"`
+	CommitWorstMs float64            `json:"commitWorstMs"`
 	AppliedMs     float64            `json:"appliedMs"`
 	SinceLastMs   float64            `json:"sinceLastMs"`
 	Drawn         bool               `json:"drawn"`
@@ -413,10 +415,15 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 		// The cadence the window drew at while it was watched. A system that is throttling a window
 		// that is not frontmost sets this, not the application, and it is the resolution every
 		// number beside it was read at.
+		// The round trips this stretch paid for, from totals differenced across it. Read as a last
+		// value, one slow commit answered for every frame after it and a move whose commits were all
+		// quick reported the one before it — the same trap the cost readings held.
 		commit, slowest, watching := 0.0, 0.0, 0.0
-		commits := 0
+		commits, spent := 0, 0.0
 		if len(r.frames) > 0 {
-			commits = r.frames[len(r.frames)-1].Commits - r.frames[0].Commits
+			first, last := r.frames[0], r.frames[len(r.frames)-1]
+			commits = last.Commits - first.Commits
+			spent = last.CommitTotalMs - first.CommitTotalMs
 		}
 		for _, frame := range r.frames {
 			if frame.TickMs > watching {
@@ -429,10 +436,10 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				slowest = frame.SinceLastMs
 			}
 		}
-		t.Logf("%-32s %3d readings   lag %s   off %s   applied %s   hole %s   over %s   blink %s   sizes %d steps %3d   commit %.0fms (%d)"+
+		t.Logf("%-32s %3d readings   lag %s   off %s   applied %s   hole %s   over %s   blink %s   sizes %d steps %3d   commit %.0fms worst, %.0fms over %d"+
 			"  drawn every %.0fms (read every %.0f, worst %.0f)  watching %.1fms",
 			r.name, len(r.frames), r.lag, r.off, r.applied, r.hole, r.over, r.blink, r.sizes, r.steps,
-			commit, commits,
+			commit, spent, commits,
 			drawnCadence(r.frames), medianCadence(r.frames), slowest, watching)
 	}
 	// One move recorded for the eye, in its own pass, with the recorder already running before the

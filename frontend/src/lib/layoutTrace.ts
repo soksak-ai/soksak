@@ -55,6 +55,10 @@ export interface LayoutTraceFrame {
   commitMs: number;
   /** How long that commit took to reach the backend. -1 before the first stamped receipt. */
   carriedMs: number;
+  /** Every round trip added up, and the worst one, since the window started. Differenced across a
+   *  stretch they say what that stretch paid; the last value alone cannot. */
+  commitTotalMs: number;
+  commitWorstMs: number;
   regions: LayoutAlignment["regions"];
   panes: LayoutAlignment["panes"];
   frames: LayoutAlignment["frames"];
@@ -212,6 +216,8 @@ function tick(drawn: boolean): void {
     costs: mainThreadCosts(),
     appliedAgeMs: applied.atUnixMs === 0 ? -1 : Math.round(atUnixMs - applied.atUnixMs),
     commitMs: Math.round(applied.latencyMs),
+    commitTotalMs: Math.round(applied.latencyTotalMs),
+    commitWorstMs: Math.round(applied.latencyWorstMs),
     carriedMs: Math.round(applied.carriedMs),
     appliedMs: Math.round(applied.appliedMs * 10) / 10,
     regions: alignment.regions,
