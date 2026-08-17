@@ -105,19 +105,18 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 		"plugin="+gate.pluginOfTab(window, built.terminalTab), "set="+terminalSet, "region=left")
 	gate.run("workspace.region.toggle", "window="+window, "region=left", "open=true")
 
-	// The inset is measured from the window rather than assumed: it is what stands between the
-	// sidebar and the panes beside it.
-	gate.run("tab.activate", "window="+window, "tab="+built.terminalTab)
+	// The inset is measured from the window rather than assumed, and from a gap the sidebar is not
+	// in: with the right pane focused the sidebar stands beside it, and what is left between the
+	// window's edge and the first pane is the window's own inset. Reading it from the gap in front
+	// of the sidebar made the measurement depend on the thing being measured — it went to zero the
+	// day the sidebar was moved against the view it serves.
+	gate.run("tab.activate", "window="+window, "tab="+built.rightTab)
 	gate.settle(window)
-	inset := gate.arrangementNow(window).panesStart - gate.arrangementNow(window).regionEnds
+	inset := gate.arrangementNow(window).panesStart
 	if inset <= 0 || inset > 40 {
-		t.Fatalf("the panes begin %0.f from where the sidebar ends, which is not an inset", inset)
+		t.Fatalf("the panes begin %0.f from the window's edge, which is not an inset", inset)
 	}
 
-	// Every way a person can get from one pane to another: three starting points times three
-	// clicks, the click's own included. What the window must hold depends on what was clicked and
-	// on nothing else, so asking it from every starting point is what proves that — a click that
-	// only works from one place works from none of the others a person will click from.
 	// Every way a person can get from one pane to another: three starting points times three
 	// clicks, the click's own included. What the sidebar holds depends on what was clicked and on
 	// nothing else, so asking it from every starting point is what proves that — a click that only
@@ -173,6 +172,31 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 					"The sidebar stands to the left of the view that was clicked.",
 					what, now.regionEnds, clicked.X, gap, inset,
 					gate.arrangementLines(window, built))
+			}
+
+			// And nearer the view it serves than anything on its other side.
+			//
+			// The sidebar stands for one view, and how near it is to that view is what marks it as
+			// its own. Measured 2026-08-17 in the window as it stood: the left column ended at 414,
+			// the sidebar held 420..580, the pane it served began at 586 — six points on each side,
+			// so nothing on the screen said which of the two it belonged to. Reported the same day
+			// as things that should be grouped reading as foreign.
+			behind := 0.0
+			for _, box := range now.panes {
+				if box.W <= 0 || box.X+box.W > now.starts["left"] {
+					continue
+				}
+				if edge := now.starts["left"] - (box.X + box.W); behind == 0 || edge < behind {
+					behind = edge
+				}
+			}
+			if behind > 0 {
+				if serves := clicked.X - now.regionEnds; serves >= behind {
+					t.Errorf("clicking %s: the sidebar is %.0f from the view it serves and %.0f from "+
+						"what is behind it, so nothing says which one it belongs to.\n%s\n"+
+						"A sidebar stands nearer the view it stands for than anything on its other side.",
+						what, serves, behind, gate.arrangementLines(window, built))
+				}
 			}
 
 			// And whose section is in it. A sidebar holding another plugin's section is what a

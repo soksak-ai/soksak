@@ -521,7 +521,12 @@ const WorkspacePlane = memo(function WorkspacePlane({
                         }}
                   style={
                     {
-                      left: `calc(${rail.station}% - ${(sidebarW * rail.station) / 100}px)`,
+                      // One inset nearer the view it serves, which is always the one on its
+                      // right. Standing between two of them with the same gap on each side,
+                      // nothing on the screen marks it as one view's rather than the other — measured
+                      // 2026-08-17: the left column ended at 414, the sidebar held 420..580,
+                      // and the pane it served began at 586. Six points each way.
+                      left: `calc(${rail.station}% - ${(sidebarW * rail.station) / 100}px + var(--pane-inset, 0px))`,
                       width: leftOpen ? sidebarW : 0,
                       borderLeftWidth: railEdgeWidths(
                         railLook,
