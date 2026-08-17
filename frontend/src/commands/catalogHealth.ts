@@ -57,6 +57,15 @@ export function registerHealthCatalog(): void {
         ...commandHealth(catalogJson().length),
         ledger,
         overlays: useUi.getState().overlayCount,
+        // The document's own account of its start. The boot script records a failure on the
+        // document element and in the console, and neither is a reading: on 2026-08-17 `<html>`
+        // carried data-boot-status="failed" while `activity.recent` held zero renderer errors, and
+        // the only way anyone learned it was by opening an inspector.
+        boot: {
+          status: document.documentElement.dataset.bootStatus ?? "",
+          error: document.documentElement.dataset.bootError ?? "",
+          runtimeError: document.documentElement.dataset.runtimeError ?? "",
+        },
       };
     },
   });

@@ -164,9 +164,17 @@ async function declareCommandsToBackend(): Promise<void> {
 }
 
 // Boot complete — restores the title so no stamp remains (initWindowTitle takes over after this).
+//
+// The document is also told, because the boot script reads that attribute to decide what an
+// unhandled error means: while it reads "loading", any error is a boot failure and raises the
+// failure screen. Nothing ever set it past "loading", so a throw an hour into a session was
+// reported as a start that never happened — measured 2026-08-17, `<html>` carried
+// data-boot-status="failed" while the application was running, and the failure screen's own
+// selector then styled the document element and inset the whole window by its 40px padding.
 function bootDone(): void {
   try {
     document.title = initialTitle;
+    document.documentElement.dataset.bootStatus = "ready";
   } catch {
     /* non-DOM test */
   }

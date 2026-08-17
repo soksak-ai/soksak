@@ -75,6 +75,16 @@ func TestARunningBuildReportsNothingWrong(t *testing.T) {
 			held)
 	}
 
+	// The document's own account of its start. A boot failure was recorded on the document element
+	// and in the console, and neither was a reading: measured 2026-08-17, `<html>` carried
+	// data-boot-status="failed" while the renderer error stream held nothing, and the way it was
+	// found was a person opening an inspector.
+	if status, detail := gate.bootStatus(window); status != "" && status != "ready" {
+		t.Errorf("the document reports its start as %q: %s\n"+
+			"A window that did not start is not one anybody should be reading numbers from.",
+			status, detail)
+	}
+
 	// The activity ledger. A publish that never lands means every observation above is blind.
 	if healthy, detail := gate.activityHealthy(window); !healthy {
 		t.Errorf("the activity ledger is not taking writes: %s", detail)
@@ -231,4 +241,23 @@ func (gate *quietGate) overlaysHeld(window string) int {
 		gate.t.Fatalf("state.health: %v\n%s", err, out)
 	}
 	return answer.Data.Overlays
+}
+
+func (gate *quietGate) bootStatus(window string) (status string, detail string) {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Boot struct {
+				Status       string `json:"status"`
+				Error        string `json:"error"`
+				RuntimeError string `json:"runtimeError"`
+			} `json:"boot"`
+		} `json:"data"`
+	}
+	out := gate.run("state.health", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("state.health: %v\n%s", err, out)
+	}
+	boot := answer.Data.Boot
+	return boot.Status, strings.TrimSpace(boot.Error + "\n" + boot.RuntimeError)
 }

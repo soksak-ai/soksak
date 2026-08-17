@@ -6,8 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>soksak</title>
     <style>
-      /* The boot failure screen. It has to stand before the app stylesheet loads, so it is here. */
-      [data-boot-error] {
+      /* The boot failure screen. It has to stand before the app stylesheet loads, so it is here.
+         Its own name: the diagnosis is recorded on <html> as data-boot-error, and an attribute
+         selector matches any element carrying it — so the screen's rules landed on the document
+         element too and inset the whole application by this padding. Measured 2026-08-17, by a
+         person reading the inspector: data-boot-status="failed" and 40px of padding on <html>. */
+      [data-boot-screen] {
         position: fixed;
         inset: 0;
         z-index: 2147483647;
@@ -22,10 +26,10 @@
         font: 13px/1.6 ui-sans-serif, -apple-system, "Helvetica Neue", sans-serif;
         text-align: center;
       }
-      [data-boot-error][data-shown] { display: flex; }
-      [data-boot-error] h1 { margin: 0; font-size: 15px; font-weight: 600; }
-      [data-boot-error] p { margin: 0; max-width: 46ch; color: #9b9ba6; }
-      [data-boot-error] code {
+      [data-boot-screen][data-shown] { display: flex; }
+      [data-boot-screen] h1 { margin: 0; font-size: 15px; font-weight: 600; }
+      [data-boot-screen] p { margin: 0; max-width: 46ch; color: #9b9ba6; }
+      [data-boot-screen] code {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         color: #c9c9d2;
       }
@@ -34,7 +38,7 @@
   <body>
     <div class="bg" aria-hidden="true"></div>
     <div id="root"></div>
-    <div data-boot-error role="alert">
+    <div data-boot-screen role="alert">
       <h1 data-boot-title></h1>
       <p data-boot-detail></p>
       <p><code>sok state.boot</code></p>
@@ -66,7 +70,7 @@
           }
           document.documentElement.dataset.bootStatus = "failed";
           document.documentElement.dataset.bootError = message;
-          const screen = document.querySelector("[data-boot-error]");
+          const screen = document.querySelector("[data-boot-screen]");
           if (!screen) return;
           screen.querySelector("[data-boot-title]").textContent = TITLE;
           screen.querySelector("[data-boot-detail]").textContent = DETAIL;
