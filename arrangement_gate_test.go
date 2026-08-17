@@ -147,7 +147,7 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 			// working directory and the frames land somewhere this run cannot look — measured
 			// 2026-08-17, nine recordings answered OK and left no frame anywhere here.
 			dir := gate.evidencePath("arrangement", "moves", name)
-			wait := gate.recording(window, dir, 14, 25)
+			wait := gate.recording(window, dir, 6, 40)
 			gate.run("tab.activate", "window="+window, "tab="+click.tab)
 			said := wait()
 			gate.settle(window)
@@ -264,8 +264,14 @@ func (gate *arrangementGate) sectionOf(window string, region string, plugin stri
 
 // settle waits until the window has stopped changing shape, so what is read is what a person is
 // left looking at rather than a frame of the way there.
+// settleFloorMs is the shortest a settle may take: a layout motion lasts that long, and two
+// readings taken before it starts are two readings of the window it is leaving. Measured
+// 2026-08-17, a click was judged against the arrangement of the click before it.
+const settleFloorMs = 220
+
 func (gate *arrangementGate) settle(window string) {
 	gate.t.Helper()
+	started := time.Now()
 	last := arrangement{}
 	same := 0
 	gate.until(5*time.Second, func() bool {
@@ -276,7 +282,7 @@ func (gate *arrangementGate) settle(window string) {
 			same = 0
 		}
 		last = now
-		return same >= 2
+		return same >= 2 && time.Since(started) >= settleFloorMs*time.Millisecond
 	}, "the window to settle")
 }
 

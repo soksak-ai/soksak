@@ -3,6 +3,7 @@
 #import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
+#import <WebKit/WebKit.h>
 
 static SoksakCapture failure(NSString *message) {
   SoksakCapture out = {NULL, 0, strdup(message.UTF8String)};
@@ -185,4 +186,83 @@ SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
 void soksakCaptureFree(SoksakCapture capture) {
   free(capture.png);
   free(capture.error);
+}
+
+// The web view that draws this window's document: the first one found in the view tree.
+//
+// A window holds one document web view and, on top of it, one child per native surface. The
+// document's is the one that was there first and the one every child is placed over, so the tree is
+// walked breadth-first and the first hit is it.
+static WKWebView *documentWebView(NSView *root) {
+  if (root == nil) return nil;
+  for (NSView *child in root.subviews) {
+    if ([child isKindOfClass:[WKWebView class]]) return (WKWebView *)child;
+  }
+  for (NSView *child in root.subviews) {
+    WKWebView *found = documentWebView(child);
+    if (found != nil) return found;
+  }
+  return nil;
+}
+
+SoksakCapture soksakCaptureDocument(void *nsWindow, double x, double y, double w,
+                                    double h, int timeout_ms) {
+  if (nsWindow == NULL) return failure(@"capture received a nil window");
+
+  NSWindow *window = (NSWindow *)nsWindow;
+  dispatch_semaphore_t done = dispatch_semaphore_create(0);
+  __block NSData *png = nil;
+  __block NSString *error = nil;
+
+  dispatch_block_t ask = ^{
+    WKWebView *view = documentWebView(window.contentView);
+    if (view == nil) {
+      error = @"this window draws its document in no web view";
+      dispatch_semaphore_signal(done);
+      return;
+    }
+    WKSnapshotConfiguration *config = [[WKSnapshotConfiguration alloc] init];
+    // The rect is in the web view's own coordinates, which are the document's — the same space the
+    // caller crops in. A zero-sized rect asks for the whole view.
+    if (w > 0 && h > 0) {
+      config.rect = CGRectMake(x, y, w, h);
+    }
+    [view takeSnapshotWithConfiguration:config
+                      completionHandler:^(NSImage *image, NSError *snapshotError) {
+                        if (image == nil || snapshotError != nil) {
+                          error = [NSString
+                              stringWithFormat:@"the web view refused a snapshot: %@",
+                                               snapshotError.localizedDescription ?: @"unknown"];
+                          dispatch_semaphore_signal(done);
+                          return;
+                        }
+                        CGImageRef cg = [image CGImageForProposedRect:NULL context:nil hints:nil];
+                        if (cg == NULL) {
+                          error = @"the snapshot carried no image";
+                          dispatch_semaphore_signal(done);
+                          return;
+                        }
+                        png = [pngFromCGImage(cg) retain];
+                        dispatch_semaphore_signal(done);
+                      }];
+    [config release];
+  };
+  if ([NSThread isMainThread]) ask(); else dispatch_async(dispatch_get_main_queue(), ask);
+
+  dispatch_time_t deadline =
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)timeout_ms * NSEC_PER_MSEC);
+  if (dispatch_semaphore_wait(done, deadline) != 0) {
+    return failure(@"the web view did not answer with a snapshot in time");
+  }
+  if (error != nil) {
+    [png release];
+    return failure(error);
+  }
+  if (png == nil || png.length == 0) {
+    return failure(@"the web view answered with an empty snapshot");
+  }
+  SoksakCapture out = {malloc(png.length), png.length, NULL};
+  memcpy(out.png, png.bytes, png.length);
+  [png release];
+  return out;
 }

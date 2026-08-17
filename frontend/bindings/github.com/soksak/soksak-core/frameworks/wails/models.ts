@@ -14,6 +14,13 @@ import { Create as $Create } from "@wailsio/runtime";
 export class CaptureNote {
     "path": string;
 
+    /**
+     * DocumentOnly states that the native children are not in this image: the window capture
+     * was refused and the web view was asked for the document instead. A picture that leaves
+     * something out and does not say so is read as a window that had nothing there.
+     */
+    "documentOnly"?: boolean;
+
     /** Creates a new CaptureNote instance. */
     constructor($$source: Partial<CaptureNote> = {}) {
         if (!("path" in $$source)) {

@@ -178,7 +178,7 @@ func (service *CaptureService) grab(handle unsafe.Pointer, region Rect, deadline
 	}
 	answer := make(chan frame, 1)
 	go func() {
-		png, err := service.capture(handle, region)
+		png, _, err := service.capturing(handle, region)
 		answer <- frame{png: png, err: err}
 	}()
 	select {

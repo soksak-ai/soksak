@@ -29,6 +29,16 @@ typedef struct {
 SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
                                   double h, int timeout_ms);
 
+// Capture the document alone, through the web view that draws it, cropped the same way.
+//
+// This asks the web view for its own pixels instead of asking the compositor for the
+// window's, so it needs no screen-recording grant and works under any application identity.
+// What it cannot show is a native child: a page drawn by another process is composited above
+// this document and is not in this image. It is the evidence available when the window
+// capture is refused, and it is a different picture, so it has a different name.
+SoksakCapture soksakCaptureDocument(void *nsWindow, double x, double y, double w,
+                                    double h, int timeout_ms);
+
 void soksakCaptureFree(SoksakCapture capture);
 
 #endif

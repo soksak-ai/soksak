@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -33,6 +35,14 @@ type CaptureService struct {
 	// frames is a loop with a budget and a stopping rule, and none of that needs a display to be
 	// judged.
 	capture func(unsafe.Pointer, Rect) ([]byte, error)
+	// captureDocument is the same picture without the native children, asked of the web view
+	// rather than of the compositor. It needs no screen-recording grant, and it is what is left
+	// when the window capture is refused for the identity this build runs under.
+	captureDocument func(unsafe.Pointer, Rect) ([]byte, error)
+	// refused remembers that this identity may not read the screen, so the deadline is paid
+	// once rather than per frame. A recording of fourteen frames paid it fourteen times and
+	// outlived the command's own deadline — measured 2026-08-17, 20s for a 350ms recording.
+	refused atomic.Bool
 	// frames announces one recorded frame once its file is complete. Nil sends nothing, which is
 	// what a caller that passed no receiver asked for.
 	frames func(index int)
@@ -43,11 +53,12 @@ type CaptureService struct {
 
 func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureService {
 	return &CaptureService{
-		name:      name,
-		window:    window,
-		size:      contentSize,
-		capture:   CaptureWindow,
-		occlusion: setWindowOcclusionDetection,
+		name:            name,
+		window:          window,
+		size:            contentSize,
+		capture:         CaptureWindow,
+		captureDocument: CaptureDocument,
+		occlusion:       setWindowOcclusionDetection,
 	}
 }
 
@@ -57,6 +68,10 @@ func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureServic
 // landed instead of guessing it went where it asked.
 type CaptureNote struct {
 	Path string `json:"path"`
+	// DocumentOnly states that the native children are not in this image: the window capture
+	// was refused and the web view was asked for the document instead. A picture that leaves
+	// something out and does not say so is read as a window that had nothing there.
+	DocumentOnly bool `json:"documentOnly,omitempty"`
 }
 
 func (service *CaptureService) ServiceName() string { return "soksak-capture" }
@@ -87,7 +102,7 @@ func (service *CaptureService) SnapshotRegion(path string, rect Rect) (CaptureNo
 		return CaptureNote{}, err
 	}
 	defer service.holdRendering(handle)()
-	png, err := service.capture(handle, rect)
+	png, documentOnly, err := service.capturing(handle, rect)
 	if err != nil {
 		return CaptureNote{}, err
 	}
@@ -100,7 +115,7 @@ func (service *CaptureService) SnapshotRegion(path string, rect Rect) (CaptureNo
 	if err := os.WriteFile(path, png, 0o644); err != nil {
 		return CaptureNote{}, fmt.Errorf("capture could not write %s: %w", path, err)
 	}
-	return CaptureNote{Path: path}, nil
+	return CaptureNote{Path: path, DocumentOnly: documentOnly}, nil
 }
 
 // CapturePixels is an image and the statement of what went into it.
@@ -132,11 +147,11 @@ func (service *CaptureService) PixelsAt(path string, rect Rect) (CapturePixels, 
 		return CapturePixels{}, err
 	}
 	defer service.holdRendering(handle)()
-	png, err := service.capture(handle, rect)
+	png, documentOnly, err := service.capturing(handle, rect)
 	if err != nil {
 		return CapturePixels{}, err
 	}
-	note := CaptureNote{}
+	note := CaptureNote{DocumentOnly: documentOnly}
 	if path != "" {
 		if err := writeCapture(path, png); err != nil {
 			return CapturePixels{}, err
@@ -187,3 +202,45 @@ func (service *CaptureService) holdRendering(handle unsafe.Pointer) func() {
 	time.Sleep(occlusionResumeMillis * time.Millisecond)
 	return func() { service.occlusion(handle, true) }
 }
+
+// capturing takes the window's picture, and the document's when the window's is refused.
+//
+// Screen recording is granted per application identity on this platform. Measured 2026-08-17: the
+// same binary and window captured in 0.3s under the installation's identifier and waited out the
+// deadline under any other — which is every gate, since each runs under its own. A run that cannot
+// take a picture has no evidence, and evidence that stops at the first refusal is evidence nobody
+// has when it matters.
+//
+// So the document is asked instead, and the answer states that it is the document. The second
+// picture is not the first: a page is composited above the document by another process and is not
+// in it.
+func (service *CaptureService) capturing(handle unsafe.Pointer, rect Rect) ([]byte, bool, error) {
+	if service.refused.Load() && service.captureDocument != nil {
+		document, documentErr := service.captureDocument(handle, rect)
+		if documentErr == nil {
+			return document, true, nil
+		}
+	}
+	png, err := service.capture(handle, rect)
+	if err == nil {
+		return png, false, nil
+	}
+	// Only for the one refusal the document can answer. Every other failure — no window, a
+	// nil handle, a rect that clamps to nothing — is answered as itself, because a fallback
+	// that runs on all of them turns a caller's mistake into a picture of something else.
+	if service.captureDocument == nil || !strings.Contains(err.Error(), captureNotPermitted) {
+		return nil, false, err
+	}
+	service.refused.Store(true)
+	document, documentErr := service.captureDocument(handle, rect)
+	if documentErr != nil {
+		// the screen. Matched rather than typed, because the sentence is the backend's and this is the one
+		return nil, false, fmt.Errorf("%w (the document alone was refused too: %v)", err, documentErr)
+	}
+	return document, true, nil
+}
+
+// captureNotPermitted is the words the window capture answers with when this identity may not read
+// the screen. Matched rather than typed, because the sentence is the backend's and this is the one
+// refusal the document capture can answer.
+const captureNotPermitted = "screen recording is not permitted"
