@@ -13,6 +13,7 @@ import { tmsg } from "../../i18n";
 import type { ContentViewHost } from "../../lib/contentViews";
 
 import { nativeSurfacesSettled } from "./nativeSurfaces";
+import { currentWindowLabel } from "../../lib/webviewLabels";
 
 function unsupported(method: string): never {
   throw new Error(tmsg("framework.contentView.unsupported", { method }));
@@ -47,6 +48,20 @@ export const wailsContentViewHost: ContentViewHost = {
   },
   chromePresentationSettled: async () => {
     await nativeSurfacesSettled();
+  },
+  // What the compositor holds, not what was asked of it. Read per call rather than cached: the
+  // caller is asking because it suspects the two clocks disagree, and a cached answer is the older
+  // of the two.
+  appliedSurfaces: async () => {
+    const composition = await CompositorService.Latest(currentWindowLabel());
+    return composition.surfaces.map((surface) => ({
+      id: surface.id,
+      x: surface.applied.x,
+      y: surface.applied.y,
+      w: surface.applied.width,
+      h: surface.applied.height,
+      visible: surface.appliedVisible,
+    }));
   },
 
   open: async (label) => unsupported(`open(${label})`),

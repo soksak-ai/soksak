@@ -134,6 +134,70 @@ export interface ContentViewHost {
   sendKey(label: string, key: string, modifiers?: {
     ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean;
   }): Promise<void>;
+  /**
+   * Where the native layer holds each surface **right now**, read from what it applied.
+   *
+   * The document is one clock and the native layer is another. A reading taken from the
+   * document alone gives where the pane is; a reading taken from the compositor alone gives where
+   * the page is; and a page drawn 160 points off its pane satisfies both separately — measured 2026-08-17,
+   * a browser page over the sidebar with every composition reading reporting zero drift.
+   *
+   * An implementation with no native layer answers an empty list, and that is the fact rather than
+   * a refusal: nothing is applied outside the document.
+   */
+  appliedSurfaces(): Promise<AppliedSurface[]>;
+}
+
+/**
+ * What the native layer last reported back, and when.
+ *
+ * Every commit is answered with the applied rectangles, so the freshest reading a window can have
+ * costs nothing: it is the answer to the request it already made. Asking the compositor again on top
+ * of that adds a round trip, and a reading a round trip old compared against an element now is two
+ * instants — during a motion the difference between them is the motion itself, which is how 72
+ * points of nothing became a defect report on 2026-08-17.
+ */
+let lastApplied: {
+  surfaces: readonly AppliedSurface[];
+  atUnixMs: number;
+  /** How long the commit that carried these took, from the rectangles being measured to the native
+   *  layer answering. This is the distance a page can be behind its pane: the pane moves in the
+   *  frame the document paints, and the page moves when this is over. */
+  latencyMs: number;
+  /** How many commits have been answered. A window that commits once per frame while a layout moves
+   *  is paying a round trip per frame, and the count is the record of it. */
+  commits: number;
+} = { surfaces: [], atUnixMs: 0, latencyMs: 0, commits: 0 };
+
+/** The framework writes down what came back with its commit, and what the round trip cost. */
+export function noteAppliedSurfaces(
+  surfaces: readonly AppliedSurface[],
+  atUnixMs: number,
+  latencyMs: number,
+): void {
+  lastApplied = { surfaces, atUnixMs, latencyMs, commits: lastApplied.commits + 1 };
+}
+
+/** What came back last, with the instant it did and what it cost. Empty until the first commit is
+ *  answered. */
+export function lastAppliedSurfaces(): {
+  surfaces: readonly AppliedSurface[];
+  atUnixMs: number;
+  latencyMs: number;
+  commits: number;
+} {
+  return lastApplied;
+}
+
+/** One surface as the native layer holds it. Coordinates are CSS pixels from the window's top left,
+ *  the frame the declaration is written in. */
+export interface AppliedSurface {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  visible: boolean;
 }
 
 /**
@@ -146,6 +210,18 @@ export interface ContentViewHost {
  * (the plugin) does not need that difference.
  */
 export const CONTENT_VIEW_BODY = "data-content-view-body";
+
+/**
+ * Every element declaring a native surface, in document order.
+ *
+ * The attribute is the plugin's declaration (`data-native-surface`, `data-native-surface-id`), the
+ * same one the compositor reads to build its inventory. Read here so a question about where a
+ * surface is can be answered against the element that asked for it, rather than against a record of
+ * what was asked some commits ago.
+ */
+export function nativeSurfaceDeclarations(doc: Document = document): HTMLElement[] {
+  return Array.from(doc.querySelectorAll<HTMLElement>("[data-native-surface][data-native-surface-id]"));
+}
 
 /** The slot declared for this label. Without one, this view has **no slot** and is not placed on screen. */
 export function findContentViewSlot(label: string, doc: Document): HTMLElement | null {

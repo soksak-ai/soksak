@@ -90,6 +90,7 @@ import {
   waitForLayoutTransaction,
 } from "../lib/layoutTransitionJournal";
 import { registerUnitDevCatalog } from "./catalogUnitDev";
+import { registerLayoutAlignmentCatalog, registerLayoutTraceCatalog } from "./catalogLayoutAlignment";
 import { registerWebviewCatalog } from "./catalogWebview";
 import { registerPresentationClockCatalog } from "./catalogPresentationClock";
 import {
@@ -2443,6 +2444,8 @@ export function registerCatalog(): void {
   registerSystemCatalog();
   registerUnitDevCatalog();
   registerWebviewCatalog();
+  registerLayoutAlignmentCatalog();
+  registerLayoutTraceCatalog();
   reportOwnerAnswered();
 }
 

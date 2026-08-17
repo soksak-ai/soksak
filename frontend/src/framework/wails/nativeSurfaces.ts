@@ -3,10 +3,28 @@ import type { NativeSurfaceCommit, NativeSurfaceObserverController } from "@soks
 
 import * as CompositorService from "../../../bindings/github.com/soksak/wails-service-native-compositor/service";
 import { Snapshot } from "../../../bindings/github.com/soksak/wails-service-native-compositor/models";
+import { noteAppliedSurfaces } from "../../lib/contentViews";
+import { presentationNowUnixMs } from "../../lib/presentationClock";
 import { currentWindowLabel } from "../../lib/webviewLabels";
 
 const commit: NativeSurfaceCommit = async (snapshot) => {
+  const askedAt = presentationNowUnixMs();
   const receipt = await CompositorService.Commit(Snapshot.createFrom(snapshot));
+  const answeredAt = presentationNowUnixMs();
+  // The applied rectangles come back with the commit that asked for them. Written down here, the
+  // freshest native reading a window can have costs no round trip of its own.
+  noteAppliedSurfaces(
+    (receipt.surfaces ?? []).map((surface) => ({
+      id: surface.id,
+      x: surface.frame.x,
+      y: surface.frame.y,
+      w: surface.frame.width,
+      h: surface.frame.height,
+      visible: surface.visible,
+    })),
+    answeredAt,
+    answeredAt - askedAt,
+  );
   // Publish the applied inventory on the document, so the composition check reads this one receipt instead
   // of recomputing the geometry from a second source.
   document.documentElement.dataset.nativeSnapshotSequence = String(receipt.sequence);
