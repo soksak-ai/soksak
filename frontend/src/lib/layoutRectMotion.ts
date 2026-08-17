@@ -109,7 +109,7 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
   //
   // On the release transition the inline styles are cleared and FLIP starts from there (hold release = travel start).
   const frozen = new Map<HTMLElement, { was: Snap; pin: Animation | null }>();
-  // A layout moves by travelling, and its sizes are settled at once.
+  // A layout moves, and every box in it moves the same way.
   //
   // Interpolating width and height changes every box in the window on every frame, and everything
   // inside those boxes lays itself out again on each of them: a terminal reflows its buffer, a page
@@ -124,20 +124,37 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
   // its element every frame and the native layer held what it was given — and both were stalled by
   // the same per-frame relayout.
   //
-  // So the travel is a translation and the size is what the commit already set. A change that only
-  // resizes is not a motion and is left alone; a change that moves is interpolated, and what is
-  // inside the box moves rigidly with it — the document and the surface above it by the same
-  // transform, which is what "they move together" means when one of them is not in the document.
+  // Settling the sizes at once was tried and taken back on 2026-08-17. A region that opens takes its
+  // whole width in the render that opens it while the panes slide into place over the motion, so for
+  // that stretch the band is drawn where the panes still are — and a page composited above the
+  // document covers it. The rectangles have to agree at every instant, not only at the ends, and
+  // that means the whole rectangle is interpolated: position and size, for every box, so a pane and
+  // the region beside it are adjacent in every frame of the way there.
+  //
+  // What the surface above the document does is whatever the element does, read from the element
+  // every frame. That is what "they move together" means when one of them is not in the document,
+  // and it is the reason the interpolation is a rectangle rather than a displacement.
   const startFlip = (el: HTMLElement, was: Snap, now: Snap): void => {
     const dx = was.x - now.x;
     const dy = was.y - now.y;
-    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+    const dw = was.w - now.w;
+    const dh = was.h - now.h;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(dw) < 0.5 && Math.abs(dh) < 0.5)
+      return;
+    const cs = getComputedStyle(el);
+    const L = parseFloat(cs.left) || 0;
+    const T = parseFloat(cs.top) || 0;
     const releaseDecoration = beginLayoutDecorationMotion(decorationScope);
     try {
       const a = el.animate(
         [
-          { transform: `translate(${dx}px, ${dy}px)` },
-          { transform: "translate(0px, 0px)" },
+          {
+            left: `${L + dx}px`,
+            top: `${T + dy}px`,
+            width: `${now.w + dw}px`,
+            height: `${now.h + dh}px`,
+          },
+          { left: `${L}px`, top: `${T}px`, width: `${now.w}px`, height: `${now.h}px` },
         ],
         { duration: LAYOUT_MOTION_MS, easing: "ease" },
       );
@@ -174,7 +191,10 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
       }
       // Clear the inline styles **first**. Left in place, the element's actual rect stays at the old value,
       // so the measurement below reads "did not move" and no travel starts — the hold becomes permanent.
-      el.style.transform = "";
+      el.style.left = "";
+      el.style.top = "";
+      el.style.width = "";
+      el.style.height = "";
       if (!el.isConnected) continue;
       const r = el.getBoundingClientRect();
       startFlip(el, f.was, { x: r.x, y: r.y, w: r.width, h: r.height });
@@ -230,7 +250,10 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
               /* already gone */
             }
           }
-          el.style.transform = "";
+          el.style.left = "";
+          el.style.top = "";
+          el.style.width = "";
+          el.style.height = "";
           noteRectMotionSkip(el.dataset.node ?? el.className, "structural-replace");
           continue;
         }
@@ -271,13 +294,14 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
         }
         const dxq = was.x - now.x;
         const dyq = was.y - now.y;
-        // A motion is a travel. A box that changed size and stayed where it was has nothing to
-        // interpolate and nothing to hold: the size is the commit's, applied once, and what is inside
-        // it lays itself out once rather than on every frame of an interpolation.
-        if (Math.abs(dxq) < 0.5 && Math.abs(dyq) < 0.5) {
-          if (Math.abs(was.w - now.w) >= 0.5 || Math.abs(was.h - now.h) >= 0.5) {
-            noteRectMotionSkip(el.dataset.node ?? el.className, "size-only");
-          }
+        const dwq = was.w - now.w;
+        const dhq = was.h - now.h;
+        if (
+          Math.abs(dxq) < 0.5
+          && Math.abs(dyq) < 0.5
+          && Math.abs(dwq) < 0.5
+          && Math.abs(dhq) < 0.5
+        ) {
           continue;
         }
         // A change during hold — the old rect is pinned with WAAPI fill:"forwards" (see the frozen preamble).
@@ -292,13 +316,24 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
             // already has the new layout — one frame of flash remains during hold (measured: in the rect
             // time series [678.3 …] one sample alone was 290.7). The animation below guards **behind it**.
             //
-            // A hold pins where the element was, which under this module's rule is where it travelled
-            // from: the size is the commit's and only the displacement is held.
-            el.style.transform = `translate(${dxq}px, ${dyq}px)`;
+            const cs0 = getComputedStyle(el);
+            const L0 = parseFloat(cs0.left) || 0;
+            const T0 = parseFloat(cs0.top) || 0;
+            el.style.left = `${L0 + dxq}px`;
+            el.style.top = `${T0 + dyq}px`;
+            el.style.width = `${now.w + dwq}px`;
+            el.style.height = `${now.h + dhq}px`;
             let pin: Animation | null = null;
             try {
               pin = el.animate(
-                [{ transform: `translate(${dxq}px, ${dyq}px)` }],
+                [
+                  {
+                    left: `${L0 + dxq}px`,
+                    top: `${T0 + dyq}px`,
+                    width: `${now.w + dwq}px`,
+                    height: `${now.h + dhq}px`,
+                  },
+                ],
                 { duration: 1, fill: "forwards" },
               );
             } catch {

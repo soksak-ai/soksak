@@ -326,15 +326,18 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 	}
 
 	type result struct {
-		name    string
-		frames  []traceFrame
-		lag     run
-		off     run
-		applied run
-		hole    run
-		over    run
-		blink   run
-		record  string
+		name      string
+		frames    []traceFrame
+		lag       run
+		off       run
+		applied   run
+		hole      run
+		over      run
+		blink     run
+		sizes     int
+		steps     int
+		paneSteps int
+		record    string
 	}
 	var results []result
 
@@ -388,7 +391,10 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 					missing := float64(len(f.Panes) - len(f.Frames))
 					return missing > 0, missing
 				}),
-				record: record,
+				sizes:     heldSizes(frames),
+				steps:     heldPositions(frames),
+				paneSteps: paneStepsIn(frames),
+				record:    record,
 			})
 		}
 	}
@@ -413,9 +419,10 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				slowest = frame.SinceLastMs
 			}
 		}
-		t.Logf("%-32s %3d readings   lag %s   off %s   applied %s   hole %s   over %s   blink %s   commit %.0fms (%d)"+
+		t.Logf("%-32s %3d readings   lag %s   off %s   applied %s   hole %s   over %s   blink %s   sizes %d steps %3d   commit %.0fms (%d)"+
 			"  drawn every %.0fms (read every %.0f, worst %.0f)  watching %.1fms",
-			r.name, len(r.frames), r.lag, r.off, r.applied, r.hole, r.over, r.blink, commit, commits,
+			r.name, len(r.frames), r.lag, r.off, r.applied, r.hole, r.over, r.blink, r.sizes, r.steps,
+			commit, commits,
 			drawnCadence(r.frames), medianCadence(r.frames), slowest, watching)
 	}
 	// One move recorded for the eye, in its own pass, with the recorder already running before the
@@ -497,6 +504,12 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				"here is the native layer holding something else.",
 				r.name, r.applied.worst, r.applied.ms, traceLines(r.frames, "left"), r.record)
 		}
+		// The sentence a person put it in: the document and the native layer move as one, and the size
+		// is adjusted. A page that took more than the two sizes of a travel was being resized on the
+		// way, and everything inside it laid itself out again on each of those frames.
+
+		// And it did travel: a page that never moved was not moving with anything.
+
 		// The frames are not motion: they are drawn or they are not, whatever rate the window runs at,
 		// so this is judged wherever it is measured.
 		//
@@ -607,6 +620,41 @@ func wholeWindow(frames []traceFrame, what run) bool {
 		}
 	}
 	return true
+}
+
+// heldSizes is how many different sizes the native layer held while a page was on the screen, and
+// heldPositions how many different positions. A travel is many positions and two sizes.
+func heldSizes(frames []traceFrame) int { return heldDistinct(frames, false) }
+
+func heldPositions(frames []traceFrame) int { return heldDistinct(frames, true) }
+
+func heldDistinct(frames []traceFrame, byPosition bool) int {
+	seen := map[string]bool{}
+	for _, frame := range frames {
+		for _, surface := range frame.Surfaces {
+			if surface.Applied == nil || !surface.Visible {
+				continue
+			}
+			if byPosition {
+				seen[fmt.Sprintf("%.0f", surface.Applied.X)] = true
+			} else {
+				seen[fmt.Sprintf("%.0f", surface.Applied.W)] = true
+			}
+		}
+	}
+	return len(seen)
+}
+
+// paneStepsIn is how many different positions the element behind a page took. A page that travels
+// with its pane takes about as many; a page that was parked takes two.
+func paneStepsIn(frames []traceFrame) int {
+	seen := map[string]bool{}
+	for _, frame := range frames {
+		for _, surface := range frame.Surfaces {
+			seen[fmt.Sprintf("%.0f", surface.Dom.X)] = true
+		}
+	}
+	return len(seen)
 }
 
 // longestRunAt is longestRun for a judgement that needs the frames around it — the age correction

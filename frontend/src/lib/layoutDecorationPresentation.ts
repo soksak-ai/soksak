@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from "react";
 import { moduleState } from "./moduleState";
 
 export type LayoutDecorationMotionReceipt = {
@@ -89,22 +88,4 @@ export function layoutDecorationMotionFacts(): Array<{
   return [...scopes.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([scope, state]) => ({ scope, receipt: { ...state.receipt } }));
-}
-
-/** Whether a layout motion is running in this scope, as a React subscription.
- *
- * What reads it is the rule that a surface travels as its picture: a page composited above the
- * document covers whatever the document draws over it — a card, a rail crossing a pane, a region
- * taking its width — and the only way to show those is for the page to step aside while the layout
- * moves. The lease is already the record that a motion is running; this is that record, read. */
-export function useLayoutMotionRunning(scope: string): boolean {
-  return useSyncExternalStore(
-    (listener) => {
-      const state = stateOf(scope);
-      state.listeners.add(listener);
-      return () => state.listeners.delete(listener);
-    },
-    () => stateOf(scope).receipt.status === "moving",
-    () => false,
-  );
 }

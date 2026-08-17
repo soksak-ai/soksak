@@ -24,7 +24,6 @@ import { cleanRailLines } from "../lib/railPlacement";
 import { recordRailPhase } from "../lib/railJournal";
 import { useGutterHover } from "../state/gutterHover";
 import { ViewTabs } from "./ViewTabs";
-import { useLayoutMotionRunning } from "../lib/layoutDecorationPresentation";
 import { FocusLightingPlane } from "./FocusLightingPlane";
 import { ParkedPicture } from "./ParkedPicture";
 import { railLightingExemption } from "./focusLightingGeometry";
@@ -220,37 +219,18 @@ export const GroupArea = memo(function GroupArea({
   const t = useT();
   // JS interpolation (FLIP) of command-driven rect changes — on every commit flush compares against the previous rect (layoutRectMotion).
   useRenderCost("render.panes");
-  // A page moves with its pane. It steps aside only when the document has to draw where it is.
+  // A page moves with its pane, every frame of the way.
   //
   // The declaration follows its element every frame and the native layer holds what it was given —
   // measured 2026-08-17, zero on both, over all six ways focus can move — so a page travelling with
-  // its pane is what this build does and what a person sees. What no motion can fix is the order: a
-  // surface is composited above the document, so a rail sweeping across a pane and a card opening
-  // over one are drawn *under* the page. Those are the two cases where the page steps aside and its
-  // picture, which is in the document, travels in its place.
+  // its pane is what this build does and what a person sees. A motion is not a reason to take it off
+  // the screen: parked for the length of one, a page holds two positions, the one it started at and
+  // the one it ended at, and what travelled was a picture.
   //
-  // Parking on every motion instead would be a page that never moves at all — a still picture where
-  // there was a page, for every split, every resize, every close.
-  const layoutMoving = useLayoutMotionRunning(`${projectId}/${content.id}`);
-  // Whether the rail's band is over the panes rather than beside them.
-  //
-  // A size is settled at once and only the travel is interpolated, so a region that opens takes its
-  // whole width in the render that opens it while the panes slide into place over the motion. For
-  // that stretch the band is drawn where the panes still are — and a page composited above the
-  // document covers it. The same is true of a band that changes station: it crosses them.
-  //
-  // The render that moves the band is the render that starts the motion, so a value read once the
-  // motion flag is on is already the new one. The change is latched where it happens and held until
-  // the layout is still again.
-  const lastBand = useRef({ width: railWidthPx, station: railStation });
-  const sweeping = useRef(false);
-  const bandMoved =
-    Math.abs(lastBand.current.width - railWidthPx) > 0.5
-    || Math.abs(lastBand.current.station - railStation) > 0.5;
-  lastBand.current = { width: railWidthPx, station: railStation };
-  if (bandMoved) sweeping.current = true;
-  else if (!layoutMoving) sweeping.current = false;
-  const railSweeping = sweeping.current;
+  // What no motion can fix is the order. A surface is composited above the document, so a card drawn
+  // over a pane is drawn under the page in it — and there the page does step aside, and its picture,
+  // which is in the document, stands in its place. That is the overlay term of `surfaceShown`, and a
+  // pane whose page is being replaced by a stand-in through a travel is the other.
   const rectMotion = useRef(createRectMotionTracker(`${projectId}/${content.id}`)).current;
   const displayLayout = solvedLayout ?? content.layout;
   const focusProjectionApplied = displayLayout !== content.layout;
@@ -418,7 +398,7 @@ export const GroupArea = memo(function GroupArea({
         const tabActive = maxCell ? v.id === maximizedId : v.id === group.activeTabId;
         commitViewVisibility(
           v.id,
-          surfaceShown(surfaceActive, true, tabActive, overlayed, traveling || railSweeping),
+          surfaceShown(surfaceActive, true, tabActive, overlayed, traveling),
         );
       }
     }
@@ -934,7 +914,7 @@ export const GroupArea = memo(function GroupArea({
             view.id,
             group.activeTabId,
             overlayed,
-            traveling || railSweeping,
+            traveling,
           );
           const slotRect = maxCell && shown ? FULL_RECT : rect;
           // B4 restore hydration gate — a cold view (restored but not yet visible) defers its body mount

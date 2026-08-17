@@ -67,18 +67,16 @@ describe("a layout change during hold", () => {
     move(200, 0); // the command moved it
     t.flush();
 
-    expect(el.style.transform, "hold is on and the new position leaked for one frame")
-      .toBe("translate(-200px, 0px)");
-    // The size is the commit's: a hold pins where the element travelled from, not how big it was.
-    expect(el.style.height).toBe("");
+    expect(el.style.left, "hold is on and the new position leaked for one frame").toBe("-200px");
+    expect(el.style.height).toBe("50px");
   });
 
-  // A layout moves by travelling, and its sizes are settled at once. Interpolating a box's size
-  // makes everything inside it lay itself out again on every frame — a terminal reflows, a page
-  // relayouts, a native surface is given a new rectangle — and the window stops drawing for as long
-  // as that takes: 68 to 385ms on a focus change, measured 2026-08-17, growing with the number of
-  // surfaces.
-  it("a change that only resizes is not a motion", () => {
+  // The whole rectangle is interpolated, position and size. Settling the sizes at once was tried on
+  // 2026-08-17 and taken back the same day: a region that opens takes its whole width in the render
+  // that opens it while the panes slide into place, so for that stretch the band is drawn where the
+  // panes still are — and a page composited above the document covers it. The rectangles have to
+  // agree at every instant, not only at the ends.
+  it("a change that only resizes is a motion too", () => {
     const t = createRectMotionTracker();
     const { el, resize } = laidOut(100, 50);
     t.ref(el);
@@ -88,9 +86,8 @@ describe("a layout change during hold", () => {
     resize(300, 50);
     t.flush();
 
-    // Nothing was pinned, because nothing travelled: the box is the size the commit gave it.
-    expect(el.style.transform).toBe("");
-    expect(el.style.width).toBe("");
+    // The old size is pinned: it is where the interpolation starts.
+    expect(el.style.width).toBe("100px");
   });
 
   it("without hold nothing is pinned inline — that position is the interpolation's", () => {
@@ -102,7 +99,7 @@ describe("a layout change during hold", () => {
     move(200, 0);
     t.flush();
 
-    expect(el.style.transform).toBe("");
+    expect(el.style.left).toBe("");
   });
 
   it("a structural snap replace adopts the new rect as the baseline instead of interpolating the old rect to the destination", () => {
@@ -123,9 +120,9 @@ describe("a layout change during hold", () => {
     t.flush("replace");
 
     expect(animate, "a structural replace transformed the outline and sidebar from the old position to the new one").not.toHaveBeenCalled();
-    expect(el.style.transform).toBe("");
+    expect(el.style.left).toBe("");
     expect(el.style.top).toBe("");
-    expect(el.style.transform).toBe("");
+    expect(el.style.left).toBe("");
     expect(el.style.height).toBe("");
 
     // replace consumed the new rect as the baseline, so the next plain flush does not replay the same change.
@@ -143,7 +140,7 @@ describe("a layout change during hold", () => {
     setMotionDebug({ hold: true });
     t.flush();
 
-    expect(el.style.transform).toBe("");
+    expect(el.style.left).toBe("");
   });
 
   /**
@@ -162,11 +159,11 @@ describe("a layout change during hold", () => {
     setMotionDebug({ hold: true });
     move(200, 0);
     t.flush();
-    expect(el.style.transform).toBe("translate(-200px, 0px)");
+    expect(el.style.left).toBe("-200px");
 
     setMotionDebug({ hold: false });
 
-    expect(el.style.transform, "released, and the old rect is still pinned").toBe("");
+    expect(el.style.left, "released, and the old rect is still pinned").toBe("");
     expect(el.style.height).toBe("");
   });
 });
@@ -242,7 +239,7 @@ describe("the interpolation exclusion is not the core's", () => {
     move(200, 0);
     t.flush();
     // If it is interpolated, the old width stands there. If excluded, nothing stands.
-    expect(el.style.transform, "the hole slot was excluded by the core").toBe("translate(-200px, 0px)");
+    expect(el.style.left, "the hole slot was excluded by the core").toBe("-200px");
   });
 
   it("with it registered the slot is excluded — the judgement is the registering side's", () => {
@@ -256,14 +253,14 @@ describe("the interpolation exclusion is not the core's", () => {
       t.flush();
       move(200, 0);
       t.flush();
-      expect(el.style.transform, "registered, and the hole slot was still interpolated").toBe("");
+      expect(el.style.left, "registered, and the hole slot was still interpolated").toBe("");
       // Oracle survival — a non-hole slot is still interpolated (the exclusion does not swallow everything).
       const other = laidOut(100, 50);
       t.ref(other.el);
       t.flush();
       other.move(200, 0);
       t.flush();
-      expect(other.el.style.transform).toBe("translate(-200px, 0px)");
+      expect(other.el.style.left).toBe("-200px");
     } finally {
       off();
     }
