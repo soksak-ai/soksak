@@ -4,6 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SectionSetHost } from "./SectionSetHost";
 import { useSectionSets } from "../state/sectionSets";
+
+// React refuses to treat act() as a test boundary without it, and prints that on every render.
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 import { useViewRegistry } from "../plugins/viewRegistry";
 import { useSessions, type Workspace } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
@@ -48,7 +51,7 @@ describe("a region draws the set standing in it", () => {
 
   beforeEach(() => {
     useViewRegistry.setState({ views: {}, badges: {}, version: 0 });
-    useSectionSets.setState({ sets: [], byPlugin: {}, mode: "individual", fixed: null });
+    useSectionSets.setState({ sets: [], byPlugin: {}, mode: "individual", fixed: {} });
     useSessions.setState({ workspaces: [workspace()], activeId: "wsp-a1b2c3" });
     host = document.createElement("div");
     document.body.append(host);
@@ -76,7 +79,7 @@ describe("a region draws the set standing in it", () => {
     useViewRegistry.getState().register(PLUGIN, view([region]), { mount: () => {} });
     const set = useSectionSets.getState().create("work");
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
-    useSectionSets.getState().link(PLUGIN, { set: set.id, region });
+    useSectionSets.getState().link(PLUGIN, region, set.id);
     return set;
   };
 
@@ -98,7 +101,7 @@ describe("a region draws the set standing in it", () => {
     useViewRegistry.getState().register(PLUGIN, view(["left", "right"]), { mount: () => {} });
     const set = useSectionSets.getState().create("work");
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
-    useSectionSets.getState().link(PLUGIN, { set: set.id, region: "right" });
+    useSectionSets.getState().link(PLUGIN, "right", set.id);
 
     render("right");
     // Oracle liveness — the same section, the same set, drawn where the link names.
@@ -114,7 +117,7 @@ describe("a region draws the set standing in it", () => {
     // Oracle liveness — it is on screen before the link goes.
     expect(host.textContent).toContain("Files");
 
-    act(() => useSectionSets.getState().link(PLUGIN, null));
+    act(() => useSectionSets.getState().link(PLUGIN, "right", null));
     render("right");
 
     expect(host.textContent).not.toContain("Files");

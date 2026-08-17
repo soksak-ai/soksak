@@ -78,15 +78,17 @@ export const SectionSetHost = memo(function SectionSetHost({
   // Sections outside what is placed here are dropped: a set is linked to a region only when every
   // section is placed there, so this can only differ after a plugin is disabled, and the arrangement
   // is reconciled the same way it always was.
-  const standing = useSectionSets((s) => (s.mode === "fixed" ? s.fixed : s.byPlugin[focusedPluginId ?? ""]));
+  const standingId = useSectionSets((s) =>
+    (s.mode === "fixed" ? s.fixed : (s.byPlugin[focusedPluginId ?? ""] ?? {}))[region],
+  );
   const sets = useSectionSets((s) => s.sets);
   const registeredKeys = useMemo(() => {
-    if (!standing || standing.region !== region) return [];
+    if (!standingId) return [];
     const placed = new Set(viewsForPlacement(region).map((v) => v.key));
-    const set = sets.find((x) => x.id === standing.set);
+    const set = sets.find((x) => x.id === standingId);
     return (set?.sections ?? []).filter((k) => placed.has(k));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, standing, sets, region]);
+  }, [version, standingId, sets, region]);
   const reconcileSidebar = useSessions((s) => s.reconcileSidebar);
   const setSidebarTab = useSessions((s) => s.setSidebarTab);
   const stored = workspace.sidebarLayouts[region];

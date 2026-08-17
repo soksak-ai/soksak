@@ -2190,6 +2190,22 @@ body::after {
   flex-direction: column;
   gap: 2px;
 }
+/* One row per region: the label names the place, the select names what stands there. */
+.settings-sidebar-region {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+.settings-sidebar-region > span {
+  color: var(--fg3);
+  font-size: 12px;
+  min-width: 44px;
+}
+.settings-sidebar-region > .settings-input {
+  flex: 1;
+}
+
 .settings-scope {
   display: inline-flex;
   gap: 2px;

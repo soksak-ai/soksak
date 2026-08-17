@@ -6,10 +6,10 @@
 
 import { tmsg } from "../i18n";
 import {
+  standsSomewhere,
   useSectionSets,
   type Region,
   type SectionSet,
-  type Standing,
 } from "../state/sectionSets";
 import { viewsForPlacement } from "../plugins/viewRegistry";
 import { register } from "./registry";
@@ -162,12 +162,12 @@ export function registerSectionsCatalog(): void {
 
   register("sections.link", {
     description:
-      "Stand a plugin's set in a region, or clear it by omitting set. In individual mode that set stands while a view of that plugin is focused, and a plugin with no link has no sidebar at all.",
+      "Stand a plugin's set in one region, or clear that region by omitting set. Each region holds its own set, so linking one leaves the other standing. In individual mode the set stands while a view of that plugin is focused, and a plugin with no link has no sidebar at all.",
     triggers: { ko: "섹션 세트 연결 플러그인 연결" },
     params: {
       plugin: { type: "string", description: "Plugin id", required: true },
-      set: { type: "string", description: "Set id (omit = clear)" },
-      region: { type: "string", enum: ["left", "right"], description: "Where it stands" },
+      set: { type: "string", description: "Set id (omit = clear this region)" },
+      region: { type: "string", enum: ["left", "right"], description: "Which region", required: true },
     },
     returns: "{ plugin, set, region }",
     message: () => tmsg("msg.sections.link"),
@@ -177,21 +177,20 @@ export function registerSectionsCatalog(): void {
     ],
     handler: (p) => {
       const plugin = p.plugin as string;
-      const id = p.set as string | undefined;
-      if (id === undefined) {
-        useSectionSets.getState().link(plugin, null);
-        return { plugin, set: null, region: null };
-      }
-      const set = setOf(id);
-      if (!set) return notFound(id);
       const region = p.region as Region | undefined;
       if (region !== "left" && region !== "right") {
         return invalid(tmsg("msg.sections.regionRequired"));
       }
+      const id = p.set as string | undefined;
+      if (id === undefined) {
+        useSectionSets.getState().link(plugin, region, null);
+        return { plugin, set: null, region };
+      }
+      const set = setOf(id);
+      if (!set) return notFound(id);
       const refusal = refuseUnplaced(set, region);
       if (refusal) return invalid(refusal);
-      const standing: Standing = { set: id, region };
-      useSectionSets.getState().link(plugin, standing);
+      useSectionSets.getState().link(plugin, region, id);
       return { plugin, set: id, region };
     },
   });
@@ -222,9 +221,9 @@ export function registerSectionsCatalog(): void {
         }
         const refusal = refuseUnplaced(set, region);
         if (refusal) return invalid(refusal);
-        store.setFixed({ set: id, region });
+        store.setFixed(region, id);
       }
-      if (mode === "fixed" && useSectionSets.getState().fixed === null) {
+      if (mode === "fixed" && !standsSomewhere(useSectionSets.getState().fixed)) {
         // Switching to fixed with nothing to stand is a mode that shows nothing and reports success.
         return invalid(tmsg("msg.sections.fixedNeedsOne"));
       }

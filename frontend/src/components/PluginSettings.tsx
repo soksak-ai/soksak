@@ -4,7 +4,7 @@ import { usePluginSettings, type SettingValue } from "../state/pluginSettings";
 import { useSessions } from "../state/sessions";
 import { localize, useT } from "../i18n";
 import type { ConfigSetting, MapEntry } from "../plugins/spec";
-import { useSectionSets, type Region } from "../state/sectionSets";
+import { useSectionSets, type Region, type Standing } from "../state/sectionSets";
 import { refuseUnplaced } from "../commands/catalogSections";
 
 // Plugin settings panel — generates controls from the manifest configuration schema (single source).
@@ -148,7 +148,10 @@ function Control({
   );
 }
 
-/** Where this plugin's sidebar stands, chosen here.
+/** Nothing standing anywhere. */
+const EMPTY_STANDING: Standing = {};
+
+/** Where this plugin's sidebars stand, chosen here — one region at a time.
  *
  *  A sidebar is composed of sections and then given to a plugin (A2a), and until 2026-08-16 that
  *  second half was reachable only through `sections.link`. A rule a person cannot reach from the
@@ -159,22 +162,16 @@ function Control({
 function SidebarLink({ pluginId }: { pluginId: string }) {
   const t = useT();
   const sets = useSectionSets((s) => s.sets);
-  const standing = useSectionSets((s) => s.byPlugin[pluginId] ?? null);
+  const standing = useSectionSets((s) => s.byPlugin[pluginId] ?? EMPTY_STANDING);
   const mode = useSectionSets((s) => s.mode);
   const link = useSectionSets((s) => s.link);
 
-  const choose = (setId: string, region: Region) => {
-    if (setId === "") return link(pluginId, null);
+  const choose = (region: Region, setId: string) => {
+    if (setId === "") return link(pluginId, region, null);
     const set = sets.find((x) => x.id === setId);
-    if (!set) return;
-    if (refuseUnplaced(set, region)) return;
-    link(pluginId, { set: setId, region });
+    if (!set || refuseUnplaced(set, region)) return;
+    link(pluginId, region, setId);
   };
-
-  const region: Region = standing?.region ?? "left";
-  // A set that cannot stand in the chosen region is not offered. The refusal reason is the
-  // command's, which states it; offering it here and refusing on click would state nothing.
-  const offered = sets.filter((set) => !refuseUnplaced(set, region));
 
   return (
     <div className="settings-sidebar-link">
@@ -183,32 +180,29 @@ function SidebarLink({ pluginId }: { pluginId: string }) {
         <div className="plugin-consent-none">{t("settings.sidebar.noSets")}</div>
       ) : (
         <>
-          <div className="settings-scope">
-            {(["left", "right"] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                className={region === r ? "on" : ""}
-                data-sidebar-region={r}
-                onClick={() => standing && choose(standing.set, r)}
+          {(["left", "right"] as const).map((region) => (
+            <label key={region} className="settings-sidebar-region" data-sidebar-region={region}>
+              <span>{t(region === "left" ? "settings.sidebar.left" : "settings.sidebar.right")}</span>
+              <select
+                className="settings-input"
+                data-sidebar-set={region}
+                value={standing[region] ?? ""}
+                onChange={(e) => choose(region, e.target.value)}
               >
-                {t(r === "left" ? "settings.sidebar.left" : "settings.sidebar.right")}
-              </button>
-            ))}
-          </div>
-          <select
-            className="settings-input"
-            data-sidebar-set
-            value={standing?.set ?? ""}
-            onChange={(e) => choose(e.target.value, region)}
-          >
-            <option value="">{t("settings.sidebar.none")}</option>
-            {offered.map((set) => (
-              <option key={set.id} value={set.id}>
-                {set.title}
-              </option>
-            ))}
-          </select>
+                <option value="">{t("settings.sidebar.none")}</option>
+                {/* A set that cannot stand in this region is not offered. The refusal reason is the
+                    command's, which states it; offering it here and refusing on click states
+                    nothing. */}
+                {sets
+                  .filter((set) => !refuseUnplaced(set, region))
+                  .map((set) => (
+                    <option key={set.id} value={set.id}>
+                      {set.title}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ))}
           {mode === "fixed" ? (
             <div className="plugin-consent-none">{t("settings.sidebar.fixed")}</div>
           ) : null}

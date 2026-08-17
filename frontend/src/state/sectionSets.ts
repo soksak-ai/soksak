@@ -27,11 +27,13 @@ export interface SectionSet {
   sections: string[];
 }
 
-/** Where a set stands, and which one. */
-export interface Standing {
-  set: string;
-  region: Region;
-}
+/** Which set stands in each region. A region with no entry has nothing standing there.
+ *
+ *  One standing for the whole plugin was the same record with a `region` on it, and it made the two
+ *  regions exclusive: a plugin standing a set on the left had no place to name a second one, so the
+ *  right toggle took no width whatever it was pressed. A region is a place, and each place holds
+ *  its own set. */
+export type Standing = Partial<Record<Region, string>>;
 
 /** individual = the set linked to the focused view\'s plugin stands, and nothing stands when that
  *  plugin has no link. fixed = one set stands, in every workspace, whatever is focused. */
@@ -39,29 +41,29 @@ export type SectionMode = "individual" | "fixed";
 
 export interface SectionSetsState {
   sets: SectionSet[];
-  /** pluginId → where its set stands. Read in `individual` only. */
+  /** pluginId → which set stands in each region. Read in `individual` only. */
   byPlugin: Record<string, Standing>;
   mode: SectionMode;
-  /** The one that stands in `fixed`. null = none, and then nothing stands. */
-  fixed: Standing | null;
+  /** What stands in `fixed`. Nothing standing = nothing is drawn. */
+  fixed: Standing;
 
   create: (title: string) => SectionSet;
   rename: (id: string, title: string) => void;
   remove: (id: string) => void;
   arrange: (id: string, sections: string[]) => void;
-  link: (pluginId: string, standing: Standing | null) => void;
+  link: (pluginId: string, region: Region, set: string | null) => void;
   setMode: (mode: SectionMode) => void;
-  setFixed: (standing: Standing | null) => void;
+  setFixed: (region: Region, set: string | null) => void;
 }
 
 interface Persisted {
   sets: SectionSet[];
   byPlugin: Record<string, Standing>;
   mode: SectionMode;
-  fixed: Standing | null;
+  fixed: Standing;
 }
 
-const EMPTY: Persisted = { sets: [], byPlugin: {}, mode: "individual", fixed: null };
+const EMPTY: Persisted = { sets: [], byPlugin: {}, mode: "individual", fixed: {} };
 
 const sync = createCoreSync<Persisted>({
   key: "sectionSets",
@@ -74,11 +76,18 @@ export const initSectionSetsPersistence = (deps: CoreStoreDeps): (() => void) =>
 
 const isRegion = (v: unknown): v is Region => v === "left" || v === "right";
 
-function standingOf(raw: unknown, known: Set<string>): Standing | null {
-  const v = (raw ?? {}) as Partial<Standing>;
-  if (typeof v.set !== "string" || !known.has(v.set) || !isRegion(v.region)) return null;
-  return { set: v.set, region: v.region };
+/** A standing as this build reads it: region → a set that exists. Anything else is dropped, and a
+ *  standing left with no region is nothing standing. */
+function standingOf(raw: unknown, known: Set<string>): Standing {
+  const standing: Standing = {};
+  for (const [region, set] of Object.entries((raw ?? {}) as Record<string, unknown>)) {
+    if (isRegion(region) && typeof set === "string" && known.has(set)) standing[region] = set;
+  }
+  return standing;
 }
+
+/** Whether anything stands at all. */
+export const standsSomewhere = (standing: Standing): boolean => Object.keys(standing).length > 0;
 
 /** What was read back, as this build reads it. A record from another shape costs that record, not
  *  the whole set (RESTORE R1) — an entry that is not a set is dropped and the rest stands. */
@@ -94,7 +103,7 @@ function shapeOf(raw: unknown): Persisted {
   const byPlugin: Record<string, Standing> = {};
   for (const [plugin, standing] of Object.entries(v.byPlugin ?? {})) {
     const kept = standingOf(standing, known);
-    if (kept) byPlugin[plugin] = kept;
+    if (standsSomewhere(kept)) byPlugin[plugin] = kept;
   }
   return {
     sets,
@@ -132,25 +141,28 @@ export const useSectionSets = moduleState("state/sectionSets#store", () =>
       remove: (id) => {
         // A link to a removed set goes with it. Left behind, it names nothing and its plugin reads
         // as linked while nothing stands.
-        const byPlugin = Object.fromEntries(
-          Object.entries(get().byPlugin).filter(([, v]) => v.set !== id),
-        );
+        const byPlugin: Record<string, Standing> = {};
+        for (const [plugin, standing] of Object.entries(get().byPlugin)) {
+          const kept = withoutSet(standing, id);
+          if (standsSomewhere(kept)) byPlugin[plugin] = kept;
+        }
         commit({
           sets: get().sets.filter((s) => s.id !== id),
           byPlugin,
-          fixed: get().fixed?.set === id ? null : get().fixed,
+          fixed: withoutSet(get().fixed, id),
         });
       },
       arrange: (id, sections) =>
         commit({ sets: get().sets.map((s) => (s.id === id ? { ...s, sections } : s)) }),
-      link: (pluginId, standing) => {
+      link: (pluginId, region, set) => {
+        const standing = stood(get().byPlugin[pluginId] ?? {}, region, set);
         const byPlugin = { ...get().byPlugin };
-        if (standing === null) delete byPlugin[pluginId];
-        else byPlugin[pluginId] = standing;
+        if (standsSomewhere(standing)) byPlugin[pluginId] = standing;
+        else delete byPlugin[pluginId];
         commit({ byPlugin });
       },
       setMode: (mode) => commit({ mode }),
-      setFixed: (standing) => commit({ fixed: standing }),
+      setFixed: (region, set) => commit({ fixed: stood(get().fixed, region, set) }),
     };
   }),
 );
@@ -174,7 +186,25 @@ export function regionPresent(
 export function standingSet(region: Region, focusedPluginId: string | null): SectionSet | null {
   const s = useSectionSets.getState();
   const standing =
-    s.mode === "fixed" ? s.fixed : focusedPluginId ? (s.byPlugin[focusedPluginId] ?? null) : null;
-  if (!standing || standing.region !== region) return null;
-  return s.sets.find((x) => x.id === standing.set) ?? null;
+    s.mode === "fixed" ? s.fixed : focusedPluginId ? (s.byPlugin[focusedPluginId] ?? {}) : {};
+  const id = standing[region];
+  if (!id) return null;
+  return s.sets.find((x) => x.id === id) ?? null;
+}
+
+/** The same standing with one region settled — a set stands there, or nothing does. */
+function stood(standing: Standing, region: Region, set: string | null): Standing {
+  const next = { ...standing };
+  if (set === null) delete next[region];
+  else next[region] = set;
+  return next;
+}
+
+/** The same standing with one set gone from wherever it stood. */
+function withoutSet(standing: Standing, set: string): Standing {
+  const next: Standing = {};
+  for (const [region, id] of Object.entries(standing)) {
+    if (isRegion(region) && id !== set) next[region] = id;
+  }
+  return next;
 }

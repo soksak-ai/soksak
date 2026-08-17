@@ -42,7 +42,7 @@ describe("the plugin settings sidebar link", () => {
 
   beforeEach(() => {
     useViewRegistry.setState({ views: {}, badges: {}, version: 0 });
-    useSectionSets.setState({ sets: [], byPlugin: {}, mode: "individual", fixed: null });
+    useSectionSets.setState({ sets: [], byPlugin: {}, mode: "individual", fixed: {} });
     const { manifest, validation } = parseManifest(MANIFEST, PLUGIN);
     if (!manifest) throw new Error(`the test manifest does not parse: ${validation.errors.join(", ")}`);
     usePlugins.setState({
@@ -63,7 +63,9 @@ describe("the plugin settings sidebar link", () => {
       root.render(<PluginSettings pluginId={PLUGIN} />);
     });
 
-  const select = () => host.querySelector<HTMLSelectElement>("[data-sidebar-set]");
+  // One select per region: each region holds its own set, so the panel offers each separately.
+  const select = (region: "left" | "right" = "left") =>
+    host.querySelector<HTMLSelectElement>(`[data-sidebar-set="${region}"]`);
 
   it("offers a composed sidebar and links it to this plugin when chosen", () => {
     useViewRegistry.getState().register(PLUGIN, view(["left"]), { mount: () => {} });
@@ -81,7 +83,7 @@ describe("the plugin settings sidebar link", () => {
       el.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
-    expect(useSectionSets.getState().byPlugin[PLUGIN]).toEqual({ set: set.id, region: "left" });
+    expect(useSectionSets.getState().byPlugin[PLUGIN]).toEqual({ left: set.id });
   });
 
   it("does not offer a sidebar whose section is placed in the other region", () => {
@@ -90,7 +92,9 @@ describe("the plugin settings sidebar link", () => {
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
     render();
 
-    expect([...(select()?.options ?? [])].map((o) => o.value)).toEqual([""]);
+    expect([...(select("left")?.options ?? [])].map((o) => o.value)).toEqual([""]);
+    // Where its section is placed, it is offered — otherwise the panel offers nothing anywhere.
+    expect([...(select("right")?.options ?? [])].map((o) => o.value)).toEqual(["", set.id]);
   });
 
   it("says nothing has been composed rather than offering an empty list", () => {
