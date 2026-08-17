@@ -3,6 +3,7 @@ module github.com/soksak/soksak-core
 go 1.25.0
 
 require (
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/soksak/soksak-plugin-browser-native v0.0.1
 	github.com/soksak/soksak-plugin-terminal-xterm v0.0.1
 	github.com/soksak/wails-service-native-compositor v0.0.1

@@ -51,6 +51,15 @@ const buildProfile = "debug"
 // serialises — so the collision would have stayed silent.
 const defaultIdentifier = "com.soksak.wails"
 
+// startWatcher answers the operating system's watcher, or nil with the reason.
+//
+// Nil is a state the build declares, not a failure to start: `watch_dir` refuses by name and names
+// the host it was refused on. A host that stopped booting over a watcher would trade a directory
+// that does not refresh for a window that does not open.
+func startWatcher() (files.Backend, error) {
+	return files.NewOSWatcher()
+}
+
 func main() {
 	identifier := os.Getenv("SOKSAK_IDENTIFIER")
 	if identifier == "" {
@@ -85,6 +94,15 @@ func main() {
 		terminalplugin.DefaultOptions(),
 	)
 
+	// Started before the registry so `watch_dir` is either served or refused by name from the first
+	// command, never accepted and silently dead.
+	watcher, watcherErr := startWatcher()
+	if watcherErr != nil {
+		// Reported once, at the edge; after that the refusal by name is the record. A host with no
+		// watcher serves every other command normally.
+		log.Println("soksak: no filesystem watcher:", watcherErr)
+	}
+
 	registry := control.NewRegistry()
 	// Filled once the home is ours. Nothing this installation owns — least of
 	// all its database — is touched by a process that has not claimed it.
@@ -110,10 +128,11 @@ func main() {
 			LiveWindows: bridge.Live,
 
 			Run: files.SystemRunner{},
-			// No filesystem watcher is built into this binary yet, so watch_dir is
-			// refused by name rather than accepting a subscription that can never
-			// fire.
-			Watch:   nil,
+			// The operating system's watcher. A host that could not start one passes nil, and
+			// `watch_dir` is refused by name rather than accepting a subscription that can never
+			// fire — which is what this binary did until 2026-08-17, with the file tree's live
+			// refresh dead and three renderer errors in the activity stream saying so.
+			Watch:   watcher,
 			Spawner: process.OSSpawner{},
 			// This host holds no vault. A spawn that requires a secret is refused
 			// by name; handing back an empty value would surface later as the
