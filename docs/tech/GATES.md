@@ -167,3 +167,27 @@ Written here so it is not rediscovered (L2).
   gates since have been clean. What is still missing is a reading for "the
   renderer took the request and has not answered": the client's timeout is the
   only evidence, and it names the command rather than what it is waiting on.
+- **No layout animation in this build has ever played.** `ui.motion` held 64
+  journeys on 2026-08-17 and every one ended `cancel` 10–13ms after it started,
+  with `animations: 0` and `applied: 0`. A pane, a tab and the browser surface
+  under it all jump to their destination instead of moving.
+
+  The cause is measured. `GroupArea` flushes the rect tracker in a
+  `useLayoutEffect` with no dependency list, so it runs after every render, and
+  a flush cancels the running interpolation before measuring — which is right on
+  its own terms: while one runs, `getBoundingClientRect` answers an interpolated
+  value, and the layout's present is only readable after the cancel. After the
+  cancel the element is already at its destination, so the delta is zero and no
+  new animation starts. A re-render inside 10ms is certain for a component
+  subscribed to that many stores.
+
+  One remedy was tried and reverted the same day: continuing the motion from the
+  drawn position made every flush create a new full-length animation, which fed
+  the renders that caused the flushes — the window went blank, 0 exposed nodes.
+  Reverted, and the numbers above are what stands.
+
+  What would remove the cancel is a FLIP that animates `transform` rather than
+  `left/top/width/height`: with the layout properties untouched,
+  `offsetLeft`/`offsetWidth` answer the layout's present while the animation
+  runs, so nothing has to be cancelled to read it. That is a rewrite of a module
+  whose every rule carries a measurement, and it is not started here.
