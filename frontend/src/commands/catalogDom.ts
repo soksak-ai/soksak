@@ -37,7 +37,7 @@ import {
 } from "./windowRecorder";
 import { createFiniteDomTraceSampler } from "./finiteDomTrace";
 import { layoutSettlementStatus, waitLayoutSettled } from "./waitLayoutSettled";
-import { layoutDecorationPresentationFacts } from "../lib/layoutDecorationPresentation";
+import { layoutDecorationMotionFacts } from "../lib/layoutDecorationPresentation";
 import { layoutDecorationClearanceFacts } from "../lib/layoutDecorationClearance";
 import { pluginViewHostOverlayStatus } from "../components/pluginViewHostOverlay";
 import { declareLayoutCause, onLayoutTransitionJournal } from "../lib/layoutTransitionJournal";
@@ -2184,12 +2184,12 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       "Return this window's event-driven layout barrier facts: motion owners, pending settlement revision and bounded producer-owned revision epochs, running layout animations, visible content-view labels, and every pending presentation owner/provider substage.",
     triggers: { ko: "레이아웃 거래 상태 장벽 진단 정착 리비전 애니메이션" },
     params: {},
-    returns: "{ settled, motion, settlement, settlementEvents:[{key,phase:'invalidated'|'settled',revision,clock,atUnixMs}], arrangementPhases:[{ownerKey,current,displayed,phase,preparationTargetKey,lastFailure}], transitionIntents:{owners:[{ownerKey,active,queued}],events:[{sequence,ownerKey,revision,generation,phase,reason?,transactionId?,failure?}],maxEvents}, decorationPresentations:[{scope,receipt:{status,owner,generation,sequence,activeAnimations},presentation:{structuralFrames,focusBoundary,relationOverlay,railSurface}}], decorationClearance:{owners:[{transactionId,status,producer,railRole,railVisibility,callbackCount,clearedAtUnixUs?,failure?,sequence}],events,maxEvents}, animations, contentViewLabels, presentationPending:[{owner:'content'|'view',stage?,labels,startedAtUnixMs,elapsedMs}] }",
+    returns: "{ settled, motion, settlement, settlementEvents:[{key,phase:'invalidated'|'settled',revision,clock,atUnixMs}], arrangementPhases:[{ownerKey,current,displayed,phase,preparationTargetKey,lastFailure}], transitionIntents:{owners:[{ownerKey,active,queued}],events:[{sequence,ownerKey,revision,generation,phase,reason?,transactionId?,failure?}],maxEvents}, decorationMotions:[{scope,receipt:{status,owner,generation,sequence,activeAnimations}}], decorationClearance:{owners:[{transactionId,status,producer,railRole,railVisibility,callbackCount,clearedAtUnixUs?,failure?,sequence}],events,maxEvents}, animations, contentViewLabels, presentationPending:[{owner:'content'|'view',stage?,labels,startedAtUnixMs,elapsedMs}] }",
     message: () => tmsg("msg.ui.motion"),
     examples: ["ui.layout.status"],
     handler: () => ({
       ...layoutSettlementStatus(useSessions.getState().activeId || undefined),
-      decorationPresentations: layoutDecorationPresentationFacts(),
+      decorationMotions: layoutDecorationMotionFacts(),
       decorationClearance: layoutDecorationClearanceFacts(),
     }),
   });

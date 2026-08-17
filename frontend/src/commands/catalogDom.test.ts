@@ -119,7 +119,9 @@ describe("ui.layout.status — public layout barrier diagnosis", () => {
     expect(getSpec("ui.layout.status")?.returns).toContain("presentationPending");
     expect(getSpec("ui.layout.status")?.returns).toContain("settlementEvents");
     expect(getSpec("ui.layout.status")?.returns).toContain("transitionIntents");
-    expect(getSpec("ui.layout.status")?.returns).toContain("decorationPresentations");
+    // The presentation half is gone: nothing is taken off the screen for a motion, so what is
+    // published is the lease itself.
+    expect(getSpec("ui.layout.status")?.returns).toContain("decorationMotions");
     expect(getSpec("ui.layout.status")?.returns).toContain("decorationClearance");
     expect(getSpec("ui.layout.status")?.returns).toContain("transactionId?");
     expect(getSpec("ui.layout.status")?.returns).toContain("failure?");
@@ -135,7 +137,7 @@ describe("ui.layout.status — public layout barrier diagnosis", () => {
       settlementEvents: [],
       arrangementPhases: [],
       transitionIntents: { owners: [], events: [], maxEvents: 64 },
-      decorationPresentations: [],
+      decorationMotions: [],
       decorationClearance: { owners: [], events: [], maxEvents: 64 },
       animations: [],
       contentViewLabels: ["browser.main.tab-current"],

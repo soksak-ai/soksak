@@ -1,85 +1,66 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  layoutDecorationPresentation,
-  type LayoutDecorationMotionReceipt,
-} from "../lib/layoutDecorationPresentation";
+import { layoutDecorationMotionReceipt } from "../lib/layoutDecorationPresentation";
 import { isViewSurfaceVisible } from "./GroupArea";
 
-const movingReceipt: LayoutDecorationMotionReceipt = {
-  status: "moving",
-  owner: "layout-rect-motion",
-  generation: 3,
-  sequence: 11,
-  activeAnimations: 2,
-};
 
-describe("layout decoration lifecycle", () => {
-  // An outline or a boundary can be taken away while the layout moves and nothing is missing from
-  // the screen. A rail holds a strip of the window, and taking it away leaves that strip to nobody
-  // while the panes are still travelling into it — measured 2026-08-17, 165 points for 183 to 194ms
-  // on every move that changed which pane the rail follows.
-  it("structure and focus are removed while moving; the relation outline and the rail, which owns width, stay", () => {
-    expect(layoutDecorationPresentation(movingReceipt)).toEqual({
-      structuralFrames: "absent",
-      focusBoundary: "absent",
-      relationOverlay: "present",
-      railSurface: "present",
-    });
-    expect(layoutDecorationPresentation({
-      status: "settled",
-      owner: "layout-rect-motion",
-      generation: 3,
-      sequence: 12,
-      activeAnimations: 0,
-    })).toEqual({
-      structuralFrames: "present",
-      focusBoundary: "present",
-      relationOverlay: "present",
-      railSurface: "present",
-    });
-  });
-
-  it("GroupArea and the rail read the same public lifecycle receipt", () => {
+describe("what a motion takes off the screen", () => {
+  // Nothing. A frame, a boundary, an outline and a rail all stay and travel with what they draw.
+  //
+  // They used to be removed for the duration of a motion, on the reasoning that they decorate a
+  // settled arrangement. Measured 2026-08-17 across all six ways focus can move in a three-pane
+  // window: every pane stood on the screen without its line for 148 to 372ms, and 165 points of the
+  // window belonged to nobody for 147 to 194ms. A line that goes out and comes back is not a settled
+  // arrangement either.
+  it("keeps the frame and the boundary through a motion, on the same tracker as the cells", () => {
     const group = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
     const app = readFileSync(resolve(import.meta.dirname, "../App.tsx"), "utf8");
-    expect(group).toContain("useLayoutDecorationPresentation(`${projectId}/${content.id}`)");
-    expect(group).toContain("decoration.structuralFrames === \"present\"");
-    expect(group).toContain("decoration.focusBoundary === \"present\"");
-    expect(app).toContain("decoration.railSurface !== \"present\"");
-    expect(group).toContain("!replaceGeometry && decoration.structuralFrames");
-    expect(group).toContain("!replaceGeometry && decoration.focusBoundary");
-    expect(app).toContain("decoration.relationOverlay === \"present\" && !phase.replacing");
-    expect(app).toContain("railStation={effectiveRailRelation.station}");
-    // The travel no longer takes the rail off the screen; it is the panes that move.
-    expect(app).toContain("phase.replacing || decoration.railSurface !== \"present\"");
-    expect(app).not.toContain("railTraveling || phase.replacing");
-    expect(app).toContain("<div\n              ref={railPlaneRef}");
-    expect(app).toContain("? null\n                : <div");
-    expect(app).not.toContain("railPlane={\n            railTraveling");
-    expect(app).not.toContain('data-rail-role={rail.visible && !phase.replacing');
-    expect(app).toContain("replaceGeometry={isActiveContent && phase.replacing}");
+    // The frame is drawn and registered with the tracker that interpolates the cells, so it is one
+    // frame that moves rather than two that appear and vanish.
+    expect(group).toContain('data-node={`layout/frame/${group.id}`}');
+    expect(group).toContain('data-node={`layout/focus-boundary/${content.activePaneId}`}');
+    expect(group).not.toContain("decoration.structuralFrames");
+    expect(group).not.toContain("decoration.focusBoundary");
+    expect(app).not.toContain("decoration.railSurface");
+    expect(app).not.toContain("decoration.relationOverlay");
+    // The lease survives: it is the record that a motion is running.
+    expect(readFileSync(resolve(import.meta.dirname, "../lib/layoutRectMotion.ts"), "utf8"))
+      .toContain("beginLayoutDecorationMotion");
+  });
+
+  it("still publishes the motion lease per scope", () => {
+    expect(layoutDecorationMotionReceipt("nothing-has-moved")).toEqual({
+      status: "settled",
+      owner: "layout-rect-motion",
+      generation: 0,
+      sequence: 0,
+      activeAnimations: 0,
+    });
   });
 });
 
 describe("content view effective visibility", () => {
-  it("focus boundary count is 0 while travelling and 1 on the active pane after settling", () => {
+  it("the focus boundary is drawn on the active pane and travels with it", () => {
     const source = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
     expect(source).toContain('className="pane-focus-boundary"');
     expect(source).toContain('key={`focus-frame-${content.activePaneId}`}');
     expect(source).toContain('data-node={`layout/focus-boundary/${content.activePaneId}`}');
-    expect(source).toMatch(/\{!traveling\s*&&\s*!replaceGeometry\s*&&\s*decoration\.focusBoundary === "present"\s*&&\s*displayCells/);
+    // Registered with the tracker that interpolates the cells, so it moves rather than blinking.
+    expect(source).toMatch(/pane-focus-boundary[\s\S]{0,200}|ref=\{rectMotion\.ref\}[\s\S]{0,200}pane-focus-boundary/);
     expect(source).not.toMatch(/pane-focus-boundary[^\n]*flip-move/);
     expect(source).not.toMatch(/className=\{`pane-border\$\{[\s\S]{0,180}focus/);
   });
 
-  it("every structural frame is removed while travelling and rebuilt from the settled rect", () => {
+  it("every structural frame is drawn through a motion, on the tracker that moves the cells", () => {
     const source = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
-    expect(source).toMatch(/\{!traveling\s*&&\s*!replaceGeometry\s*&&\s*decoration\.structuralFrames === "present"\s*&&\s*displayCells\.map/);
-    expect(source).not.toMatch(/displayCells\s*\.filter\(\(\{ group \}\) => !traveling \|\| !flipMoves\(group\.id\)\)/);
     expect(source).toContain('className="pane-border"');
     expect(source).toContain('data-node={`layout/frame/${group.id}`}');
+    // The condition that took them away for the length of a motion is gone. What is left is the
+    // structural snap, where the previous rect is a structure to discard rather than a start point.
+    expect(source).toMatch(/\{!replaceGeometry && displayCells\.map/);
+    expect(source).not.toContain("decoration.structuralFrames");
+    expect(source).not.toMatch(/displayCells\s*\.filter\(\(\{ group \}\) => !traveling \|\| !flipMoves\(group\.id\)\)/);
     expect(source).not.toMatch(/className=\{`pane-border\$\{[^\n]*flip-move/);
   });
 

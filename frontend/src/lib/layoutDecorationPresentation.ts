@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from "react";
 import { moduleState } from "./moduleState";
 
 export type LayoutDecorationMotionReceipt = {
@@ -7,13 +6,6 @@ export type LayoutDecorationMotionReceipt = {
   generation: number;
   sequence: number;
   activeAnimations: number;
-};
-
-export type LayoutDecorationPresentation = {
-  structuralFrames: "present" | "absent";
-  focusBoundary: "present" | "absent";
-  relationOverlay: "present" | "absent";
-  railSurface: "present" | "absent";
 };
 
 type ScopeState = {
@@ -80,57 +72,20 @@ export function layoutDecorationMotionReceipt(scope: string): LayoutDecorationMo
   return stateOf(scope).receipt;
 }
 
-/** Public composition verdict surface. Returns the per-scope transaction-owned lifetime together with the decoration set allowed during it. */
-export function layoutDecorationPresentationFacts(): Array<{
+/** Public surface: what each scope's motion lease holds right now.
+ *
+ * The presentation half of this module is gone. It answered which decorations were allowed while a
+ * motion ran, and the answer is now the same for all of them — a frame, a boundary, an outline and a
+ * rail all stay on the screen and travel with what they draw. Measured 2026-08-17: removing them left
+ * every pane without its line for 148 to 372ms and 165 points of the window belonging to nobody, on
+ * every one of the six ways focus can move in a three-pane window. What is left here is the lease
+ * itself, which is the record that a layout motion is running.
+ */
+export function layoutDecorationMotionFacts(): Array<{
   scope: string;
   receipt: LayoutDecorationMotionReceipt;
-  presentation: LayoutDecorationPresentation;
 }> {
   return [...scopes.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([scope, state]) => ({
-      scope,
-      receipt: { ...state.receipt },
-      presentation: layoutDecorationPresentation(state.receipt),
-    }));
-}
-
-export function layoutDecorationPresentation(
-  receipt: LayoutDecorationMotionReceipt,
-): LayoutDecorationPresentation {
-  const value = receipt.status === "settled" ? "present" : "absent";
-  return {
-    structuralFrames: value,
-    focusBoundary: value,
-    // The relation outline is a destination marker, not a motion decoration. The click commit
-    // swaps it to a new identity pinned at the destination, so it does not wait for rect
-    // animation settlement.
-    relationOverlay: "present",
-    // A region that owns width is not a decoration.
-    //
-    // An outline or a boundary can be taken away while the layout moves and nothing is missing from
-    // the screen. A rail holds a strip of the window, and taking it away leaves that strip to
-    // nobody: the panes are still travelling into it, so what a person sees is a hole. Measured
-    // 2026-08-17 in the named three-pane window, over all six ways focus can move — 165 points, for
-    // 147 to 182ms, every time the region arrived or left. It travels with the panes instead, on
-    // their tracker, which is why it is present through the motion rather than after it.
-    railSurface: "present",
-  };
-}
-
-export function useLayoutDecorationPresentation(scope: string): LayoutDecorationPresentation {
-  const receipt = useSyncExternalStore(
-    (listener) => {
-      const state = stateOf(scope);
-      state.listeners.add(listener);
-      return () => state.listeners.delete(listener);
-    },
-    () => stateOf(scope).receipt,
-    () => stateOf(scope).receipt,
-  );
-  return layoutDecorationPresentation(receipt);
-}
-
-export function __resetLayoutDecorationPresentationForTest(): void {
-  scopes.clear();
+    .map(([scope, state]) => ({ scope, receipt: { ...state.receipt } }));
 }

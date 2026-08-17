@@ -19,8 +19,7 @@ import { armSlotActivation } from "../lib/slotGesture";
 import { beginLayoutMotion, endLayoutMotion } from "../lib/layoutMotion";
 import { CHROME_BANDS } from "../lib/chromeBands";
 import { createRectMotionTracker } from "../lib/layoutRectMotion";
-import { timed } from "../lib/mainThreadCost";
-import { useLayoutDecorationPresentation } from "../lib/layoutDecorationPresentation";
+import { timed, useRenderCost } from "../lib/mainThreadCost";
 import { cleanRailLines } from "../lib/railPlacement";
 import { recordRailPhase } from "../lib/railJournal";
 import { useGutterHover } from "../state/gutterHover";
@@ -217,8 +216,8 @@ export const GroupArea = memo(function GroupArea({
   const overlayed = useUi((s) => s.overlayCount > 0);
   const t = useT();
   // JS interpolation (FLIP) of command-driven rect changes — on every commit flush compares against the previous rect (layoutRectMotion).
+  useRenderCost("render.panes");
   const rectMotion = useRef(createRectMotionTracker(`${projectId}/${content.id}`)).current;
-  const decoration = useLayoutDecorationPresentation(`${projectId}/${content.id}`);
   const displayLayout = solvedLayout ?? content.layout;
   const focusProjectionApplied = displayLayout !== content.layout;
   const traveling = (moves?.length ?? 0) > 0;
@@ -853,27 +852,33 @@ export const GroupArea = memo(function GroupArea({
           included. The slot layer covers the cell border, so the border alone is split out and floated
           (pointer-events none). Coordinates use the same variables as the cell — the arithmetic is owned
           by CSS rules. The structural border line (--bd, §B contract) is invariant — emphasis is only
-          outline or background (--acc, §B4). A frame is not a moving object but decoration of a settled
-          arrangement. During a transaction both the source and destination structural frames are removed,
-          and after settling they are all built anew at the final rect. An intermediate representation where
-          the destination frame appears before the content, or an old frame deforms and moves, is forbidden. ── */}
-      {!traveling && !replaceGeometry && decoration.structuralFrames === "present" && displayCells.map(({ group, rect }) => (
+          outline or background (--acc, §B4).
+
+          The frame travels with the pane it draws. It used to be removed for the whole of a motion and
+          built again at the final rect, on the reasoning that a frame decorates a settled arrangement
+          — and what a person saw was every pane on the screen without its line for 148 to 372ms,
+          measured 2026-08-17 across all six ways focus can move in the named window. A line that goes
+          out and comes back is not a settled arrangement either. It is registered with the same rect
+          tracker as the cells, so it is interpolated on the same commit with the same duration: the
+          old frame does not deform and the new one does not arrive early, because there is one frame
+          and it moves. ── */}
+      {!replaceGeometry && displayCells.map(({ group, rect }) => (
          <div
            key={`frame-${group.id}`}
+           ref={rectMotion.ref}
            className="pane-border"
            data-node={`layout/frame/${group.id}`}
            style={cellVars(rect, group.id)}
          />
       ))}
 
-      {/* The selection boundary is a state of the settled arrangement. During a move neither the previous
-          nor the destination boundary exists; after the phase closes, exactly one is created at the active
-          pane's final rect. */}
-      {!traveling && !replaceGeometry && decoration.focusBoundary === "present" && displayCells
+      {/* The selection boundary travels with the pane it marks, for the same reason the frame does. */}
+      {!replaceGeometry && displayCells
         .filter(({ group }) => group.id === content.activePaneId)
         .map(({ rect }) => (
           <div
             key={`focus-frame-${content.activePaneId}`}
+            ref={rectMotion.ref}
             className="pane-focus-boundary"
             data-node={`layout/focus-boundary/${content.activePaneId}`}
             style={cellVars(rect, content.activePaneId)}

@@ -16,7 +16,7 @@ import { rafThrottle } from "./lib/rafThrottle";
 import { railEdgeWidths } from "./ui/railEdges";
 import { parkedStyle } from "./lib/layerPark";
 import { createRectMotionTracker } from "./lib/layoutRectMotion";
-import { timed } from "./lib/mainThreadCost";
+import { timed, useRenderCost } from "./lib/mainThreadCost";
 import { emitPathsDropped, emitPluginEvent } from "./plugins/hooks";
 import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
@@ -25,7 +25,6 @@ import { startSurfaceActivationSync, startViewFocusSync } from "./plugins/viewFo
 import { safeListen } from "./lib/safeListen";
 import { SectionSetHost } from "./components/SectionSetHost";
 import { RailGridSurface, type RailGridSurfaceHandle } from "./components/RailGridSurface";
-import { useLayoutDecorationPresentation } from "./lib/layoutDecorationPresentation";
 import { RailLinkOverlay } from "./components/RailLinkOverlay";
 import { PluginManagerModal } from "./components/PluginManagerModal";
 import { ContentTabs } from "./components/ContentTabs";
@@ -184,6 +183,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
 }) {
   const t = useT();
   const setLeftRailPlacement = useSessions((s) => s.setLeftRailPlacement);
+  useRenderCost("render.workspace");
   const railPlaneRef = useRef<HTMLDivElement>(null);
   // The rail travels with the panes, on the same interpolation they use.
   //
@@ -217,9 +217,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
   const activeContent =
     workspace.spaces.find((content) => content.id === workspace.activeSpaceId) ??
     workspace.spaces[0];
-  const decoration = useLayoutDecorationPresentation(
-    `${workspace.id}/${activeContent?.id ?? "none"}`,
-  );
+
   // Fall back to the last settled value so station does not collapse to 0 on an unresolved focus render.
   const lastStationRef = useRef(0);
   // The solver solves the arrangement — single truth for station, layout, produced adjacency and move amounts (never recompute).
@@ -467,7 +465,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
           traveling={railTraveling}
           starting={phase.starting}
           relationOverlay={
-            decoration.relationOverlay === "present" && !phase.replacing && activeContent && effectiveRailRelation ? (
+            !phase.replacing && activeContent && effectiveRailRelation ? (
               <RailLinkOverlay
                 key={`${effectiveRailRelation.state.relationId}|${effectiveRailRelation.station}|${effectiveRailRelation.targetRect?.left ?? "none"}|${effectiveRailRelation.targetRect?.top ?? "none"}|${effectiveRailRelation.targetRect?.width ?? "none"}|${effectiveRailRelation.targetRect?.height ?? "none"}`}
                 contentId={activeContent.id}
@@ -491,7 +489,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                 } as React.CSSProperties
               }
             >
-              {phase.replacing || decoration.railSurface !== "present"
+              {phase.replacing
                 ? null
                 : <div
                   key={rail.key}
