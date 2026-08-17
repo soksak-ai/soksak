@@ -973,24 +973,12 @@ func drawnGaps(frames []traceFrame) []float64 {
 	return gaps
 }
 
-// lateFrames is how many of them were later than the machine's own cadence allows, and quantile is
-// where a given share of them falls.
+// quantile is where a given share of the gaps falls.
 //
-// One worst value cannot tell a window that froze from a window that dropped two frames out of
-// ninety. Measured 2026-08-18, the move that leaves a page for a terminal: median 17ms, p90 18ms,
-// p99 34ms, worst 45ms, two frames over 30 — and the moves beside it never pass 26ms. Read through
-// the worst alone, the first was called a 45ms stall and the second was called clean, and the
-// difference between them is two frames.
-func lateFrames(gaps []float64, over float64) int {
-	late := 0
-	for _, gap := range gaps {
-		if gap > over {
-			late++
-		}
-	}
-	return late
-}
-
+// One worst value cannot tell a window that froze from a window that dropped a frame out of eighty.
+// Measured 2026-08-18, the move that leaves a page for a terminal: median 17ms, p90 17ms, p99 26ms,
+// worst 49ms — and the moves beside it never pass 26ms. Read through the worst alone, the first was
+// called a 49ms stall and the second was called clean, and one frame separates them.
 func quantile(gaps []float64, share float64) float64 {
 	if len(gaps) == 0 {
 		return 0
