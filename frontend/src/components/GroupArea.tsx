@@ -27,6 +27,7 @@ import { ViewTabs } from "./ViewTabs";
 import { FocusLightingPlane } from "./FocusLightingPlane";
 import { railLightingExemption } from "./focusLightingGeometry";
 import { computeSplitLayout, hitTestCells } from "../lib/splitLayout";
+import { layoutGeometrySignature } from "../lib/layoutGeometrySignature";
 import { gutterAddress, gutterOwnerOf } from "../lib/gutterAddress";
 import { beginGesture } from "../lib/gesture";
 import { commitDomLayout } from "../lib/domLayoutCommit";
@@ -217,9 +218,6 @@ export const GroupArea = memo(function GroupArea({
   // JS interpolation (FLIP) of command-driven rect changes — on every commit flush compares against the previous rect (layoutRectMotion).
   const rectMotion = useRef(createRectMotionTracker(`${projectId}/${content.id}`)).current;
   const decoration = useLayoutDecorationPresentation(`${projectId}/${content.id}`);
-  useLayoutEffect(() => {
-    rectMotion.flush(replaceGeometry ? "replace" : "animate");
-  });
   const displayLayout = solvedLayout ?? content.layout;
   const focusProjectionApplied = displayLayout !== content.layout;
   const traveling = (moves?.length ?? 0) > 0;
@@ -339,6 +337,26 @@ export const GroupArea = memo(function GroupArea({
   // transition and back exactly once after, a PIN click moving nothing, a FLOW station on the
   // focused pane's left clean line — are about moments, and a command asked afterwards sees only
   // the last one.
+  // What a rect is made of. Anything missing here is a change that moves an element and skips its
+  // motion; anything extra is a render that ends one that was playing.
+  const geometrySignature = layoutGeometrySignature({
+    traveling,
+    railStation,
+    railWidthPx,
+    paneInset: inset,
+    replaceGeometry,
+    cells: displayCells.map((c) => ({ id: c.group.id, rect: c.rect })),
+    slotIds: displayCells.flatMap((c) => c.group.tabs.map((v) => v.id)),
+  });
+  // Once per layout commit, which is the tracker's contract. Running it on every render cancelled
+  // every interpolation before it played — measured 2026-08-17, `ui.motion` held 64 journeys and
+  // not one finished, so a pane, a tab and the surface under it jumped to their destination.
+  useLayoutEffect(() => {
+    rectMotion.flush(replaceGeometry ? "replace" : "animate");
+    // The signature is the whole dependency: every field in it is one the tracker reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geometrySignature]);
+
   const phaseKey = [
     traveling ? "traveling" : "settled",
     railStation,
