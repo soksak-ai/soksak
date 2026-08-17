@@ -102,3 +102,95 @@ func TestAShownSentenceComesFromAKey(t *testing.T) {
 			len(found), strings.Join(found, "\n"))
 	}
 }
+
+// A refusal that travels back to a caller comes from a key, and this holds the
+// Go half of that.
+//
+// `control.Answer` renders a refusal at the edge, in the language of whoever
+// asked (I18N I4). A refusal built with fmt.Errorf has no key to render and
+// arrives in English no matter who is reading — and it reads correct to the
+// author, because the author reads English.
+//
+// The discriminator is the canon's own: a wrap that hands a cause to a log
+// (`fmt.Errorf("reading %s: %w", path, err)`) is not read by a person and is a
+// plain English literal under 6-1. Everything else with a sentence in it is
+// either keyed or listed below with the reason no caller ever reads it.
+var (
+	goRefusal = regexp.MustCompile(`(?:fmt\.Errorf|errors\.New)\(\s*"([^"]{6,})"`)
+	handsOn   = regexp.MustCompile(`%w`)
+)
+
+// refusalsThatNeverTravel are the sentences outside this rule, each with
+// the reason it is outside. A sentence rather than a line, so moving code around
+// does not silently widen the exception, and a new refusal in one of these files
+// is still caught.
+var refusalsThatNeverTravel = map[string]string{
+	"%s": "cmd/sok re-emits the sentence the backend already rendered, and core/files " +
+		"hands over a constant; neither writes a sentence of its own here",
+	"%s exists and is not a socket": "listen_unix refuses at startup, before any caller " +
+		"exists to be answered — this goes to the console of whoever started the process",
+	"another backend is already answering at %s": "the same startup console; a second " +
+		"backend never gets far enough to hold a command registry",
+	"this build has no sentences in %q; it serves %s": "the one refusal that cannot hold a " +
+		"key: it answers a caller whose language this build does not have, so rendering it " +
+		"would need the very table the tag was just refused against",
+	"control: a command needs a name":                     registrationTime,
+	"control: command %s has no handler":                  registrationTime,
+	"control: command %s is already registered":           registrationTime,
+	"control: command %s is delegated to %s":              registrationTime,
+	"control: command %s must declare why it is unserved": registrationTime,
+}
+
+const registrationTime = "a registration-time refusal: it fires while the process is wiring " +
+	"its own commands, so the reader is the developer who wired them wrong, not a caller"
+
+func TestARefusalThatTravelsComesFromAKey(t *testing.T) {
+	var found []string
+	scanned := 0
+
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			if skippedTrees[info.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		scanned++
+		clean := filepath.ToSlash(path)
+		for index, line := range strings.Split(string(body), "\n") {
+			match := goRefusal.FindStringSubmatch(line)
+			if match == nil || handsOn.MatchString(match[1]) || !prose(match[1]) {
+				continue
+			}
+			if _, excused := refusalsThatNeverTravel[match[1]]; excused {
+				continue
+			}
+			found = append(found, clean+":"+itoa(index+1)+" "+match[1])
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scanning the Go sources: %v", err)
+	}
+	if scanned == 0 {
+		t.Fatal("no Go source was scanned; the path is wrong")
+	}
+
+	if len(found) > 0 {
+		t.Errorf("these refusals reach a caller without a key, in %d places:\n%s\n"+
+			"Declare the sentence in the package's messages.go and build the refusal with "+
+			"i18n.Errorf(key, params). A refusal that genuinely never leaves this process goes "+
+			"in refusalsThatNeverTravel with the reason it does not.",
+			len(found), strings.Join(found, "\n"))
+	}
+}
