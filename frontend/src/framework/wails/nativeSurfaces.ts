@@ -5,6 +5,7 @@ import * as CompositorService from "../../../bindings/github.com/soksak/wails-se
 import { Snapshot } from "../../../bindings/github.com/soksak/wails-service-native-compositor/models";
 import { noteAppliedSurfaces } from "../../lib/contentViews";
 import { presentationNowUnixMs } from "../../lib/presentationClock";
+import { nextFrame } from "../../lib/nextFrame";
 import { currentWindowLabel } from "../../lib/webviewLabels";
 
 const commit: NativeSurfaceCommit = async (snapshot) => {
@@ -104,6 +105,9 @@ export async function resetNativeSurfaces(): Promise<void> {
 /** How long a wait for a frame may go on before it states what did not arrive. */
 const SETTLE_LIMIT_MS = 5_000;
 
+/** How long the wait gives the frame clock before it looks at the time itself. */
+const SETTLE_TICK_MS = 16;
+
 /** Status the wait reads. Replaced only by a test — the observer is the writer in a running build. */
 let statusOverride: (() => ReturnType<NativeSurfaceObserverController["status"]>) | null = null;
 
@@ -141,6 +145,8 @@ export async function nativeSurfacesSettled(limitMs: number = SETTLE_LIMIT_MS): 
           (status.error ? `, last error: ${String(status.error)}` : ""),
       );
     }
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    // The frame is what a commit lands in; the timer is what makes this wait end at all. Both live
+    // in `nextFrame` so every wait for a frame in this build has the same guarantee.
+    await nextFrame(SETTLE_TICK_MS);
   }
 }

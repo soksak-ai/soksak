@@ -99,6 +99,7 @@ import {
   validateWorkspaceRoot,
 } from "../lib/workspaceRoot";
 import { contentViewHost, hasContentViewHost } from "../lib/contentViews";
+import { nextFrame } from "../lib/nextFrame";
 import { waitForDomCommit } from "./waitForDomCommit";
 
 // ── Shared errors and helpers ─────────────────────────────────────────────────
@@ -670,9 +671,10 @@ export function registerCatalog(): void {
         stable: boolean;
       } | null = null;
       for (let round = 0; round < 4; round += 1) {
-        await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-        });
+        // Two frames: the commit, then the paint that follows it. Each has its own second clock,
+        // so a window that is not drawing ends this round instead of holding the command.
+        await nextFrame();
+        await nextFrame();
         const before = resolveWorkspace(p, ctx);
         if (!before) return notFound("msg.workspace.notFound");
         const solved = projectArrangement(before);

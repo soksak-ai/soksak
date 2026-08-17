@@ -55,6 +55,26 @@ describe("waiting for the declared surfaces to be in a frame", () => {
     await expect(m.nativeSurfacesSettled(20)).rejects.toThrow(/9.*4|4.*9/);
   });
 
+  // A window the system has stopped drawing produces no animation frame, and a wait that yields only
+  // on one never gets to its own deadline: the command performs its work and answers nothing.
+  // Measured 2026-08-17 on the running build, one run in three — `workspace.region.toggle` did not
+  // answer inside the client's 20 seconds while the window sat behind another.
+  it("ends on its deadline even when the window never draws a frame", async () => {
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    const m = await import("./nativeSurfaces");
+    m.__setNativeSurfaceStatusForTest(() => ({
+      dirty: true,
+      sequence: 9,
+      committedSequence: 4,
+      running: true,
+      error: null,
+    }));
+
+    const started = Date.now();
+    await expect(m.nativeSurfacesSettled(60)).rejects.toThrow(/9.*4|4.*9/);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
   it("returns as soon as the commit catches up", async () => {
     const m = await import("./nativeSurfaces");
     let committed = 0;
