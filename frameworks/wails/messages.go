@@ -287,6 +287,97 @@ func init() {
 	})
 }
 
+// The refusals a recording answers with. Every bound is named with the value
+// that missed it and with the range, because a caller who is told only that a
+// number was refused cannot tell whether to raise it or lower it. Nothing is
+// clamped: a burst quietly shortened to fit is a burst of something other than
+// what was asked for, and the frames look the same either way.
+
+func init() {
+	i18n.Declare(map[string]i18n.Sentence{
+		"wails.record.noDir": {
+			EN: "a recording needs a directory to write its frames into",
+			KO: "녹화에는 프레임을 기록할 디렉터리가 필요합니다",
+		},
+		"wails.record.framesOutOfRange": {
+			EN: "a recording takes 1 through {max} frames; {given} is outside that and is not clamped to it",
+			KO: "녹화는 1 에서 {max} 프레임까지입니다 — {given} 은(는) 그 밖이며 범위로 잘라내지 않습니다",
+		},
+		"wails.record.intervalOutOfRange": {
+			EN: "a recording interval is 0 through {max}ms; {given}ms is outside that and is not clamped to it",
+			KO: "녹화 간격은 0 에서 {max}ms 까지입니다 — {given}ms 는 그 밖이며 범위로 잘라내지 않습니다",
+		},
+		"wails.record.budgetOutOfRange": {
+			EN: "a recording budget is 1 through {max} bytes; {given} is outside that",
+			KO: "녹화 용량 한도는 1 에서 {max} 바이트까지입니다 — {given} 은(는) 그 밖입니다",
+		},
+		"wails.record.deadlineOutOfRange": {
+			EN: "a frame deadline is 1 through {max}ms; {given}ms is outside that",
+			KO: "프레임 기한은 1 에서 {max}ms 까지입니다 — {given}ms 는 그 밖입니다",
+		},
+		"wails.record.frameLate": {
+			EN: "the frame did not arrive within {deadline}",
+			KO: "프레임이 {deadline} 안에 도착하지 않았습니다",
+		},
+	})
+}
+
+// The refusals a reading of a recording answers with. A reading is asked for by
+// name and answered by name, so a region with no name and two regions sharing
+// one are both refused before a frame is opened — an answer keyed by position
+// would be read against the wrong region and nothing in it would say so.
+
+func init() {
+	i18n.Declare(map[string]i18n.Sentence{
+		"wails.analyze.noRegions": {
+			EN: "a reading needs at least one region to read",
+			KO: "판독에는 읽을 영역이 최소 하나 필요합니다",
+		},
+		"wails.analyze.regionUnnamed": {
+			EN: "a region has no name; the answer is read by name, not by position",
+			KO: "이름 없는 영역이 있습니다 — 답은 위치가 아니라 이름으로 읽습니다",
+		},
+		"wails.analyze.regionNameRepeated": {
+			EN: "two regions are named {name}; one name answers with one series",
+			KO: "{name} 이름의 영역이 둘입니다 — 한 이름은 한 계열로 답합니다",
+		},
+		"wails.analyze.regionOutsideFrame": {
+			EN: "region {name} is x{x} y{y} {w}x{h}; a region is a fraction of the frame inside 0..1",
+			KO: "영역 {name} 은(는) x{x} y{y} {w}x{h} 입니다 — 영역은 0..1 안의 프레임 비율입니다",
+		},
+		"wails.analyze.regionEmpty": {
+			EN: "region {name} is {w}x{h} pixels in a {frameW}x{frameH} frame; there is nothing there to read",
+			KO: "영역 {name} 은(는) {frameW}x{frameH} 프레임 안에서 {w}x{h} 픽셀입니다 — 읽을 것이 없습니다",
+		},
+		"wails.analyze.thresholdOutOfRange": {
+			EN: "a change threshold is a luminance difference from 0 through 1; {given} is outside that",
+			KO: "변화 임계값은 0 에서 1 사이의 휘도 차입니다 — {given} 은(는) 그 밖입니다",
+		},
+		"wails.analyze.noDir": {
+			EN: "a reading needs the directory the frames were recorded into",
+			KO: "판독에는 프레임이 기록된 디렉터리가 필요합니다",
+		},
+		"wails.analyze.dirUnreadable": {
+			EN: "no recording in {dir}: {first} could not be read ({cause})",
+			KO: "{dir} 에 녹화가 없습니다 — {first} 을(를) 읽을 수 없습니다 ({cause})",
+		},
+		"wails.analyze.firstFrameMissing": {
+			EN: "no recording in {dir}: {first} is not there",
+			KO: "{dir} 에 녹화가 없습니다 — {first} 이(가) 없습니다",
+		},
+		"wails.analyze.frameGap": {
+			EN: "{missing} is missing and {present} is not; a gap makes two frames adjacent that were not",
+			KO: "{missing} 이(가) 없고 {present} 은(는) 있습니다 — 빈칸은 이웃이 아니던 두 프레임을 이웃으로 만듭니다",
+		},
+		"wails.analyze.frameSizeChanged": {
+			EN: "frame {number} is {w}x{h} and frame {first} is {firstW}x{firstH}; " +
+				"one recording is one size, and a region is a different rectangle in each",
+			KO: "프레임 {number} 은(는) {w}x{h} 이고 프레임 {first} 은(는) {firstW}x{firstH} 입니다 — " +
+				"한 녹화는 한 크기이며, 영역은 각각에서 다른 사각형이 됩니다",
+		},
+	})
+}
+
 // The refusals the single-window dispatch answers with. A request that was
 // never delivered is refused here rather than waiting out its deadline, so a
 // caller reads which window is missing.

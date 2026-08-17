@@ -11,7 +11,14 @@ import (
 	"strconv"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 )
+
+// fraction writes a region bound the way %g did: the shortest form that reads
+// back as the same number. A rounded one in a refusal would name a rectangle the
+// caller did not ask for, and 0.30000000000000004 would name the arithmetic
+// rather than the mistake.
+func fraction(value float64) string { return strconv.FormatFloat(value, 'g', -1, 64) }
 
 // Numbers read back off a recording.
 //
@@ -186,9 +193,11 @@ func AnalyzeFrames(request AnalyzeRequest) (AnalyzeReport, error) {
 				return AnalyzeReport{}, err
 			}
 			if frame.Bounds().Dx() != width || frame.Bounds().Dy() != height {
-				return AnalyzeReport{}, fmt.Errorf(
-					"frame %d is %dx%d and frame %d is %dx%d; one recording is one size, and a region is a different rectangle in each",
-					number, frame.Bounds().Dx(), frame.Bounds().Dy(), frames[0], width, height)
+				return AnalyzeReport{}, i18n.Errorf("wails.analyze.frameSizeChanged", map[string]string{
+					"number": strconv.Itoa(number),
+					"w":      strconv.Itoa(frame.Bounds().Dx()), "h": strconv.Itoa(frame.Bounds().Dy()),
+					"first":  strconv.Itoa(frames[0]),
+					"firstW": strconv.Itoa(width), "firstH": strconv.Itoa(height)})
 			}
 		}
 
@@ -221,9 +230,8 @@ func analyzeThreshold(given *float64) (float64, error) {
 		return AnalyzeDefaultThreshold, nil
 	}
 	if *given < 0 || *given > 1 || math.IsNaN(*given) {
-		return 0, fmt.Errorf(
-			"a change threshold is a luminance difference from 0 through 1; %g is outside that",
-			*given)
+		return 0, i18n.Errorf("wails.analyze.thresholdOutOfRange", map[string]string{
+			"given": strconv.FormatFloat(*given, 'g', -1, 64)})
 	}
 	return *given, nil
 }
@@ -236,24 +244,25 @@ func analyzeThreshold(given *float64) (float64, error) {
 // known.
 func checkRegions(regions []AnalyzeRegion) error {
 	if len(regions) == 0 {
-		return fmt.Errorf("a reading needs at least one region to read")
+		return i18n.Errorf("wails.analyze.noRegions", nil)
 	}
 	seen := make(map[string]struct{}, len(regions))
 	for _, region := range regions {
 		if region.Name == "" {
-			return fmt.Errorf("a region has no name; the answer is read by name, not by position")
+			return i18n.Errorf("wails.analyze.regionUnnamed", nil)
 		}
 		if _, duplicate := seen[region.Name]; duplicate {
-			return fmt.Errorf("two regions are named %q; one name answers with one series", region.Name)
+			return i18n.Errorf("wails.analyze.regionNameRepeated", map[string]string{"name": strconv.Quote(region.Name)})
 		}
 		seen[region.Name] = struct{}{}
 
 		if region.Width <= 0 || region.Height <= 0 ||
 			region.X < 0 || region.Y < 0 ||
 			region.X+region.Width > 1 || region.Y+region.Height > 1 {
-			return fmt.Errorf(
-				"region %q is x%g y%g %gx%g; a region is a fraction of the frame inside 0..1",
-				region.Name, region.X, region.Y, region.Width, region.Height)
+			return i18n.Errorf("wails.analyze.regionOutsideFrame", map[string]string{
+				"name": strconv.Quote(region.Name),
+				"x":    fraction(region.X), "y": fraction(region.Y),
+				"w": fraction(region.Width), "h": fraction(region.Height)})
 		}
 	}
 	return nil
@@ -266,14 +275,15 @@ func checkRegions(regions []AnalyzeRegion) error {
 // so every change fraction after the gap would be measured across it.
 func frameSequence(dir string) ([]int, error) {
 	if dir == "" {
-		return nil, fmt.Errorf("a reading needs the directory the frames were recorded into")
+		return nil, i18n.Errorf("wails.analyze.noDir", nil)
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		// An unreadable directory and an empty one are the same absence of
 		// frames to a caller, and both are named the same way: what was looked
 		// for, and where.
-		return nil, fmt.Errorf("no recording in %s: %s could not be read (%v)", dir, frameFile(dir, 0), err)
+		return nil, i18n.Errorf("wails.analyze.dirUnreadable", map[string]string{
+			"dir": dir, "first": frameFile(dir, 0), "cause": err.Error()})
 	}
 
 	held := map[int]struct{}{}
@@ -296,15 +306,15 @@ func frameSequence(dir string) ([]int, error) {
 		}
 	}
 	if highest < 0 {
-		return nil, fmt.Errorf("no recording in %s: %s is not there", dir, frameFile(dir, 0))
+		return nil, i18n.Errorf("wails.analyze.firstFrameMissing", map[string]string{
+			"dir": dir, "first": frameFile(dir, 0)})
 	}
 
 	frames := make([]int, 0, highest+1)
 	for number := 0; number <= highest; number++ {
 		if _, present := held[number]; !present {
-			return nil, fmt.Errorf(
-				"%s is missing and %s is not; a gap makes two frames adjacent that were not",
-				frameFile(dir, number), frameFile(dir, highest))
+			return nil, i18n.Errorf("wails.analyze.frameGap", map[string]string{
+				"missing": frameFile(dir, number), "present": frameFile(dir, highest)})
 		}
 		frames = append(frames, number)
 	}
@@ -340,9 +350,10 @@ func regionPixels(region AnalyzeRegion, width, height int) (RegionPixels, error)
 
 	pixels := RegionPixels{X: left, Y: top, Width: right - left, Height: bottom - top}
 	if pixels.Width < 1 || pixels.Height < 1 {
-		return RegionPixels{}, fmt.Errorf(
-			"region %q is %dx%d pixels in a %dx%d frame; there is nothing there to read",
-			region.Name, pixels.Width, pixels.Height, width, height)
+		return RegionPixels{}, i18n.Errorf("wails.analyze.regionEmpty", map[string]string{
+			"name": strconv.Quote(region.Name),
+			"w":    strconv.Itoa(pixels.Width), "h": strconv.Itoa(pixels.Height),
+			"frameW": strconv.Itoa(width), "frameH": strconv.Itoa(height)})
 	}
 	return pixels, nil
 }

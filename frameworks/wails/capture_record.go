@@ -3,8 +3,11 @@ package wails
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"time"
 	"unsafe"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // A burst of frames: the video source this host produces.
@@ -75,28 +78,24 @@ type RecordReport struct {
 // pixels, with nothing drawn into them.
 func (service *CaptureService) Record(request RecordRequest) (RecordReport, error) {
 	if request.Dir == "" {
-		return RecordReport{}, fmt.Errorf("a recording needs a directory to write its frames into")
+		return RecordReport{}, i18n.Errorf("wails.record.noDir", nil)
 	}
 	if request.Frames < 1 || request.Frames > recordMaxFrames {
-		return RecordReport{}, fmt.Errorf(
-			"a recording takes 1 through %d frames; %d is outside that and is not clamped to it",
-			recordMaxFrames, request.Frames)
+		return RecordReport{}, i18n.Errorf("wails.record.framesOutOfRange", map[string]string{
+			"max": strconv.Itoa(recordMaxFrames), "given": strconv.Itoa(request.Frames)})
 	}
 	if request.IntervalMs < 0 || request.IntervalMs > recordMaxIntervalMs {
-		return RecordReport{}, fmt.Errorf(
-			"a recording interval is 0 through %dms; %dms is outside that and is not clamped to it",
-			recordMaxIntervalMs, request.IntervalMs)
+		return RecordReport{}, i18n.Errorf("wails.record.intervalOutOfRange", map[string]string{
+			"max": strconv.Itoa(recordMaxIntervalMs), "given": strconv.Itoa(request.IntervalMs)})
 	}
 	if request.MaxBytes < 0 || request.MaxBytes > recordMaxBytes {
-		return RecordReport{}, fmt.Errorf(
-			"a recording budget is 1 through %d bytes; %d is outside that",
-			recordMaxBytes, request.MaxBytes)
+		return RecordReport{}, i18n.Errorf("wails.record.budgetOutOfRange", map[string]string{
+			"max": strconv.FormatInt(recordMaxBytes, 10), "given": strconv.FormatInt(request.MaxBytes, 10)})
 	}
 
 	if request.FrameTimeoutMs < 0 || request.FrameTimeoutMs > recordMaxFrameTimeoutMs {
-		return RecordReport{}, fmt.Errorf(
-			"a frame deadline is 1 through %dms; %dms is outside that",
-			recordMaxFrameTimeoutMs, request.FrameTimeoutMs)
+		return RecordReport{}, i18n.Errorf("wails.record.deadlineOutOfRange", map[string]string{
+			"max": strconv.Itoa(recordMaxFrameTimeoutMs), "given": strconv.Itoa(request.FrameTimeoutMs)})
 	}
 	deadline := time.Duration(request.FrameTimeoutMs) * time.Millisecond
 	if request.FrameTimeoutMs == 0 {
@@ -185,6 +184,6 @@ func (service *CaptureService) grab(handle unsafe.Pointer, region Rect, deadline
 	case taken := <-answer:
 		return taken.png, taken.err
 	case <-time.After(deadline):
-		return nil, fmt.Errorf("the frame did not arrive within %s", deadline)
+		return nil, i18n.Errorf("wails.record.frameLate", map[string]string{"deadline": deadline.String()})
 	}
 }
