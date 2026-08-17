@@ -42,19 +42,21 @@ type layoutScenariosGate = restoreGate
 
 // traceFrame is one recorded frame, as the window wrote it down.
 type traceFrame struct {
-	Frame        int                `json:"frame"`
-	At           float64            `json:"atUnixMs"`
-	AppliedAgeMs float64            `json:"appliedAgeMs"`
-	CommitMs     float64            `json:"commitMs"`
-	SinceLastMs  float64            `json:"sinceLastMs"`
-	Drawn        bool               `json:"drawn"`
-	TickMs       float64            `json:"tickMs"`
-	Commits      int                `json:"commits"`
-	Costs        map[string]float64 `json:"costs"`
-	WorstOff     float64            `json:"worstOff"`
-	WorstLag     float64            `json:"worstLag"`
-	WorstOver    float64            `json:"worstOver"`
-	Regions      []struct {
+	Frame         int                `json:"frame"`
+	At            float64            `json:"atUnixMs"`
+	AppliedAgeMs  float64            `json:"appliedAgeMs"`
+	CommitMs      float64            `json:"commitMs"`
+	AppliedMs     float64            `json:"appliedMs"`
+	SinceLastMs   float64            `json:"sinceLastMs"`
+	Drawn         bool               `json:"drawn"`
+	TickMs        float64            `json:"tickMs"`
+	SinceCommitMs float64            `json:"sinceCommitMs"`
+	Commits       int                `json:"commits"`
+	Costs         map[string]float64 `json:"costs"`
+	WorstOff      float64            `json:"worstOff"`
+	WorstLag      float64            `json:"worstLag"`
+	WorstOver     float64            `json:"worstOver"`
+	Regions       []struct {
 		Region string  `json:"region"`
 		X      float64 `json:"x"`
 		W      float64 `json:"w"`
@@ -64,6 +66,12 @@ type traceFrame struct {
 		X    float64 `json:"x"`
 		W    float64 `json:"w"`
 	} `json:"panes"`
+	Frames []struct {
+		Pane string `json:"pane"`
+	} `json:"frames"`
+	Boundaries []struct {
+		Pane string `json:"pane"`
+	} `json:"boundaries"`
 	Surfaces []struct {
 		ID      string `json:"id"`
 		Visible bool   `json:"visible"`
@@ -252,6 +260,23 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 		"plugin="+gate.pluginOfTab(window, built.browserTab), "set="+set, "region=left")
 	gate.run("workspace.region.toggle", "window="+window, "region=left", "open=true")
 
+	// The spotlight is a full-window SVG mask redrawn with the layout, and what it costs is the
+	// question this run is asked to answer. It is turned off and on again around the measurement so
+	// the two numbers come from the same window.
+	if lit := os.Getenv("SOKSAK_GATE_FOCUS_DIM"); lit == "off" {
+		gate.run("settings.set", "window="+window, "key=focusDim", "value=false")
+	}
+	// The other control group: the same window with the motion collapsed to nothing.
+	//
+	// An interpolation changes every rectangle in the window on every frame, and everything that
+	// reads a rectangle — a plugin view fitting itself, a surface being re-declared, the engine
+	// laying the document out — pays for each of those frames. Run at a hundredth of the duration
+	// the layout still changes, and it changes once. The difference between the two runs is what
+	// the interpolation costs. Named rather than improvised: `SOKSAK_GATE_MOTION=off`.
+	if os.Getenv("SOKSAK_GATE_MOTION") == "off" {
+		gate.run("ui.motion", "window="+window, "scale=0.01")
+	}
+
 	// A covered window is not drawn, and a window that is not drawn has no motion to measure: the
 	// system throttles it, and the same six moves were written down at 60Hz in one run and at 4.7Hz
 	// in the next, purely by what happened to be in front. The throttle is turned off for the
@@ -280,6 +305,7 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 		applied run
 		hole    run
 		over    run
+		blink   run
 		record  string
 	}
 	var results []result
@@ -330,6 +356,10 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				hole: longestRun(frames, func(f traceFrame) (bool, float64) {
 					return f.hole("left") > holeTolerance, f.hole("left")
 				}),
+				blink: longestRun(frames, func(f traceFrame) (bool, float64) {
+					missing := float64(len(f.Panes) - len(f.Frames))
+					return missing > 0, missing
+				}),
 				record: record,
 			})
 		}
@@ -355,9 +385,9 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				slowest = frame.SinceLastMs
 			}
 		}
-		t.Logf("%-32s %3d readings   lag %s   off %s   applied %s   hole %s   over %s   commit %.0fms (%d)"+
+		t.Logf("%-32s %3d readings   lag %s   off %s   applied %s   hole %s   over %s   blink %s   commit %.0fms (%d)"+
 			"  drawn every %.0fms (read every %.0f, worst %.0f)  watching %.1fms",
-			r.name, len(r.frames), r.lag, r.off, r.applied, r.hole, r.over, commit, commits,
+			r.name, len(r.frames), r.lag, r.off, r.applied, r.hole, r.over, r.blink, commit, commits,
 			drawnCadence(r.frames), medianCadence(r.frames), slowest, watching)
 	}
 	// One move recorded for the eye, in its own pass, with the recorder already running before the
@@ -431,6 +461,14 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				"The document's rectangle and the native layer's are the same commit; a difference "+
 				"here is the native layer holding something else.",
 				r.name, r.applied.worst, r.applied.ms, traceLines(r.frames, "left"), r.record)
+		}
+		// The frames are not motion: they are drawn or they are not, whatever rate the window runs at,
+		// so this is judged wherever it is measured.
+		if r.blink.ms > budgetMs {
+			t.Errorf("%s: %.0f panes were on the screen without their frame for %.0fms.\n%s\nframes: %s\n"+
+				"The line around a pane is a separate element from the pane, and a person sees it go "+
+				"out and come back.",
+				r.name, r.blink.worst, r.blink.ms, traceLines(r.frames, "left"), r.record)
 		}
 		if r.hole.ms > budgetMs {
 			t.Errorf("%s: %.0f points belonged to nobody for %.0fms.\n%s\nframes: %s\n"+
@@ -637,9 +675,11 @@ func traceLines(frames []traceFrame, region string) string {
 			}
 		}
 		lines = append(lines, fmt.Sprintf(
-			"  f%03d +%.0fms commits=%d age=%.0fms commit=%.0fms lag=%.0f off=%.0f hole=%.0f over=%.0f (pane %.0f, page %.0f)",
-			frame.Frame, frame.SinceLastMs, frame.Commits, frame.AppliedAgeMs, frame.CommitMs,
-			frame.WorstLag, frame.WorstOff,
+			"  f%03d +%.0fms sinceCommit=%.0fms commits=%d age=%.0fms commit=%.0fms native=%.1fms panes=%d frames=%d "+
+				"lag=%.0f off=%.0f hole=%.0f over=%.0f (pane %.0f, page %.0f)",
+			frame.Frame, frame.SinceLastMs, frame.SinceCommitMs, frame.Commits, frame.AppliedAgeMs,
+			frame.CommitMs, frame.AppliedMs, len(frame.Panes), len(frame.Frames), frame.WorstLag,
+			frame.WorstOff,
 			frame.hole(region), frame.WorstOver, pane, page))
 	}
 	return strings.Join(lines, "\n")

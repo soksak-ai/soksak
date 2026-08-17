@@ -287,6 +287,17 @@ export class Receipt {
     "accepted": boolean;
     "surfaces": AppliedSurface[];
 
+    /**
+     * AppliedMs is how long the backend held this commit — the native work alone, without the
+     * bridge that carried the request or the wait for a thread that was busy with something else.
+     * 
+     * A caller measuring a commit from the other side of the bridge measures both, and the two ask
+     * different questions: work the application does costs this, and time it spends waiting is the
+     * window being busy elsewhere. Measured 2026-08-17, a window stopped drawing for exactly as long
+     * as its commits took, and nothing could tell those two apart.
+     */
+    "appliedMs": number;
+
     /** Creates a new Receipt instance. */
     constructor($$source: Partial<Receipt> = {}) {
         if (!("sequence" in $$source)) {
@@ -297,6 +308,9 @@ export class Receipt {
         }
         if (!("surfaces" in $$source)) {
             this["surfaces"] = [];
+        }
+        if (!("appliedMs" in $$source)) {
+            this["appliedMs"] = 0;
         }
 
         Object.assign(this, $$source);

@@ -13,7 +13,7 @@
 // anything; it writes down what each frame held, and whoever reads it does the judging.
 import { lastAppliedSurfaces } from "./contentViews";
 import { alignmentOf, documentAlignment, type LayoutAlignment } from "./layoutAlignment";
-import { mainThreadCosts } from "./mainThreadCost";
+import { mainThreadCosts, sinceCommitMs } from "./mainThreadCost";
 import { moduleState } from "./moduleState";
 import { presentationNowUnixMs } from "./presentationClock";
 
@@ -35,6 +35,10 @@ export interface LayoutTraceFrame {
    *  main thread is busy laying out an animation answers more, and then nothing on the screen is
    *  moving at the rate it was asked to. */
   sinceLastMs: number;
+  /** How long before this reading the last render committed. A frame that arrives 100ms after the
+   *  commit spent that time in the engine — style, layout, paint — and no timer inside a component
+   *  can see it. */
+  sinceCommitMs: number;
   /** What this recording cost the frame it was taken in. A watcher that is itself the stall would
    *  report a window that is only slow while it is watched. */
   tickMs: number;
@@ -43,11 +47,16 @@ export interface LayoutTraceFrame {
   /** What each path this application owns last cost on the main thread. Whatever the frame gaps
    *  hold that these do not account for is the engine's own render and paint. */
   costs: Record<string, number>;
+  /** What the native layer itself held that commit for. Everything between this and `commitMs` is
+   *  the bridge and a thread that was busy with something else. */
+  appliedMs: number;
   /** What the commit that carried the native half cost, from the rectangles being measured to the
    *  native layer answering. A page cannot be closer to its pane than this. */
   commitMs: number;
   regions: LayoutAlignment["regions"];
   panes: LayoutAlignment["panes"];
+  frames: LayoutAlignment["frames"];
+  boundaries: LayoutAlignment["boundaries"];
   surfaces: LayoutAlignment["surfaces"];
   worstOff: number;
   worstLag: number;
@@ -175,13 +184,17 @@ function tick(drawn: boolean): void {
     atUnixMs,
     drawn,
     sinceLastMs: previous ? Math.round(atUnixMs - previous.atUnixMs) : 0,
+    sinceCommitMs: sinceCommitMs(performance.now()),
     tickMs: 0,
     commits: applied.commits,
     costs: mainThreadCosts(),
     appliedAgeMs: applied.atUnixMs === 0 ? -1 : Math.round(atUnixMs - applied.atUnixMs),
     commitMs: Math.round(applied.latencyMs),
+    appliedMs: Math.round(applied.appliedMs * 10) / 10,
     regions: alignment.regions,
     panes: alignment.panes,
+    frames: alignment.frames,
+    boundaries: alignment.boundaries,
     surfaces: alignment.surfaces,
     worstOff: alignment.worstOff,
     worstLag: alignment.worstLag,

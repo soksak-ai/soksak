@@ -41,6 +41,11 @@ export interface SurfaceAlignment {
 export interface LayoutAlignment {
   regions: Array<{ region: string } & Box>;
   panes: Array<{ pane: string } & Box>;
+  /** The lines drawn around the panes: one frame per pane, and the boundary on the focused one. They
+   *  are a separate element from the pane they outline, so whether they are on the screen is a
+   *  different fact from whether the pane is. */
+  frames: Array<{ pane: string } & Box>;
+  boundaries: Array<{ pane: string } & Box>;
   surfaces: SurfaceAlignment[];
   worstOff: number;
   worstLag: number;
@@ -69,6 +74,8 @@ export const boxOf = (rect: { left: number; top: number; width: number; height: 
 export function documentAlignment(): {
   regions: LayoutAlignment["regions"];
   panes: LayoutAlignment["panes"];
+  frames: LayoutAlignment["frames"];
+  boundaries: LayoutAlignment["boundaries"];
   declarations: Array<{ id: string; dom: Box; declared: Box | null }>;
 } {
   const regions = boxesOf("[data-node$='rail/left'],[data-node$='sidebar/right']").map((box) => ({
@@ -79,12 +86,20 @@ export function documentAlignment(): {
     pane: box.node.slice(box.node.lastIndexOf("/") + 1),
     ...box.box,
   }));
+  const frames = boxesOf("[data-node^='layout/frame/']").map((box) => ({
+    pane: box.node.slice(box.node.lastIndexOf("/") + 1),
+    ...box.box,
+  }));
+  const boundaries = boxesOf("[data-node^='layout/focus-boundary/']").map((box) => ({
+    pane: box.node.slice(box.node.lastIndexOf("/") + 1),
+    ...box.box,
+  }));
   const declarations = nativeSurfaceDeclarations().map((element) => ({
     id: element.dataset.nativeSurfaceId ?? "",
     dom: boxOf(element.getBoundingClientRect()),
     declared: declaredOf(element),
   }));
-  return { regions, panes, declarations };
+  return { regions, panes, frames, boundaries, declarations };
 }
 
 /** The two halves put together. The applied side is passed in rather than fetched, so a caller that
@@ -130,6 +145,8 @@ export function alignmentOf(
   return {
     regions: document.regions,
     panes: document.panes,
+    frames: document.frames,
+    boundaries: document.boundaries,
     surfaces,
     worstOff: worst((s) => s.off),
     worstLag: worst((s) => s.lag),

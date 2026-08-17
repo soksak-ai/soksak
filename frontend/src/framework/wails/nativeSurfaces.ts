@@ -25,6 +25,7 @@ const commit: NativeSurfaceCommit = async (snapshot) => {
     })),
     answeredAt,
     answeredAt - askedAt,
+    receipt.appliedMs ?? -1,
   );
   // Publish the applied inventory on the document, so the composition check reads this one receipt instead
   // of recomputing the geometry from a second source.

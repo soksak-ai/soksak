@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 )
@@ -42,6 +43,22 @@ type gateWindow struct {
 func (gate *restoreGate) buildGateWindow(window string) gateWindow {
 	gate.t.Helper()
 	terminalProgram, browserProgram := gate.programsForWindow(window)
+
+	// The control group: the same window with a terminal where the page goes.
+	//
+	// A native surface is resized by the layout, and what that costs the window is a question the
+	// named window alone cannot answer — it always has a page in it. Built with a terminal instead,
+	// every other thing about the window is the same, so the difference between the two runs is the
+	// page. Named rather than improvised: `SOKSAK_GATE_NO_PAGE=1`.
+	if os.Getenv("SOKSAK_GATE_NO_PAGE") == "1" {
+		browserProgram = terminalProgram
+	}
+	// And the other way: every pane a page. A terminal re-lays its buffer out when its box changes,
+	// and a page does something else entirely, so which of the two the window is made of is the
+	// difference between these two runs. `SOKSAK_GATE_ALL_PAGES=1`.
+	if os.Getenv("SOKSAK_GATE_ALL_PAGES") == "1" {
+		terminalProgram = browserProgram
+	}
 
 	// The first pane is the space's own; each later one splits it on the side it names. So: a
 	// terminal, a terminal taking the right of the window, and a browser taking the bottom of what
@@ -84,8 +101,10 @@ func (gate *restoreGate) buildGateWindow(window string) gateWindow {
 
 	// The arrangement is not built until the panes hold what they were asked to hold. A gate that
 	// starts measuring here would otherwise be measuring the tail of its own setup.
+	// The control group has no page in it, so waiting for one would wait forever.
+	page := os.Getenv("SOKSAK_GATE_NO_PAGE") != "1"
 	gate.until(10*time.Second, func() bool {
-		return len(gate.panes(window)) >= 3 && gate.aVisibleSurface(window) != ""
+		return len(gate.panes(window)) >= 3 && (!page || gate.aVisibleSurface(window) != "")
 	}, "the three panes to stand with a surface on screen")
 
 	built.terminalTab = gate.tabInPane(window, built.terminal)
