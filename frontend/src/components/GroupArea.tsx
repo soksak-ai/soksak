@@ -19,6 +19,7 @@ import { armSlotActivation } from "../lib/slotGesture";
 import { beginLayoutMotion, endLayoutMotion } from "../lib/layoutMotion";
 import { CHROME_BANDS } from "../lib/chromeBands";
 import { createRectMotionTracker } from "../lib/layoutRectMotion";
+import { timed } from "../lib/mainThreadCost";
 import { useLayoutDecorationPresentation } from "../lib/layoutDecorationPresentation";
 import { cleanRailLines } from "../lib/railPlacement";
 import { recordRailPhase } from "../lib/railJournal";
@@ -352,7 +353,7 @@ export const GroupArea = memo(function GroupArea({
   // every interpolation before it played — measured 2026-08-17, `ui.motion` held 64 journeys and
   // not one finished, so a pane, a tab and the surface under it jumped to their destination.
   useLayoutEffect(() => {
-    rectMotion.flush(replaceGeometry ? "replace" : "animate");
+    timed("panes.flush", () => rectMotion.flush(replaceGeometry ? "replace" : "animate"));
     // The signature is the whole dependency: every field in it is one the tracker reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geometrySignature]);

@@ -13,6 +13,7 @@
 // anything; it writes down what each frame held, and whoever reads it does the judging.
 import { lastAppliedSurfaces } from "./contentViews";
 import { alignmentOf, documentAlignment, type LayoutAlignment } from "./layoutAlignment";
+import { mainThreadCosts } from "./mainThreadCost";
 import { moduleState } from "./moduleState";
 import { presentationNowUnixMs } from "./presentationClock";
 
@@ -39,6 +40,9 @@ export interface LayoutTraceFrame {
   tickMs: number;
   /** Commits answered since the trace started. One per frame means a round trip per frame. */
   commits: number;
+  /** What each path this application owns last cost on the main thread. Whatever the frame gaps
+   *  hold that these do not account for is the engine's own render and paint. */
+  costs: Record<string, number>;
   /** What the commit that carried the native half cost, from the rectangles being measured to the
    *  native layer answering. A page cannot be closer to its pane than this. */
   commitMs: number;
@@ -173,6 +177,7 @@ function tick(drawn: boolean): void {
     sinceLastMs: previous ? Math.round(atUnixMs - previous.atUnixMs) : 0,
     tickMs: 0,
     commits: applied.commits,
+    costs: mainThreadCosts(),
     appliedAgeMs: applied.atUnixMs === 0 ? -1 : Math.round(atUnixMs - applied.atUnixMs),
     commitMs: Math.round(applied.latencyMs),
     regions: alignment.regions,

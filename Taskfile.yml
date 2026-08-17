@@ -83,6 +83,26 @@ tasks:
     cmds:
       - go test -count=1 -run TestWhatTheLinkSaysIsWhatIsDrawn -timeout 600s .
 
+  verify:motion:
+    summary: The window keeps drawing while the layout changes
+    desc: |
+      Run on a machine that is doing nothing else. A window that stops drawing
+      while the layout changes is this application's defect; a window that stops
+      because four other test binaries are running is not, and the two produce
+      the same number. So `task verify` measures it and writes it down, and this
+      task is where it fails.
+
+      Measured 2026-08-17 in the named window — a terminal top left, a browser
+      under it, a terminal filling the right — the window stopped drawing for 68
+      to 114ms on a focus change while drawing every 17 to 19ms once still. The
+      paths this build owns cost 1 to 4ms of that, so the rest is the engine's
+      own render and paint.
+    deps:
+      - task: build
+      - task: build:sok
+    cmds:
+      - go test -count=1 -tags motion -run TestEveryWayTheFocusMovesInTheNamedWindow -timeout 900s .
+
   verify:quiet:
     summary: A running build reports nothing wrong about itself
     desc: |

@@ -16,6 +16,7 @@ import { rafThrottle } from "./lib/rafThrottle";
 import { railEdgeWidths } from "./ui/railEdges";
 import { parkedStyle } from "./lib/layerPark";
 import { createRectMotionTracker } from "./lib/layoutRectMotion";
+import { timed } from "./lib/mainThreadCost";
 import { emitPathsDropped, emitPluginEvent } from "./plugins/hooks";
 import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
@@ -419,10 +420,12 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // The rail is measured on the commit that changed it, the same beat the panes are measured on. A
   // render that changes nothing about its box produces the same values and starts no motion.
   useLayoutEffect(() => {
-    railMotion.flush(phase.replacing ? "replace" : "animate");
+    timed("rail.flush", () => railMotion.flush(phase.replacing ? "replace" : "animate"));
   }, [leftOpen, sidebarW, renderedStation, railLook, railTraveling, phase.replacing, railMotion]);
   useLayoutEffect(() => {
-    emitPluginEvent("layout.reflow", { activeSpaceId: workspace.activeSpaceId });
+    timed("plugins.reflow", () =>
+      emitPluginEvent("layout.reflow", { activeSpaceId: workspace.activeSpaceId }),
+    );
   }, [
     contentKey,
     activeContent?.activePaneId,

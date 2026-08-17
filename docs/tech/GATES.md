@@ -115,6 +115,7 @@ has watched fail is a claim, not a gate.
 | `sweep_gate_test.go` | a translation sweep changes no code |
 | `observation_gate_test.go` | what the build claims to observe, it serves |
 | `docs_carried_gate_test.go` | a carried document is not cited as contract before its review |
+| `task verify:motion` | the window keeps drawing while the layout changes — run where the machine is quiet, because a stalled window and a loaded machine produce the same number |
 | `layout_scenarios_gate_test.go` | in the named window — a terminal top left, a browser under it, a terminal filling the right — every one of the six ways focus can move leaves no hole between a region and the panes, no stale declaration, and no page the native layer holds away from where the document put it. Read frame by frame inside the window (`layout.trace`), and a case whose window stalled is reported rather than judged: a page cannot follow a pane that jumped 160 points in one step |
 | `surface_alignment_gate_test.go` | a person's click on the exposed region toggle leaves the page on its pane |
 
@@ -178,11 +179,20 @@ Written here so it is not rediscovered (L2).
   What is still missing is a reading for "the renderer took the request and has
   not answered": the client's timeout is the only evidence, and it names the
   command rather than what it is waiting on.
-- **The window does not draw at its own rate while the layout moves.** Measured
-  2026-08-17 with `layout.trace` on a quiet machine: the frame clock ran every 18
-  to 32ms rather than every 17, and one commit in a move cost 45 to 71ms on a
-  loaded one. The declaration is exact (`lag` 0) and the native layer holds what
-  it was given (0 age-corrected), so what a person sees as a page lagging its
-  pane is set by those two numbers. The scenario gate reports a case whose window
-  stalled rather than judging it — a page cannot follow a pane that jumped 160
-  points in one step — so the stall is the open item, not the surface.
+- **The window stops drawing while the layout changes.** Measured 2026-08-17
+  with `layout.trace` in the named window, on a machine drawing every 17 to 20ms
+  once still: a focus change stopped it for 68 to 217ms. Nothing on the screen
+  moves in that time — the pane, the rail, and the page composited above them all
+  wait together — and every other motion number is downstream of it. The page is
+  drawn 160 points over the region for about 105ms on one of the six moves, which
+  is this stall seen from the surface's side.
+
+  Where it goes is half answered. The paths this build owns are timed and cost 1
+  to 4ms of it (`panes.flush`, `rail.flush`, and the plugin reflow, which does not
+  reach a millisecond). The rest is the engine's own render and paint, which
+  nothing here measures yet — a focus change re-renders a workspace whose panes,
+  rail, tab strips and plugin hosts all read the workspace object.
+
+  `task verify:motion` is where it fails, on a machine that is doing nothing else.
+  `task verify` runs its gates beside each other, so a stalled window and a loaded
+  machine give the same number there; it measures and writes it down instead.

@@ -42,17 +42,18 @@ type layoutScenariosGate = restoreGate
 
 // traceFrame is one recorded frame, as the window wrote it down.
 type traceFrame struct {
-	Frame        int     `json:"frame"`
-	At           float64 `json:"atUnixMs"`
-	AppliedAgeMs float64 `json:"appliedAgeMs"`
-	CommitMs     float64 `json:"commitMs"`
-	SinceLastMs  float64 `json:"sinceLastMs"`
-	Drawn        bool    `json:"drawn"`
-	TickMs       float64 `json:"tickMs"`
-	Commits      int     `json:"commits"`
-	WorstOff     float64 `json:"worstOff"`
-	WorstLag     float64 `json:"worstLag"`
-	WorstOver    float64 `json:"worstOver"`
+	Frame        int                `json:"frame"`
+	At           float64            `json:"atUnixMs"`
+	AppliedAgeMs float64            `json:"appliedAgeMs"`
+	CommitMs     float64            `json:"commitMs"`
+	SinceLastMs  float64            `json:"sinceLastMs"`
+	Drawn        bool               `json:"drawn"`
+	TickMs       float64            `json:"tickMs"`
+	Commits      int                `json:"commits"`
+	Costs        map[string]float64 `json:"costs"`
+	WorstOff     float64            `json:"worstOff"`
+	WorstLag     float64            `json:"worstLag"`
+	WorstOver    float64            `json:"worstOver"`
 	Regions      []struct {
 		Region string  `json:"region"`
 		X      float64 `json:"x"`
@@ -373,12 +374,51 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 		t.Logf("recorded %d frames of %s for the eye: %s", len(trails), looked.name, looked.record)
 	}
 	for _, r := range results {
-		cadence, stall := drawnCadence(r.frames), worstDrawnGap(r.frames)
-		judgeMotion := cadence > 0 && cadence <= drawingCadenceMs && stall <= stalledFrameMs
-		if !judgeMotion {
-			t.Logf("%s: the window's frame clock ran every %.0fms and stalled %.0fms at worst, so "+
-				"how far the page trailed its pane was not judged here — that number would be this "+
-				"machine's load. The geometry below was judged.", r.name, cadence, stall)
+		// What the window can do when nothing is happening to it. The recording ends with the window
+		// settled, so the drawing rate there is this machine's floor: if it draws every 17ms once the
+		// change is over, a stretch in the middle where it drew nothing is the change's doing and not
+		// the machine's.
+		settled := r.frames[len(r.frames)*2/3:]
+		floor := drawnCadence(settled)
+		if floor > 0 && floor <= drawingCadenceMs {
+			if stall := worstDrawnGap(r.frames); stall > stalledFrameMs {
+				say := t.Logf
+				if judgeDrawing {
+					say = t.Errorf
+				}
+				say("%s: the window stopped drawing for %.0fms while the layout changed, on a "+
+					"machine that draws every %.0fms once it is still.\n%s\nframes: %s\n"+
+					"Nothing on the screen moves while the window is not drawing, and the page a "+
+					"person watches is composited above a document that has stopped.\n"+
+					"what the paths this build owns cost: %s",
+					r.name, stall, floor, traceLines(r.frames, "left"), r.record, costLines(r.frames))
+			}
+		}
+
+		// Whether a stretch can be judged is asked of that stretch. A window that stalled somewhere
+		// else in the recording — before the change, after it settled — has nothing to do with
+		// whether the page followed its pane while it moved.
+		judged := func(what run) bool {
+			if what.frames == 0 {
+				return true
+			}
+			// How far the page trailed its pane is a question about a moving window, and a window
+			// moves at the rate the machine lets it. `task verify` runs its gates beside each other,
+			// so this is measured there and judged where the machine is quiet (`verify:motion`).
+			if !judgeDrawing {
+				t.Logf("%s: %s, not judged in this run — motion is judged by `task verify:motion`, "+
+					"on a machine that is doing nothing else.", r.name, what)
+				return false
+			}
+			over := r.frames[what.from : what.to+1]
+			cadence, stall := drawnCadence(over), worstDrawnGap(over)
+			if cadence > 0 && cadence <= drawingCadenceMs && stall <= stalledFrameMs {
+				return true
+			}
+			t.Logf("%s: over that stretch the window's frame clock ran every %.0fms and stalled "+
+				"%.0fms, so it was not judged — that number would be this machine's load.",
+				r.name, cadence, stall)
+			return false
 		}
 		if r.lag.ms > budgetMs {
 			t.Errorf("%s: the declaration was %.0f points behind its element for %.0fms.\n%s\nframes: %s\n"+
@@ -386,7 +426,7 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				"standing still while its pane travels.",
 				r.name, r.lag.worst, r.lag.ms, traceLines(r.frames, "left"), r.record)
 		}
-		if judgeMotion && r.applied.ms > budgetMs {
+		if r.applied.ms > budgetMs && judged(r.applied) {
 			t.Errorf("%s: the native layer held a page %.0f points from where the document put it, for %.0fms.\n%s\nframes: %s\n"+
 				"The document's rectangle and the native layer's are the same commit; a difference "+
 				"here is the native layer holding something else.",
@@ -397,7 +437,7 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				"The region gives up its width in one render while the panes travel over the motion.",
 				r.name, r.hole.worst, r.hole.ms, traceLines(r.frames, "left"), r.record)
 		}
-		if judgeMotion && r.over.ms > budgetMs {
+		if r.over.ms > budgetMs && judged(r.over) {
 			t.Errorf("%s: a page was drawn %.0f points over the region for %.0fms.\n%s\nframes: %s\n"+
 				"A native surface is composited above the document, so a page reaching into the "+
 				"region is drawn over it.",
@@ -412,6 +452,10 @@ type run struct {
 	ms     float64
 	frames int
 	worst  float64
+	// Where it was, so the window's own drawing over that stretch can be read. A stall somewhere
+	// else in the recording is no evidence about the stretch being judged.
+	from int
+	to   int
 }
 
 func (r run) String() string {
@@ -476,8 +520,10 @@ func longestRunAt(frames []traceFrame, wrong func(int) (bool, float64)) run {
 		}
 		if current.frames == 0 {
 			start = frames[i].At
+			current.from = i
 		}
 		current.frames++
+		current.to = i
 		current.ms = frames[i].At - start
 		if value > current.worst {
 			current.worst = value
@@ -494,7 +540,7 @@ func longestRunAt(frames []traceFrame, wrong func(int) (bool, float64)) run {
 func longestRun(frames []traceFrame, wrong func(traceFrame) (bool, float64)) run {
 	longest, current := run{}, run{}
 	start := 0.0
-	for _, frame := range frames {
+	for i, frame := range frames {
 		bad, value := wrong(frame)
 		if !bad {
 			current = run{}
@@ -502,8 +548,10 @@ func longestRun(frames []traceFrame, wrong func(traceFrame) (bool, float64)) run
 		}
 		if current.frames == 0 {
 			start = frame.At
+			current.from = i
 		}
 		current.frames++
+		current.to = i
 		current.ms = frame.At - start
 		if value > current.worst {
 			current.worst = value
@@ -541,6 +589,32 @@ func (gate *layoutScenariosGate) oneFrame(window string) traceFrame {
 		gate.t.Fatalf("layout.alignment: %v\n%s", err, out)
 	}
 	return answer.Data
+}
+
+// costLines is the worst each timed path reached while the window was watched. What the frame gaps
+// hold that these do not account for is the engine's own render and paint.
+func costLines(frames []traceFrame) string {
+	worst := map[string]float64{}
+	for _, frame := range frames {
+		for path, cost := range frame.Costs {
+			if cost > worst[path] {
+				worst[path] = cost
+			}
+		}
+	}
+	names := make([]string, 0, len(worst))
+	for path := range worst {
+		names = append(names, path)
+	}
+	sort.Strings(names)
+	parts := make([]string, 0, len(names))
+	for _, path := range names {
+		parts = append(parts, fmt.Sprintf("%s %.1fms", path, worst[path]))
+	}
+	if len(parts) == 0 {
+		return "nothing was timed"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // traceLines is every frame that differs from the one before it. A run of identical lines records
