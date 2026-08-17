@@ -1047,6 +1047,8 @@ export const en: Record<MsgKey, string> = {
   "msg.app.shutdown.receiptInvalid": "The runtime generation reap receipt is invalid",
   "msg.daemon.nameInvalid": "Invalid daemon name: {name} — use only letters, digits, _ and -",
   "msg.registry.descriptorChanged": "The registry descriptor changed during certification — try again",
+  "msg.registry.rateLimited": "The registry is rate limiting this build — try again shortly",
+  "msg.registry.rateLimitedFor": "The registry asked to be tried again in {seconds}s",
   "msg.registry.httpStatus": "The registry request returned HTTP {status}",
   "msg.registry.notFound": "No registry {id} is registered",
   "msg.registry.privateIdentityInvalid": "The private registry credential is not valid",

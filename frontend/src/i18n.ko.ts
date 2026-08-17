@@ -1053,6 +1053,8 @@ export const ko = {
   "msg.app.shutdown.receiptInvalid": "실행 세대 회수 receipt 가 유효하지 않습니다",
   "msg.daemon.nameInvalid": "데몬 이름 형식이 올바르지 않습니다: {name} — 영문자·숫자·_·- 만 씁니다",
   "msg.registry.descriptorChanged": "인증 중 레지스트리 서술자가 바뀌었습니다 — 다시 시도하십시오",
+  "msg.registry.rateLimited": "레지스트리가 요청 한도에 걸렸습니다 — 잠시 후 다시 시도하세요",
+  "msg.registry.rateLimitedFor": "레지스트리가 {seconds}초 뒤에 다시 요청하라고 답했습니다",
   "msg.registry.httpStatus": "레지스트리 요청이 HTTP {status} 를 반환했습니다",
   "msg.registry.notFound": "{id} 레지스트리가 등록되어 있지 않습니다",
   "msg.registry.privateIdentityInvalid": "비공개 레지스트리 자격 증명이 올바르지 않습니다",

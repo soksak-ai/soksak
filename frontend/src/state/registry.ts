@@ -1,5 +1,6 @@
 import { invoke } from "../framework";
 import { tmsg } from "../i18n";
+import { isRateLimited, retryAfterCeilingMs, retryAfterMs } from "./registryRetryAfter";
 import { moduleState } from "../lib/moduleState";
 import { create } from "zustand";
 import {
@@ -290,10 +291,45 @@ async function registryHttpGet(
 }
 
 async function loadRegistryDocument(descriptor: RegistryDescriptor): Promise<unknown> {
-  const response = await registryHttpGet(descriptor, descriptor.indexUrl);
+  const response = await registryGetHonouringLimit(descriptor, descriptor.indexUrl);
+  return JSON.parse(response.body) as unknown;
+}
+
+/**
+ * A GET that waits while the registry holds this build off.
+ *
+ * 429 is not a registry that failed; it is one holding this build off, with Retry-After naming how
+ * much later. Read as a failure it reports the network's rate limit as this build's catalogue
+ * being unreadable — measured 2026-08-18, official -> error (HTTP 429), 0 units, with nothing
+ * wrong with the build.
+ *
+ * One wait, bounded: a limit longer than anyone watching a window will sit through is answered as a
+ * limit rather than waited out, and it is answered in its own words so that a reader can tell it
+ * from a registry that is broken.
+ */
+async function registryGetHonouringLimit(
+  descriptor: RegistryDescriptor,
+  url: string,
+): Promise<{ status: number; headers: Record<string, string>; body: string }> {
+  let response = await registryHttpGet(descriptor, url);
+  if (isRateLimited(response.status)) {
+    const wait = retryAfterMs(response.headers, Date.now());
+    if (wait !== null && wait <= retryAfterCeilingMs) {
+      await new Promise((done) => setTimeout(done, wait));
+      response = await registryHttpGet(descriptor, url);
+    }
+  }
+  if (isRateLimited(response.status)) {
+    const wait = retryAfterMs(response.headers, Date.now());
+    throw new Error(
+      wait === null
+        ? tmsg("msg.registry.rateLimited")
+        : tmsg("msg.registry.rateLimitedFor", { seconds: Math.ceil(wait / 1000) }),
+    );
+  }
   if (response.status < 200 || response.status >= 300)
     throw new Error(tmsg("msg.registry.httpStatus", { status: response.status }));
-  return JSON.parse(response.body) as unknown;
+  return response;
 }
 
 /**
@@ -307,9 +343,7 @@ export async function loadRegistryResourceBytes(
 ): Promise<Uint8Array> {
   const descriptor = useRegistry.getState().registries[registryId]?.descriptor;
   if (!descriptor) throw new Error(tmsg("msg.registry.notFound", { id: registryId }));
-  const response = await registryHttpGet(descriptor, url);
-  if (response.status < 200 || response.status >= 300)
-    throw new Error(tmsg("msg.registry.httpStatus", { status: response.status }));
+  const response = await registryGetHonouringLimit(descriptor, url);
   return new TextEncoder().encode(response.body);
 }
 
