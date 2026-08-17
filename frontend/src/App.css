@@ -2193,6 +2193,16 @@ body::after {
 /* One row per region: the label names the place, the select names what stands there. */
 /* The picture a parked surface left. It fills the slot it was taken from and takes no input: what a
    person can do with a page is done to the page, and this is not one. */
+/* What stands in the rail keeps the width it will have while the band grows to it. Absolute so the
+   band's own size never lays it out again, and the band clips what is not yet uncovered. */
+.rail-content {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .parked-picture {
   position: absolute;
   inset: 0;

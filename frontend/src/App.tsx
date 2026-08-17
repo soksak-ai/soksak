@@ -535,12 +535,21 @@ const WorkspacePlane = memo(function WorkspacePlane({
                     } as React.CSSProperties
                   }
                 >
-                  <SectionSetHost
-                    region="left"
-                    workspace={workspace}
-                    paneId={cwdTabOf(workspace) ?? ""}
-                    focusedPluginId={focusedPluginId}
-                  />
+                  {/* The band takes its shape from the motion; what stands in it keeps its own.
+                      A region that opens interpolates its width so the panes beside it are adjacent
+                      in every frame of the way — and a section inside it that followed that width
+                      would lay itself out again on each of those frames. Measured 2026-08-17: the
+                      window stopped drawing for 184ms on a move that only travelled the rail, with
+                      no page in it at all. So the band grows and the section keeps the width it will
+                      have, clipped by the band until the band is that wide. */}
+                  <div className="rail-content" style={{ width: sidebarW }}>
+                    <SectionSetHost
+                      region="left"
+                      workspace={workspace}
+                      paneId={cwdTabOf(workspace) ?? ""}
+                      focusedPluginId={focusedPluginId}
+                    />
+                  </div>
                   {leftOpen && (
                     <div className="left-rail-controls">
                       <button

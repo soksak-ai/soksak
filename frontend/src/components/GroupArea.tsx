@@ -934,6 +934,10 @@ export const GroupArea = memo(function GroupArea({
               data-workspace-id={projectId}
               data-node={`layout/tab/${view.id}`}
               data-wv-geometry-owner
+              // What is inside this box is alive — a terminal, a page. It travels with the layout and
+              // takes its size at once, so the thing inside lays itself out when the motion is over
+              // rather than on each of its frames. The chrome around it holds the shape.
+              data-rect-motion="travel"
               ref={shown ? rectMotion.ref : undefined}
               // Normally an inactive slot only turns off visibility, while a slot excluded by maximize is also removed
               // from the compositing tree (viewSurfaceStyle is the single truth). Both keep the DOM and plugin instance lifetime.

@@ -135,10 +135,24 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
   // every frame. That is what "they move together" means when one of them is not in the document,
   // and it is the reason the interpolation is a rectangle rather than a displacement.
   const startFlip = (el: HTMLElement, was: Snap, now: Snap): void => {
+    // A box that holds something alive travels, and takes its size at once.
+    //
+    // Interpolating a size is every box inside it laid out again on each frame of the motion: a
+    // terminal reflows its buffer, a page relayouts, a native surface is given a new rectangle and
+    // its content follows. Measured 2026-08-17 in a window in front, three of six focus changes
+    // stopped the window drawing for 52 to 169ms while it drew every 18ms once still.
+    //
+    // The frame around it does interpolate — a region and the panes beside it have to be adjacent in
+    // every frame of the way there, or a page composited above the document covers the band the
+    // region is taking. So the chrome holds the shape and the slot holds what is alive: the slot
+    // travels to the same place on the same curve, at the size the commit gave it. Declared by the
+    // element (`data-rect-motion="travel"`), because which of its boxes hold something alive is the
+    // application's fact and not this module's.
+    const travelOnly = el.dataset.rectMotion === "travel";
     const dx = was.x - now.x;
     const dy = was.y - now.y;
-    const dw = was.w - now.w;
-    const dh = was.h - now.h;
+    const dw = travelOnly ? 0 : was.w - now.w;
+    const dh = travelOnly ? 0 : was.h - now.h;
     if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(dw) < 0.5 && Math.abs(dh) < 0.5)
       return;
     const cs = getComputedStyle(el);
@@ -147,15 +161,20 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
     const releaseDecoration = beginLayoutDecorationMotion(decorationScope);
     try {
       const a = el.animate(
-        [
-          {
-            left: `${L + dx}px`,
-            top: `${T + dy}px`,
-            width: `${now.w + dw}px`,
-            height: `${now.h + dh}px`,
-          },
-          { left: `${L}px`, top: `${T}px`, width: `${now.w}px`, height: `${now.h}px` },
-        ],
+        travelOnly
+          ? [
+              { left: `${L + dx}px`, top: `${T + dy}px` },
+              { left: `${L}px`, top: `${T}px` },
+            ]
+          : [
+              {
+                left: `${L + dx}px`,
+                top: `${T + dy}px`,
+                width: `${now.w + dw}px`,
+                height: `${now.h + dh}px`,
+              },
+              { left: `${L}px`, top: `${T}px`, width: `${now.w}px`, height: `${now.h}px` },
+            ],
         { duration: LAYOUT_MOTION_MS, easing: "ease" },
       );
       running.set(el, a);
