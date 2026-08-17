@@ -821,20 +821,28 @@ func judgeMove(t *testing.T, r moveResult) {
 	// and in front, on the same build and the same six moves, it never stopped at all. What was
 	// reported here as a stall was the environment, and the correction is that this is only asked
 	// of a window someone is looking at.
-	// What this stall is not, measured 2026-08-17 on the six moves of the named window.
+	// What this stall is not, measured 2026-08-18, each move run on its own five times.
 	//
-	// It is 55 to 60ms, on exactly the four moves where a region appears or disappears, and
-	// on no other. It is there with the motion collapsed to nothing, so it is not the
-	// interpolation. It is the same with a section holding two rows as with the file tree, so
-	// it is not the section's own drawing. It survives taking no picture and hiding nothing,
-	// so it is neither half of the park. The page's box does not change across it — same x,
-	// same width — so it is not a resize. The commit crosses in 0ms and the native work is
-	// 0.2ms, and every path this build owns costs under 10ms over the whole stretch.
+	// It is 45 to 59ms and it is one condition: focus leaving the page for a terminal, in a window
+	// that holds both kinds. Five of five on browser-bottom→terminal-top-left. Moves into the page
+	// are clean, moves between terminals are clean, and the same move is clean when every pane is a
+	// page and when every pane is a terminal, three runs each.
 	//
-	// And with no page in the window it is gone: twelve moves, two runs, not one stall. So
-	// what is left is the window relaying itself out while a web view is attached to it,
-	// which is the substrate's cost and not this application's arithmetic. Anything that
-	// claims to have fixed it has to move this number.
+	// It is not the interpolation: the motion collapsed to nothing leaves it. It is not the park:
+	// taking no picture and hiding nothing leave it. It is not the focus lighting: turning the mask
+	// off leaves it. It is not a resize: the page's box is the same across it. It is not the bridge:
+	// twelve commands and no layout change do not stop the window at all, three runs of three.
+	//
+	// And it is not this build's arithmetic. With the cost totals differenced across the stretch,
+	// every path this build times comes to under half a millisecond over it; the commit crosses in
+	// 1ms and the native work is 0ms. Sampled, the application's main thread is idle for 93% of the
+	// stretch and the document's process is idle beside it. Nobody is busy: it is a wait.
+	//
+	// An earlier version of this comment said the condition was a region appearing or disappearing,
+	// and later that a plugin view's mount cost 30ms inside it. Both were read off instruments that
+	// could not answer the question — a scenario whose sidebar left the screen, and cost readings
+	// that were last values rather than totals. Anything that claims to have fixed this has to move
+	// the number above, five runs of five.
 	settled := r.frames[len(r.frames)*2/3:]
 	floor := drawnCadence(settled)
 	if os.Getenv("SOKSAK_GATE_FRONT") == "1" && floor > 0 && floor <= drawingCadenceMs {
