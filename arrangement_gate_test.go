@@ -208,10 +208,21 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 					what, named(got), click.section, gate.arrangementLines(window, built))
 			}
 
-			// And in the band the panes are in. The sidebar stands beside the panes, so it begins
-			// where they begin and ends where they end — reported 2026-08-17 as a sidebar attached
-			// at the overlay's place, and every reading here passed because none of them had ever
-			// asked for a y or a height.
+			// And in the band the panes are in.
+			//
+			// The sidebar stands beside the panes and takes the width for the whole column, so the
+			// band it holds is theirs — reported 2026-08-17 as a sidebar attached at the overlay's
+			// place, and every reading here passed because none of them had asked for a y.
+			//
+			// It was made the band of the view it stands for on 2026-08-18, to answer a report that
+			// things next to each other which should read as one group read as foreign: the sidebar
+			// held 87..612 beside a view holding 354..612, twice the height and read as two things.
+			// The reading agreed afterwards, and the window was worse. The width is the column's
+			// whoever stands in it, so the sidebar shrank and left an empty bordered box above it,
+			// 160 points wide and half the column tall. The
+			// grouping cannot be bought with the band while the width is the column's; what it would
+			// take is the panes reclaiming that space, which is a different window from the one this
+			// gate states.
 			if where, standing := now.bands["left"]; standing && !now.panesBand.empty() {
 				if apart := math.Max(math.Abs(where.top-now.panesBand.top),
 					math.Abs(where.bottom-now.panesBand.bottom)); apart > 1 {
@@ -411,6 +422,12 @@ func (b band) empty() bool { return b.bottom <= b.top }
 // while every reading here passed. A still of the end of a move is not evidence about the move.
 func (gate *arrangementGate) recording(window string, dir string, frames int, intervalMs int) func() string {
 	gate.t.Helper()
+	// The frames of this run and no other. Left behind, a longer recording's frames outlive a
+	// shorter one's and the still is taken from whichever sorts last — measured 2026-08-18, a
+	// picture of the window as it stood an hour earlier, read here as the change not having landed.
+	if err := os.RemoveAll(dir); err != nil {
+		gate.t.Fatalf("clearing %s: %v", dir, err)
+	}
 	done := make(chan struct{})
 	var out string
 	var err error
