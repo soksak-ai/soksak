@@ -180,23 +180,30 @@ tasks:
       marker states where the copy came from, so an installed tree can be told
       apart from a published one.
     cmds:
-      - for:
-          [
-            "../soksak-plugins/soksak-plugin-browser-native",
-            "../soksak-plugins/soksak-plugin-terminal-xterm",
-            "{{.HOME}}/.soksak-dev/plugins/soksak-plugin-file-tree",
-          ]
-        cmd: |
-          set -e
-          name="$(basename "{{.ITEM}}")"
-          home="${SOKSAK_HOME:-$HOME/.soksak-wails}"
-          if [ -f "{{.ITEM}}/frontend/build.mjs" ]; then
-            (cd "{{.ITEM}}/frontend" && node build.mjs)
+      - |
+        set -e
+        # One list and one copy rule. A `for:` list is not templated, so a source under $HOME had to
+        # be spelled by a second command — and a second copy of this rule is what drifts the day one
+        # of them is edited.
+        home="${SOKSAK_HOME:-$HOME/.soksak-wails}"
+        for source in \
+          "../soksak-plugins/soksak-plugin-browser-native" \
+          "../soksak-plugins/soksak-plugin-terminal-xterm" \
+          "$HOME/.soksak-dev/plugins/soksak-plugin-file-tree"
+        do
+          name="$(basename "$source")"
+          if [ ! -f "$source/plugin.json" ]; then
+            echo "no plugin at $source" >&2
+            exit 1
+          fi
+          if [ -f "$source/frontend/build.mjs" ]; then
+            (cd "$source/frontend" && node build.mjs)
           fi
           mkdir -p "$home/plugins/$name"
-          cp "{{.ITEM}}/main.js" "{{.ITEM}}/plugin.json" "$home/plugins/$name/"
+          cp "$source/main.js" "$source/plugin.json" "$home/plugins/$name/"
           printf '{"version":"0.0.1","source":"local"}' > "$home/plugins/$name/.soksak.json"
           echo "installed $name into $home/plugins"
+        done
 
   package:
     summary: Packages a production build of the application

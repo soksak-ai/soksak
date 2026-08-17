@@ -4,6 +4,9 @@ import type { PluginViewContext, PluginViewProvider, RegisteredView } from "./vi
 
 export type PluginViewSurfacePlacement = Readonly<{
   desiredVisible: boolean;
+  /** How much the focus lighting takes off this view, 0..1, by the same rule the veil paints by.
+   *  One object for both, because they are one fact about one moment. */
+  dim: number;
   topology: "visible" | "retained-hidden" | "exclusive-hidden";
   declaredPaneFrame: Readonly<{ x: number; y: number; w: number; h: number }> | null;
 }>;

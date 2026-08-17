@@ -111,13 +111,13 @@ describe("PluginViewHost — a changed binding is delivered to the view", () => 
     expect(log.mounts.length).toBe(1);
   });
 
-  it("visibility is delivered from the core current value and a subscription, not from a DOM rect", () => {
+  it("presentation is delivered from the core current value and a subscription, not from a DOM rect", () => {
     const seen: boolean[] = [];
     let initial: boolean | null = null;
     const provider = {
       mount(_el: HTMLElement, ctx: PluginViewContext) {
-        initial = ctx.isVisible();
-        ctx.onVisibilityChange((visible) => seen.push(visible));
+        initial = ctx.presentation().visible;
+        ctx.onPresentationChange((presentation) => seen.push(presentation.visible));
       },
     };
     act(() => {

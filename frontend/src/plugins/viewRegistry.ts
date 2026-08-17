@@ -8,6 +8,13 @@ import { tmsg } from "../i18n";
 import { create } from "zustand";
 import { qualifiedViewId, type ContributedView } from "./spec";
 
+/** How a view is presented at one moment. */
+export interface ViewPresentation {
+  visible: boolean;
+  /** 0 = full brightness, 1 = fully taken off. */
+  dim: number;
+}
+
 export interface PluginViewContext {
   projectId: string;
   root: string | null;
@@ -32,12 +39,24 @@ export interface PluginViewContext {
   // plugin-observed state recorded through setRestoreState (e.g. a browser URL). A newly opened
   // view gets null — residue cannot leak in by construction.
   restore: { cwd: string | null; state: unknown } | null;
-  // Effective current visibility, owned by the core. An inactive slot may keep the same rect to
-  // preserve layout, so never infer this value from DOM geometry or IntersectionObserver.
-  isVisible: () => boolean;
-  // Subscribes to visibility changes after mount. Read the initial state with isVisible(); only
-  // subsequent changes arrive here.
-  onVisibilityChange: (listener: (visible: boolean) => void) => () => void;
+  // How this view is presented right now, owned by the core. An inactive slot may keep the same
+  // rect to preserve layout, so never infer either value from DOM geometry or IntersectionObserver.
+  //
+  // `visible` is whether it is shown at all. `dim` is how much the focus lighting takes off it,
+  // 0..1, from the same rule the veil paints by: a pane that is not the focused one is dimmed, and
+  // a pane wedged where the rail cannot arrive is dimmed further.
+  //
+  // One channel for both, because they are one fact about one moment. Two would let a view answer a
+  // dim from one frame with a visibility from another, and a surface would dim after it was hidden.
+  //
+  // The veil is an SVG over the document and a native surface is composited above it, so the veil
+  // cannot darken one — measured 2026-08-17, the browser area kept its brightness whether its pane
+  // was focused or not, while the CSS above it stated that it painted "over a native child outside
+  // the document". A view drawn on a surface applies `dim` to the surface's own alpha.
+  presentation: () => ViewPresentation;
+  // Subscribes to presentation changes after mount. Read the initial value with `presentation()`;
+  // only subsequent changes arrive here.
+  onPresentationChange: (listener: (presentation: ViewPresentation) => void) => () => void;
   // The person interacted with this view — make it the focused one.
   //
   // A view drawn on a native surface receives its own clicks and the document never sees them, so

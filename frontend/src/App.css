@@ -604,11 +604,13 @@ body,
    forbidden: changing a filter on a subtree that holds a WebGL canvas makes
    WKWebView rebuild that composited surface, and a live texture atlas can break.
 
-   This one SVG paints black pixels over the DOM, over WebGL, and over a native
-   child outside the document. No adapter adds a second dim veil, so brightness
-   does not differ per framework. Input passes through. The mask subtracts focus
-   and blocked first, then paints blocked once at its own density, so alpha never
-   stacks. */
+   This one SVG paints black pixels over the DOM and over WebGL inside it. It does
+   not reach a native surface: that is composited above the document, and the
+   sentence here claimed otherwise until 2026-08-17 — measured, the same rectangle
+   inside a browser page read the same brightness focused and not. A surface is
+   dimmed by its own alpha, from the same `--dim` strength this veil paints by
+   (SIDEBAR S5). Input passes through. The mask subtracts focus and blocked first,
+   then paints blocked once at its own density, so alpha never stacks. */
 .focus-lighting-plane {
   position: absolute;
   inset: 0;

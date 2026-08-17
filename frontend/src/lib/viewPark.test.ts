@@ -34,16 +34,23 @@ describe("viewSurfaceStyle — exclusive (maximize) composition contract", () =>
   it("an exclusive hide declares the layout owner exact parking frame instead of a ResizeObserver", () => {
     expect(viewSurfacePlacement(false, true)).toEqual({
       desiredVisible: false,
+      dim: 0,
       topology: "exclusive-hidden",
       declaredPaneFrame: { x: 0, y: 0, w: 0, h: 0 },
     });
     expect(viewSurfacePlacement(false, false)).toEqual({
       desiredVisible: false,
+      dim: 0,
       topology: "retained-hidden",
       declaredPaneFrame: null,
     });
+
+    // The dim travels with the same object: they are one fact about one moment, and a view that
+    // read them from two channels could dim after it was hidden.
+    expect(viewSurfacePlacement(true, false, 0.5).dim).toBe(0.5);
     expect(viewSurfacePlacement(true, true)).toEqual({
       desiredVisible: true,
+      dim: 0,
       topology: "visible",
       declaredPaneFrame: null,
     });

@@ -258,21 +258,31 @@ export const GroupArea = memo(function GroupArea({
   // Dimming is one level — the cell (.pane) and the slot (.tab-body) come from different traversals but must read
   // the same value. Recombining the reasons separately makes the two surfaces diverge silently (one fact, one place).
   // Emit the name (why it dims) and the strength (how much) together — both must be decided here or the media diverge.
-  const dimOf = (groupId: string) => {
-    const level = dimLevel({
-      // **Dimming follows the solution the screen draws too.** Focus changes on click, but geometry changes when the
-      // phase accepts it. If only dimming changes at once, the slot's level differs at the moment the journey starts
-      // and the frozen snapshot baked then (it contains the veil) becomes unusable — nothing covers the surface for
-      // the whole glide and the hole shows the background (measured 2026-08-02: at the swap peak two browsers went entirely blank).
+  // The strength one cell is dimmed by. Three readers: the cell, the slot, and the surface the slot
+  // holds — the veil is an SVG over the document and cannot darken a surface composited above it,
+  // so the surface applies the same number to its own alpha.
+  const dimStrengthOf = (groupId: string) =>
+    dimAmount(
+      dimLevel({
+        // **Dimming follows the solution the screen draws too.** Focus changes on click, but geometry changes when the
+        // phase accepts it. If only dimming changes at once, the slot's level differs at the moment the journey starts
+        // and the frozen snapshot baked then (it contains the veil) becomes unusable — nothing covers the surface for
+        // the whole glide and the hole shows the background (measured 2026-08-02: at the swap peak two browsers went entirely blank).
+        active: groupId === (focusedPaneId ?? content.activePaneId),
+        focusDim,
+        blocked: !!betweenIds?.includes(groupId),
+      }),
+      { idle: dimIdle, blocked: dimBlocked },
+    );
+
+  const dimOf = (groupId: string) => ({
+    "data-dim": dimLevel({
       active: groupId === (focusedPaneId ?? content.activePaneId),
       focusDim,
       blocked: !!betweenIds?.includes(groupId),
-    });
-    return {
-      "data-dim": level,
-      style: { "--dim": dimAmount(level, { idle: dimIdle, blocked: dimBlocked }) },
-    };
-  };
+    }),
+    style: { "--dim": dimStrengthOf(groupId) },
+  });
 
   // Click = active + real focus, one invariant. Relying on the state-change effect alone makes re-clicking an
   // already active group or pane a no-op, leaving only the mousedown default (a click on a non-focusable target
@@ -916,7 +926,10 @@ export const GroupArea = memo(function GroupArea({
                   root={workspaceRoot}
                   region="center"
                   logicalPaneId={group.id}
-                  surfacePlacement={viewSurfacePlacement(shown, !!maxCell)}
+                  // The same dim as the cell, from one place. Recombining the reasons here would
+                  // make the veil and the surface disagree, and no veil is painted on the
+                  // surface at all.
+                  surfacePlacement={viewSurfacePlacement(shown, !!maxCell, dimStrengthOf(group.id))}
                   command={view.command ?? null}
                   // B3 restore seam — the observed runtime (cwd, plugin state). A terminal restores the spawn
                   // location, browser-like views restore state (URL etc.). With no observed value it is null (a new view).

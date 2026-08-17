@@ -70,6 +70,25 @@ surface for a strip nobody sees.
 
 ---
 
+## S5. A surface is dimmed by its own alpha
+
+The focus veil is an SVG painted over the document, and a native surface is composited above it, so
+the veil does not reach one. Measured 2026-08-17: the same rectangle inside a browser page read a
+mean brightness of 184.7 whether its pane was focused or not, while the CSS above the veil stated it
+painted "over a native child outside the document".
+
+One strength, computed once per pane, read by three: the cell, the slot, and the view. A view drawn
+on a surface applies it to that surface's alpha — the compositor carries alpha per surface already,
+so nothing new is declared for it.
+
+The strength travels in the same object as the view's visibility. They are one fact about one
+moment, and two channels would let a view answer a dim from one frame with a visibility from
+another — a surface dimming after it was hidden.
+
+Measured after: 118.2 unfocused, 223.2 focused, the same rectangle.
+
+---
+
 # T. Travel
 
 ## T1. The relationship outline is a destination mark, not a surface that moves

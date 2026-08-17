@@ -60,18 +60,20 @@ export function viewSurfaceStyle(visible: boolean, exclusive: boolean) {
 export function viewSurfacePlacement(
   visible: boolean,
   exclusive: boolean,
+  dim: number = 0,
 ): PluginViewSurfacePlacement {
   if (visible) {
-    return { desiredVisible: true, topology: "visible", declaredPaneFrame: null };
+    return { desiredVisible: true, dim, topology: "visible", declaredPaneFrame: null };
   }
   if (exclusive) {
     return {
       desiredVisible: false,
+      dim,
       topology: "exclusive-hidden",
       declaredPaneFrame: { x: 0, y: 0, w: 0, h: 0 },
     };
   }
-  return { desiredVisible: false, topology: "retained-hidden", declaredPaneFrame: null };
+  return { desiredVisible: false, dim, topology: "retained-hidden", declaredPaneFrame: null };
 }
 
 // Outside the hot swap boundary — a new table here leaves the filling side treating it as already filled and never refilling.

@@ -105,7 +105,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
     expect(presentationMount.mock.calls[0]?.[0]).toMatchObject({
       logicalPaneId: "pan-left",
       placementViewId: "tab-1",
-      surfacePlacement: { desiredVisible: true, topology: "visible" },
+      surfacePlacement: { desiredVisible: true, dim: 0, topology: "visible" },
     });
     const initial = presentationMount.mock.calls[0]![0];
     expect(initial.containerGeneration).toBeGreaterThan(0);
@@ -135,6 +135,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
           logicalPaneId="pan-right"
           surfacePlacement={{
             desiredVisible: false,
+            dim: 0,
             topology: "exclusive-hidden",
             declaredPaneFrame: { x: 0, y: 0, w: 0, h: 0 },
           }}

@@ -9,6 +9,7 @@ import {
   getRegisteredView,
   useViewRegistry,
   type PluginViewContext,
+  type ViewPresentation,
 } from "../plugins/viewRegistry";
 import { formatAddress, type Region } from "../commands/address";
 import { viewHostAnchors } from "../plugins/viewHostAnchors";
@@ -96,9 +97,15 @@ export const PluginViewHost = memo(function PluginViewHost({
   useViewRegistry((s) => s.version);
   const reg = getRegisteredView(viewKey);
   const containerRef = useRef<HTMLDivElement>(null);
-  const surfaceVisibleRef = useRef(surfacePlacement.desiredVisible);
-  surfaceVisibleRef.current = surfacePlacement.desiredVisible;
-  const visibilityListenersRef = useRef(new Set<(visible: boolean) => void>());
+  const presentationRef = useRef<ViewPresentation>({
+    visible: surfacePlacement.desiredVisible,
+    dim: surfacePlacement.dim,
+  });
+  presentationRef.current = {
+    visible: surfacePlacement.desiredVisible,
+    dim: surfacePlacement.dim,
+  };
+  const presentationListenersRef = useRef(new Set<(presentation: ViewPresentation) => void>());
   const presentedRef = useRef<PresentedPluginView | null>(null);
   const placementDeclarationRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
@@ -119,10 +126,10 @@ export const PluginViewHost = memo(function PluginViewHost({
     boundViewId: boundViewId ?? null,
     command: command ?? null,
     restore: restore ?? null,
-    isVisible: () => surfaceVisibleRef.current,
-    onVisibilityChange: (listener) => {
-      visibilityListenersRef.current.add(listener);
-      return () => visibilityListenersRef.current.delete(listener);
+    presentation: () => presentationRef.current,
+    onPresentationChange: (listener) => {
+      presentationListenersRef.current.add(listener);
+      return () => presentationListenersRef.current.delete(listener);
     },
     // The person interacted with this view. The core owns what that means: the pane it is in becomes
     // the focused one and this view becomes its active tab, which is what the lighting follows.
@@ -159,14 +166,14 @@ export const PluginViewHost = memo(function PluginViewHost({
         : undefined,
   };
 
-  // Visibility is a core fact every plugin view consumes, not a side effect of native presentation.
-  // provider mount reads the initial value through isVisible(), and after that both DOM and native
-  // implementations get exactly one change notification on the same layout-commit edge.
+  // Presentation is a core fact every plugin view consumes, not a side effect of native placement.
+  // A provider mount reads the initial value through presentation(), and after that both DOM and
+  // native implementations get exactly one notification on the same layout-commit edge.
   useLayoutEffect(() => {
-    for (const listener of visibilityListenersRef.current) {
-      listener(surfacePlacement.desiredVisible);
+    for (const listener of presentationListenersRef.current) {
+      listener(presentationRef.current);
     }
-  }, [surfacePlacement.desiredVisible]);
+  }, [surfacePlacement.desiredVisible, surfacePlacement.dim]);
 
   useLayoutEffect(() => {
     if (!reg?.decl.nativeSurface || !pluginViewPresentationHost()) return;
