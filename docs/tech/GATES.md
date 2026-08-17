@@ -179,9 +179,21 @@ Written here so it is not rediscovered (L2).
   What is still missing is a reading for "the renderer took the request and has
   not answered": the client's timeout is the only evidence, and it names the
   command rather than what it is waiting on.
-- **The window stops drawing while the layout changes.** Measured 2026-08-17
-  with `layout.trace` in the named window, on a machine drawing every 17 to 20ms
-  once still: a focus change stopped it for 68 to 217ms. Nothing on the screen
+- **A pane holding a page is drawn by a picture while the layout moves.** The
+  page steps aside so the document can draw over its place, and what travels is
+  its picture — one instant old, no scrolling, no click. A page that changes while
+  a layout moves is a page a person watches change a beat later. Nothing measures
+  how stale it looks; what is measured is that the pane is never blank.
+- **A covered window is not drawn at the display's rate, and that is not this
+  application.** Measured 2026-08-17 with `layout.trace` in the named window,
+  covered: a focus change stopped it drawing for 68 to 234ms while JS ran
+  throughout — the timer readings never missed a beat — and in front, on the same
+  build and the same six moves, it never stopped at all. What was reported here
+  first as a stall was the environment. `task verify:motion` asks it only of a
+  window someone is looking at (`SOKSAK_GATE_FRONT=1`).
+
+  Older text, kept because the numbers in it are still the ones to beat: a focus
+  change stopped it for 68 to 217ms. Nothing on the screen
   moves in that time — the pane, the rail, and the page composited above them all
   wait together — and every other motion number is downstream of it. The page is
   drawn 160 points over the region for about 105ms on one of the six moves, which
