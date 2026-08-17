@@ -24,6 +24,7 @@ import { cleanRailLines } from "../lib/railPlacement";
 import { recordRailPhase } from "../lib/railJournal";
 import { useGutterHover } from "../state/gutterHover";
 import { ViewTabs } from "./ViewTabs";
+import { useLayoutMotionRunning } from "../lib/layoutDecorationPresentation";
 import { FocusLightingPlane } from "./FocusLightingPlane";
 import { ParkedPicture } from "./ParkedPicture";
 import { railLightingExemption } from "./focusLightingGeometry";
@@ -155,9 +156,10 @@ export function isViewSurfaceVisible(
   viewId: string,
   activeTabId: string,
   overlayed: boolean,
+  traveling: boolean,
 ): boolean {
   const tabActive = maximizedId ? viewId === maximizedId : viewId === activeTabId;
-  return surfaceShown(surfaceActive, true, tabActive, overlayed);
+  return surfaceShown(surfaceActive, true, tabActive, overlayed, traveling);
 }
 
 export const GroupArea = memo(function GroupArea({
@@ -218,6 +220,12 @@ export const GroupArea = memo(function GroupArea({
   const t = useT();
   // JS interpolation (FLIP) of command-driven rect changes — on every commit flush compares against the previous rect (layoutRectMotion).
   useRenderCost("render.panes");
+  // While the layout moves, a page steps aside and its picture travels in its place. A native
+  // surface is composited above the document, so a rail crossing a pane, a region taking its width
+  // and a card opening are all drawn under the page unless the page is away — and the picture is in
+  // the document, so it moves with the slot by the same transform, which is what moving together
+  // means when one of them is not in the document.
+  const layoutMoving = useLayoutMotionRunning(`${projectId}/${content.id}`);
   const rectMotion = useRef(createRectMotionTracker(`${projectId}/${content.id}`)).current;
   const displayLayout = solvedLayout ?? content.layout;
   const focusProjectionApplied = displayLayout !== content.layout;
@@ -383,7 +391,10 @@ export const GroupArea = memo(function GroupArea({
     for (const { group } of cells) {
       for (const v of group.tabs) {
         const tabActive = maxCell ? v.id === maximizedId : v.id === group.activeTabId;
-        commitViewVisibility(v.id, surfaceShown(surfaceActive, true, tabActive, overlayed));
+        commitViewVisibility(
+          v.id,
+          surfaceShown(surfaceActive, true, tabActive, overlayed, traveling || layoutMoving),
+        );
       }
     }
   });
@@ -898,6 +909,7 @@ export const GroupArea = memo(function GroupArea({
             view.id,
             group.activeTabId,
             overlayed,
+            traveling || layoutMoving,
           );
           const slotRect = maxCell && shown ? FULL_RECT : rect;
           // B4 restore hydration gate — a cold view (restored but not yet visible) defers its body mount

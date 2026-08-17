@@ -27,11 +27,17 @@ type surfaceMotionGate = restoreGate
 
 // surfaceSample is one reading of one surface during a move.
 type surfaceSample struct {
-	at      time.Duration
+	at time.Duration
+	// Whether the surface itself is on the screen.
 	visible bool
-	x       float64
-	w       float64
+	// Whether the pane is showing the picture the surface left when it stepped aside.
+	pictured bool
+	x        float64
+	w        float64
 }
+
+// shown is what the rule is about: the pane has the page on it, one way or the other.
+func (s surfaceSample) shown() bool { return (s.visible && s.w > 0) || s.pictured }
 
 func TestASurfaceStaysOnScreenWhileTheLayoutMoves(t *testing.T) {
 	gate := newGate(t, surfaceMotionGateHome, surfaceMotionGateIdentifier)
@@ -70,17 +76,17 @@ func TestASurfaceStaysOnScreenWhileTheLayoutMoves(t *testing.T) {
 
 	// Gone is either state a person reads as a blank pane: the compositor hiding it, or a rectangle
 	// with no width left to draw in.
-	var gone []surfaceSample
+	var blank []surfaceSample
 	for _, sample := range samples {
-		if !sample.visible || sample.w <= 0 {
-			gone = append(gone, sample)
+		if !sample.shown() {
+			blank = append(blank, sample)
 		}
 	}
 	t.Logf("%d readings across the move:\n%s", len(samples), sampleLines(samples))
-	if len(gone) > 0 {
-		t.Errorf("%s left the screen for %s while the layout moved, over %d readings.\n%s\n"+
-			"A surface that vanishes and returns elsewhere is not a surface that moved.",
-			surface, gone[len(gone)-1].at-gone[0].at, len(gone), sampleLines(samples))
+	if len(blank) > 0 {
+		t.Errorf("the pane holding %s showed neither the page nor its picture for %s, over %d readings.\n%s\n"+
+			"A pane that goes blank is what a person reads as a view that failed.",
+			surface, blank[len(blank)-1].at-blank[0].at, len(blank), sampleLines(samples))
 	}
 }
 
@@ -93,7 +99,13 @@ func (gate *surfaceMotionGate) watchSurface(window string, surface string, cause
 	var samples []surfaceSample
 	read := func() surfaceSample {
 		visible, frame := gate.surfaceState(window, surface)
-		return surfaceSample{at: time.Since(started), visible: visible, x: frame[0], w: frame[1]}
+		return surfaceSample{
+			at:       time.Since(started),
+			visible:  visible,
+			pictured: len(gate.parkedPictures(window)) > 0,
+			x:        frame[0],
+			w:        frame[1],
+		}
 	}
 	samples = append(samples, read())
 	cause()
@@ -164,7 +176,10 @@ func sampleLines(samples []surfaceSample) string {
 	for _, sample := range samples {
 		state := "on screen "
 		if !sample.visible {
-			state = "GONE      "
+			state = "picture   "
+		}
+		if !sample.shown() {
+			state = "BLANK     "
 		}
 		lines = append(lines, fmt.Sprintf("  %6dms %s x=%.0f w=%.0f",
 			sample.at.Milliseconds(), state, sample.x, sample.w))

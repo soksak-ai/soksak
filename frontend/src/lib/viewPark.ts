@@ -8,8 +8,9 @@
 //      and re-snap races are replaced by one rule.
 // Idempotent: re-committing the same state is a no-op — calling it every render costs only on change.
 import { moduleState } from "../lib/moduleState";
-import { contentViewHost } from "./contentViews";
+import { contentViewHost, lastAppliedSurfaces } from "./contentViews";
 import { emitPluginEvent } from "../plugins/hooks";
+import { nextFrame } from "./nextFrame";
 import { holdParkedPicture, releaseParkedPicture } from "./parkedPicture";
 import { surfaceLabelOfView } from "./surfaceLabels";
 import { parkedStyle } from "./layerPark";
@@ -28,6 +29,13 @@ import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost
 // already answers a view about its own visibility, so the fact is one term of this expression rather
 // than a rule about modals.
 //
+// The travelling layer is that fact once more. A rail that moves to another station passes across
+// the panes on the way, and a page above the document covers it for the whole crossing — 155 to 160
+// points of it, for 85 to 119ms, measured the same day in the named window. What travels while the
+// layout moves is the page's picture, which is in the document and therefore moves with the slot it
+// is drawn in, exactly and by the same transform. When the layout settles the page is back and is
+// the thing being looked at again.
+//
 // CSS hides these layers separately, but the native layer is outside CSS, so the judgment is
 // collected into one expression.
 export function surfaceShown(
@@ -35,8 +43,9 @@ export function surfaceShown(
   spaceActive: boolean,
   tabActive: boolean,
   overlayed: boolean,
+  traveling: boolean,
 ): boolean {
-  return workspaceActive && spaceActive && tabActive && !overlayed;
+  return workspaceActive && spaceActive && tabActive && !overlayed && !traveling;
 }
 
 /**
@@ -107,9 +116,13 @@ export function commitViewVisibility(viewId: string, visible: boolean): void {
         console.warn(`[viewPark] parking commit failed: ${viewId} visible=${visible}`, e);
       });
   if (visible) {
-    // The surface is the thing to look at again, so the picture goes before it comes back.
-    releaseParkedPicture(viewId);
+    // The picture goes when the page is actually back, not when it was asked for. Dropping it at
+    // the request leaves the pane with neither for as long as the commit takes — measured
+    // 2026-08-17, one reading of a blank pane on the way back.
     commit();
+    void whenSurfaceIsBack(label).finally(() => {
+      if (visibleByView.get(viewId) === true) releaseParkedPicture(viewId);
+    });
   } else {
     // The picture is taken **before** the surface goes, because a surface that is already hidden has
     // nothing to photograph. Nothing drawn in the document can be put over a surface, so a card or a
@@ -134,4 +147,24 @@ export function commitViewVisibility(viewId: string, visible: boolean): void {
 /** Reclaims state when a view closes permanently (prevents map growth). */
 export function dropViewVisibility(viewId: string): void {
   visibleByView.delete(viewId);
+}
+
+/** How long the picture is held waiting for the page to be back on the screen. */
+const BACK_ON_SCREEN_LIMIT_MS = 1_000;
+
+/**
+ * Waits until the native layer reports this surface visible.
+ *
+ * The picture goes when the page is actually back, not when it was asked for: dropping it at the
+ * request leaves the pane with neither for as long as the commit takes — measured 2026-08-17, one
+ * reading of a blank pane on the way back, between the picture being dropped and the surface being
+ * applied. What is read is the answer to the last commit, which costs no round trip of its own.
+ */
+async function whenSurfaceIsBack(label: string): Promise<void> {
+  const until = Date.now() + BACK_ON_SCREEN_LIMIT_MS;
+  for (;;) {
+    if (lastAppliedSurfaces().surfaces.some((surface) => surface.id === label && surface.visible)) return;
+    if (Date.now() >= until) return;
+    await nextFrame();
+  }
 }

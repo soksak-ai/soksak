@@ -94,20 +94,20 @@ describe("content view effective visibility", () => {
   });
 
   it("a parked workspace or space surface hides its active tab as well", () => {
-    expect(isViewSurfaceVisible(false, null, "v1", "v1", false)).toBe(false);
+    expect(isViewSurfaceVisible(false, null, "v1", "v1", false, false)).toBe(false);
   });
 
   it("an active surface shows the pane active tab only", () => {
-    expect(isViewSurfaceVisible(true, null, "v1", "v1", false)).toBe(true);
-    expect(isViewSurfaceVisible(true, null, "v2", "v1", false)).toBe(false);
+    expect(isViewSurfaceVisible(true, null, "v1", "v1", false, false)).toBe(true);
+    expect(isViewSurfaceVisible(true, null, "v2", "v1", false, false)).toBe(false);
   });
 
   it("while maximized, that one view is the only visible one", () => {
-    expect(isViewSurfaceVisible(true, "v2", "v2", "v1", false)).toBe(true);
-    expect(isViewSurfaceVisible(true, "v2", "v1", "v1", false)).toBe(false);
+    expect(isViewSurfaceVisible(true, "v2", "v2", "v1", false, false)).toBe(true);
+    expect(isViewSurfaceVisible(true, "v2", "v1", "v1", false, false)).toBe(false);
   });
 
   it("an overlay hides even the view its pane is showing", () => {
-    expect(isViewSurfaceVisible(true, null, "v1", "v1", true)).toBe(false);
+    expect(isViewSurfaceVisible(true, null, "v1", "v1", true, false)).toBe(false);
   });
 });

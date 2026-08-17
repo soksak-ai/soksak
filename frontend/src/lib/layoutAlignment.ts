@@ -126,8 +126,11 @@ export function alignmentOf(
       off: appliedBox ? apart(declaration.dom, appliedBox) : null,
     };
   });
+  // Only what is on the screen. A parked surface is not where its pane is and does not need to be —
+  // it has stepped aside so the document can draw over its place, and its picture is what a person
+  // is looking at. Counting it answers a question about a rectangle nobody can see.
   const worst = (pick: (s: SurfaceAlignment) => number | null): number =>
-    surfaces.reduce((most, surface) => Math.max(most, pick(surface) ?? 0), 0);
+    surfaces.reduce((most, surface) => (surface.visible ? Math.max(most, pick(surface) ?? 0) : most), 0);
   // Overlap, not distance. A region collapsed to no width still has a position — the right rail is
   // at the window's edge with w=0 — and measuring from its edge alone called every page on the screen
   // 994 points "over" it. What counts is how much of the region's band a page actually covers.

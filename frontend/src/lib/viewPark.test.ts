@@ -8,29 +8,39 @@ import { surfaceShown, viewSurfacePlacement, viewSurfaceStyle } from "./viewPark
 
 describe("effective view visibility — all three layers", () => {
   it("an inactive workspace is not visible even when the space and the tab are active", () => {
-    expect(surfaceShown(false, true, true, false)).toBe(false);
+    expect(surfaceShown(false, true, true, false, false)).toBe(false);
   });
 
   it("an inactive space is not visible", () => {
-    expect(surfaceShown(true, false, true, false)).toBe(false);
+    expect(surfaceShown(true, false, true, false, false)).toBe(false);
   });
 
   it("an inactive tab is not visible", () => {
-    expect(surfaceShown(true, true, false, false)).toBe(false);
+    expect(surfaceShown(true, true, false, false, false)).toBe(false);
   });
 
   it("visible only when all three layers are active", () => {
-    expect(surfaceShown(true, true, true, false)).toBe(true);
+    expect(surfaceShown(true, true, true, false, false)).toBe(true);
   });
 
   // A native surface is composited above the document, so no z-index puts it under a modal — the
   // plugin manager opened and two browser pages drew over its card, measured 2026-08-17.
   it("an overlay over the window hides it, whatever the other three say", () => {
-    expect(surfaceShown(true, true, true, true)).toBe(false);
+    expect(surfaceShown(true, true, true, true, false)).toBe(false);
   });
 });
 
 describe("viewSurfaceStyle — exclusive (maximize) composition contract", () => {
+  // A rail moving to another station crosses the panes on the way, and a page above the document
+  // covers it for the whole crossing — 155 to 160 points, for 85 to 119ms, measured 2026-08-17. What
+  // travels while the layout moves is the page's picture, which is in the document and moves with the
+  // slot by the same transform.
+  it("a travelling layout hides it, whatever the other layers hold", () => {
+    expect(surfaceShown(true, true, true, false, true)).toBe(false);
+    // Oracle liveness — the same window with the travel over.
+    expect(surfaceShown(true, true, true, false, false)).toBe(true);
+  });
+
   it("an exclusive hide declares the layout owner exact parking frame instead of a ResizeObserver", () => {
     expect(viewSurfacePlacement(false, true)).toEqual({
       desiredVisible: false,
@@ -99,6 +109,15 @@ describe("a parking commit goes through the content view host", () => {
     const order: string[] = [];
     vi.doMock("./contentViews", () => ({
       hasContentViewHost: () => true,
+      // The picture is held until the native layer reports the page back, so the stand-in window
+      // has to answer that too.
+      lastAppliedSurfaces: () => ({
+        surfaces: [{ id: "browser-win-a-v-1", x: 0, y: 0, w: 0, h: 0, visible: true }],
+        atUnixMs: 0,
+        latencyMs: 0,
+        appliedMs: 0,
+        commits: 1,
+      }),
       contentViewHost: () => ({
         visible: async (label: string, visible: boolean) => {
           order.push("hide");
