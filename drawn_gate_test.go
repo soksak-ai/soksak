@@ -60,6 +60,10 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 		gate.run("sections.arrange", "window="+window, "set="+set, "sections="+jsonList(section))
 		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+set, "region="+region)
 		gate.focusPluginPane(window, plugin)
+		// Let the motion this link caused finish before the next command retargets it. A journey
+		// cancelled by the next change is not a fault, but a run where every one was cancelled is
+		// no evidence that motion plays — and that is what the reading below is for.
+		gate.run("ui.layout.wait-settled", "window="+window)
 
 		// The region is drawn after a layout commit, so this waits for it rather than reading the
 		// frame the link happened to land in.
@@ -83,7 +87,15 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 			}
 		}
 
-		gate.run("sections.link", "window="+window, "plugin="+plugin)
+		// Clearing names the region: each region holds its own set, so a clear that took both would
+		// be a second rule about placement living in the unlink.
+		gate.run("sections.link", "window="+window, "plugin="+plugin, "region="+region)
+		gate.run("ui.layout.wait-settled", "window="+window)
+		// What leaves, leaves with the space it stood in: the region's width travels with the panes,
+		// and the sections are drawn until that motion has closed it. Reading in the render that
+		// removed the link reads the frame before the space is gone.
+		gate.until(5*time.Second, func() bool { return !contains(gate.drawnIn(window, region), section) },
+			"the "+region+" region to close on "+section)
 		if drawn := gate.drawnIn(window, region); contains(drawn, section) {
 			t.Errorf("the link to %s was removed and %s is still drawn in the %s region: %v\n"+
 				"Not connected is not present.", plugin, section, region, drawn)
@@ -93,20 +105,59 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 	// filter for its own reason, and a host that never reads the link's region passes anyway —
 	// measured 2026-08-17, a planted host that ignores the region survived this gate until a section
 	// stood in both.
+	// Both regions at once. A plugin held one standing until 2026-08-17 — one set, one region — so a
+	// person who stood a set on the left could press the right toggle forever: the command answered
+	// OK, nothing stood there, and the region took no width. Two sets, two regions, one plugin.
+	if len(available["left"]) > 0 && len(available["right"]) > 0 {
+		left, right := available["left"][0], available["right"][0]
+		leftSet := gate.createSet(window, "gate-both-left")
+		rightSet := gate.createSet(window, "gate-both-right")
+		gate.run("sections.arrange", "window="+window, "set="+leftSet, "sections="+jsonList(left))
+		gate.run("sections.arrange", "window="+window, "set="+rightSet, "sections="+jsonList(right))
+		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+leftSet, "region=left")
+		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+rightSet, "region=right")
+		gate.focusPluginPane(window, plugin)
+		gate.until(5*time.Second, func() bool {
+			return contains(gate.drawnIn(window, "left"), left) &&
+				contains(gate.drawnIn(window, "right"), right)
+		}, "both regions to draw the set standing in them")
+		for _, stood := range []struct{ region, section string }{{"left", left}, {"right", right}} {
+			if drawn := gate.drawnIn(window, stood.region); !contains(drawn, stood.section) {
+				t.Errorf("%s and %s stand at once and the %s region holds %v.\n"+
+					"A region a person cannot open while the other stands is a region they do not have.",
+					left, right, stood.region, drawn)
+			}
+		}
+		for _, region := range []string{"left", "right"} {
+			gate.run("sections.link", "window="+window, "plugin="+plugin, "region="+region)
+		}
+	}
+
 	// A modal covers the window, and a native surface is composited above the document — no z-index
 	// orders it under the card. The plugin manager opened with two browser pages drawn over it,
 	// measured 2026-08-17. The DOM behind a modal keeps its boxes, which is correct; what must go is
 	// the surface, so this reads the composition rather than the document.
+	// The command answers when the ui state changed; the surface goes on a later frame. Reading in
+	// the frame the command returned in was right 4 times in 10 and wrong the other 6 — measured
+	// 2026-08-17 over 8 runs, and every failure printed a composition already hidden. So the reading
+	// is taken against a deadline, and the deadline is the assertion: a surface that outlives it is
+	// one a person watches sitting over the card.
 	gate.showASurface(window)
 	gate.run("plugin.manager", "window="+window, "open=true")
-	if during := gate.visibleSurfaces(window); len(during) > 0 {
-		t.Errorf("the plugin manager is open and %d native surfaces are still visible: %v\n"+
-			"A surface above the card is one a person cannot read or click past.", len(during), during)
+	if took, left := gate.waitForSurfacesToGo(window, surfaceHideDeadline); left != nil {
+		t.Errorf("the plugin manager has been open %s and %d native surfaces are still visible: %v\n"+
+			"A surface above the card is one a person cannot read or click past.\n"+
+			"overlays held: %d — zero means the modal never registered, more means the view never applied it\n"+
+			"composition: %s",
+			took, len(left), left, gate.overlaysHeld(window),
+			gate.run("surface.composition", "window="+window))
+	} else {
+		t.Logf("the surfaces went %s after the manager opened", took)
 	}
 	gate.run("plugin.manager", "window="+window, "open=false")
-	if after := gate.visibleSurfaces(window); len(after) == 0 {
-		t.Errorf("the manager closed and no surface came back.\ncomposition: %s",
-			gate.run("surface.composition", "window="+window))
+	if took, back := gate.waitForASurfaceToReturn(window, surfaceHideDeadline); !back {
+		t.Errorf("the manager closed %s ago and no surface came back.\ncomposition: %s",
+			took, gate.run("surface.composition", "window="+window))
 	}
 
 	// A link that changes the layout moves panes, and a motion that never plays is a jump.
@@ -270,6 +321,41 @@ func (gate *drawnGate) showASurface(window string) {
 	}
 	gate.t.Fatalf("no pane could be brought to show a native surface.\npanes: %s\ncomposition: %s",
 		gate.run("pane.list", "window="+window), gate.run("surface.composition", "window="+window))
+}
+
+// surfaceHideDeadline is how long a surface may stay on screen after the state that hides it. One
+// frame at 60Hz is 17ms and the commit costs a few; a fifth of a second is far above what a correct
+// build takes and far below what a person reads as a surface sitting over the card.
+const surfaceHideDeadline = 200 * time.Millisecond
+
+// waitForSurfacesToGo reads until the compositor has nothing on screen, and answers how long that
+// took with whatever was left when the deadline passed.
+func (gate *drawnGate) waitForSurfacesToGo(window string, deadline time.Duration) (time.Duration, []string) {
+	gate.t.Helper()
+	started := time.Now()
+	for {
+		left := gate.visibleSurfaces(window)
+		if len(left) == 0 {
+			return time.Since(started), nil
+		}
+		if time.Since(started) > deadline {
+			return time.Since(started), left
+		}
+	}
+}
+
+// waitForASurfaceToReturn is the same reading in the other direction.
+func (gate *drawnGate) waitForASurfaceToReturn(window string, deadline time.Duration) (time.Duration, bool) {
+	gate.t.Helper()
+	started := time.Now()
+	for {
+		if len(gate.visibleSurfaces(window)) > 0 {
+			return time.Since(started), true
+		}
+		if time.Since(started) > deadline {
+			return time.Since(started), false
+		}
+	}
 }
 
 // visibleSurfaces is what the compositor has on screen — declared and applied both true. The

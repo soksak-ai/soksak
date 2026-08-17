@@ -15,3 +15,7 @@ build/android/gen/
 
 /local/
 bin/
+
+# Frames a gate records on every run — 23MB per run, regenerated, and never the pass mark.
+# What passes or fails is the numbers the gate prints beside them.
+evidence/scenarios/

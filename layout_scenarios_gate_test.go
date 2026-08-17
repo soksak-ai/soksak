@@ -1,0 +1,572 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"testing"
+	"time"
+)
+
+// Every way the focus can move in the named window, frame by frame.
+//
+// The window is the one named on 2026-08-17: a left column split into a terminal on top and a
+// browser underneath, and a terminal filling the right. Three panes, so focus can move six ways, and
+// each way is its own case — a set stands for one plugin, so some of those moves take the region
+// away and some do not, and a gate that clicks one of them speaks for none of the others.
+//
+// The reading is `layout.trace`, recorded inside the window once per animation frame. Sampling
+// through the plane costs a round trip — 15 to 25ms against a 16.7ms frame — so a page that is
+// behind its pane for one or two frames landed in one sample or two by chance, and a person watching
+// the screen saw what the reading could not state. Frames are the unit here, and every one of them
+// is in the answer.
+//
+// Three numbers per case, none of them from a picture:
+//
+//   - lag: the declaring element against the box the last commit sent. This is the document alone —
+//     no round trip, no second clock — so it is exact per frame. It answers whether the declaration
+//     follows the element while the element travels.
+//   - off: the element against the box the native layer holds. It holds the age of the native
+//     half, which each frame states (appliedAgeFrames).
+//   - hole: the distance between where the region ends and where the panes begin.
+//   - over: how far a page is drawn into a region's band.
+const layoutScenariosGateHome = "<local-evidence>/soksak-layout-scenarios-gate"
+
+const layoutScenariosGateIdentifier = "com.soksak.layoutscenariosgate"
+
+type layoutScenariosGate = restoreGate
+
+// traceFrame is one recorded frame, as the window wrote it down.
+type traceFrame struct {
+	Frame        int     `json:"frame"`
+	At           float64 `json:"atUnixMs"`
+	AppliedAgeMs float64 `json:"appliedAgeMs"`
+	CommitMs     float64 `json:"commitMs"`
+	SinceLastMs  float64 `json:"sinceLastMs"`
+	Drawn        bool    `json:"drawn"`
+	TickMs       float64 `json:"tickMs"`
+	Commits      int     `json:"commits"`
+	WorstOff     float64 `json:"worstOff"`
+	WorstLag     float64 `json:"worstLag"`
+	WorstOver    float64 `json:"worstOver"`
+	Regions      []struct {
+		Region string  `json:"region"`
+		X      float64 `json:"x"`
+		W      float64 `json:"w"`
+	} `json:"regions"`
+	Panes []struct {
+		Pane string  `json:"pane"`
+		X    float64 `json:"x"`
+		W    float64 `json:"w"`
+	} `json:"panes"`
+	Surfaces []struct {
+		ID      string `json:"id"`
+		Visible bool   `json:"visible"`
+		Dom     struct {
+			X float64 `json:"x"`
+			W float64 `json:"w"`
+		} `json:"dom"`
+		Declared *struct {
+			X float64 `json:"x"`
+			W float64 `json:"w"`
+		} `json:"declared"`
+		Applied *struct {
+			X float64 `json:"x"`
+			W float64 `json:"w"`
+		} `json:"applied"`
+	} `json:"surfaces"`
+}
+
+func (f traceFrame) atUnixMs() float64 { return f.At }
+
+// regionEnds is where the region's band stops, and panesStart where the first pane begins.
+func (f traceFrame) regionEnds(region string) float64 {
+	edge := 0.0
+	for _, held := range f.Regions {
+		if held.Region == region && held.X+held.W > edge {
+			edge = held.X + held.W
+		}
+	}
+	return edge
+}
+
+func (f traceFrame) panesStart() float64 {
+	start := -1.0
+	for _, pane := range f.Panes {
+		if pane.W <= 0 {
+			continue
+		}
+		if start < 0 || pane.X < start {
+			start = pane.X
+		}
+	}
+	return start
+}
+
+func (f traceFrame) hole(region string) float64 {
+	start := f.panesStart()
+	if start < 0 {
+		return 0
+	}
+	return start - f.regionEnds(region)
+}
+
+// offAgeCorrected is the distance between a pane and the page drawn for it, with the age of the
+// native reading taken out.
+//
+// The native half costs a round trip, so a frame holds an answer that was asked for `age` frames
+// earlier. Comparing it against this frame's element is comparing two instants, and during a motion
+// that difference is the motion itself — 72 points of it, measured before this correction existed.
+// So each frame's applied rectangle is compared against the element where it was when that answer
+// was asked for. What is left is the product: the distance between where the document said the page
+// should be and where the native layer put it.
+func offAgeCorrected(frames []traceFrame, at int) float64 {
+	frame := frames[at]
+	if frame.AppliedAgeMs < 0 {
+		return 0
+	}
+	// Which recorded frame the native answer came from: the one closest to when it was answered.
+	asked := at
+	for asked > 0 && frames[asked].atUnixMs() > frame.atUnixMs()-frame.AppliedAgeMs {
+		asked--
+	}
+	was := map[string]struct{ X, W float64 }{}
+	for _, surface := range frames[asked].Surfaces {
+		was[surface.ID] = struct{ X, W float64 }{surface.Dom.X, surface.Dom.W}
+	}
+	worst := 0.0
+	for _, surface := range frame.Surfaces {
+		if surface.Applied == nil || !surface.Visible {
+			continue
+		}
+		then, known := was[surface.ID]
+		if !known {
+			continue
+		}
+		if d := math.Abs(then.X - surface.Applied.X); d > worst {
+			worst = d
+		}
+		if d := math.Abs(then.W - surface.Applied.W); d > worst {
+			worst = d
+		}
+	}
+	return worst
+}
+
+// overAgeCorrected is how far a page extends into a region's band, with the age of the native
+// reading taken out — the same correction as offAgeCorrected, for the same reason.
+func overAgeCorrected(frames []traceFrame, at int) float64 {
+	frame := frames[at]
+	if frame.AppliedAgeMs < 0 {
+		return 0
+	}
+	asked := at
+	for asked > 0 && frames[asked].atUnixMs() > frame.atUnixMs()-frame.AppliedAgeMs {
+		asked--
+	}
+	worst := 0.0
+	for _, region := range frames[asked].Regions {
+		if region.W <= 0 {
+			continue
+		}
+		for _, surface := range frame.Surfaces {
+			if surface.Applied == nil || !surface.Visible {
+				continue
+			}
+			overlap := math.Min(region.X+region.W, surface.Applied.X+surface.Applied.W) -
+				math.Max(region.X, surface.Applied.X)
+			if overlap > worst {
+				worst = overlap
+			}
+		}
+	}
+	return worst
+}
+
+// budgetMs is how long a window may be wrong before it is.
+//
+// Counted in milliseconds from the trace's own timestamps rather than in frames, because the frame
+// rate is not this application's to set: a window that is not frontmost is throttled by the system,
+// and the same motion was written down at 60Hz in one run and 19Hz in the next. A verdict in frames
+// then means something different in each. What the frame rate does decide is the resolution of the
+// reading, which every case reports beside its numbers.
+//
+// The floor is the commit: the rectangles are measured in the document's frame and applied across a
+// process boundary, so a page cannot be closer to its pane than one round trip. Two frames at 60Hz
+// is that with room.
+const budgetMs = 34.0
+
+// drawingCadenceMs is the slowest a window may be drawing for its motion to be judged here.
+//
+// A page cannot be closer to its pane than one commit, and a commit waits for the main thread. When
+// that thread is stalled — another test driving another window on the same machine, a person's build
+// running beside it — the commit stretches with it: measured 2026-08-17 under `task verify`, 2ms
+// commits became 67ms and the page stood 160 points behind its pane for exactly that long. Judging
+// motion there measures the machine.
+//
+// So the geometry is judged always (a hole and a stale declaration are wrong whatever the machine is
+// doing) and the motion only when the window was drawing at something like a frame's rate. What is
+// never done is passing quietly: a case that could not be judged states that.
+const drawingCadenceMs = 20.0
+
+// stalledFrameMs is a gap between drawn frames that makes the window's own motion the subject.
+//
+// A page cannot follow a pane that moved 160 points in one step: when the window misses frames, the
+// element jumps and the surface arrives one commit later, and what that measures is the stall. So a
+// case whose window stalled is reported and not judged — and the stall itself is the defect to
+// chase, in its own measurement on a machine that is doing nothing else.
+const stalledFrameMs = 40.0
+
+// holeTolerance is the gap that is a border rather than a hole — the pane inset is a few points, and
+// the reading writes down two rounded numbers.
+const holeTolerance = 12.0
+
+// offTolerance is the distance that is rounding rather than a displacement.
+const offTolerance = 2.0
+
+func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
+	gate := newGate(t, layoutScenariosGateHome, layoutScenariosGateIdentifier)
+	plugins := gate.installPlugins()
+	gate.start()
+	defer gate.quit()
+
+	window := gate.openWorkspace()
+	gate.consentAndEnable(window, plugins)
+	built := gate.buildGateWindow(window)
+
+	// The region stands for the browser's plugin, in the left region, open. Focus on a terminal then
+	// takes it away and focus on the browser brings it back — which is what makes the six moves
+	// different from each other.
+	set := gate.createSet(window, "scenarios")
+	sections := gate.availableSections(window)["left"]
+	if len(sections) == 0 {
+		t.Fatal("no section stands on the left, so no move can take a region away")
+	}
+	gate.run("sections.arrange", "window="+window, "set="+set, "sections="+jsonList(sections[0]))
+	gate.run("sections.link", "window="+window,
+		"plugin="+gate.pluginOfTab(window, built.browserTab), "set="+set, "region=left")
+	gate.run("workspace.region.toggle", "window="+window, "region=left", "open=true")
+
+	// A covered window is not drawn, and a window that is not drawn has no motion to measure: the
+	// system throttles it, and the same six moves were written down at 60Hz in one run and at 4.7Hz
+	// in the next, purely by what happened to be in front. The throttle is turned off for the
+	// duration and put back after — the same thing every capture does for itself, and it takes no
+	// focus from whoever is at the machine.
+	gate.run("window_occlusion", "window="+window, "enabled=false")
+	defer gate.run("window_occlusion", "window="+window, "enabled=true")
+
+	where := map[string]string{
+		"terminal-top-left": built.terminalTab,
+		"browser-bottom":    built.browserTab,
+		"terminal-right":    built.rightTab,
+	}
+	order := []string{"terminal-top-left", "browser-bottom", "terminal-right"}
+
+	evidence := filepath.Join("evidence", "scenarios")
+	if err := os.MkdirAll(evidence, 0o755); err != nil {
+		t.Fatalf("making the evidence directory: %v", err)
+	}
+
+	type result struct {
+		name    string
+		frames  []traceFrame
+		lag     run
+		off     run
+		applied run
+		hole    run
+		over    run
+		record  string
+	}
+	var results []result
+
+	for _, from := range order {
+		for _, to := range order {
+			if from == to {
+				continue
+			}
+			name := from + "→" + to
+			// Each case starts from the state it names, settled. A case begun mid-change measures the
+			// tail of the one before it.
+			gate.run("tab.activate", "window="+window, "tab="+where[from])
+			gate.until(5*time.Second, func() bool {
+				frame := gate.oneFrame(window)
+				return frame.hole("left") <= holeTolerance && frame.WorstOff <= offTolerance &&
+					frame.WorstLag <= offTolerance
+			}, "the window to settle before "+name)
+
+			record := filepath.Join(evidence, strings.NewReplacer("→", "-to-").Replace(name))
+			// Frames for a person to look at, taken without touching the window's focus, beside the
+			// trace that judges. The recording is never the pass mark.
+			// The numbers are taken without a recorder running. Capturing a window costs the main
+			// thread a frame at a time: with `window.record` alongside, the same six moves answered
+			// 2 to 3 frames of lag where they answer none without it — the recorder was measuring
+			// itself. Frames for the eye are recorded in their own pass, below.
+			gate.run("layout.trace.start", "window="+window, "ms=1500")
+			gate.run("tab.activate", "window="+window, "tab="+where[to])
+			time.Sleep(1600 * time.Millisecond)
+			frames := gate.readTrace(window)
+			if len(frames) < 10 {
+				t.Fatalf("%s recorded %d readings, which is not a motion", name, len(frames))
+			}
+
+			results = append(results, result{
+				name:   name,
+				frames: frames,
+				lag:    longestRun(frames, func(f traceFrame) (bool, float64) { return f.WorstLag > offTolerance, f.WorstLag }),
+				off:    longestRun(frames, func(f traceFrame) (bool, float64) { return f.WorstOff > offTolerance, f.WorstOff }),
+				applied: longestRunAt(frames, func(i int) (bool, float64) {
+					d := offAgeCorrected(frames, i)
+					return d > offTolerance, d
+				}),
+				over: longestRunAt(frames, func(i int) (bool, float64) {
+					d := overAgeCorrected(frames, i)
+					return d > offTolerance, d
+				}),
+				hole: longestRun(frames, func(f traceFrame) (bool, float64) {
+					return f.hole("left") > holeTolerance, f.hole("left")
+				}),
+				record: record,
+			})
+		}
+	}
+
+	for _, r := range results {
+		// The cadence the window drew at while it was watched. A system that is throttling a window
+		// that is not frontmost sets this, not the application, and it is the resolution every
+		// number beside it was read at.
+		commit, slowest, watching := 0.0, 0.0, 0.0
+		commits := 0
+		if len(r.frames) > 0 {
+			commits = r.frames[len(r.frames)-1].Commits - r.frames[0].Commits
+		}
+		for _, frame := range r.frames {
+			if frame.TickMs > watching {
+				watching = frame.TickMs
+			}
+			if frame.CommitMs > commit {
+				commit = frame.CommitMs
+			}
+			if frame.SinceLastMs > slowest {
+				slowest = frame.SinceLastMs
+			}
+		}
+		t.Logf("%-32s %3d readings   lag %s   off %s   applied %s   hole %s   over %s   commit %.0fms (%d)"+
+			"  drawn every %.0fms (read every %.0f, worst %.0f)  watching %.1fms",
+			r.name, len(r.frames), r.lag, r.off, r.applied, r.hole, r.over, commit, commits,
+			drawnCadence(r.frames), medianCadence(r.frames), slowest, watching)
+	}
+	// One move recorded for the eye, in its own pass, with the recorder already running before the
+	// change. What it is for is looking; the numbers above are what passes and fails.
+	looked := results[len(results)-1]
+	gate.run("tab.activate", "window="+window, "tab="+where[order[2]])
+	gate.until(5*time.Second, func() bool { return gate.oneFrame(window).WorstOff <= offTolerance },
+		"the window to settle before the recording")
+	go gate.try("window.record", "window="+window, "dir="+looked.record, "frames=60", "intervalMs=16")
+	time.Sleep(400 * time.Millisecond)
+	gate.run("tab.activate", "window="+window, "tab="+where[order[1]])
+	time.Sleep(1200 * time.Millisecond)
+	if trails, err := pageTrailsIn(looked.record, 0.72); err == nil && len(trails) > 0 {
+		t.Logf("recorded %d frames of %s for the eye: %s", len(trails), looked.name, looked.record)
+	}
+	for _, r := range results {
+		cadence, stall := drawnCadence(r.frames), worstDrawnGap(r.frames)
+		judgeMotion := cadence > 0 && cadence <= drawingCadenceMs && stall <= stalledFrameMs
+		if !judgeMotion {
+			t.Logf("%s: the window's frame clock ran every %.0fms and stalled %.0fms at worst, so "+
+				"how far the page trailed its pane was not judged here — that number would be this "+
+				"machine's load. The geometry below was judged.", r.name, cadence, stall)
+		}
+		if r.lag.ms > budgetMs {
+			t.Errorf("%s: the declaration was %.0f points behind its element for %.0fms.\n%s\nframes: %s\n"+
+				"The document writes the declaration in the frame it measures, so this is the page "+
+				"standing still while its pane travels.",
+				r.name, r.lag.worst, r.lag.ms, traceLines(r.frames, "left"), r.record)
+		}
+		if judgeMotion && r.applied.ms > budgetMs {
+			t.Errorf("%s: the native layer held a page %.0f points from where the document put it, for %.0fms.\n%s\nframes: %s\n"+
+				"The document's rectangle and the native layer's are the same commit; a difference "+
+				"here is the native layer holding something else.",
+				r.name, r.applied.worst, r.applied.ms, traceLines(r.frames, "left"), r.record)
+		}
+		if r.hole.ms > budgetMs {
+			t.Errorf("%s: %.0f points belonged to nobody for %.0fms.\n%s\nframes: %s\n"+
+				"The region gives up its width in one render while the panes travel over the motion.",
+				r.name, r.hole.worst, r.hole.ms, traceLines(r.frames, "left"), r.record)
+		}
+		if judgeMotion && r.over.ms > budgetMs {
+			t.Errorf("%s: a page was drawn %.0f points over the region for %.0fms.\n%s\nframes: %s\n"+
+				"A native surface is composited above the document, so a page reaching into the "+
+				"region is drawn over it.",
+				r.name, r.over.worst, r.over.ms, traceLines(r.frames, "left"), r.record)
+		}
+	}
+}
+
+// run is the longest unbroken stretch that answered wrong: how long it lasted, how many readings it
+// held, and the worst value in it.
+type run struct {
+	ms     float64
+	frames int
+	worst  float64
+}
+
+func (r run) String() string {
+	if r.frames == 0 {
+		return "        0"
+	}
+	return fmt.Sprintf("%4.0fms/%df %4.0fpt", r.ms, r.frames, r.worst)
+}
+
+// medianCadence is the middle gap between readings — the resolution of everything measured here.
+func medianCadence(frames []traceFrame) float64 { return middleGap(frames, false) }
+
+// drawnCadence is the middle gap between the readings the **window's frame clock** made. The timer
+// that keeps the recording alive when a window is not drawing answers a gap of its own, and a window
+// judged by that is judged by the recorder.
+func drawnCadence(frames []traceFrame) float64 { return middleGap(frames, true) }
+
+// worstDrawnGap is the longest the window went without drawing while it was watched.
+func worstDrawnGap(frames []traceFrame) float64 {
+	worst, last := 0.0, 0.0
+	for _, frame := range frames {
+		if !frame.Drawn {
+			continue
+		}
+		if last > 0 && frame.At-last > worst {
+			worst = frame.At - last
+		}
+		last = frame.At
+	}
+	return worst
+}
+
+func middleGap(frames []traceFrame, drawnOnly bool) float64 {
+	var at []float64
+	for _, frame := range frames {
+		if drawnOnly && !frame.Drawn {
+			continue
+		}
+		at = append(at, frame.At)
+	}
+	if len(at) < 3 {
+		return 0
+	}
+	gaps := make([]float64, 0, len(at)-1)
+	for i := 1; i < len(at); i++ {
+		gaps = append(gaps, at[i]-at[i-1])
+	}
+	sort.Float64s(gaps)
+	return gaps[len(gaps)/2]
+}
+
+// longestRunAt is longestRun for a judgement that needs the frames around it — the age correction
+// compares a frame against an earlier one.
+func longestRunAt(frames []traceFrame, wrong func(int) (bool, float64)) run {
+	longest, current := run{}, run{}
+	start := 0.0
+	for i := range frames {
+		bad, value := wrong(i)
+		if !bad {
+			current = run{}
+			continue
+		}
+		if current.frames == 0 {
+			start = frames[i].At
+		}
+		current.frames++
+		current.ms = frames[i].At - start
+		if value > current.worst {
+			current.worst = value
+		}
+		if current.ms > longest.ms || (current.ms == longest.ms && current.frames > longest.frames) {
+			longest = current
+		}
+	}
+	return longest
+}
+
+// longestRun counts frames rather than milliseconds. A frame is the unit the screen changes in, and
+// the trace holds every one of them.
+func longestRun(frames []traceFrame, wrong func(traceFrame) (bool, float64)) run {
+	longest, current := run{}, run{}
+	start := 0.0
+	for _, frame := range frames {
+		bad, value := wrong(frame)
+		if !bad {
+			current = run{}
+			continue
+		}
+		if current.frames == 0 {
+			start = frame.At
+		}
+		current.frames++
+		current.ms = frame.At - start
+		if value > current.worst {
+			current.worst = value
+		}
+		if current.ms > longest.ms || (current.ms == longest.ms && current.frames > longest.frames) {
+			longest = current
+		}
+	}
+	return longest
+}
+
+// readTrace stops the recording and answers what it holds.
+func (gate *layoutScenariosGate) readTrace(window string) []traceFrame {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Frames []traceFrame `json:"frames"`
+		} `json:"data"`
+	}
+	out := gate.run("layout.trace.read", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("layout.trace.read: %v\n%s", err, out[:min(len(out), 400)])
+	}
+	return answer.Data.Frames
+}
+
+// oneFrame is a single reading, for settling rather than for judging.
+func (gate *layoutScenariosGate) oneFrame(window string) traceFrame {
+	gate.t.Helper()
+	var answer struct {
+		Data traceFrame `json:"data"`
+	}
+	out := gate.run("layout.alignment", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("layout.alignment: %v\n%s", err, out)
+	}
+	return answer.Data
+}
+
+// traceLines is every frame that differs from the one before it. A run of identical lines records
+// only that the window was still.
+func traceLines(frames []traceFrame, region string) string {
+	lines := []string{}
+	for i, frame := range frames {
+		if i > 0 && frames[i-1].WorstLag == frame.WorstLag && frames[i-1].WorstOff == frame.WorstOff &&
+			frames[i-1].hole(region) == frame.hole(region) && frames[i-1].WorstOver == frame.WorstOver {
+			continue
+		}
+		pane, page := 0.0, 0.0
+		for _, surface := range frame.Surfaces {
+			if !surface.Visible {
+				continue
+			}
+			pane = surface.Dom.X
+			if surface.Applied != nil {
+				page = surface.Applied.X
+			}
+		}
+		lines = append(lines, fmt.Sprintf(
+			"  f%03d +%.0fms commits=%d age=%.0fms commit=%.0fms lag=%.0f off=%.0f hole=%.0f over=%.0f (pane %.0f, page %.0f)",
+			frame.Frame, frame.SinceLastMs, frame.Commits, frame.AppliedAgeMs, frame.CommitMs,
+			frame.WorstLag, frame.WorstOff,
+			frame.hole(region), frame.WorstOver, pane, page))
+	}
+	return strings.Join(lines, "\n")
+}

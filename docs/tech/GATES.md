@@ -74,7 +74,7 @@ Contract: [`NATIVE-SURFACES.md`](NATIVE-SURFACES.md).
 
 | Judged by | Answered 2026-08-16 |
 | --- | --- |
-| `sok layout.transition.journal` | every travelling record holds 0 rail surfaces, every settled record exactly 1 |
+| `sok layout.transition.journal` | 2026-08-16: every travelling record held 0 rail surfaces and every settled record exactly 1. The rule changed 2026-08-17 — a region that owns width stays on the screen while the panes travel, so a travelling record now holds 1 as well. Removing it left 165 points belonging to nobody for 183–194ms on every move that changed which pane the rail follows, measured over all six moves in the named three-pane window and seen in the recorded frames |
 | `sok layout.arrangement` under PIN | a focus change wrote no arrangement record — nothing moved |
 | `sok layout.arrangement` under FLOW | four focus changes, each landing the station on the focused pane's left clean line |
 | `sok ui.focus.state` | the aperture's target is the focused pane |
@@ -115,6 +115,8 @@ has watched fail is a claim, not a gate.
 | `sweep_gate_test.go` | a translation sweep changes no code |
 | `observation_gate_test.go` | what the build claims to observe, it serves |
 | `docs_carried_gate_test.go` | a carried document is not cited as contract before its review |
+| `layout_scenarios_gate_test.go` | in the named window — a terminal top left, a browser under it, a terminal filling the right — every one of the six ways focus can move leaves no hole between a region and the panes, no stale declaration, and no page the native layer holds away from where the document put it. Read frame by frame inside the window (`layout.trace`), and a case whose window stalled is reported rather than judged: a page cannot follow a pane that jumped 160 points in one step |
+| `surface_alignment_gate_test.go` | a person's click on the exposed region toggle leaves the page on its pane |
 
 ---
 
@@ -150,9 +152,12 @@ Written here so it is not rediscovered (L2).
 - **One surface behind another is still unmeasured.** A DOM overlay is covered:
   `surfaceShown` takes the open-overlay count as a layer, and `verify:drawn`
   opens the plugin manager and reads `surface.composition` for anything still
-  visible. What no reading covers is surface against surface — two native
-  rectangles in one window, where `presence` and `misparented` both answer about
-  the window rather than about the order inside it.
+  visible. A page against the *document* is covered too: `layout.alignment`
+  answers `over`, how far a page is drawn into a region's band, and the scenario
+  gate holds it at zero across all six moves. What no reading covers is surface
+  against surface — two native rectangles in one window, where `presence` and
+  `misparented` both answer about the window rather than about the order inside
+  it.
 - **A blank browser after a restart is reported and not reproduced.** A person
   reported 2026-08-17 that a restart comes up with the page empty until
   something else happens. Nine cold starts that day, read at t+2s, t+3s, t+4s,
@@ -160,34 +165,24 @@ Written here so it is not rediscovered (L2).
   and the page painted. The first attempt to reproduce it did fail — against a
   reading that parsed the wrong answer shape, before `CONTROL-PROTOCOL.md` C2a —
   so that attempt says nothing. It stays open with no reproduction.
-- **A command that answers nothing has no reading.** `workspace.region.toggle`
-  twice did not answer inside the client's 20 seconds while every other command
-  did. Every await in that handler is bounded now — `waitForDomCommit` at 2s,
-  `nativeSurfacesSettled` at 5s — and 23 consecutive runs of both running-build
-  gates since have been clean. What is still missing is a reading for "the
-  renderer took the request and has not answered": the client's timeout is the
-  only evidence, and it names the command rather than what it is waiting on.
-- **No layout animation in this build has ever played.** `ui.motion` held 64
-  journeys on 2026-08-17 and every one ended `cancel` 10–13ms after it started,
-  with `animations: 0` and `applied: 0`. A pane, a tab and the browser surface
-  under it all jump to their destination instead of moving.
+- **A command that answers nothing** — found and fixed 2026-08-17.
+  `workspace.region.toggle` was silent past the client's 20 seconds, one run in
+  three. Its deadline was already there; what could not be reached was the check.
+  The wait yielded on `requestAnimationFrame` alone, and a window the system has
+  stopped drawing produces no frame, so the loop that would have looked at the
+  clock never ran again. Every wait for a frame now goes through `nextFrame`,
+  which resolves on the frame or on a 16ms timer, whichever comes first
+  (`lib/nextFrame.ts`, with the test that hangs without it). Four consecutive
+  runs of the gate that reproduced it are clean.
 
-  The cause is measured. `GroupArea` flushes the rect tracker in a
-  `useLayoutEffect` with no dependency list, so it runs after every render, and
-  a flush cancels the running interpolation before measuring — which is right on
-  its own terms: while one runs, `getBoundingClientRect` answers an interpolated
-  value, and the layout's present is only readable after the cancel. After the
-  cancel the element is already at its destination, so the delta is zero and no
-  new animation starts. A re-render inside 10ms is certain for a component
-  subscribed to that many stores.
-
-  One remedy was tried and reverted the same day: continuing the motion from the
-  drawn position made every flush create a new full-length animation, which fed
-  the renders that caused the flushes — the window went blank, 0 exposed nodes.
-  Reverted, and the numbers above are what stands.
-
-  What would remove the cancel is a FLIP that animates `transform` rather than
-  `left/top/width/height`: with the layout properties untouched,
-  `offsetLeft`/`offsetWidth` answer the layout's present while the animation
-  runs, so nothing has to be cancelled to read it. That is a rewrite of a module
-  whose every rule carries a measurement, and it is not started here.
+  What is still missing is a reading for "the renderer took the request and has
+  not answered": the client's timeout is the only evidence, and it names the
+  command rather than what it is waiting on.
+- **The window does not draw at its own rate while the layout moves.** Measured
+  2026-08-17 with `layout.trace` on a quiet machine: the frame clock ran every 18
+  to 32ms rather than every 17, and one commit in a move cost 45 to 71ms on a
+  loaded one. The declaration is exact (`lag` 0) and the native layer holds what
+  it was given (0 age-corrected), so what a person sees as a page lagging its
+  pane is set by those two numbers. The scenario gate reports a case whose window
+  stalled rather than judging it — a page cannot follow a pane that jumped 160
+  points in one step — so the stall is the open item, not the surface.
