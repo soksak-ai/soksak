@@ -19,7 +19,8 @@ import { emitPathsDropped, emitPluginEvent } from "./plugins/hooks";
 import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
 import { beginLayoutMotion, endLayoutMotion } from "./lib/layoutMotion";
-import { startViewFocusSync } from "./plugins/viewFocus";
+import { startSurfaceActivationSync, startViewFocusSync } from "./plugins/viewFocus";
+import { safeListen } from "./lib/safeListen";
 import { SectionSetHost } from "./components/SectionSetHost";
 import { RailGridSurface, type RailGridSurfaceHandle } from "./components/RailGridSurface";
 import { useLayoutDecorationPresentation } from "./lib/layoutDecorationPresentation";
@@ -813,6 +814,17 @@ function App() {
   // The active workspace/space/pane/tab chain and the real keyboard focus are one contract.
   // Do not autofocus on mount; pass only the latest active view intent to the provider.
   useEffect(() => startViewFocusSync(), []);
+  // The other direction: a surface reports it was clicked and the session follows. A view on a
+  // native surface receives its own clicks and the document never sees them.
+  useEffect(
+    () => startSurfaceActivationSync((event, onLabel) =>
+      safeListen<{ label?: string }>(event, (e) => {
+        const label = e.payload?.label;
+        if (label) onLabel(label);
+      }),
+    ),
+    [],
+  );
   // Ghost hold recovery — blocks a lost mouseup from a window-activating click from spreading into a terminal drag selection.
   useEffect(() => startPointerOrderRepair(), []);
 

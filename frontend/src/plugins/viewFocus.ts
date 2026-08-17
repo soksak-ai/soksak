@@ -3,6 +3,8 @@ import type {
   PluginViewProvider,
 } from "./viewRegistry";
 import { allGroups, useSessions } from "../state/sessions";
+import { CONTENT_VIEW_EVENT } from "../lib/contentViewEvents";
+import { viewIdFromSurfaceLabel } from "../lib/surfaceLabels";
 
 interface MountedView {
   container: HTMLElement;
@@ -381,6 +383,36 @@ export function startViewFocusSync(): () => void {
     activeViewId = next;
     if (next) coordinator.requestFocus(next);
     else coordinator.clear();
+  });
+}
+
+/**
+ * The other direction: a surface reports it was clicked, and the session follows.
+ *
+ * `startViewFocusSync` takes the session's active view to the mounted views. Nothing took the
+ * reverse path, so a view drawn on a native surface — which receives its own clicks, the document never
+ * seeing them — could not become the focused one by being clicked. Measured on the running build
+ * 2026-08-17: a click inside a browser page left the focus where it was.
+ *
+ * `content-view-activated` was already the name for it in both vocabularies, with nothing emitting
+ * it and nothing subscribing. The core acts on it rather than offering it to plugins: which pane and
+ * which tab focus means is the core's, and a plugin moving focus itself would be a second rule.
+ */
+export function startSurfaceActivationSync(
+  subscribe: (event: string, onLabel: (label: string) => void) => () => void,
+): () => void {
+  return subscribe(CONTENT_VIEW_EVENT.activated, (label) => {
+    const viewId = viewIdFromSurfaceLabel(label);
+    if (!viewId) return;
+    const sessions = useSessions.getState();
+    const workspace = sessions.workspaces.find((w) => w.id === sessions.activeId);
+    if (!workspace) return;
+    const space = workspace.spaces.find((c) => c.id === workspace.activeSpaceId);
+    if (!space) return;
+    const pane = allGroups(space.layout).find((g) => g.tabs.some((v) => v.id === viewId));
+    if (!pane) return;
+    sessions.setActiveGroup(workspace.id, pane.id);
+    sessions.setActiveView(workspace.id, viewId);
   });
 }
 
