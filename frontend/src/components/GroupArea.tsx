@@ -220,12 +220,37 @@ export const GroupArea = memo(function GroupArea({
   const t = useT();
   // JS interpolation (FLIP) of command-driven rect changes — on every commit flush compares against the previous rect (layoutRectMotion).
   useRenderCost("render.panes");
-  // While the layout moves, a page steps aside and its picture travels in its place. A native
-  // surface is composited above the document, so a rail crossing a pane, a region taking its width
-  // and a card opening are all drawn under the page unless the page is away — and the picture is in
-  // the document, so it moves with the slot by the same transform, which is what moving together
-  // means when one of them is not in the document.
+  // A page moves with its pane. It steps aside only when the document has to draw where it is.
+  //
+  // The declaration follows its element every frame and the native layer holds what it was given —
+  // measured 2026-08-17, zero on both, over all six ways focus can move — so a page travelling with
+  // its pane is what this build does and what a person sees. What no motion can fix is the order: a
+  // surface is composited above the document, so a rail sweeping across a pane and a card opening
+  // over one are drawn *under* the page. Those are the two cases where the page steps aside and its
+  // picture, which is in the document, travels in its place.
+  //
+  // Parking on every motion instead would be a page that never moves at all — a still picture where
+  // there was a page, for every split, every resize, every close.
   const layoutMoving = useLayoutMotionRunning(`${projectId}/${content.id}`);
+  // Whether the rail's band is over the panes rather than beside them.
+  //
+  // A size is settled at once and only the travel is interpolated, so a region that opens takes its
+  // whole width in the render that opens it while the panes slide into place over the motion. For
+  // that stretch the band is drawn where the panes still are — and a page composited above the
+  // document covers it. The same is true of a band that changes station: it crosses them.
+  //
+  // The render that moves the band is the render that starts the motion, so a value read once the
+  // motion flag is on is already the new one. The change is latched where it happens and held until
+  // the layout is still again.
+  const lastBand = useRef({ width: railWidthPx, station: railStation });
+  const sweeping = useRef(false);
+  const bandMoved =
+    Math.abs(lastBand.current.width - railWidthPx) > 0.5
+    || Math.abs(lastBand.current.station - railStation) > 0.5;
+  lastBand.current = { width: railWidthPx, station: railStation };
+  if (bandMoved) sweeping.current = true;
+  else if (!layoutMoving) sweeping.current = false;
+  const railSweeping = sweeping.current;
   const rectMotion = useRef(createRectMotionTracker(`${projectId}/${content.id}`)).current;
   const displayLayout = solvedLayout ?? content.layout;
   const focusProjectionApplied = displayLayout !== content.layout;
@@ -393,7 +418,7 @@ export const GroupArea = memo(function GroupArea({
         const tabActive = maxCell ? v.id === maximizedId : v.id === group.activeTabId;
         commitViewVisibility(
           v.id,
-          surfaceShown(surfaceActive, true, tabActive, overlayed, traveling || layoutMoving),
+          surfaceShown(surfaceActive, true, tabActive, overlayed, traveling || railSweeping),
         );
       }
     }
@@ -909,7 +934,7 @@ export const GroupArea = memo(function GroupArea({
             view.id,
             group.activeTabId,
             overlayed,
-            traveling || layoutMoving,
+            traveling || railSweeping,
           );
           const slotRect = maxCell && shown ? FULL_RECT : rect;
           // B4 restore hydration gate — a cold view (restored but not yet visible) defers its body mount
