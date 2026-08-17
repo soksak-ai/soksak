@@ -38,6 +38,15 @@ export interface PluginViewContext {
   // Subscribes to visibility changes after mount. Read the initial state with isVisible(); only
   // subsequent changes arrive here.
   onVisibilityChange: (listener: (visible: boolean) => void) => () => void;
+  // The person interacted with this view — make it the focused one.
+  //
+  // A view drawn on a native surface receives its own clicks and the document never sees them, so
+  // clicking inside a browser page left the focus where it was (measured 2026-08-17). The view
+  // reports the fact; what focus means — which pane, which tab, what the lighting follows — stays
+  // the core's. A plugin that moved focus itself would be a second rule about it.
+  //
+  // Content placements only. A section has no tab of its own to activate.
+  requestFocus: () => void;
   // Sidebar tab badge of this view (unread marker). number = count, "dot" = dot, null = clear.
   // Per-window, since each window has its own store (based on that window's active workspace).
   // Recompute the data with app.data.watch.

@@ -124,6 +124,14 @@ export const PluginViewHost = memo(function PluginViewHost({
       visibilityListenersRef.current.add(listener);
       return () => visibilityListenersRef.current.delete(listener);
     },
+    // The person interacted with this view. The core owns what that means: the pane it is in becomes
+    // the focused one and this view becomes its active tab, which is what the lighting follows.
+    requestFocus: () => {
+      if (!viewId) return;
+      const sessions = useSessions.getState();
+      if (paneId) sessions.setActiveGroup(projectId, paneId);
+      sessions.setActiveView(projectId, viewId);
+    },
     // Tab badge for that view in this window (per-window — each window has its own store). The
     // plugin recomputes it when its data changes.
     setBadge: (badge) => useViewRegistry.getState().setViewBadge(viewKey, badge),

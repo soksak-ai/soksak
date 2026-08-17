@@ -15,6 +15,7 @@ const context = {
   restore: null,
   isVisible: () => true,
   onVisibilityChange: () => () => {},
+  requestFocus: () => {},
   setBadge: () => {},
   setStatus: () => {},
   setTitle: () => {},
