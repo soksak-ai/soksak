@@ -162,13 +162,34 @@ export async function readAlignment(): Promise<LayoutAlignment> {
   return alignmentOf(half, applied);
 }
 
-/** Every element at an address, with its box. The address is the declaration a person can already
- *  read through `ui.tree`; this answers it beside the surfaces so both are one instant. */
+/** Every element at an address **a person can see**, with its box.
+ *
+ * A window holds more than the space in front of it: another space's panes are mounted with their
+ * own rectangles, and a workspace that is not active keeps its whole plane. Counting those answers
+ * questions about a layout nobody is looking at — measured 2026-08-17, the leftmost pane in the
+ * window was one of them, sitting at x=5 through a motion in which every visible pane travelled from
+ * 5 to 165, and every seam and overlap measured against it was a number about the wrong space.
+ *
+ * The address is the declaration a person can already read through `ui.tree`; this answers it beside
+ * the surfaces so both are one instant. */
 function boxesOf(selector: string): Array<{ node: string; box: Box }> {
-  return Array.from(globalThis.document.querySelectorAll<HTMLElement>(selector)).map((element) => ({
-    node: element.dataset.node ?? "",
-    box: boxOf(element.getBoundingClientRect()),
-  }));
+  return Array.from(globalThis.document.querySelectorAll<HTMLElement>(selector))
+    .filter((element) => onScreen(element))
+    .map((element) => ({
+      node: element.dataset.node ?? "",
+      box: boxOf(element.getBoundingClientRect()),
+    }));
+}
+
+/** Whether the document draws this element at all: nothing on the way up hides it, and the workspace
+ *  plane it is in is the active one. */
+function onScreen(element: HTMLElement): boolean {
+  for (let at: HTMLElement | null = element; at; at = at.parentElement) {
+    const style = at.ownerDocument.defaultView?.getComputedStyle(at);
+    if (style?.display === "none" || style?.visibility === "hidden") return false;
+    if (at.hasAttribute("data-workspace-plane") && at.dataset.workspaceActive !== "1") return false;
+  }
+  return true;
 }
 
 /** The rectangle the last commit declared for this element, written back on the element by the
