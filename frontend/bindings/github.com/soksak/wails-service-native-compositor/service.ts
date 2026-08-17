@@ -85,6 +85,26 @@ export function Status(window: string): $CancellablePromise<$models.Receipt> {
 }
 
 /**
+ * SurfaceAt names the surface a point lands on, or "" for a point on none.
+ * 
+ * A surface is composited above the document, so a click inside one is delivered to it and the page
+ * above never sees it. Whoever needs to know which surface that was has the point and nothing else,
+ * and this service is what holds every surface's rectangle in the coordinate contract they are
+ * declared in (A2, CSS top-left). Walking the native view tree instead re-derives that fact in
+ * whatever coordinate space the walker happens to be in — measured 2026-08-17, a first attempt did
+ * exactly that and landed short by the title bar's height.
+ * 
+ * The applied rectangle, not the declared one: the point came from the screen, and what is on the
+ * screen is what the native layer applied.
+ * 
+ * Topmost wins, by layer and then by the order the inventory declared them, which is the order they
+ * are composited in. A point inside two overlapping surfaces belongs to the one a person sees.
+ */
+export function SurfaceAt(window: string, x: number, y: number): $CancellablePromise<string> {
+    return $Call.ByID(4178174910, window, x, y);
+}
+
+/**
  * Windows names every window this service has accepted a commit for, sorted.
  * 
  * A reader that has to know the window names in advance cannot sweep, and a
