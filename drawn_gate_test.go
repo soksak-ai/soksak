@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 )
@@ -59,10 +61,17 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+set, "region="+region)
 		gate.focusPluginPane(window, plugin)
 
+		// The region is drawn after a layout commit, so this waits for it rather than reading the
+		// frame the link happened to land in.
+		gate.until(5*time.Second, func() bool { return contains(gate.drawnIn(window, region), section) },
+			"the "+region+" region to draw "+section)
 		if drawn := gate.drawnIn(window, region); !contains(drawn, section) {
 			t.Errorf("%s is linked to the %s region and is not drawn there.\n"+
-				"%s holds %v. The link is a fact nobody can see.",
-				section, region, region, drawn)
+				"%s holds %v, and every node the window exposes there is:\n%s\n"+
+				"The link is a fact nobody can see.",
+				section, region, region, drawn, gate.nodesIn(window, region)+
+					"\nsections: "+gate.run("sections.list", "window="+window)+
+					"\nhealth: "+gate.run("state.health", "window="+window))
 		}
 		for _, other := range []string{"left", "right"} {
 			if other == region {
@@ -98,6 +107,19 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 	if after := gate.visibleSurfaces(window); len(after) == 0 {
 		t.Errorf("the manager closed and no surface came back.\ncomposition: %s",
 			gate.run("surface.composition", "window="+window))
+	}
+
+	// A link that changes the layout moves panes, and a motion that never plays is a jump.
+	//
+	// Measured 2026-08-17: `ui.motion` held 64 journeys and every one ended `cancel` 10–13ms after
+	// it started, with nothing running. The rect tracker was flushed on every render, and a flush
+	// cancels the running interpolation before measuring — after which the element is already at
+	// its destination, so nothing new starts. A cancelled journey is not a fault by itself: a second
+	// command mid-motion retargets the first. A window where none has ever finished has no motion.
+	if finished, cancelled := gate.journeys(window); finished == 0 && cancelled > 0 {
+		t.Errorf("%d layout journeys ran and not one finished — every pane jumped to its place.\n"+
+			"The rect tracker flushes once per layout commit; a flush per render ends them all.",
+			cancelled)
 	}
 
 	if tested < 2 {
@@ -274,6 +296,64 @@ func (gate *drawnGate) visibleSurfaces(window string) []string {
 		}
 	}
 	return found
+}
+
+// nodesIn is every node the window exposes inside a region, with its box. A gate that reports
+// "not drawn" without them sends its reader back to the window to find out what was there.
+func (gate *drawnGate) nodesIn(window string, region string) string {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Nodes []struct {
+				Address string `json:"address"`
+				Rect    struct {
+					W float64 `json:"w"`
+					H float64 `json:"h"`
+				} `json:"rect"`
+			} `json:"nodes"`
+		} `json:"data"`
+	}
+	out := gate.run("ui.snapshot.dom", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("ui.snapshot.dom: %v\n%s", err, out)
+	}
+	var lines []string
+	for _, node := range answer.Data.Nodes {
+		m := drawnAddress.FindStringSubmatch(node.Address)
+		if m == nil || m[1] != region {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("  %s  %gx%g", node.Address, node.Rect.W, node.Rect.H))
+	}
+	if len(lines) == 0 {
+		return "  (the window exposes no node in that region at all)"
+	}
+	return strings.Join(lines, "\n")
+}
+
+// journeys counts how the window's layout motions ended.
+func (gate *drawnGate) journeys(window string) (finished int, cancelled int) {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Journeys []struct {
+				End string `json:"end"`
+			} `json:"journeys"`
+		} `json:"data"`
+	}
+	out := gate.run("ui.motion", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("ui.motion: %v\n%s", err, out)
+	}
+	for _, journey := range answer.Data.Journeys {
+		switch journey.End {
+		case "finish":
+			finished++
+		case "cancel":
+			cancelled++
+		}
+	}
+	return finished, cancelled
 }
 
 func contains(list []string, want string) bool {

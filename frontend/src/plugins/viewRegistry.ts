@@ -54,8 +54,10 @@ export interface PluginViewContext {
   // was focused or not, while the CSS above it stated that it painted "over a native child outside
   // the document". A view drawn on a surface applies `dim` to the surface's own alpha.
   presentation: () => ViewPresentation;
-  // Subscribes to presentation changes after mount. Read the initial value with `presentation()`;
-  // only subsequent changes arrive here.
+  // Subscribes to how this view is presented. The current value arrives immediately, then every
+  // change: a view that read the value and subscribed a line later missed anything that happened
+  // between the two, and its surface then stayed as it was — measured 2026-08-17, a browser surface
+  // stayed visible over an open modal on 1 run in 3.
   onPresentationChange: (listener: (presentation: ViewPresentation) => void) => () => void;
   // The person interacted with this view — make it the focused one.
   //

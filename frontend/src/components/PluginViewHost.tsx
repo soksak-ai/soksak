@@ -129,6 +129,9 @@ export const PluginViewHost = memo(function PluginViewHost({
     presentation: () => presentationRef.current,
     onPresentationChange: (listener) => {
       presentationListenersRef.current.add(listener);
+      // The current value first, so a view that subscribes after a change still has it. Reading it
+      // separately and subscribing a line later leaves exactly that gap.
+      listener(presentationRef.current);
       return () => presentationListenersRef.current.delete(listener);
     },
     // The person interacted with this view. The core owns what that means: the pane it is in becomes
