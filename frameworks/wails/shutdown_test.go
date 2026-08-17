@@ -67,11 +67,11 @@ func TestThePrepareReceiptSaysWhatItReaped(t *testing.T) {
 	receipt := receiptOf(t, registry)
 
 	for key, want := range map[string]any{
-		"phase":            "reaped",
-		"reaped":           true,
-		"localPtysReaped":  float64(3),
+		"phase":                 "reaped",
+		"reaped":                true,
+		"localPtysReaped":       float64(3),
 		"nativeSurfacesDrained": float64(4),
-		"nativeRemaining":  float64(0),
+		"nativeRemaining":       float64(0),
 	} {
 		if receipt[key] != want {
 			t.Errorf("receipt[%q] = %v, want %v", key, receipt[key], want)

@@ -139,6 +139,14 @@ type WindowHost interface {
 	Place(name string, frame Frame) error
 	Focus(name string) error
 	Reload(name string) error
+	// OpenInspector opens the window's own developer tools.
+	//
+	// Every rule about a rectangle here is checked against a number, and on 2026-08-17 every number
+	// agreed while the screen did not — the surface's declared rect equalled its element to the
+	// tenth of a point and the compositor's drift was zero, and a page still sat off its pane. When
+	// the readings agree and the screen does not, the next question is about the document, and
+	// nothing in this build could open it.
+	OpenInspector(name string) error
 	Close(name string) error
 	// ActivateApplication brings this application forward. It takes no window:
 	// activation is the application's business, and requiring a window here is

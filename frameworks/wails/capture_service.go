@@ -41,7 +41,6 @@ type CaptureService struct {
 	occlusion func(window unsafe.Pointer, enabled bool) int
 }
 
-
 func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureService {
 	return &CaptureService{
 		name:      name,
@@ -59,8 +58,6 @@ func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureServic
 type CaptureNote struct {
 	Path string `json:"path"`
 }
-
-
 
 func (service *CaptureService) ServiceName() string { return "soksak-capture" }
 

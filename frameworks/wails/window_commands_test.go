@@ -200,6 +200,14 @@ func (h *fakeHost) Focus(name string) error {
 	return nil
 }
 
+func (h *fakeHost) OpenInspector(name string) error {
+	if h.find(name) == nil {
+		return fmt.Errorf("no window %s", name)
+	}
+	h.note("devtools %s", name)
+	return nil
+}
+
 func (h *fakeHost) Reload(name string) error {
 	h.note("reload %s", name)
 	return nil

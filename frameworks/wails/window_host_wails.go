@@ -297,6 +297,21 @@ func (h *wailsHost) Reload(name string) error {
 	return nil
 }
 
+func (h *wailsHost) OpenInspector(name string) error {
+	window, addressable := h.live(name)
+	if !addressable {
+		return i18n.Errorf("wails.host.cannotInspect", map[string]string{"window": name})
+	}
+	if !inspectorAvailable {
+		// Refused by name rather than answered with nothing: under `production` without `devtools`
+		// the framework's own call is an empty function, so the inspector never opens and the
+		// caller is told it did.
+		return i18n.Errorf("wails.host.noInspector", nil)
+	}
+	window.OpenDevTools()
+	return nil
+}
+
 func (h *wailsHost) Close(name string) error {
 	window, addressable := h.live(name)
 	if !addressable {

@@ -86,6 +86,19 @@ func Register(registry *control.Registry, deps Deps) {
 		return nil, deps.Host.Focus(name)
 	})
 
+	command("window_devtools", func(args control.Args) (any, error) {
+		name, err := targetWindow(deps.Host, args)
+		if err != nil {
+			return nil, err
+		}
+		if err := deps.Host.OpenInspector(name); err != nil {
+			return nil, err
+		}
+		// The window the inspector opens is the operating system's and this process never sees it,
+		// so the answer states what was asked and of which window — not that it appeared.
+		return map[string]any{"window": name, "asked": true}, nil
+	})
+
 	command("window_activate", func(args control.Args) (any, error) {
 		if err := requireStarted(deps.Host); err != nil {
 			return nil, err

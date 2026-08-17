@@ -40,7 +40,12 @@ tasks:
     cmds:
       - go build {{.BUILD_FLAGS}} -o {{.OUTPUT}}
     vars:
-      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
+      # `devtools` rides with `production`: the framework compiles its inspector away under
+      # `production` alone, and `window_devtools` then answers OK while nothing opens. Every rule
+      # about a rectangle in this build is checked against a number, and on 2026-08-17 every number
+      # agreed while the screen did not — the document itself was the next question and no build
+      # could open it. A build that refuses by name is honest; a build that can answer is useful.
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags "production devtools" -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
     env:

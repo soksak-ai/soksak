@@ -96,4 +96,3 @@ func TestACompositionIsTheWindowsOwn(t *testing.T) {
 		t.Fatalf("main's composition must hold its own one surface: %+v", orchestrator.Placements)
 	}
 }
-

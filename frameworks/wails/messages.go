@@ -220,6 +220,14 @@ func init() {
 			EN: "window {window} cannot be reloaded; it has no native lifetime",
 			KO: "창 {window} 을(를) 다시 불러올 수 없습니다 — 네이티브 수명이 없습니다",
 		},
+		"wails.host.cannotInspect": {
+			EN: "window {window} has no inspector; it has no native lifetime",
+			KO: "창 {window} 에는 검사기가 없습니다 — 네이티브 수명이 없습니다",
+		},
+		"wails.host.noInspector": {
+			EN: "this build has no inspector — build with the devtools tag",
+			KO: "이 빌드에는 검사기가 없습니다 — devtools 태그로 빌드하십시오",
+		},
 		"wails.host.cannotClose": {
 			EN: "window {window} cannot be closed; it has no native lifetime",
 			KO: "창 {window} 을(를) 닫을 수 없습니다 — 네이티브 수명이 없습니다",
