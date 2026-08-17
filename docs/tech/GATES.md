@@ -32,12 +32,37 @@ contract is in its own canonical document, linked below.
 | `sok ui.tree` | every reachable node carries `data-node` |
 | `sok window.snapshot` | writes a PNG without taking focus |
 | `task verify:drawn` | what a link names is what the window draws, and an open modal leaves no surface above it |
+| `task verify:arrangement` | each of the nine ways focus moves between three panes leaves the window it is meant to |
 
 Contracts: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`CONTROL-PROTOCOL.md`](CONTROL-PROTOCOL.md),
 [`MESSAGE-PROTOCOL.md`](MESSAGE-PROTOCOL.md), [`NAMING.md`](NAMING.md),
 [`IDENTITY.md`](IDENTITY.md), [`REPO-LAYOUT.md`](REPO-LAYOUT.md),
 [`PLUGIN-CONTRACT.md`](PLUGIN-CONTRACT.md), [`SIDECARS.md`](SIDECARS.md),
 [`NATIVE-LAYER.md`](NATIVE-LAYER.md), [`I18N.md`](I18N.md), [`UI-GEOMETRY.md`](UI-GEOMETRY.md).
+
+## G0a — the arrangement, before anything is measured about it
+
+Every other question about a layout — how long a motion takes, whether a page
+travels with its pane, whether a frame blinks — is a question about a window that
+is already the right window. None of them was asked first, and on 2026-08-17 a
+person looked at a window these gates had left and said the sidebar was gone,
+while every reading passed.
+
+So the window is stated before it is measured, and each of the nine ways focus can
+move between its three panes is a test of its own, run by name. What it refuses:
+
+| Judged by | Answered 2026-08-18 |
+| --- | --- |
+| the section standing | the one linked to the focused view's plugin, by key, read off the screen |
+| where the sidebar stands | to the left of the view that was clicked, an inset away, nearer it than anything behind |
+| the band it holds | the panes' band — it held 45..617 where the panes held 87..612 |
+| what it looks like | the same card as the view it stands against: rgb(14,15,21) beside rgb(21,22,30) failed |
+| the three panes | the shape they were built in, whatever the sidebar does |
+| every address | one node each — both regions had written their cells under the same name |
+| the evidence | a picture per case, kept from the recording of that case |
+
+Each of those was added the day a person saw what the gate did not ask. Held by
+`arrangement_gate_test.go`.
 
 ## G1 — one terminal
 
