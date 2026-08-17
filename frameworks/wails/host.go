@@ -96,6 +96,11 @@ func Run(options Options) error {
 	// One reader of the last commit, shared by the surface commands and the capture. Two would
 	// answer from two moments, and the capture would draw a page at a rectangle the numbers say it
 	// is not at.
+	// Which surface a point landed on. The plugin sees the click and holds the window handles; the
+	// compositor holds every applied rectangle in the contract they are declared in. Neither answers
+	// alone, and a plugin deciding it would re-derive the rectangles in its own coordinate space.
+	nativebrowser.ReadSurfacesWith(nativeCompositor.SurfaceAt)
+
 	surfaceComposition := NewCompositorSource(nativeCompositor)
 
 	app := application.New(application.Options{
