@@ -4,12 +4,12 @@
 // Change watching (clipboard-change emit) is a plugin subscription via app.clipboard.onChange — a stream, not a command surface.
 
 import { invoke } from "../framework";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { register } from "./registry";
 
 export function registerClipboardCatalog(): void {
   register("clipboard.read", {
-    description: tmsg("cmd.clipboard.read.desc"),
+    description: key("cmd.clipboard.read.desc"),
     triggers: { ko: "클립보드 읽기 복사내용 붙여넣기확인" },
     params: {},
     // The answer is home-wide, not per-window — same in every window (registry.ts windowScoped).
@@ -25,7 +25,7 @@ export function registerClipboardCatalog(): void {
   });
 
   register("clipboard.write", {
-    description: tmsg("cmd.clipboard.write.desc"),
+    description: key("cmd.clipboard.write.desc"),
     triggers: { ko: "클립보드 쓰기 복사 클립보드저장" },
     params: {
       text: { type: "string", description: "Text to place in the clipboard", required: true },

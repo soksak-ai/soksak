@@ -6,7 +6,7 @@
 // authority (remote::confirm). Not a phone bypass: reachable only in a desktop dev build. Classified danger:"inject", so it also passes the remote policy gate.
 import { moduleState } from "../lib/moduleState";
 import { register } from "./registry";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { useRemoteConfirm } from "../state/remoteConfirm";
 
 // Outside the hot-swap boundary — if these values are replaced, the "already done" record, the lazy init
@@ -20,24 +20,24 @@ export function registerRemoteConfirmDevCatalog(): void {
   if (!import.meta.env.DEV) return;
 
   register("dev.remoteConfirmMock", {
-    description: tmsg("cmd.dev.remoteConfirmMock.desc"),
+    description: key("cmd.dev.remoteConfirmMock.desc"),
     triggers: { ko: "원격 confirm mock 데스크톱 confirm 테스트 모달" },
     params: {
       device_id: {
         type: "string",
-        description: tmsg("cmd.dev.remoteConfirmMock.param.deviceId"),
+        description: key("cmd.dev.remoteConfirmMock.param.deviceId"),
       },
       command: {
         type: "string",
-        description: tmsg("cmd.dev.remoteConfirmMock.param.command"),
+        description: key("cmd.dev.remoteConfirmMock.param.command"),
       },
       params: {
         type: "string",
-        description: tmsg("cmd.dev.remoteConfirmMock.param.params"),
+        description: key("cmd.dev.remoteConfirmMock.param.params"),
       },
       ttl_secs: {
         type: "number",
-        description: tmsg("cmd.dev.remoteConfirmMock.param.ttlSecs"),
+        description: key("cmd.dev.remoteConfirmMock.param.ttlSecs"),
       },
     },
     returns: "{ request_id }",

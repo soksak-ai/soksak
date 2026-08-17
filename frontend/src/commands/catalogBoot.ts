@@ -1,4 +1,4 @@
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { useBootPhase } from "../state/bootPhase";
 import { awaitBootReady } from "../state/bootReady";
 import { awaitCommandHostReady } from "./executor";
@@ -6,7 +6,7 @@ import { register } from "./registry";
 
 export function registerBootCatalog(): void {
   register("app.boot.status", {
-    description: tmsg("cmd.app.boot.status.desc"),
+    description: key("cmd.app.boot.status.desc"),
     triggers: { ko: "앱 부트 준비 상태 위상" },
     params: {},
     returns: "{ phase: 'restoring'|'activating'|'ready' }",

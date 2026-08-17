@@ -11,17 +11,17 @@
 
 import { invoke } from "../framework";
 import { register } from "./registry";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 
 const NS_PARAM = {
   type: "string",
-  description: tmsg("cmd.secret.param.ns"),
+  description: key("cmd.secret.param.ns"),
   required: true,
 } as const;
 
 const KEY_PARAM = {
   type: "string",
-  description: tmsg("cmd.secret.param.key"),
+  description: key("cmd.secret.param.key"),
   required: true,
 } as const;
 
@@ -88,7 +88,7 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.has", {
-    description: tmsg("cmd.secret.has.desc"),
+    description: key("cmd.secret.has.desc"),
     triggers: { ko: "시크릿 존재 확인 있는지 has 체크" },
     params: { ns: NS_PARAM, key: KEY_PARAM },
     // The answer comes from the owner — identical whichever window runs it (registry.ts windowScoped).
@@ -107,7 +107,7 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.keys", {
-    description: tmsg("cmd.secret.keys.desc"),
+    description: key("cmd.secret.keys.desc"),
     triggers: { ko: "시크릿 목록 키 리스트 조회" },
     params: { ns: NS_PARAM },
     // The answer comes from the owner — identical whichever window runs it (registry.ts windowScoped).
@@ -126,7 +126,7 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.remove", {
-    description: tmsg("cmd.secret.remove.desc"),
+    description: key("cmd.secret.remove.desc"),
     triggers: { ko: "시크릿 삭제 제거 지우기 delete" },
     params: { ns: NS_PARAM, key: KEY_PARAM },
     returns: "{ removed }",

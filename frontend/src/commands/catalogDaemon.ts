@@ -6,7 +6,7 @@
 // path blocked).
 import { invoke } from "../framework";
 import { register, type CommandContext, type CommandHint } from "./registry";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { useSessions } from "../state/sessions";
 import { parseProcfile, removeEntry, upsertEntry, type ProcfileEntry } from "../lib/procfile";
 
@@ -271,7 +271,7 @@ export function registerDaemonCatalog(): void {
   });
 
   register("daemon.restart", {
-    description: tmsg("cmd.daemon.restart.desc"),
+    description: key("cmd.daemon.restart.desc"),
     triggers: { ko: "데몬 재시작" },
     params: { name: P.name, workspace: P.workspace },
     returns: "{ projectId, name, pid }",

@@ -7,7 +7,7 @@
 
 import { invoke } from "../framework";
 import { register, type CommandBrokerSpec, type CommandMachineObjectSchema } from "./registry";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 
 // The four kv commands are the only durable path for a native runtime plugin — broker opens the plugin call.
 const kvBroker = (
@@ -22,13 +22,13 @@ const kvBroker = (
 
 const NS_PARAM = {
   type: "string",
-  description: tmsg("cmd.data.param.ns"),
+  description: key("cmd.data.param.ns"),
   required: true,
 } as const;
 
 const COLL_PARAM = {
   type: "string",
-  description: tmsg("cmd.data.param.collection"),
+  description: key("cmd.data.param.collection"),
   required: true,
 } as const;
 
@@ -37,7 +37,7 @@ const KV_BATCH_MAX = 4_096;
 export function registerDataCatalog(): void {
   // kv public surface — the only durable path for a native runtime plugin (see file header). ns is required.
   register("data.kv.get", {
-    description: tmsg("cmd.data.kv.get.desc"),
+    description: key("cmd.data.kv.get.desc"),
     triggers: { ko: "키값 조회" },
     params: {
       ns: NS_PARAM,
@@ -96,7 +96,7 @@ export function registerDataCatalog(): void {
   });
 
   register("data.kv.delete", {
-    description: tmsg("cmd.data.kv.delete.desc"),
+    description: key("cmd.data.kv.delete.desc"),
     triggers: { ko: "키값 삭제" },
     params: {
       ns: NS_PARAM,
@@ -129,7 +129,7 @@ export function registerDataCatalog(): void {
   });
 
   register("data.kv.keys", {
-    description: tmsg("cmd.data.kv.keys.desc"),
+    description: key("cmd.data.kv.keys.desc"),
     triggers: { ko: "키 목록" },
     params: {
       ns: NS_PARAM,

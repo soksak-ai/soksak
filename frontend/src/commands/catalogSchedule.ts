@@ -4,7 +4,7 @@
 // Core holds no persistence — plugins store their own schedules and re-arm on activate.
 
 import { invoke } from "../framework";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { register } from "./registry";
 
 export function registerScheduleCatalog(): void {
@@ -104,7 +104,7 @@ export function registerScheduleCatalog(): void {
   });
 
   register("schedule.cancel", {
-    description: tmsg("cmd.schedule.cancel.desc"),
+    description: key("cmd.schedule.cancel.desc"),
     triggers: { ko: "스케줄 취소 삭제 예약취소 cancel" },
     params: { id: { type: "string", description: "Schedule id issued by schedule.set", required: true } },
     // The answer is home-wide, not per-window — same in every window (registry.ts windowScoped).

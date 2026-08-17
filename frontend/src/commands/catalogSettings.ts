@@ -12,7 +12,7 @@
 import { invoke, frameworkPath } from "../framework";
 import { recordWindowFrames } from "./windowRecorder";
 import { suggestLayout, type MonitorFact, type WindowFact } from "../lib/layoutSuggest";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { register } from "./registry";
 import { notFound } from "./refuse";
 import { serialize, useSettings } from "../state/settings";
@@ -42,7 +42,7 @@ export function registerSettingsCatalog(): void {
   ] as const;
 
   register("settings.get", {
-    description: tmsg("cmd.settings.get.desc"),
+    description: key("cmd.settings.get.desc"),
     triggers: { ko: "설정 확인 앱 설정 조회 환경설정" },
     params: {},
     returns: "{ <every persisted setting>, iconSets[], theme, themeMode }",
@@ -73,7 +73,7 @@ export function registerSettingsCatalog(): void {
     params: {
       key: {
         type: "string",
-        description: tmsg("cmd.settings.set.param.key"),
+        description: key("cmd.settings.set.param.key"),
         enum: SETTING_KEYS,
         required: true,
       },
@@ -194,7 +194,7 @@ export function registerSettingsCatalog(): void {
     params: {
       strategy: {
         type: "string",
-        description: tmsg("cmd.layout.suggest.param.strategy"),
+        description: key("cmd.layout.suggest.param.strategy"),
         enum: ["spread", "grid"],
         default: "spread",
       },
@@ -233,11 +233,11 @@ export function registerSettingsCatalog(): void {
     params: {
       since: {
         type: "number",
-        description: tmsg("cmd.activity.recent.param.since"),
+        description: key("cmd.activity.recent.param.since"),
       },
       limit: {
         type: "number",
-        description: tmsg("cmd.activity.recent.param.limit"),
+        description: key("cmd.activity.recent.param.limit"),
         default: 200,
       },
     },
@@ -271,30 +271,30 @@ export function registerSettingsCatalog(): void {
     params: {
       theme: {
         type: "string",
-        description: tmsg("cmd.window.themeScan.param.theme"),
+        description: key("cmd.window.themeScan.param.theme"),
       },
       from: {
         type: "string",
-        description: tmsg("cmd.window.themeScan.param.from"),
+        description: key("cmd.window.themeScan.param.from"),
         enum: ["light", "dark"],
       },
       to: {
         type: "string",
-        description: tmsg("cmd.window.themeScan.param.to"),
+        description: key("cmd.window.themeScan.param.to"),
         enum: ["light", "dark"],
       },
       frames: { type: "number", description: "Frames to capture (default 40)" },
       intervalMs: {
         type: "number",
-        description: tmsg("cmd.window.themeScan.param.intervalMs"),
+        description: key("cmd.window.themeScan.param.intervalMs"),
       },
       applyAtMs: {
         type: "number",
-        description: tmsg("cmd.window.themeScan.param.applyAtMs"),
+        description: key("cmd.window.themeScan.param.applyAtMs"),
       },
       settleMs: {
         type: "number",
-        description: tmsg("cmd.window.themeScan.param.settleMs"),
+        description: key("cmd.window.themeScan.param.settleMs"),
       },
       skipCapture: {
         type: "boolean",
@@ -484,7 +484,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("theme.apply", {
-    description: tmsg("cmd.theme.apply.desc"),
+    description: key("cmd.theme.apply.desc"),
     triggers: { ko: "테마 적용 테마 바꾸기 다크 모드 라이트 모드 색 테마" },
     params: {
       name: { type: "string", description: "Theme name (see theme.list)", required: true },
@@ -504,7 +504,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("theme.reload", {
-    description: tmsg("cmd.theme.reload.desc"),
+    description: key("cmd.theme.reload.desc"),
     triggers: { ko: "테마 새로고침 테마 리로드 외부 테마 재스캔" },
     params: {},
     returns: "{ count, rejected }",
@@ -518,7 +518,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("theme.install", {
-    description: tmsg("cmd.theme.install.desc"),
+    description: key("cmd.theme.install.desc"),
     triggers: { ko: "테마 설치 테마 추가 외부 테마 설치" },
     params: {
       path: { type: "string", description: "Absolute path to theme .json file", required: true },

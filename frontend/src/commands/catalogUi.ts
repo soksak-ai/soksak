@@ -3,7 +3,7 @@
 // The red→green button: one `sok ui.validate` line is the RED/GREEN verdict.
 // (ui.measure is in catalog.ts — R5 numeric checks. This file is §B contract only.)
 
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { expectForSelector, validateDom } from "../ui/borderValidate";
 import { register } from "./registry";
 
@@ -15,7 +15,7 @@ export function registerUiCatalog(): void {
     params: {
       rule: {
         type: "string",
-        description: tmsg("cmd.ui.validate.param.rule"),
+        description: key("cmd.ui.validate.param.rule"),
       },
     },
     returns: "{ pass, rulesActive, elementsChecked, violations: [{rule, selector, index, edge, expected, actual}] }",

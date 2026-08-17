@@ -6,7 +6,7 @@
 // one surface AI/E2E read directly.
 
 import { invoke } from "../framework";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { register } from "./registry";
 
 export function registerServiceCatalog(): void {
@@ -18,7 +18,7 @@ export function registerServiceCatalog(): void {
       plugin: {
         type: "string",
         required: false,
-        description: tmsg("cmd.service.status.param.plugin"),
+        description: key("cmd.service.status.param.plugin"),
       },
     },
     // The owner produces the answer — identical in every window (registry.ts windowScoped).

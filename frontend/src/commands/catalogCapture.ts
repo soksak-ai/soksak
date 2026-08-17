@@ -6,7 +6,7 @@
 // outside.
 
 import { invoke, frameworkPath } from "../framework";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { settleAnimationsForCapture } from "./captureSettle";
 import { contentViewHost, hasContentViewHost } from "../lib/contentViews";
 import { isLayoutMotionActive, onLayoutMotion } from "../lib/layoutMotion";
@@ -316,7 +316,7 @@ export function registerCaptureCatalog(): void {
     params: {
       anchors: {
         type: "json",
-        description: tmsg("cmd.capture.motion-anchors.param.anchors"),
+        description: key("cmd.capture.motion-anchors.param.anchors"),
         required: true,
       },
     },
@@ -355,11 +355,11 @@ export function registerCaptureCatalog(): void {
     params: {
       path: {
         type: "string",
-        description: tmsg("cmd.window.snapshot.param.path"),
+        description: key("cmd.window.snapshot.param.path"),
       },
       base64: {
         type: "boolean",
-        description: tmsg("cmd.window.snapshot.param.base64"),
+        description: key("cmd.window.snapshot.param.base64"),
       },
       rect: {
         type: "json",
@@ -518,7 +518,7 @@ export function registerCaptureCatalog(): void {
       },
       node: {
         type: "string",
-        description: tmsg("cmd.window.pixels.param.node"),
+        description: key("cmd.window.pixels.param.node"),
       },
       tab: {
         type: "string",
@@ -564,7 +564,7 @@ export function registerCaptureCatalog(): void {
     params: {
       dir: {
         type: "string",
-        description: tmsg("cmd.window.record.param.dir"),
+        description: key("cmd.window.record.param.dir"),
         required: true,
       },
       frames: {

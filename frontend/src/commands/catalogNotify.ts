@@ -5,7 +5,7 @@
 // fills that slot (core deeplink.rs on_open_url).
 
 import { invoke } from "../framework";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { register } from "./registry";
 
 export function registerNotifyCatalog(): void {
@@ -18,7 +18,7 @@ export function registerNotifyCatalog(): void {
       body: { type: "string", description: "Notification body text", required: true },
       deepLink: {
         type: "string",
-        description: tmsg("cmd.notify.show.param.deepLink"),
+        description: key("cmd.notify.show.param.deepLink"),
         required: false,
       },
     },

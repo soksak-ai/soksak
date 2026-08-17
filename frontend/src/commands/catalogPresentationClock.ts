@@ -1,4 +1,4 @@
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { PRESENTATION_CLOCK, presentationNowUnixMs } from "../lib/presentationClock";
 import { register } from "./registry";
 
@@ -13,7 +13,7 @@ export function registerPresentationClockCatalog(): void {
     params: {
       traceId: {
         type: "string",
-        description: tmsg("cmd.presentation.clock.acknowledge.param.traceId"),
+        description: key("cmd.presentation.clock.acknowledge.param.traceId"),
         required: true,
       },
     },

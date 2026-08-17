@@ -14,7 +14,7 @@ import { registerWindowCatalog } from "./catalogWindow";
 import { invoke, frameworkPath } from "../framework";
 import { recordWindowFrames } from "./windowRecorder";
 import { tabIconOf } from "../lib/tabIcon";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { computeSplitLayout } from "../lib/splitLayout";
 import { railJournal } from "../lib/railJournal";
 import { fingerprintOf } from "./stateFingerprint";
@@ -496,16 +496,16 @@ export const P = {
    */
   windowLabel: {
     type: "string",
-    description: tmsg("cmd.param.windowLabel"),
+    description: key("cmd.param.windowLabel"),
   },
   workspace: {
     type: "string",
-    description: tmsg("cmd.param.workspace"),
+    description: key("cmd.param.workspace"),
   },
   space: { type: "string", description: "Target space tab id" },
   pane: {
     type: "string",
-    description: tmsg("cmd.param.pane"),
+    description: key("cmd.param.pane"),
   },
   /**
    * Tab axis — one axis has one name. Two names for the same id space make the caller guess which to
@@ -514,7 +514,7 @@ export const P = {
    */
   tab: {
     type: "string",
-    description: tmsg("cmd.param.tab"),
+    description: key("cmd.param.tab"),
   },
   program: {
     type: "string",
@@ -523,7 +523,7 @@ export const P = {
   },
   side: {
     type: "string",
-    description: tmsg("cmd.param.side"),
+    description: key("cmd.param.side"),
     enum: ["left", "right", "top", "bottom"],
   },
   edge: {
@@ -534,7 +534,7 @@ export const P = {
   },
   zone: {
     type: "string",
-    description: tmsg("cmd.param.zone"),
+    description: key("cmd.param.zone"),
     enum: ["center", "left", "right", "top", "bottom"],
   },
 } satisfies Record<string, import("./registry").ParamSpec>;
@@ -804,17 +804,17 @@ export function registerCatalog(): void {
     params: {
       causeTraceId: {
         type: "string",
-        description: tmsg("cmd.layout.transaction.wait.param.causeTraceId"),
+        description: key("cmd.layout.transaction.wait.param.causeTraceId"),
         required: true,
       },
       afterSequence: {
         type: "number",
-        description: tmsg("cmd.layout.transaction.wait.param.afterSequence"),
+        description: key("cmd.layout.transaction.wait.param.afterSequence"),
         required: true,
       },
       timeoutMs: {
         type: "number",
-        description: tmsg("cmd.layout.transaction.wait.param.timeoutMs"),
+        description: key("cmd.layout.transaction.wait.param.timeoutMs"),
         required: true,
       },
     },
@@ -831,7 +831,7 @@ export function registerCatalog(): void {
   });
 
   register("state.commands", {
-    description: tmsg("cmd.state.commands.desc"),
+    description: key("cmd.state.commands.desc"),
     params: {},
     returns: "{ commands: [{name,description,params,returns,errors,examples}] }",
     message: (d) => tmsg("msg.state.commands", { n: ((d.commands as unknown[]) ?? []).length }),
@@ -873,7 +873,7 @@ export function registerCatalog(): void {
 
   // ----- workspace -----
   register("workspace.list", {
-    description: tmsg("cmd.workspace.list.desc"),
+    description: key("cmd.workspace.list.desc"),
     triggers: { ko: "워크스페이스 목록 워크스페이스 리스트 열린 워크스페이스" },
     params: {},
     returns: "{ workspaces: [{id,title,root,active}] }",
@@ -1016,7 +1016,7 @@ export function registerCatalog(): void {
 
   register("workspace.close", {
     danger: "destructive",
-    description: tmsg("cmd.workspace.close.desc"),
+    description: key("cmd.workspace.close.desc"),
     triggers: { ko: "워크스페이스 닫기 워크스페이스 제거" },
     params: { workspace: { ...P.workspace, required: true } },
     returns: "{ activeProjectId }",
@@ -1028,7 +1028,7 @@ export function registerCatalog(): void {
   });
 
   register("workspace.activate", {
-    description: tmsg("cmd.workspace.activate.desc"),
+    description: key("cmd.workspace.activate.desc"),
     triggers: { ko: "워크스페이스 전환 워크스페이스 바꾸기 이동" },
     params: { workspace: { ...P.workspace, required: true } },
     returns: "{}",
@@ -1039,7 +1039,7 @@ export function registerCatalog(): void {
   });
 
   register("workspace.rename", {
-    description: tmsg("cmd.workspace.rename.desc"),
+    description: key("cmd.workspace.rename.desc"),
     triggers: { ko: "워크스페이스 이름 바꾸기 이름 변경 워크스페이스 제목" },
     params: {
       workspace: { ...P.workspace, required: true },
@@ -1056,13 +1056,13 @@ export function registerCatalog(): void {
   });
 
   register("workspace.color", {
-    description: tmsg("cmd.workspace.color.desc"),
+    description: key("cmd.workspace.color.desc"),
     triggers: { ko: "워크스페이스 색 색상 탭 색깔" },
     params: {
       workspace: { ...P.workspace, required: true },
       color: {
         type: "string",
-        description: tmsg("cmd.workspace.color.param.color"),
+        description: key("cmd.workspace.color.param.color"),
       },
     },
     returns: "{ projectId }",
@@ -1101,17 +1101,17 @@ export function registerCatalog(): void {
   });
 
   register("workspace.region.toggle", {
-    description: tmsg("cmd.workspace.region.toggle.desc"),
+    description: key("cmd.workspace.region.toggle.desc"),
     triggers: { ko: "사이드바 영역 열기 닫기 토글 좌측 우측" },
     params: {
       workspace: P.workspace,
       region: {
         type: "string",
         enum: ["left", "right"],
-        description: tmsg("cmd.sidebar.param.region"),
+        description: key("cmd.sidebar.param.region"),
         required: true,
       },
-      open: { type: "boolean", description: tmsg("cmd.workspace.region.toggle.param.open") },
+      open: { type: "boolean", description: key("cmd.workspace.region.toggle.param.open") },
     },
     returns: "{ projectId, region, open }",
     message: (d) =>
@@ -1176,7 +1176,7 @@ export function registerCatalog(): void {
   // A rail tab label attaches to the view kind (viewKey) — not to one content tab, but to the tab slot
   // for that kind. So the axis of these two commands is viewKey, not tab id, and the name follows.
   register("tab.label.set", {
-    description: tmsg("cmd.tab.label.set.desc"),
+    description: key("cmd.tab.label.set.desc"),
     triggers: { ko: "사이드바 탭 이름변경 라벨 뷰 제목 변경" },
     params: {
       viewKey: { type: "string", description: "viewKey '<pluginId>.<viewId>'", required: true },
@@ -1253,7 +1253,7 @@ export function registerCatalog(): void {
       region: {
         type: "string",
         enum: ["left", "right"],
-        description: tmsg("cmd.sidebar.param.region"),
+        description: key("cmd.sidebar.param.region"),
         required: true,
       },
     },
@@ -1279,7 +1279,7 @@ export function registerCatalog(): void {
       workspace: P.workspace,
       mode: {
         type: "string",
-        description: tmsg("cmd.sidebar.left.position.param.mode"),
+        description: key("cmd.sidebar.left.position.param.mode"),
         enum: ["flow", "pin"],
       },
       station: {
@@ -1369,14 +1369,14 @@ export function registerCatalog(): void {
       region: {
         type: "string",
         enum: ["left", "right"],
-        description: tmsg("cmd.sidebar.param.region"),
+        description: key("cmd.sidebar.param.region"),
         required: true,
       },
       viewKey: { type: "string", description: "viewKey to move", required: true },
       target: { type: "string", description: "target viewKey (a view in the target group)", required: true },
       zone: {
         type: "string",
-        description: tmsg("cmd.sidebar.move.param.zone"),
+        description: key("cmd.sidebar.move.param.zone"),
         enum: ["into", "left", "right", "top", "bottom"],
         required: true,
       },
@@ -1415,12 +1415,12 @@ export function registerCatalog(): void {
       region: {
         type: "string",
         enum: ["left", "right"],
-        description: tmsg("cmd.sidebar.param.region"),
+        description: key("cmd.sidebar.param.region"),
         required: true,
       },
       viewKey: {
         type: "string",
-        description: tmsg("cmd.sidebar.resize.param.viewKey"),
+        description: key("cmd.sidebar.resize.param.viewKey"),
         required: true,
       },
       sizes: { type: "number[]", description: "Ratio per child, sum 1", required: true },
@@ -1448,7 +1448,7 @@ export function registerCatalog(): void {
 
   // ----- space -----
   register("space.list", {
-    description: tmsg("cmd.space.list.desc"),
+    description: key("cmd.space.list.desc"),
     params: { workspace: P.workspace },
     returns: "{ projectId, spaces: [{id,title,active}] }",
     message: (d) => tmsg("msg.space.list", { n: ((d.spaces as unknown[]) ?? []).length }),
@@ -1469,7 +1469,7 @@ export function registerCatalog(): void {
   });
 
   register("space.create", {
-    description: tmsg("cmd.space.create.desc"),
+    description: key("cmd.space.create.desc"),
     triggers: { ko: "새 탭 스페이스 탭 추가 새로 열기" },
     params: { workspace: P.workspace, program: P.program },
     returns: "{ projectId, spaceId, paneId, tabId? }",
@@ -1501,7 +1501,7 @@ export function registerCatalog(): void {
 
   register("space.close", {
     danger: "destructive",
-    description: tmsg("cmd.space.close.desc"),
+    description: key("cmd.space.close.desc"),
     triggers: { ko: "탭 닫기 스페이스 닫기" },
     params: {
       workspace: P.workspace,
@@ -1522,7 +1522,7 @@ export function registerCatalog(): void {
   });
 
   register("space.activate", {
-    description: tmsg("cmd.space.activate.desc"),
+    description: key("cmd.space.activate.desc"),
     triggers: { ko: "탭 이동 탭 전환 탭 바꾸기" },
     params: {
       workspace: P.workspace,
@@ -1551,17 +1551,17 @@ export function registerCatalog(): void {
       to: { ...P.space, required: true },
       from: {
         type: "string",
-        description: tmsg("cmd.space.switchScan.param.from"),
+        description: key("cmd.space.switchScan.param.from"),
       },
       frames: { type: "number", description: "Frames to capture (default 30)" },
       intervalMs: { type: "number", description: "Frame interval ms (default 16)" },
       applyAtMs: {
         type: "number",
-        description: tmsg("cmd.space.switchScan.param.applyAtMs"),
+        description: key("cmd.space.switchScan.param.applyAtMs"),
       },
       settleMs: {
         type: "number",
-        description: tmsg("cmd.space.switchScan.param.settleMs"),
+        description: key("cmd.space.switchScan.param.settleMs"),
       },
       region: {
         type: "json",
@@ -1661,7 +1661,7 @@ export function registerCatalog(): void {
   });
 
   register("space.rename", {
-    description: tmsg("cmd.space.rename.desc"),
+    description: key("cmd.space.rename.desc"),
     params: {
       workspace: P.workspace,
       space: { ...P.space, required: true },
@@ -1859,7 +1859,7 @@ export function registerCatalog(): void {
   });
 
   register("pane.merge", {
-    description: tmsg("cmd.pane.merge.desc"),
+    description: key("cmd.pane.merge.desc"),
     triggers: { ko: "칸 합치기 병합 탭 이동 합병" },
     params: {
       workspace: P.workspace,
@@ -1888,7 +1888,7 @@ export function registerCatalog(): void {
   });
 
   register("pane.move", {
-    description: tmsg("cmd.pane.move.desc"),
+    description: key("cmd.pane.move.desc"),
     triggers: { ko: "칸 이동 재배치 위치 옮기기" },
     params: {
       workspace: P.workspace,
@@ -1919,7 +1919,7 @@ export function registerCatalog(): void {
 
   register("pane.close", {
     danger: "destructive",
-    description: tmsg("cmd.pane.close.desc"),
+    description: key("cmd.pane.close.desc"),
     triggers: { ko: "칸 닫기 칸 제거" },
     params: { pane: { ...P.pane, required: true } },
     returns: "{ paneId(closed), activePaneId }",
@@ -1939,7 +1939,7 @@ export function registerCatalog(): void {
   });
 
   register("pane.activate", {
-    description: tmsg("cmd.pane.activate.desc"),
+    description: key("cmd.pane.activate.desc"),
     triggers: { ko: "칸 포커스 칸 활성화 선택" },
     params: { pane: { ...P.pane, required: true } },
     returns: "{ paneId }",
@@ -2034,7 +2034,7 @@ export function registerCatalog(): void {
       edge: { ...P.edge, required: true },
       all: {
         type: "boolean",
-        description: tmsg("cmd.pane.equalize.param.all"),
+        description: key("cmd.pane.equalize.param.all"),
       },
     },
     returns: "{ paneId, gutter:{pane,edge}(canonical), sizes }",
@@ -2189,7 +2189,7 @@ export function registerCatalog(): void {
 
   // ----- tab -----
   register("tab.list", {
-    description: tmsg("cmd.tab.list.desc"),
+    description: key("cmd.tab.list.desc"),
     params: { pane: P.pane },
     returns: "{ paneId, activeTabId, tabs[] }",
     message: (d) => tmsg("msg.tab.list", { n: ((d.tabs as unknown[]) ?? []).length }),
@@ -2240,7 +2240,7 @@ export function registerCatalog(): void {
 
   register("tab.close", {
     danger: "destructive",
-    description: tmsg("cmd.tab.close.desc"),
+    description: key("cmd.tab.close.desc"),
     triggers: { ko: "탭 닫기" },
     params: { tab: { ...P.tab, required: true } },
     returns: "{ tabId(closed), activePaneId, activeTabId }",
@@ -2257,7 +2257,7 @@ export function registerCatalog(): void {
   });
 
   register("tab.activate", {
-    description: tmsg("cmd.tab.activate.desc"),
+    description: key("cmd.tab.activate.desc"),
     triggers: { ko: "탭 전환 탭 선택 탭 활성화" },
     params: { tab: { ...P.tab, required: true } },
     returns: "{ tabId }",
@@ -2310,7 +2310,7 @@ export function registerCatalog(): void {
       tab: P.tab,
       causeTraceId: {
         type: "string",
-        description: tmsg("cmd.tab.maximize.param.causeTraceId"),
+        description: key("cmd.tab.maximize.param.causeTraceId"),
       },
     },
     returns: "{ tabId, causeTraceId? }",
@@ -2339,13 +2339,13 @@ export function registerCatalog(): void {
   });
 
   register("tab.restore", {
-    description: tmsg("cmd.tab.restore.desc"),
+    description: key("cmd.tab.restore.desc"),
     triggers: { ko: "최대화 해제 원래대로 레이아웃 복원" },
     params: {
       workspace: P.workspace,
       causeTraceId: {
         type: "string",
-        description: tmsg("cmd.tab.restore.param.causeTraceId"),
+        description: key("cmd.tab.restore.param.causeTraceId"),
       },
     },
     returns: "{ projectId, tabId(restored tab | null = was not maximized), causeTraceId? }",
@@ -2372,7 +2372,7 @@ export function registerCatalog(): void {
   });
 
   register("tab.move", {
-    description: tmsg("cmd.tab.move.desc"),
+    description: key("cmd.tab.move.desc"),
     triggers: { ko: "탭 이동 다른 칸으로" },
     params: {
       tab: { ...P.tab, required: true },
@@ -2398,7 +2398,7 @@ export function registerCatalog(): void {
 
   // ----- status (view report replies, R8) -----
   register("status.query", {
-    description: tmsg("cmd.status.query.desc"),
+    description: key("cmd.status.query.desc"),
     triggers: { ko: "상태 조회 뷰 상태 status 조회 무엇이 도는지" },
     params: { tab: P.tab },
     returns: "{ statuses: Array<{ tabId, code, message? }> }",

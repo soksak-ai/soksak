@@ -60,6 +60,37 @@ export function withReaderLanguage<T>(language: string | null | undefined, run: 
   }
 }
 
+/**
+ * A sentence named but not yet built.
+ *
+ * `tmsg` answers in the language of whoever is reading at the moment it is called. A command
+ * catalogue is registered once, at boot, and read afterwards by every caller — so a description
+ * built with `tmsg` at registration is the sentence for whoever booted the window, and it stays
+ * that for a Korean caller and an English one alike. Measured 2026-08-18: `state.tree` answered
+ * one string to both.
+ *
+ * The two are apart by shape. A plain string is a literal somebody wrote; an I18nKey is a name to
+ * resolve where the reader is known. Nothing guesses whether a string happens to be a key — a
+ * lookup that quietly falls back would answer a key name as a sentence on the day it is misspelt.
+ */
+export type I18nKey = {
+  readonly i18nKey: MsgKey;
+  /** Values the sentence needs. Held with the key because a caller reading the catalogue has the
+   *  reader in hand and not the numbers the registration knew. */
+  readonly params?: Record<string, string | number>;
+};
+
+/** Names a sentence to build later, where the reader is in hand. The key is checked at compile
+ *  time, the same as a direct `tmsg` call — a deferred sentence is not a looser one. */
+export function key(name: MsgKey, params?: Record<string, string | number>): I18nKey {
+  return params ? { i18nKey: name, params } : { i18nKey: name };
+}
+
+/** Resolves a named sentence now; a literal passes through as it stands. */
+export function text(value: string | I18nKey, params?: Record<string, string | number>): string {
+  return typeof value === "string" ? value : tmsg(value.i18nKey, params ?? value.params);
+}
+
 // Plural rules per language, kept because building one is not free and every counted sentence
 // needs it. A caller never chooses a form itself: `n === 1 ? … : …` is right for English, wrong for
 // Korean, which has one form, and wrong differently for Russian and Arabic — which is why I5

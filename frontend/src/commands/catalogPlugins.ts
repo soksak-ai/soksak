@@ -10,7 +10,7 @@ import { hasSidebarView as hasSidebarViewKey } from "../state/sidebarLayout";
 import { getRegisteredView, registeredViewIds } from "../plugins/viewRegistry";
 import { registeredIconSetIds } from "../ui/icons/registry";
 import { getRegisteredProgram, listPrograms, useProgramRegistry } from "../plugins/programRegistry";
-import { localize, tmsg } from "../i18n";
+import { localize, tmsg, key} from "../i18n";
 import {
   VIEW_PLACEMENTS,
   configDefaults,
@@ -130,7 +130,7 @@ export function registerPluginCatalog(): void {
       id: { type: "string", description: "Program id to await", required: true },
       timeoutMs: {
         type: "number",
-        description: tmsg("cmd.program.wait.param.timeoutMs"),
+        description: key("cmd.program.wait.param.timeoutMs"),
         default: 20_000,
       },
     },
@@ -254,7 +254,7 @@ export function registerPluginCatalog(): void {
       "Open or close the plugin manager — verified release install, consent, enable and disable, update, remove, and the reason a plugin was refused. Omit open to flip it.",
     triggers: { ko: "플러그인 관리 설치 마켓 열기 닫기" },
     params: {
-      open: { type: "boolean", description: tmsg("cmd.plugin.manager.param.open") },
+      open: { type: "boolean", description: key("cmd.plugin.manager.param.open") },
     },
     returns: "{ open }",
     message: (d) => (d.open ? tmsg("msg.plugin.manager.opened") : tmsg("msg.plugin.manager.closed")),
@@ -440,11 +440,11 @@ export function registerPluginCatalog(): void {
     params: {
       registryId: {
         type: "string",
-        description: tmsg("cmd.plugin.catalog.param.registryId"),
+        description: key("cmd.plugin.catalog.param.registryId"),
       },
       refresh: {
         type: "boolean",
-        description: tmsg("cmd.plugin.catalog.param.refresh"),
+        description: key("cmd.plugin.catalog.param.refresh"),
       },
     },
     returns:
@@ -505,12 +505,12 @@ export function registerPluginCatalog(): void {
     params: {
       refresh: {
         type: "boolean",
-        description: tmsg("cmd.command.docs.param.refresh"),
+        description: key("cmd.command.docs.param.refresh"),
       },
       lang: {
         type: "string",
         enum: ["en", "ko"],
-        description: tmsg("cmd.command.docs.param.lang"),
+        description: key("cmd.command.docs.param.lang"),
       },
     },
     returns:
@@ -676,7 +676,7 @@ export function registerPluginCatalog(): void {
       id: { type: "string", description: "Plugin id", required: true },
       cascade: {
         type: "boolean",
-        description: tmsg("cmd.plugin.remove.param.cascade"),
+        description: key("cmd.plugin.remove.param.cascade"),
       },
     },
     returns: "{ id, removed: [removed ids …] }",
@@ -847,7 +847,7 @@ export function registerPluginCatalog(): void {
     params: {
       id: {
         type: "string",
-        description: tmsg("cmd.plugin.consent.preview.param.id"),
+        description: key("cmd.plugin.consent.preview.param.id"),
       },
     },
     returns: "{ id, shown }",
@@ -1069,7 +1069,7 @@ export function registerPluginCatalog(): void {
     params: {
       id: {
         type: "string",
-        description: tmsg("cmd.plugin.reload.param.id"),
+        description: key("cmd.plugin.reload.param.id"),
       },
     },
     returns:
@@ -1104,7 +1104,7 @@ export function registerPluginCatalog(): void {
       },
       placement: {
         type: "string",
-        description: tmsg("cmd.plugin.view.open.param.placement"),
+        description: key("cmd.plugin.view.open.param.placement"),
         enum: VIEW_PLACEMENTS,
       },
       workspace: { type: "string", description: "Workspace id. Defaults to the active workspace." },
@@ -1273,7 +1273,7 @@ export function registerPluginCatalog(): void {
     description:
       "Report a plugin's declared-vs-actual conformance: manifest declarations vs what is actually registered/exposed at runtime, across every register-gated contribution (commands/views/fileViewers/iconSets) plus DOM nodes. Read-only diagnosis. The publish-time schema gate is soksak-validate (headless, plugins/spec); this is the in-app runtime surface.",
     triggers: { ko: "플러그인 정합성 선언 실제 conformance" },
-    params: { id: { type: "string", required: true, description: tmsg("cmd.plugin.conformance.param.id") } },
+    params: { id: { type: "string", required: true, description: key("cmd.plugin.conformance.param.id") } },
     returns:
       "{ id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan }, implements: { declared, violations }, c2: { violations: [{ rule, detail }], viewStatus: { mounted, reported, unreported, undeclared: [{ viewId, view, code }] } }, calls: { literals, dynamic, unresolved } }",
     message: (d) => tmsg("msg.plugin.conformance", { id: String(d.id) }),

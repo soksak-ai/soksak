@@ -5,7 +5,7 @@
 // Webview JS cannot do raw UDP or cross-origin HTTP; the core is the only path. Zero domain lock-in (generic).
 
 import { invoke } from "../framework";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { register } from "./registry";
 
 // hex string → byte array. Requires even length + [0-9a-fA-F] only; returns null otherwise (caller emits INVALID_PARAMS).
@@ -44,13 +44,13 @@ export function registerNetworkCatalog(): void {
     params: {
       host: {
         type: "string",
-        description: tmsg("cmd.net.udp.send.param.host"),
+        description: key("cmd.net.udp.send.param.host"),
         required: true,
       },
       port: { type: "number", description: "Target UDP port (e.g. 9)", required: true },
       data: {
         type: "string",
-        description: tmsg("cmd.net.udp.send.param.data"),
+        description: key("cmd.net.udp.send.param.data"),
         required: true,
       },
       broadcast: { type: "boolean", description: "Allow broadcast addresses (255.255.255.255 etc.)" },
@@ -90,7 +90,7 @@ export function registerNetworkCatalog(): void {
     params: {
       host: {
         type: "string",
-        description: tmsg("cmd.net.udp.request.param.host"),
+        description: key("cmd.net.udp.request.param.host"),
         required: true,
       },
       port: { type: "number", description: "Target port (e.g. 1900 for SSDP)", required: true },
@@ -147,11 +147,11 @@ export function registerNetworkCatalog(): void {
       ns: { type: "string", description: "Secret resolution namespace (required when secretSubst is provided)" },
       secretSubst: {
         type: "json",
-        description: tmsg("cmd.net.http.request.param.secretSubst"),
+        description: key("cmd.net.http.request.param.secretSubst"),
       },
       impersonate: {
         type: "string",
-        description: tmsg("cmd.net.http.request.param.impersonate"),
+        description: key("cmd.net.http.request.param.impersonate"),
       },
     },
     // The answer comes from the owner — identical in every window (registry.ts windowScoped).

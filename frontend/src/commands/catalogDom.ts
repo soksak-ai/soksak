@@ -24,7 +24,7 @@ import { parseAddress, isParseError } from "./address";
 import { lightingRegionsIn } from "./focusLighting";
 import { scanNodes, type ScannedNode } from "../plugins/nodeScan";
 import { register } from "./registry";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { viewFocusSnapshot } from "../plugins/viewFocus";
 import { useGutterHover } from "../state/gutterHover";
 import { useSessions } from "../state/sessions";
@@ -849,7 +849,7 @@ export function viewContainerOf(el: Element | null): HTMLElement | null {
 
 export function registerDomCatalog(): void {
   register("ui.plugin-view.overlay", {
-    description: tmsg("cmd.ui.plugin-view.overlay.desc"),
+    description: key("cmd.ui.plugin-view.overlay.desc"),
     params: {},
     returns: "{ current:[{viewKey,viewId,containerGeneration,registryPresent,bootPhase,overlayReason:'none'|'registry-loading'|'registry-missing'|'presentation-error',error,sequence}],events:[...],maxEvents:64 }",
     message: (data) =>
@@ -863,7 +863,7 @@ export function registerDomCatalog(): void {
     params: {
       rects: {
         type: "boolean",
-        description: tmsg("cmd.ui.tree.param.rects"),
+        description: key("cmd.ui.tree.param.rects"),
         default: false,
       },
     },
@@ -1086,7 +1086,7 @@ export function registerDomCatalog(): void {
     params: {
       address: {
         type: "string",
-        description: tmsg("cmd.ui.slot.param.address"),
+        description: key("cmd.ui.slot.param.address"),
         required: true,
       },
     },
@@ -1210,7 +1210,7 @@ export function registerDomCatalog(): void {
     params: {
       ms: {
         type: "number",
-        description: tmsg("cmd.ui.focus.trace.start.param.ms"),
+        description: key("cmd.ui.focus.trace.start.param.ms"),
         required: false,
       },
     },
@@ -1528,33 +1528,33 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       y: { type: "number", description: "Content-view-relative y (CSS px).", required: false },
       button: {
         type: "string",
-        description: tmsg("cmd.ui.input.click.param.button"),
+        description: key("cmd.ui.input.click.param.button"),
         enum: ["left", "right"],
         required: false,
       },
       recordDir: {
         type: "string",
-        description: tmsg("cmd.ui.input.click.param.recordDir"),
+        description: key("cmd.ui.input.click.param.recordDir"),
         required: false,
       },
       recordFrames: {
         type: "number",
-        description: tmsg("cmd.ui.input.click.param.recordFrames"),
+        description: key("cmd.ui.input.click.param.recordFrames"),
         default: 40,
       },
       recordIntervalMs: {
         type: "number",
-        description: tmsg("cmd.ui.input.click.param.recordIntervalMs"),
+        description: key("cmd.ui.input.click.param.recordIntervalMs"),
         default: 16,
       },
       recordLeadMs: {
         type: "number",
-        description: tmsg("cmd.ui.input.click.param.recordLeadMs"),
+        description: key("cmd.ui.input.click.param.recordLeadMs"),
         default: 0,
       },
       recordMaxBytes: {
         type: "number",
-        description: tmsg("cmd.ui.input.click.param.recordMaxBytes"),
+        description: key("cmd.ui.input.click.param.recordMaxBytes"),
         required: false,
       },
       traceAddresses: {
@@ -2295,7 +2295,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     params: {
       events: {
         type: "json",
-        description: tmsg("cmd.ui.input.observe.param.events"),
+        description: key("cmd.ui.input.observe.param.events"),
       },
       ms: { type: "number", description: "Recording window in ms (default 1000, max 5000)" },
     },
@@ -2414,7 +2414,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     params: {
       addresses: {
         type: "json",
-        description: tmsg("cmd.ui.trace.multi.start.param.addresses"),
+        description: key("cmd.ui.trace.multi.start.param.addresses"),
         required: true,
       },
       maxMs: {
@@ -2817,7 +2817,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       to: { type: "string", description: "Target node address to drop onto (mode 1). Omit when using dx/dy.", required: false },
       zone: {
         type: "string",
-        description: tmsg("cmd.ui.input.drag.param.zone"),
+        description: key("cmd.ui.input.drag.param.zone"),
         enum: ["center", "left", "right", "top", "bottom"],
       },
       x: { type: "number", description: "Surface-relative start x (CSS px) when `from` is a content view. Defaults to its top-left.", required: false },
@@ -2827,37 +2827,37 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       dy: { type: "number", description: "Vertical drag distance in CSS px from `from` center (mode 2).", required: false },
       steps: {
         type: "number",
-        description: tmsg("cmd.ui.input.drag.param.steps"),
+        description: key("cmd.ui.input.drag.param.steps"),
         default: 2,
       },
       durationMs: {
         type: "number",
-        description: tmsg("cmd.ui.input.drag.param.durationMs"),
+        description: key("cmd.ui.input.drag.param.durationMs"),
         default: 0,
       },
       recordDir: {
         type: "string",
-        description: tmsg("cmd.ui.input.drag.param.recordDir"),
+        description: key("cmd.ui.input.drag.param.recordDir"),
         required: false,
       },
       recordFrames: {
         type: "number",
-        description: tmsg("cmd.ui.input.drag.param.recordFrames"),
+        description: key("cmd.ui.input.drag.param.recordFrames"),
         default: 120,
       },
       recordIntervalMs: {
         type: "number",
-        description: tmsg("cmd.ui.input.drag.param.recordIntervalMs"),
+        description: key("cmd.ui.input.drag.param.recordIntervalMs"),
         default: 33,
       },
       recordLeadMs: {
         type: "number",
-        description: tmsg("cmd.ui.input.drag.param.recordLeadMs"),
+        description: key("cmd.ui.input.drag.param.recordLeadMs"),
         default: 0,
       },
       recordMaxBytes: {
         type: "number",
-        description: tmsg("cmd.ui.input.drag.param.recordMaxBytes"),
+        description: key("cmd.ui.input.drag.param.recordMaxBytes"),
         required: false,
       },
     },
@@ -3051,7 +3051,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       to: { type: "string", description: "Drop-target node address", required: true },
       position: {
         type: "string",
-        description: tmsg("cmd.ui.input.dnd.param.position"),
+        description: key("cmd.ui.input.dnd.param.position"),
         enum: ["center", "before", "after"],
       },
       files: {

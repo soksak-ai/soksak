@@ -5,7 +5,7 @@
 // so the command is discoverable and actually runs on every path.
 
 import { engineProvision, framework, frameworkName, invoke } from "../framework";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { register } from "./registry";
 import { persistWindowNow } from "../state/windowPersistRequest";
 
@@ -45,7 +45,7 @@ export function registerSystemCatalog(): void {
       framework: {
         type: "string",
         required: false,
-        description: tmsg("cmd.app.shutdown.commit.param.framework"),
+        description: key("cmd.app.shutdown.commit.param.framework"),
       },
     },
     danger: "destructive",

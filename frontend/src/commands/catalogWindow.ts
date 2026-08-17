@@ -6,7 +6,7 @@
 // The catalog owns the shared resolvers (`windowTarget`, `P`, `notFound`) — redefining them here
 // would fork the same rule per file (omitted label = the addressed target).
 import { invoke, currentWindow, clearNativeSurfaces, windowByLabel } from "../framework";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { register } from "./registry";
 import { notFound } from "./refuse";
 import { currentWindowLabel } from "../lib/webviewLabels";
@@ -31,7 +31,7 @@ import {
 
 export function registerWindowCatalog(): void {
   register("window.info", {
-    description: tmsg("cmd.window.info.desc"),
+    description: key("cmd.window.info.desc"),
     params: {},
     returns: "{ x, y, w, h, scale }",
     message: (d) => tmsg("msg.window.info", { w: Number(d.w), h: Number(d.h) }),
@@ -48,7 +48,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.viewport", {
-    description: tmsg("cmd.window.viewport.desc"),
+    description: key("cmd.window.viewport.desc"),
     params: {},
     returns: "{ window,generation,sequence,trigger,owner,backingScale,coordinateSpace,contentBounds,requestedFrame,mainRootFrame,corrected,matched,events:[{window,generation,sequence,trigger,owner,backingScale,coordinateSpace,contentBounds,requestedFrame,mainRootFrame,corrected,matched}],maxEvents,dom:{innerWidth,innerHeight,devicePixelRatio,documentElement,body},fill:{widthRatio,heightRatio,areaRatio,matched} }",
     message: () => "window viewport receipt",
@@ -121,7 +121,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.move", {
-    description: tmsg("cmd.window.move.desc"),
+    description: key("cmd.window.move.desc"),
     params: {
       x: { type: "number", description: "Physical x coordinate", required: true },
       y: { type: "number", description: "Physical y coordinate", required: true },
@@ -136,7 +136,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.resize", {
-    description: tmsg("cmd.window.resize.desc"),
+    description: key("cmd.window.resize.desc"),
     params: {
       w: { type: "number", description: "Physical width", required: true },
       h: { type: "number", description: "Physical height", required: true },
@@ -156,14 +156,14 @@ export function registerWindowCatalog(): void {
     params: {
       sizes: {
         type: "json",
-        description: tmsg("cmd.window.resizeSequence.param.sizes", {
+        description: key("cmd.window.resizeSequence.param.sizes", {
           phases: RESIZE_TRANSACTION_PHASES.join("|"),
         }),
         required: true,
       },
       intervalMs: {
         type: "number",
-        description: tmsg("cmd.window.resizeSequence.param.intervalMs"),
+        description: key("cmd.window.resizeSequence.param.intervalMs"),
       },
       recordDir: { type: "string", description: "Optional output directory for transition PNGs" },
       recordFrames: { type: "number", description: "Frames to record when recordDir is set (default 64, max 600)" },
@@ -358,11 +358,11 @@ export function registerWindowCatalog(): void {
     params: {
       root: {
         type: "string",
-        description: tmsg("cmd.window.open.param.root"),
+        description: key("cmd.window.open.param.root"),
       },
       alias: {
         type: "string",
-        description: tmsg("cmd.window.open.param.alias"),
+        description: key("cmd.window.open.param.alias"),
       },
       mode: {
         type: "string",
@@ -459,7 +459,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.list", {
-    description: tmsg("cmd.window.list.desc"),
+    description: key("cmd.window.list.desc"),
     triggers: { ko: "창 목록 윈도우 목록 열린 창" },
     params: {},
     returns: "{ labels }",
@@ -478,7 +478,7 @@ export function registerWindowCatalog(): void {
       label: P.windowLabel,
       apply: {
         type: "boolean",
-        description: tmsg("cmd.window.restorePrevious.param.apply"),
+        description: key("cmd.window.restorePrevious.param.apply"),
       },
     },
     returns: "{ found, workspaces, tabs, applied }",
@@ -570,7 +570,7 @@ export function registerWindowCatalog(): void {
     params: {
       enabled: {
         type: "boolean",
-        description: tmsg("cmd.window.occlusion.param.enabled"),
+        description: key("cmd.window.occlusion.param.enabled"),
         required: true,
       },
     },

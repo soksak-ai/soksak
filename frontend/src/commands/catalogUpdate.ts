@@ -3,7 +3,7 @@
 // The PTY daemon preserves sessions with fd-handoff; the app body restarts only in a release identity.
 import { invoke } from "../framework";
 import { register } from "./registry";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import { usePlugins } from "../state/plugins";
 import { publishActivity } from "../state/activityFeed";
 import { updateCertifiedRegistryPlugin } from "../plugins/registryInstallService";
@@ -58,15 +58,15 @@ export function registerUpdateCatalog(): void {
     params: {
       plugins: {
         type: "boolean",
-        description: tmsg("cmd.update.apply.param.plugins"),
+        description: key("cmd.update.apply.param.plugins"),
       },
       daemon: {
         type: "boolean",
-        description: tmsg("cmd.update.apply.param.daemon"),
+        description: key("cmd.update.apply.param.daemon"),
       },
       app: {
         type: "boolean",
-        description: tmsg("cmd.update.apply.param.app"),
+        description: key("cmd.update.apply.param.app"),
       },
     },
     returns: "{ applied: [{ axis, ... }], skipped: [{ axis, reason }] }",

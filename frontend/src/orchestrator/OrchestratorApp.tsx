@@ -12,7 +12,7 @@ import { currentWindowLabel } from "../lib/webviewLabels";
 import { execute, getSpec } from "../commands/registry";
 import { Icon } from "../ui/icons/Icon";
 import { NewWorkspaceModal, type CreateWorkspaceArgs } from "../components/NewWorkspaceModal";
-import { hasMessage, localize, useT, type MsgKey, type TFn } from "../i18n";
+import { hasMessage, localize, text, useT, type MsgKey, type TFn } from "../i18n";
 import { actorKeyOf, foldFeed, itemWindow, type ActivityEntry, type ChatCard } from "./feedFold";
 
 const FEED_CAP = 500;
@@ -47,7 +47,7 @@ function commandLabel(cmd: string, t: TFn, carried?: unknown): string {
   if (spec?.title) return localize(spec.title);
   const key = `cmd.${cmd}`;
   if (hasMessage(key)) return t(key as MsgKey);
-  return spec?.description ?? cmd;
+  return spec ? text(spec.description) : cmd;
 }
 
 // Response media render — draws only the display media the envelope declared (MESSAGE-PROTOCOL:

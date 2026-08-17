@@ -11,7 +11,7 @@
 // setPermissionGate). No decision, no modal shown, permission denied, and TTL expiry all reduce to Deny
 // (fail-closed). No token or execution logic in the core — the sidecar owns that floor.
 import { register } from "./registry";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 import {
   useRemoteConfirm,
   awaitDecision,
@@ -28,29 +28,29 @@ export function registerRemoteCatalog(): void {
       request_id: {
         type: "number",
         required: true,
-        description: tmsg("cmd.remote.confirm.param.request_id"),
+        description: key("cmd.remote.confirm.param.request_id"),
       },
       device_id: {
         type: "string",
         required: true,
-        description: tmsg("cmd.remote.confirm.param.device_id"),
+        description: key("cmd.remote.confirm.param.device_id"),
       },
       command: {
         type: "string",
         required: true,
-        description: tmsg("cmd.remote.confirm.param.command"),
+        description: key("cmd.remote.confirm.param.command"),
       },
       danger: {
         type: "boolean",
-        description: tmsg("cmd.remote.confirm.param.danger"),
+        description: key("cmd.remote.confirm.param.danger"),
       },
       params: {
         type: "string",
-        description: tmsg("cmd.remote.confirm.param.params"),
+        description: key("cmd.remote.confirm.param.params"),
       },
       ttl_secs: {
         type: "number",
-        description: tmsg("cmd.remote.confirm.param.ttl_secs"),
+        description: key("cmd.remote.confirm.param.ttl_secs"),
       },
     },
     returns: "{ approve }",

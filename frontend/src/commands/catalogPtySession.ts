@@ -9,7 +9,7 @@ import { moduleState } from "../lib/moduleState";
 import { createStream, invoke } from "../framework";
 import { register, type CommandBrokerSpec, type CommandMachineObjectSchema } from "./registry";
 import { currentWindowLabel } from "../lib/webviewLabels";
-import { tmsg } from "../i18n";
+import { tmsg, key} from "../i18n";
 
 // broker = the plugin call permission contract (pluginCallable). This surface exists for native
 // runtime plugins (view-less session owners), so every command opens a broker. danger pairs with
@@ -64,7 +64,7 @@ export function registerPtySessionCatalog(): void {
       replayFromSeq: {
         type: "number",
         required: false,
-        description: tmsg("cmd.pty.session.spawn.param.replayFromSeq"),
+        description: key("cmd.pty.session.spawn.param.replayFromSeq"),
       },
     },
     danger: "inject",
@@ -222,7 +222,7 @@ export function registerPtySessionCatalog(): void {
   });
 
   register("pty.session.kill", {
-    description: tmsg("cmd.pty.session.kill.desc"),
+    description: key("cmd.pty.session.kill.desc"),
     triggers: { ko: "헤드리스 세션 종료" },
     params: { session: { type: "string", required: true, description: "Session id" } },
     danger: "destructive",
@@ -250,7 +250,7 @@ export function registerPtySessionCatalog(): void {
   });
 
   register("pty.session.list", {
-    description: tmsg("cmd.pty.session.list.desc"),
+    description: key("cmd.pty.session.list.desc"),
     triggers: { ko: "헤드리스 세션 목록" },
     params: {},
     broker: brokerOf(["commands"], {

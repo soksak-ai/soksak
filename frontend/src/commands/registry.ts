@@ -18,13 +18,15 @@ import {
 } from "../plugins/spec";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { cliName } from "../lib/cliIdentity";
-import { hasMessage, tmsg, withReaderLanguage, type MsgKey } from "../i18n";
+import { hasMessage, text, tmsg, withReaderLanguage, type I18nKey, type MsgKey } from "../i18n";
 
 // Parameter spec (JSON-serializable — used as is for CLI/MCP/docs generation).
 export interface ParamSpec {
   // json = arbitrary JSON value (the handler validates it).
   type: "string" | "number" | "boolean" | "string[]" | "number[]" | "json";
-  description: string;
+  // A key, or a literal nobody has keyed yet. Resolved where the catalogue is read, not where it
+  // is registered — see I18nKey.
+  description: string | I18nKey;
   required?: boolean;
   enum?: readonly string[];
   default?: unknown;
@@ -107,8 +109,10 @@ export interface CommandBrokerSpec {
 }
 
 export interface CommandSpec {
-  // description = English base (role, what, when, why). LLM discovery surface — no stub (name copy-paste). Not a human UI.
-  description: string;
+  // description = role, what, when, why. A person reads it in the command palette and in `sok`
+  // help, and an LLM reads it to discover the command — both readers put it through a key
+  // (I18N.md I1). A key, or a literal nobody has keyed yet; resolved where the catalogue is read.
+  description: string | I18nKey;
   // triggers = per-language trigger words for non-English languages (space separated). composeTriggers merges them into base on exposure.
   // The base prose handles English matching, so en is usually omitted. Adding a language (ja/zh) = add a key to this map (docs/I18N.md §3).
   triggers?: Record<string, string>;
@@ -1071,6 +1075,17 @@ function dedupTokens(s: string): string {
 
 // Catalog (handler excluded, serializable) — the source of the sok commands/help/docs/MCP tool list.
 // description = composeTriggers(base, triggers) — the single composed form CLI/MCP/skill see.
+// Every parameter description resolved for whoever is reading. The catalogue answers one caller
+// at a time, so this runs inside that caller's language scope and the same registration answers
+// a Korean reader and an English one differently.
+function readableParams(params: Record<string, ParamSpec>): Record<string, ParamSpec> {
+  const readable: Record<string, ParamSpec> = {};
+  for (const [name, spec] of Object.entries(params)) {
+    readable[name] = { ...spec, description: text(spec.description) };
+  }
+  return readable;
+}
+
 export function catalogJson(): {
   name: string;
   description: string;
@@ -1089,8 +1104,10 @@ export function catalogJson(): {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, s]) => ({
       name,
-      description: composeTriggers(s.description, s.triggers),
-      params: s.params,
+      // Resolved here rather than at registration: the catalogue is registered once and read by
+      // every caller, and a sentence built at registration is the boot language for all of them.
+      description: composeTriggers(text(s.description), s.triggers),
+      params: readableParams(s.params),
       returns: s.returns,
       errors: s.errors ?? [],
       examples: s.examples ?? [],
