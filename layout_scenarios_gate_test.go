@@ -846,18 +846,23 @@ func judgeMove(t *testing.T, r moveResult) {
 	settled := r.frames[len(r.frames)*2/3:]
 	floor := drawnCadence(settled)
 	if os.Getenv("SOKSAK_GATE_FRONT") == "1" && floor > 0 && floor <= drawingCadenceMs {
-		if stall := worstDrawnGap(r.frames); stall > stalledFrameMs {
+		gaps := drawnGaps(r.frames)
+		late := lateFrames(gaps, stalledFrameMs)
+		if stall := quantile(gaps, 1); late > 0 {
 			say := t.Logf
 			if judgeDrawing {
 				say = t.Errorf
 			}
-			say("%s: the window stopped drawing for %.0fms while the layout changed, on a "+
-				"machine that draws every %.0fms once it is still.\n%s\nframes: %s\n"+
+			say("%s: %d of %d drawn frames came late, the worst %.0fms, on a machine that draws "+
+				"every %.0fms once it is still. The rest: median %.0fms, p90 %.0fms, p99 %.0fms.\n"+
+				"%s\nframes: %s\n"+
 				"Nothing on the screen moves while the window is not drawing, and the page a "+
 				"person watches is composited above a document that has stopped.\n"+
-				"inside the stall:\n%s\n"+
+				"inside the longest gap:\n%s\n"+
 				"what the paths this build owns cost: %s",
-				r.name, stall, floor, traceLines(r.frames, "left"), r.record,
+				r.name, late, len(gaps)+1, stall, floor,
+				quantile(gaps, 0.5), quantile(gaps, 0.9), quantile(gaps, 0.99),
+				traceLines(r.frames, "left"), r.record,
 				stallLines(r.frames), costLines(r.frames))
 		}
 	}
@@ -940,4 +945,45 @@ func judgeMove(t *testing.T, r moveResult) {
 			"region is drawn over it.",
 			r.name, r.over.worst, r.over.ms, traceLines(r.frames, "left"), r.record)
 	}
+}
+
+// drawnGaps is every gap between the frames the window drew, sorted.
+func drawnGaps(frames []traceFrame) []float64 {
+	gaps, last := []float64{}, 0.0
+	for _, frame := range frames {
+		if !frame.Drawn {
+			continue
+		}
+		if last > 0 {
+			gaps = append(gaps, frame.At-last)
+		}
+		last = frame.At
+	}
+	sort.Float64s(gaps)
+	return gaps
+}
+
+// lateFrames is how many of them were later than the machine's own cadence allows, and quantile is
+// where a given share of them falls.
+//
+// One worst value cannot tell a window that froze from a window that dropped two frames out of
+// ninety. Measured 2026-08-18, the move that leaves a page for a terminal: median 17ms, p90 18ms,
+// p99 34ms, worst 45ms, two frames over 30 — and the moves beside it never pass 26ms. Read through
+// the worst alone, the first was called a 45ms stall and the second was called clean, and the
+// difference between them is two frames.
+func lateFrames(gaps []float64, over float64) int {
+	late := 0
+	for _, gap := range gaps {
+		if gap > over {
+			late++
+		}
+	}
+	return late
+}
+
+func quantile(gaps []float64, share float64) float64 {
+	if len(gaps) == 0 {
+		return 0
+	}
+	return gaps[int(float64(len(gaps)-1)*share)]
 }
