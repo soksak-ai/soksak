@@ -131,7 +131,11 @@ const DEFAULTS = {
   defaultWorkspaceRoot: "",
   tabCloseConfirm: "warn" as TabCloseConfirm,
   rightSidebarMode: "overlay" as RightSidebarMode,
-  railLook: "ground" as RailLook,
+  // The rail stands against the view it serves and is stroked into one border with it, so what it
+  // starts as is that view's card. Ground strips the card to a floor plane, and inside one border a
+  // plane beside a card reads as two things — measured 2026-08-18, rgb(14,15,21) beside
+  // rgb(21,22,30). Ground remains a choice; it is no longer the one nobody made.
+  railLook: "pane" as RailLook,
   railRelation: "stroke" as RailRelation,
   railFill: "none" as RailFill,
   focusDim: true,

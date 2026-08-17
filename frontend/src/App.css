@@ -726,11 +726,17 @@ body,
   top: var(--pane-inset, 0px);
   bottom: var(--pane-inset, 0px);
   overflow: hidden;
-  /* The rail's visual language, distinct from a split pane at a glance: a card
-     tint background with elevation on both sides. Standing mid-grid in FLOW it
-     still reads as furniture floating between panels. The palette is theme
-     variables only (S6 — a recolour follows automatically). */
-  background: color-mix(in srgb, var(--card) 55%, var(--bg));
+  /* The rail's card is the pane's card.
+     The relation surface strokes the union of the rail and the view it stands
+     for, so the two are inside one border already — and inside it they were a
+     different colour and a different shape. Measured 2026-08-18: the rail at
+     rgb(14,15,21) with square corners beside a pane at rgb(21,22,30) with 11px
+     ones, one outline around two cards, read as two things.
+     What tells a rail from a pane is what it holds: a section, its header, its
+     own tabs. It is not told apart by being a different card from the view it
+     is standing against. The palette is theme variables only (S6 — a recolour
+     follows automatically). */
+  background: var(--card);
   box-shadow:
     10px 0 24px -14px rgba(0, 0, 0, 0.35),
     -10px 0 24px -14px rgba(0, 0, 0, 0.35);
@@ -1727,6 +1733,17 @@ body,
 :root[data-pane-style="floating"] .pane {
   border-radius: 14px;
   box-shadow: var(--shadow);
+}
+
+/* And the rail takes the same corners as the panes it stands against, per style,
+   for the same reason its card is theirs. */
+:root[data-pane-style="card"] .sidebar,
+:root[data-pane-style="floating"] .sidebar {
+  border-radius: 11px;
+  overflow: hidden;
+}
+:root[data-pane-style="floating"] .sidebar {
+  border-radius: 14px;
 }
 
 /* The foreground frame (z:5) is the card's only border. It lies over the

@@ -233,6 +233,31 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 				}
 			}
 
+			// And it reads as one thing with the view it stands for.
+			//
+			// The two are drawn inside one border already — the relation surface strokes the union of
+			// the rail and the view it is bound to. Inside that border they were a different colour
+			// and a different shape: measured 2026-08-18, the sidebar at rgb(29,26,22) with square
+			// corners beside a pane at rgb(39,35,30) with 14px ones. One outline around two cards
+			// reads as two things — reported as things next to each other that should be one group
+			// reading as foreign.
+			//
+			// The rail used to be told to look "distinct from a split pane at a glance". It is
+			// distinguished by what it holds — a section, a header, its own tabs — and standing
+			// against the view it serves it is one card with it.
+			look := gate.styleOf(window, "chrome/rail/left",
+				[]string{"backgroundColor", "borderRadius"})
+			pane := gate.styleOf(window, "layout/pane/"+gate.paneOfTab(window, click.tab),
+				[]string{"backgroundColor", "borderRadius"})
+			for _, property := range []string{"backgroundColor", "borderRadius"} {
+				if look[property] != pane[property] {
+					t.Errorf("clicking %s: the sidebar's %s is %s where the view it stands for is %s.\n%s\n"+
+						"They are drawn inside one border; two cards inside it read as two things.",
+						what, property, look[property], pane[property],
+						gate.arrangementLines(window, built))
+				}
+			}
+
 			// One node per address, whatever is standing.
 			gate.assertOneNodePerAddress(window, "clicking "+what)
 
@@ -526,4 +551,44 @@ func (gate *arrangementGate) evidencePath(parts ...string) string {
 		gate.t.Fatalf("asking where this run is: %v", err)
 	}
 	return filepath.Join(append([]string{here, "evidence"}, parts...)...)
+}
+
+// styleOf reads named computed styles off one exposed node, found by the tail of its address.
+//
+// The gate addresses nodes by what they are — `rail/left`, `layout/pane/<id>` — and the window
+// answers with the whole address, workspace and all. Matching the tail keeps the gate from carrying
+// a second copy of how an address is built.
+func (gate *arrangementGate) styleOf(window string, suffix string, props []string) map[string]string {
+	gate.t.Helper()
+	var tree struct {
+		Data struct {
+			Nodes []struct {
+				Address string `json:"address"`
+			} `json:"nodes"`
+		} `json:"data"`
+	}
+	out := gate.run("ui.tree", "window="+window)
+	if err := json.Unmarshal([]byte(out), &tree); err != nil {
+		gate.t.Fatalf("ui.tree: %v\n%s", err, out)
+	}
+	address := ""
+	for _, node := range tree.Data.Nodes {
+		if strings.HasSuffix(node.Address, suffix) {
+			address = node.Address
+			break
+		}
+	}
+	if address == "" {
+		gate.t.Fatalf("no node is exposed at %s, so its look cannot be read", suffix)
+	}
+	var answer struct {
+		Data struct {
+			Style map[string]string `json:"style"`
+		} `json:"data"`
+	}
+	measured := gate.run("ui.measure", "window="+window, "address="+address, "props="+jsonList(props...))
+	if err := json.Unmarshal([]byte(measured), &answer); err != nil {
+		gate.t.Fatalf("ui.measure %s: %v\n%s", address, err, measured)
+	}
+	return answer.Data.Style
 }
