@@ -154,6 +154,20 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 	} else {
 		t.Logf("the surfaces went %s after the manager opened", took)
 	}
+	// And the pane is not blank. A native surface is composited above the document, so the only way
+	// to show a card over a page is to take the page off the screen — and what was reported, in
+	// these words, is that the browser blanks when the manager opens. The surface leaves its picture
+	// and the document draws it in the same box, so the page is still there to look at while the
+	// card is over it.
+	gate.until(5*time.Second, func() bool { return len(gate.parkedPictures(window)) > 0 },
+		"the parked surface to leave its picture")
+	held := gate.parkedPictures(window)
+	t.Logf("panes holding the picture of a parked surface: %v", held)
+	if len(held) == 0 {
+		t.Errorf("the manager is open, the surfaces are parked, and no pane holds a picture.\n"+
+			"nodes: %s\nA pane that goes blank is what a person reads as a view that failed.",
+			gate.run("ui.snapshot.dom", "window="+window))
+	}
 	gate.run("plugin.manager", "window="+window, "open=false")
 	if took, back := gate.waitForASurfaceToReturn(window, surfaceHideDeadline); !back {
 		t.Errorf("the manager closed %s ago and no surface came back.\ncomposition: %s",
@@ -356,6 +370,38 @@ func (gate *drawnGate) waitForASurfaceToReturn(window string, deadline time.Dura
 			return time.Since(started), false
 		}
 	}
+}
+
+var parkedPictureAddress = regexp.MustCompile(`/layout/parked-picture/([^/]+)$`)
+
+// parkedPictures is every pane drawing the picture a parked surface left, with a box a person can
+// see. A node with no rectangle is not a picture anyone is looking at.
+func (gate *drawnGate) parkedPictures(window string) []string {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Nodes []struct {
+				Address string `json:"address"`
+				Rect    struct {
+					W float64 `json:"w"`
+					H float64 `json:"h"`
+				} `json:"rect"`
+			} `json:"nodes"`
+		} `json:"data"`
+	}
+	out := gate.run("ui.snapshot.dom", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("ui.snapshot.dom: %v\n%s", err, out)
+	}
+	var found []string
+	for _, node := range answer.Data.Nodes {
+		if match := parkedPictureAddress.FindStringSubmatch(node.Address); match != nil {
+			if node.Rect.W > 0 && node.Rect.H > 0 {
+				found = append(found, match[1])
+			}
+		}
+	}
+	return found
 }
 
 // visibleSurfaces is what the compositor has on screen — declared and applied both true. The

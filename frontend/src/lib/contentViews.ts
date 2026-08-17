@@ -135,6 +135,20 @@ export interface ContentViewHost {
     ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean;
   }): Promise<void>;
   /**
+   * What the surface is showing, as a picture the document can draw.
+   *
+   * A native surface is composited above the document, so nothing drawn in the document can be put
+   * over it: a modal opens and the page covers the card, a rail travels and the page covers the
+   * rail. The only way to put something over it is to take it off the screen — and a pane that goes
+   * blank is what a person reads as a view that failed.
+   *
+   * So a surface that is parked leaves its picture behind. The document draws that picture where the
+   * surface was, and the screen keeps showing the page while something is drawn over it. An
+   * implementation whose surfaces are inside the document has nothing to leave and answers null.
+   */
+  picture(label: string): Promise<string | null>;
+
+  /**
    * Where the native layer holds each surface **right now**, read from what it applied.
    *
    * The document is one clock and the native layer is another. A reading taken from the

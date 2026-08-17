@@ -88,6 +88,14 @@ export const wailsContentViewHost: ContentViewHost = {
   sendInput: async (label) => unsupported(`sendInput(${label})`),
   inputState: async (label) => unsupported(`inputState(${label})`),
   wheel: async (label) => unsupported(`wheel(${label})`),
+  // The surface's own pixels, as a data URL the document can draw. The kind's backend takes the
+  // picture — the compositor forwards the message without reading it — so nothing here names a
+  // browser or an engine.
+  picture: async (label) => {
+    const answer = await drive(label, { verb: "snapshot" });
+    const png = answer.png;
+    return typeof png === "string" && png.length > 0 ? `data:image/png;base64,${png}` : null;
+  },
   captureFull: async (label) => unsupported(`captureFull(${label})`),
   typeText: async (label) => unsupported(`typeText(${label})`),
   markText: async (label) => unsupported(`markText(${label})`),

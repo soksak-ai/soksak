@@ -94,10 +94,19 @@ describe("a parking commit goes through the content view host", () => {
   it("with a DOM host, parking actually touches the DOM", async () => {
     vi.resetModules();
     const seen: [string, boolean][] = [];
+    // The order is the rule: a surface that is about to be parked is photographed first, because a
+    // surface that is already hidden has nothing to photograph and the pane it left goes blank.
+    const order: string[] = [];
     vi.doMock("./contentViews", () => ({
+      hasContentViewHost: () => true,
       contentViewHost: () => ({
         visible: async (label: string, visible: boolean) => {
+          order.push("hide");
           seen.push([label, visible]);
+        },
+        picture: async () => {
+          order.push("picture");
+          return "data:image/png;base64,AAAA";
         },
       }),
     }));
@@ -113,7 +122,10 @@ describe("a parking commit goes through the content view host", () => {
 
     dropViewVisibility("v-1");
     commitViewVisibility("v-1", false);
-    await Promise.resolve();
+    // The picture is taken before the surface goes, so the commit lands after that answer rather
+    // than in the same breath as the call.
+    await new Promise((done) => setTimeout(done, 0));
+    expect(order).toEqual(["picture", "hide"]);
     expect(seen).toHaveLength(1);
     expect(seen[0][0]).toBe("browser-win-a-v-1");
     expect(seen[0][1]).toBe(false);

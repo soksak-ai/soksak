@@ -2191,6 +2191,18 @@ body::after {
   gap: 2px;
 }
 /* One row per region: the label names the place, the select names what stands there. */
+/* The picture a parked surface left. It fills the slot it was taken from and takes no input: what a
+   person can do with a page is done to the page, and this is not one. */
+.parked-picture {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+}
+
 .settings-sidebar-region {
   display: flex;
   align-items: center;

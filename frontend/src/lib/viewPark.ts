@@ -10,6 +10,7 @@
 import { moduleState } from "../lib/moduleState";
 import { contentViewHost } from "./contentViews";
 import { emitPluginEvent } from "../plugins/hooks";
+import { holdParkedPicture, releaseParkedPicture } from "./parkedPicture";
 import { surfaceLabelOfView } from "./surfaceLabels";
 import { parkedStyle } from "./layerPark";
 import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost";
@@ -97,13 +98,36 @@ export function commitViewVisibility(viewId: string, visible: boolean): void {
     emitPluginEvent("view.parked", { viewId, parked: !visible });
     return;
   }
-  void contentViewHost()
-    .visible(label, visible)
-    .catch((e: unknown) => {
-      // Not swallowed — a parking that did not happen shows up only as "the previous browser does
-      // not disappear", and there is no path back from that symptom to this site.
-      console.warn(`[viewPark] parking commit failed: ${viewId} visible=${visible}`, e);
-    });
+  const commit = () =>
+    void contentViewHost()
+      .visible(label, visible)
+      .catch((e: unknown) => {
+        // Not swallowed — a parking that did not happen shows up only as "the previous browser does
+        // not disappear", and there is no path back from that symptom to this site.
+        console.warn(`[viewPark] parking commit failed: ${viewId} visible=${visible}`, e);
+      });
+  if (visible) {
+    // The surface is the thing to look at again, so the picture goes before it comes back.
+    releaseParkedPicture(viewId);
+    commit();
+  } else {
+    // The picture is taken **before** the surface goes, because a surface that is already hidden has
+    // nothing to photograph. Nothing drawn in the document can be put over a surface, so a card or a
+    // travelling rail can only be shown by taking the surface off the screen — and a pane that goes
+    // blank is what a person reads as a view that failed. The picture is what stays in its place.
+    void holdParkedPicture(viewId, label)
+      .finally(() => {
+        // It may have come back while the picture was being taken. Hiding it then would park a
+        // surface nobody asked to park.
+        if (visibleByView.get(viewId) === false) commit();
+      })
+      .catch((e: unknown) => {
+        // The park still has to happen. A rejection with nobody holding it is an unhandled one, and
+        // the surface it was about to park stays on the screen over whatever was drawn for it.
+        console.warn(`[viewPark] parking a picture failed: ${viewId}`, e);
+        if (visibleByView.get(viewId) === false) commit();
+      });
+  }
   emitPluginEvent("view.parked", { viewId, parked: !visible });
 }
 

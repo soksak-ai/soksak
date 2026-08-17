@@ -25,6 +25,7 @@ import { recordRailPhase } from "../lib/railJournal";
 import { useGutterHover } from "../state/gutterHover";
 import { ViewTabs } from "./ViewTabs";
 import { FocusLightingPlane } from "./FocusLightingPlane";
+import { ParkedPicture } from "./ParkedPicture";
 import { railLightingExemption } from "./focusLightingGeometry";
 import { computeSplitLayout, hitTestCells } from "../lib/splitLayout";
 import { layoutGeometrySignature } from "../lib/layoutGeometrySignature";
@@ -942,6 +943,9 @@ export const GroupArea = memo(function GroupArea({
                 });
               }}
             >
+              {/* What the surface left when it was parked. Drawn under the view's own body, so the
+                  moment the surface is back the picture is behind it and then gone. */}
+              <ParkedPicture viewId={view.id} />
               {!hydrated ? null : (
                 <PluginViewHost
                   viewKey={`${view.pluginId}.${view.view}`}
