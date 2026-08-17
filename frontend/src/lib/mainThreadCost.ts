@@ -14,8 +14,19 @@
 import { useLayoutEffect } from "react";
 import { moduleState } from "./moduleState";
 
-/** The last cost of each named path, in milliseconds. */
+/** What each named path has cost in total, in milliseconds, since this window started.
+ *
+ * A total, not the last value. The last value cannot be attributed to a stretch: read across a
+ * window that stopped drawing for 45ms, every path showed the same number before, during and after
+ * it, and one of them — a plugin view's mount, 32ms — was read here as the cause of the stall when
+ * it had happened while the window was being built. Totals subtract: what a stretch cost is the
+ * difference between its ends, and a path that did not run over it differences to zero. */
 const costs = moduleState("lib/mainThreadCost#costs", () => new Map<string, number>());
+
+/** Adds one reading to a path's total. */
+function add(name: string, ms: number): void {
+  costs.set(name, Math.round(((costs.get(name) ?? 0) + ms) * 100) / 100);
+}
 
 /** Runs the work and writes down what it cost. */
 export function timed<T>(name: string, work: () => T): T {
@@ -23,7 +34,7 @@ export function timed<T>(name: string, work: () => T): T {
   try {
     return work();
   } finally {
-    costs.set(name, Math.round((performance.now() - started) * 100) / 100);
+    add(name, performance.now() - started);
   }
 }
 
@@ -44,7 +55,7 @@ export function useRenderCost(name: string): void {
   const started = performance.now();
   useLayoutEffect(() => {
     const done = performance.now();
-    costs.set(name, Math.round((done - started) * 100) / 100);
+    add(name, done - started);
     committedAtUnixMs = done;
   });
 }
@@ -91,6 +102,6 @@ export async function timedAwait<T>(name: string, work: Promise<T>): Promise<T> 
   try {
     return await work;
   } finally {
-    costs.set(name, Math.round((performance.now() - started) * 100) / 100);
+    add(name, performance.now() - started);
   }
 }

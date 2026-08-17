@@ -102,7 +102,18 @@ export function documentAlignment(): {
       const parts = box.node.split("/");
       return { region: parts[1] ?? "", section: parts.slice(2).join("/") };
     });
-  const panes = boxesOf("[data-node*='layout/pane/']").map((box) => ({
+  // Every pane on the screen, whoever is drawing it.
+  //
+  // A travel takes the core's pane chrome away and gives the coordinates to the travelling
+  // object (lib/viewTravelPresentation), so mid-motion the pane elements of the panes that
+  // move are not in the document at all. A reading built on them alone answers one pane
+  // where a person sees three — measured 2026-08-17 through one travel, and two verdicts
+  // in this repository were drawn from that answer before anyone asked what it was made of.
+  //
+  // The outline around each pane is a separate element and it travels with the pane, so it
+  // is what the reading falls back to. One shape either way: nothing here marks which of the two
+  // two answered, because a caller that has to ask is a caller holding two readings.
+  const drawn = boxesOf("[data-node*='layout/pane/']").map((box) => ({
     pane: box.node.slice(box.node.lastIndexOf("/") + 1),
     ...box.box,
   }));
@@ -110,6 +121,8 @@ export function documentAlignment(): {
     pane: box.node.slice(box.node.lastIndexOf("/") + 1),
     ...box.box,
   }));
+  const held = new Set(drawn.map((pane) => pane.pane));
+  const panes = [...drawn, ...frames.filter((frame) => !held.has(frame.pane))];
   const boundaries = boxesOf("[data-node^='layout/focus-boundary/']").map((box) => ({
     pane: box.node.slice(box.node.lastIndexOf("/") + 1),
     ...box.box,

@@ -475,15 +475,9 @@ func (gate *arrangementGate) keepLastFrame(dir string, path string, said string)
 	gate.t.Helper()
 	frames, err := filepath.Glob(filepath.Join(dir, "f*.png"))
 	if err != nil || len(frames) == 0 {
-		// A permission is a precondition, not a defect. This machine grants screen recording per
-		// application identity and a gate runs under its own, which no panel ever offers the person
-		// to grant — measured 2026-08-17: the same binary and window captured in 0.3s under the
-		// installation's identifier and timed out under any other. Said plainly and carried on;
-		// a run that fails for it would be reporting the machine as the window.
-		if strings.Contains(said, "screen recording is not permitted") {
-			gate.t.Logf("no picture for %s — this identity cannot capture:\n%s", filepath.Base(dir), said)
-			return
-		}
+		// A run with no picture is a run with no evidence. The capture answers under any identity
+		// now — the document is taken through the web view when the screen is refused — so a case
+		// that kept no frame is a defect and not a machine this gate has to live with.
 		gate.t.Errorf("the recording in %s left no frame, so this case has no picture: %v\n"+
 			"what the window answered: %s", dir, err, said)
 		return

@@ -5,6 +5,8 @@
 
 import { moduleState } from "../lib/moduleState";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+
+import { timed } from "../lib/mainThreadCost";
 import {
   getRegisteredView,
   useViewRegistry,
@@ -282,7 +284,10 @@ export const PluginViewHost = memo(function PluginViewHost({
       }
     }
     try {
-      reg.provider.mount(el, ctxRef.current!);
+      // What a plugin spends putting its view on the screen. A section swapped in on a focus change
+      // stopped the window for 45 to 49ms, five runs of five, and nothing said whether that was this
+      // call or the document around it.
+      timed(`view.mount.${viewKey}`, () => reg.provider.mount(el, ctxRef.current!));
     } catch (e) {
       console.error(`plugin view mount failed (${viewKey}):`, e);
       setError(String(e));

@@ -338,76 +338,73 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 		t.Fatalf("making the evidence directory: %v", err)
 	}
 
-	type result struct {
-		name      string
-		frames    []traceFrame
-		lag       run
-		off       run
-		applied   run
-		hole      run
-		over      run
-		blink     run
-		sizes     int
-		steps     int
-		paneSteps int
-		record    string
-	}
-	var results []result
+	var results []moveResult
 
 	for _, from := range order {
 		for _, to := range order {
 			if from == to {
 				continue
 			}
-			name := from + "→" + to
-			// Each case starts from the state it names, settled. A case begun mid-change measures the
-			// tail of the one before it.
-			gate.run("tab.activate", "window="+window, "tab="+where[from])
-			gate.until(5*time.Second, func() bool {
-				frame := gate.oneFrame(window)
-				return frame.hole("left") <= holeTolerance && frame.WorstOff <= offTolerance &&
-					frame.WorstLag <= offTolerance
-			}, "the window to settle before "+name)
+			// One move, one named test. The six were a loop with a single verdict at the end, so
+			// nobody could run one of them: to look at a single move a person ran all six and read
+			// One move, one named test. The six were a loop with a single verdict at the end, so
+			move := from + "\u2192" + to
+			t.Run(strings.NewReplacer("\u2192", "-to-").Replace(move), func(t *testing.T) {
+				name := move
+				// Each case starts from the state it names, settled. A case begun mid-change measures the
+				// tail of the one before it.
+				gate.run("tab.activate", "window="+window, "tab="+where[from])
+				gate.until(5*time.Second, func() bool {
+					frame := gate.oneFrame(window)
+					return frame.hole("left") <= holeTolerance && frame.WorstOff <= offTolerance &&
+						frame.WorstLag <= offTolerance
+				}, "the window to settle before "+name)
 
-			record := filepath.Join(evidence, strings.NewReplacer("→", "-to-").Replace(name))
-			// Frames for a person to look at, taken without touching the window's focus, beside the
-			// trace that judges. The recording is never the pass mark.
-			// The numbers are taken without a recorder running. Capturing a window costs the main
-			// thread a frame at a time: with `window.record` alongside, the same six moves answered
-			// 2 to 3 frames of lag where they answer none without it — the recorder was measuring
-			// itself. Frames for the eye are recorded in their own pass, below.
-			gate.run("layout.trace.start", "window="+window, "ms=1500")
-			gate.run("tab.activate", "window="+window, "tab="+where[to])
-			time.Sleep(1600 * time.Millisecond)
-			frames := gate.readTrace(window)
-			if len(frames) < 10 {
-				t.Fatalf("%s recorded %d readings, which is not a motion", name, len(frames))
-			}
+				record := filepath.Join(evidence, strings.NewReplacer("→", "-to-").Replace(name))
+				// Frames for a person to look at, taken without touching the window's focus, beside the
+				// trace that judges. The recording is never the pass mark.
+				// The numbers are taken without a recorder running. Capturing a window costs the main
+				// thread a frame at a time: with `window.record` alongside, the same six moves answered
+				// 2 to 3 frames of lag where they answer none without it — the recorder was measuring
+				// itself. Frames for the eye are recorded in their own pass, below.
+				gate.run("layout.trace.start", "window="+window, "ms=1500")
+				gate.run("tab.activate", "window="+window, "tab="+where[to])
+				time.Sleep(1600 * time.Millisecond)
+				frames := gate.readTrace(window)
+				if len(frames) < 10 {
+					t.Fatalf("%s recorded %d readings, which is not a motion", name, len(frames))
+				}
 
-			results = append(results, result{
-				name:   name,
-				frames: frames,
-				lag:    longestRun(frames, func(f traceFrame) (bool, float64) { return f.WorstLag > offTolerance, f.WorstLag }),
-				off:    longestRun(frames, func(f traceFrame) (bool, float64) { return f.WorstOff > offTolerance, f.WorstOff }),
-				applied: longestRunAt(frames, func(i int) (bool, float64) {
-					d := offAgeCorrected(frames, i)
-					return d > offTolerance, d
-				}),
-				over: longestRunAt(frames, func(i int) (bool, float64) {
-					d := overAgeCorrected(frames, i)
-					return d > offTolerance, d
-				}),
-				hole: longestRun(frames, func(f traceFrame) (bool, float64) {
-					return f.hole("left") > holeTolerance, f.hole("left")
-				}),
-				blink: longestRun(frames, func(f traceFrame) (bool, float64) {
-					missing := float64(len(f.Panes) - len(f.Frames))
-					return missing > 0, missing
-				}),
-				sizes:     heldSizes(frames),
-				steps:     heldPositions(frames),
-				paneSteps: paneStepsIn(frames),
-				record:    record,
+				measured := moveResult{
+					name:   name,
+					frames: frames,
+					lag:    longestRun(frames, func(f traceFrame) (bool, float64) { return f.WorstLag > offTolerance, f.WorstLag }),
+					off:    longestRun(frames, func(f traceFrame) (bool, float64) { return f.WorstOff > offTolerance, f.WorstOff }),
+					applied: longestRunAt(frames, func(i int) (bool, float64) {
+						d := offAgeCorrected(frames, i)
+						return d > offTolerance, d
+					}),
+					over: longestRunAt(frames, func(i int) (bool, float64) {
+						d := overAgeCorrected(frames, i)
+						return d > offTolerance, d
+					}),
+					hole: longestRun(frames, func(f traceFrame) (bool, float64) {
+						return f.hole("left") > holeTolerance, f.hole("left")
+					}),
+					blink: longestRun(frames, func(f traceFrame) (bool, float64) {
+						missing := float64(len(f.Panes) - len(f.Frames))
+						return missing > 0, missing
+					}),
+					sizes:     heldSizes(frames),
+					steps:     heldPositions(frames),
+					paneSteps: paneStepsIn(frames),
+					record:    record,
+				}
+				results = append(results, measured)
+				// The verdict is given where the measurement was taken. Given afterwards, in the
+				// parent, a run of one move answered PASS for that move and FAIL for the test —
+				// measured 2026-08-17, twice, and read here as the recording pass being judged.
+				judgeMove(t, measured)
 			})
 		}
 	}
@@ -451,130 +448,7 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 	if trails, err := pageTrailsIn(looked.record, 0.72); err == nil && len(trails) > 0 {
 		t.Logf("recorded %d frames of %s for the eye: %s", len(trails), looked.name, looked.record)
 	}
-	for _, r := range results {
-		// What the window can do when nothing is happening to it. The recording ends with the window
-		// settled, so the drawing rate there is this machine's floor: if it draws every 17ms once the
-		// change is over, a stretch in the middle where it drew nothing is the change's doing and not
-		// the machine's.
-		// A covered window is not presented at the display's rate whatever its occlusion detection is
-		// set to, so the gaps between its drawn frames are the system's cadence and not this
-		// application's work. Measured 2026-08-17: covered, the window stopped drawing for 68 to
-		// 234ms on a focus change and JS ran throughout — the timer readings never missed a beat —
-		// and in front, on the same build and the same six moves, it never stopped at all. What was
-		// reported here as a stall was the environment, and the correction is that this is only asked
-		// of a window someone is looking at.
-		// What this stall is not, measured 2026-08-17 on the six moves of the named window.
-		//
-		// It is 55 to 60ms, on exactly the four moves where a region appears or disappears, and
-		// on no other. It is there with the motion collapsed to nothing, so it is not the
-		// interpolation. It is the same with a section holding two rows as with the file tree, so
-		// it is not the section's own drawing. It survives taking no picture and hiding nothing,
-		// so it is neither half of the park. The page's box does not change across it — same x,
-		// same width — so it is not a resize. The commit crosses in 0ms and the native work is
-		// 0.2ms, and every path this build owns costs under 10ms over the whole stretch.
-		//
-		// And with no page in the window it is gone: twelve moves, two runs, not one stall. So
-		// what is left is the window relaying itself out while a web view is attached to it,
-		// which is the substrate's cost and not this application's arithmetic. Anything that
-		// claims to have fixed it has to move this number.
-		settled := r.frames[len(r.frames)*2/3:]
-		floor := drawnCadence(settled)
-		if os.Getenv("SOKSAK_GATE_FRONT") == "1" && floor > 0 && floor <= drawingCadenceMs {
-			if stall := worstDrawnGap(r.frames); stall > stalledFrameMs {
-				say := t.Logf
-				if judgeDrawing {
-					say = t.Errorf
-				}
-				say("%s: the window stopped drawing for %.0fms while the layout changed, on a "+
-					"machine that draws every %.0fms once it is still.\n%s\nframes: %s\n"+
-					"Nothing on the screen moves while the window is not drawing, and the page a "+
-					"person watches is composited above a document that has stopped.\n"+
-					"inside the stall:\n%s\n"+
-					"what the paths this build owns cost: %s",
-					r.name, stall, floor, traceLines(r.frames, "left"), r.record,
-					stallLines(r.frames), costLines(r.frames))
-			}
-		}
-
-		// Whether a stretch can be judged is asked of that stretch. A window that stalled somewhere
-		// else in the recording — before the change, after it settled — has nothing to do with
-		// whether the page followed its pane while it moved.
-		judged := func(what run) bool {
-			if what.frames == 0 {
-				return true
-			}
-			// How far the page trailed its pane is a question about a moving window, and a window
-			// moves at the rate the machine lets it. `task verify` runs its gates beside each other,
-			// so this is measured there and judged where the machine is quiet (`verify:motion`).
-			if !judgeDrawing {
-				t.Logf("%s: %s, not judged in this run — motion is judged by `task verify:motion`, "+
-					"on a machine that is doing nothing else.", r.name, what)
-				return false
-			}
-			over := r.frames[what.from : what.to+1]
-			cadence, stall := drawnCadence(over), worstDrawnGap(over)
-			if cadence > 0 && cadence <= drawingCadenceMs && stall <= stalledFrameMs {
-				return true
-			}
-			t.Logf("%s: over that stretch the window's frame clock ran every %.0fms and stalled "+
-				"%.0fms, so it was not judged — that number would be this machine's load.",
-				r.name, cadence, stall)
-			return false
-		}
-		if r.lag.ms > budgetMs {
-			t.Errorf("%s: the declaration was %.0f points behind its element for %.0fms.\n%s\nframes: %s\n"+
-				"The document writes the declaration in the frame it measures, so this is the page "+
-				"standing still while its pane travels.",
-				r.name, r.lag.worst, r.lag.ms, traceLines(r.frames, "left"), r.record)
-		}
-		if r.applied.ms > budgetMs && judged(r.applied) {
-			t.Errorf("%s: the native layer held a page %.0f points from where the document put it, for %.0fms.\n%s\nframes: %s\n"+
-				"The document's rectangle and the native layer's are the same commit; a difference "+
-				"here is the native layer holding something else.",
-				r.name, r.applied.worst, r.applied.ms, traceLines(r.frames, "left"), r.record)
-		}
-		// The sentence a person put it in: the document and the native layer move as one, and the size
-		// is adjusted. A page that took more than the two sizes of a travel was being resized on the
-		// way, and everything inside it laid itself out again on each of those frames.
-
-		// And it did travel: a page that never moved was not moving with anything.
-
-		// The frames are not motion: they are drawn or they are not, whatever rate the window runs at,
-		// so this is judged wherever it is measured.
-		//
-		// The seam is not: a pane that is mid-travel is drawn by the stand-in rather than by itself,
-		// and a reading that counts only what is on the screen then sees one pane where there are
-		// three. So the seam is judged from readings that hold the whole window.
-		if r.blink.ms > budgetMs {
-			t.Errorf("%s: %.0f panes were on the screen without their frame for %.0fms.\n%s\nframes: %s\n"+
-				"The line around a pane is a separate element from the pane, and a person sees it go "+
-				"out and come back.",
-				r.name, r.blink.worst, r.blink.ms, traceLines(r.frames, "left"), r.record)
-		}
-		// The gap between the sidebar and the panes is not judged here, and the outlines say why.
-		//
-		// Measured 2026-08-17 through one travel, frame by frame: the sidebar's right edge went
-		// 160, 222, 337, 431, 483, 580 while the two left panes went 165, 141, 97, 62, 42, 5.
-		// They pass through each other, which is what a rail travelling between stations does,
-		// and the panes read as absent for that stretch because they are under it. Over the same
-		// frames the page kept out of the region's band and no pane lost its outline, which are
-		// the two things that would make the crossing visible as a defect.
-		//
-		// So this number is printed and not judged. A verdict here calls the design a defect.
-		if false && r.hole.ms > budgetMs && wholeWindow(r.frames, r.hole) {
-			t.Errorf("%s: %.0f points belonged to nobody for %.0fms.\npanes seen:\n%s\n%s\nframes: %s\n"+
-				"The sidebar and the panes are one layout: what one gives up the other takes, over "+
-				"the same motion and not before it.",
-				r.name, r.hole.worst, r.hole.ms, panesSeen(r.frames, r.hole),
-				traceLines(r.frames, "left"), r.record)
-		}
-		if r.over.ms > budgetMs && judged(r.over) {
-			t.Errorf("%s: a page was drawn %.0f points over the region for %.0fms.\n%s\nframes: %s\n"+
-				"A native surface is composited above the document, so a page reaching into the "+
-				"region is drawn over it.",
-				r.name, r.over.worst, r.over.ms, traceLines(r.frames, "left"), r.record)
-		}
-	}
+	// Judged inside the case that measured it — see the subtest above.
 }
 
 // run is the longest unbroken stretch that answered wrong: how long it lasted, how many readings it
@@ -805,9 +679,19 @@ func stallLines(frames []traceFrame) string {
 		if frames[i].Drawn {
 			clock = "frame"
 		}
+		// What each path cost over this reading alone: the totals are cumulative, so the number
+		// What each path cost over this reading alone: the totals are cumulative, so the number
+		// mount that happened while the window was being built read as the cause of a stall
+		// three seconds later — measured 2026-08-18, and acted on before it was checked.
 		costs := make([]string, 0, len(frames[i].Costs))
 		for path, cost := range frames[i].Costs {
-			if cost >= 1 {
+			// The first reading of the stretch has nothing to difference against, so it holds the
+			// totals and is labelled as such. Unlabelled, its numbers were read as the cost of the
+			// stall they are printed beside.
+			if i > from {
+				cost -= frames[i-1].Costs[path]
+			}
+			if cost >= 0.5 {
 				costs = append(costs, fmt.Sprintf("%s %.0f", path, cost))
 			}
 		}
@@ -819,10 +703,14 @@ func stallLines(frames []traceFrame) string {
 				break
 			}
 		}
-		lines = append(lines, fmt.Sprintf("  f%03d %s +%.0fms watch=%.1f commit=%.0f carried=%.0f native=%.1f commits=%d %s %s",
+		spent := ""
+		if i == from {
+			spent = "(totals so far)"
+		}
+		lines = append(lines, fmt.Sprintf("  f%03d %s +%.0fms watch=%.1f commit=%.0f carried=%.0f native=%.1f commits=%d %s %s%s",
 			frames[i].Frame, clock, frames[i].SinceLastMs, frames[i].TickMs, frames[i].CommitMs,
 			frames[i].CarriedMs,
-			frames[i].AppliedMs, frames[i].Commits, page, strings.Join(costs, ", ")))
+			frames[i].AppliedMs, frames[i].Commits, page, spent, strings.Join(costs, ", ")))
 		if len(lines) >= 16 {
 			break
 		}
@@ -899,4 +787,149 @@ func traceLines(frames []traceFrame, region string) string {
 			frame.hole(region), frame.WorstOver, pane, page))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// moveResult is one focus move, measured. Declared here rather than inside the test so the verdict
+// on a single move can be a function of its own — and so a person can run one move by name.
+type moveResult struct {
+	name      string
+	frames    []traceFrame
+	lag       run
+	off       run
+	applied   run
+	hole      run
+	over      run
+	blink     run
+	sizes     int
+	steps     int
+	paneSteps int
+	record    string
+}
+
+// judgeMove is the verdict on one focus move: the speed, the shape, the document against the
+// native layer, and the blink. One move, one function, so a person can run one by name and read a
+// failure that names itself.
+func judgeMove(t *testing.T, r moveResult) {
+	// What the window can do when nothing is happening to it. The recording ends with the window
+	// settled, so the drawing rate there is this machine's floor: if it draws every 17ms once the
+	// change is over, a stretch in the middle where it drew nothing is the change's doing and not
+	// the machine's.
+	// A covered window is not presented at the display's rate whatever its occlusion detection is
+	// set to, so the gaps between its drawn frames are the system's cadence and not this
+	// application's work. Measured 2026-08-17: covered, the window stopped drawing for 68 to
+	// 234ms on a focus change and JS ran throughout — the timer readings never missed a beat —
+	// and in front, on the same build and the same six moves, it never stopped at all. What was
+	// reported here as a stall was the environment, and the correction is that this is only asked
+	// of a window someone is looking at.
+	// What this stall is not, measured 2026-08-17 on the six moves of the named window.
+	//
+	// It is 55 to 60ms, on exactly the four moves where a region appears or disappears, and
+	// on no other. It is there with the motion collapsed to nothing, so it is not the
+	// interpolation. It is the same with a section holding two rows as with the file tree, so
+	// it is not the section's own drawing. It survives taking no picture and hiding nothing,
+	// so it is neither half of the park. The page's box does not change across it — same x,
+	// same width — so it is not a resize. The commit crosses in 0ms and the native work is
+	// 0.2ms, and every path this build owns costs under 10ms over the whole stretch.
+	//
+	// And with no page in the window it is gone: twelve moves, two runs, not one stall. So
+	// what is left is the window relaying itself out while a web view is attached to it,
+	// which is the substrate's cost and not this application's arithmetic. Anything that
+	// claims to have fixed it has to move this number.
+	settled := r.frames[len(r.frames)*2/3:]
+	floor := drawnCadence(settled)
+	if os.Getenv("SOKSAK_GATE_FRONT") == "1" && floor > 0 && floor <= drawingCadenceMs {
+		if stall := worstDrawnGap(r.frames); stall > stalledFrameMs {
+			say := t.Logf
+			if judgeDrawing {
+				say = t.Errorf
+			}
+			say("%s: the window stopped drawing for %.0fms while the layout changed, on a "+
+				"machine that draws every %.0fms once it is still.\n%s\nframes: %s\n"+
+				"Nothing on the screen moves while the window is not drawing, and the page a "+
+				"person watches is composited above a document that has stopped.\n"+
+				"inside the stall:\n%s\n"+
+				"what the paths this build owns cost: %s",
+				r.name, stall, floor, traceLines(r.frames, "left"), r.record,
+				stallLines(r.frames), costLines(r.frames))
+		}
+	}
+
+	// Whether a stretch can be judged is asked of that stretch. A window that stalled somewhere
+	// else in the recording — before the change, after it settled — has nothing to do with
+	// whether the page followed its pane while it moved.
+	judged := func(what run) bool {
+		if what.frames == 0 {
+			return true
+		}
+		// How far the page trailed its pane is a question about a moving window, and a window
+		// moves at the rate the machine lets it. `task verify` runs its gates beside each other,
+		// so this is measured there and judged where the machine is quiet (`verify:motion`).
+		if !judgeDrawing {
+			t.Logf("%s: %s, not judged in this run — motion is judged by `task verify:motion`, "+
+				"on a machine that is doing nothing else.", r.name, what)
+			return false
+		}
+		over := r.frames[what.from : what.to+1]
+		cadence, stall := drawnCadence(over), worstDrawnGap(over)
+		if cadence > 0 && cadence <= drawingCadenceMs && stall <= stalledFrameMs {
+			return true
+		}
+		t.Logf("%s: over that stretch the window's frame clock ran every %.0fms and stalled "+
+			"%.0fms, so it was not judged — that number would be this machine's load.",
+			r.name, cadence, stall)
+		return false
+	}
+	if r.lag.ms > budgetMs {
+		t.Errorf("%s: the declaration was %.0f points behind its element for %.0fms.\n%s\nframes: %s\n"+
+			"The document writes the declaration in the frame it measures, so this is the page "+
+			"standing still while its pane travels.",
+			r.name, r.lag.worst, r.lag.ms, traceLines(r.frames, "left"), r.record)
+	}
+	if r.applied.ms > budgetMs && judged(r.applied) {
+		t.Errorf("%s: the native layer held a page %.0f points from where the document put it, for %.0fms.\n%s\nframes: %s\n"+
+			"The document's rectangle and the native layer's are the same commit; a difference "+
+			"here is the native layer holding something else.",
+			r.name, r.applied.worst, r.applied.ms, traceLines(r.frames, "left"), r.record)
+	}
+	// The sentence a person put it in: the document and the native layer move as one, and the size
+	// is adjusted. A page that took more than the two sizes of a travel was being resized on the
+	// way, and everything inside it laid itself out again on each of those frames.
+
+	// And it did travel: a page that never moved was not moving with anything.
+
+	// The frames are not motion: they are drawn or they are not, whatever rate the window runs at,
+	// so this is judged wherever it is measured.
+	//
+	// The seam is not: a pane that is mid-travel is drawn by the stand-in rather than by itself,
+	// and a reading that counts only what is on the screen then sees one pane where there are
+	// three. So the seam is judged from readings that hold the whole window.
+	if r.blink.ms > budgetMs {
+		t.Errorf("%s: %.0f panes were on the screen without their frame for %.0fms.\n%s\nframes: %s\n"+
+			"The line around a pane is a separate element from the pane, and a person sees it go "+
+			"out and come back.",
+			r.name, r.blink.worst, r.blink.ms, traceLines(r.frames, "left"), r.record)
+	}
+	// The gap between the sidebar and the panes is not judged here, and the outlines say why.
+	//
+	// Measured 2026-08-17 through one travel, frame by frame: the sidebar's right edge went
+	// 160, 222, 337, 431, 483, 580 while the two left panes went 165, 141, 97, 62, 42, 5.
+	// They pass through each other, which is what a rail travelling between stations does,
+	// and the panes read as absent for that stretch because they are under it. Over the same
+	// frames the page kept out of the region's band and no pane lost its outline, which are
+	// the two things that would make the crossing visible as a defect.
+	//
+	// So this number is printed and not judged. A verdict here calls the design a defect.
+	if false && r.hole.ms > budgetMs && wholeWindow(r.frames, r.hole) {
+		t.Errorf("%s: %.0f points belonged to nobody for %.0fms.\npanes seen:\n%s\n%s\nframes: %s\n"+
+			"The sidebar and the panes are one layout: what one gives up the other takes, over "+
+			"the same motion and not before it.",
+			r.name, r.hole.worst, r.hole.ms, panesSeen(r.frames, r.hole),
+			traceLines(r.frames, "left"), r.record)
+	}
+	if r.over.ms > budgetMs && judged(r.over) {
+		t.Errorf("%s: a page was drawn %.0f points over the region for %.0fms.\n%s\nframes: %s\n"+
+			"A native surface is composited above the document, so a page reaching into the "+
+			"region is drawn over it.",
+			r.name, r.over.worst, r.over.ms, traceLines(r.frames, "left"), r.record)
+	}
 }
