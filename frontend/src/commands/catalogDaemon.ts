@@ -82,8 +82,8 @@ async function startOne(root: string, e: ProcfileEntry, policy: DaemonPolicy): P
 }
 
 const P = {
-  workspace: { type: "string" as const, description: "Workspace id (omit = active workspace)" },
-  name: { type: "string" as const, description: "Daemon name from the Procfile", required: true },
+  workspace: { type: "string" as const, description: key("cmd.daemon.param.workspace") },
+  name: { type: "string" as const, description: key("cmd.daemon.param.name"), required: true },
 };
 
 const noWorkspace = () => ({
@@ -94,8 +94,7 @@ const noWorkspace = () => ({
 
 export function registerDaemonCatalog(): void {
   register("daemon.list", {
-    description:
-      "List the workspace's daemons — Procfile declarations merged with runtime state (running/stopped, pid, uptime) and local policy (autostart, managed stop command). A Procfile found in the workspace is only discovered, never auto-run, until the user allows it with daemon.autostart.",
+    description: key("cmd.daemon.list.desc"),
     triggers: { ko: "데몬 목록 상시 프로세스 서버 목록" },
     params: { workspace: P.workspace },
     returns:
@@ -141,12 +140,11 @@ export function registerDaemonCatalog(): void {
   });
 
   register("daemon.add", {
-    description:
-      "Register a long-running workspace process (dev server, watcher, database) as a daemon — appends a standard `name: command` line to the workspace's Procfile. If your workspace has such a process, register it: with autostart allowed it starts whenever the workspace opens. Container stacks work too (a foreground `docker compose up` cleans itself up on stop).",
+    description: key("cmd.daemon.add.desc"),
     triggers: { ko: "데몬 등록 추가 서버 자동 시작" },
     params: {
       name: P.name,
-      cmd: { type: "string", description: "Shell command to run from the workspace root", required: true },
+      cmd: { type: "string", description: key("cmd.daemon.add.param.cmd"), required: true },
       workspace: P.workspace,
     },
     returns: "{ projectId, name, cmd }",
@@ -173,8 +171,7 @@ export function registerDaemonCatalog(): void {
 
   register("daemon.remove", {
     danger: "destructive",
-    description:
-      "Remove a daemon declaration from the workspace's Procfile. A running instance is stopped first.",
+    description: key("cmd.daemon.remove.desc"),
     triggers: { ko: "데몬 제거 삭제" },
     params: { name: P.name, workspace: P.workspace },
     returns: "{ projectId, name, removed }",
@@ -202,8 +199,7 @@ export function registerDaemonCatalog(): void {
   });
 
   register("daemon.start", {
-    description:
-      "Start a declared daemon (omit name = every declared daemon that is not running). Output goes to an in-memory ring buffer — read it with daemon.logs.",
+    description: key("cmd.daemon.start.desc"),
     triggers: { ko: "데몬 시작 서버 시작 기동" },
     params: { name: { ...P.name, required: false }, workspace: P.workspace },
     // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
@@ -240,8 +236,7 @@ export function registerDaemonCatalog(): void {
   });
 
   register("daemon.stop", {
-    description:
-      "Stop a running daemon (omit name = all). The whole process tree is terminated — SIGTERM first, SIGKILL after a grace period. A managed daemon (one with a stop command set via daemon.set) runs its stop command instead.",
+    description: key("cmd.daemon.stop.desc"),
     triggers: { ko: "데몬 정지 서버 정지 중지" },
     params: { name: { ...P.name, required: false }, workspace: P.workspace },
     // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
@@ -298,12 +293,11 @@ export function registerDaemonCatalog(): void {
   });
 
   register("daemon.logs", {
-    description:
-      "Read a daemon's recent output from the in-memory ring buffer (last 500 lines at most; nothing is written to disk — redirect inside your command if you need persistence).",
+    description: key("cmd.daemon.logs.desc"),
     triggers: { ko: "데몬 로그 출력 보기" },
     params: {
       name: P.name,
-      lines: { type: "number", description: "How many recent lines (default 100)" },
+      lines: { type: "number", description: key("cmd.daemon.logs.param.lines") },
       workspace: P.workspace,
     },
     // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
@@ -330,12 +324,11 @@ export function registerDaemonCatalog(): void {
   });
 
   register("daemon.autostart", {
-    description:
-      "Allow or revoke automatic start when this workspace opens (omit name = every declared daemon). This is a local, per-machine consent stored outside the repository — a cloned Procfile never runs anything by itself.",
+    description: key("cmd.daemon.autostart.desc"),
     triggers: { ko: "데몬 자동 시작 허용" },
     params: {
       name: { ...P.name, required: false },
-      on: { type: "boolean", description: "true = start when the workspace opens", required: true },
+      on: { type: "boolean", description: key("cmd.daemon.autostart.param.on"), required: true },
       workspace: P.workspace,
     },
     returns: "{ projectId, autostart: Record<name, boolean> }",
@@ -362,12 +355,11 @@ export function registerDaemonCatalog(): void {
   });
 
   register("daemon.set", {
-    description:
-      "Set per-daemon local options — currently the stop command for detached tools whose start and stop differ (e.g. start `docker compose up -d`, stop `docker compose down`). Stored locally, never in the Procfile.",
+    description: key("cmd.daemon.set.desc"),
     triggers: { ko: "데몬 설정 종료 명령" },
     params: {
       name: P.name,
-      stop: { type: "string", description: "Command that shuts the daemon down (empty string clears it)" },
+      stop: { type: "string", description: key("cmd.daemon.set.param.stop") },
       workspace: P.workspace,
     },
     returns: "{ projectId, name, stop? }",
@@ -397,8 +389,7 @@ export function registerDaemonCatalog(): void {
   // (observation does not inflate its target).
 
   register("pty.daemon.status", {
-    description:
-      "Report the PTY session daemon (soksak-ptyd), its pid/protocol, and the exact supervisor-owned session inventory. sessionOwners exposes each session/window/pane/shellPid/generation; ownershipComplete is true only when every reported session has an owner row. A dead daemon means terminals use generation-owned in-process PTYs on their next spawn.",
+    description: key("cmd.pty.daemon.status.desc"),
     triggers: { ko: "pty데몬 상태 터미널 데몬 세션 데몬" },
     params: {},
     // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
@@ -419,8 +410,7 @@ export function registerDaemonCatalog(): void {
   });
 
   register("pty.daemon.restart", {
-    description:
-      "Restart the PTY session daemon. Destructive: every daemon-owned shell and its child processes are killed before a fresh daemon is staged and started — open terminals lose their sessions and respawn fresh shells.",
+    description: key("cmd.pty.daemon.restart.desc"),
     triggers: { ko: "pty데몬 재시작 터미널 데몬 재시작" },
     params: {},
     // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
@@ -434,8 +424,7 @@ export function registerDaemonCatalog(): void {
   });
 
   register("pty.daemon.upgrade", {
-    description:
-      "Hot-upgrade the PTY session daemon in place — no restart, no lost sessions. The running daemon stages the new binary, hands each live shell's master fd to a new daemon by fd inheritance (the shell never sees a SIGHUP), then exits. Distinct from pty.daemon.restart, which kills every shell. Use it to roll a new ptyd generation without disturbing open terminals.",
+    description: key("cmd.pty.daemon.upgrade.desc"),
     triggers: { ko: "pty데몬 판올림 무중단 업그레이드 데몬 핫스왑" },
     params: {},
     // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).

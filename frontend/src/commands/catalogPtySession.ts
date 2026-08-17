@@ -52,15 +52,14 @@ function sessionOf(p: Record<string, unknown>): string | null {
 
 export function registerPtySessionCatalog(): void {
   register("pty.session.spawn", {
-    description:
-      "Spawn (or warm-reattach) a headless daemon-backed PTY session under a caller-chosen session id. No tab is created; the core drains and acks output into a bounded raw tail readable via pty.session.read. Respawning the same session id reattaches to the still-running shell; pass replayFromSeq to skip ring replay up to a sequence already consumed.",
+    description: key("cmd.pty.session.spawn.desc"),
     triggers: { ko: "헤드리스 터미널 세션 생성 재부착" },
     params: {
-      session: { type: "string", required: true, description: "Caller-owned session id" },
-      cwd: { type: "string", required: false, description: "Working directory" },
-      shell: { type: "string", required: false, description: "Shell binary (default: user shell)" },
-      cols: { type: "number", required: false, description: "Columns (default 200)" },
-      rows: { type: "number", required: false, description: "Rows (default 50)" },
+      session: { type: "string", required: true, description: key("cmd.pty.session.spawn.param.session") },
+      cwd: { type: "string", required: false, description: key("cmd.pty.session.spawn.param.cwd") },
+      shell: { type: "string", required: false, description: key("cmd.pty.session.spawn.param.shell") },
+      cols: { type: "number", required: false, description: key("cmd.pty.session.spawn.param.cols") },
+      rows: { type: "number", required: false, description: key("cmd.pty.session.spawn.param.rows") },
       replayFromSeq: {
         type: "number",
         required: false,
@@ -126,12 +125,11 @@ export function registerPtySessionCatalog(): void {
   });
 
   register("pty.session.write", {
-    description:
-      "Write raw bytes (text) to a headless PTY session created by pty.session.spawn.",
+    description: key("cmd.pty.session.write.desc"),
     triggers: { ko: "헤드리스 세션 입력 쓰기" },
     params: {
-      session: { type: "string", required: true, description: "Session id" },
-      data: { type: "string", required: true, description: "Raw text to write" },
+      session: { type: "string", required: true, description: key("cmd.pty.session.write.param.session") },
+      data: { type: "string", required: true, description: key("cmd.pty.session.write.param.data") },
     },
     danger: "inject",
     broker: brokerOf(["commands", "commands:inject"], {
@@ -158,12 +156,11 @@ export function registerPtySessionCatalog(): void {
   });
 
   register("pty.session.read", {
-    description:
-      "Read the raw output tail of a headless PTY session (bounded ring, ANSI included — the reader interprets). Returns the tail joined and the total bytes seen as a resume cursor.",
+    description: key("cmd.pty.session.read.desc"),
     triggers: { ko: "헤드리스 세션 출력 읽기" },
     params: {
-      session: { type: "string", required: true, description: "Session id" },
-      lines: { type: "number", required: false, description: "Trailing lines to keep (default all buffered)" },
+      session: { type: "string", required: true, description: key("cmd.pty.session.read.param.session") },
+      lines: { type: "number", required: false, description: key("cmd.pty.session.read.param.lines") },
     },
     broker: brokerOf(["commands"], {
       type: "object",
@@ -195,10 +192,9 @@ export function registerPtySessionCatalog(): void {
   });
 
   register("pty.session.alive", {
-    description:
-      "Report whether the PTY daemon still holds a live shell for this session id — true even across an app restart before anything reattaches. Distinct from being attached in this window (see pty.session.list).",
+    description: key("cmd.pty.session.alive.desc"),
     triggers: { ko: "헤드리스 세션 생존 확인" },
-    params: { session: { type: "string", required: true, description: "Session id" } },
+    params: { session: { type: "string", required: true, description: key("cmd.pty.session.alive.param.session") } },
     broker: brokerOf(["commands"], {
       type: "object",
       properties: {
@@ -224,7 +220,7 @@ export function registerPtySessionCatalog(): void {
   register("pty.session.kill", {
     description: key("cmd.pty.session.kill.desc"),
     triggers: { ko: "헤드리스 세션 종료" },
-    params: { session: { type: "string", required: true, description: "Session id" } },
+    params: { session: { type: "string", required: true, description: key("cmd.pty.session.kill.param.session") } },
     danger: "destructive",
     broker: brokerOf(["commands", "commands:destructive"], {
       type: "object",

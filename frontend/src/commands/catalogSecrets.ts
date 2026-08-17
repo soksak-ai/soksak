@@ -27,8 +27,7 @@ const KEY_PARAM = {
 
 export function registerSecretsCatalog(): void {
   register("secret.status", {
-    description:
-      "Query the transparent-unlock status: KEK backend label, seal_available (whether the OS key store is reachable, so sealing/opening works), expect_vault (app.data envelope keys registered), and the stored app.data key ids. Use to check whether secrets can be sealed before performing operations.",
+    description: key("cmd.secret.status.desc"),
     triggers: { ko: "시크릿 볼트 상태 백엔드 봉인가능 status" },
     params: {},
     // The answer comes from the owner — identical whichever window runs it (registry.ts windowScoped).
@@ -51,8 +50,7 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.backend", {
-    description:
-      "Query the KEK backend label and whether sealing is available (compat shim over secret.status; unlocked = seal_available). Prefer secret.status.",
+    description: key("cmd.secret.backend.desc"),
     triggers: { ko: "시크릿 볼트 상태 백엔드 봉인가능" },
     params: {},
     // The answer comes from the owner — identical whichever window runs it (registry.ts windowScoped).
@@ -67,10 +65,9 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.set", {
-    description:
-      "Store a sensitive value under ns/key using envelope encryption (per-item DEK wrapped by the device KEK). Overwrites the existing value if the key already exists. Rejected when the OS key store is unavailable (no secret service).",
+    description: key("cmd.secret.set.desc"),
     triggers: { ko: "시크릿 저장 설정 키 값 저장 set 보관" },
-    params: { ns: NS_PARAM, key: KEY_PARAM, value: { type: "string", description: "Sensitive value to store", required: true } },
+    params: { ns: NS_PARAM, key: KEY_PARAM, value: { type: "string", description: key("cmd.secret.set.param.value"), required: true } },
     // The answer comes from the owner — identical whichever window runs it (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ok }",

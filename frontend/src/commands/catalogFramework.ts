@@ -13,7 +13,7 @@
 
 import { framework } from "../framework";
 import { titlebarProvisionBreaches } from "../framework/titlebarProvision";
-import { tmsg } from "../i18n";
+import { key, tmsg } from "../i18n";
 import { register } from "./registry";
 
 /** Names of the contract capabilities — nested groups (app, path, dialog, notification, deepLink) are
@@ -34,8 +34,7 @@ function capabilityNames(framework: Record<string, unknown>): string[] {
 
 export function registerFrameworkCatalog(): void {
   register("framework.info", {
-    description:
-      "Read which app framework this window actually runs on (the resolved adapter, e.g. tauri or electron) and which contract capabilities that adapter exposes. Capability names are reported by presence only — nothing is invoked, because an unimplemented capability throws when called. Use when diagnosing an incident, driving a harness, or stamping a ledger entry with the framework it came from.",
+    description: key("cmd.framework.info.desc"),
     triggers: { ko: "프레임워크 어댑터 플랫폼 활성 런타임 진단 능력 어느프레임워크" },
     params: {},
     returns:

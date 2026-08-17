@@ -7,7 +7,7 @@
 
 import { invoke } from "../framework";
 import { register, type CommandHint } from "./registry";
-import { tmsg } from "../i18n";
+import { key, tmsg } from "../i18n";
 import { allViews, useSessions } from "../state/sessions";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { orphanSurfaceLabels, viewIdFromSurfaceLabel } from "../lib/surfaceLabels";
@@ -26,8 +26,7 @@ interface LabelHealth {
 
 export function registerWebviewCatalog(): void {
   register("webview.surfaces", {
-    description:
-      "Reconcile this window's state (which views exist) against the browser content views actually alive for this window. ghosts = views whose view no longer exists in state — a stale surface floating over the window (the 'browser over an empty window' mismatch). detached = content surfaces that live in the document but not inside the slot that declared them — they are being pushed by coordinates, so slot and surface are two clocks and one of them is always late (empty pane, edge afterimage). A non-empty ghosts or detached list is always a defect fact. Judged from the same sources the app itself uses (state store + the content view host), no pixels involved.",
+    description: key("cmd.webview.surfaces.desc"),
     triggers: { ko: "표면 정합 유령 웹뷰 잔존 브라우저 대조 확인" },
     params: {},
     returns:
@@ -154,8 +153,7 @@ export function registerWebviewCatalog(): void {
   });
 
   register("webview.health.query", {
-    description:
-      "Report webview renderer-process health per label: circuit-breaker state (closed / recovering / open), crash counts in the rolling 60s window, lifetime total, and the last termination reason if the platform provided one. Labels: a window label is that window's main webview, b-<win>-<view> is a browser child. state=open means automatic recovery is exhausted — recover it manually with webview.recover.",
+    description: key("cmd.webview.health.query.desc"),
     triggers: { ko: "웹뷰 건강 웹뷰 상태 크래시 조회 복구 상태" },
     params: {},
     returns:
@@ -179,14 +177,12 @@ export function registerWebviewCatalog(): void {
   });
 
   register("webview.recover", {
-    description:
-      "Manually recover a webview: reset its circuit breaker (clears the crash window and the open state) and reload it in place. Use after webview.health.query shows state=open, or any time a webview is blank/wedged. The window's main webview reloads through the normal boot path (terminals survive — PTYs live in the core); a browser child (b-<win>-<view>) reloads in place without being re-created.",
+    description: key("cmd.webview.recover.desc"),
     triggers: { ko: "웹뷰 복구 웹뷰 되살리기 크래시 복구 화면 복구" },
     params: {
       label: {
         type: "string",
-        description:
-          "webview label — a window label for that window's main webview, or <kind>-<win>-<view> for a native surface (list via webview.health.query or window.list)",
+        description: key("cmd.webview.recover.param.label"),
         required: true,
       },
     },

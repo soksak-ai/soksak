@@ -4,7 +4,7 @@
 // a person puts sections together and gives a plugin its set. Everything the settings screen can do
 // is here first: a surface with no command is not shipped (C2).
 
-import { tmsg } from "../i18n";
+import { key, tmsg } from "../i18n";
 import {
   standsSomewhere,
   useSectionSets,
@@ -53,8 +53,7 @@ function examplePlugin(): string {
 
 export function registerSectionsCatalog(): void {
   register("sections.list", {
-    description:
-      "The section sets this installation holds, where each plugin's set stands, the mode, and the fixed one. A set is a named, ordered list of sections; a section is a view a plugin placed in a region.",
+    description: key("cmd.sections.list.desc"),
     triggers: { ko: "섹션 세트 목록 조합 목록" },
     params: {},
     returns: "{ mode, fixed, sets: [{id,title,sections}], byPlugin, available: {left,right} }",
@@ -79,10 +78,9 @@ export function registerSectionsCatalog(): void {
   });
 
   register("sections.create", {
-    description:
-      "Create an empty section set — put sections in it with sections.arrange, and stand it in a region with sections.link.",
+    description: key("cmd.sections.create.desc"),
     triggers: { ko: "섹션 세트 생성 조합 만들기" },
-    params: { title: { type: "string", description: "Display name", required: true } },
+    params: { title: { type: "string", description: key("cmd.sections.create.param.title"), required: true } },
     returns: "{ id, title }",
     message: () => tmsg("msg.sections.create"),
     errors: ["INVALID_PARAMS"],
@@ -96,12 +94,11 @@ export function registerSectionsCatalog(): void {
   });
 
   register("sections.rename", {
-    description:
-      "Rename a set — the id does not change, so every link to it and the fixed choice hold.",
+    description: key("cmd.sections.rename.desc"),
     triggers: { ko: "섹션 세트 이름 변경" },
     params: {
-      set: { type: "string", description: "Set id", required: true },
-      title: { type: "string", description: "New display name", required: true },
+      set: { type: "string", description: key("cmd.sections.rename.param.set"), required: true },
+      title: { type: "string", description: key("cmd.sections.rename.param.title"), required: true },
     },
     returns: "{ id, title }",
     message: () => tmsg("msg.sections.rename"),
@@ -118,10 +115,9 @@ export function registerSectionsCatalog(): void {
   });
 
   register("sections.remove", {
-    description:
-      "Remove a set. Every link to it goes with it, and the fixed choice clears when it was the one — a link naming nothing reads as linked while nothing stands.",
+    description: key("cmd.sections.remove.desc"),
     triggers: { ko: "섹션 세트 삭제 제거" },
-    params: { set: { type: "string", description: "Set id", required: true } },
+    params: { set: { type: "string", description: key("cmd.sections.remove.param.set"), required: true } },
     returns: "{ id }",
     message: () => tmsg("msg.sections.remove"),
     errors: ["TARGET_NOT_FOUND"],
@@ -135,12 +131,11 @@ export function registerSectionsCatalog(): void {
   });
 
   register("sections.arrange", {
-    description:
-      "Set what a section set holds, in the order the sections stand. A section is a view key, <pluginId>.<viewId>. Whether they can stand in a region is settled when the set is linked there.",
+    description: key("cmd.sections.arrange.desc"),
     triggers: { ko: "섹션 구성 순서" },
     params: {
-      set: { type: "string", description: "Set id", required: true },
-      sections: { type: "json", description: "View keys in order", required: true },
+      set: { type: "string", description: key("cmd.sections.arrange.param.set"), required: true },
+      sections: { type: "json", description: key("cmd.sections.arrange.param.sections"), required: true },
     },
     returns: "{ id, sections }",
     message: (d) => tmsg("msg.sections.arrange", { n: ((d.sections as unknown[]) ?? []).length }),
@@ -161,13 +156,12 @@ export function registerSectionsCatalog(): void {
   });
 
   register("sections.link", {
-    description:
-      "Stand a plugin's set in one region, or clear that region by omitting set. Each region holds its own set, so linking one leaves the other standing. In individual mode the set stands while a view of that plugin is focused, and a plugin with no link has no sidebar at all.",
+    description: key("cmd.sections.link.desc"),
     triggers: { ko: "섹션 세트 연결 플러그인 연결" },
     params: {
-      plugin: { type: "string", description: "Plugin id", required: true },
-      set: { type: "string", description: "Set id (omit = clear this region)" },
-      region: { type: "string", enum: ["left", "right"], description: "Which region", required: true },
+      plugin: { type: "string", description: key("cmd.sections.link.param.plugin"), required: true },
+      set: { type: "string", description: key("cmd.sections.link.param.set") },
+      region: { type: "string", enum: ["left", "right"], description: key("cmd.sections.link.param.region"), required: true },
     },
     returns: "{ plugin, set, region }",
     message: () => tmsg("msg.sections.link"),
@@ -196,13 +190,12 @@ export function registerSectionsCatalog(): void {
   });
 
   register("sections.mode", {
-    description:
-      "individual = the set linked to the focused view's plugin stands, and nothing stands for a plugin with no link. fixed = one set stands in every workspace, whatever is focused, and links are not read.",
+    description: key("cmd.sections.mode.desc"),
     triggers: { ko: "섹션 모드 개별 고정" },
     params: {
-      mode: { type: "string", enum: ["individual", "fixed"], description: "Which rule decides", required: true },
-      set: { type: "string", description: "The set that stands in fixed" },
-      region: { type: "string", enum: ["left", "right"], description: "Where the fixed set stands" },
+      mode: { type: "string", enum: ["individual", "fixed"], description: key("cmd.sections.mode.param.mode"), required: true },
+      set: { type: "string", description: key("cmd.sections.mode.param.set") },
+      region: { type: "string", enum: ["left", "right"], description: key("cmd.sections.mode.param.region") },
     },
     returns: "{ mode, fixed }",
     message: (d) => tmsg("msg.sections.mode", { mode: String(d.mode) }),

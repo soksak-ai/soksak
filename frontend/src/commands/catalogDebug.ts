@@ -6,7 +6,7 @@
 // import.meta.env.DEV gate — registered in dev builds only, absent from the production bundle (dev.remoteConfirmMock precedent).
 // Classified danger:"inject" so it passes the remote policy gate too (socket e2e defaults to remoteInject=allow in dev).
 import { register } from "./registry";
-import { tmsg } from "../i18n";
+import { key, tmsg } from "../i18n";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -14,12 +14,11 @@ export function registerDebugCatalog(): void {
   if (!import.meta.env.DEV) return;
 
   register("debug.sleep", {
-    description:
-      "DEV-ONLY: hold the reply for `ms` then return (ok by default; ok:false when fail=true). Simulates a held-reply process (exec-one onExit) so the scheduler's process_lease lease — no-kill while running, single in-flight, cancel-wakes-wait — can be e2e-tested without a real LLM. Absent in production builds.",
+    description: key("cmd.debug.sleep.desc"),
     triggers: { ko: "디버그 슬립 대기 보류 테스트 lease 스케줄러" },
     params: {
-      ms: { type: "number", description: "Milliseconds to hold the reply before returning (default 3000)." },
-      fail: { type: "boolean", description: "Return ok:false instead of ok:true (exercises backoff/crash path)." },
+      ms: { type: "number", description: key("cmd.debug.sleep.param.ms") },
+      fail: { type: "boolean", description: key("cmd.debug.sleep.param.fail") },
     },
     returns: "{ slept } (ok:true) | { ok:false } when fail",
     message: (d) => tmsg("msg.debug.sleep", { ms: Number(d.slept) }),

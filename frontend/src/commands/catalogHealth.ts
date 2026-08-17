@@ -5,7 +5,7 @@
 // axis, since when, and how takes counters, and without counters a fix cannot be proven — so
 // there is a separate place to query.
 
-import { tmsg } from "../i18n";
+import { key, tmsg } from "../i18n";
 import { register } from "./registry";
 import { catalogJson } from "./registry";
 import { commandHealth, noteActivityPersist, noteLedgerAudit } from "./commandObservation";
@@ -14,8 +14,7 @@ import { invoke } from "../framework";
 
 export function registerHealthCatalog(): void {
   register("state.health", {
-    description:
-      "Report the liveness of the core's observation wiring: command registry size, execution trace sink, and activity hub publishing (attempts/ok/failed/consecutive/lastError/lastStampAt). Use this when responses look fine but nothing is being recorded.",
+    description: key("cmd.state.health.desc"),
     triggers: { ko: "상태 진단 건강 관측 배선" },
     params: {},
     returns:

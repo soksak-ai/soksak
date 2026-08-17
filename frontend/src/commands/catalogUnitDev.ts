@@ -3,7 +3,7 @@
 // after manifest validation.
 
 import { invoke } from "../framework";
-import { tmsg } from "../i18n";
+import { key, tmsg } from "../i18n";
 import { usePlugins, type UnitDevSource } from "../state/plugins";
 import { register } from "./registry";
 
@@ -12,8 +12,7 @@ type UnitKind = (typeof KINDS)[number];
 
 export function registerUnitDevCatalog(): void {
   register("unit.dev.list", {
-    description:
-      "List development source selections for plugins, sidecars, and kits in this CLI identity home. Core build and unit source mode are independent.",
+    description: key("cmd.unit.dev.list.desc"),
     triggers: { ko: "유닛 개발 소스 목록 플러그인 사이드카 키트 작업공간" },
     params: {},
     // The answer comes from the owner — identical in every window (registry.ts windowScoped).
@@ -32,13 +31,12 @@ export function registerUnitDevCatalog(): void {
   });
 
   register("unit.dev.set", {
-    description:
-      "Select an existing absolute directory as a unit's development source in this identity home. Symlinks and relative paths are rejected. Plugin sources are validated and loaded immediately.",
+    description: key("cmd.unit.dev.set.desc"),
     triggers: { ko: "유닛 개발 소스 지정 선택 플러그인 사이드카 키트" },
     params: {
-      kind: { type: "string", enum: [...KINDS], required: true, description: "Unit kind" },
-      id: { type: "string", required: true, description: "Unit id" },
-      source: { type: "string", required: true, description: "Existing absolute source directory" },
+      kind: { type: "string", enum: [...KINDS], required: true, description: key("cmd.unit.dev.set.param.kind") },
+      id: { type: "string", required: true, description: key("cmd.unit.dev.set.param.id") },
+      source: { type: "string", required: true, description: key("cmd.unit.dev.set.param.source") },
     },
     returns: "{ kind, id, source }",
     message: (d) =>
@@ -64,12 +62,11 @@ export function registerUnitDevCatalog(): void {
   });
 
   register("unit.dev.remove", {
-    description:
-      "Remove one development source selection without deleting its workspace. A plugin returns to its separate official installation when present.",
+    description: key("cmd.unit.dev.remove.desc"),
     triggers: { ko: "유닛 개발 소스 해제 제거 공식 설치 복귀" },
     params: {
-      kind: { type: "string", enum: [...KINDS], required: true, description: "Unit kind" },
-      id: { type: "string", required: true, description: "Unit id" },
+      kind: { type: "string", enum: [...KINDS], required: true, description: key("cmd.unit.dev.remove.param.kind") },
+      id: { type: "string", required: true, description: key("cmd.unit.dev.remove.param.id") },
     },
     returns: "{ kind, id, removed }",
     message: (d) =>

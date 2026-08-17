@@ -74,8 +74,7 @@ function settledLayout(): Promise<void> {
  */
 const SETTLE_PARAM = {
   type: "boolean" as const,
-  description:
-    "Finish in-flight finite animations before capturing (default true — a command must yield the frame that should be showing). Pass false to capture the CURRENT instant instead: required to see mismatches that exist only mid-transition, because settling ends them.",
+  description: key("cmd.capture.param.settle"),
 };
 
 /**
@@ -296,10 +295,9 @@ async function resolveRegion(p: Record<string, unknown>): Promise<Region | Refus
 
 export function registerCaptureCatalog(): void {
   register("capture.calibration", {
-    description:
-      "Show, hide, or inspect the three fixed 64×40 DOM compositor calibration rulers used to compare chrome pixels with embedded-surface pixels during cropped window transitions. Reapplying the same visibility is idempotent.",
+    description: key("cmd.capture.calibration.desc"),
     params: {
-      visible: { type: "boolean", description: "true=show, false=remove; omit to inspect current status" },
+      visible: { type: "boolean", description: key("cmd.capture.calibration.param.visible") },
     },
     returns: "{ visible, color, rect, rects }",
     message: (d) => `DOM compositor calibration: ${d.visible ? "visible" : "hidden"}`,
@@ -311,8 +309,7 @@ export function registerCaptureCatalog(): void {
   });
 
   register("capture.motion-anchors", {
-    description:
-      "Attach finite E2E pixel anchors to exposed DOM tab slots. Each anchor inherits its slot's layout transform, so a page marker of the same color must share its x coordinate in every recorded PNG. Passing an empty anchors array removes all anchors idempotently.",
+    description: key("cmd.capture.motion-anchors.desc"),
     params: {
       anchors: {
         type: "json",
@@ -349,8 +346,7 @@ export function registerCaptureCatalog(): void {
   });
 
   register("window.snapshot", {
-    description:
-      "Capture the window contents to a PNG. Captures even when fully occluded by other apps (occlusion detection is temporarily disabled during capture). Includes WebGL terminal. Parent folder is created automatically. Cropping and saving compose freely: rect (CSS px, window coords — same space as ui.measure), node (an exposed address from ui.tree), or tab (a content tab id) selects the region, and path saves it while base64:true returns it inline. Capturing a tab that is not active activates it for the shot and restores whatever was active afterwards, so the screen returns to where it was. With neither path nor base64, a cropped capture still returns inline.",
+    description: key("cmd.window.snapshot.desc"),
     triggers: { ko: "스크린샷 캡처 화면 저장 PNG 저장 스냅샷 부분 영역" },
     params: {
       path: {
@@ -363,23 +359,19 @@ export function registerCaptureCatalog(): void {
       },
       rect: {
         type: "json",
-        description:
-          "Crop region {x,y,w,h} in CSS px, window coordinates (ui.measure space). Combine with path to save the crop.",
+        description: key("cmd.window.snapshot.param.rect"),
       },
       node: {
         type: "string",
-        description:
-          "Exposed address (ui.tree) to capture — its rect is measured for you. Use this to capture one panel or element without computing coordinates.",
+        description: key("cmd.window.snapshot.param.node"),
       },
       tab: {
         type: "string",
-        description:
-          "Content tab id to capture. Inactive tabs are parked offscreen, so this activates the tab (and its space) for the shot and restores what was active afterwards.",
+        description: key("cmd.window.snapshot.param.tab"),
       },
       margin: {
         type: "number",
-        description:
-          "Points of surroundings to keep around a node or tab crop (default 0), clamped to the window. A node captured to its own edges shows what it looks like and nothing about where it is — whether it is clipped, covered, or aligned with what is beside it are all questions about its surroundings.",
+        description: key("cmd.window.snapshot.param.margin"),
       },
       settle: SETTLE_PARAM,
     },
@@ -507,14 +499,12 @@ export function registerCaptureCatalog(): void {
   // leaves pixels unchanged when it is covered, clipped, or composited under another layer. So there
   // is a separate place to query pixels.
   register("window.pixels", {
-    description:
-      "Measure what is actually painted in a region — mean color and luminance, not a picture. Same region axes as window.snapshot (rect | node | tab), so the address you measure is the address you capture. Use this to verify that a declared style reached the screen: computed style says what was declared, this says what was painted (an overlay can be clipped, covered, or composited under a native surface and the declaration still reads correct). Compare two states or two regions by their luminance.",
+    description: key("cmd.window.pixels.desc"),
     triggers: { ko: "픽셀 색 밝기 실제칠해짐 검증 휘도 평균색" },
     params: {
       rect: {
         type: "json",
-        description:
-          "Region {x,y,w,h} in CSS px, window coordinates (ui.measure space)",
+        description: key("cmd.window.pixels.param.rect"),
       },
       node: {
         type: "string",
@@ -522,8 +512,7 @@ export function registerCaptureCatalog(): void {
       },
       tab: {
         type: "string",
-        description:
-          "Content tab id. Inactive tabs are parked offscreen, so this activates the tab for the shot and restores what was active afterwards",
+        description: key("cmd.window.pixels.param.tab"),
       },
       settle: SETTLE_PARAM,
     },
@@ -558,8 +547,7 @@ export function registerCaptureCatalog(): void {
   });
 
   register("window.record", {
-    description:
-      "Capture the window as a sequence of PNGs (dir/f0000.png ...) for use as a video source. All frames are rendered even when occluded (occlusion detection disabled for the duration). Folder is created automatically.",
+    description: key("cmd.window.record.desc"),
     triggers: { ko: "녹화 연속 캡처 프레임 저장 동영상 소스" },
     params: {
       dir: {

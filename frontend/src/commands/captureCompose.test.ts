@@ -9,6 +9,8 @@
 // This pins down whether the spec promises that combination. Live verification was done separately
 // (rect+path 65515B, node+path 2879B); this check stops the promise from being reverted silently.
 import { describe, it, expect, beforeEach, vi } from "vitest";
+// The description is a key now, resolved where the catalogue is read — so read it that way.
+import { text, withReaderLanguage } from "../i18n";
 
 const BAG_KEY = "__soksakModuleState";
 
@@ -39,7 +41,10 @@ describe("capture — cropping and saving compose", () => {
     expect(spec.returns).toContain("tabId");
     // An inactive tab is parked outside the window, so this command activates it. The description
     // must state that and the promise to restore, or the caller reads the brief screen change as a defect.
-    expect(spec.description).toContain("restores");
+    // Both editions, because a promise that only one language makes is the defect a key exists to
+    // prevent: the English reader is told the screen comes back and the Korean reader is not.
+    expect(withReaderLanguage("en", () => text(spec.description))).toContain("restores");
+    expect(withReaderLanguage("ko", () => text(spec.description))).toContain("되돌리");
   });
 
   it("declares that a cropped result can also be written to a file", async () => {
@@ -53,6 +58,6 @@ describe("capture — cropping and saving compose", () => {
     expect(examples.some((e) => e.includes("node") && e.includes("path"))).toBe(true);
     // The old spec said rect "implies base64", which justified ignoring path. While that sentence
     // remains, the spec justifies a revert of the implementation.
-    expect(spec.description).not.toContain("implies base64");
+    expect(withReaderLanguage("en", () => text(spec.description))).not.toContain("implies base64");
   });
 });

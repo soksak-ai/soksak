@@ -28,7 +28,7 @@ export function registerClipboardCatalog(): void {
     description: key("cmd.clipboard.write.desc"),
     triggers: { ko: "클립보드 쓰기 복사 클립보드저장" },
     params: {
-      text: { type: "string", description: "Text to place in the clipboard", required: true },
+      text: { type: "string", description: key("cmd.clipboard.write.param.text"), required: true },
     },
     returns: "{ ok }",
     message: () => tmsg("msg.clipboard.write"),

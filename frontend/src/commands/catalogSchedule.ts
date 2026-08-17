@@ -9,14 +9,13 @@ import { register } from "./registry";
 
 export function registerScheduleCatalog(): void {
   register("schedule.set", {
-    description:
-      "Schedule a registry command to fire once at an absolute epoch-ms timestamp. Generates a new id if omitted; replaces an existing schedule when id is supplied. For recurrence, re-arm after the command fires; compose with notify.show for reminders.",
+    description: key("cmd.schedule.set.desc"),
     triggers: { ko: "스케줄 예약 타이머 알람 일정 등록" },
     params: {
-      at: { type: "number", description: "Fire time as epoch milliseconds", required: true },
-      command: { type: "string", description: "Registry command name to fire", required: true },
-      params: { type: "json", description: "Command parameters (defaults to empty object when omitted)" },
-      id: { type: "string", description: "Existing schedule id to replace (a new id is issued when omitted)" },
+      at: { type: "number", description: key("cmd.schedule.set.param.at"), required: true },
+      command: { type: "string", description: key("cmd.schedule.set.param.command"), required: true },
+      params: { type: "json", description: key("cmd.schedule.set.param.params") },
+      id: { type: "string", description: key("cmd.schedule.set.param.id") },
     },
     // The answer is home-wide, not per-window — same in every window (registry.ts windowScoped).
     windowScoped: false,
@@ -42,19 +41,18 @@ export function registerScheduleCatalog(): void {
   });
 
   register("schedule.register", {
-    description:
-      "Register a scheduler job (trigger + registry command to fire). trigger = { kind:'at', at } | { kind:'every', every_ms, anchor? } | { kind:'cron', expr } | { kind:'reconcile' }. process_lease=true holds the lease until the fired command's process exits (no kill while running, zombie_backstop_ms cap, default 3h). retry = { max, base_ms, max_ms } for ok:false backoff. Returns the assigned id. Generalizes schedule.set.",
+    description: key("cmd.schedule.register.desc"),
     triggers: { ko: "스케줄 등록 register 트리거 reconcile cron every 프로세스" },
     params: {
-      trigger: { type: "json", description: "{ kind:'at'|'every'|'cron'|'reconcile', ... }", required: true },
-      command: { type: "string", description: "Registry command name to fire", required: true },
-      params: { type: "json", description: "Command parameters (fired with the command)" },
-      id: { type: "string", description: "Existing job id to replace (new id issued when omitted)" },
-      retry: { type: "json", description: "{ max, base_ms, max_ms } — backoff on ok:false" },
-      concurrency: { type: "number", description: "Reserved (per-job lease is always single)" },
-      timeout_ms: { type: "number", description: "Non-process wait cap (ms). Ignored when process_lease." },
-      process_lease: { type: "boolean", description: "Hold lease until fired process exits (exec-one)" },
-      zombie_backstop_ms: { type: "number", description: "Process-lease zombie cap (ms). null=infinite, default 3h" },
+      trigger: { type: "json", description: key("cmd.schedule.register.param.trigger"), required: true },
+      command: { type: "string", description: key("cmd.schedule.register.param.command"), required: true },
+      params: { type: "json", description: key("cmd.schedule.register.param.params") },
+      id: { type: "string", description: key("cmd.schedule.register.param.id") },
+      retry: { type: "json", description: key("cmd.schedule.register.param.retry") },
+      concurrency: { type: "number", description: key("cmd.schedule.register.param.concurrency") },
+      timeout_ms: { type: "number", description: key("cmd.schedule.register.param.timeout_ms") },
+      process_lease: { type: "boolean", description: key("cmd.schedule.register.param.process_lease") },
+      zombie_backstop_ms: { type: "number", description: key("cmd.schedule.register.param.zombie_backstop_ms") },
     },
     // The answer is home-wide, not per-window — same in every window (registry.ts windowScoped).
     windowScoped: false,
@@ -86,10 +84,9 @@ export function registerScheduleCatalog(): void {
   });
 
   register("schedule.poke", {
-    description:
-      "Fire a job immediately (completion trigger / external change). id given = that job; omitted = all reconcile jobs. Running jobs coalesce (re-fire once after completion).",
+    description: key("cmd.schedule.poke.desc"),
     triggers: { ko: "스케줄 깨우기 poke 재평가 reconcile 틱" },
-    params: { id: { type: "string", description: "Job id (omit = all reconcile jobs)" } },
+    params: { id: { type: "string", description: key("cmd.schedule.poke.param.id") } },
     // The answer is home-wide, not per-window — same in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ok }",
@@ -106,7 +103,7 @@ export function registerScheduleCatalog(): void {
   register("schedule.cancel", {
     description: key("cmd.schedule.cancel.desc"),
     triggers: { ko: "스케줄 취소 삭제 예약취소 cancel" },
-    params: { id: { type: "string", description: "Schedule id issued by schedule.set", required: true } },
+    params: { id: { type: "string", description: key("cmd.schedule.cancel.param.id"), required: true } },
     // The answer is home-wide, not per-window — same in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ removed }",
@@ -123,8 +120,7 @@ export function registerScheduleCatalog(): void {
   });
 
   register("schedule.list", {
-    description:
-      "List all jobs sorted by next fire time ascending. Each: { id, trigger, command, params, next_at, running, concurrency }. next_at=null means waiting (reconcile/event) or running. running=true means a fire is in flight (lease held).",
+    description: key("cmd.schedule.list.desc"),
     triggers: { ko: "스케줄 목록 예약 리스트 조회" },
     params: {},
     // The answer is home-wide, not per-window — same in every window (registry.ts windowScoped).

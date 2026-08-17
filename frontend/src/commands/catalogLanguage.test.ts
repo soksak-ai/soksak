@@ -34,7 +34,7 @@ function sentencesIn(language: "ko" | "en"): string[] {
 //
 // A keyed sentence whose two translations happen to be identical counts here too. That overcounts
 // and never undercounts, which is the direction a ratchet can absorb.
-const unkeyedDescriptions = 486;
+const unkeyedDescriptions = 336;
 
 describe("the catalogue in the reader's language", () => {
   beforeAll(() => {

@@ -11,8 +11,7 @@ import { persistWindowNow } from "../state/windowPersistRequest";
 
 export function registerSystemCatalog(): void {
   register("system.hello", {
-    description:
-      "Greet the app and read the socket protocol version, the oldest client protocol still served, and app identity (version, pid, start time, capabilities). A client sends this first to detect version skew before issuing commands. Also answered at the transport, so it replies even when the front is wedged.",
+    description: key("cmd.system.hello.desc"),
     triggers: { ko: "협상 핸드셰이크 헬로 인사 프로토콜 버전 스큐 호환 접속" },
     params: {},
     returns:
@@ -115,8 +114,7 @@ export function registerSystemCatalog(): void {
   });
 
   register("app.environment", {
-    description:
-      "Read this app's compile-time core identity, isolated home, matching CLI name, build profile, updater channel, and explicitly selected development units.",
+    description: key("cmd.app.environment.desc"),
     triggers: { ko: "앱 환경 코어 빌드 홈 CLI 개발 유닛 모드" },
     params: {},
     // The owner defines the answer — identical from any window (registry.ts windowScoped).
@@ -144,8 +142,7 @@ export function registerSystemCatalog(): void {
   // diagnostics; decisions branch on the axes (chromium, nativeChildWebview, engineModules) — one
   // more framework leaves the deciding code unchanged.
   register("framework.provision", {
-    description:
-      "Read what this window's framework provides. Adapter name is diagnostic identity; product behavior branches only on explicit capabilities such as document-start scripts and real input injection.",
+    description: key("cmd.framework.provision.desc"),
     triggers: { ko: "프레임워크 능력 제공 축 네이티브 자식 웹뷰 엔진" },
     params: {},
     returns: "{ name, chromium, nativeChildWebview, engineModules, supportsDocumentStart, supportsInputInjection }",
