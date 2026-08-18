@@ -63,9 +63,9 @@ import {
   type PluginManifest,
   type PluginPermission,
   type ViewPlacement,
+  type LocalizedText,
 } from "./spec";
-import { localize, tmsg } from "../i18n";
-import { useSettings } from "../state/settings";
+import { localize, readingLanguage, tmsg } from "../i18n";
 import { usePluginSettings, type SettingValue } from "../state/pluginSettings";
 import { findViewById, useSessions } from "../state/sessions";
 
@@ -133,10 +133,12 @@ export interface DataChangeEvent {
 // ── Types the plugin sees ────────────────────────────────────────────────────
 
 export interface PluginCommandSpec {
-  // description = English base (LLM discovery surface — no stubs). triggers = non-English trigger words
-  // (language → word). Host catalogJson composes base+triggers (docs/I18N.md §3). Human UI uses
-  // contributes.commands.title.
-  description: string;
+  // description is read by a person in the palette and in `sok` help, and by an LLM discovering the
+  // command — both put it through a key, and a plugin's key mechanism is its own text (I18N.md I1).
+  // One string stands for every language, which is what an untranslated plugin has; a language map
+  // is resolved against the reader. triggers = non-English trigger words (language → word), which
+  // the host's catalogJson composes onto the base (docs/I18N.md §3).
+  description: LocalizedText;
   triggers?: Record<string, string>;
   params?: Record<string, ParamSpec>;
   /** "handler" = the handler owns parameter validation (parameters absent from the spec pass through).
@@ -149,7 +151,9 @@ export interface PluginCommandSpec {
   /** Standard answer (MESSAGE-PROTOCOL §3) — turns success data into a one-line human-readable message.
    *  Without it the answer degrades to a label and the loader warns (required at M5). Reference: runbook
    *  ok()/err(). */
-  message?: (data: Record<string, unknown>) => string;
+  // A string, or a language map the host resolves against whoever asked. A plugin has no key in
+  // the host table, so its sentence travels as text.
+  message?: (data: Record<string, unknown>) => LocalizedText;
   /** @deprecated Renamed to message — transitional lifeline until the M5 sweep. New plugins use
    *  message. */
   summarize?: (data: Record<string, unknown>) => string;
@@ -228,7 +232,11 @@ export interface SoksakPluginApi {
    *  probing for a surface — the same bundle is evaluated in the window realm and the child renderer
    *  realm, and their surfaces differ. */
   realm: PluginRealm;
-  // Host display language (permission-free context §3.5) — changes arrive as the locale.changed event.
+  // The language to answer in (permission-free context §3.5) — the caller's inside a command, this
+  // window's own outside one. A change to the window's own arrives as the locale.changed event.
+  //
+  // Measured 2026-08-18: this read the window's setting only, so a plugin command answered an
+  // English `sok` call in Korean whenever the window was Korean (I18N.md I4a).
   locale: () => string;
   /** Window label of this plugin instance (multi-window — for per-window state and credential
    *  records). */
@@ -1374,7 +1382,7 @@ export function buildPluginApi(
   const draft: Omit<SoksakPluginApi, "realm"> = {
     appVersion: deps.appVersion,
     pluginId: id,
-    locale: () => useSettings.getState().language,
+    locale: () => readingLanguage(),
     windowLabel: () => currentWindowLabel() || "main",
 
     events: {

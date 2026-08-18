@@ -18,7 +18,7 @@ export function langKeySets(): { ko: string[]; en: string[] } {
 }
 
 export function localize(t: LocalizedText): string {
-  return resolveText(t, useSettings.getState().language);
+  return resolveText(t, readingLanguage());
 }
 
 // Non-React translation (for building command message/speak) — the out-of-hook equivalent
@@ -69,9 +69,11 @@ export function withReaderLanguage<T>(language: string | null | undefined, run: 
  * that for a Korean caller and an English one alike. Measured 2026-08-18: `state.tree` answered
  * one string to both.
  *
- * The two are apart by shape. A plain string is a literal somebody wrote; an I18nKey is a name to
- * resolve where the reader is known. Nothing guesses whether a string happens to be a key — a
- * lookup that quietly falls back would answer a key name as a sentence on the day it is misspelt.
+ * The three are apart by shape. A plain string is a literal that stands for every language; an
+ * I18nKey is a name in this build's own table; a language map is a plugin's own text, which has no
+ * key here and resolves against the reader the same way. Nothing guesses whether a string happens
+ * to be a key — a lookup that quietly falls back would answer a key name as a sentence on the day
+ * it is misspelt.
  */
 export type I18nKey = {
   readonly i18nKey: MsgKey;
@@ -86,9 +88,19 @@ export function key(name: MsgKey, params?: Record<string, string | number>): I18
   return params ? { i18nKey: name, params } : { i18nKey: name };
 }
 
+/** What a sentence can be before it is built: a literal, a key here, or a plugin's own text. */
+export type Sentence = string | I18nKey | LocalizedText;
+
+/** True for a key in this build's table. A language map cannot hold this field: a language key is
+ *  two letters and an optional subtag, which `i18nKey` is not. */
+function isKey(value: Sentence): value is I18nKey {
+  return typeof value === "object" && typeof (value as I18nKey).i18nKey === "string";
+}
+
 /** Resolves a named sentence now; a literal passes through as it stands. */
-export function text(value: string | I18nKey, params?: Record<string, string | number>): string {
-  return typeof value === "string" ? value : tmsg(value.i18nKey, params ?? value.params);
+export function text(value: Sentence, params?: Record<string, string | number>): string {
+  if (typeof value === "string") return value;
+  return isKey(value) ? tmsg(value.i18nKey, params ?? value.params) : localize(value);
 }
 
 // Plural rules per language, kept because building one is not free and every counted sentence
@@ -161,8 +173,19 @@ function pluralBranches(body: string): Map<string, string> {
   return branches;
 }
 
+/**
+ * The language to build a sentence in right now.
+ *
+ * The reader's, inside a scope that named one; this window's own otherwise. Everything that builds
+ * a sentence reads this — the key table, a plugin's language map, a plugin resolving its own text —
+ * so a caller who named a language gets it from all of them, or from none.
+ */
+export function readingLanguage(): Language {
+  return readerLanguage ?? useSettings.getState().language;
+}
+
 export function tmsg(key: MsgKey, params?: Record<string, string | number>): string {
-  const lang = readerLanguage ?? useSettings.getState().language;
+  const lang = readingLanguage();
   const stored: string = messages[lang][key] ?? ko[key] ?? key;
   const count = countIn(params);
   let s = selectPluralForm(stored, lang, count);

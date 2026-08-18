@@ -18,7 +18,7 @@ import {
 } from "../plugins/spec";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { cliName } from "../lib/cliIdentity";
-import { hasMessage, text, tmsg, withReaderLanguage, type I18nKey, type MsgKey } from "../i18n";
+import { hasMessage, text, tmsg, withReaderLanguage, type MsgKey, type Sentence } from "../i18n";
 
 // Parameter spec (JSON-serializable — used as is for CLI/MCP/docs generation).
 export interface ParamSpec {
@@ -26,7 +26,7 @@ export interface ParamSpec {
   type: "string" | "number" | "boolean" | "string[]" | "number[]" | "json";
   // A key, or a literal nobody has keyed yet. Resolved where the catalogue is read, not where it
   // is registered — see I18nKey.
-  description: string | I18nKey;
+  description: Sentence;
   required?: boolean;
   enum?: readonly string[];
   default?: unknown;
@@ -112,7 +112,7 @@ export interface CommandSpec {
   // description = role, what, when, why. A person reads it in the command palette and in `sok`
   // help, and an LLM reads it to discover the command — both readers put it through a key
   // (I18N.md I1). A key, or a literal nobody has keyed yet; resolved where the catalogue is read.
-  description: string | I18nKey;
+  description: Sentence;
   // triggers = per-language trigger words for non-English languages (space separated). composeTriggers merges them into base on exposure.
   // The base prose handles English matching, so en is usually omitted. Adding a language (ja/zh) = add a key to this map (docs/I18N.md §3).
   triggers?: Record<string, string>;
@@ -143,7 +143,10 @@ export interface CommandSpec {
   // Standard answer (message, display) — the success data as one human-readable line. **Required**: every command
   // supplies its own answer. No guessing layer (shape derivation) and no code-echo fallback. tmsg (key table) resolves
   // the sentence into the current language (P0 — adding a language = adding a table column). docs/MESSAGE-PROTOCOL.md response envelope contract.
-  message: (data: Record<string, unknown>) => string;
+  // Built where the answer is, and resolved where the reader is: a plain string, a key in this
+  // build's table, or a plugin's own language map. A plugin has no key in this table, so its
+  // sentence travels as text and the core resolves it against whoever asked.
+  message: (data: Record<string, unknown>) => Sentence;
   // Spoken sentence (speak) — the seam symmetric to message (display). This is the only speech axis (§3): with speak,
   // speak(outcome) is the sentence for both success and failure; without it message is the fallback; "" = silence. A
   // command that performs speech (say and friends) cuts the feedback loop with speak: () => "". Built with tmsg like message (P0).
@@ -1524,7 +1527,7 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
   // spec.message is the fallback only when it is absent (label degradation — same shape as the rule in MESSAGE-PROTOCOL §3).
   const wireMessage =
     spec?.envelope === "service" && typeof rm === "string" && rm.trim() ? rm : undefined;
-  const message = wireMessage ?? (spec ? spec.message(data ?? {}) : code);
+  const message = wireMessage ?? (spec ? text(spec.message(data ?? {})) : code);
   const media =
     rmedia && typeof rmedia === "object" && typeof (rmedia as MediaContent).kind === "string"
       ? (rmedia as MediaContent)

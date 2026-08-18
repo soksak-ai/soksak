@@ -14,6 +14,7 @@ import {
   isNonEmptyString,
   isRecord,
 } from "./util";
+import { normalizeText, validateLocalizedText, type LocalizedText } from "./localizedText";
 
 // The plugin service wire contract (PS5, PS6). A contract id starts with
 // "soksak-spec-", so it never collides with a plugin id (soksak-plugin-<name>);
@@ -37,19 +38,25 @@ export const PARAM_TYPES = [
 export type ServiceParamType = (typeof PARAM_TYPES)[number];
 export interface ServiceParamSpec {
   type: ServiceParamType;
-  description: string;
+  // A person reads this in the palette and in `sok` help; it is LocalizedText for the same reason
+  // the command's own description is.
+  description: LocalizedText;
   required?: boolean;
   enum?: string[];
   default?: unknown;
 }
 
 // Spec fields a bind:"service" command declares additionally in the manifest (PS3).
-// description = the English base (LLM discovery surface — isomorphic to CommandSpec.description;
-// the human label is title).
+//
+// description is read by a person in the command palette and in `sok` help, and by an LLM
+// discovering the command. Both readers put it through the plugin's own text mechanism, so it is
+// LocalizedText — one string, or a language map (I18N.md I1). A plain string is still valid and
+// stands for every language, which is what an untranslated plugin has.
+//
 // triggers = the non-English trigger word map (composed by composeTriggers — docs/I18N.md §3).
 export interface ServiceCommandFields {
   bind?: "service";
-  description?: string;
+  description?: LocalizedText;
   triggers?: Record<string, string>;
   params?: Record<string, ServiceParamSpec>;
   returns?: string;
@@ -183,13 +190,13 @@ export function parseCommandServiceFields(
     errs.push(tmsg("plugin.manifest.command.bind", { label }));
     return null;
   }
-  if (!isNonEmptyString(v.description)) {
+  if (!validateLocalizedText(v.description, `${label}.description`, errs)) {
     errs.push(tmsg("plugin.manifest.command.description", { label }));
     return null;
   }
   const out: ServiceCommandFields = {
     bind: "service",
-    description: v.description.trim(),
+    description: normalizeText(v.description),
   };
   if (v.triggers !== undefined) {
     if (
@@ -218,7 +225,7 @@ export function parseCommandServiceFields(
         errs.push(`${plabel}.type: ${PARAM_TYPES.join("|")}`);
         return null;
       }
-      if (!isNonEmptyString(spec.description)) {
+      if (!validateLocalizedText(spec.description, `${plabel}.description`, errs)) {
         errs.push(tmsg("plugin.manifest.param.description", { label: plabel }));
         return null;
       }
@@ -234,7 +241,7 @@ export function parseCommandServiceFields(
       }
       const p: ServiceParamSpec = {
         type: spec.type as ServiceParamType,
-        description: spec.description.trim(),
+        description: normalizeText(spec.description),
       };
       if (spec.required !== undefined) p.required = spec.required as boolean;
       if (spec.enum !== undefined) p.enum = (spec.enum as string[]).map((e) => e.trim());
