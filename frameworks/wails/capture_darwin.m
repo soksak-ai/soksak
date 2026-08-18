@@ -5,8 +5,14 @@
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <WebKit/WebKit.h>
 
+// A refusal always carries words. A nil or empty message would reach the caller as a failure with
+// nothing in it, and `strdup(NULL)` is not even that — measured 2026-08-18, a recording stopped with
+// "frame 0 could not be captured: " and the colon was the whole reason.
 static SoksakCapture failure(NSString *message) {
-  SoksakCapture out = {NULL, 0, strdup(message.UTF8String)};
+  const char *words = (message != nil && message.length > 0)
+      ? message.UTF8String
+      : "the capture refused and said nothing; this message is missing at its source";
+  SoksakCapture out = {NULL, 0, strdup(words)};
   return out;
 }
 

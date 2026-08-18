@@ -280,6 +280,10 @@ func init() {
 			EN: "window capture received a nil window",
 			KO: "창 캡처가 nil 창을 받았습니다",
 		},
+		"wails.capture.wordlessRefusal": {
+			EN: "the capture refused and said nothing; the reason is missing at its source",
+			KO: "캡처가 이유 없이 거절했습니다 — 사유가 그 출처에서 빠져 있습니다",
+		},
 		"wails.capture.noImage": {
 			EN: "window capture produced no image",
 			KO: "창 캡처가 이미지를 만들지 못했습니다",

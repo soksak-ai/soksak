@@ -12,6 +12,7 @@ import "C"
 
 import (
 	"errors"
+	"strings"
 	"unsafe"
 
 	"github.com/soksak/soksak-core/core/i18n"
@@ -28,6 +29,19 @@ import (
 // back flat while the surface itself reported title "Example Domain" and
 // progress 1. CompositeSurfaces finishes the image by asking each surface for
 // its own pixels; this function is the window layer alone.
+// capturedRefusal is the native layer's refusal, and a refusal that arrived without words is named
+// as that rather than passed on empty.
+//
+// Measured 2026-08-18: a recording answered `frame 0 could not be captured: ` and the colon was the
+// whole reason. A caller cannot act on that and cannot report it either — an empty message is
+// indistinguishable from a message nobody read.
+func capturedRefusal(words string) error {
+	if strings.TrimSpace(words) == "" {
+		return i18n.Errorf("wails.capture.wordlessRefusal", nil)
+	}
+	return errors.New(words)
+}
+
 func CaptureWindow(window unsafe.Pointer, rect Rect) ([]byte, error) {
 	if window == nil {
 		return nil, i18n.Errorf("wails.capture.nilWindow", nil)
@@ -42,7 +56,7 @@ func CaptureWindow(window unsafe.Pointer, rect Rect) ([]byte, error) {
 	defer C.soksakCaptureFree(result)
 
 	if result.error != nil {
-		return nil, errors.New(C.GoString(result.error))
+		return nil, capturedRefusal(C.GoString(result.error))
 	}
 	if result.png == nil || result.png_len == 0 {
 		// An empty answer is a failure with a missing message, never a
@@ -75,7 +89,7 @@ func CaptureDocument(window unsafe.Pointer, rect Rect) ([]byte, error) {
 	defer C.soksakCaptureFree(result)
 
 	if result.error != nil {
-		return nil, errors.New(C.GoString(result.error))
+		return nil, capturedRefusal(C.GoString(result.error))
 	}
 	if result.png == nil || result.png_len == 0 {
 		return nil, i18n.Errorf("wails.capture.noImage", nil)
