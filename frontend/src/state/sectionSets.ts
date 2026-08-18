@@ -3,6 +3,7 @@ import { moduleState } from "../lib/moduleState";
 import { createCoreSync } from "./coreSync";
 import type { CoreStoreDeps } from "./coreStore";
 import { issueId } from "./ids";
+import { allGroups, type Workspace } from "./sessions";
 
 // Section sets: which sections go together, who gets which set, and which one stands.
 //
@@ -183,6 +184,23 @@ export function regionPresent(
 
 /** The set standing in a region, given the plugin of the focused view. null = none stands, and then
  *  the region is not drawn: composing nothing and reserving width for it is a hole on the screen. */
+/**
+ * The plugin of the view a workspace is focused on — what `individual` reads.
+ *
+ * Beside the rule it feeds rather than in the plane that draws it. Three readers depend on it: the
+ * plane, the hole reported for the surface underneath a region, and sections.link, for whether
+ * the link it just made changed what stands. A second copy would be a second answer to whose
+ * sections stand.
+ */
+export function focusedPluginOf(workspace: Workspace | null | undefined): string | null {
+  if (!workspace) return null;
+  const space = workspace.spaces.find((c) => c.id === workspace.activeSpaceId);
+  if (!space) return null;
+  const group = allGroups(space.layout).find((g) => g.id === space.activePaneId);
+  const view = group?.tabs.find((v) => v.id === group.activeTabId);
+  return view?.pluginId ?? null;
+}
+
 export function standingSet(region: Region, focusedPluginId: string | null): SectionSet | null {
   const s = useSectionSets.getState();
   const standing =

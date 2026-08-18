@@ -278,7 +278,21 @@ export const SectionSetHost = memo(function SectionSetHost({
   const hoverCell = hover && cells.find((c) => cellId(c.value) === hover.cellId);
 
   return (
-    <div className="sidebar-left">
+    <div
+      className="sidebar-left"
+      // What this host stands, declared by the render that stands it.
+      //
+      // Nothing announced it before, so every reader inferred it from boxes and every one of them
+      // polled: measured 2026-08-18, `sections.link` answered and `ui.layout.wait-settled` answered
+      // and the section that had just been unlinked was still on screen, in four gates at once.
+      // A declaration is what a projection owes the outside (NATIVE-SURFACES P1) — the reader is
+      // told what stands rather than working it out from what has a rectangle.
+      //
+      // The value is registeredKeys, which is what this render mounts: the standing set filtered to
+      // the sections actually placed in this region. Empty while nothing stands.
+      data-region-sections={registeredKeys.join(" ")}
+      data-region-standing={standingId ?? ""}
+    >
       {/* Header band — same height as the content header (lib/chromeBands). No plugin fills this
           slot today, and empty is a legitimate state for this band. */}
       <div className="sidebar-left-header" data-node={`sidebar/${region}/header`} />

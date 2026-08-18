@@ -6,13 +6,17 @@
 
 import { key, tmsg } from "../i18n";
 import {
+  focusedPluginOf,
+  standingSet,
   standsSomewhere,
   useSectionSets,
   type Region,
   type SectionSet,
 } from "../state/sectionSets";
 import { viewsForPlacement } from "../plugins/viewRegistry";
+import { resolveWorkspace } from "./catalog";
 import { register } from "./registry";
+import { waitForDomCommit } from "./waitForDomCommit";
 
 const notFound = (id: string) => ({
   ok: false as const,
@@ -25,6 +29,25 @@ const invalid = (message: string) => ({
   code: "INVALID_PARAMS" as const,
   message,
 });
+
+/**
+ * Waits until the region declares it is standing the set now linked to it.
+ *
+ * The host declares what it stands (`data-region-sections`), so this reads a declaration rather
+ * than working it out from what has a rectangle. The expected value comes from the same two
+ * functions the host calls — the standing set, filtered to what is placed in this region — because
+ * a second way of deciding what stands is a second answer to one question.
+ */
+async function waitForRegionToStand(region: Region, stands: SectionSet | null): Promise<void> {
+  const placed = new Set(viewsForPlacement(region).map((view) => view.key));
+  const wanted = (stands?.sections ?? []).filter((section) => placed.has(section)).join(" ");
+  await waitForDomCommit(() => {
+    const host = document.querySelector<HTMLElement>(`[data-region="${region}"] .sidebar-left`);
+    // No host is a region standing nothing, which is the same as an empty declaration.
+    if (!host) return wanted === "";
+    return host.dataset.regionSections === wanted;
+  });
+}
 
 const setOf = (id: string): SectionSet | undefined =>
   useSectionSets.getState().sets.find((s) => s.id === id);
@@ -169,23 +192,29 @@ export function registerSectionsCatalog(): void {
     examples: [
       `sections.link '{"plugin":"${examplePlugin()}","set":"set-a2b3c4","region":"left"}'`,
     ],
-    handler: (p) => {
+    handler: async (p, ctx) => {
       const plugin = p.plugin as string;
       const region = p.region as Region | undefined;
       if (region !== "left" && region !== "right") {
         return invalid(tmsg("msg.sections.regionRequired"));
       }
       const id = p.set as string | undefined;
-      if (id === undefined) {
-        useSectionSets.getState().link(plugin, region, null);
-        return { plugin, set: null, region };
+      if (id !== undefined) {
+        const set = setOf(id);
+        if (!set) return notFound(id);
+        const refusal = refuseUnplaced(set, region);
+        if (refusal) return invalid(refusal);
       }
-      const set = setOf(id);
-      if (!set) return notFound(id);
-      const refusal = refuseUnplaced(set, region);
-      if (refusal) return invalid(refusal);
-      useSectionSets.getState().link(plugin, region, id);
-      return { plugin, set: id, region };
+      const focused = focusedPluginOf(resolveWorkspace(p, ctx));
+      const before = standingSet(region, focused);
+      useSectionSets.getState().link(plugin, region, id ?? null);
+      const after = standingSet(region, focused);
+      // Whether this link changed what stands here. Linking a plugin that is not focused changes
+      // nothing on screen, and a caller that waits for a frame on every link waits out its own
+      // timeout — the same fact tab.activate answers under the name `moved`.
+      const moved = (before?.id ?? null) !== (after?.id ?? null);
+      if (moved) await waitForRegionToStand(region, after);
+      return { plugin, set: id ?? null, region, moved };
     },
   });
 

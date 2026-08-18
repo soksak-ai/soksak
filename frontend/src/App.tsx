@@ -81,7 +81,7 @@ import { prepareLayoutChange, viewLayoutChange } from "./lib/layoutTransitionHos
 import { registerLayoutTransitionIntentHost } from "./lib/layoutTransitionIntent";
 import { ownsNativeSurfaceFromManifests } from "./lib/nativeSurfaceOwnership";
 import { useAddTabIntent } from "./state/addTabIntent";
-import { regionPresent, useSectionSets } from "./state/sectionSets";
+import { focusedPluginOf, regionPresent, useSectionSets } from "./state/sectionSets";
 import "./App.css";
 
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
@@ -797,17 +797,6 @@ function WebviewHealthBadges() {
       ))}
     </div>
   );
-}
-
-/** The plugin of the view a workspace is focused on — what `individual` reads. Two readers: the
- *  plane that draws a region, and the hole reported for the surface underneath it. */
-function focusedPluginOf(workspace: Workspace | null | undefined): string | null {
-  if (!workspace) return null;
-  const space = workspace.spaces.find((c) => c.id === workspace.activeSpaceId);
-  if (!space) return null;
-  const group = allGroups(space.layout).find((g) => g.id === space.activePaneId);
-  const view = group?.tabs.find((v) => v.id === group.activeTabId);
-  return view?.pluginId ?? null;
 }
 
 function App() {
