@@ -177,15 +177,19 @@ Written here so it is not rediscovered (L2).
   items now, and no gate refuses a core-drawn one coming back.
 - **Plugin loading beyond these two plugins is untried.** The terminal and the
   browser are installed and driven; nothing has exercised a third.
-- **One surface behind another is still unmeasured.** A DOM overlay is covered:
-  `surfaceShown` takes the open-overlay count as a layer, and `verify:drawn`
-  opens the plugin manager and reads `surface.composition` for anything still
-  visible. A page against the *document* is covered too: `layout.alignment`
-  answers `over`, how far a page is drawn into a region's band, and the scenario
-  gate holds it at zero across all six moves. What no reading covers is surface
-  against surface — two native rectangles in one window, where `presence` and
-  `misparented` both answer about the window rather than about the order inside
+- **Surface against surface is measured; nothing yet judges on it.**
+  `surface.composition` answers `coveredBy` and `coveredFraction` per surface —
+  which surfaces in that window lie over this one, and how much of it they hold.
+  It is sampled through the compositor's own `surfaceAt`, so what a point lands
+  on and what covers a surface cannot answer differently. That closes the gap
+  where `presence` and `misparented` both answered about the window rather than
+  about the order inside it: a surface entirely behind another held a
+  right-looking frame, generation and zero drift while nobody could see any of
   it.
+
+  No gate reads it yet. A pane covered by a plugin manager card is a legitimate
+  state and so is a parked view, so the rule for which coverage is a defect has
+  to be stated before a number can refuse one.
 - **The application dies inside Wails' asset server during a recording.** Measured
   2026-08-18: one full-suite run in four, the arrangement gate's `window.record`
   answered `the backend closed without answering: EOF` and the socket was gone.

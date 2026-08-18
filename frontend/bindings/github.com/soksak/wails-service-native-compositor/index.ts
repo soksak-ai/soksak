@@ -9,6 +9,7 @@ export {
 export {
     AppliedSurface,
     Composition,
+    Cover,
     Frame,
     Placement,
     Receipt,

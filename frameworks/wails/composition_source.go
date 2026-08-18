@@ -30,6 +30,10 @@ func (source *CompositorSource) Latest(window string) Composition {
 		return Composition{}
 	}
 	composed := source.service.Latest(window)
+	// What lies over each surface, from the compositor. It samples through the
+	// same function that answers what a point lands on, so what a person clicks
+	// and what covers a surface cannot answer differently.
+	covers := source.service.CoverIn(window)
 
 	composition := Composition{
 		Sequence:       composed.Sequence,
@@ -55,6 +59,9 @@ func (source *CompositorSource) Latest(window string) Composition {
 			// halves of one commit; subtracting again here would be a second
 			// definition of one number.
 			Drift: driftOf(placement.Drift),
+			// Read, not recomputed, for the same reason drift is.
+			CoveredBy:       covers[placement.ID].By,
+			CoveredFraction: covers[placement.ID].Fraction,
 		})
 	}
 	return composition

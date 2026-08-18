@@ -132,6 +132,47 @@ export class Composition {
     }
 }
 
+/**
+ * Cover is what lies over one surface.
+ */
+export class Cover {
+    /**
+     * By names the surfaces found over this one, in no order. Empty means every point sampled
+     * inside it belongs to it.
+     */
+    "by": string[];
+
+    /**
+     * Fraction is how much of it they hold, 0 through 1, sampled. Exactly 1 is every sampled point
+     * belonging to something else, which is a surface nobody can see any of.
+     */
+    "fraction": number;
+
+    /** Creates a new Cover instance. */
+    constructor($$source: Partial<Cover> = {}) {
+        if (!("by" in $$source)) {
+            this["by"] = [];
+        }
+        if (!("fraction" in $$source)) {
+            this["fraction"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Cover instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Cover {
+        const $$createField0_0 = $$createType3;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("by" in $$parsedSource) {
+            $$parsedSource["by"] = $$createField0_0($$parsedSource["by"]);
+        }
+        return new Cover($$parsedSource as Partial<Cover>);
+    }
+}
+
 export class Frame {
     "x": number;
     "y": number;

@@ -74,6 +74,17 @@ type SurfacePlacement struct {
 	Generation uint64
 	Layer      int
 
+	// CoveredBy names the surfaces in this window found over this one, and
+	// CoveredFraction how much of it they hold. Read from the compositor, which
+	// samples through the same function that answers what a point lands on.
+	//
+	// A window's presence answers for the window. This is the other half: a
+	// surface inside a visible window can be entirely behind
+	// another one and hold a right-looking frame, generation and zero drift
+	// while nobody can see any of it.
+	CoveredBy       []string
+	CoveredFraction float64
+
 	Declared        SurfaceFrame
 	DeclaredVisible bool
 	DeclaredAlpha   float64
@@ -338,6 +349,12 @@ type compositionPlace struct {
 	Misparented bool         `json:"misparented"`
 	Drift       SurfaceFrame `json:"drift"`
 	Worst       float64      `json:"worst"`
+
+	// CoveredBy and CoveredFraction are what lies over this surface inside this
+	// window, and how much of it. Everything else here is about where the
+	// surface is; this is about whether any of it is on the screen.
+	CoveredBy       []string `json:"coveredBy"`
+	CoveredFraction float64  `json:"coveredFraction"`
 }
 
 // compositionJudgementOf takes the maximum over one recorded composition.
@@ -369,6 +386,12 @@ func compositionJudgementOf(composition Composition, parentPresent bool) composi
 		if placement.Misparented {
 			misparented = append(misparented, placement.ID)
 		}
+		// Never nil: a nil slice encodes as null, and a caller reading length on
+		// null gets an error where it asked a question.
+		coveredBy := placement.CoveredBy
+		if coveredBy == nil {
+			coveredBy = []string{}
+		}
 		places = append(places, compositionPlace{
 			ID:              placement.ID,
 			Kind:            placement.Kind,
@@ -382,6 +405,8 @@ func compositionJudgementOf(composition Composition, parentPresent bool) composi
 			AppliedAlpha:    placement.AppliedAlpha,
 			Misparented:     placement.Misparented,
 			Drift:           drift,
+			CoveredBy:       coveredBy,
+			CoveredFraction: placement.CoveredFraction,
 			Worst:           here,
 		})
 	}

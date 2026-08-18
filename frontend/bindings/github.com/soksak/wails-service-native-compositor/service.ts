@@ -26,6 +26,15 @@ export function Commit(snapshot: $models.Snapshot): $CancellablePromise<$models.
 }
 
 /**
+ * CoverIn answers what lies over every surface of one window, keyed by surface id.
+ */
+export function CoverIn(window: string): $CancellablePromise<{ [_ in string]?: $models.Cover }> {
+    return $Call.ByID(3663693176, window).then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
+/**
  * Deliver forwards a message to the backend that owns a surface.
  * 
  * The inventory is the only record of what exists, so a message for an id nobody declared is
@@ -35,7 +44,7 @@ export function Commit(snapshot: $models.Snapshot): $CancellablePromise<$models.
  */
 export function Deliver(id: string, message: { [_ in string]?: any }): $CancellablePromise<{ [_ in string]?: any }> {
     return $Call.ByID(1390608961, id, message).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType3($result);
     });
 }
 
@@ -71,7 +80,7 @@ export function Drain(): $CancellablePromise<[number, number]> {
  */
 export function Latest(window: string): $CancellablePromise<$models.Composition> {
     return $Call.ByID(2745712171, window).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType4($result);
     });
 }
 
@@ -112,12 +121,14 @@ export function SurfaceAt(window: string, x: number, y: number): $CancellablePro
  */
 export function Windows(): $CancellablePromise<string[]> {
     return $Call.ByID(3374928189).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType5($result);
     });
 }
 
 // Private type creation functions
 const $$createType0 = $models.Receipt.createFrom;
-const $$createType1 = $Create.Map($Create.Any, $Create.Any);
-const $$createType2 = $models.Composition.createFrom;
-const $$createType3 = $Create.Array($Create.Any);
+const $$createType1 = $models.Cover.createFrom;
+const $$createType2 = $Create.Map($Create.Any, $$createType1);
+const $$createType3 = $Create.Map($Create.Any, $Create.Any);
+const $$createType4 = $models.Composition.createFrom;
+const $$createType5 = $Create.Array($Create.Any);
