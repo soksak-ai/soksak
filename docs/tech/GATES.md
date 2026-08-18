@@ -152,6 +152,7 @@ has watched fail is a claim, not a gate.
 | `task verify:motion` | the window keeps drawing while the layout changes — run where the machine is quiet, because a stalled window and a loaded machine produce the same number |
 | `layout_scenarios_gate_test.go` | in the named window — a terminal top left, a browser under it, a terminal filling the right — every one of the six ways focus can move leaves no hole between a region and the panes, no stale declaration, and no page the native layer holds away from where the document put it. Read frame by frame inside the window (`layout.trace`), and a case whose window stalled is reported rather than judged: a page cannot follow a pane that jumped 160 points in one step |
 | `surface_alignment_gate_test.go` | a person's click on the exposed region toggle leaves the page on its pane |
+| `surface_cover_gate_test.go` | no native surface stands over another, in a window holding two pages, through a sidebar opening, a tab switch and the plugin manager. Every surface here is layer 0 — peers — and two peers holding one place is one of them being in the wrong place. Each state reports how many surfaces it held, because a state with one proves nothing and reads the same as one that asked a real question |
 
 ---
 
@@ -177,19 +178,6 @@ Written here so it is not rediscovered (L2).
   items now, and no gate refuses a core-drawn one coming back.
 - **Plugin loading beyond these two plugins is untried.** The terminal and the
   browser are installed and driven; nothing has exercised a third.
-- **Surface against surface is measured; nothing yet judges on it.**
-  `surface.composition` answers `coveredBy` and `coveredFraction` per surface —
-  which surfaces in that window lie over this one, and how much of it they hold.
-  It is sampled through the compositor's own `surfaceAt`, so what a point lands
-  on and what covers a surface cannot answer differently. That closes the gap
-  where `presence` and `misparented` both answered about the window rather than
-  about the order inside it: a surface entirely behind another held a
-  right-looking frame, generation and zero drift while nobody could see any of
-  it.
-
-  No gate reads it yet. A pane covered by a plugin manager card is a legitimate
-  state and so is a parked view, so the rule for which coverage is a defect has
-  to be stated before a number can refuse one.
 - **The application dies inside Wails' asset server during a recording.** Measured
   2026-08-18: one full-suite run in four, the arrangement gate's `window.record`
   answered `the backend closed without answering: EOF` and the socket was gone.
