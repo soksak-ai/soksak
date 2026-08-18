@@ -56,7 +56,7 @@ function workspace(activePaneId: string): Workspace {
     title: "P",
     root: "<local-evidence>/arrangement",
     regionOpen: { left: false, rail: true, right: false },
-    leftRailPlacement: { mode: "flow" },
+    railPlacement: { mode: "flow" },
     sidebarLayouts: { left: initialSidebarLayout([]), rail: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [
       {
@@ -90,7 +90,7 @@ describe("layout.arrangement", () => {
   it("tab.maximize opens the exact geometry revision before publishing and its transaction consumes the cause", async () => {
     const pinned = {
       ...workspace("pan-bbbbbb"),
-      leftRailPlacement: { mode: "pin" as const, station: 50 },
+      railPlacement: { mode: "pin" as const, station: 50 },
     };
     useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
     const before = projectArrangement(pinned)!;
@@ -138,7 +138,7 @@ describe("layout.arrangement", () => {
 
   it("tab.restore opens one geometry revision from station 100 back to the two-pane station 50 layout", async () => {
     const pinned = workspace("pan-aaaaaa");
-    pinned.leftRailPlacement = { mode: "pin", station: 50 };
+    pinned.railPlacement = { mode: "pin", station: 50 };
     pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "tab-aaaaaa" };
     useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
     expect(projectArrangement(pinned)).toMatchObject({ station: 100, cells: [{ id: "pan-aaaaaa" }] });
@@ -163,7 +163,7 @@ describe("layout.arrangement", () => {
 
   it("tab maximize no-op and missing targets do not open layout revisions", async () => {
     const pinned = workspace("pan-aaaaaa");
-    pinned.leftRailPlacement = { mode: "pin", station: 50 };
+    pinned.railPlacement = { mode: "pin", station: 50 };
     pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "tab-aaaaaa" };
     useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
 
@@ -396,7 +396,7 @@ describe("layout.arrangement", () => {
 
   it("cross-pane activation under PIN changes focus only and opens no geometry revision", async () => {
     const fixture = workspace("pan-bbbbbb");
-    fixture.leftRailPlacement = { mode: "pin", station: 50 };
+    fixture.railPlacement = { mode: "pin", station: 50 };
     useSessions.setState({ workspaces: [fixture], activeId: "wsp-aaaaaa" });
 
     await expect(execute("tab.activate", { tab: "tab-aaaaaa" }, {})).resolves.toMatchObject({ ok: true });

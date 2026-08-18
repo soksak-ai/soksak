@@ -223,7 +223,7 @@ export interface Workspace {
   regionOpen: Record<SidebarRegion, boolean>;
   // Position mode of the left rail frame. A separate axis from the projection ref pin (the content
   // inside the rail). Absence in old snapshots and test fixtures is read as FLOW.
-  leftRailPlacement?: RailPlacement;
+  railPlacement?: RailPlacement;
   // How the sections of the set standing in each region are arranged (B2) — SplitTree<SidebarGroup>,
   // tab bundle + split + active, the same drag-merge as the content area. Reconciled against
   // registration changes by the host.
@@ -729,7 +729,7 @@ export function projectArrangement(
   return solveArrangement<Pane>({
     layout: content.layout,
     focusId: content.activePaneId,
-    placement: workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT,
+    placement: workspace.railPlacement ?? DEFAULT_RAIL_PLACEMENT,
     railOpen: workspace.regionOpen.rail,
     // Maximize is not a move on top of the underlying split but an atomic switch to the single
     // [rail | feature] plane. The filling panel is the group holding the maximized view — not the
@@ -763,7 +763,7 @@ function openProjectArrangementTransition(before: Workspace, after: Workspace): 
 }
 
 function leftRailLayoutConflict(workspace: Workspace): CmdErr | null {
-  const placement = workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
+  const placement = workspace.railPlacement ?? DEFAULT_RAIL_PLACEMENT;
   if (placement.mode !== "pin") return null;
   const content =
     workspace.spaces.find((item) => item.id === workspace.activeSpaceId) ??
@@ -959,7 +959,7 @@ function makeWorkspace(id: string, opts: NewWorkspaceOpts): Workspace {
     // The rail is open on a fresh workspace; the two edges are not. A place with nothing standing
     // does not open anyway, so this is what a person sees before they compose anything.
     regionOpen: { left: false, rail: true, right: false },
-    leftRailPlacement: DEFAULT_RAIL_PLACEMENT, // flow — the rail attaches to the focused panel
+    railPlacement: DEFAULT_RAIL_PLACEMENT, // flow — the rail attaches to the focused panel
     sidebarLayouts: byPlace(() => initialSidebarLayout([])),
     root: opts.root,
     spaces: [c],
@@ -1141,7 +1141,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
     set((s) => {
       const workspace = s.workspaces.find((item) => item.id === id);
       if (!workspace) return s;
-      const current = workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
+      const current = workspace.railPlacement ?? DEFAULT_RAIL_PLACEMENT;
       if (
         current.mode === placement.mode &&
         (current.mode === "flow" ||
@@ -1150,7 +1150,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = ok({ placement: current });
         return s;
       }
-      const nextWorkspace = { ...workspace, leftRailPlacement: placement };
+      const nextWorkspace = { ...workspace, railPlacement: placement };
       const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = err(
@@ -1167,7 +1167,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       openProjectArrangementTransition(workspace, nextWorkspace);
       return {
         workspaces: s.workspaces.map((item) =>
-          item.id === id ? { ...item, leftRailPlacement: placement } : item,
+          item.id === id ? { ...item, railPlacement: placement } : item,
         ),
       };
     });

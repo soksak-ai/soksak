@@ -37,14 +37,14 @@ const group = (id: string, viewId?: string): Pane => ({
 });
 
 function workspace(
-  placement?: Workspace["leftRailPlacement"],
+  placement?: Workspace["railPlacement"],
 ): Workspace {
   return {
     id: "wsp-aaaaaa",
     title: "P",
     root: "<local-evidence>/rail-position",
     regionOpen: { left: false, rail: true, right: false },
-    ...(placement ? { leftRailPlacement: placement } : {}),
+    ...(placement ? { railPlacement: placement } : {}),
     sidebarLayouts: { left: initialSidebarLayout([]), rail: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [
       {
@@ -148,7 +148,7 @@ describe("sidebar.left.position", () => {
       effectiveStation: 50,
       cleanLines: [0, 50, 100],
     });
-    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({
+    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
       mode: "pin",
       station: 50,
     });
@@ -166,7 +166,7 @@ describe("sidebar.left.position", () => {
       station: 50,
       effectiveStation: 50,
     });
-    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({
+    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
       mode: "pin",
       station: 50,
     });
@@ -186,7 +186,7 @@ describe("sidebar.left.position", () => {
       effectiveStation: 50,
       cleanLines: [0, 50, 100],
     });
-    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({
+    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
       mode: "pin",
       station: 31,
     });
@@ -205,7 +205,7 @@ describe("sidebar.left.position", () => {
       effectiveStation: 50,
       cleanLines: [0, 50, 100],
     });
-    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({
+    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
       mode: "flow",
     });
   });

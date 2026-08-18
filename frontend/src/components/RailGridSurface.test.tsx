@@ -98,7 +98,7 @@ describe("RailGridSurface", () => {
         <div className="content">
           <div className="space-tabs" data-testid="tabs" />
           <RailGridSurface
-            railPlane={<div className="left-rail-plane" data-testid="rail" />}
+            railPlane={<div className="rail-plane" data-testid="rail" />}
           >
             <div className="space-plane" data-testid="grid" />
           </RailGridSurface>

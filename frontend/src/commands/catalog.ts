@@ -429,7 +429,7 @@ function serializeSpace(
 function serializeLeftRailPosition(t: Workspace) {
   const arrangement = projectArrangement(t);
   const cleanLines = arrangement?.cleanLines ?? [0, 100];
-  const placement: RailPlacement = t.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
+  const placement: RailPlacement = t.railPlacement ?? DEFAULT_RAIL_PLACEMENT;
   const effectiveStation = arrangement?.station ?? 0;
   return placement.mode === "pin"
     ? {
@@ -1688,7 +1688,7 @@ export function registerCatalog(): void {
         t.activeSpaceId,
         arrangement,
         t.regionOpen.rail,
-        (t.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT).mode,
+        (t.railPlacement ?? DEFAULT_RAIL_PLACEMENT).mode,
       );
       return {
         projectId: t.id,

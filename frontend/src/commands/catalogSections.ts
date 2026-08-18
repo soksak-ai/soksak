@@ -42,7 +42,7 @@ async function waitForPlaceToStand(place: SectionPlace, stands: SectionSet | nul
   const beside = new Set(viewsOnSurface("side").map((view) => view.key));
   const wanted = (stands?.sections ?? []).filter((section) => beside.has(section)).join(" ");
   await waitForDomCommit(() => {
-    const host = document.querySelector<HTMLElement>(`[data-region="${place}"] .sidebar-left`);
+    const host = document.querySelector<HTMLElement>(`[data-region="${place}"] .sidebar-body`);
     // No host is a place standing nothing, which is the same as an empty declaration.
     if (!host) return wanted === "";
     return host.dataset.regionSections === wanted;

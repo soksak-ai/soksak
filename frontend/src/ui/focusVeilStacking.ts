@@ -66,7 +66,7 @@ function layerOf(css: string, selector: string): number | null {
   return null;
 }
 
-const RAIL_PLANE = ".left-rail-plane";
+const RAIL_PLANE = ".rail-plane";
 const VEIL_PLANE = ".focus-lighting-plane";
 const SPACE_PLANE = ".space-plane";
 const RELATION_OVERLAY = ".rail-link-overlay";

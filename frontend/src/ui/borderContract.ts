@@ -63,7 +63,7 @@ export const BORDER_RULES: readonly BorderRule[] = [
   // ownership is stated here.
   {
     id: "rail-card-perimeter",
-    selector: ".sidebar-left .projection",
+    selector: ".sidebar-body .projection",
     kind: "edges",
     edges: { top: "bd", right: "bd", bottom: "bd", left: "bd" },
     when: { paneStyle: ["card", "floating"] },
@@ -71,7 +71,7 @@ export const BORDER_RULES: readonly BorderRule[] = [
   },
   {
     id: "rail-card-perimeter-flat",
-    selector: ".sidebar-left .projection",
+    selector: ".sidebar-body .projection",
     kind: "edges",
     edges: { top: "none", right: "none", bottom: "none", left: "none" },
     when: { paneStyle: ["flat"] },
@@ -123,7 +123,7 @@ export const BORDER_RULES: readonly BorderRule[] = [
   },
   {
     id: "left-host-tabs-bottom",
-    selector: ".sidebar-left-tabs",
+    selector: ".sidebar-body-tabs",
     kind: "edges",
     edges: { bottom: "bd" },
     note: tmsg("msg.ui.border.leftHostTabsBottom"),
@@ -131,7 +131,7 @@ export const BORDER_RULES: readonly BorderRule[] = [
 
   // Vertical boundary between the left sidebar and the body — **the sidebar owns right**.
   // §B2 already mandated "left chrome = right", but CSS never drew it and this table lacked it,
-  // so the validator never checked it (measured 2026-07-31: ui.expect ".sidebar-left" → rules: []).
+  // so the validator never checked it (measured 2026-07-31: ui.expect ".sidebar-body" → rules: []).
   // Absent from the table a violation is never reported as a violation — an element present with
   // 0 rules is not a pass, it is no judgement. The resizer cannot draw this line (§B6): it is a
   // zero-width overlay, so color appears only on hover and at rest nothing owned the boundary.
@@ -139,7 +139,7 @@ export const BORDER_RULES: readonly BorderRule[] = [
   // so this is a panel inner line (§B4), not an app chrome boundary (rail right, tone bd).
   {
     id: "left-sidebar-body-edge",
-    selector: ".sidebar-left",
+    selector: ".sidebar-body",
     kind: "edges",
     edges: { right: "bd-soft" },
     note: tmsg("msg.ui.border.leftSidebarBodyEdge"),
@@ -150,18 +150,18 @@ export const BORDER_RULES: readonly BorderRule[] = [
   // inside the same panel area as the sidebar body, not an app chrome boundary (§B4).
   //
   // Both were created on 2026-08-15 and went a day without being listed in the contract. The static
-  // gate judged listing by substring, so it read the `.sidebar-left` rule as covering them, and
+  // gate judged listing by substring, so it read the `.sidebar-body` rule as covering them, and
   // only the runtime `ui.expect` answered "no rules". Fixing the judge exposed this slot.
   {
     id: "left-sidebar-header-band",
-    selector: ".sidebar-left-header",
+    selector: ".sidebar-body-header",
     kind: "edges",
     edges: { bottom: "bd-soft" },
     note: tmsg("msg.ui.border.leftSidebarHeaderBand"),
   },
   {
     id: "left-sidebar-footer-band",
-    selector: ".sidebar-left-footer",
+    selector: ".sidebar-body-footer",
     kind: "edges",
     edges: { top: "bd-soft" },
     note: tmsg("msg.ui.border.leftSidebarFooterBand"),

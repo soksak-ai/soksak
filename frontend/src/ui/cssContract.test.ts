@@ -38,7 +38,7 @@ const EXEMPT = /\.workspace-rail|\.space-tabs\.vertical/;
 // Chrome row band (tab/header strip on the horizontal line under the title bar). Only theme standard
 // variables own the height (--chrome-row-h=tab row, --header-h=title bar/view tab row). No hardcoded
 // px. \.workspace-tabs does not match .space-tabs/.tabs.
-const CHROME_ROW = /\.(ft-header|plugin-side-head|sidebar-left-tabs|space-tabs|workspace-tabs)(?![\w-])/;
+const CHROME_ROW = /\.(ft-header|plugin-side-head|sidebar-body-tabs|space-tabs|workspace-tabs)(?![\w-])/;
 // Allowed standard variables (both theme-owned) — a chrome row height is var() of one of them.
 // Sanctioned row-height tokens — chrome-row (one band row), header (panel/rail header), toolbar
 // (shared two-row grid, theme-owned). Do not invent a row height outside these three.
@@ -46,7 +46,7 @@ const CHROME_HEIGHT_OK = /height\s*:\s*var\(--(chrome-row|header|toolbar)-h/;
 
 /** Is this selector listed in the contract — **there is exactly one judge.**
  *
- * A class name has an end. `.sidebar-left-header` starting with `.sidebar-left` does not put it under
+ * A class name has an end. `.sidebar-body-header` starting with `.sidebar-body` does not put it under
  * that rule — a different name is a different surface, and one the contract does not have. Measured
  * 2026-08-15: substring matching let this gate pass while runtime `ui.expect` answered "no rule" for
  * the same selector. When the static gate and the verifier split, the static gate is the silent one.
@@ -88,7 +88,7 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     // hardcoding, no chrome row variables).
     const header = rules().find((r) => r.selector === ".projection-header");
     expect(header?.decls).toMatch(/height\s*:\s*var\(--header-h/);
-    const host = rules().find((r) => r.selector === ".sidebar-left");
+    const host = rules().find((r) => r.selector === ".sidebar-body");
     expect(host?.decls).toMatch(/padding-top\s*:\s*var\(--pane-inset/);
   });
 
@@ -155,12 +155,12 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     expect(css).not.toMatch(/\.projection\.(entering|leaving)/);
     const rail = rules().find((r) => r.selector === ".sidebar");
     expect(rail?.decls).not.toMatch(/opacity\s*:/);
-    const restingPlane = rules().find((r) => r.selector === ".left-rail-plane");
+    const restingPlane = rules().find((r) => r.selector === ".rail-plane");
     const spacePlane = rules().find((r) => r.selector === ".space-plane");
     expect(restingPlane?.decls).toMatch(/z-index\s*:\s*0/);
     expect(spacePlane?.decls).toMatch(/z-index\s*:\s*1/);
     // The departing and the arriving rail keep the same layer contract.
-    expect(css).not.toMatch(/\.space-body\.rail-traveling \.left-rail-plane\s*\{/);
+    expect(css).not.toMatch(/\.space-body\.rail-traveling \.rail-plane\s*\{/);
   });
 
   it("the left rail is below the tabview work plane and only the relation line stays above both", () => {
@@ -173,14 +173,14 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
 
   it("pins the spot where the rule actually splits — plant a violation and confirm the gate bites", () => {
     const raisedRail = css.replace(
-      /\.left-rail-plane\s*\{[^}]*\}/,
-      ".left-rail-plane { position: absolute; z-index: 2; }",
+      /\.rail-plane\s*\{[^}]*\}/,
+      ".rail-plane { position: absolute; z-index: 2; }",
     );
     // Matched on the prefix that names the two planes and their z values. The
     // clause after the dash is prose and moves into the key table; toContain on
     // an array is an exact element match, so it cannot hold a fragment.
     expect(focusVeilStackingViolations(raisedRail)
-      .some((v) => v.startsWith(".left-rail-plane: z-index 2 >= .space-plane 1"))).toBe(true);
+      .some((v) => v.startsWith(".rail-plane: z-index 2 >= .space-plane 1"))).toBe(true);
 
     // Declaring the layer without positioning creates no stacking context, so content leaks outside
     // the plane.
@@ -345,7 +345,7 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     ".orch-console input", // orchestrator console input — closed outline
     ".orch-console button", // orchestrator run button — closed outline
     ".orch-feed-all", // feed all-filter clear button — closed outline
-    ".left-rail-controls", // closed control palette around the FLOW/PIN grip and pin
+    ".rail-controls", // closed control palette around the FLOW/PIN grip and pin
 
     ".dctl",
     ".dstepper",
@@ -388,7 +388,7 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
   });
 
   it("B8: the listing verdict uses the whole class name — a shared prefix does not cover a different surface", async () => {
-    // `.sidebar-left-header` starts with `.sidebar-left`. Substring matching lets a new surface that
+    // `.sidebar-body-header` starts with `.sidebar-body`. Substring matching lets a new surface that
     // is not in the contract pass under an already-listed neighbor's rule — measured 2026-08-15:
     // this gate passed while runtime `ui.expect` answered "no rule" for the same selector. When the
     // two split, the static side is the silent one.

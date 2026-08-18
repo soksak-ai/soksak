@@ -39,7 +39,7 @@ function workspace(): Workspace {
     title: "P",
     root: "<local-evidence>/floor",
     regionOpen: { left: false, rail: false, right: false },
-    leftRailPlacement: { mode: "flow" },
+    railPlacement: { mode: "flow" },
     sidebarLayouts: { left: initialSidebarLayout([]), rail: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [
       {

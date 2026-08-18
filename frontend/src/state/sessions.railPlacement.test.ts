@@ -25,7 +25,7 @@ function twoColumnWorkspace(): Workspace {
   const right = group("g-right", "v-right");
   return {
     ...base,
-    leftRailPlacement: { mode: "pin", station: 50 },
+    railPlacement: { mode: "pin", station: 50 },
     spaces: [
       {
         ...base.spaces[0],
@@ -67,7 +67,7 @@ describe("position PIN guards the clean grid line", () => {
     expect(useSessions.getState().setActiveGroup(workspace.id, "g-left")).toEqual({
       ok: true,
     });
-    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({
+    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
       mode: "pin",
       station: 50,
     });
@@ -82,7 +82,7 @@ describe("position PIN guards the clean grid line", () => {
       viewId: "v-right",
     });
     expect(projectArrangement(useSessions.getState().workspaces[0])!.station).toBe(0);
-    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({ mode: "pin", station: 50 });
+    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({ mode: "pin", station: 50 });
 
     expect(useSessions.getState().restoreView(workspace.id)).toEqual({ ok: true, viewId: "v-right" });
     expect(projectArrangement(useSessions.getState().workspaces[0])!.station).toBe(50);

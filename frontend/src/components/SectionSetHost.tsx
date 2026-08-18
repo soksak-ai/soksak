@@ -1,4 +1,4 @@
-// Left sidebar host — the sidebar-left view frame. Layout is workspace.leftLayout (SplitTree<SidebarGroup>).
+// Left sidebar host — the sidebar-body view frame. Layout is workspace.leftLayout (SplitTree<SidebarGroup>).
 // [dedupe] Shares the *same* split machine as the content area (GroupArea) through splitLayout.ts:
 // computeSplitLayout for % coordinate cells, hitTestCells for 5-zone (center/left/right/top/bottom) drops,
 // the same drop-ind/divider visuals. The sidebar is narrow, so a col (vertical) split is natural, but it
@@ -281,7 +281,7 @@ export const SectionSetHost = memo(function SectionSetHost({
 
   return (
     <div
-      className="sidebar-left"
+      className="sidebar-body"
       // What this host stands, declared by the render that stands it.
       //
       // Nothing announced it before, so every reader inferred it from boxes and every one of them
@@ -297,7 +297,7 @@ export const SectionSetHost = memo(function SectionSetHost({
     >
       {/* Header band — same height as the content header (lib/chromeBands). No plugin fills this
           slot today, and empty is a legitimate state for this band. */}
-      <div className="sidebar-left-header" data-node={`sidebar/${region}/header`} />
+      <div className="sidebar-body-header" data-node={`sidebar/${region}/header`} />
       {/* Grid of %-absolute cells (same model as a content space) — the footer is below it, outside the flow. */}
       <div
         className="left-panes"
@@ -366,7 +366,7 @@ export const SectionSetHost = memo(function SectionSetHost({
           next to another window it is off by one row (measured 2026-08-15).
           Nothing fills it: `rail-footer` was a placement a plugin asked for, and a position inside a
           region is an order the person arranged, not a place (2026-08-16). */}
-      <div className="sidebar-left-footer" data-node={`sidebar/${region}/footer`} />
+      <div className="sidebar-body-footer" data-node={`sidebar/${region}/footer`} />
     </div>
   );
 });
@@ -400,8 +400,8 @@ function SidebarLeaf({
   const hosted = opened.filter((k) => group.viewKeys.includes(k));
 
   return (
-    <div className="sidebar-left-section">
-      <div className="sidebar-left-tabs">
+    <div className="sidebar-body-section">
+      <div className="sidebar-body-tabs">
         {group.viewKeys.map((key) => {
           const reg = getRegisteredView(key);
           const fallback = reg ? localize(reg.decl.title) : key;
@@ -409,11 +409,11 @@ function SidebarLeaf({
           const editing = editingKey === key;
           // Reuses the *same structure and design* as the content tab (.space-tab, the top tab row) — .space-tab.editing
           // owns the edit box and .space-tab-rename (transparent, font:inherit) owns the input, so font and shape match
-          // the label. sidebar-left-tab is only a drag marker.
+          // the label. sidebar-body-tab is only a drag marker.
           return (
             <div
               key={key}
-              className={`space-tab sidebar-left-tab${active === key ? " active" : ""}${editing ? " editing" : ""}${dragging === key ? " dragging" : ""}`}
+              className={`space-tab sidebar-body-tab${active === key ? " active" : ""}${editing ? " editing" : ""}${dragging === key ? " dragging" : ""}`}
               data-node={`tab/${region}/${key}`}
               title={label}
               onMouseDown={editing ? undefined : startDrag(key)}
@@ -451,11 +451,11 @@ function SidebarLeaf({
           );
         })}
       </div>
-      <div className="sidebar-left-stack" data-node={`body/${region}`}>
+      <div className="sidebar-body-stack" data-node={`body/${region}`}>
         {hosted.map((k) => (
           <div
             key={k}
-            className="sidebar-left-body"
+            className="sidebar-body-body"
             // Which section this is, on the screen. A region that stands is measured by its width, and
             // a width does not name whose section is in it — a browser was focused and the file
             // tree stood beside it, and every gate about the arrangement passed. So the key is on the

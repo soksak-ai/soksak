@@ -8,8 +8,8 @@
 
 // Chrome selectors and variables the host solely owns. Appearing in plugin CSS is a violation (a plugin must style only its own body slot).
 export const HOST_CHROME_TOKENS: readonly string[] = [
-  ".sidebar-left-tabs",
-  ".sidebar-left-tab",
+  ".sidebar-body-tabs",
+  ".sidebar-body-tab",
   // Chrome vocabulary migration window (IDENTITY 2026-07-26) — guard both the old and the new
   // names. Guarding only one leaves a plugin unprotected when it meets a core of the other
   // generation. Removal condition: the day a core that draws the old names drops out of the
@@ -41,7 +41,7 @@ export function scanHostChromeViolations(entrySource: string): string[] {
   const hits: string[] = [];
   for (const tok of HOST_CHROME_TOKENS) {
     const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    // Selector: appears at a rule head plus a declaration block, as in `.sidebar-left-tabs {` / `.sidebar-left-tabs.foo,`.
+    // Selector: appears at a rule head plus a declaration block, as in `.sidebar-body-tabs {` / `.sidebar-body-tabs.foo,`.
     // Variable: a definition/assignment, as in `--chrome-row-h:`.
     const re = tok.startsWith("--")
       ? new RegExp(`${esc}\\s*:`)

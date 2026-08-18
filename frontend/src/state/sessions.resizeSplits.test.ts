@@ -86,7 +86,7 @@ describe("resizeSplits — several splits in one commit", () => {
   it("rejects the whole batch when the final state conflicts with a PIN rail (no change)", () => {
     const workspace: Workspace = {
       ...stackedWorkspace(),
-      leftRailPlacement: { mode: "pin", station: 50 },
+      railPlacement: { mode: "pin", station: 50 },
     };
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
     const before = useSessions.getState().workspaces[0];

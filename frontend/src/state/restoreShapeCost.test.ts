@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { restoreWindow } from "./windowPersistence";
 import type { WindowSnapshot } from "./windowPersistence";
 import { SECTION_PLACES } from "./sectionSets";
+import { DEFAULT_RAIL_PLACEMENT } from "../lib/railPlacement";
 
 // A stored field of another shape costs that field, not the window (RESTORE R1).
 //
@@ -22,6 +23,9 @@ const STORED_BEFORE = {
       root: "<local-evidence>/w",
       regionOpen: { left: false, rail: true, right: false },
       // The shape of that day: one region's layout, and the other region's single active view.
+      // `leftRailPlacement` is that day's name for where the rail stands — `left` meant the rail
+      // then, and the field is `railPlacement` now.
+      leftRailPlacement: { mode: "pin", station: 60 },
       rightView: null,
       leftLayout: { t: "l", v: { viewKeys: [], activeViewKey: "" } },
       activeContentId: "spc-a1b2c3",
@@ -47,6 +51,16 @@ describe("restoring a window written by an older build", () => {
     expect(workspaces).toHaveLength(1);
     expect(activeId).toBe("wsp-a1b2c3");
     expect(workspaces[0]?.root).toBe("<local-evidence>/w");
+    expect(workspaces[0]?.spaces).toHaveLength(1);
+  });
+
+  it("costs a renamed field and says so, rather than restoring a station nobody set", () => {
+    // `leftRailPlacement` became `railPlacement` on 2026-08-18 when `left` stopped meaning the rail.
+    // Read under the old name, a stored pin would put the rail at a station whose name meant the
+    // window's left edge by then. It is not migrated (L11c) — the rail comes back where it stands
+    // by default, and everything else in the window survives.
+    const { workspaces } = restoreWindow(STORED_BEFORE);
+    expect(workspaces[0]?.railPlacement).toEqual(DEFAULT_RAIL_PLACEMENT);
     expect(workspaces[0]?.spaces).toHaveLength(1);
   });
 

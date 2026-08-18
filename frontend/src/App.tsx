@@ -201,7 +201,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // a second timing source would meet the first somewhere in the middle of every change.
   const railMotion = useMemo(() => createRectMotionTracker("rail"), []);
   const railGridSurfaceRef = useRef<RailGridSurfaceHandle>(null);
-  const placement = workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
+  const placement = workspace.railPlacement ?? DEFAULT_RAIL_PLACEMENT;
   // The plugin of the focused centre view, and the set standing on the left because of it.
   //
   // A plugin with no link has no sidebar at all — not an empty one. Composing nothing and reserving
@@ -496,7 +496,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
           railPlane={
             <div
               ref={railPlaneRef}
-              className="left-rail-plane"
+              className="rail-plane"
               data-node="rail/plane"
               style={
                 {
@@ -572,10 +572,10 @@ const WorkspacePlane = memo(function WorkspacePlane({
                     />
                   </div>
                   {railOpen && (
-                    <div className="left-rail-controls">
+                    <div className="rail-controls">
                       <button
                         type="button"
-                        className={`left-rail-pin${placement.mode === "pin" ? " active" : ""}`}
+                        className={`rail-pin${placement.mode === "pin" ? " active" : ""}`}
                         title={
                           placement.mode === "pin"
                             ? t("sidebar.unpin")

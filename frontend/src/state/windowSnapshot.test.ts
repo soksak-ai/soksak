@@ -17,7 +17,7 @@ const workspace: Workspace = {
   title: "proj",
   root: "/repo",
   regionOpen: { left: false, rail: true, right: false },
-  leftRailPlacement: { mode: "pin", station: 60 },
+  railPlacement: { mode: "pin", station: 60 },
   sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, rail: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   activeSpaceId: "spc-aaaaaa",
   spaces: [
@@ -81,7 +81,7 @@ describe("windowSnapshot round trip", () => {
     // Every place, not one of them: `left` meant the rail until the window grew three places, and
     // an assertion naming a single place would have kept passing while the other two were dropped.
     expect(back.regionOpen).toEqual({ left: false, rail: true, right: false });
-    expect(back.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
+    expect(back.railPlacement).toEqual({ mode: "pin", station: 60 });
     expect(back.activeSpaceId).toBe("spc-aaaaaa");
 
     const c = back.spaces[0];
@@ -157,10 +157,10 @@ describe("windowSnapshot round trip", () => {
 describe("left rail FLOW/PIN persistence", () => {
   it("round-trips the position PIN independently from projection ref pins", () => {
     const snap = serializeWorkspace(workspace);
-    expect(snap.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
+    expect(snap.railPlacement).toEqual({ mode: "pin", station: 60 });
 
     const back = deserializeWorkspace(snap);
-    expect(back.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
+    expect(back.railPlacement).toEqual({ mode: "pin", station: 60 });
   });
 
   it("a pin leftover from the retired era is reverted to the default (flow) by one normalization", () => {
@@ -170,10 +170,10 @@ describe("left rail FLOW/PIN persistence", () => {
     // stored placement once (the same one-shot migration as vlNormalized).
     const legacy = serializeWorkspace({
       ...workspace,
-      leftRailPlacement: { mode: "pin", station: 0 },
+      railPlacement: { mode: "pin", station: 0 },
     });
     delete legacy.railPlacementNormalized;
-    expect(deserializeWorkspace(legacy).leftRailPlacement).toEqual({
+    expect(deserializeWorkspace(legacy).railPlacement).toEqual({
       mode: "flow",
     });
   });
@@ -181,10 +181,10 @@ describe("left rail FLOW/PIN persistence", () => {
   it("with the marker present the PIN the user chose is kept as is (one-time guarantee)", () => {
     const marked = serializeWorkspace({
       ...workspace,
-      leftRailPlacement: { mode: "pin", station: 60 },
+      railPlacement: { mode: "pin", station: 60 },
     });
     expect(marked.railPlacementNormalized).toBe(true);
-    expect(deserializeWorkspace(marked).leftRailPlacement).toEqual({
+    expect(deserializeWorkspace(marked).railPlacement).toEqual({
       mode: "pin",
       station: 60,
     });
@@ -193,10 +193,10 @@ describe("left rail FLOW/PIN persistence", () => {
   it("a snapshot with no placement field restores to the default (flow)", () => {
     const legacy = serializeWorkspace({
       ...workspace,
-      leftRailPlacement: { mode: "pin", station: 0 },
+      railPlacement: { mode: "pin", station: 0 },
     });
-    delete legacy.leftRailPlacement;
-    expect(deserializeWorkspace(legacy).leftRailPlacement).toEqual({
+    delete legacy.railPlacement;
+    expect(deserializeWorkspace(legacy).railPlacement).toEqual({
       mode: "flow",
     });
   });

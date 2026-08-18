@@ -16,27 +16,27 @@ describe("sidebar frame contract", () => {
     // The theme makes the slot and the plugin only puts text and icons inside it. An empty inside is
     // legitimate but a vanished slot is not — if a condition wraps the slot, only the window with no
     // plugins gets a different skeleton.
-    const framedByCondition = /&&\s*\(?\s*<div className="sidebar-left-footer"/.test(host);
+    const framedByCondition = /&&\s*\(?\s*<div className="sidebar-body-footer"/.test(host);
     expect(framedByCondition).toBe(false);
 
-    const frameExists = /<div className="sidebar-left-footer"/.test(host);
+    const frameExists = /<div className="sidebar-body-footer"/.test(host);
     expect(frameExists).toBe(true);
   });
 
   it("a plugin does not set the slot height", () => {
     // If the height comes from the content, the band differs per plugin, and at that moment matching the
     // content footer becomes the plugin's choice.
-    const rule = css.match(/\.sidebar-left-footer\s*\{[^}]*\}/)?.[0] ?? "";
+    const rule = css.match(/\.sidebar-body-footer\s*\{[^}]*\}/)?.[0] ?? "";
     expect(rule).not.toContain("flex: 0 0 auto");
   });
 
   it("the footer height uses the same band as the content footer", () => {
-    const rule = css.match(/\.sidebar-left-footer\s*\{[^}]*\}/)?.[0] ?? "";
+    const rule = css.match(/\.sidebar-body-footer\s*\{[^}]*\}/)?.[0] ?? "";
     expect(rule).toContain("var(--status-h)");
   });
 
   it("the header band is present in the sidebar too", () => {
-    const rule = css.match(/\.sidebar-left-header\s*\{[^}]*\}/)?.[0] ?? "";
+    const rule = css.match(/\.sidebar-body-header\s*\{[^}]*\}/)?.[0] ?? "";
     expect(rule).toContain("var(--header-h)");
   });
 });

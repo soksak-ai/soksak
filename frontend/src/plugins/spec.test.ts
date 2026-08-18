@@ -878,7 +878,7 @@ describe("scanHostChromeViolations — host chrome standard static gate", () => 
     expect(scanHostChromeViolations(ok)).toEqual([]);
   });
   it("a height override on a host tab selector is a violation", () => {
-    expect(scanHostChromeViolations(`.sidebar-left-tab{height:50px}`)).toContain(".sidebar-left-tab");
+    expect(scanHostChromeViolations(`.sidebar-body-tab{height:50px}`)).toContain(".sidebar-body-tab");
     expect(scanHostChromeViolations(`.content-tabs{height:60px}`)).toContain(".content-tabs");
     expect(scanHostChromeViolations(`.view-tabs{padding:0}`)).toContain(".view-tabs");
   });
@@ -887,13 +887,13 @@ describe("scanHostChromeViolations — host chrome standard static gate", () => 
     expect(scanHostChromeViolations(`.x{--header-h:10px}`)).toContain("--header-h");
   });
   it("a mention in a comment or in prose is not a false positive(0 violations)", () => {
-    expect(scanHostChromeViolations(`// .sidebar-left-tabs is owned by the host`)).toEqual([]);
+    expect(scanHostChromeViolations(`// .sidebar-body-tabs is owned by the host`)).toEqual([]);
     expect(scanHostChromeViolations(`const note = "do not touch --chrome-row-h here"`)).toEqual([]);
   });
   it("reports every violation", () => {
-    const bad = `.sidebar-left-tabs{height:40px} .ft-header{height:40px} :root{--header-h:5px}`;
+    const bad = `.sidebar-body-tabs{height:40px} .ft-header{height:40px} :root{--header-h:5px}`;
     const v = scanHostChromeViolations(bad);
-    expect(v).toEqual(expect.arrayContaining([".sidebar-left-tabs", ".ft-header", "--header-h"]));
+    expect(v).toEqual(expect.arrayContaining([".sidebar-body-tabs", ".ft-header", "--header-h"]));
   });
 });
 

@@ -77,7 +77,7 @@ export interface WorkspaceSnapshot {
   railPlacementNormalized?: true;
   regionOpen: Record<SidebarRegion, boolean>;
   // Rail frame position PIN.
-  leftRailPlacement?: RailPlacement;
+  railPlacement?: RailPlacement;
   // One arrangement per region. The right held a single active view and drew an icon rail of
   // everything placed there until 2026-08-16 — a region with a rule of its own (A2a).
   sidebarLayouts: Record<SidebarRegion, SplitSnapshot<SidebarGroup>>;
@@ -134,7 +134,7 @@ export function serializeWorkspace(p: Workspace): WorkspaceSnapshot {
     vlNormalized: true,
     railPlacementNormalized: true,
     regionOpen: p.regionOpen,
-    leftRailPlacement: p.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT,
+    railPlacement: p.railPlacement ?? DEFAULT_RAIL_PLACEMENT,
     // Sidebar layout (SplitTree<SidebarGroup>) — the leaf payload is plain JSON.
     sidebarLayouts: byPlace((place) => serializeSplitTree(p.sidebarLayouts[place], (g) => g)),
     activeContentId: p.activeSpaceId,
@@ -215,8 +215,8 @@ export function deserializeWorkspace(s: WorkspaceSnapshot): Workspace {
     // The stored value of an old snapshot without the marker is not trusted — there is no way to separate the
     // withdrawn era's default (pin@0) from an anchor the user chose, so it is reset once to the default (flow).
     // With the marker present the stored value is honored.
-    leftRailPlacement: s.railPlacementNormalized
-      ? normalizeRailPlacement(s.leftRailPlacement)
+    railPlacement: s.railPlacementNormalized
+      ? normalizeRailPlacement(s.railPlacement)
       : DEFAULT_RAIL_PLACEMENT,
     sidebarLayouts: byPlace((place) => sidebarLayoutOf(s.sidebarLayouts?.[place])),
     activeSpaceId: s.activeContentId,

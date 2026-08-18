@@ -154,7 +154,7 @@ body,
 .workspace-tabs {
   display: flex;
   /* The chrome row standard — the same horizontal line and height as the left
-     sidebar tabs (.sidebar-left-tabs) and the right header (.plugin-side-head).
+     sidebar tabs (.sidebar-body-tabs) and the right header (.plugin-side-head).
      The height belongs to the chrome row contract at the bottom of this file
      (--chrome-row-h) and must not be set here (cssContract R3). Spacing is
      --ws-pad; items stretch to fill. */
@@ -523,7 +523,7 @@ body,
   display: flex;
   flex-direction: row;
 }
-.left-rail-plane {
+.rail-plane {
   position: absolute;
   inset: 0;
   /* The left rail travels under the work surface. Where it crosses a tab view the
@@ -870,7 +870,7 @@ body,
 .sidebar-resizer:active {
   background: rgba(127, 127, 127, 0.4);
 }
-.left-rail-controls {
+.rail-controls {
   position: absolute;
   /* Whole-pixel centring inside the frame header row (--header-h under
    --pane-inset) — the controls are 28 tall in total. */
@@ -885,7 +885,7 @@ body,
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   box-shadow: var(--shadow);
 }
-.left-rail-pin {
+.rail-pin {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -899,8 +899,8 @@ body,
   opacity: 0.62;
   cursor: pointer;
 }
-.left-rail-pin:hover,
-.left-rail-pin.active {
+.rail-pin:hover,
+.rail-pin.active {
   background: var(--accbg);
   color: var(--acc);
   opacity: 1;
@@ -2854,8 +2854,8 @@ select.dctl {
      content, enforced at the compositor. */
   will-change: transform;
 }
-/* The place, not the body. `sidebar-left` is the body of any sidebar — its tabs, header and
-   footer are `sidebar-left-*` — and naming a place the same thing would put two meanings on one
+/* The place, not the body. `sidebar-body` is the body of any sidebar — its tabs, header and
+   footer are `sidebar-body-*` — and naming a place the same thing would put two meanings on one
    class. */
 .sidebar-edge-left {
   left: 0;
@@ -2975,7 +2975,7 @@ select.dctl {
   top: 1px;
   right: 1px;
 }
-.sidebar-left-tab .tab-badge {
+.sidebar-body-tab .tab-badge {
   margin-left: 4px;
   vertical-align: middle;
 }
@@ -3026,14 +3026,14 @@ select.dctl {
   position: relative;
 }
 /* ── The plugin view slot contract: inheritance plus independence ────────────
-   Every placement (content, sidebar-left, sidebar-right) has a slot that holds a
+   Every placement (content, sidebar-body, sidebar-right) has a slot that holds a
    PluginViewHost.
    - Independence: each slot sets its own size and position (content in absolute
      pixels, a sidebar with flex:1). One rule is shared — a slot must be a
      positioned containing block (position:relative or absolute).
        · content    .tab-body            = position:absolute + definite px (GroupArea)
        · sidebar-R  .sidebar-right-body  = flex:1 + position:relative       (PluginSidebar)
-       · sidebar-L  .sidebar-left-body   = flex:1 + position:relative       (LeftSidebarHost)
+       · sidebar-L  .sidebar-body-body   = flex:1 + position:relative       (LeftSidebarHost)
    - Inheritance: .plugin-body fills that slot with absolute inset:0, the same in
      every placement. flex:1 only works when the parent is a flex container, so it
      did nothing in the content slot, which is a block. absolute inset:0 gives
@@ -3383,7 +3383,7 @@ select.dctl {
   padding-top: 4px;
 }
 
-/* ── Left sidebar host: the file tree and sidebar-left plugin views ────────── */
+/* ── Left sidebar host: the file tree and sidebar-body plugin views ────────── */
 /* The projection slots (ProjectionSlots) — where a bound view's sidebar
    declaration renders. It coexists with the pin grid (R4). */
 .projections {
@@ -3417,20 +3417,20 @@ select.dctl {
    line, and no size makes it vanish.
    Whether a border is drawn follows the pane style setting (flat has no line) —
    the same rule as a content cell. */
-:root[data-pane-style="card"] .sidebar-left .projection,
-:root[data-pane-style="floating"] .sidebar-left .projection {
+:root[data-pane-style="card"] .sidebar-body .projection,
+:root[data-pane-style="floating"] .sidebar-body .projection {
   background: var(--card);
   border: 1px solid var(--bd);
   border-radius: 11px;
   overflow: hidden;
 }
-:root[data-pane-style="floating"] .sidebar-left .projection {
+:root[data-pane-style="floating"] .sidebar-body .projection {
   border-radius: 14px;
 }
 /* The body slot takes the same --bg as .tab-body in a content cell — that step
    between inside and outside is what makes the card's edge readable. */
-:root[data-pane-style="card"] .sidebar-left .projection-card,
-:root[data-pane-style="floating"] .sidebar-left .projection-card {
+:root[data-pane-style="card"] .sidebar-body .projection-card,
+:root[data-pane-style="floating"] .sidebar-body .projection-card {
   background: var(--bg);
 }
 /* The shared slot form (§12-①②): the host owns the header (what the feature is,
@@ -3443,7 +3443,7 @@ select.dctl {
   padding: 0 6px 0 10px;
   /* The rail is furniture inside the pane grid — its neighbour is a pane group
      header, so it follows the same row contract (--header-h). The top offset plus
-     the --pane-inset padding of .sidebar-left aligns it to the grid (R1c). */
+     the --pane-inset padding of .sidebar-body aligns it to the grid (R1c). */
   height: var(--header-h, 33px);
   font-size: 11px;
   color: var(--fg);
@@ -3509,7 +3509,7 @@ select.dctl {
   opacity: 0.55;
   text-align: center;
 }
-.sidebar-left {
+.sidebar-body {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -3560,13 +3560,13 @@ select.dctl {
   min-height: 0;
   overflow: hidden;
 }
-.sidebar-left-section {
+.sidebar-body-section {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
-.sidebar-left-stack {
+.sidebar-body-stack {
   flex: 1;
   min-height: 0;
   position: relative;
@@ -3576,7 +3576,7 @@ select.dctl {
      view tabs) and sidebar row2 (the plugin header) land at the same y. */
   padding-top: var(--pane-inset, 0);
 }
-.sidebar-left-tabs {
+.sidebar-body-tabs {
   flex: 0 0 auto;
   display: flex;
   /* Identical to the content tab row (.space-tabs) — stretch with 5px vertical
@@ -3590,9 +3590,9 @@ select.dctl {
   border-bottom: 1px solid var(--bd);
 }
 /* A sidebar tab uses the .tab design of a content view tab as it is;
-   sidebar-left-tab is only a drag marker. .tab alone owns the visual properties,
+   sidebar-body-tab is only a drag marker. .tab alone owns the visual properties,
    so nothing is declared twice. */
-.sidebar-left-tab.dragging {
+.sidebar-body-tab.dragging {
   opacity: 0.5;
 }
 /* The inline rename input on a tab (B1) — the tab's own font and padding with
@@ -3600,8 +3600,8 @@ select.dctl {
 /* Renaming a left tab reuses .space-tab.editing for the box and
    .space-tab-rename for the transparent input, exactly as a content tab does. The
    separate .left-host-tab-rename is gone so font and box are not defined twice. */
-.sidebar-left-body {
-  /* The sidebar-left plugin view slot — flex:1 with a position:relative containing
+.sidebar-body-body {
+  /* The sidebar-body plugin view slot — flex:1 with a position:relative containing
      block, per the slot contract. .plugin-body (absolute inset:0) fills this box. */
   flex: 1;
   min-height: 0;
@@ -3609,11 +3609,11 @@ select.dctl {
 }
 /* The file tab body is a column: the file tree (flex:1) and a permanent bottom
    slot (sidebar-footer, for example a mascot). */
-.sidebar-left-files {
+.sidebar-body-files {
   display: flex;
   flex-direction: column;
 }
-.sidebar-left-files > .ft-sidebar {
+.sidebar-body-files > .ft-sidebar {
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -3621,7 +3621,7 @@ select.dctl {
    a different height puts the two adjacent rows out of step, and the mismatch
    looks different in each theme, so it reads as a defect in one of them
    (measured 2026-08-15: content 33px, sidebar 30px). */
-.sidebar-left-header {
+.sidebar-body-header {
   flex: 0 0 var(--header-h);
   /* This is an inner line inside the same panel area as the sidebar body, not an
      app chrome boundary (--bd, §B4). Measured 2026-08-15: drawn with --bd, and
@@ -3629,7 +3629,7 @@ select.dctl {
   border-bottom: 1px solid var(--bd-soft);
 }
 
-.sidebar-left-footer {
+.sidebar-body-footer {
   /* The same band as the content footer. It does not shrink when empty — the frame
    does not depend on its content. */
   flex: 0 0 var(--status-h);
@@ -3641,7 +3641,7 @@ select.dctl {
 /* The view host in the footer slot is in normal flow, not absolute inset:0 — its
    content makes the height. sidebar and content fill a parent flex:1 box, while
    in the footer the content height is the slot height. */
-.sidebar-left-footer .plugin-body {
+.sidebar-body-footer .plugin-body {
   position: static;
   inset: auto;
 }
@@ -3811,7 +3811,7 @@ select.dctl {
    and the content tabs — are one row, and this rule owns the height. An
    individual block must not set height (cssContract R3). */
 .plugin-side-head,
-.sidebar-left-tabs,
+.sidebar-body-tabs,
 .space-tabs,
 .workspace-tabs {
   height: var(--chrome-row-h, 37px);
@@ -3819,14 +3819,14 @@ select.dctl {
 
 /* The file header (the project1 row) follows a different standard depending on
    how many levels the left sidebar has. With a view tab row
-   (.sidebar-left-tabs) it is two levels and takes the titlebar line, the same
+   (.sidebar-body-tabs) it is two levels and takes the titlebar line, the same
    --header-h as the content view tabs; without one it is a single level and takes
    --chrome-row-h. Both are theme standard variables and must not be hardcoded
    (cssContract R3). */
 .ft-header {
   height: var(--chrome-row-h, 37px);
 }
-.sidebar-left:has(.sidebar-left-tabs) .ft-header {
+.sidebar-body:has(.sidebar-body-tabs) .ft-header {
   height: var(--header-h, 33px);
 }
 /* The shared row grid contract (PLUGIN-CONTRACT §Toolbar row): the auxiliary top

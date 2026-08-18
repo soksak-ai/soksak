@@ -57,7 +57,7 @@ function workspaceFixture(): Workspace {
   };
   return {
     ...base,
-    leftRailPlacement: { mode: "flow" },
+    railPlacement: { mode: "flow" },
     spaces: [
       {
         ...base.spaces[0],
@@ -134,7 +134,7 @@ describe("session arrangement — the solution decides the display and the canon
     expect(station).toBeTypeOf("number");
     const pinned: Workspace = {
       ...workspace,
-      leftRailPlacement: { mode: "pin", station: station! },
+      railPlacement: { mode: "pin", station: station! },
     };
     useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
 
@@ -142,7 +142,7 @@ describe("session arrangement — the solution decides the display and the canon
       ok: true,
       viewId: "v-ghostty",
     });
-    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({
+    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
       mode: "pin",
       station,
     });

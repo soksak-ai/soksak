@@ -590,7 +590,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
           <div class="sidebar" data-node="rail/left" data-rail-role="resting"></div>
         </div>
         <div class="content" data-content="active">
-          <div class="left-rail-plane" data-node="rail/plane"></div>
+          <div class="rail-plane" data-node="rail/plane"></div>
           <div class="space" data-node="layout/space/space-a" data-traveling="true">
             <div class="tab-viewer" data-view-addr="center/view/test.v">
               <div data-node="slot"></div>
