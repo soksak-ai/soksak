@@ -1,6 +1,8 @@
 package wails
 
 import (
+	terminalcmd "github.com/soksak/soksak-plugin-terminal-xterm/command"
+
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,7 +16,6 @@ import (
 	"github.com/soksak/soksak-core/core/identity"
 	"github.com/soksak/soksak-core/core/process"
 	"github.com/soksak/soksak-core/core/store"
-	terminalcmd "github.com/soksak/soksak-plugin-terminal-xterm/command"
 )
 
 // invokeCall finds the backend commands the frontend calls by name.
@@ -72,9 +73,22 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	// names register depends on the dependencies being present, never on what
 	// they answer, so stubs are enough.
 	RegisterHost(registry, HostDeps{
-		Host:         startedHost(),
-		NewID:        counter("1"),
-		Sessions:     idleSessions{},
+		Host:  startedHost(),
+		NewID: counter("1"),
+		// The plugin groups this build composes, named here because this gate's
+		// subject is the build and not the package: the frontend calls a
+		// terminal command and something has to serve it. RegisterHost holds no
+		// plugin name any more — a build hands over its own registrations — so
+		// the list a run composes and the list this composes are two lists
+		// again, and this is the one place they are written side by side.
+		//
+		// A test may name a plugin; the coupling gate reads sources, and what it
+		// refuses is a host that names one.
+		Plugins: []func(*control.Registry){
+			func(registry *control.Registry) {
+				terminalcmd.Register(registry, terminalcmd.Deps{Sessions: idleSessions{}})
+			},
+		},
 		Composition:  stubComposition{},
 		NativeParent: func(string) bool { return false },
 		Dispatch:     func(string, string, any) error { return nil },
@@ -216,6 +230,7 @@ type idleSessions struct{}
 func (idleSessions) Open(string, string, uint16, uint16) (terminalcmd.Handle, error) {
 	return terminalcmd.Handle{}, nil
 }
+
 func (idleSessions) Write(terminalcmd.Handle, string) error          { return nil }
 func (idleSessions) Resize(terminalcmd.Handle, uint16, uint16) error { return nil }
 func (idleSessions) Close(terminalcmd.Handle) error                  { return nil }

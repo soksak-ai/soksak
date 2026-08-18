@@ -42,19 +42,16 @@ var couplingAllowed = map[string]string{
 
 // couplingWiring is a file in frameworks/ that may name a plugin, and why.
 //
-// Two of these are debts, said so here rather than left to be discovered. A
-// debt with a reason written next to it is a thing someone can pay; an
-// unexplained exemption is the shape the browser rule hid inside.
+// One entry, and it is the composition root. Two more were debts here, written
+// down rather than left to be discovered, and both are paid: HostDeps carried
+// a field typed as the terminal plugin's session interface, and the sink took
+// two of that plugin's types for a body that only marshals them. A build's
+// command groups arrive as their own registrations now, and a diagnostic record
+// travels on the core's own contract (control.TraceSink).
 var couplingWiring = map[string]string{
 	"frameworks/wails/host.go": "the Wails host's composition root — it constructs the plugins this " +
 		"binary ships with and hands each one what it needs. Every line here is a construction or a " +
 		"hand-off; a rule about what a plugin's data means belongs to the plugin.",
-	"frameworks/wails/register.go": "DEBT: HostDeps.Sessions is typed terminalcmd.Sessions. The " +
-		"interface is the plugin's, so a second terminal plugin needs a second field. The core owns " +
-		"no session contract yet for it to be typed against.",
-	"frameworks/wails/terminal_sink.go": "DEBT: EmitTerminalInputTrace takes terminal.Handle and " +
-		"terminal.InputTrace. EmitStream beside it names nothing and is the shape the trace should " +
-		"take; the core owns no trace contract yet.",
 }
 
 func TestTheCoreNamesNoPluginAndNoEngine(t *testing.T) {

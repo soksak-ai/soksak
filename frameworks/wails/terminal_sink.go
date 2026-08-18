@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"log"
 
-	terminal "github.com/soksak/soksak-plugin-terminal-xterm"
-
 	"github.com/soksak/soksak-core/core/control"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -43,19 +41,24 @@ func (sink *TerminalSink) EmitStream(stream string, frame any) {
 	sink.bridge.Emit(control.StreamEvent, control.StreamFrame{Stream: stream, Frame: frame})
 }
 
-// EmitTerminalInputTrace logs one line per keystroke when tracing is on. It is a
-// diagnostic channel, not a delivery path, so a marshalling failure is dropped
-// rather than surfaced — the terminal itself is unaffected either way.
-func (sink *TerminalSink) EmitTerminalInputTrace(handle terminal.Handle, event terminal.InputTrace) {
+// Trace writes one diagnostic record where a developer reads it, and names none
+// of them (control.TraceSink).
+//
+// It took the terminal plugin's own Handle and InputTrace to marshal them and
+// log them — a host that is meant to know no plugin, holding two of one
+// plugin's types for a body that never looks inside either. The record is
+// whatever the producer holds now, and the kind is whose it is.
+//
+// A diagnostic channel, not a delivery path: a record that will not encode is
+// dropped rather than surfaced, because a channel that can stop the thing it
+// observes is worse than no channel.
+func (sink *TerminalSink) Trace(kind string, record any) {
 	if !sink.traceInput {
 		return
 	}
-	encoded, err := json.Marshal(struct {
-		Handle terminal.Handle     `json:"handle"`
-		Event  terminal.InputTrace `json:"event"`
-	}{Handle: handle, Event: event})
+	encoded, err := json.Marshal(record)
 	if err != nil {
 		return
 	}
-	log.Printf("terminal-input-trace %s", encoded)
+	log.Printf("trace %s %s", kind, encoded)
 }

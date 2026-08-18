@@ -16,6 +16,7 @@ import (
 	nativebrowser "github.com/soksak/soksak-plugin-browser-native"
 	terminal "github.com/soksak/soksak-plugin-terminal-xterm"
 	terminalplugin "github.com/soksak/soksak-plugin-terminal-xterm"
+	terminalcmd "github.com/soksak/soksak-plugin-terminal-xterm/command"
 	compositor "github.com/soksak/wails-service-native-compositor"
 
 	"github.com/soksak/soksak-core/core/control"
@@ -159,9 +160,18 @@ func Run(options Options) error {
 	// report that it closed, and its names would stay on the table pointing at
 	// a page that is gone.
 	renderer := RegisterHost(options.Registry, HostDeps{
-		Host:        windowHost,
-		NewID:       newWindowID,
-		Sessions:    terminalplugin.CommandSessions(options.Terminal),
+		Host:  windowHost,
+		NewID: newWindowID,
+		// The command groups this binary ships with. Constructed here, where the
+		// plugins are, and handed over as registrations the host runs without
+		// knowing what they register.
+		Plugins: []func(*control.Registry){
+			func(registry *control.Registry) {
+				terminalcmd.Register(registry, terminalcmd.Deps{
+					Sessions: terminalplugin.CommandSessions(options.Terminal),
+				})
+			},
+		},
 		Composition: surfaceComposition,
 		Frames: func(stream string, frame any) {
 			options.Bridge.Emit(control.StreamEvent, control.StreamFrame{Stream: stream, Frame: frame})

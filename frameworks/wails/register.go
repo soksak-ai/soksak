@@ -1,8 +1,6 @@
 package wails
 
 import (
-	terminalcmd "github.com/soksak/soksak-plugin-terminal-xterm/command"
-
 	"github.com/soksak/soksak-core/core/control"
 )
 
@@ -15,9 +13,15 @@ type HostDeps struct {
 	Host WindowHost
 	// NewID mints a window name.
 	NewID func() string
-	// Sessions is the terminal owner. The terminal is a plugin: it registers
-	// its own command group, and this is the owner the group routes to.
-	Sessions terminalcmd.Sessions
+	// Plugins put their own command groups on the registry. Each one is a
+	// plugin's own Register, already holding whatever that plugin needs — so
+	// this host names none of them and a build with another is a line in the
+	// composition root rather than a field here.
+	//
+	// It was one field typed as the terminal plugin's session interface, which
+	// made a second terminal plugin need a second field and made this file name
+	// a plugin it does not otherwise know.
+	Plugins []func(*control.Registry)
 	// Composition is the applied native inventory the surface commands read.
 	Composition CompositionSource
 	// Frames delivers stream frames to a receiver the caller passed. Nil sends
@@ -51,7 +55,9 @@ type HostDeps struct {
 // measuring the framework's startup rather than the table.
 func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
 	renderer := RegisterRendererCommands(registry, deps.Dispatch)
-	terminalcmd.Register(registry, terminalcmd.Deps{Sessions: deps.Sessions})
+	for _, plugin := range deps.Plugins {
+		plugin(registry)
+	}
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
 	RegisterCapture(registry, deps.Host, deps.Frames)
 	RegisterShutdown(registry, ShutdownDeps{Reaper: deps.Reaper, Quit: deps.Quit})
