@@ -2220,23 +2220,43 @@ export function registerCatalog(): void {
     },
   });
 
+  // Activating a tab moves the screen: the rail travels to the pane that was clicked and the
+  // sidebar stands the section of that view's plugin. Both are a layout transaction, and until this
+  // command stamped a cause there was no way to wait for the one it opened — a caller had to read
+  // the arrangement over and over and call it settled when two readings agreed, which is equally
+  // true of a window that has finished and one whose motion the readings straddled.
   register("tab.activate", {
     description: key("cmd.tab.activate.desc"),
     triggers: { ko: "탭 전환 탭 선택 탭 활성화" },
-    params: { tab: { ...P.tab, required: true } },
-    returns: "{ tabId }",
+    params: {
+      tab: { ...P.tab, required: true },
+      causeTraceId: { type: "string", description: key("cmd.tab.activate.param.causeTraceId") },
+    },
+    returns: "{ tabId, moved, causeTraceId? } — causeTraceId is answered only when the activation moved the screen, which is the only case a transaction exists to wait for",
     message: () => tmsg("msg.tab.activate"),
-    errors: ["TARGET_NOT_FOUND"],
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: ['tab.activate \'{"tab":"tab-k5m6n7"}\''],
     handler: (p) => {
+      const causeTraceId = p.causeTraceId as string | undefined;
+      if (causeTraceId !== undefined && causeTraceId.length === 0) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.cause.empty") };
+      }
       const loc = locateTab(p.tab as string);
       if (!loc) return notFound("msg.tab.notFoundId", { id: String(p.tab) });
-      return withTargets(
-        transferViewFocus(activeSessionViewId(), p.tab as string, () =>
-          S().setActiveView(loc.workspace.id, p.tab as string),
-        ),
-        { tabId: p.tab as string },
+      // Declared before the state write, because the transaction opens inside it.
+      if (causeTraceId !== undefined) declareLayoutCause(causeTraceId);
+      const done = transferViewFocus(activeSessionViewId(), p.tab as string, () =>
+        S().setActiveView(loc.workspace.id, p.tab as string),
       );
+      // Whether the screen moved. Activating the tab that is already active changes nothing and
+      // opens no layout transaction, so a caller that waits for one on every activation waits out
+      // its own timeout — measured 2026-08-18, the gate's own click on the pane it was already in.
+      const moved = (done as { moved?: boolean }).moved === true;
+      // The cause is answered only where there is a transaction to find it on.
+      return withTargets(done, {
+        tabId: p.tab as string,
+        ...(causeTraceId !== undefined && moved ? { causeTraceId } : {}),
+      });
     },
   });
 
@@ -2282,7 +2302,7 @@ export function registerCatalog(): void {
     handler: (p, ctx) => {
       const causeTraceId = p.causeTraceId as string | undefined;
       if (causeTraceId !== undefined && causeTraceId.length === 0) {
-        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "causeTraceId is required" };
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.cause.empty") };
       }
       const loc = p.tab ? locateTab(p.tab as string) : resolveCtx(ctx);
       if (!loc?.tab)
@@ -2317,7 +2337,7 @@ export function registerCatalog(): void {
     handler: (p, ctx) => {
       const causeTraceId = p.causeTraceId as string | undefined;
       if (causeTraceId !== undefined && causeTraceId.length === 0) {
-        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "causeTraceId is required" };
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.cause.empty") };
       }
       const t = resolveWorkspace(p, ctx);
       if (!t) return notFound("msg.workspace.notFound");

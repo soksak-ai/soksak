@@ -1440,6 +1440,8 @@ export const en: Record<MsgKey, string> = {
   "cmd.tab.close.desc": "Close a tab — if it was the last tab in a pane, the pane is also removed. Refuses to close the last tab in a space.",
   "cmd.tab.label.set.desc": "Set a custom tab label for a sidebar view (overrides the manifest title). Empty label clears the override (manifest fallback). viewKey = '<pluginId>.<viewId>' from ui.tree (tab/left/<key>).",
   "cmd.tab.list.desc": "List the tabs inside a pane.",
+  "cmd.tab.activate.param.causeTraceId": "Caller-owned cause identity stamped on the layout transaction this activation opens. layout.transaction.wait waits for that one by it, so a caller never times the screen settling.",
+  "msg.cause.empty": "causeTraceId must have a value; an empty string names no cause",
   "cmd.tab.maximize.param.causeTraceId": "Caller-owned cause identity stamped on the geometry-changing layout transaction.",
   "cmd.tab.move.desc": "Move a tab to the zone position of the dst pane (center = move into that pane; other = split and create a new pane).",
   "cmd.tab.restore.desc": "Exit tab maximize mode and restore the original split layout for the active space.",

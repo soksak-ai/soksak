@@ -368,7 +368,10 @@ interface SessionsStore {
     projectId: string,
     viewId: string,
   ) => CmdResult<{ activePaneId: string; activeTabId: string }>;
-  setActiveView: (projectId: string, viewId: string) => CmdResult;
+  // moved is whether the activation changed the arrangement and opened a layout transition.
+  // Activating the tab that is already active changes nothing, and a caller that cannot tell the
+  // two apart waits for a transaction that was never opened.
+  setActiveView: (projectId: string, viewId: string) => CmdResult<{ moved: boolean }>;
   setActiveGroup: (projectId: string, groupId: string) => CmdResult;
   // Maximize a view — one view fills the whole content area (split tree unchanged, display only).
   // Restore = the original split.
@@ -1534,7 +1537,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   setActiveView: (projectId, viewId) => {
     noteActivation("setActiveView", viewId); // activation ledger — call count and call path (observation)
-    let r: CmdResult = noWorkspace(projectId);
+    let r: CmdResult<{ moved: boolean }> = noWorkspace(projectId);
     set((s) => {
       const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
@@ -1553,8 +1556,8 @@ export const useSessions = moduleState("state/sessions#store", () =>
         })),
         activePaneId: grp.id,
       }));
-      openProjectArrangementTransition(t, nextWorkspace);
-      r = ok({});
+      const moved = openProjectArrangementTransition(t, nextWorkspace);
+      r = ok({ moved });
       // The WorkspacePlane adapter starts preparing the exact revision before the new workspace
       // subscriber. The React layout commit does not reopen this transaction; it claims the same
       // revision promise.

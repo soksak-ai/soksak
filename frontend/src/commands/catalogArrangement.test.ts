@@ -340,6 +340,35 @@ describe("layout.arrangement", () => {
     });
   });
 
+  // Whether the screen moved is a fact only this command holds, and a caller that cannot read it
+  // waits for a transaction that was never opened. Measured 2026-08-18: the arrangement gate
+  // clicked the pane it was already in and waited out an eight-second timeout on a transaction
+  // nothing had opened, once every six runs before this and every run after the wait was added.
+  it("tab.activate says whether it moved the screen, and answers a cause only when it did", async () => {
+    const moving = (await execute(
+      "tab.activate",
+      { tab: "tab-aaaaaa", causeTraceId: "b08/activate/moved" },
+      {},
+    )) as { data?: { moved?: boolean; causeTraceId?: string } };
+    expect(moving.data?.moved, "activating another pane moves the screen").toBe(true);
+    expect(moving.data?.causeTraceId).toBe("b08/activate/moved");
+
+    // The same tab again. Nothing changes, so nothing opens, and no cause is answered — the
+    // caller reads that and does not wait.
+    const still = (await execute(
+      "tab.activate",
+      { tab: "tab-aaaaaa", causeTraceId: "b08/activate/still" },
+      {},
+    )) as { data?: { moved?: boolean; causeTraceId?: string } };
+    expect(still.data?.moved, "activating the active tab moves nothing").toBe(false);
+    expect(still.data?.causeTraceId, "no transaction exists to find this cause on").toBeUndefined();
+  });
+
+  it("tab.activate refuses an empty cause rather than stamping one nothing can be found by", async () => {
+    await expect(execute("tab.activate", { tab: "tab-aaaaaa", causeTraceId: "" }, {}))
+      .resolves.toMatchObject({ ok: false, code: "INVALID_PARAMS" });
+  });
+
   it("a tab switch inside the same pane and a failed activation open no geometry revision", async () => {
     const fixture = workspace("pan-bbbbbb");
     const g2 = fixture.spaces[0].layout.type === "split"
