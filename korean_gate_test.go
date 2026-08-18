@@ -70,6 +70,15 @@ var koreanScanned = map[string]bool{
 // a Korean sentence anywhere else on the line is still counted.
 var koreanTrigger = regexp.MustCompile(`(^|\{)\s*ko:\s*"`)
 
+// koreanReading matches an assertion about the content of a sentence's Korean
+// edition. Checking that a promise is in both editions means naming a fragment of
+// the Korean one — a half-translated sentence is the defect a key exists to
+// prevent, and no test can hold that without a Korean word in it.
+//
+// The reader scope is what is matched, not the Hangul: a Korean sentence
+// elsewhere on the line is still counted.
+var koreanReading = regexp.MustCompile(`withReaderLanguage\(\s*"ko"`)
+
 // koreanDebt is how many Hangul lines remain that no rule accounts for.
 //
 // The count used to fold three different things together — the bundles, the
@@ -127,7 +136,7 @@ func TestKoreanStaysInTheBundles(t *testing.T) {
 		scanned++
 		lines := 0
 		for _, line := range strings.Split(string(body), "\n") {
-			if hasHangul(line) && !koreanTrigger.MatchString(line) {
+			if hasHangul(line) && !koreanTrigger.MatchString(line) && !koreanReading.MatchString(line) {
 				lines++
 			}
 		}
