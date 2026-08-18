@@ -21,8 +21,7 @@ import {
 
 export function registerRemoteCatalog(): void {
   register("remote.confirm", {
-    description:
-      "Show the desktop human confirm modal for a destructive remote action and await the decision (approve/deny). Called by the remote-iroh sidecar over the socket: the sidecar owns the confirm authority (parking, TTL, token issuance) and delegates only the human decision here. The phone cannot self-approve — the decision comes only from this desktop modal. Returns { approve }.",
+    description: key("cmd.remote.confirm.desc"),
     triggers: { ko: "원격 destructive 데스크톱 사람 confirm 모달 승인 거부" },
     params: {
       request_id: {

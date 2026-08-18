@@ -41,7 +41,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "키값 조회" },
     params: {
       ns: NS_PARAM,
-      key: { type: "string", required: true, description: "Key" },
+      key: { type: "string", required: true, description: key("cmd.data.kv.get.param.key") },
     },
     broker: kvBroker(["commands"], {
       // value is arbitrary JSON — left as an open field instead of pinned to a machine schema primitive.
@@ -66,13 +66,12 @@ export function registerDataCatalog(): void {
   });
 
   register("data.kv.set", {
-    description:
-      "Write one kv value (JSON) into a namespace. The store is a core SQLite singleton — the row survives app restart and window close.",
+    description: key("cmd.data.kv.set.desc"),
     triggers: { ko: "키값 저장" },
     params: {
       ns: NS_PARAM,
-      key: { type: "string", required: true, description: "Key" },
-      value: { type: "json", required: true, description: "JSON value to store" },
+      key: { type: "string", required: true, description: key("cmd.data.kv.set.param.key") },
+      value: { type: "json", required: true, description: key("cmd.data.kv.set.param.value") },
     },
     broker: kvBroker(["commands"], {
       type: "object",
@@ -100,7 +99,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "키값 삭제" },
     params: {
       ns: NS_PARAM,
-      key: { type: "string", required: true, description: "Key" },
+      key: { type: "string", required: true, description: key("cmd.data.kv.delete.param.key") },
     },
     danger: "destructive",
     broker: kvBroker(["commands", "commands:destructive"], {
@@ -133,7 +132,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "키 목록" },
     params: {
       ns: NS_PARAM,
-      prefix: { type: "string", required: false, description: "Key prefix filter" },
+      prefix: { type: "string", required: false, description: key("cmd.data.kv.keys.param.prefix") },
     },
     broker: kvBroker(["commands"], {
       type: "object",
@@ -163,12 +162,11 @@ export function registerDataCatalog(): void {
   });
 
   register("data.kv.entries", {
-    description:
-      "Read a namespace key/value snapshot in one store call, optionally filtered by a literal prefix. Use this instead of keys followed by N gets when values must belong to one observed generation.",
+    description: key("cmd.data.kv.entries.desc"),
     triggers: { ko: "키 값 일괄 조회 스냅샷" },
     params: {
       ns: NS_PARAM,
-      prefix: { type: "string", required: false, description: "Literal key prefix" },
+      prefix: { type: "string", required: false, description: key("cmd.data.kv.entries.param.prefix") },
     },
     broker: kvBroker(["commands"], {
       type: "object",
@@ -208,12 +206,11 @@ export function registerDataCatalog(): void {
   });
 
   register("data.kv.deleteMany", {
-    description:
-      "Delete 1..4096 explicitly named exact kv keys in one store transaction. Duplicate keys are collapsed; this command never performs prefix deletion.",
+    description: key("cmd.data.kv.deleteMany.desc"),
     triggers: { ko: "키값 일괄 exact 삭제" },
     params: {
       ns: NS_PARAM,
-      keys: { type: "string[]", required: true, description: "1..4096 exact non-empty keys" },
+      keys: { type: "string[]", required: true, description: key("cmd.data.kv.deleteMany.param.keys") },
     },
     danger: "destructive",
     broker: kvBroker(["commands", "commands:destructive"], {
@@ -257,10 +254,9 @@ export function registerDataCatalog(): void {
   // ns reclaim — whatever can be created must also be removable. Without this surface the namespaces made by
   // tests (e2e, probing) could not be removed, and the data axis of the 3-axis reclaim was left open.
   register("data.ns.remove", {
-    description:
-      "Remove a data namespace and everything it made: its records, kv rows, collection definitions, FTS tables and expression indexes. Other namespaces are untouched. Removing a namespace that does not exist is not a failure — it reports zeros.",
+    description: key("cmd.data.ns.remove.desc"),
     triggers: { ko: "데이터 네임스페이스 삭제 회수" },
-    params: { ns: { type: "string", required: true, description: "Namespace to remove" } },
+    params: { ns: { type: "string", required: true, description: key("cmd.data.ns.remove.param.ns") } },
     danger: "destructive",
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
@@ -287,8 +283,7 @@ export function registerDataCatalog(): void {
   // limits and memory separate out what starved it (opening the file from outside is a different board and a
   // different answer).
   register("data.stats", {
-    description:
-      "Report the data store as the app's own SQLite sees it: the boot write-gate verdict, version, heap limits, memory used and highwater, page cache settings, page/freelist counts, and how many indexes sit on the shared records table. Read-only. Use this when a store call answers out of memory — bootGate says whether writes worked at startup, and the limits and memory figures say what starved it.",
+    description: key("cmd.data.stats.desc"),
     triggers: { ko: "데이터 저장소 상태 통계 메모리 한도" },
     params: {},
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
@@ -308,8 +303,7 @@ export function registerDataCatalog(): void {
   // index corruption. A store in that state reads fine and fails only on write (measured). The full cross-check
   // is therefore a surface people and agents can call.
   register("data.verify", {
-    description:
-      "Check the data store for corruption (full integrity check — it cross-checks every index against the table, which the boot check does not). Read-only. Returns the problems SQLite reports; an empty list means the store is sound.",
+    description: key("cmd.data.verify.desc"),
     triggers: { ko: "데이터 무결성 점검 손상 확인" },
     params: {},
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
@@ -326,8 +320,7 @@ export function registerDataCatalog(): void {
 
   // Writability — the diagnosis (integrity_check) only reads, so it misses write failure. Write one row and roll back.
   register("data.canary", {
-    description:
-      "Check whether the store can actually be written: inserts one row and rolls it back, leaving nothing. The integrity check only reads, so a store that reads fine and fails every write passes it — this is the surface that catches that. Failures carry the diagnosis and the process's memory figures.",
+    description: key("cmd.data.canary.desc"),
     triggers: { ko: "데이터 쓰기 확인 저장 가능" },
     params: {},
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
@@ -345,8 +338,7 @@ export function registerDataCatalog(): void {
   // Backup scratch reclaim — one backup builds a file the size of the store, and a run that dies mid-build
   // leaves that size behind. Names are split by pid, so **a live owner's file is never touched** (hence not destructive).
   register("data.reclaim", {
-    description:
-      "Delete backup scratch files whose owning process is gone, and report how many. Each backup builds a file the size of the store, so a run that dies mid-snapshot leaves that size behind. Scratch files carry their owner's pid, and a live owner's file is never touched. Rotation reclaims on its own schedule; call this when backups are not running or the space is needed now.",
+    description: key("cmd.data.reclaim.desc"),
     triggers: { ko: "백업 임시 파일 회수 정리 공간" },
     params: {},
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
@@ -361,8 +353,7 @@ export function registerDataCatalog(): void {
   // Healing — rebuild the indexes from the table (REINDEX). Data rows are untouched, so it is not destructive,
   // but it rewrites the store, so it is marked danger (remote calls pass the permission gate).
   register("data.repair", {
-    description:
-      "Rebuild the data store's indexes from the table rows (REINDEX) and report the problems before and after. Rows are neither created nor deleted. Use when data.verify reports index problems — a store whose indexes are broken reads fine and fails on write. Healing is attempted even when the diagnosis itself fails; reindexError carries the reason when the rebuild could not run.",
+    description: key("cmd.data.repair.desc"),
     triggers: { ko: "데이터 복구 인덱스 재생성 치유" },
     params: {},
     danger: "destructive",
@@ -389,10 +380,9 @@ export function registerDataCatalog(): void {
   });
 
   register("data.backup", {
-    description:
-      "Snapshot the entire data store to a single .db file via VACUUM INTO (absorbs WAL). Omit path to write a timestamped file under ~/.soksak/backups/.",
+    description: key("cmd.data.backup.desc"),
     triggers: { ko: "백업 스냅샷 데이터백업" },
-    params: { path: { type: "string", description: "Destination path; defaults to backup folder" } },
+    params: { path: { type: "string", description: key("cmd.data.backup.param.path") } },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ path }",
@@ -408,10 +398,9 @@ export function registerDataCatalog(): void {
   });
 
   register("data.restore", {
-    description:
-      "Restore the entire data store from a backup .db file: validates, safely copies the current store, then atomically swaps. Irreversible — use with caution.",
+    description: key("cmd.data.restore.desc"),
     triggers: { ko: "복원 데이터복원 되돌리기" },
-    params: { path: { type: "string", description: "Path to the backup .db file to restore from", required: true } },
+    params: { path: { type: "string", description: key("cmd.data.restore.param.path"), required: true } },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ok }",
@@ -429,12 +418,11 @@ export function registerDataCatalog(): void {
   });
 
   register("data.export", {
-    description:
-      "Export data as JSONL (meta + record + kv rows). Scope by ns/coll; omit both for a full export. Use for partial backups or migrating data between instances.",
+    description: key("cmd.data.export.desc"),
     triggers: { ko: "내보내기 익스포트 데이터이식" },
     params: {
-      ns: { type: "string", description: "Limit to this namespace; omit for all" },
-      coll: { type: "string", description: "Limit to this collection; omit for all" },
+      ns: { type: "string", description: key("cmd.data.export.param.ns") },
+      coll: { type: "string", description: key("cmd.data.export.param.coll") },
     },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
@@ -452,10 +440,9 @@ export function registerDataCatalog(): void {
   });
 
   register("data.import", {
-    description:
-      "Import JSONL produced by data.export: meta rows call define, record rows upsert, kv rows set. Existing ids are overwritten.",
+    description: key("cmd.data.import.desc"),
     triggers: { ko: "가져오기 임포트 데이터이식 복구" },
-    params: { jsonl: { type: "string", description: "JSONL string output from data.export", required: true } },
+    params: { jsonl: { type: "string", description: key("cmd.data.import.param.jsonl"), required: true } },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ applied }",
@@ -475,18 +462,17 @@ export function registerDataCatalog(): void {
   // ── Read-only queries (for inspection) ─────────────────────────────────────
 
   register("data.query", {
-    description:
-      "Query a collection (read-only). Filter fields must be declared as indexes in define. Use to read or filter stored records.",
+    description: key("cmd.data.query.desc"),
     triggers: { ko: "데이터 조회 쿼리 검색 목록" },
     params: {
       ns: NS_PARAM,
       coll: COLL_PARAM,
-      scope: { type: "string", description: "Scope partition key (e.g. projectId)" },
-      where: { type: "json", description: "{field: value} or {field: {op, value}}" },
-      order: { type: "string", description: "Sort field: created, updated, or any index field" },
-      desc: { type: "boolean", description: "Sort descending (default true)" },
-      limit: { type: "number", description: "Max rows to return (default 200)" },
-      offset: { type: "number", description: "Rows to skip" },
+      scope: { type: "string", description: key("cmd.data.query.param.scope") },
+      where: { type: "json", description: key("cmd.data.query.param.where") },
+      order: { type: "string", description: key("cmd.data.query.param.order") },
+      desc: { type: "boolean", description: key("cmd.data.query.param.desc") },
+      limit: { type: "number", description: key("cmd.data.query.param.limit") },
+      offset: { type: "number", description: key("cmd.data.query.param.offset") },
     },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
@@ -510,15 +496,14 @@ export function registerDataCatalog(): void {
   });
 
   register("data.search", {
-    description:
-      "Full-text search a collection using FTS5 trigram (CJK-aware). Queries shorter than 3 code points fall back to LIKE.",
+    description: key("cmd.data.search.desc"),
     triggers: { ko: "검색 전문검색 찾기 텍스트검색" },
     params: {
       ns: NS_PARAM,
       coll: COLL_PARAM,
-      query: { type: "string", description: "Search query string", required: true },
-      scope: { type: "string", description: "Scope partition key" },
-      limit: { type: "number", description: "Max rows to return (default 50)" },
+      query: { type: "string", description: key("cmd.data.search.param.query"), required: true },
+      scope: { type: "string", description: key("cmd.data.search.param.scope") },
+      limit: { type: "number", description: key("cmd.data.search.param.limit") },
     },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
@@ -539,14 +524,13 @@ export function registerDataCatalog(): void {
   });
 
   register("data.count", {
-    description:
-      "Count records in a collection (read-only). Narrow the count with an optional where filter.",
+    description: key("cmd.data.count.desc"),
     triggers: { ko: "카운트 개수 레코드수 건수" },
     params: {
       ns: NS_PARAM,
       coll: COLL_PARAM,
-      scope: { type: "string", description: "Scope partition key" },
-      where: { type: "json", description: "Filter condition (same shape as data.query where)" },
+      scope: { type: "string", description: key("cmd.data.count.param.scope") },
+      where: { type: "json", description: key("cmd.data.count.param.where") },
     },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
@@ -568,10 +552,9 @@ export function registerDataCatalog(): void {
   // ── Encryption (stage ② — per-scope envelope key, R0 transparent exposure) ─
 
   register("data.encrypt.status", {
-    description:
-      "Report encryption state for a scope: enabled (an active key = sealing trigger), keyId, algo, whether the vault is unlocked (decryption possible), tampered (publicKey no longer matches the vault private key), and keyMissing (the public key exists but its private key is gone from the vault — sealed records are unrecoverable).",
+    description: key("cmd.data.encrypt.status.desc"),
     triggers: { ko: "암호화상태 암호화확인 봉인상태" },
-    params: { scope: { type: "string", description: "Scope partition key (e.g. projectId)", required: true } },
+    params: { scope: { type: "string", description: key("cmd.data.encrypt.status.param.scope"), required: true } },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ enabled, keyId, algo, unlocked, tampered, keyMissing }",
@@ -587,10 +570,9 @@ export function registerDataCatalog(): void {
   });
 
   register("data.encrypt.enable", {
-    description:
-      "Enable encryption for a scope: generate an X25519 keypair, wrap the private key in the vault (requires the vault to be unlocked first) AND under a one-time recovery code, then register the public key so every subsequent write is sealed. Returns the recovery code ONCE — store it safely; it is the only way to recover the data if the passphrase is lost, and it is never retrievable again. Run data.encrypt.convert afterward to seal records already stored.",
+    description: key("cmd.data.encrypt.enable.desc"),
     triggers: { ko: "암호화활성 암호화켜기 봉인활성" },
-    params: { scope: { type: "string", description: "Scope partition key to encrypt", required: true } },
+    params: { scope: { type: "string", description: key("cmd.data.encrypt.enable.param.scope"), required: true } },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ keyId, recoveryCode }",
@@ -608,12 +590,11 @@ export function registerDataCatalog(): void {
   });
 
   register("data.encrypt.recover", {
-    description:
-      "Recover a scope's encryption private key from its one-time recovery code on a machine that lacks it — a fresh install, a different OS, or a lost keychain. Re-stores the key under this device's OS-keychain KEK, which must be reachable. The recovered key must match the registered public key or recovery is refused. After success the scope's sealed records decrypt again on this machine.",
+    description: key("cmd.data.encrypt.recover.desc"),
     triggers: { ko: "암호화복구 키복구 복구코드" },
     params: {
-      scope: { type: "string", description: "Scope partition key to recover", required: true },
-      recoveryCode: { type: "string", description: "The recovery code issued at enable", required: true },
+      scope: { type: "string", description: key("cmd.data.encrypt.recover.param.scope"), required: true },
+      recoveryCode: { type: "string", description: key("cmd.data.encrypt.recover.param.recoveryCode"), required: true },
     },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
@@ -632,10 +613,9 @@ export function registerDataCatalog(): void {
   });
 
   register("data.encrypt.rotate", {
-    description:
-      "Rotate a scope's encryption key: generate a new keypair, re-seal every record from the old key to the new one (one transaction each, resumable), re-issue the recovery blob under a NEW recovery code, then dispose the old key only once nothing references it. Requires this device's OS-keychain KEK. Returns the new recovery code ONCE — store it; the previous code no longer opens the data.",
+    description: key("cmd.data.encrypt.rotate.desc"),
     triggers: { ko: "키회전 키교체 암호화회전" },
-    params: { scope: { type: "string", description: "Scope partition key to rotate", required: true } },
+    params: { scope: { type: "string", description: key("cmd.data.encrypt.rotate.param.scope"), required: true } },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ oldKeyId, newKeyId, rekeyed, oldDisposed, recoveryCode }",
@@ -652,10 +632,9 @@ export function registerDataCatalog(): void {
   });
 
   register("data.encrypt.changeRecovery", {
-    description:
-      "Change a scope's recovery code WITHOUT re-encrypting data: re-wrap the active private key under a fresh recovery code and return it once. Use when the old code is lost or exposed. Requires this device's OS-keychain KEK. The previous code stops working; store the new one. Cheaper than rotate — the key and sealed records are untouched, only the recovery blob is replaced.",
+    description: key("cmd.data.encrypt.changeRecovery.desc"),
     triggers: { ko: "복구코드변경 복구코드재발급 복구코드교체" },
-    params: { scope: { type: "string", description: "Scope partition key", required: true } },
+    params: { scope: { type: "string", description: key("cmd.data.encrypt.changeRecovery.param.scope"), required: true } },
     returns: "{ recoveryCode }",
     message: () => tmsg("msg.data.encrypt.changeRecovery"),
     danger: "destructive",
@@ -671,13 +650,12 @@ export function registerDataCatalog(): void {
   });
 
   register("data.encrypt.convert", {
-    description:
-      "Seal records already stored plaintext in a scope under the active key (one transaction per record, idempotent, resumable). Run after data.encrypt.enable to protect pre-existing data.",
+    description: key("cmd.data.encrypt.convert.desc"),
     triggers: { ko: "암호화변환 봉인변환 기존암호화" },
     params: {
       ns: NS_PARAM,
       coll: COLL_PARAM,
-      scope: { type: "string", description: "Scope partition key to convert", required: true },
+      scope: { type: "string", description: key("cmd.data.encrypt.convert.param.scope"), required: true },
     },
     // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,

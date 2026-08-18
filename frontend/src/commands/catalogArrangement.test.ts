@@ -2,6 +2,8 @@
 // command's answer must equal the solver result exactly — a divergence means either the screen or
 // the contract is wrong.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+// The description is a key, resolved where the catalogue is read.
+import { text, withReaderLanguage } from "../i18n";
 
 const mem = new Map<string, string>();
 vi.stubGlobal("localStorage", {
@@ -224,7 +226,12 @@ describe("layout.arrangement", () => {
 
   it("the returns contract does not promise movesFrom, which the response does not hold", () => {
     expect(getSpec("layout.arrangement")?.returns).not.toContain("movesFrom");
-    expect(getSpec("layout.arrangement")?.description).not.toMatch(/move list/i);
+    // The description is a key now — read the sentence, and read both editions, because a promise
+    // made in one language and not the other is what a key exists to prevent.
+    for (const language of ["en", "ko"] as const) {
+      const sentence = withReaderLanguage(language, () => text(getSpec("layout.arrangement")!.description));
+      expect(sentence, language).not.toMatch(/move list/i);
+    }
   });
 
   it("exposes a finite layout transaction journal as a command, independent of recording", async () => {

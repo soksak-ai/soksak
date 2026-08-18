@@ -10,12 +10,11 @@ import { register } from "./registry";
 
 export function registerNotifyCatalog(): void {
   register("notify.show", {
-    description:
-      "Show an OS desktop notification (title + body). Behaves like a push notification when the window is not focused. Clicking runs the deep link this notification carries — pass it as `deepLink` (soksak[-env]://cmd/<name>?<query>).",
+    description: key("cmd.notify.show.desc"),
     triggers: { ko: "알림 보내기 푸시 통지 데스크톱알림" },
     params: {
-      title: { type: "string", description: "Notification title", required: true },
-      body: { type: "string", description: "Notification body text", required: true },
+      title: { type: "string", description: key("cmd.notify.show.param.title"), required: true },
+      body: { type: "string", description: key("cmd.notify.show.param.body"), required: true },
       deepLink: {
         type: "string",
         description: key("cmd.notify.show.param.deepLink"),
@@ -51,11 +50,10 @@ export function registerNotifyCatalog(): void {
   // already exists — an unnamed event cannot be invoked, and what cannot be invoked cannot be
   // called working.
   register("notify.activate", {
-    description:
-      "Activate a notification previously shown by `notify.show`, using its `handle`. Runs exactly what an OS click runs.",
+    description: key("cmd.notify.activate.desc"),
     triggers: { ko: "알림 누르기 알림 활성화 클릭" },
     params: {
-      handle: { type: "number", description: "Handle returned by notify.show", required: true },
+      handle: { type: "number", description: key("cmd.notify.activate.param.handle"), required: true },
     },
     returns: "{ ok }",
     message: () => tmsg("msg.notify.activate"),

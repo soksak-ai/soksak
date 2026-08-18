@@ -11,8 +11,7 @@ import { register } from "./registry";
 
 export function registerServiceCatalog(): void {
   register("service.status", {
-    description:
-      "Report resident plugin services and their live status. A live generation exposes the exact manager-owned pid and owner:'service-manager'; reaped/error/stopped generations expose pid:null. status is one of spawning|ready|draining|backoff:<n>|error:<reason>|stopped.",
+    description: key("cmd.service.status.desc"),
     triggers: { ko: "상주 서비스 상태 조회 확인" },
     params: {
       plugin: {

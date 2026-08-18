@@ -502,7 +502,7 @@ export const P = {
     type: "string",
     description: key("cmd.param.workspace"),
   },
-  space: { type: "string", description: "Target space tab id" },
+  space: { type: "string", description: key("cmd.param.space") },
   pane: {
     type: "string",
     description: key("cmd.param.pane"),
@@ -518,8 +518,7 @@ export const P = {
   },
   program: {
     type: "string",
-    description:
-      "Program id — plugin-registered only (see program.list; no built-in default). Omitted or unregistered id opens a blank pane",
+    description: key("cmd.param.program"),
   },
   side: {
     type: "string",
@@ -528,8 +527,7 @@ export const P = {
   },
   edge: {
     type: "string",
-    description:
-      "Which of the pane's edges the gutter sits on — right|bottom are canonical, left|top name the same gutter from the neighbour's side",
+    description: key("cmd.param.edge"),
     enum: [...EDGES],
   },
   zone: {
@@ -550,8 +548,7 @@ export function registerCatalog(): void {
   // ui.measure / ui.tree / ui.input.* are in catalogDom.ts (address-based) — selector measurement is dropped (moved to the address scheme).
 
   register("state.tree", {
-    description:
-      "Full layout snapshot (address book): all ids and active state across workspace → space → pane (display rect %) → tab. Each space exposes displayed and canonical stored layouts, projection provenance, and the effective rail relation; each workspace exposes its effective left-rail position and clean grid lines.",
+    description: key("cmd.state.tree.desc"),
     params: {},
     returns:
       "{ activeProjectId, workspaces[].{ leftRailPosition, spaces[].{ layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] } } } — layout/panes are displayed state; canonicalLayout is the stored SplitTree",
@@ -564,8 +561,7 @@ export function registerCatalog(): void {
   // part of what a window holds, and comparing three answers across a restart puts the rule in
   // whoever is comparing — two people comparing the same restart can then disagree about it.
   register("state.fingerprint", {
-    description:
-      "One digest of what this window holds — every workspace root, its rail mode, station and clean lines, and every pane rectangle with which one is active. Compare it before and after a restart: equal digests mean the window came back the same. Ids are deliberately not in it, because a restore mints new ones by contract; a root is, because it is the workspace's identity rather than an id.",
+    description: key("cmd.state.fingerprint.desc"),
     triggers: { ko: "상태 지문 복원 동형 비교 다이제스트" },
     params: {},
     returns:
@@ -582,8 +578,7 @@ export function registerCatalog(): void {
   // surface that writes it directly becomes a second truth (position is owned by
   // sidebar.left.position, structure by pane.*).
   register("layout.arrangement", {
-    description:
-      "The solved arrangement of the active space: the rail station, whether the focused pane was switched to the front (row-mismatch rule), and the displayed cell rects. Read-only — the arrangement is a function of the split tree and the focus, so pane.*/sidebar.left.position are the ways to change it.",
+    description: key("cmd.layout.arrangement.desc"),
     triggers: {
       ko: "배치 해 레일 스테이션 이동량 스위칭 정렬 계산 확인",
     },
@@ -633,8 +628,7 @@ export function registerCatalog(): void {
   // renderer's arithmetic answers yes to every question; this one recomputes the position from the
   // declared percentage and compares.
   register("layout.verify", {
-    description:
-      "Compare the declared cell rect of every pane in the active space against its measured DOM rect. Declared rects are percentages of the space box; measured rects are viewport pixels. The answer carries both plus their difference in CSS pixels. Judgement: settled is true and worst = 0 within one device pixel. Panes named by the arrangement but absent from the DOM come back in missing[], panes on screen that the arrangement does not name come back in unexpected[]. While a layout transition is open, settled is false and every number describes a frame in motion rather than the layout — wait with layout.transaction.wait and ask again.",
+    description: key("cmd.layout.verify.desc"),
     triggers: { ko: "레이아웃 검증 선언 실측 차이 대조 셀 rect 픽셀" },
     params: { workspace: P.workspace },
     returns:
@@ -774,8 +768,7 @@ export function registerCatalog(): void {
   // acknowledged; this records what the arrangement was at each phase, which is a different fact
   // and the one the three rail claims are judged on.
   register("layout.transition.journal", {
-    description:
-      "Every arrangement phase this window has been through, oldest first. Each record holds the station, the clean lines, every cell rect, how far each pane moved since the previous record, and how many rail surfaces the document held at that moment. Judgement: a transition record has 0 rail surfaces and the record after it has exactly 1; a PIN click leaves dStation 0 and moved empty; a FLOW click leaves the station on the focused pane's left clean line.",
+    description: key("cmd.layout.transition.journal.desc"),
     triggers: { ko: "레일 전이 저널 위상 스테이션 이동 델타 표면" },
     params: {},
     returns:
@@ -786,8 +779,7 @@ export function registerCatalog(): void {
   });
 
   register("layout.transactions", {
-    description:
-      "Read the finite layout transition journal. A transaction is published as preparing before adapter ACK, becomes prepared only after staged targets are declared, and then closes terminally. Snap rows bind the exact store settlement owner/revision and retain whether that revision is still pending or settled after projection commit. The journal retains at most 16 active and 64 terminal rows without evicting active work. Glide rows own a display-callback presentationStart; snap rows instead own the exact adapter projectionCommit bounds ACK and never run candidate negotiation. causeTraceId joins the stimulus to one terminal transaction. This is the numeric automation surface; recordings are human visual evidence only.",
+    description: key("cmd.layout.transactions.desc"),
     triggers: { ko: "레이아웃 거래 장부 이동 위상 수치 추적" },
     params: {},
     returns:
@@ -798,8 +790,7 @@ export function registerCatalog(): void {
   });
 
   register("layout.transaction.wait", {
-    description:
-      "Wait for the one terminal layout transaction opened by an exact causeTraceId after an ordered journal sequence. The command subscribes to journal events before reading its snapshot, rejects duplicate causes, and removes its listener at a finite timeout; it does not poll.",
+    description: key("cmd.layout.transaction.wait.desc"),
     triggers: { ko: "레이아웃 거래 종결 대기 원인 식별자 이벤트" },
     params: {
       causeTraceId: {
@@ -840,8 +831,7 @@ export function registerCatalog(): void {
   });
 
   register("state.context", {
-    description:
-      "Resolve the caller's position: workspace/space/pane/tab that $SOKSAK_CALLER_TAB belongs to (falls back to active chain when called outside a terminal).",
+    description: key("cmd.state.context.desc"),
     params: { tab: P.tab },
     returns:
       "{ projectId, spaceId, paneId, tabId?, callerTab? } — tabId is absent when the pane is empty; callerTab is the terminal tab this call came from",
@@ -890,8 +880,7 @@ export function registerCatalog(): void {
   });
 
   register("workspace.recent", {
-    description:
-      "List recent workspaces (the cross-window recents feeding the control-plane workspace map and the workspace rail): root, alias, last-opened timestamp. Same list from any window (core kv).",
+    description: key("cmd.workspace.recent.desc"),
     triggers: { ko: "최근 워크스페이스 목록 최근 연 워크스페이스 픽커 레일" },
     params: {},
     returns: "{ recents: [{root, alias, lastOpenedAt}] }",
@@ -901,11 +890,10 @@ export function registerCatalog(): void {
   });
 
   register("workspace.recent.remove", {
-    description:
-      "Remove a workspace from the recents list (workspace map/rail). Does not touch the workspace on disk — only the recents entry. Idempotent (missing root is a no-op).",
+    description: key("cmd.workspace.recent.remove.desc"),
     triggers: { ko: "최근 워크스페이스 제거 최근 목록에서 지우기 잊기" },
     params: {
-      root: { type: "string", description: "Workspace root to forget", required: true },
+      root: { type: "string", description: key("cmd.workspace.recent.remove.param.root"), required: true },
     },
     returns: "{ ok }",
     message: () => tmsg("msg.workspace.recent.remove"),
@@ -917,18 +905,16 @@ export function registerCatalog(): void {
   });
 
   register("workspace.open", {
-    description:
-      "Open a workspace (creates it if it doesn't exist yet). When root is omitted, folder (slug) is required — creates and uses ~/.soksak/workspaces/<folder>. Home (~) and root (/) are forbidden as root. Duplicate root activates the existing workspace instead.",
+    description: key("cmd.workspace.open.desc"),
     triggers: { ko: "워크스페이스 만들기 새 워크스페이스 워크스페이스 생성 열기" },
     params: {
-      root: { type: "string", description: "Workspace root directory (absolute path — home/root forbidden)" },
+      root: { type: "string", description: key("cmd.workspace.open.param.root") },
       folder: {
         type: "string",
-        description:
-          "Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/workspaces/<folder>",
+        description: key("cmd.workspace.open.param.folder"),
       },
-      alias: { type: "string", description: "Tab alias (omit = folder name)" },
-      program: { ...P.program, description: "Initial view program (omit = empty space tab)" },
+      alias: { type: "string", description: key("cmd.workspace.open.param.alias") },
+      program: { ...P.program, description: key("cmd.workspace.open.param.program") },
     },
     returns:
       "{ projectId, spaceId, paneId, tabId, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)",
@@ -1043,7 +1029,7 @@ export function registerCatalog(): void {
     triggers: { ko: "워크스페이스 이름 바꾸기 이름 변경 워크스페이스 제목" },
     params: {
       workspace: { ...P.workspace, required: true },
-      title: { type: "string", description: "New workspace name", required: true },
+      title: { type: "string", description: key("cmd.workspace.rename.param.title"), required: true },
     },
     returns: "{ projectId }",
     message: () => tmsg("msg.workspace.rename"),
@@ -1077,11 +1063,10 @@ export function registerCatalog(): void {
   });
 
   register("workspace.update", {
-    description:
-      "Batch-update workspace settings. Omitted fields are preserved; \"\" removes the override. root is immutable.",
+    description: key("cmd.workspace.update.desc"),
     params: {
       workspace: { ...P.workspace, required: true },
-      title: { type: "string", description: "Alias (empty string is ignored)" },
+      title: { type: "string", description: key("cmd.workspace.update.param.title") },
       color: { type: "string", description: 'Accent color ("" = remove)' },
     },
     returns: "{ projectId }",
@@ -1150,12 +1135,11 @@ export function registerCatalog(): void {
   // that failed to be reclaimed was invisible from outside, so neither the user nor a tool could see
   // them pile up. Read-only observation surface.
   register("process.list", {
-    description:
-      "List the child processes the app spawned for plugins: handle id, OS pid, the window that spawned it, the command, and whether it is still alive. The handle id is a small counter and is not an OS pid — ask liveness with pid. An entry that is no longer alive but still listed is an orphan its owner failed to reclaim. Read-only.",
+    description: key("cmd.process.list.desc"),
     triggers: { ko: "프로세스 목록 자식 프로세스 고아 좀비 사이드카 스폰 생존" },
     params: {
-      alive: { type: "boolean", description: "Only entries that are still running" },
-      window: { type: "string", description: "Only entries spawned by this window label" },
+      alive: { type: "boolean", description: key("cmd.process.list.param.alive") },
+      window: { type: "string", description: key("cmd.process.list.param.window") },
     },
     // The owner produces the answer — the same from whichever window it runs (registry.ts windowScoped).
     windowScoped: false,
@@ -1179,8 +1163,8 @@ export function registerCatalog(): void {
     description: key("cmd.tab.label.set.desc"),
     triggers: { ko: "사이드바 탭 이름변경 라벨 뷰 제목 변경" },
     params: {
-      viewKey: { type: "string", description: "viewKey '<pluginId>.<viewId>'", required: true },
-      label: { type: "string", description: "Custom label; empty to clear", required: true },
+      viewKey: { type: "string", description: key("cmd.tab.label.set.param.viewKey"), required: true },
+      label: { type: "string", description: key("cmd.tab.label.set.param.label"), required: true },
     },
     returns: "{ viewKey, label }",
     message: (d) =>
@@ -1199,11 +1183,10 @@ export function registerCatalog(): void {
   });
 
   register("tab.label.get", {
-    description:
-      "Get the custom tab label override for a sidebar view (empty = none, caller falls back to manifest title). Omit viewKey to list all overrides.",
+    description: key("cmd.tab.label.get.desc"),
     triggers: { ko: "사이드바 탭 라벨 조회 뷰 제목" },
     params: {
-      viewKey: { type: "string", description: "viewKey; omit to list all overrides" },
+      viewKey: { type: "string", description: key("cmd.tab.label.get.param.viewKey") },
     },
     returns: "{ labels } or { viewKey, label }",
     message: (d) =>
@@ -1222,11 +1205,10 @@ export function registerCatalog(): void {
   });
 
   register("sidebar.right.mode", {
-    description:
-      "Right sidebar layout mode — overlay (floats over content) or push (occupies area like the left sidebar). Global setting; omit mode to query current.",
+    description: key("cmd.sidebar.right.mode.desc"),
     triggers: { ko: "우측 사이드바 밀기 영역차지 오버레이 모드 도킹" },
     params: {
-      mode: { type: "string", description: "overlay | push — omit to query current" },
+      mode: { type: "string", description: key("cmd.sidebar.right.mode.param.mode") },
     },
     returns: "{ mode }",
     message: (d) => tmsg("msg.sidebar.right.mode", { mode: String(d.mode) }),
@@ -1245,8 +1227,7 @@ export function registerCatalog(): void {
   });
 
   register("sidebar.tree", {
-    description:
-      "Return a region's sidebar layout tree (SplitTree of tab groups) — direction, sizes, each leaf's viewKeys + active. Source for sidebar.move/resize targets, which name a viewKey (the tree's interior nodes have no name).",
+    description: key("cmd.sidebar.tree.desc"),
     triggers: { ko: "사이드바 레이아웃 트리 탭 분할 구조" },
     params: {
       workspace: P.workspace,
@@ -1270,8 +1251,7 @@ export function registerCatalog(): void {
   });
 
   register("sidebar.left.position", {
-    description:
-      "Read or set the workspace left rail position mode. Omit mode to query. flow (default) stands the rail at the focused pane's clean left line and travels with focus; pin without station freezes the current effective line; pin with station snaps to the nearest clean full-height grid line. The solved arrangement is what state.tree reports.",
+    description: key("cmd.sidebar.left.position.desc"),
     triggers: {
       ko: "좌측 사이드바 레일 위치 플로우 포커스 추종 핀 고정 그립 스냅",
     },
@@ -1284,8 +1264,7 @@ export function registerCatalog(): void {
       },
       station: {
         type: "number",
-        description:
-          "Requested logical station in 0..100 for pin; omitted pin freezes the current effective station",
+        description: key("cmd.sidebar.left.position.param.station"),
       },
     },
     returns:
@@ -1361,8 +1340,7 @@ export function registerCatalog(): void {
   });
 
   register("sidebar.move", {
-    description:
-      "Drag-merge a left sidebar view — into=merge as a tab, left/right=horizontal split, top/bottom=vertical split (same 4 directions as the content area). viewKeys/targets come from sidebar.left.tree.",
+    description: key("cmd.sidebar.move.desc"),
     triggers: { ko: "좌측 사이드바 탭 이동 합치기 분할 드래그 머지" },
     params: {
       workspace: P.workspace,
@@ -1372,8 +1350,8 @@ export function registerCatalog(): void {
         description: key("cmd.sidebar.param.region"),
         required: true,
       },
-      viewKey: { type: "string", description: "viewKey to move", required: true },
-      target: { type: "string", description: "target viewKey (a view in the target group)", required: true },
+      viewKey: { type: "string", description: key("cmd.sidebar.move.param.viewKey"), required: true },
+      target: { type: "string", description: key("cmd.sidebar.move.param.target"), required: true },
       zone: {
         type: "string",
         description: key("cmd.sidebar.move.param.zone"),
@@ -1407,8 +1385,7 @@ export function registerCatalog(): void {
   });
 
   register("sidebar.resize", {
-    description:
-      "Resize the left sidebar split that holds a view — sizes are parallel to that split's children (sum 1). The tree's interior nodes have no name, so the split is named by one of the views inside it (viewKeys from sidebar.left.tree).",
+    description: key("cmd.sidebar.resize.desc"),
     triggers: { ko: "좌측 사이드바 분할 비율 크기 조절" },
     params: {
       workspace: P.workspace,
@@ -1423,7 +1400,7 @@ export function registerCatalog(): void {
         description: key("cmd.sidebar.resize.param.viewKey"),
         required: true,
       },
-      sizes: { type: "number[]", description: "Ratio per child, sum 1", required: true },
+      sizes: { type: "number[]", description: key("cmd.sidebar.resize.param.sizes"), required: true },
     },
     returns: "{ projectId, sizes }",
     message: () => tmsg("msg.sidebar.resize"),
@@ -1543,8 +1520,7 @@ export function registerCatalog(): void {
   });
 
   register("space.switchScan", {
-    description:
-      "Measure a space-tab switch as the user sees it: record the switch and report whether the new space lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts.",
+    description: key("cmd.space.switchScan.desc"),
     triggers: { ko: "탭 전환 측정 깜빡임 jank 스페이스 전환 검사 단일프레임" },
     params: {
       workspace: P.workspace,
@@ -1553,8 +1529,8 @@ export function registerCatalog(): void {
         type: "string",
         description: key("cmd.space.switchScan.param.from"),
       },
-      frames: { type: "number", description: "Frames to capture (default 30)" },
-      intervalMs: { type: "number", description: "Frame interval ms (default 16)" },
+      frames: { type: "number", description: key("cmd.space.switchScan.param.frames") },
+      intervalMs: { type: "number", description: key("cmd.space.switchScan.param.intervalMs") },
       applyAtMs: {
         type: "number",
         description: key("cmd.space.switchScan.param.applyAtMs"),
@@ -1565,13 +1541,11 @@ export function registerCatalog(): void {
       },
       region: {
         type: "json",
-        description:
-          "Content area fractional rect {x0,y0,x1,y1} (0..1). Default covers the space's content area.",
+        description: key("cmd.space.switchScan.param.region"),
       },
       threshold: {
         type: "number",
-        description:
-          "Noise floor (changed-pixel fraction) below which no switch is reported (default 0.003). Detection above the floor is peak-relative, so it adapts to the switch's magnitude.",
+        description: key("cmd.space.switchScan.param.threshold"),
       },
     },
     returns:
@@ -1665,7 +1639,7 @@ export function registerCatalog(): void {
     params: {
       workspace: P.workspace,
       space: { ...P.space, required: true },
-      title: { type: "string", description: "New name", required: true },
+      title: { type: "string", description: key("cmd.space.rename.param.title"), required: true },
     },
     returns: "{ projectId, spaceId }",
     message: () => tmsg("msg.space.rename"),
@@ -1683,8 +1657,7 @@ export function registerCatalog(): void {
 
   // ----- pane -----
   register("pane.list", {
-    description:
-      "List displayed panes in a space, including rect (%), displayed layout, immutable canonical layout, projection provenance, and the effective rail relation.",
+    description: key("cmd.pane.list.desc"),
     params: { workspace: P.workspace, space: P.space },
     returns:
       "{ projectId, spaceId, activePaneId, layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] }",
@@ -1797,8 +1770,7 @@ export function registerCatalog(): void {
   };
 
   register("pane.split", {
-    description:
-      "Split a pane — add a new pane beside the target on a given side (optionally running a program). Use when arranging the layout or opening something side by side.",
+    description: key("cmd.pane.split.desc"),
     triggers: { ko: "칸 나누기 분할 화면 분할 옆에 열기 나란히" },
     params: {
       workspace: P.workspace,
@@ -1807,8 +1779,7 @@ export function registerCatalog(): void {
       program: P.program,
       mountTimeoutMs: {
         type: "number",
-        description:
-          "When program is provided, wait until its view is actionable (default 5000). 0 only creates state and returns mounted:false.",
+        description: key("cmd.pane.split.param.mountTimeoutMs"),
       },
     },
     returns:
@@ -1863,8 +1834,8 @@ export function registerCatalog(): void {
     triggers: { ko: "칸 합치기 병합 탭 이동 합병" },
     params: {
       workspace: P.workspace,
-      src: { type: "string", description: "Source pane id", required: true },
-      dst: { type: "string", description: "Destination pane id", required: true },
+      src: { type: "string", description: key("cmd.pane.merge.param.src"), required: true },
+      dst: { type: "string", description: key("cmd.pane.merge.param.dst"), required: true },
     },
     returns: "{ projectId, paneId(merged pane) }",
     message: () => tmsg("msg.pane.merge"),
@@ -1892,8 +1863,8 @@ export function registerCatalog(): void {
     triggers: { ko: "칸 이동 재배치 위치 옮기기" },
     params: {
       workspace: P.workspace,
-      src: { type: "string", description: "Source pane id", required: true },
-      dst: { type: "string", description: "Destination pane id", required: true },
+      src: { type: "string", description: key("cmd.pane.move.param.src"), required: true },
+      dst: { type: "string", description: key("cmd.pane.move.param.dst"), required: true },
       zone: { ...P.zone, required: true },
     },
     returns: "{ projectId, paneId }",
@@ -1962,16 +1933,14 @@ export function registerCatalog(): void {
   });
 
   register("pane.resize", {
-    description:
-      "Move one gutter — the seam on the given edge of a pane. ratio is the new share of the area on that pane's side of the seam; the neighbour on the other side takes the rest, and the panes further along keep their sizes. Every seam is some pane's right or bottom edge (left/top name the same seam from the neighbour's side), so no interior layout id is ever needed.",
+    description: key("cmd.pane.resize.desc"),
     triggers: { ko: "칸 크기 조절 비율 골 조정 크기 바꾸기 경계 끌기" },
     params: {
       pane: P.pane,
       edge: { ...P.edge, required: true },
       ratio: {
         type: "number",
-        description:
-          "New share (0..1, exclusive) of the two adjacent areas for the side the pane sits on",
+        description: key("cmd.pane.resize.param.ratio"),
         required: true,
       },
     },
@@ -2026,8 +1995,7 @@ export function registerCatalog(): void {
   });
 
   register("pane.equalize", {
-    description:
-      "Even out a gutter — halves the two areas the seam divides (what double-clicking it does). Pass all:true to give every area along that seam's axis the same share instead of just the two neighbours.",
+    description: key("cmd.pane.equalize.desc"),
     triggers: { ko: "칸 균등 같은 크기 반반 균등화" },
     params: {
       pane: P.pane,
@@ -2081,15 +2049,13 @@ export function registerCatalog(): void {
   });
 
   register("layout.apply", {
-    description:
-      "Apply a layout by building fresh spaces — never destroys existing spaces. Hierarchy: first-level spaces are independent switchable screens; second-level panes are the splits inside each space. A pane whose program is not registered is skipped and reported in skipped. Verify by switching to a space with space.activate, then capturing with window.snapshot.",
+    description: key("cmd.layout.apply.desc"),
     triggers: { ko: "화면 구성 레이아웃 적용 스페이스 배치 나란히 배치" },
     params: {
       spaces: {
         type: "json",
         required: true,
-        description:
-          "Named spaces to build: [{ title, panes?: [{ program, side? }] }]",
+        description: key("cmd.layout.apply.param.spaces"),
       },
       workspace: P.workspace,
     },
@@ -2207,16 +2173,14 @@ export function registerCatalog(): void {
   });
 
   register("tab.open", {
-    description:
-      "Open a new tab in a pane by program id (terminal / claude / codex / a plugin view program). The answer waits until the view is mounted, so the returned tabId can be acted on immediately; mounted:false means it did not come up in time and commands aimed at it will not find it yet.",
+    description: key("cmd.tab.open.desc"),
     triggers: { ko: "탭 열기 탭 추가 claude 열기 터미널 열기" },
     params: {
       pane: P.pane,
       program: { ...P.program, required: true },
       mountTimeoutMs: {
         type: "number",
-        description:
-          "How long to wait for the view to become actionable (default 5000). 0 answers as soon as the tab exists — mounted will be false and commands aimed at the tab may not find it yet.",
+        description: key("cmd.tab.open.param.mountTimeoutMs"),
       },
     },
     returns: "{ paneId, tabId, mounted }",
@@ -2277,12 +2241,11 @@ export function registerCatalog(): void {
   });
 
   register("tab.rename", {
-    description:
-      "Set a custom label for a content tab. Overrides the dynamic content title (e.g. a browser page <title> keeps updating underneath; the override wins on display). Empty title clears the override and the dynamic title returns. Sidebar views use tab.label.set instead.",
+    description: key("cmd.tab.rename.desc"),
     triggers: { ko: "탭 이름변경 탭명 변경 라벨" },
     params: {
       tab: { ...P.tab, required: true },
-      title: { type: "string", description: "Custom label; empty to clear the override", required: true },
+      title: { type: "string", description: key("cmd.tab.rename.param.title"), required: true },
     },
     returns: "{ tabId, label }",
     message: (d) =>
@@ -2303,8 +2266,7 @@ export function registerCatalog(): void {
   });
 
   register("tab.maximize", {
-    description:
-      "Maximize a tab to fill the entire space. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit tab to maximize the active one.",
+    description: key("cmd.tab.maximize.desc"),
     triggers: { ko: "최대화 전체화면 탭 최대화 크게 보기" },
     params: {
       tab: P.tab,
@@ -2376,7 +2338,7 @@ export function registerCatalog(): void {
     triggers: { ko: "탭 이동 다른 칸으로" },
     params: {
       tab: { ...P.tab, required: true },
-      dst: { type: "string", description: "Destination pane id", required: true },
+      dst: { type: "string", description: key("cmd.tab.move.param.dst"), required: true },
       zone: { ...P.zone, required: true },
     },
     returns: "{ tabId, paneId(moved or created pane) }",

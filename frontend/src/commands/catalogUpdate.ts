@@ -15,8 +15,7 @@ async function checkApp(): Promise<Record<string, unknown>> {
 
 export function registerUpdateCatalog(): void {
   register("update.check", {
-    description:
-      "Survey what can be updated without applying anything. Reports the app body (release channel only — a debug/dev build has no remote updater and comes back available:false), plus a count of the hot axes update.apply can roll: installed plugins and the running PTY daemon. Read this first; update.apply does the work.",
+    description: key("cmd.update.check.desc"),
     triggers: { ko: "업데이트 점검 확인 새 버전" },
     params: {},
     returns:
@@ -52,8 +51,7 @@ export function registerUpdateCatalog(): void {
   });
 
   register("update.apply", {
-    description:
-      "Apply updates across every hot axis, least-disruptive first: authenticated plugin release closures, the PTY daemon with fd-handoff, then the app body in a release identity. Each result is announced on the activity bus.",
+    description: key("cmd.update.apply.desc"),
     triggers: { ko: "업데이트 적용 설치 새 버전 갱신 핫스왑" },
     params: {
       plugins: {

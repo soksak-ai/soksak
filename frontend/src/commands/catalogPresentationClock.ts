@@ -8,8 +8,7 @@ export function registerPresentationClockCatalog(): void {
   // correction can change `performance.timeOrigin`.
   presentationNowUnixMs();
   register("presentation.clock.acknowledge", {
-    description:
-      "Acknowledge a caller-owned presentation correlation on the core renderer's stable control clock. Call immediately after a producer arm/checkpoint resolves; producer timestamps remain on their own clock and are never relabeled.",
+    description: key("cmd.presentation.clock.acknowledge.desc"),
     params: {
       traceId: {
         type: "string",

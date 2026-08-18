@@ -79,8 +79,7 @@ export function registerSettingsCatalog(): void {
       },
       value: {
         type: "json",
-        description:
-          "Value — language:ko|en, workspaceTabPosition:top|left, contentTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, railRelation:tint|moment|stroke (rail-pane relation surface — tint fill only, moment flash on rebind, stroke outline+label), railFill:none|faint (bound-pane background in stroke mode — none is the default, faint is a 1% accent tint), focusDim:boolean (spotlight — every pane dims except the active one), railSeamStyle:seam|edge (how a manufactured FLOW adjacency is marked: seam dashes the inner shared edge, edge dashes the outer right edge), railPullFocused:boolean (FLOW-only blocked-line policy: true minimally swaps a leaf pane to preserve adjacency; false preserves pane order and stops the rail at the nearest clean line. PIN always preserves both the rail station and pane layout), railSolidColor:string (CSS color for a solid relation seam — empty leaves it to the theme), dimIdle:number (0-1 — how far a pane that is not focused sinks), dimBlocked:number (0-1 — how far a pane stranded between the rail and the focused pane sinks; deeper than dimIdle, or being covered is invisible), appFontFamily:string (CSS font-family stack), windowZoom:number (0.5-2.0 — whole-window zoom factor applied to the main webview and every child webview)",
+        description: key("cmd.settings.set.param.value"),
         required: true,
       },
     },
@@ -186,8 +185,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("layout.suggest", {
-    description:
-      "Suggest window placements from current monitor/window facts (pure strategy — nothing moves). strategy spread: orchestrator windows take a monitor free of workspace windows whole (or the right third alongside on a single monitor); workspace windows fill their own monitor. strategy grid: tile all windows on the first monitor. Feed each placement to window.place to execute.",
+    description: key("cmd.layout.suggest.desc"),
     triggers: {
       ko: "창 배치 제안 전략 모니터 분배 오케스트레이터 배치",
     },
@@ -225,8 +223,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("activity.recent", {
-    description:
-      "Query the app-wide activity stream (P12 execution visibility): registry command executions (command/source/danger/duration/outcome — param keys only, no values), terminal command start/finish, AI turn ends, view activations. Cursor with since (exclusive seq) to fetch only new entries; entries carry monotonic seq + epoch-ms ts. Same answer from any window (process-wide singleton hub).",
+    description: key("cmd.activity.recent.desc"),
     triggers: {
       ko: "활동 피드 실행 기록 최근 명령 스트림 조회 오케스트레이터",
     },
@@ -263,8 +260,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("window.themeScan", {
-    description:
-      "Measure whether a dark/light theme transition is atomic across screen regions. Records the toggle, then reports each region's transition frame and how many frames they are out of sync (a torn frame is chrome already switched while content has not). Idempotent — replaces ad-hoc capture scripts. Restores the original theme when done.",
+    description: key("cmd.window.themeScan.desc"),
     triggers: {
       ko: "테마 전환 검사 원자성 깜빡임 tear 측정 다크 라이트 토글 회귀",
     },
@@ -283,7 +279,7 @@ export function registerSettingsCatalog(): void {
         description: key("cmd.window.themeScan.param.to"),
         enum: ["light", "dark"],
       },
-      frames: { type: "number", description: "Frames to capture (default 40)" },
+      frames: { type: "number", description: key("cmd.window.themeScan.param.frames") },
       intervalMs: {
         type: "number",
         description: key("cmd.window.themeScan.param.intervalMs"),
@@ -298,13 +294,11 @@ export function registerSettingsCatalog(): void {
       },
       skipCapture: {
         type: "boolean",
-        description:
-          "Measure latency only (applyJsMs, applyReflowMs) and skip frame capture — fast, robust even when the window is backgrounded. For A/B latency tuning.",
+        description: key("cmd.window.themeScan.param.skipCapture"),
       },
       regions: {
         type: "json",
-        description:
-          "Named fractional rects {name:{x0,y0,x1,y1}} (0..1). Default samples chrome top bar, center content, and left sidebar.",
+        description: key("cmd.window.themeScan.param.regions"),
       },
     },
     returns:
@@ -457,8 +451,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("theme.list", {
-    description:
-      "List available themes (built-in + external ~/.soksak/themes), including files that failed validation and their reasons.",
+    description: key("cmd.theme.list.desc"),
     triggers: { ko: "테마 목록 테마 보기 사용 가능 테마" },
     params: {},
     returns:
@@ -487,8 +480,8 @@ export function registerSettingsCatalog(): void {
     description: key("cmd.theme.apply.desc"),
     triggers: { ko: "테마 적용 테마 바꾸기 다크 모드 라이트 모드 색 테마" },
     params: {
-      name: { type: "string", description: "Theme name (see theme.list)", required: true },
-      mode: { type: "string", description: "Color mode", enum: ["light", "dark"] },
+      name: { type: "string", description: key("cmd.theme.apply.param.name"), required: true },
+      mode: { type: "string", description: key("cmd.theme.apply.param.mode"), enum: ["light", "dark"] },
     },
     returns: "{ name, mode }",
     message: (d) => tmsg("msg.theme.apply", { name: String(d.name) }),
@@ -521,7 +514,7 @@ export function registerSettingsCatalog(): void {
     description: key("cmd.theme.install.desc"),
     triggers: { ko: "테마 설치 테마 추가 외부 테마 설치" },
     params: {
-      path: { type: "string", description: "Absolute path to theme .json file", required: true },
+      path: { type: "string", description: key("cmd.theme.install.param.path"), required: true },
     },
     returns: "{ installed(install path), rejected? }",
     message: (d) =>

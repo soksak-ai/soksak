@@ -123,8 +123,8 @@ export function registerWindowCatalog(): void {
   register("window.move", {
     description: key("cmd.window.move.desc"),
     params: {
-      x: { type: "number", description: "Physical x coordinate", required: true },
-      y: { type: "number", description: "Physical y coordinate", required: true },
+      x: { type: "number", description: key("cmd.window.move.param.x"), required: true },
+      y: { type: "number", description: key("cmd.window.move.param.y"), required: true },
     },
     returns: "{ x, y }",
     message: (d) => tmsg("msg.window.move", { x: Number(d.x), y: Number(d.y) }),
@@ -138,8 +138,8 @@ export function registerWindowCatalog(): void {
   register("window.resize", {
     description: key("cmd.window.resize.desc"),
     params: {
-      w: { type: "number", description: "Physical width", required: true },
-      h: { type: "number", description: "Physical height", required: true },
+      w: { type: "number", description: key("cmd.window.resize.param.w"), required: true },
+      h: { type: "number", description: key("cmd.window.resize.param.h"), required: true },
     },
     returns: "{ w, h }",
     message: (d) => tmsg("msg.window.resize", { w: Number(d.w), h: Number(d.h) }),
@@ -151,8 +151,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.resizeSequence", {
-    description:
-      "Apply a finite sequence of native physical window sizes in order. Before the first size is requested the same observer that answers every step is read once, and that pre-resize observation is returned as baseline; a value is never derived from the requested sizes. baseline.status separates an observer that was never asked, one that refused because no settled native transaction exists yet, and a real observation — a refusal reports its reason and never cancels the finite resize transaction. Optional realtime recording is separate visual evidence: successful readiness places the baseline frame before the first resize, while recording startup/readiness/completion failures are reported in recording.status and never cancel the finite resize transaction. Used to reproduce live-resize stalls, blanks, stale frames, and surface drift without focusing the window.",
+    description: key("cmd.window.resizeSequence.desc"),
     params: {
       sizes: {
         type: "json",
@@ -165,9 +164,9 @@ export function registerWindowCatalog(): void {
         type: "number",
         description: key("cmd.window.resizeSequence.param.intervalMs"),
       },
-      recordDir: { type: "string", description: "Optional output directory for transition PNGs" },
-      recordFrames: { type: "number", description: "Frames to record when recordDir is set (default 64, max 600)" },
-      recordIntervalMs: { type: "number", description: "Recording interval in ms (default 16, 0..1000)" },
+      recordDir: { type: "string", description: key("cmd.window.resizeSequence.param.recordDir") },
+      recordFrames: { type: "number", description: key("cmd.window.resizeSequence.param.recordFrames") },
+      recordIntervalMs: { type: "number", description: key("cmd.window.resizeSequence.param.recordIntervalMs") },
       recordMaxBytes: {
         type: "number",
         description: `Optional total encoded PNG byte budget (positive safe integer, max ${WINDOW_RECORD_MAX_BYTES})`,
@@ -247,8 +246,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.focus", {
-    description:
-      "Bring a window to the front and focus it. Without label, focuses the window this command runs in (clears inactive state for automation); with label, focuses that window (see window.list).",
+    description: key("cmd.window.focus.desc"),
     triggers: { ko: "창 포커스 창 활성화 창 앞으로" },
     params: { label: P.windowLabel },
     returns: "{ focused: true, key }",
@@ -278,12 +276,11 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.maximize", {
-    description:
-      "Maximize a window to fill the screen (native window maximize — distinct from tab.maximize, which only enlarges one tab within a space). Without label, targets the window this command runs in; with label, targets that window (see window.list). Pass off:true to restore (unmaximize).",
+    description: key("cmd.window.maximize.desc"),
     triggers: { ko: "창 최대화 전체화면 창 키우기 최대화 해제" },
     params: {
       label: P.windowLabel,
-      off: { type: "boolean", description: "Restore (unmaximize) instead of maximizing" },
+      off: { type: "boolean", description: key("cmd.window.maximize.param.off") },
     },
     returns: "{ maximized: boolean }",
     message: (d) =>
@@ -306,8 +303,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.reload", {
-    description:
-      "Fully reload the app webview (location.reload). Picks up core/plugin code changes during development — including modules HMR misses (e.g. already-activated plugin API surfaces). Active plugins are re-activated automatically after reload (install and consent are persisted).",
+    description: key("cmd.window.reload.desc"),
     triggers: { ko: "앱 리로드 새로고침 플러그인 재시작 코드 반영" },
     params: {},
     returns: "{ reloaded: true }",
@@ -352,8 +348,7 @@ export function registerWindowCatalog(): void {
 
   // ── Multi-window ─────────────────────────────────────────────────────────
   register("window.open", {
-    description:
-      "Open a new workspace window for a workspace root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating workspaces live there; empty workspace windows do not exist.",
+    description: key("cmd.window.open.desc"),
     triggers: { ko: "새 창 창 열기 새 윈도우 워크스페이스 새 창 오케스트레이터 창" },
     params: {
       root: {
@@ -366,14 +361,12 @@ export function registerWindowCatalog(): void {
       },
       mode: {
         type: "string",
-        description:
-          "orchestrator = bring the control plane (main) forward. Mutually exclusive with root.",
+        description: key("cmd.window.open.param.mode"),
         enum: ["orchestrator"],
       },
       focus: {
         type: "boolean",
-        description:
-          "Whether the new window takes focus (default true). Automation and visual verification must pass false to preserve the user's active app.",
+        description: key("cmd.window.open.param.focus"),
       },
     },
     returns: "{ label } | { existingWindow } (root already open — focused instead)",
@@ -471,8 +464,7 @@ export function registerWindowCatalog(): void {
   // A safety net requires that a human can see the retained previous generation — a backup that
   // cannot be read back is not a backup.
   register("window.restorePrevious", {
-    description:
-      "Inspect or restore the previous workspace generation for a window. The store keeps the last few values of every key, so any write — a bug, a crash, a bad tool — leaves something to come back to. Without `apply` this only reports what is there.",
+    description: key("cmd.window.restorePrevious.desc"),
     triggers: { ko: "이전 워크스페이스 복구 직전 세대 되돌리기 작업 복구" },
     params: {
       label: P.windowLabel,
@@ -510,8 +502,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.workspaces", {
-    description:
-      "Map open windows to the workspace each one hosts (root path + name + window label). The meaning layer over window.list — use it first to pick the right window before targeting commands with --window. Same answer from any window (process-wide registry).",
+    description: key("cmd.window.workspaces.desc"),
     triggers: { ko: "창 워크스페이스 매핑 어느 창 워크스페이스 열림 창별 워크스페이스" },
     params: {},
     returns: "{ workspaces: [{ root, name, window }] }",
@@ -531,8 +522,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.close", {
-    description:
-      "Close a window. Omit label to close the window this command is addressed to — the envelope already names it, so the common case needs no argument. An unknown label is TARGET_NOT_FOUND, not an internal failure.",
+    description: key("cmd.window.close.desc"),
     triggers: { ko: "창 닫기 윈도우 닫기" },
     params: { label: P.windowLabel },
     returns: "{ ok, label }",
@@ -565,8 +555,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.occlusion", {
-    description:
-      "Toggle occlusion detection for every native webview in the addressed window. When false, the main renderer and native child content surfaces continue rendering while fully covered by other apps. Returns the number of native webviews actually updated, so capture automation can reject a main-only partial arm.",
+    description: key("cmd.window.occlusion.desc"),
     params: {
       enabled: {
         type: "boolean",
@@ -590,8 +579,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.layers", {
-    description:
-      "Read the compositor plugin's typed native surface inventory for this window. Returns generation-bound model/presentation frames, visibility, alpha, pane ownership, resize policy, provider-parent state, and renderer topology without exposing native pointers or walking private AppKit trees.",
+    description: key("cmd.window.layers.desc"),
     triggers: {
       ko: "네이티브 뷰 계층 레이어 덤프 child 위치 진단",
     },
@@ -606,8 +594,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.monitors", {
-    description:
-      "Monitor and window placement facts in device-independent points, declared as `space: \"dip\"` in the payload: every monitor's rect/scale/name and every window's rect, focus state, and owning monitor index. Each monitor carries its scale, so pixels are a multiplication away. Facts only — placement strategy is layout.suggest, execution is window.place (same coordinate space).",
+    description: key("cmd.window.monitors.desc"),
     triggers: {
       ko: "모니터 목록 해상도 창 배치 현황 듀얼 모니터 파악",
     },
@@ -626,17 +613,16 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.place", {
-    description:
-      "Place a window at an exact frame in device-independent points — the window.monitors coordinate space. Position and size applied once. Use layout.suggest output directly. The OS may clamp frames into the usable area (e.g. below the macOS menu bar) — read back window.monitors for the settled frame.",
+    description: key("cmd.window.place.desc"),
     triggers: {
       ko: "창 배치 이동 모니터로 옮기기 위치 지정",
     },
     params: {
       label: P.windowLabel,
-      x: { type: "number", description: "Left edge (device-independent points)", required: true },
-      y: { type: "number", description: "Top edge (device-independent points)", required: true },
-      w: { type: "number", description: "Width (device-independent points)", required: true },
-      h: { type: "number", description: "Height (device-independent points)", required: true },
+      x: { type: "number", description: key("cmd.window.place.param.x"), required: true },
+      y: { type: "number", description: key("cmd.window.place.param.y"), required: true },
+      w: { type: "number", description: key("cmd.window.place.param.w"), required: true },
+      h: { type: "number", description: key("cmd.window.place.param.h"), required: true },
     },
     returns: "{ ok }",
     message: () => tmsg("msg.window.place"),
