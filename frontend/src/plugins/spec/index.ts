@@ -125,22 +125,25 @@ export type { LocalizedText } from "./localizedText";
 // permissions.ts is the single source of the permission vocabulary (PluginPermission, PERMISSIONS)
 // and the consent notice text (PERMISSION_INFO) — the export * above exposes it as is.
 
-// ── §2 View placement ────────────────────────────────────────────────────────
-// View provider and placement are orthogonal (§0-6). placements = supported placements, default right sidebar.
-
-// Projection model (plans/sidebar-projection-spec.md §3.3): content = content plane,
-// A view declares the regions it can be placed in, and defaultPlacement is where it goes. Several
-// declared regions mean the view works in each; an undeclared region is one it is never placed in.
-// The old sidebar-* names do not exist.
-// Where a view is placed: a region of the window, and nothing about what it is for.
+// ── §2 View surface ──────────────────────────────────────────────────────────
+// View provider and surface are orthogonal (§0-6). A view declares its surfaces; several mean it
+// works on each, and an undeclared one is one it is never put on.
 //
-// It read "content" | "rail" | "rail-footer" until 2026-08-16. "content" and "rail" claim a role —
-// this one is the main thing, that one is auxiliary — and the core holds no view about content
-// (A1). A region is a place. `rail-footer` is gone: a position inside the left region is an order
-// the person arranged, not a region of its own.
-export type ViewPlacement = "left" | "center" | "right";
+// The surface a view is drawn on, and nothing about where that surface stands.
+//
+// It read "left" | "center" | "right" until 2026-08-18 — three names for two things. Measured: no
+// consumer told left from right (`file-tree.tree` was offered for both), and the one predicate over
+// this axis, `isContentView`, read "center" alone. The window has three places a sidebar can stand
+// now (left, rail, right) and a view has no business choosing between them: which one a set stands
+// in is what a person arranges, and a view that named a place would be arranging it from inside the
+// plugin.
+//
+// Before that it read "content" | "rail" | "rail-footer" (until 2026-08-16). "content" and "rail"
+// claimed a role — this one is the main thing, that one is auxiliary — and the core holds no view
+// about content (A1).
+export type ViewSurface = "tab" | "side";
 
-export const VIEW_PLACEMENTS: readonly ViewPlacement[] = ["left", "center", "right"];
+export const VIEW_SURFACES: readonly ViewSurface[] = ["tab", "side"];
 
 // ── §2.5 Sidebar projection contract ─────────────────────────────────────────
 // Sidebar declaration of content views and file viewers (plans/sidebar-projection-spec.md §3.1).
@@ -155,8 +158,9 @@ export interface ContributedView {
   id: string; // unique within the plugin. Global key is "<pluginId>.<id>"
   title: LocalizedText;
   icon: string; // short glyph for the icon rail (1-2 characters or an emoji). v1 has no SVG support
-  placements: ViewPlacement[]; // parse default ["left"]
-  defaultPlacement: ViewPlacement; // parse default placements[0]
+  // The surfaces this view is drawn on. Not where it stands: a sidebar's place is what a person
+  // arranges, and a view naming one would be arranging it from inside the plugin.
+  surfaces: ViewSurface[]; // parse default ["side"]
   // A native layer under the content view (embedded webview etc.) must show through — the core
   // treats that cell as a transparent hole. Declared by browser-like views (child webview embed);
   // no hard check in the core — data-driven. Default false.
@@ -176,10 +180,7 @@ export interface ContributedView {
   // sidebar obligation. transparent/nativeSurface are not exception grounds (a browser content view
   // is subject to A1). Default false.
   decoration: boolean; // parse default false
-  // Resident marker (R4) — a rail view the user can pin to the rail. An undeclared rail view is
-  // declaration-projection only (the sidebar is subordinate to content function — arbitrary
-  // mounting restricted). Allowed on rail-family placements only.
-  // Sidebar projection declaration (§2.5) — content placement views only. A1 enforcement (reject on
+  // Sidebar projection declaration (§2.5) — tab-surface views only. A1 enforcement (reject on
   // absence) turns on at migration step 4; until then absence is tolerated as runtime downgrade (R5).
 }
 
@@ -1076,7 +1077,7 @@ export function parseManifest(
       views = parseEntries(c.views, {
         label: "contributes.views",
         required: ["id", "title", "icon"],
-        optional: ["placements", "defaultPlacement", "transparent", "nativeSurface", "status", "decoration"],
+        optional: ["surfaces", "transparent", "nativeSurface", "status", "decoration"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
             errs.push("contributes.views: id must be ^[a-z0-9][a-z0-9-]*$");
@@ -1084,31 +1085,24 @@ export function parseManifest(
           }
           if (!validateLocalizedText(v.title, "contributes.views.title", errs)) return null;
           if (!isNonEmptyString(v.icon)) return null;
-          let placements: ViewPlacement[] = ["left"];
-          if (v.placements !== undefined) {
+          // A view that names no surface stands beside the work. Declaring `tab` is the deliberate
+          // act: a view that takes a content tab is a view a person opens and closes like any other.
+          let surfaces: ViewSurface[] = ["side"];
+          if (v.surfaces !== undefined) {
+            // A set, not a sequence — the order is not read, and a repeat adds nothing. Taken
+            // silently, a repeated name reads as a manifest that meant something by it.
             if (
-              !Array.isArray(v.placements) ||
-              v.placements.length === 0 ||
-              v.placements.some(
-                (p) => !VIEW_PLACEMENTS.includes(p as ViewPlacement),
-              )
+              !Array.isArray(v.surfaces) ||
+              v.surfaces.length === 0 ||
+              v.surfaces.some((surface) => !VIEW_SURFACES.includes(surface as ViewSurface)) ||
+              new Set(v.surfaces).size !== v.surfaces.length
             ) {
               errs.push(
-                `contributes.views["${v.id}"].placements: non-empty array of ${VIEW_PLACEMENTS.join("|")}`,
+                `contributes.views["${v.id}"].surfaces: non-empty array of distinct ${VIEW_SURFACES.join("|")}`,
               );
               return null;
             }
-            placements = v.placements as ViewPlacement[];
-          }
-          let defaultPlacement = placements[0];
-          if (v.defaultPlacement !== undefined) {
-            if (!placements.includes(v.defaultPlacement as ViewPlacement)) {
-              errs.push(
-                `contributes.views["${v.id}"].defaultPlacement: must be one of placements`,
-              );
-              return null;
-            }
-            defaultPlacement = v.defaultPlacement as ViewPlacement;
+            surfaces = v.surfaces as ViewSurface[];
           }
           let transparent = false;
           if (v.transparent !== undefined) {
@@ -1164,8 +1158,7 @@ export function parseManifest(
             id: v.id.trim(),
             title: normalizeText(v.title as LocalizedText),
             icon: (v.icon as string).trim(),
-            placements,
-            defaultPlacement,
+            surfaces,
             transparent,
             nativeSurface,
             ...(status !== undefined ? { status } : {}),

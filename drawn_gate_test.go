@@ -36,89 +36,101 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 		gate.open(window, program)
 	}
 
-	// A closed region draws nothing whatever the link names, and the link is what this gate measures.
-	// Both are opened by the same command, which is what a person's click goes through.
-	for _, region := range []string{"left", "right"} {
-		gate.run("workspace.region.toggle", "window="+window, "region="+region, "open=true")
+	// A closed place draws nothing whatever the link names, and the link is what this gate measures.
+	// All three are opened by the same command, which is what a person's click goes through.
+	for _, place := range []string{"left", "rail", "right"} {
+		gate.run("workspace.region.toggle", "window="+window, "region="+place, "open=true")
 	}
 
 	// The sections to compose from are what this build offers, not a list written here that goes
-	// stale the day a plugin changes where it stands.
+	// stale the day a plugin changes where it stands. One list: a `side` view is standable in every
+	// place, so which place it goes in is the link's answer and not the view's.
 	available := gate.availableSections(window)
+	if len(available) < 2 {
+		t.Fatalf("this build offers %d sections and the place rule needs two.\navailable: %v",
+			len(available), available)
+	}
 	// The link is given to the plugin of the focused view, which is what `individual` reads — not to
 	// the plugin that provides the section. A section provider need not have a pane of its own.
 	plugin := gate.aPluginWithAPane(window)
 	tested := 0
-	for _, region := range []string{"left", "right"} {
-		sections := available[region]
-		if len(sections) == 0 {
-			continue
-		}
+	// The two places that follow the focus. The window's left edge holds one set for the whole
+	// installation and is stood with `sections.left`, measured on its own below.
+	for index, place := range []string{"rail", "right"} {
 		tested++
-		section := sections[0]
-		set := gate.createSet(window, "gate-"+region)
+		section := available[index%len(available)]
+		set := gate.createSet(window, "gate-"+place)
 		gate.run("sections.arrange", "window="+window, "set="+set, "sections="+jsonList(section))
-		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+set, "region="+region)
+		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+set, "place="+place)
 		gate.focusPluginPane(window, plugin)
 		// Let the motion this link caused finish before the next command retargets it. A journey
 		// cancelled by the next change is not a fault, but a run where every one was cancelled is
 		// no evidence that motion plays — and that is what the reading below is for.
 		gate.run("ui.layout.wait-settled", "window="+window)
 
-		// Read once. sections.link waits for the region to declare it is standing the set now
-		// linked here, so a region not drawing the section at this point is not drawing it.
-		if drawn := gate.drawnIn(window, region); !contains(drawn, section) {
-			t.Errorf("%s is linked to the %s region and is not drawn there.\n"+
+		// Read once. sections.link waits for the place to declare it is standing the set now linked
+		// here, so a place not drawing the section at this point is not drawing it.
+		if drawn := gate.drawnIn(window, place); !contains(drawn, section) {
+			t.Errorf("%s is linked to the %s place and is not drawn there.\n"+
 				"%s holds %v, and every node the window exposes there is:\n%s\n"+
 				"The link is a fact nobody can see.",
-				section, region, region, drawn, gate.nodesIn(window, region)+
+				section, place, place, drawn, gate.nodesIn(window, place)+
 					"\nsections: "+gate.run("sections.list", "window="+window)+
 					"\nhealth: "+gate.run("state.health", "window="+window))
 		}
-		for _, other := range []string{"left", "right"} {
-			if other == region {
+		for _, other := range []string{"left", "rail", "right"} {
+			if other == place {
 				continue
 			}
 			if drawn := gate.drawnIn(window, other); contains(drawn, section) {
-				t.Errorf("%s is linked to the %s region and is drawn in the %s one as well: %v",
-					section, region, other, drawn)
+				t.Errorf("%s is linked to the %s place and is drawn in the %s one as well: %v",
+					section, place, other, drawn)
 			}
 		}
 
-		// Clearing names the region: each region holds its own set, so a clear that took both would
+		// Clearing names the place: each place holds its own set, so a clear that took both would
 		// be a second rule about placement living in the unlink.
-		gate.run("sections.link", "window="+window, "plugin="+plugin, "region="+region)
+		gate.run("sections.link", "window="+window, "plugin="+plugin, "place="+place)
 		gate.run("ui.layout.wait-settled", "window="+window)
-		if drawn := gate.drawnIn(window, region); contains(drawn, section) {
-			t.Errorf("the link to %s was removed and %s is still drawn in the %s region: %v\n"+
-				"Not connected is not present.", plugin, section, region, drawn)
+		if drawn := gate.drawnIn(window, place); contains(drawn, section) {
+			t.Errorf("the link to %s was removed and %s is still drawn in the %s place: %v\n"+
+				"Not connected is not present.", plugin, section, place, drawn)
 		}
 	}
-	// One region is not the rule. A section that stands in one place only is dropped by the placement
-	// filter for its own reason, and a host that never reads the link's region passes anyway —
-	// measured 2026-08-17, a planted host that ignores the region survived this gate until a section
-	// stood in both.
-	// Both regions at once. A plugin held one standing until 2026-08-17 — one set, one region — so a
-	// person who stood a set on the left could press the right toggle forever: the command answered
-	// OK, nothing stood there, and the region took no width. Two sets, two regions, one plugin.
-	if len(available["left"]) > 0 && len(available["right"]) > 0 {
-		left, right := available["left"][0], available["right"][0]
-		leftSet := gate.createSet(window, "gate-both-left")
-		rightSet := gate.createSet(window, "gate-both-right")
-		gate.run("sections.arrange", "window="+window, "set="+leftSet, "sections="+jsonList(left))
-		gate.run("sections.arrange", "window="+window, "set="+rightSet, "sections="+jsonList(right))
-		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+leftSet, "region=left")
-		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+rightSet, "region=right")
+	// One place is not the rule. A host that never reads which place the link names passes a
+	// one-place run anyway — measured 2026-08-17, a planted host that ignored the region survived
+	// this gate until a section stood in two at once.
+	//
+	// All three at once. A plugin held one standing until 2026-08-17 — one set, one place — so a
+	// person who stood a set in the rail could press the right toggle forever: the command answered
+	// OK, nothing stood there, and the place took no width. Three sets, three places, and the left
+	// one is the installation's rather than this plugin's: `sections.left` stands it, and it stays
+	// standing whatever is focused.
+	if len(available) >= 2 {
+		stood := []struct{ place, section, set string }{
+			{"left", available[0], gate.createSet(window, "gate-all-left")},
+			{"rail", available[1%len(available)], gate.createSet(window, "gate-all-rail")},
+			{"right", available[0], gate.createSet(window, "gate-all-right")},
+		}
+		for _, one := range stood {
+			gate.run("sections.arrange", "window="+window, "set="+one.set, "sections="+jsonList(one.section))
+		}
+		gate.run("sections.left", "window="+window, "set="+stood[0].set)
+		for _, one := range stood[1:] {
+			gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+one.set, "place="+one.place)
+		}
 		gate.focusPluginPane(window, plugin)
-		for _, stood := range []struct{ region, section string }{{"left", left}, {"right", right}} {
-			if drawn := gate.drawnIn(window, stood.region); !contains(drawn, stood.section) {
-				t.Errorf("%s and %s stand at once and the %s region holds %v.\n"+
-					"A region a person cannot open while the other stands is a region they do not have.",
-					left, right, stood.region, drawn)
+		gate.run("ui.layout.wait-settled", "window="+window)
+		for _, one := range stood {
+			if drawn := gate.drawnIn(window, one.place); !contains(drawn, one.section) {
+				t.Errorf("three places stand at once and the %s one holds %v, not %s.\n"+
+					"A place a person cannot open while the others stand is a place they do not have.",
+					one.place, drawn, one.section)
 			}
 		}
-		for _, region := range []string{"left", "right"} {
-			gate.run("sections.link", "window="+window, "plugin="+plugin, "region="+region)
+		gate.run("sections.left", "window="+window)
+		for _, place := range []string{"rail", "right"} {
+			gate.run("sections.link", "window="+window, "plugin="+plugin, "place="+place)
 		}
 	}
 
@@ -177,18 +189,20 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 	}
 
 	if tested < 2 {
-		t.Fatalf("sections stand in %d of 2 regions, so the region rule was not measured.\n"+
-			"available: %v\nA section placed in both is what separates the region from the placement.",
-			tested, available)
+		t.Fatalf("sections stand in %d of the 2 places a plugin links, so the place rule was not "+
+			"measured.\navailable: %v\nA section stood in more than one place is what separates the "+
+			"place from the surface.", tested, available)
 	}
 }
 
-// availableSections is what `sections.list` offers per region — the same list the host filters by.
-func (gate *drawnGate) availableSections(window string) map[string][]string {
+// availableSections is what `sections.list` offers — the same list the host filters by. One list
+// and not one per place: a `side` view is standable in every place, so the place is the link's
+// answer rather than the view's.
+func (gate *drawnGate) availableSections(window string) []string {
 	gate.t.Helper()
 	var answer struct {
 		Data struct {
-			Available map[string][]string `json:"available"`
+			Available []string `json:"available"`
 		} `json:"data"`
 	}
 	out := gate.run("sections.list", "window="+window)

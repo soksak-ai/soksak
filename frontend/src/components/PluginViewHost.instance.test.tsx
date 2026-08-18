@@ -17,8 +17,7 @@ import { pluginViewSurfacePlacementLedger } from "../plugins/viewSurfacePlacemen
 const DECL = {
   id: "content",
   title: { en: "Browser" },
-  placements: ["center"],
-  defaultPlacement: "center",
+  surfaces: ["tab"],
   nativeSurface: true,
 } as unknown as ContributedView;
 

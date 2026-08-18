@@ -29,8 +29,7 @@ const DECL = {
   id: "list",
   title: { en: "L" },
   icon: "▤",
-  placements: ["left"],
-  defaultPlacement: "left",
+  surfaces: ["side"],
   transparent: false,
   nativeSurface: false,
 } as unknown as ContributedView;

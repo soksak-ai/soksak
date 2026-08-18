@@ -16,8 +16,7 @@ const DECL = {
   id: "canvas",
   title: { en: "T" },
   icon: "▤",
-  placements: ["center"],
-  defaultPlacement: "center",
+  surfaces: ["tab"],
   transparent: false,
   nativeSurface: false,
 } as unknown as ContributedView;

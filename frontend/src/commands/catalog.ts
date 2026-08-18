@@ -41,6 +41,7 @@ import {
   type CmdErr,
   type SidebarRegion,
 } from "../state/sessions";
+import { SECTION_PLACES } from "../state/sectionSets";
 import {
   canonicalGutter,
   isCanonicalSide,
@@ -452,7 +453,7 @@ function serializeTree() {
         title: t.title,
         root: t.root ?? null,
         color: t.color ?? null,
-        sidebarOpen: t.regionOpen.left,
+        sidebarOpen: t.regionOpen.rail,
         leftRailPosition,
         active: t.id === s.activeId,
         activeSpaceId: t.activeSpaceId,
@@ -461,7 +462,7 @@ function serializeTree() {
             c,
             t.activeSpaceId,
             c.id === t.activeSpaceId ? arrangement : null,
-            t.regionOpen.left,
+            t.regionOpen.rail,
             leftRailPosition.mode,
           ),
         ),
@@ -593,7 +594,7 @@ export function registerCatalog(): void {
       if (!t) return notFound("msg.workspace.notFound");
       const solved = projectArrangement(t);
       if (!solved) return notFound("msg.space.notFound");
-      const railOpen = t.regionOpen.left;
+      const railOpen = t.regionOpen.rail;
       return {
         projectId: t.id,
         spaceId: t.activeSpaceId,
@@ -1090,9 +1091,11 @@ export function registerCatalog(): void {
     triggers: { ko: "사이드바 영역 열기 닫기 토글 좌측 우측" },
     params: {
       workspace: P.workspace,
+      // Read from the places themselves. Written out here, the day a place is added is the day the
+      // command refuses the one thing the window grew.
       region: {
         type: "string",
-        enum: ["left", "right"],
+        enum: [...SECTION_PLACES],
         description: key("cmd.sidebar.param.region"),
         required: true,
       },
@@ -1105,7 +1108,7 @@ export function registerCatalog(): void {
         : tmsg("msg.workspace.region.toggle.closed", { region: String(d.region) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'workspace.region.toggle \'{"region":"left"}\'',
+      'workspace.region.toggle \'{"region":"rail"}\'',
       'workspace.region.toggle \'{"region":"right","open":true}\'',
     ],
     handler: async (p, ctx) => {
@@ -1231,9 +1234,11 @@ export function registerCatalog(): void {
     triggers: { ko: "사이드바 레이아웃 트리 탭 분할 구조" },
     params: {
       workspace: P.workspace,
+      // Read from the places themselves. Written out here, the day a place is added is the day the
+      // command refuses the one thing the window grew.
       region: {
         type: "string",
-        enum: ["left", "right"],
+        enum: [...SECTION_PLACES],
         description: key("cmd.sidebar.param.region"),
         required: true,
       },
@@ -1344,9 +1349,11 @@ export function registerCatalog(): void {
     triggers: { ko: "좌측 사이드바 탭 이동 합치기 분할 드래그 머지" },
     params: {
       workspace: P.workspace,
+      // Read from the places themselves. Written out here, the day a place is added is the day the
+      // command refuses the one thing the window grew.
       region: {
         type: "string",
-        enum: ["left", "right"],
+        enum: [...SECTION_PLACES],
         description: key("cmd.sidebar.param.region"),
         required: true,
       },
@@ -1389,9 +1396,11 @@ export function registerCatalog(): void {
     triggers: { ko: "좌측 사이드바 분할 비율 크기 조절" },
     params: {
       workspace: P.workspace,
+      // Read from the places themselves. Written out here, the day a place is added is the day the
+      // command refuses the one thing the window grew.
       region: {
         type: "string",
-        enum: ["left", "right"],
+        enum: [...SECTION_PLACES],
         description: key("cmd.sidebar.param.region"),
         required: true,
       },
@@ -1678,7 +1687,7 @@ export function registerCatalog(): void {
         c,
         t.activeSpaceId,
         arrangement,
-        t.regionOpen.left,
+        t.regionOpen.rail,
         (t.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT).mode,
       );
       return {

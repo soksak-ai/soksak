@@ -139,16 +139,12 @@ func (gate *restoreGate) installPlugins() []string {
 	// The same roots `task install:plugins` copies from. A gate that installs a different set than
 	// the installation measures a build nobody runs — the section plugin is kept in the development
 	// tree and the two built here are siblings.
-	var sources []string
-	for _, pattern := range []string{
-		filepath.Join("..", "soksak-plugins", "*"),
-		filepath.Join(os.Getenv("HOME"), ".soksak-dev", "plugins", "soksak-plugin-file-tree"),
-	} {
-		found, err := filepath.Glob(pattern)
-		if err != nil {
-			gate.t.Fatalf("looking for the plugins to install: %v", err)
-		}
-		sources = append(sources, found...)
+	// This repository's own plugins, and only those. The file tree used to be borrowed from the
+	// preceding implementation's home — a build measuring itself against a plugin it does not
+	// contain, and one that could not be fixed here because the older application still runs on it.
+	sources, err := filepath.Glob(filepath.Join("..", "soksak-plugins", "*"))
+	if err != nil {
+		gate.t.Fatalf("looking for the plugins to install: %v", err)
 	}
 	var installed []string
 	for _, source := range sources {

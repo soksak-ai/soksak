@@ -29,8 +29,8 @@ const proj = (id: string, root: string): Workspace => ({
   id,
   title: id,
   root,
-  regionOpen: { left: true, right: false },
-  sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
+  regionOpen: { left: false, rail: true, right: false },
+  sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, rail: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   activeSpaceId: "spc-aaaaaa",
   spaces: [{ id: "spc-aaaaaa", title: "1", activePaneId: "pan-aaaaaa", layout: leafGroup("pan-aaaaaa", "tab-aaaaaa") }],
 });

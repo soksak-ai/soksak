@@ -41,10 +41,10 @@ export const C2_STATIC_ENFORCEMENT: Readonly<
 
 // Judgment input — a structural subset of the parsed manifest contributes.
 // PluginManifest["contributes"] assigns directly (structural typing). It takes the real declaration
-// arrays, not counts — rule ③ needs per-view placements·status (no degradation to aggregates).
+// arrays, not counts — rule ③ needs per-view surfaces·status (no degradation to aggregates).
 export interface TransparencyView {
   id: string;
-  placements: readonly string[];
+  surfaces: readonly string[];
   status?: readonly string[];
 }
 
@@ -56,13 +56,12 @@ export interface TransparencyContributes {
   nodes: readonly unknown[];
 }
 
-// Center view test — placements contains "center". The definition was fixed by measuring
-// installed manifests (40 measured in the dev home: content views are identified by placements
-// alone, with no separate marker. 9 content-only, 1 mixed with sidebar — a mixed one still rides in
-// a content tab, so it is a content view). setStatus is valid only in content placement (no-op in
-// the sidebar), so the scope of the status declaration duty matches this test.
-export function isContentView(view: { placements: readonly string[] }): boolean {
-  return view.placements.includes("center");
+// A content view is one drawn on a tab. Measured across 40 installed manifests: content views are
+// identified by this axis alone, with no separate marker — 9 tab-only, 1 declaring both, and that
+// one still rides in a content tab. setStatus is valid on a tab and a no-op beside the work, so the
+// scope of the status declaration duty matches this test.
+export function isContentView(view: { surfaces: readonly string[] }): boolean {
+  return view.surfaces.includes("tab");
 }
 
 // The capability predicate counts every render/program contribution axis. An overlay also renders

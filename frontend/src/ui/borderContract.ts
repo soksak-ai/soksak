@@ -242,12 +242,21 @@ export const BORDER_RULES: readonly BorderRule[] = [
     edges: { left: "bd", right: "bd" },
     note: tmsg("msg.ui.border.railPaneStationInner"),
   },
+  // Each window edge owns the one line facing the work. Written as two entries, not one shared
+  // selector, because they own opposite sides — a single rule could only name one of them.
   {
-    id: "sidebar-right-left-edge",
-    selector: ".sidebar-right",
+    id: "sidebar-edge-left-inner",
+    selector: ".sidebar-edge-left",
+    kind: "edges",
+    edges: { right: "bd" },
+    note: tmsg("msg.ui.border.sidebarEdgeLeftInner"),
+  },
+  {
+    id: "sidebar-edge-right-inner",
+    selector: ".sidebar-edge-right",
     kind: "edges",
     edges: { left: "bd" },
-    note: tmsg("msg.ui.border.sidebarRightLeftEdge"),
+    note: tmsg("msg.ui.border.sidebarEdgeRightInner"),
   },
   {
     id: "plugin-rail-right",
@@ -299,7 +308,8 @@ export const BORDER_RULES: readonly BorderRule[] = [
   // ── B6 boundary tool no-ownership assertion ───────────────────────────────
   {
     id: "resizer-no-line",
-    selector: ".sidebar-resizer, .sidebar-right-resizer, .workspace-rail-resizer",
+    selector:
+      ".sidebar-resizer, .sidebar-edge-left-resizer, .sidebar-edge-right-resizer, .workspace-rail-resizer",
     kind: "edges",
     edges: { top: "none", right: "none", bottom: "none", left: "none" },
     note: tmsg("msg.ui.border.resizerNoLine"),

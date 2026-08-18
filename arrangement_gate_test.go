@@ -88,22 +88,22 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 	gate.consentAndEnable(window, plugins)
 	built := gate.buildGateWindow(window)
 
-	// Two sets, both in the sidebar on the left: one holding the browser's own section, one holding
-	// the terminals'. Two sets of the same section would answer every question about which one
-	// stands with the same words.
-	browserSection := gate.sectionOf(window, "left", arrangementBrowserSectionPlugin)
+	// Two sets, both in the rail between the panes: one holding the browser's own section, one
+	// holding the terminals'. Two sets of the same section would answer every question about which
+	// one stands with the same words.
+	browserSection := gate.sectionOf(window, arrangementBrowserSectionPlugin)
 	browserSet := gate.createSet(window, "arrangement-browser")
 	gate.run("sections.arrange", "window="+window, "set="+browserSet,
 		"sections="+jsonList(browserSection))
 	gate.run("sections.link", "window="+window,
-		"plugin="+gate.pluginOfTab(window, built.browserTab), "set="+browserSet, "region=left")
-	terminalSection := gate.sectionOf(window, "left", arrangementTerminalSectionPlugin)
+		"plugin="+gate.pluginOfTab(window, built.browserTab), "set="+browserSet, "place=rail")
+	terminalSection := gate.sectionOf(window, arrangementTerminalSectionPlugin)
 	terminalSet := gate.createSet(window, "arrangement-terminal")
 	gate.run("sections.arrange", "window="+window, "set="+terminalSet,
 		"sections="+jsonList(terminalSection))
 	gate.run("sections.link", "window="+window,
-		"plugin="+gate.pluginOfTab(window, built.terminalTab), "set="+terminalSet, "region=left")
-	gate.run("workspace.region.toggle", "window="+window, "region=left", "open=true")
+		"plugin="+gate.pluginOfTab(window, built.terminalTab), "set="+terminalSet, "place=rail")
+	gate.run("workspace.region.toggle", "window="+window, "region=rail", "open=true")
 
 	// The inset is measured from the window rather than assumed, and from a gap the sidebar is not
 	// in: with the right pane focused the sidebar stands beside it, and what is left between the
@@ -180,10 +180,10 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 			// as things that should be grouped reading as foreign.
 			behind := 0.0
 			for _, box := range now.panes {
-				if box.W <= 0 || box.X+box.W > now.starts["left"] {
+				if box.W <= 0 || box.X+box.W > now.starts["rail"] {
 					continue
 				}
-				if edge := now.starts["left"] - (box.X + box.W); behind == 0 || edge < behind {
+				if edge := now.starts["rail"] - (box.X + box.W); behind == 0 || edge < behind {
 					behind = edge
 				}
 			}
@@ -199,7 +199,7 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 			// And whose section is in it. A sidebar holding another plugin's section is what a
 			// person reported as "this is not the browser's sidebar", and it is a different window
 			// from the one defined here even though every rectangle in it measures right.
-			if got := now.sections["left"]; strings.Join(got, ",") != click.section {
+			if got := now.sections["rail"]; strings.Join(got, ",") != click.section {
 				t.Errorf("clicking %s: the sidebar holds %s where the set linked to this view's "+
 					"plugin is %s.\n%s\nA sidebar's width does not name whose section is in it.",
 					what, named(got), click.section, gate.arrangementLines(window, built))
@@ -220,7 +220,7 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 			// grouping cannot be bought with the band while the width is the column's; what it would
 			// take is the panes reclaiming that space, which is a different window from the one this
 			// gate states.
-			if where, standing := now.bands["left"]; standing && !now.panesBand.empty() {
+			if where, standing := now.bands["rail"]; standing && !now.panesBand.empty() {
 				if apart := math.Max(math.Abs(where.top-now.panesBand.top),
 					math.Abs(where.bottom-now.panesBand.bottom)); apart > 1 {
 					t.Errorf("clicking %s: the sidebar holds %s where the panes hold %s, %.0f apart.\n%s\n"+
@@ -279,19 +279,19 @@ func named(sections []string) string {
 	return strings.Join(sections, ", ")
 }
 
-// sectionOf is the section a named plugin placed in a region. A gate that took whichever section came
+// sectionOf is the section a named plugin contributed. A gate that took whichever section came
 // first took the file tree for the browser and asked nothing that could tell them apart.
-func (gate *arrangementGate) sectionOf(window string, region string, plugin string) string {
+func (gate *arrangementGate) sectionOf(window string, plugin string) string {
 	gate.t.Helper()
-	available := gate.availableSections(window)[region]
+	available := gate.availableSections(window)
 	for _, key := range available {
 		if strings.HasPrefix(key, plugin+".") {
 			return key
 		}
 	}
-	gate.t.Fatalf("%s placed no section in the %s region, so nothing of its can stand there.\n"+
-		"placed there: %v\nThe plugin is installed from the development tree; a build without it "+
-		"cannot be asked whose section stands.", plugin, region, available)
+	gate.t.Fatalf("%s contributed no section, so nothing of its can stand beside the work.\n"+
+		"offered: %v\nThe plugin is installed from the sibling tree; a build without it cannot be "+
+		"asked whose section stands.", plugin, available)
 	return ""
 }
 
@@ -339,7 +339,7 @@ func (gate *arrangementGate) arrangementNow(window string) arrangement {
 		}
 		now.bands[region.Region] = band{top: region.Y, bottom: region.Y + region.H}
 		now.starts[region.Region] = region.X
-		if region.Region == "left" && region.W > 0 && region.X+region.W > now.regionEnds {
+		if region.Region == "rail" && region.W > 0 && region.X+region.W > now.regionEnds {
 			now.regionEnds = region.X + region.W
 		}
 	}
@@ -381,9 +381,9 @@ func (gate *arrangementGate) arrangementLines(window string, built gateWindow) s
 	now := gate.arrangementNow(window)
 	lines := []string{
 		fmt.Sprintf("  region ends at %.0f, panes begin at %.0f", now.regionEnds, now.panesStart),
-		fmt.Sprintf("  bands: left %s, right %s, panes %s", now.bands["left"], now.bands["right"], now.panesBand),
+		fmt.Sprintf("  bands: rail %s, right %s, panes %s", now.bands["rail"], now.bands["right"], now.panesBand),
 		fmt.Sprintf("  standing: left %s, right %s",
-			named(now.sections["left"]), named(now.sections["right"])),
+			named(now.sections["rail"]), named(now.sections["right"])),
 		// Which plugin the window is reading the standing for, and what stands. A region on the
 		// screen with nothing in it and a region standing for the wrong plugin are two different
 		// defects that look the same from the outside.

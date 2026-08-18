@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { moduleState } from "../lib/moduleState";
 import { issueId } from "./ids";
+import { byPlace, type SectionPlace } from "./sectionSets";
 import { noteActivation } from "../lib/motionDebug";
 import {
   DEFAULT_RAIL_PLACEMENT,
@@ -195,7 +196,10 @@ export interface Space {
 }
 
 /** A window region a set can stand in. Centre holds panes, not sections. */
-export type SidebarRegion = "left" | "right";
+/** Where a sidebar stands. One name for it, in state/sectionSets, because two would drift: this
+ *  file held `SidebarRegion = "left" | "right"` while the other held the same two values under
+ *  another name, and the day a third place arrived they would have disagreed about it. */
+export type SidebarRegion = SectionPlace;
 
 /** One region's layout replaced, the rest of the workspace untouched. Written in one place so a
  *  region cannot be updated by a path that forgets the other. */
@@ -726,7 +730,7 @@ export function projectArrangement(
     layout: content.layout,
     focusId: content.activePaneId,
     placement: workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT,
-    railOpen: workspace.regionOpen.left,
+    railOpen: workspace.regionOpen.rail,
     // Maximize is not a move on top of the underlying split but an atomic switch to the single
     // [rail | feature] plane. The filling panel is the group holding the maximized view — not the
     // active group. The two can diverge (double-clicking a tab of another group does exactly that),
@@ -952,9 +956,11 @@ function makeWorkspace(id: string, opts: NewWorkspaceOpts): Workspace {
   return {
     id,
     title: alias,
-    regionOpen: { left: true, right: false },
+    // The rail is open on a fresh workspace; the two edges are not. A place with nothing standing
+    // does not open anyway, so this is what a person sees before they compose anything.
+    regionOpen: { left: false, rail: true, right: false },
     leftRailPlacement: DEFAULT_RAIL_PLACEMENT, // flow — the rail attaches to the focused panel
-    sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
+    sidebarLayouts: byPlace(() => initialSidebarLayout([])),
     root: opts.root,
     spaces: [c],
     activeSpaceId: c.id,

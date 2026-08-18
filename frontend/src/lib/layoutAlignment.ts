@@ -90,8 +90,11 @@ export function documentAlignment(): {
   boundaries: LayoutAlignment["boundaries"];
   declarations: Array<{ id: string; dom: Box; declared: Box | null }>;
 } {
-  const regions = boxesOf("[data-node$='rail/left'],[data-node$='sidebar/right']").map((box) => ({
-    region: box.node.endsWith("rail/left") ? "left" : "right",
+  // Read from what each place declares about itself. The names were paired with node paths by hand
+  // until 2026-08-18 — two places, two selectors, and the rail answered "left" because that is what
+  // it had been called. A place added then had no box here at all.
+  const regions = boxesOf("[data-region]").map((box) => ({
+    region: box.region ?? "",
     ...box.box,
   }));
   // Whose sections are on the screen, in the region they are in. The hidden one of a stack is
@@ -209,11 +212,12 @@ export async function readAlignment(): Promise<LayoutAlignment> {
  *
  * The address is the declaration a person can already read through `ui.tree`; this answers it beside
  * the surfaces so both are one instant. */
-function boxesOf(selector: string): Array<{ node: string; box: Box }> {
+function boxesOf(selector: string): Array<{ node: string; region?: string; box: Box }> {
   return Array.from(globalThis.document.querySelectorAll<HTMLElement>(selector))
     .filter((element) => onScreen(element))
     .map((element) => ({
       node: element.dataset.node ?? "",
+      region: element.dataset.region,
       box: boxOf(element.getBoundingClientRect()),
     }));
 }

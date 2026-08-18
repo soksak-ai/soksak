@@ -34,8 +34,10 @@ describe("a fixed overlay is positioned against the window", () => {
   it("names the panels that are a containing block for fixed children", () => {
     // Not a violation on its own — this pins which ones they are, so a modal
     // mounted inside one is a decision rather than an accident.
-    const promoted = [".sidebar-right"].filter((s) => CONTAINING.test(block(s) ?? ""));
-    expect(promoted).toEqual([".sidebar-right"]);
+    // One rule covers both window edges, so the promotion is named once. Listing the two
+    // places instead would pass while neither of them declared anything.
+    const promoted = [".sidebar-edge"].filter((s) => CONTAINING.test(block(s) ?? ""));
+    expect(promoted).toEqual([".sidebar-edge"]);
   });
 
   it("the modal overlay is fixed and full-window", () => {
@@ -64,16 +66,18 @@ describe("a fixed overlay is positioned against the window", () => {
     // and reached the window only by portal. The rail is gone (A2a — the region
     // draws the standing set), so the manager is mounted by App itself.
     const app = readFileSync(join(process.cwd(), "src", "App.tsx"), "utf8");
-    const sidebarRight = app.indexOf('className={`sidebar-right');
+    // Both window edges are drawn by one component, so there is one promoted box in the source
+    // and it stands for either place.
+    const edge = app.indexOf("className={`sidebar-edge");
     const manager = app.indexOf("<PluginManagerModal");
     expect(manager).toBeGreaterThan(-1);
     // Oracle liveness — the promoted panel is still rendered here, so "outside"
     // is a placement rather than an absence.
-    expect(sidebarRight).toBeGreaterThan(-1);
+    expect(edge).toBeGreaterThan(-1);
 
-    // The manager's mount is not inside the sidebar-right element's JSX. That
-    // element closes before the modal list begins.
-    const sidebarBlockEnds = app.indexOf("</div>", app.indexOf("<SectionSetHost", sidebarRight));
-    expect(manager).toBeGreaterThan(sidebarBlockEnds);
+    // The manager's mount is not inside the promoted element's JSX. That element is a whole
+    // component, so it closes long before App's modal list begins.
+    const edgeBlockEnds = app.indexOf("</div>", app.indexOf("<SectionSetHost", edge));
+    expect(manager).toBeGreaterThan(edgeBlockEnds);
   });
 });

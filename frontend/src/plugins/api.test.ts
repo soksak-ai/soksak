@@ -517,15 +517,14 @@ describe("ui — an undeclared view is rejected and the registry is updated", ()
     expect(useViewRegistry.getState().views["demo.panel"]).toBeUndefined();
   });
 
-  it("delegates openView to plugin.view.open with the global key and placement", async () => {
+  it("delegates openView to plugin.view.open with the global key and nothing else", async () => {
+    // It names no place. `plugin.view.open` opens a tab and refuses a view that does not live on
+    // one; where a sidebar stands is what a person arranges, and a plugin asking for a place would
+    // be arranging the window from inside itself.
     const d = fakeDeps();
     const { api } = buildPluginApi(uiManifest(), "/d", d);
-    await api.ui!.openView("panel", "center");
-    expect(d.execute).toHaveBeenCalledWith(
-      "plugin.view.open",
-      { viewKey: "demo.panel", placement: "center" },
-      {},
-    );
+    await api.ui!.openView("panel");
+    expect(d.execute).toHaveBeenCalledWith("plugin.view.open", { viewKey: "demo.panel" }, {});
   });
 });
 

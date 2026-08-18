@@ -2838,14 +2838,14 @@ select.dctl {
    It is an overlay above the content, not a flex split — toggling it does not
    resize the body (terminal or editor). It is absolute against .workspace-plane
    (position:absolute inset:0). */
-.sidebar-right {
+/* A sidebar standing at a window edge. Both edges, one rule — they differ in which side they sit
+   on and which border they draw, and writing them twice is where a change lands on one of them. */
+.sidebar-edge {
   position: absolute;
   top: 0;
-  right: 0;
   bottom: 0;
   z-index: 20;
   overflow: hidden;
-  border-left: 1px solid var(--bd); /* §B2 */
   background: var(--bg);
   /* Promoted to its own compositing layer. A WebGL canvas in plugin content is
      composited on its own layer and rises above the page layer regardless of
@@ -2854,23 +2854,37 @@ select.dctl {
      content, enforced at the compositor. */
   will-change: transform;
 }
+/* The place, not the body. `sidebar-left` is the body of any sidebar — its tabs, header and
+   footer are `sidebar-left-*` — and naming a place the same thing would put two meanings on one
+   class. */
+.sidebar-edge-left {
+  left: 0;
+  border-right: 1px solid var(--bd); /* §B2 */
+}
+.sidebar-edge-right {
+  right: 0;
+  border-left: 1px solid var(--bd); /* §B2 */
+}
 /* Push mode — the overlay is released, it joins the flex flow and takes space,
-   pushing the body aside the way the left sidebar does. inset:auto clears the
-   absolute offsets and z-index is levelled. */
-.sidebar-right.push {
+   pushing the body aside. inset:auto clears the absolute offsets and z-index is
+   levelled. */
+.sidebar-edge.push {
   position: relative;
   inset: auto;
   z-index: auto;
   flex: none;
 }
 /* The shadow only when open — closed it is zero wide, and the shadow would
-   linger at the edge. */
-.sidebar-right.open {
+   linger at the edge. It falls away from the work, so each edge casts its own way. */
+.sidebar-edge-left.open {
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
+}
+.sidebar-edge-right.open {
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
 }
-/* The width handle floating on the overlay's left edge; right is set inline and
-   is the sidebar's left edge. */
-.sidebar-right-resizer {
+/* The width handle floating on the sidebar's inner edge; the offset is set inline. */
+.sidebar-edge-left-resizer,
+.sidebar-edge-right-resizer {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -2880,8 +2894,10 @@ select.dctl {
   transition: background 0.12s ease;
   z-index: 21;
 }
-.sidebar-right-resizer:hover,
-.sidebar-right-resizer:active {
+.sidebar-edge-left-resizer:hover,
+.sidebar-edge-left-resizer:active,
+.sidebar-edge-right-resizer:hover,
+.sidebar-edge-right-resizer:active {
   background: rgba(127, 127, 127, 0.4);
 }
 

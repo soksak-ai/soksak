@@ -20,9 +20,10 @@ export type FocusIndicator = "outline" | "corners";
 // Tab close confirmation policy (R6) — warn = confirm dialog on a blocking status (unsaved,
 // running, and so on), off = always close immediately.
 export type TabCloseConfirm = "warn" | "off";
-// Right plugin sidebar placement: overlay = floats over the content (the original), push = takes
-// area like the left sidebar (pushes the content aside).
-export type RightSidebarMode = "overlay" | "push";
+// How a sidebar standing at a window edge takes its room: overlay = floats over the work, push =
+// takes area and the panes move aside. The rail has neither — it stands between the panes, so
+// there is no side to float over.
+export type EdgeSidebarMode = "overlay" | "push";
 // Left rail visual mode (§12-⑤): pane = like a split pane (card tint + elevation), ground = a flat
 // plane lying on the floor.
 export type RailLook = "pane" | "ground";
@@ -59,7 +60,10 @@ interface SettingsState {
   defaultWorkspaceRoot: string;
   // Tab close confirmation policy (R6 — warn by default).
   tabCloseConfirm: TabCloseConfirm;
-  rightSidebarMode: RightSidebarMode;
+  // One per edge. Two edges of the same kind read one setting until 2026-08-18, and a person who
+  // wanted the left over the work and the right beside it had no way to say so.
+  leftSidebarMode: EdgeSidebarMode;
+  rightSidebarMode: EdgeSidebarMode;
   railLook: RailLook;
   railRelation: RailRelation;
   railFill: RailFill;
@@ -104,7 +108,8 @@ interface SettingsState {
   setFocusIndicator: (v: FocusIndicator) => void;
   setDefaultWorkspaceRoot: (root: string) => void;
   setTabCloseConfirm: (v: TabCloseConfirm) => void;
-  setRightSidebarMode: (v: RightSidebarMode) => void;
+  setLeftSidebarMode: (v: EdgeSidebarMode) => void;
+  setRightSidebarMode: (v: EdgeSidebarMode) => void;
   setRailLook: (v: RailLook) => void;
   setRailRelation: (v: RailRelation) => void;
   setRailFill: (v: RailFill) => void;
@@ -130,7 +135,8 @@ const DEFAULTS = {
   focusIndicator: "outline" as FocusIndicator,
   defaultWorkspaceRoot: "",
   tabCloseConfirm: "warn" as TabCloseConfirm,
-  rightSidebarMode: "overlay" as RightSidebarMode,
+  leftSidebarMode: "push" as EdgeSidebarMode,
+  rightSidebarMode: "overlay" as EdgeSidebarMode,
   // The rail stands against the view it serves and is stroked into one border with it, so what it
   // starts as is that view's card. Ground strips the card to a floor plane, and inside one border a
   // plane beside a card reads as two things — measured 2026-08-18, rgb(14,15,21) beside
@@ -186,6 +192,7 @@ export function serialize(s: SettingsState): PersistedSettings {
     focusIndicator: s.focusIndicator,
     defaultWorkspaceRoot: s.defaultWorkspaceRoot,
     tabCloseConfirm: s.tabCloseConfirm,
+    leftSidebarMode: s.leftSidebarMode,
     rightSidebarMode: s.rightSidebarMode,
     railLook: s.railLook,
     railRelation: s.railRelation,
@@ -320,6 +327,10 @@ export const useSettings = moduleState("state/settings#store", () =>
     },
     setDimBlocked: (v) => {
       set({ dimBlocked: clamp01(v) });
+      save();
+    },
+    setLeftSidebarMode: (leftSidebarMode) => {
+      set({ leftSidebarMode });
       save();
     },
     setRightSidebarMode: (rightSidebarMode) => {

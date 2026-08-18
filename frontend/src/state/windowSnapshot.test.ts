@@ -16,9 +16,9 @@ const workspace: Workspace = {
   id: "wsp-aaaaaa",
   title: "proj",
   root: "/repo",
-  regionOpen: { left: true, right: false },
+  regionOpen: { left: false, rail: true, right: false },
   leftRailPlacement: { mode: "pin", station: 60 },
-  sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
+  sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, rail: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   activeSpaceId: "spc-aaaaaa",
   spaces: [
     {
@@ -78,7 +78,9 @@ describe("windowSnapshot round trip", () => {
     const back = deserializeWorkspace(snap);
     expect(back.root).toBe("/repo");
     expect(back.title).toBe("proj");
-    expect(back.regionOpen.left).toBe(true);
+    // Every place, not one of them: `left` meant the rail until the window grew three places, and
+    // an assertion naming a single place would have kept passing while the other two were dropped.
+    expect(back.regionOpen).toEqual({ left: false, rail: true, right: false });
     expect(back.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
     expect(back.activeSpaceId).toBe("spc-aaaaaa");
 

@@ -236,12 +236,12 @@ export const useViewRegistry = moduleState("plugins/viewRegistry#store", () =>
 );
 
 // Views per placement (for the icon rail / tab strip) — registration order preserved.
-export function viewsForPlacement(
-  placement: import("./spec").ViewPlacement,
+export function viewsOnSurface(
+  surface: import("./spec").ViewSurface,
 ): { key: string; view: RegisteredView }[] {
   const { views } = useViewRegistry.getState();
   return Object.entries(views)
-    .filter(([, v]) => v.decl.placements.includes(placement))
+    .filter(([, v]) => v.decl.surfaces.includes(surface))
     .map(([key, view]) => ({ key, view }));
 }
 

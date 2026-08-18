@@ -18,6 +18,7 @@ import {
   type SplitSnapshot,
 } from "./splitTree";
 import { initialSidebarLayout, type SidebarGroup, type SidebarLayout } from "./sidebarLayout";
+import { byPlace } from "./sectionSets";
 import type { Workspace, Space, Pane, Tab, SidebarRegion } from "./sessions";
 import { DEFAULT_RAIL_PLACEMENT,
   normalizeRailPlacement,
@@ -135,10 +136,7 @@ export function serializeWorkspace(p: Workspace): WorkspaceSnapshot {
     regionOpen: p.regionOpen,
     leftRailPlacement: p.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT,
     // Sidebar layout (SplitTree<SidebarGroup>) — the leaf payload is plain JSON.
-    sidebarLayouts: {
-      left: serializeSplitTree(p.sidebarLayouts.left, (g) => g),
-      right: serializeSplitTree(p.sidebarLayouts.right, (g) => g),
-    },
+    sidebarLayouts: byPlace((place) => serializeSplitTree(p.sidebarLayouts[place], (g) => g)),
     activeContentId: p.activeSpaceId,
     contents: p.spaces.map(serializeContent),
   };
@@ -211,17 +209,16 @@ export function deserializeWorkspace(s: WorkspaceSnapshot): Workspace {
     title: s.title,
     root: s.root,
     ...(s.color ? { color: s.color } : {}),
-    regionOpen: { left: s.regionOpen?.left ?? true, right: s.regionOpen?.right ?? false },
+    // The rail is open on a workspace that never said, the two edges are not. A snapshot from
+    // before the left edge existed has nothing for it, and nothing is what it gets.
+    regionOpen: byPlace((place) => s.regionOpen?.[place] ?? place === "rail"),
     // The stored value of an old snapshot without the marker is not trusted — there is no way to separate the
     // withdrawn era's default (pin@0) from an anchor the user chose, so it is reset once to the default (flow).
     // With the marker present the stored value is honored.
     leftRailPlacement: s.railPlacementNormalized
       ? normalizeRailPlacement(s.leftRailPlacement)
       : DEFAULT_RAIL_PLACEMENT,
-    sidebarLayouts: {
-      left: sidebarLayoutOf(s.sidebarLayouts?.left),
-      right: sidebarLayoutOf(s.sidebarLayouts?.right),
-    },
+    sidebarLayouts: byPlace((place) => sidebarLayoutOf(s.sidebarLayouts?.[place])),
     activeSpaceId: s.activeContentId,
     spaces: s.contents.map((c) => deserializeContent(c, !s.vlNormalized)),
   };

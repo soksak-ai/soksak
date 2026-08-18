@@ -12,11 +12,9 @@ import { registeredIconSetIds } from "../ui/icons/registry";
 import { getRegisteredProgram, listPrograms, useProgramRegistry } from "../plugins/programRegistry";
 import { localize, tmsg, key} from "../i18n";
 import {
-  VIEW_PLACEMENTS,
   configDefaults,
   configSettingOf,
   validateSettingValue,
-  type ViewPlacement,
 } from "../plugins/spec";
 import { usePluginSettings } from "../state/pluginSettings";
 import { useRegistry } from "../state/registry";
@@ -85,7 +83,7 @@ function serializeRuntime(p: PluginRuntime) {
     views: p.manifest.contributes.views.map((v) => ({
       id: v.id,
       title: v.title,
-      placements: v.placements,
+      surfaces: v.surfaces,
     })),
     commands: p.manifest.contributes.commands.map((c) => c.name),
     dir: p.dir,
@@ -1072,16 +1070,10 @@ export function registerPluginCatalog(): void {
         description: key("cmd.plugin.view.open.param.viewKey"),
         required: true,
       },
-      placement: {
-        type: "string",
-        description: key("cmd.plugin.view.open.param.placement"),
-        enum: VIEW_PLACEMENTS,
-      },
       workspace: { type: "string", description: key("cmd.plugin.view.open.param.workspace") },
     },
-    returns:
-      "{ viewKey, placement, projectId } (sidebar placements) | { viewKey, placement, projectId, paneId, tabId, existing } (content placement)",
-    message: (d) => tmsg("msg.plugin.view.open", { view: String(d.viewKey), placement: String(d.placement) }),
+    returns: "{ viewKey, projectId, paneId, tabId, existing }",
+    message: (d) => tmsg("msg.plugin.view.open", { view: String(d.viewKey) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
       'plugin.view.open \'{"viewKey":"soksak-plugin-<id>.<view>"}\'',
@@ -1097,21 +1089,14 @@ export function registerPluginCatalog(): void {
       if (!reg) {
         return notFound("msg.plugin.view.notRegistered", { key });
       }
-      const placement =
-        (p.placement as ViewPlacement | undefined) ?? reg.decl.defaultPlacement;
-      if (!reg.decl.placements.includes(placement)) {
-        return invalid(
-          tmsg("msg.plugin.view.placementUnsupported", {
-            key,
-            placement,
-            supported: reg.decl.placements.join(", "),
-          }),
-        );
-      }
-      // A view placed left or right is already in that region; opening is what a center view does,
-      // as a tab of the pane, where drag, split and close behave like any other tab.
-      if (placement !== "center") {
-        return invalid(tmsg("msg.plugin.view.notOpenable", { key, placement }));
+      // Opening is for a tab view. A `side` view is drawn through `sections.*` instead — a set is
+      // arranged and then stood in a place — and this command refused it with `notOpenable` every
+      // time, a parameter whose values were one that worked and several that did not.
+      if (!reg.decl.surfaces.includes("tab")) {
+        return invalid(tmsg("msg.plugin.view.notATabView", {
+          key,
+          surfaces: reg.decl.surfaces.join(", "),
+        }));
       }
       const r = s.openPluginView(
         projectId,
@@ -1122,7 +1107,6 @@ export function registerPluginCatalog(): void {
       if (!r.ok) return r;
       return {
         viewKey: key,
-        placement,
         projectId,
         paneId: r.groupId,
         tabId: r.viewId,

@@ -57,21 +57,21 @@ func TestASurfaceStaysOnScreenWhileTheLayoutMoves(t *testing.T) {
 		t.Fatal("no surface is on screen, so a move cannot be watched")
 	}
 
-	// The move is the one that was recorded: a region opens, takes its width, and every pane beside
-	// it shifts by that much. The link is settled first and the region closed, so the only change
+	// The move is the one that was recorded: a place opens, takes its width, and every pane beside
+	// it shifts by that much. The link is settled first and the place closed, so the only change
 	// being watched is the opening.
 	set := gate.createSet(window, "motion")
-	sections := gate.availableSections(window)["left"]
+	sections := gate.availableSections(window)
 	if len(sections) == 0 {
-		t.Fatal("no section stands on the left, so no move can be caused here")
+		t.Fatal("this build offers no section, so no move can be caused here")
 	}
 	gate.run("sections.arrange", "window="+window, "set="+set, "sections="+jsonList(sections[0]))
 	gate.run("sections.link", "window="+window,
-		"plugin="+gate.aPluginWithAPane(window), "set="+set, "region=left")
-	gate.run("workspace.region.toggle", "window="+window, "region=left", "open=false")
+		"plugin="+gate.aPluginWithAPane(window), "set="+set, "place=rail")
+	gate.run("workspace.region.toggle", "window="+window, "region=rail", "open=false")
 
 	samples := gate.watchSurface(window, surface, func() {
-		gate.run("workspace.region.toggle", "window="+window, "region=left", "open=true")
+		gate.run("workspace.region.toggle", "window="+window, "region=rail", "open=true")
 	})
 
 	// Gone is either state a person reads as a blank pane: the compositor hiding it, or a rectangle

@@ -24,10 +24,15 @@
 // node/<nodePath> and chrome/<chromePath> allow multiple slash-separated segments (to the end).
 // Everything else is a single token.
 
-// The three regions of a window, and the one vocabulary for them: a placement declares one, an
-// address names one, a view host is handed one. The middle one was "content" until 2026-08-16 — a
-// role rather than a place, and the core holds no view about content (A1).
-export const REGIONS = ["left", "center", "right"] as const;
+// The places of a window, and the one vocabulary for them: an address names one and a view host is
+// handed one. Three of them hold a sidebar (left, rail, right) and one holds the work (center).
+//
+// "center" was "content" until 2026-08-16 — a role rather than a place, and the core holds no view
+// about content (A1). "rail" arrived 2026-08-18 with the third sidebar: `left` had named the rail,
+// and it names the window's left edge now, so an address written for one build and read by the
+// other resolves somewhere else. Which is why a view no longer declares a place at all — the
+// declaration is a surface (tab or side) and the place is what a person arranges.
+export const REGIONS = ["left", "rail", "center", "right"] as const;
 export type Region = (typeof REGIONS)[number];
 
 // Node/chrome path segments — alphanumerics, hyphen, dot (qualifiedViewId), slash (hierarchy),

@@ -19,7 +19,39 @@ import { allGroups, type Workspace } from "./sessions";
 // workspace it would be built again for each one. What stays with a workspace is that window's
 // arrangement — split, tab, order.
 
-export type Region = "left" | "right";
+/**
+ * Where a sidebar stands. Three places, and the place is the rule.
+ *
+ * `rail` is the one that moves: it stands between panes, on a clean line, and travels with the
+ * focus (FLOW) or holds a station (PIN). What stands in it is the focused view's plugin's set,
+ * because a sidebar that follows the focus and does not change with it is a box that moves for no
+ * reason.
+ *
+ * `left` and `right` are the window's own edges. They do not move, they take a width a person
+ * drags, and they draw over the content or take room from it. `right` holds the focused plugin's
+ * set like the rail does; `left` holds one set for the whole installation, whatever is focused.
+ *
+ * There is no mode switch between those — the place is the rule. A switch would let two places
+ * behave the same way, and then there is no reason for there to be two.
+ *
+ * `left` meant the rail until 2026-08-18. The stored key is versioned rather than migrated (L11c) —
+ * a value that reads correct and means somewhere else is worse than no value.
+ */
+export type SectionPlace = "left" | "rail" | "right";
+
+/**
+ * Every place, in the order they stand on the screen.
+ *
+ * One list, because a caller that writes the three out by hand forgets one: measured while adding
+ * the third, six records were built by naming `left` and `right` and none of them mentioned the
+ * rail — each a place that would hold nothing with nothing to say it was missing.
+ */
+export const SECTION_PLACES: readonly SectionPlace[] = ["left", "rail", "right"];
+
+/** A record with one entry per place, from a function of the place. */
+export function byPlace<T>(of: (place: SectionPlace) => T): Record<SectionPlace, T> {
+  return { left: of("left"), rail: of("rail"), right: of("right") };
+}
 
 /** One set. Sections are view keys, `<pluginId>.<viewId>`, in the order they stand. */
 export interface SectionSet {
@@ -28,61 +60,64 @@ export interface SectionSet {
   sections: string[];
 }
 
-/** Which set stands in each region. A region with no entry has nothing standing there.
+/** Which set stands in each place a plugin can fill. A place with no entry has nothing standing.
  *
  *  One standing for the whole plugin was the same record with a `region` on it, and it made the two
  *  regions exclusive: a plugin standing a set on the left had no place to name a second one, so the
  *  right toggle took no width whatever it was pressed. A region is a place, and each place holds
  *  its own set. */
-export type Standing = Partial<Record<Region, string>>;
+export type Standing = Partial<Record<PluginPlace, string>>;
 
-/** individual = the set linked to the focused view\'s plugin stands, and nothing stands when that
- *  plugin has no link. fixed = one set stands, in every workspace, whatever is focused. */
-export type SectionMode = "individual" | "fixed";
+/** The places a plugin's link can fill: the two that follow the focus. `left` is not one of them —
+ *  it holds one set for the installation and is set once, not per plugin. */
+export type PluginPlace = "rail" | "right";
 
 export interface SectionSetsState {
   sets: SectionSet[];
-  /** pluginId → which set stands in each region. Read in `individual` only. */
+  /** pluginId → which set stands in the places that follow the focus. */
   byPlugin: Record<string, Standing>;
-  mode: SectionMode;
-  /** What stands in `fixed`. Nothing standing = nothing is drawn. */
-  fixed: Standing;
+  /** The one set standing on the left, for the whole installation. Null = nothing stands there,
+   *  and a place with nothing standing does not open. */
+  left: string | null;
 
   create: (title: string) => SectionSet;
   rename: (id: string, title: string) => void;
   remove: (id: string) => void;
   arrange: (id: string, sections: string[]) => void;
-  link: (pluginId: string, region: Region, set: string | null) => void;
-  setMode: (mode: SectionMode) => void;
-  setFixed: (region: Region, set: string | null) => void;
+  link: (pluginId: string, place: PluginPlace, set: string | null) => void;
+  standLeft: (set: string | null) => void;
 }
 
 interface Persisted {
   sets: SectionSet[];
   byPlugin: Record<string, Standing>;
-  mode: SectionMode;
-  fixed: Standing;
+  left: string | null;
 }
 
-const EMPTY: Persisted = { sets: [], byPlugin: {}, mode: "individual", fixed: {} };
+const EMPTY: Persisted = { sets: [], byPlugin: {}, left: null };
 
 const sync = createCoreSync<Persisted>({
-  key: "sectionSets",
-  lsKey: "soksak.sectionSets",
+  // Versioned rather than migrated. `left` named the rail until 2026-08-18 and names the window's
+  // left edge now, so a stored value under the old key reads correct and means somewhere else — a
+  // sidebar appearing at the wrong edge with nothing to say it moved. A new key is not read by the
+  // old build and the old key is not read by this one; what a person had is gone and a few clicks
+  // rebuild it, which is the honest half of that trade (L11c).
+  key: "sectionSets.v2",
+  lsKey: "soksak.sectionSets.v2",
   fallback: EMPTY,
   apply: (v) => useSectionSets.setState(shapeOf(v)),
 });
 
 export const initSectionSetsPersistence = (deps: CoreStoreDeps): (() => void) => sync.init(deps);
 
-const isRegion = (v: unknown): v is Region => v === "left" || v === "right";
+const isPluginPlace = (v: unknown): v is PluginPlace => v === "rail" || v === "right";
 
 /** A standing as this build reads it: region → a set that exists. Anything else is dropped, and a
  *  standing left with no region is nothing standing. */
 function standingOf(raw: unknown, known: Set<string>): Standing {
   const standing: Standing = {};
-  for (const [region, set] of Object.entries((raw ?? {}) as Record<string, unknown>)) {
-    if (isRegion(region) && typeof set === "string" && known.has(set)) standing[region] = set;
+  for (const [place, set] of Object.entries((raw ?? {}) as Record<string, unknown>)) {
+    if (isPluginPlace(place) && typeof set === "string" && known.has(set)) standing[place] = set;
   }
   return standing;
 }
@@ -109,16 +144,14 @@ function shapeOf(raw: unknown): Persisted {
   return {
     sets,
     byPlugin,
-    mode: v.mode === "fixed" ? "fixed" : "individual",
-    fixed: standingOf(v.fixed, known),
+    left: typeof v.left === "string" && known.has(v.left) ? v.left : null,
   };
 }
 
 const persistedOf = (s: SectionSetsState): Persisted => ({
   sets: s.sets,
   byPlugin: s.byPlugin,
-  mode: s.mode,
-  fixed: s.fixed,
+  left: s.left,
 });
 
 // The store is held outside the module boundary — a hot swap that replaced it would leave the
@@ -150,36 +183,35 @@ export const useSectionSets = moduleState("state/sectionSets#store", () =>
         commit({
           sets: get().sets.filter((s) => s.id !== id),
           byPlugin,
-          fixed: withoutSet(get().fixed, id),
+          left: get().left === id ? null : get().left,
         });
       },
       arrange: (id, sections) =>
         commit({ sets: get().sets.map((s) => (s.id === id ? { ...s, sections } : s)) }),
-      link: (pluginId, region, set) => {
-        const standing = stood(get().byPlugin[pluginId] ?? {}, region, set);
+      link: (pluginId, place, set) => {
+        const standing = stood(get().byPlugin[pluginId] ?? {}, place, set);
         const byPlugin = { ...get().byPlugin };
         if (standsSomewhere(standing)) byPlugin[pluginId] = standing;
         else delete byPlugin[pluginId];
         commit({ byPlugin });
       },
-      setMode: (mode) => commit({ mode }),
-      setFixed: (region, set) => commit({ fixed: stood(get().fixed, region, set) }),
+      standLeft: (set) => commit({ left: set }),
     };
   }),
 );
 
-/** Whether a region is present: the person has it open and a set stands there.
+/** Whether a place is present: the person has it open and a set stands there.
  *
- *  A region open with nothing in it reserves its width and draws nothing, which reads as a view that
- *  failed. The left asked this and the right did not until 2026-08-17, so the right stood empty in
- *  every capture of that day. One rule, both regions, one place.
+ *  A place open with nothing in it reserves its width and draws nothing, which reads as a view that
+ *  failed. The rail asked this and the right did not until 2026-08-17, so the right stood empty in
+ *  every capture of that day. One rule, all three places.
  */
-export function regionPresent(
+export function placePresent(
   open: boolean,
-  region: Region,
+  place: SectionPlace,
   focusedPluginId: string | null,
 ): boolean {
-  return open && standingSet(region, focusedPluginId) !== null;
+  return open && standingSet(place, focusedPluginId) !== null;
 }
 
 /** The set standing in a region, given the plugin of the focused view. null = none stands, and then
@@ -201,28 +233,34 @@ export function focusedPluginOf(workspace: Workspace | null | undefined): string
   return view?.pluginId ?? null;
 }
 
-export function standingSet(region: Region, focusedPluginId: string | null): SectionSet | null {
+export function standingSet(place: SectionPlace, focusedPluginId: string | null): SectionSet | null {
   const s = useSectionSets.getState();
-  const standing =
-    s.mode === "fixed" ? s.fixed : focusedPluginId ? (s.byPlugin[focusedPluginId] ?? {}) : {};
-  const id = standing[region];
+  // The place is the rule. `left` holds one set for the installation; the other two hold the
+  // focused view's plugin's set. There is no switch between the two, because a switch would let two
+  // places answer the same way and then there is no reason for there to be two.
+  const id =
+    place === "left"
+      ? s.left
+      : focusedPluginId
+        ? (s.byPlugin[focusedPluginId] ?? {})[place]
+        : undefined;
   if (!id) return null;
   return s.sets.find((x) => x.id === id) ?? null;
 }
 
-/** The same standing with one region settled — a set stands there, or nothing does. */
-function stood(standing: Standing, region: Region, set: string | null): Standing {
+/** The same standing with one place settled — a set stands there, or nothing does. */
+function stood(standing: Standing, place: PluginPlace, set: string | null): Standing {
   const next = { ...standing };
-  if (set === null) delete next[region];
-  else next[region] = set;
+  if (set === null) delete next[place];
+  else next[place] = set;
   return next;
 }
 
 /** The same standing with one set gone from wherever it stood. */
 function withoutSet(standing: Standing, set: string): Standing {
   const next: Standing = {};
-  for (const [region, id] of Object.entries(standing)) {
-    if (isRegion(region) && id !== set) next[region] = id;
+  for (const [place, id] of Object.entries(standing)) {
+    if (isPluginPlace(place) && id !== set) next[place] = id;
   }
   return next;
 }

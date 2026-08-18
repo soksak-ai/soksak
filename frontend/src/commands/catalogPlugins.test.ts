@@ -126,7 +126,7 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
             id: "canvas",
             title: "Canvas",
             icon: "C",
-            placements: ["center"], decoration: true,
+            surfaces: ["tab"], decoration: true,
             ...(status !== undefined ? { status } : {}),
           },
         ],
@@ -226,7 +226,7 @@ describe("plugin.conformance — C2 static rules (command-surface, view-nodes)",
     const manifest = manifestOf(id, {
       permissions: ["ui"],
       contributes: {
-        views: [{ id: "image", title: { en: "Image", ko: "Image" }, icon: "file", placements: ["center"] }],
+        views: [{ id: "image", title: { en: "Image", ko: "Image" }, icon: "file", surfaces: ["tab"] }],
       },
     });
     usePlugins.setState({ plugins: { [id]: runtimeOf(manifest) } });
@@ -282,7 +282,7 @@ describe("plugin.dev.load — home lane gate (dev identity only)", () => {
 });
 
 describe("plugin.view.open — only a center view opens as a tab", () => {
-  it("a view placed left is refused, and the refusal names where it is", async () => {
+  it("a view that lives beside the work is refused a tab, and the refusal names its surface", async () => {
     const { useViewRegistry } = await import("../plugins/viewRegistry");
     useViewRegistry.getState().register(
       "railplug",
@@ -290,8 +290,7 @@ describe("plugin.view.open — only a center view opens as a tab", () => {
         id: "tree",
         title: "tree",
         icon: "x",
-        placements: ["left"],
-        defaultPlacement: "left",
+        surfaces: ["side"],
         transparent: false,
         nativeSurface: false,
         decoration: false,
@@ -306,8 +305,10 @@ describe("plugin.view.open — only a center view opens as a tab", () => {
     };
     expect(r.ok).toBe(false);
     expect(r.code).toBe("INVALID_PARAMS");
-    // The refusal names where the view actually is — a caller told only "no" looks for a bug.
-    expect(r.message).toContain("left");
+    // The refusal names the view's actual surface — a caller told only "no" looks for a bug. A
+    // surface and not a place: this view stands wherever a person put the set holding it, so there
+    // is no one place to name.
+    expect(r.message).toContain("side");
   });
 });
 

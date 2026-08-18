@@ -25,12 +25,11 @@ const MANIFEST = {
   entry: "main.js",
 };
 
-const view = (placements: ("left" | "right" | "center")[]) => ({
+const view = (surfaces: ("side" | "tab")[]) => ({
   id: "tree",
   title: { en: "T", ko: "T" },
   icon: "|",
-  placements,
-  defaultPlacement: placements[0],
+  surfaces,
   transparent: false,
   nativeSurface: false,
   decoration: false,
@@ -42,7 +41,7 @@ describe("the plugin settings sidebar link", () => {
 
   beforeEach(() => {
     useViewRegistry.setState({ views: {}, badges: {}, version: 0 });
-    useSectionSets.setState({ sets: [], byPlugin: {}, mode: "individual", fixed: {} });
+    useSectionSets.setState({ sets: [], byPlugin: {}, left: null });
     const { manifest, validation } = parseManifest(MANIFEST, PLUGIN);
     if (!manifest) throw new Error(`the test manifest does not parse: ${validation.errors.join(", ")}`);
     usePlugins.setState({
@@ -63,12 +62,14 @@ describe("the plugin settings sidebar link", () => {
       root.render(<PluginSettings pluginId={PLUGIN} />);
     });
 
-  // One select per region: each region holds its own set, so the panel offers each separately.
-  const select = (region: "left" | "right" = "left") =>
-    host.querySelector<HTMLSelectElement>(`[data-sidebar-set="${region}"]`);
+  // One select per place: each holds its own set, so the panel offers each separately. Two of
+  // them, because the window's left edge holds one set for the whole installation — that one is a
+  // general setting, not a plugin's.
+  const select = (place: "rail" | "right" = "rail") =>
+    host.querySelector<HTMLSelectElement>(`[data-sidebar-set="${place}"]`);
 
   it("offers a composed sidebar and links it to this plugin when chosen", () => {
-    useViewRegistry.getState().register(PLUGIN, view(["left"]), { mount: () => {} });
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
     const set = useSectionSets.getState().create("work");
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
     render();
@@ -83,17 +84,28 @@ describe("the plugin settings sidebar link", () => {
       el.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
-    expect(useSectionSets.getState().byPlugin[PLUGIN]).toEqual({ left: set.id });
+    expect(useSectionSets.getState().byPlugin[PLUGIN]).toEqual({ rail: set.id });
   });
 
-  it("does not offer a sidebar whose section is placed in the other region", () => {
-    useViewRegistry.getState().register(PLUGIN, view(["right"]), { mount: () => {} });
+  it("does not offer a sidebar whose section lives on a tab", () => {
+    // A tab view is opened as a tab; putting it in a set would drop it silently, and the person
+     // would read that as the plugin failing rather than as the set being wrong.
+    useViewRegistry.getState().register(PLUGIN, view(["tab"]), { mount: () => {} });
     const set = useSectionSets.getState().create("work");
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
     render();
 
-    expect([...(select("left")?.options ?? [])].map((o) => o.value)).toEqual([""]);
-    // Where its section is placed, it is offered — otherwise the panel offers nothing anywhere.
+    expect([...(select("rail")?.options ?? [])].map((o) => o.value)).toEqual([""]);
+    expect([...(select("right")?.options ?? [])].map((o) => o.value)).toEqual([""]);
+  });
+
+  it("offers a section that lives beside the work in both places it can stand", () => {
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
+    const set = useSectionSets.getState().create("work");
+    useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
+    render();
+
+    expect([...(select("rail")?.options ?? [])].map((o) => o.value)).toEqual(["", set.id]);
     expect([...(select("right")?.options ?? [])].map((o) => o.value)).toEqual(["", set.id]);
   });
 

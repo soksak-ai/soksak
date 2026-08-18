@@ -26,7 +26,7 @@ describe("a plugin that lives in a sidebar and nowhere else", () => {
               id: "tree",
               title: { en: "Files", ko: "Files" },
               icon: "folder",
-              placements: ["left"],
+              surfaces: ["side"],
             },
           ],
           commands: [{ name: "reveal", title: { en: "Reveal", ko: "Reveal" } }],
@@ -35,7 +35,7 @@ describe("a plugin that lives in a sidebar and nowhere else", () => {
       "soksak-plugin-file-tree",
     );
     expect(validation.errors).toEqual([]);
-    expect(manifest?.contributes.views[0].placements).toEqual(["left"]);
+    expect(manifest?.contributes.views[0].surfaces).toEqual(["side"]);
     // Which pane it follows arrives at mount as view context (paneId), so a section names no plugin.
     expect(JSON.stringify(manifest)).not.toContain("terminal");
   });

@@ -268,25 +268,26 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 	gate.consentAndEnable(window, plugins)
 	built := gate.buildGateWindow(window)
 
-	// The sidebar stands for every plugin in this window, in the left region, open — stated on
+	// The sidebar stands for every plugin in this window, in the rail between the panes, open —
+	// stated on
 	// 2026-08-17 as the thing about this window that does not change: it is beside the view that
 	// was clicked, always. Linked to one plugin only, it left the screen on half the moves, and
 	// what this gate then measured was a region appearing and disappearing rather than the window
 	// a person uses. Both plugins are linked, so what each move changes is where the sidebar stands
 	// and what is in it.
 	browserSet := gate.createSet(window, "scenarios-browser")
-	browserSection := gate.sectionOf(window, "left", arrangementBrowserSectionPlugin)
+	browserSection := gate.sectionOf(window, arrangementBrowserSectionPlugin)
 	gate.run("sections.arrange", "window="+window, "set="+browserSet,
 		"sections="+jsonList(browserSection))
 	gate.run("sections.link", "window="+window,
-		"plugin="+gate.pluginOfTab(window, built.browserTab), "set="+browserSet, "region=left")
+		"plugin="+gate.pluginOfTab(window, built.browserTab), "set="+browserSet, "place=rail")
 	terminalSet := gate.createSet(window, "scenarios-terminal")
-	terminalSection := gate.sectionOf(window, "left", arrangementTerminalSectionPlugin)
+	terminalSection := gate.sectionOf(window, arrangementTerminalSectionPlugin)
 	gate.run("sections.arrange", "window="+window, "set="+terminalSet,
 		"sections="+jsonList(terminalSection))
 	gate.run("sections.link", "window="+window,
-		"plugin="+gate.pluginOfTab(window, built.terminalTab), "set="+terminalSet, "region=left")
-	gate.run("workspace.region.toggle", "window="+window, "region=left", "open=true")
+		"plugin="+gate.pluginOfTab(window, built.terminalTab), "set="+terminalSet, "place=rail")
+	gate.run("workspace.region.toggle", "window="+window, "region=rail", "open=true")
 
 	// The spotlight is a full-window SVG mask redrawn with the layout, and what it costs is the
 	// question this run is asked to answer. It is turned off and on again around the measurement so

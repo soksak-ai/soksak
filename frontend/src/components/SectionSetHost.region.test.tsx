@@ -29,12 +29,11 @@ vi.stubGlobal("ResizeObserver", class {
 
 const PLUGIN = "plg-a";
 
-const view = (placements: ("left" | "right" | "center")[]) => ({
+const view = (surfaces: ("side" | "tab")[]) => ({
   id: "tree",
   title: { en: "Files", ko: "Files" },
   icon: "|",
-  placements,
-  defaultPlacement: placements[0],
+  surfaces,
   transparent: false,
   nativeSurface: false,
   decoration: false,
@@ -43,7 +42,7 @@ const view = (placements: ("left" | "right" | "center")[]) => ({
 const workspace = (): Workspace =>
   ({
     id: "wsp-a1b2c3",
-    sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
+    sidebarLayouts: { left: initialSidebarLayout([]), rail: initialSidebarLayout([]), right: initialSidebarLayout([]) },
   }) as unknown as Workspace;
 
 describe("a region draws the set standing in it", () => {
@@ -52,7 +51,7 @@ describe("a region draws the set standing in it", () => {
 
   beforeEach(() => {
     useViewRegistry.setState({ views: {}, badges: {}, version: 0 });
-    useSectionSets.setState({ sets: [], byPlugin: {}, mode: "individual", fixed: {} });
+    useSectionSets.setState({ sets: [], byPlugin: {}, left: null });
     useSessions.setState({ workspaces: [workspace()], activeId: "wsp-a1b2c3" });
     host = document.createElement("div");
     document.body.append(host);
@@ -64,7 +63,7 @@ describe("a region draws the set standing in it", () => {
     host.remove();
   });
 
-  const render = (region: "left" | "right") =>
+  const render = (region: "left" | "rail" | "right") =>
     act(() => {
       root.render(
         <SectionSetHost
@@ -76,11 +75,12 @@ describe("a region draws the set standing in it", () => {
       );
     });
 
-  const stand = (region: "left" | "right") => {
-    useViewRegistry.getState().register(PLUGIN, view([region]), { mount: () => {} });
+  /** A `side` section, in a set, linked to one of the two places a plugin fills. */
+  const stand = (place: "rail" | "right") => {
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
     const set = useSectionSets.getState().create("work");
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
-    useSectionSets.getState().link(PLUGIN, region, set.id);
+    useSectionSets.getState().link(PLUGIN, place, set.id);
     return set;
   };
 
@@ -90,26 +90,39 @@ describe("a region draws the set standing in it", () => {
     expect(host.textContent).toContain("Files");
   });
 
-  it("draws the linked section on the left", () => {
-    stand("left");
-    render("left");
+  it("draws the linked section in the rail", () => {
+    stand("rail");
+    render("rail");
     expect(host.textContent).toContain("Files");
   });
 
-  it("draws nothing in the region the link does not name", () => {
-    // Placed in both regions, linked to one. Anything less and the placement filter alone would drop
-    // the section, and this would pass without the link's region being read at all.
-    useViewRegistry.getState().register(PLUGIN, view(["left", "right"]), { mount: () => {} });
-    const set = useSectionSets.getState().create("work");
-    useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
-    useSectionSets.getState().link(PLUGIN, "right", set.id);
+  it("draws nothing in the place the link does not name", () => {
+    // One `side` view, linked to one place. The view is standable in any of the three, so the
+    // link is the only thing that settles it — and this would pass without the link being read at
+    // all if the view were standable in one place only.
+    stand("right");
 
     render("right");
     // Oracle liveness — the same section, the same set, drawn where the link names.
     expect(host.textContent).toContain("Files");
 
+    render("rail");
+    expect(host.textContent).not.toContain("Files");
+  });
+
+  it("the left edge draws what was stood there, and no link touches it", () => {
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
+    const set = useSectionSets.getState().create("work");
+    useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
+    useSectionSets.getState().link(PLUGIN, "rail", set.id);
+
+    // Linked to the rail and nothing stood on the left: the left is not a place a link names.
     render("left");
     expect(host.textContent).not.toContain("Files");
+
+    useSectionSets.getState().standLeft(set.id);
+    render("left");
+    expect(host.textContent).toContain("Files");
   });
 
   // What leaves, leaves with the space it stood in. The region's width travels with the panes, so a

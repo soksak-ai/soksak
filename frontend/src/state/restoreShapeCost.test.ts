@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { restoreWindow } from "./windowPersistence";
 import type { WindowSnapshot } from "./windowPersistence";
+import { SECTION_PLACES } from "./sectionSets";
 
 // A stored field of another shape costs that field, not the window (RESTORE R1).
 //
@@ -19,7 +20,7 @@ const STORED_BEFORE = {
       id: "wsp-a1b2c3",
       title: "w",
       root: "<local-evidence>/w",
-      regionOpen: { left: true, right: false },
+      regionOpen: { left: false, rail: true, right: false },
       // The shape of that day: one region's layout, and the other region's single active view.
       rightView: null,
       leftLayout: { t: "l", v: { viewKeys: [], activeViewKey: "" } },
@@ -49,12 +50,13 @@ describe("restoring a window written by an older build", () => {
     expect(workspaces[0]?.spaces).toHaveLength(1);
   });
 
-  it("costs the arrangement itself, and answers an empty one per region", () => {
+  it("costs the arrangement itself, and answers an empty one per place", () => {
+    // One per place a sidebar can stand, read from the places themselves. Writing the three names
+    // here would pass the day a fourth place is added and nothing restored it.
     const { workspaces } = restoreWindow(STORED_BEFORE);
     const layouts = workspaces[0]?.sidebarLayouts;
 
-    expect(Object.keys(layouts ?? {})).toEqual(["left", "right"]);
-    expect(layouts?.left).toBeDefined();
-    expect(layouts?.right).toBeDefined();
+    expect(Object.keys(layouts ?? {}).sort()).toEqual([...SECTION_PLACES].sort());
+    for (const place of SECTION_PLACES) expect(layouts?.[place], place).toBeDefined();
   });
 });

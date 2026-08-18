@@ -24,12 +24,12 @@ describe("section sets — who stands where", () => {
     const m = await load();
     const set = m.useSectionSets.getState().create("work");
     m.useSectionSets.getState().arrange(set.id, ["soksak-plugin-file-tree.tree"]);
-    m.useSectionSets.getState().link("plg-a", "left", set.id);
+    m.useSectionSets.getState().link("plg-a", "rail", set.id);
 
-    expect(m.standingSet("left", "plg-a")?.sections).toEqual(["soksak-plugin-file-tree.tree"]);
+    expect(m.standingSet("rail", "plg-a")?.sections).toEqual(["soksak-plugin-file-tree.tree"]);
     // The link is one plugin's. Another plugin standing the same set would make the link decorative.
-    expect(m.standingSet("left", "plg-b")).toBeNull();
-    expect(m.standingSet("left", null)).toBeNull();
+    expect(m.standingSet("rail", "plg-b")).toBeNull();
+    expect(m.standingSet("rail", null)).toBeNull();
   });
 
   it("stands in the region the link names and in no other", async () => {
@@ -39,7 +39,7 @@ describe("section sets — who stands where", () => {
 
     expect(m.standingSet("right", "plg-a")?.id).toBe(set.id);
     // Reserving the other region's width for a set that does not stand there is a hole on screen.
-    expect(m.standingSet("left", "plg-a")).toBeNull();
+    expect(m.standingSet("rail", "plg-a")).toBeNull();
   });
 
   // Two regions, and a plugin that wants both. A standing that names one region for the whole
@@ -51,10 +51,10 @@ describe("section sets — who stands where", () => {
     const store = m.useSectionSets.getState();
     const files = store.create("files");
     const tools = store.create("tools");
-    store.link("plg-a", "left", files.id);
+    store.link("plg-a", "rail", files.id);
     store.link("plg-a", "right", tools.id);
 
-    expect(m.standingSet("left", "plg-a")?.id).toBe(files.id);
+    expect(m.standingSet("rail", "plg-a")?.id).toBe(files.id);
     expect(m.standingSet("right", "plg-a")?.id).toBe(tools.id);
   });
 
@@ -63,61 +63,77 @@ describe("section sets — who stands where", () => {
     const store = m.useSectionSets.getState();
     const files = store.create("files");
     const tools = store.create("tools");
-    store.link("plg-a", "left", files.id);
+    store.link("plg-a", "rail", files.id);
     store.link("plg-a", "right", tools.id);
     store.link("plg-a", "right", null);
 
     expect(m.standingSet("right", "plg-a")).toBeNull();
-    expect(m.standingSet("left", "plg-a")?.id).toBe(files.id);
+    expect(m.standingSet("rail", "plg-a")?.id).toBe(files.id);
   });
 
-  it("in fixed the focused plugin decides nothing", async () => {
+  // The place is the rule, and there is no switch between the two. A switch let two places answer
+  // the same way — the rail and a fixed sidebar both standing one set whatever was focused — and
+  // then there was no reason for there to be two of them.
+  it("the left edge stands one set whatever is focused", async () => {
     const m = await load();
     const set = m.useSectionSets.getState().create("work");
-    m.useSectionSets.getState().link("plg-a", "left", set.id);
-    m.useSectionSets.getState().setMode("fixed");
-    m.useSectionSets.getState().setFixed("left", set.id);
+    m.useSectionSets.getState().standLeft(set.id);
 
-    // Oracle liveness — the individual link above would answer for plg-a either way.
+    expect(m.standingSet("left", "plg-a")?.id).toBe(set.id);
     expect(m.standingSet("left", "plg-b")?.id).toBe(set.id);
     expect(m.standingSet("left", null)?.id).toBe(set.id);
   });
 
-  it("in fixed with none chosen nothing stands, whatever the links say", async () => {
+  it("a plugin's link says nothing about the left edge", async () => {
     const m = await load();
     const set = m.useSectionSets.getState().create("work");
-    m.useSectionSets.getState().link("plg-a", "left", set.id);
-    m.useSectionSets.getState().setMode("fixed");
+    m.useSectionSets.getState().link("plg-a", "rail", set.id);
 
+    // Oracle liveness — the same set stands in the rail for the plugin that linked it.
+    expect(m.standingSet("rail", "plg-a")?.id).toBe(set.id);
     expect(m.standingSet("left", "plg-a")).toBeNull();
   });
 
-  // A region open with nothing in it reserves its width and draws nothing, which reads as a view
-  // that failed to draw. The left asked this and the right did not until 2026-08-17.
-  it("a region is present only when it is open and a set stands there", async () => {
+  it("the left edge holds one set, and standing another replaces it", async () => {
+    const m = await load();
+    const files = m.useSectionSets.getState().create("files");
+    const tools = m.useSectionSets.getState().create("tools");
+    m.useSectionSets.getState().standLeft(files.id);
+    m.useSectionSets.getState().standLeft(tools.id);
+
+    expect(m.standingSet("left", null)?.id).toBe(tools.id);
+    m.useSectionSets.getState().standLeft(null);
+    expect(m.standingSet("left", null)).toBeNull();
+  });
+
+  // A place open with nothing in it reserves its width and draws nothing, which reads as a view
+  // that failed to draw. The rail asked this and the right did not until 2026-08-17.
+  it("a place is present only when it is open and a set stands there", async () => {
     const m = await load();
     const set = m.useSectionSets.getState().create("work");
     m.useSectionSets.getState().link("plg-a", "right", set.id);
 
-    expect(m.regionPresent(true, "right", "plg-a")).toBe(true);
-    // Open, and nothing stands: no width for a region a person cannot see anything in.
-    expect(m.regionPresent(true, "left", "plg-a")).toBe(false);
-    expect(m.regionPresent(true, "right", "plg-b")).toBe(false);
+    expect(m.placePresent(true, "right", "plg-a")).toBe(true);
+    // Open, and nothing stands: no width for a place a person cannot see anything in.
+    expect(m.placePresent(true, "left", "plg-a")).toBe(false);
+    expect(m.placePresent(true, "rail", "plg-a")).toBe(false);
+    expect(m.placePresent(true, "right", "plg-b")).toBe(false);
     // Standing, and the person closed it.
-    expect(m.regionPresent(false, "right", "plg-a")).toBe(false);
+    expect(m.placePresent(false, "right", "plg-a")).toBe(false);
   });
 
   it("removing a set takes its links with it", async () => {
     const m = await load();
     const set = m.useSectionSets.getState().create("work");
-    m.useSectionSets.getState().link("plg-a", "left", set.id);
-    m.useSectionSets.getState().setFixed("left", set.id);
+    m.useSectionSets.getState().link("plg-a", "rail", set.id);
+    m.useSectionSets.getState().standLeft(set.id);
 
     m.useSectionSets.getState().remove(set.id);
 
     // A link left behind names nothing: the plugin reads as linked while nothing stands.
     expect(m.useSectionSets.getState().byPlugin["plg-a"]).toBeUndefined();
-    expect(m.useSectionSets.getState().fixed).toEqual({});
-    expect(m.standingSet("left", "plg-a")).toBeNull();
+    expect(m.useSectionSets.getState().left).toBeNull();
+    expect(m.standingSet("rail", "plg-a")).toBeNull();
+    expect(m.standingSet("left", null)).toBeNull();
   });
 });

@@ -29,7 +29,7 @@ import {
 } from "../lib/splitLayout";
 import {
   useViewRegistry,
-  viewsForPlacement,
+  viewsOnSurface,
   getRegisteredView,
 } from "../plugins/viewRegistry";
 import { useHeldWhileLeaving } from "../lib/heldWhileLeaving";
@@ -80,8 +80,10 @@ export const SectionSetHost = memo(function SectionSetHost({
   // Sections outside what is placed here are dropped: a set is linked to a region only when every
   // section is placed there, so this can only differ after a plugin is disabled, and the arrangement
   // is reconciled the same way it always was.
+  // The place is the rule: the left edge holds one set for the installation, the other two hold the
+  // focused view's plugin's set.
   const standsNow = useSectionSets((s) =>
-    (s.mode === "fixed" ? s.fixed : (s.byPlugin[focusedPluginId ?? ""] ?? {}))[region],
+    region === "left" ? s.left : (s.byPlugin[focusedPluginId ?? ""] ?? {})[region],
   );
   // The region's width travels with the panes, so what stands in it leaves when the space does. With
   // the content decided by this render alone, the strip is empty for the whole closing motion —
@@ -90,9 +92,9 @@ export const SectionSetHost = memo(function SectionSetHost({
   const sets = useSectionSets((s) => s.sets);
   const registeredKeys = useMemo(() => {
     if (!standingId) return [];
-    const placed = new Set(viewsForPlacement(region).map((v) => v.key));
+    const beside = new Set(viewsOnSurface("side").map((v) => v.key));
     const set = sets.find((x) => x.id === standingId);
-    return (set?.sections ?? []).filter((k) => placed.has(k));
+    return (set?.sections ?? []).filter((k) => beside.has(k));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version, standingId, sets, region]);
   const reconcileSidebar = useSessions((s) => s.reconcileSidebar);

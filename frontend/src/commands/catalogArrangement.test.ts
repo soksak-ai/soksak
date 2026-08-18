@@ -55,9 +55,9 @@ function workspace(activePaneId: string): Workspace {
     id: "wsp-aaaaaa",
     title: "P",
     root: "<local-evidence>/arrangement",
-    regionOpen: { left: true, right: false },
+    regionOpen: { left: false, rail: true, right: false },
     leftRailPlacement: { mode: "flow" },
-    sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
+    sidebarLayouts: { left: initialSidebarLayout([]), rail: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [
       {
         id: "spc-aaaaaa",

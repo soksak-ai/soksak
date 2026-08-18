@@ -113,17 +113,17 @@ func TestAPageStaysOnItsPaneWhileTheSidebarOpens(t *testing.T) {
 		t.Fatal("no surface is on screen, so its placement cannot be watched")
 	}
 
-	// A region with nothing standing in it takes no width, and a region that takes no width moves
-	// nothing. The link is settled first, and the region closed, so the click below is the change.
+	// A place with nothing standing in it takes no width, and a place that takes no width moves
+	// nothing. The link is settled first, and the place closed, so the click below is the change.
 	set := gate.createSet(window, "alignment")
-	sections := gate.availableSections(window)["left"]
+	sections := gate.availableSections(window)
 	if len(sections) == 0 {
-		t.Fatal("no section stands on the left, so the toggle would move nothing")
+		t.Fatal("this build offers no section, so the toggle would move nothing")
 	}
 	gate.run("sections.arrange", "window="+window, "set="+set, "sections="+jsonList(sections[0]))
 	gate.run("sections.link", "window="+window,
-		"plugin="+gate.aPluginWithAPane(window), "set="+set, "region=left")
-	gate.run("workspace.region.toggle", "window="+window, "region=left", "open=false")
+		"plugin="+gate.aPluginWithAPane(window), "set="+set, "place=rail")
+	gate.run("workspace.region.toggle", "window="+window, "region=rail", "open=false")
 	// workspace.region.toggle waits for its own DOM commit; the surface half settles after it, and
 	// ui.layout.wait-settled is what answers for that one. Read once after: a window that is out of
 	// place here is out of place, not early.
@@ -138,7 +138,7 @@ func TestAPageStaysOnItsPaneWhileTheSidebarOpens(t *testing.T) {
 	// the last one is still moving is the case a single press never produces.
 	samples := gate.watchAlignment(window, func() {
 		for press := 0; press < 6; press++ {
-			gate.run("ui.input.click", "window="+window, "address=chrome/titlebar/region/left")
+			gate.run("ui.input.click", "window="+window, "address=chrome/titlebar/region/rail")
 			// Not a wait for anything: this is the interval that produces the case. A press that
 			// lands while the last one is still moving is what was recorded and what a single
 			// settled press never makes.

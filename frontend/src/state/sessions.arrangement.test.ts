@@ -116,7 +116,7 @@ describe("session arrangement — the solution decides the display and the canon
       { id: "ghostty", rect: { left: 0, top: 0, width: 100, height: 100 } },
     ]);
     expect(solved.station).toBe(0);
-    expect(maximized.regionOpen.left).toBe(true);
+    expect(maximized.regionOpen.rail).toBe(true);
     expect(maximized.spaces[0].layout).toEqual(canonical);
 
     expect(useSessions.getState().restoreView(workspace.id)).toEqual({
@@ -148,10 +148,10 @@ describe("session arrangement — the solution decides the display and the canon
     });
   });
 
-  it("a closed sidebar leaves no rail to attach to — no swap happens", () => {
+  it("a closed rail leaves nothing to attach to — no swap happens", () => {
     const workspace = workspaceFixture();
     useSessions.setState({
-      workspaces: [{ ...workspace, regionOpen: { ...workspace.regionOpen, left: false } }],
+      workspaces: [{ ...workspace, regionOpen: { ...workspace.regionOpen, rail: false } }],
       activeId: workspace.id,
     });
     const solved = projectArrangement(useSessions.getState().workspaces[0])!;

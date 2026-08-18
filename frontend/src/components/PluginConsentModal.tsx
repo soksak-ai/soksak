@@ -206,7 +206,7 @@ export function PluginConsentModal({
             for (const v of c.views) {
               rows.push({
                 key: `view:${v.id}`,
-                text: `${t("plugin.consent.kind.view")} — ${localize(v.title)} (${v.placements.join(", ")})`,
+                text: `${t("plugin.consent.kind.view")} — ${localize(v.title)} (${v.surfaces.join(", ")})`,
               });
             }
             for (const cmd of c.commands) {

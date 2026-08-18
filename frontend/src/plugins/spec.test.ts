@@ -61,7 +61,7 @@ describe("parseManifest — accept", () => {
     });
   });
 
-  it("normalizes view placement defaults: placements=[rail], defaultPlacement=first item", () => {
+  it("a view that names no surface lives beside the work", () => {
     const { manifest } = parseManifest(
       base({
         permissions: ["ui"],
@@ -72,7 +72,7 @@ describe("parseManifest — accept", () => {
               id: "diff",
               title: "Diff",
               icon: "D",
-              placements: ["center", "left"],
+              surfaces: ["tab", "side"],
               decoration: true,
             },
           ],
@@ -81,12 +81,10 @@ describe("parseManifest — accept", () => {
       "demo",
     );
     expect(manifest?.contributes.views[0]).toMatchObject({
-      placements: ["left"],
-      defaultPlacement: "left",
+      surfaces: ["side"],
     });
     expect(manifest?.contributes.views[1]).toMatchObject({
-      placements: ["center", "left"],
-      defaultPlacement: "center",
+      surfaces: ["tab", "side"],
     });
   });
 
@@ -98,7 +96,7 @@ describe("parseManifest — accept", () => {
         minAppVersion: "0.1.0",
         permissions: ["ui", "commands"],
         contributes: {
-          views: [{ id: "v", title: "View", icon: "V", defaultPlacement: "left" }],
+          views: [{ id: "v", title: "View", icon: "V", surfaces: ["side"] }],
           commands: [{ name: "do.it", title: "Run" }],
         },
       }),
@@ -376,36 +374,35 @@ describe("parseManifest — contribution item validation", () => {
     expect(errors.some((e) => e.includes("duplicate"))).toBe(true);
   });
 
-  it("bad view placements(empty array, unknown value) → rejected", () => {
-    for (const placements of [[], ["sidebar-left"]]) {
+  it("bad view surfaces(empty array, unknown value) → rejected", () => {
+    // A place — left, rail, right — is not a surface. A view that named one would be arranging
+    // the window from inside the plugin, so the old vocabulary is rejected rather than mapped.
+    for (const surfaces of [[], ["side", "tab", "side"], ["left"], ["right"]]) {
       const errors = errorsOf(
         base({
           permissions: ["ui"],
-          contributes: { views: [{ id: "v", title: "View", icon: "V", placements }] },
+          contributes: { views: [{ id: "v", title: "View", icon: "V", surfaces }] },
         }),
       );
-      expect(errors.some((e) => e.includes("placements"))).toBe(true);
+      expect(errors.some((e) => e.includes("surfaces")), JSON.stringify(surfaces)).toBe(true);
     }
   });
 
-  it("defaultPlacement outside placements → rejected", () => {
-    const errors = errorsOf(
-      base({
-        permissions: ["ui"],
-        contributes: {
-          views: [
-            {
-              id: "v",
-              title: "View",
-              icon: "V",
-              placements: ["left"],
-              defaultPlacement: "center",
-            },
-          ],
-        },
-      }),
-    );
-    expect(errors.some((e) => e.includes("defaultPlacement"))).toBe(true);
+  it("the old placement vocabulary is refused by name, not ignored", () => {
+    // `placements` and `defaultPlacement` are gone (L11c — the old path is deleted, not mapped).
+    // A manifest still carrying them would otherwise parse with the key dropped and the view would
+    // stand somewhere its author never chose, which reads as the host misplacing it.
+    for (const key of ["placements", "defaultPlacement"]) {
+      const errors = errorsOf(
+        base({
+          permissions: ["ui"],
+          contributes: {
+            views: [{ id: "v", title: "View", icon: "V", surfaces: ["side"], [key]: "left" }],
+          },
+        }),
+      );
+      expect(errors.some((e) => e.includes(key)), key).toBe(true);
+    }
   });
 
   it("unknown key in a view item → rejected", () => {

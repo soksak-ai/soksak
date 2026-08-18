@@ -28,8 +28,8 @@ const browser = (viewId: string, title: string, customLabel?: string): Tab => ({
 const tab = (id: string, tabs: Tab[]): Workspace => ({
   id,
   title: id,
-  regionOpen: { left: false, right: false },
-  sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
+  regionOpen: { left: false, rail: false, right: false },
+  sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, rail: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   root: "/r",
   spaces: [
     {

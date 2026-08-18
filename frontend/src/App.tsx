@@ -61,7 +61,7 @@ import {
 import {
   useSettings,
   type TabPosition,
-  type RightSidebarMode,
+  type EdgeSidebarMode,
 } from "./state/settings";
 import { useTheme } from "./state/theme";
 import { hasPtyObservation } from "./terminal/ptyObservationStore";
@@ -81,7 +81,7 @@ import { prepareLayoutChange, viewLayoutChange } from "./lib/layoutTransitionHos
 import { registerLayoutTransitionIntentHost } from "./lib/layoutTransitionIntent";
 import { ownsNativeSurfaceFromManifests } from "./lib/nativeSurfaceOwnership";
 import { useAddTabIntent } from "./state/addTabIntent";
-import { focusedPluginOf, regionPresent, useSectionSets } from "./state/sectionSets";
+import { focusedPluginOf, placePresent, useSectionSets } from "./state/sectionSets";
 import "./App.css";
 
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
@@ -97,9 +97,9 @@ const SIDEBAR_MIN = 160;
 const SIDEBAR_MAX = 640;
 const SIDEBAR_DEFAULT = 320;
 // Right plugin sidebar width range.
-const RIGHT_MIN = 200;
-const RIGHT_MAX = 640;
-const RIGHT_DEFAULT = 300;
+const EDGE_MIN = 200;
+const EDGE_MAX = 640;
+const EDGE_DEFAULT = 300;
 // Left workspace rail width.
 // Product layout contract: workspace rail default 54px, drag 44–110px.
 const RAIL_MIN = 44;
@@ -162,24 +162,31 @@ function useResizableWidth(
 // memo boundary = workspace data boundary (principle 2, docs/PERFORMANCE.md): a store write for workspace X
 // preserves the object identity of workspace Y (mapWorkspace), so the Y subtree does not re-render.
 // Every prop must be reference- or value-stable — no custom comparator.
+/** One edge sidebar's own axes: how wide, how it takes its room, and how a person drags it. */
+export interface EdgeSidebar {
+  width: number;
+  mode: EdgeSidebarMode;
+  startResize: (e: React.MouseEvent) => void;
+}
+
 const WorkspacePlane = memo(function WorkspacePlane({
   workspace,
   isActiveWorkspace,
   sidebarW,
-  rightW,
-  rightMode,
+  left,
+  right,
   contentTabPosition,
   startResize,
-  startRightResize,
 }: {
   workspace: Workspace;
   isActiveWorkspace: boolean;
   sidebarW: number;
-  rightW: number;
-  rightMode: RightSidebarMode;
+  // The two window edges. One object each, because they hold the same three axes and passing six
+  // loose props is where a change to one silently misses the other.
+  left: EdgeSidebar;
+  right: EdgeSidebar;
   contentTabPosition: TabPosition;
   startResize: (e: React.MouseEvent) => void;
-  startRightResize: (e: React.MouseEvent) => void;
 }) {
   const t = useT();
   const setLeftRailPlacement = useSessions((s) => s.setLeftRailPlacement);
@@ -205,12 +212,18 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // width — the hole this rule exists to prevent, and the empty strip in every capture of that day.
   // Re-read when the sets change, not only when the workspace does.
   const sectionsVersion = useSectionSets((s) => s.sets.length + Object.keys(s.byPlugin).length);
-  const leftOpen = useMemo(
-    () => regionPresent(workspace.regionOpen.left, "left", focusedPluginId),
+  // The rail: between the panes, travelling with the focus. `railOpen` named it until 2026-08-18,
+  // when the window's own left edge took that name.
+  const railOpen = useMemo(
+    () => placePresent(workspace.regionOpen.rail, "rail", focusedPluginId),
+    [workspace.regionOpen.rail, focusedPluginId, sectionsVersion],
+  );
+  const leftPresent = useMemo(
+    () => placePresent(workspace.regionOpen.left, "left", focusedPluginId),
     [workspace.regionOpen.left, focusedPluginId, sectionsVersion],
   );
   const rightPresent = useMemo(
-    () => regionPresent(workspace.regionOpen.right, "right", focusedPluginId),
+    () => placePresent(workspace.regionOpen.right, "right", focusedPluginId),
     [workspace.regionOpen.right, focusedPluginId, sectionsVersion],
   );
 
@@ -262,10 +275,10 @@ const WorkspacePlane = memo(function WorkspacePlane({
         to,
         groups,
         hostWidth,
-        leftOpen ? sidebarW : 0,
+        railOpen ? sidebarW : 0,
       ), signal);
     },
-    [leftOpen, sidebarW],
+    [railOpen, sidebarW],
   );
   useLayoutEffect(
     () => registerLayoutTransitionIntentHost<Pane>(workspace.id, {
@@ -296,7 +309,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
         destination: solved,
         bindingTabId: activeContent.railBindingTabId,
         placement: placement.mode,
-        railOpen: leftOpen,
+        railOpen: railOpen,
         station: renderedStation,
       })
     : null;
@@ -355,7 +368,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
 
   const startRailStationDrag = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button !== 0 || !leftOpen) return;
+      if (e.button !== 0 || !railOpen) return;
       e.preventDefault();
       e.stopPropagation();
       const plane = railPlaneRef.current;
@@ -399,7 +412,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
       effectiveStation,
       phase.rebase,
       workspace.id,
-      leftOpen,
+      railOpen,
       railCleanLines,
       setLeftRailPlacement,
       sidebarW,
@@ -419,7 +432,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // render that changes nothing about its box produces the same values and starts no motion.
   useLayoutEffect(() => {
     timed("rail.flush", () => railMotion.flush(phase.replacing ? "replace" : "animate"));
-  }, [leftOpen, sidebarW, renderedStation, railLook, railTraveling, phase.replacing, railMotion]);
+  }, [railOpen, sidebarW, renderedStation, railLook, railTraveling, phase.replacing, railMotion]);
   useLayoutEffect(() => {
     timed("plugins.reflow", () =>
       emitPluginEvent("layout.reflow", { activeSpaceId: workspace.activeSpaceId }),
@@ -429,7 +442,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
     activeContent?.activePaneId,
     activeContent?.maximizedTabId,
     workspace.activeSpaceId,
-    leftOpen,
+    railOpen,
     isActiveWorkspace,
     renderedStation,
     railTraveling,
@@ -500,8 +513,8 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   className={`sidebar rail-${railLook}`}
                   data-wv-occlusion="rail"
                   data-node="rail/left"
-                  data-region="left"
-                  data-region-open={String(workspace.regionOpen.left)}
+                  data-region="rail"
+                  data-region-open={String(workspace.regionOpen.rail)}
                   data-rail-role={rail.visible ? "resting" : "traveling-hidden"}
                   data-focus-lighting="exempt"
                   // Ownership of the vertical border depends on station (at an edge the outer side is omitted — §B2).
@@ -527,16 +540,16 @@ const WorkspacePlane = memo(function WorkspacePlane({
                       // 2026-08-17: the left column ended at 414, the sidebar held 420..580,
                       // and the pane it served began at 586. Six points each way.
                       left: `calc(${rail.station}% - ${(sidebarW * rail.station) / 100}px + var(--pane-inset, 0px))`,
-                      width: leftOpen ? sidebarW : 0,
+                      width: railOpen ? sidebarW : 0,
                       borderLeftWidth: railEdgeWidths(
                         railLook,
-                        leftOpen,
+                        railOpen,
                         rail.station,
                         paneStyle,
                       ).left,
                       borderRightWidth: railEdgeWidths(
                         railLook,
-                        leftOpen,
+                        railOpen,
                         rail.station,
                         paneStyle,
                       ).right,
@@ -552,13 +565,13 @@ const WorkspacePlane = memo(function WorkspacePlane({
                       have, clipped by the band until the band is that wide. */}
                   <div className="rail-content" style={{ width: sidebarW }}>
                     <SectionSetHost
-                      region="left"
+                      region="rail"
                       workspace={workspace}
                       paneId={cwdTabOf(workspace) ?? ""}
                       focusedPluginId={focusedPluginId}
                     />
                   </div>
-                  {leftOpen && (
+                  {railOpen && (
                     <div className="left-rail-controls">
                       <button
                         type="button"
@@ -577,7 +590,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                       </button>
                     </div>
                   )}
-                  {leftOpen && (
+                  {railOpen && (
                     <div
                       className="sidebar-resizer"
                       data-wv-occlusion="sidebar-resizer"
@@ -631,7 +644,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   // The maximize fact comes from the **same solution** as station — mixing them makes the render throw.
                   displayMaximizedId={isActiveContent ? (arrangement?.maximizedId ?? null) : undefined}
                   railWidthPx={
-                    isActiveContent && leftOpen ? sidebarW : 0
+                    isActiveContent && railOpen ? sidebarW : 0
                   }
                 />
               </div>
@@ -640,39 +653,81 @@ const WorkspacePlane = memo(function WorkspacePlane({
         </RailGridSurface>
       </div>
 
-      {/* Right plugin sidebar (⌥⌘B). Closed = width 0 (not unmounted — keep-alive). */}
-      {rightPresent && (
+      {/* The two window edges. Closed = width 0, not unmounted — keep-alive. */}
+      <EdgeSidebarPlane
+        place="left"
+        present={leftPresent}
+        edge={left}
+        workspace={workspace}
+        focusedPluginId={focusedPluginId}
+        resizeTitle={t("plugin.sidebar.resize")}
+      />
+      <EdgeSidebarPlane
+        place="right"
+        present={rightPresent}
+        edge={right}
+        workspace={workspace}
+        focusedPluginId={focusedPluginId}
+        resizeTitle={t("plugin.sidebar.resize")}
+      />
+    </div>
+  );
+});
+
+/**
+ * One sidebar standing at a window edge.
+ *
+ * Both edges, one component. The axes are the same for either — a width a person drags, a mode
+ * for whether it takes room or floats over it, and the set standing in it — and written twice, a
+ * change lands on one of them. The difference is the side of the resizer and the border drawn.
+ */
+function EdgeSidebarPlane({
+  place,
+  present,
+  edge,
+  workspace,
+  focusedPluginId,
+  resizeTitle,
+}: {
+  place: "left" | "right";
+  present: boolean;
+  edge: EdgeSidebar;
+  workspace: Workspace;
+  focusedPluginId: string | null;
+  resizeTitle: string;
+}) {
+  const outward = place === "left" ? "borderRightWidth" : "borderLeftWidth";
+  return (
+    <>
+      {present && (
         <div
-          className="sidebar-right-resizer"
-          data-node="sidebar/right/resizer"
+          className={`sidebar-edge-${place}-resizer`}
+          data-node={`sidebar/${place}/resizer`}
           data-wv-occlusion="sidebar-resizer"
-          style={{ right: rightW - 2 }}
-          onMouseDown={startRightResize}
-          title={t("plugin.sidebar.resize")}
+          style={{ [place]: edge.width - 2 }}
+          onMouseDown={edge.startResize}
+          title={resizeTitle}
         />
       )}
       <div
-        className={`sidebar-right${rightPresent ? " open" : ""}${rightMode === "push" ? " push" : ""}`}
-        data-node="sidebar/right"
-        data-region="right"
-        data-region-open={String(workspace.regionOpen.right)}
-        data-wv-occlusion="sidebar-right"
+        className={`sidebar-edge sidebar-edge-${place}${present ? " open" : ""}${edge.mode === "push" ? " push" : ""}`}
+        data-node={`sidebar/${place}`}
+        data-region={place}
+        data-region-open={String(workspace.regionOpen[place])}
+        data-wv-occlusion={`sidebar-${place}`}
         data-focus-lighting="exempt"
-        style={{
-          width: rightPresent ? rightW : 0,
-          borderLeftWidth: rightPresent ? 1 : 0,
-        }}
+        style={{ width: present ? edge.width : 0, [outward]: present ? 1 : 0 }}
       >
         <SectionSetHost
-          region="right"
+          region={place}
           workspace={workspace}
           paneId={cwdTabOf(workspace) ?? ""}
           focusedPluginId={focusedPluginId}
         />
       </div>
-    </div>
+    </>
   );
-});
+}
 
 // The terminal pane the workspace sidebar (file tree) follows (= the current cwd source). The pure resolver is
 // sessions.cwdTabOf — here it is called with the PTY observation predicate (hasPtyObservation) injected.
@@ -805,6 +860,7 @@ function App() {
   const setSettingsSection = useUi((s) => s.setSettingsSection);
   const workspaceTabPosition = useSettings((s) => s.workspaceTabPosition);
   const contentTabPosition = useSettings((s) => s.contentTabPosition);
+  const leftSidebarMode = useSettings((s) => s.leftSidebarMode);
   const rightSidebarMode = useSettings((s) => s.rightSidebarMode);
 
   // The theme system (token slots) is the single source — the theme engine applies CSS variables and structural attributes.
@@ -917,11 +973,18 @@ function App() {
     [workspaceTabPosition, railW].join(":"),
     activeWorkspace?.activeSpaceId ?? null,
   );
+  const [leftW, startLeftResize] = useResizableWidth(
+    "leftSidebarW",
+    EDGE_DEFAULT,
+    EDGE_MIN,
+    EDGE_MAX,
+    "left",
+  );
   const [rightW, startRightResize] = useResizableWidth(
     "rightSidebarW",
-    RIGHT_DEFAULT,
-    RIGHT_MIN,
-    RIGHT_MAX,
+    EDGE_DEFAULT,
+    EDGE_MIN,
+    EDGE_MAX,
     "right",
   );
 
@@ -939,7 +1002,7 @@ function App() {
   const activeSections = useSectionSets((s) => s.sets.length + Object.keys(s.byPlugin).length);
   const rightRect = useMemo(
     () =>
-      regionPresent(activeWorkspace?.regionOpen.right ?? false, "right", activeFocusedPlugin) &&
+      placePresent(activeWorkspace?.regionOpen.right ?? false, "right", activeFocusedPlugin) &&
       rightSidebarMode !== "push"
         ? rightW
         : 0,
@@ -1223,8 +1286,8 @@ function App() {
           <PluginHeaderActions />
           <button
             type="button"
-            className={`icon-btn sidebar-toggle${activeWorkspace?.regionOpen.left ? " active" : ""}`}
-            data-node="titlebar/region/left"
+            className={`icon-btn sidebar-toggle${activeWorkspace?.regionOpen.rail ? " active" : ""}`}
+            data-node="titlebar/region/rail"
             title={t("sidebar.toggle")}
             aria-label={t("sidebar.toggle")}
             onClick={() => activeWorkspace && toggleRegion(activeWorkspace.id, "left")}
@@ -1328,11 +1391,10 @@ function App() {
               workspace={workspace}
               isActiveWorkspace={workspace.id === activeId}
               sidebarW={sidebarW}
-              rightW={rightW}
-              rightMode={rightSidebarMode}
+              left={{ width: leftW, mode: leftSidebarMode, startResize: startLeftResize }}
+              right={{ width: rightW, mode: rightSidebarMode, startResize: startRightResize }}
               contentTabPosition={contentTabPosition}
               startResize={startResize}
-              startRightResize={startRightResize}
             />
           ))}
         </div>

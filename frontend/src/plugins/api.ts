@@ -62,7 +62,6 @@ import {
   qualifiedViewId,
   type PluginManifest,
   type PluginPermission,
-  type ViewPlacement,
   type LocalizedText,
 } from "./spec";
 import { localize, readingLanguage, tmsg } from "../i18n";
@@ -274,10 +273,9 @@ export interface SoksakPluginApi {
   };
   ui?: {
     registerView: (viewId: string, provider: PluginViewProvider) => Disposable;
-    openView: (
-      viewId: string,
-      placement?: ViewPlacement,
-    ) => Promise<CommandOutcome>;
+    /** Opens this plugin's view as a content tab. A view that stands beside the work is put there
+     *  by arranging a set and standing it in a place; there is nothing to open. */
+    openView: (viewId: string) => Promise<CommandOutcome>;
     /** Register an icon set (contributes.iconSets declaration required). data must supply every semantic
      *  name. */
     registerIconSet: (setId: string, data: unknown) => Disposable;
@@ -1578,14 +1576,12 @@ export function buildPluginApi(
             return tracker.wrap(remove);
           },
 
-          // Delegates to the placement command (plugin.view.open — registered at M_P5).
-          openView: (viewId, placement) =>
+          // Delegates to plugin.view.open, which opens a tab and refuses a view that does not
+          // live on one.
+          openView: (viewId) =>
             deps.execute(
               "plugin.view.open",
-              {
-                viewKey: qualifiedViewId(id, viewId),
-                ...(placement ? { placement } : {}),
-              },
+              { viewKey: qualifiedViewId(id, viewId) },
               pluginCtx,
             ),
           // Icon set registration — rejects anything outside the declaration (contributes.iconSets) and
