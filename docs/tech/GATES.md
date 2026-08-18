@@ -178,16 +178,25 @@ Written here so it is not rediscovered (L2).
   items now, and no gate refuses a core-drawn one coming back.
 - **Plugin loading beyond these two plugins is untried.** The terminal and the
   browser are installed and driven; nothing has exercised a third.
-- **The application dies inside Wails' asset server during a recording.** Measured
-  2026-08-18: one full-suite run in four, the arrangement gate's `window.record`
-  answered `the backend closed without answering: EOF` and the socket was gone.
-  The crash is in the pinned Wails commit's own request path —
+- **The application dies inside Wails' asset server during a recording.** Twice
+  on 2026-08-18 and not since: once with the arrangement gate running alone and
+  once in a full suite. `window.record` answered `the backend closed without
+  answering: EOF` and the socket was gone. Both were in a recording; nothing
+  else has produced it.
+
+  Counted against everything that ran after: more than a dozen full suites and
+  a dozen runs of that gate alone, none of them crashed. An earlier note here
+  said one full-suite run in four and that it did not happen when the gate ran
+  alone — the first was a four-run sample and the second was wrong, because one
+  of the two crashes was a lone run of exactly that gate.
+
+  The stack was captured once, in the second of the two, and points into the
+  pinned Wails commit's own request path:
   `internal/assetserver/assetserver_webview.go:50`, a goroutine created by
-  `AssetServer.ServeWebViewRequest` — and it appears under the load of the whole
-  suite, not when that gate runs alone (8 runs, none). Nothing here reproduces it
-  deliberately and no cause is claimed. What is fixed is that it is now
-  reportable: the gates keep the application's own output and every refusal after
-  the process stops answering carries it.
+  `AssetServer.ServeWebViewRequest`. That reading also arrived truncated — the
+  gate kept the tail of the log and a crash states its reason on the first line
+  — so the reason itself has never been seen. It is kept from the reason now,
+  and nothing has crashed since to test that.
 
   Read rather than guessed at, 2026-08-18: Wails catches the scheme-task
   exception whose reason is exactly `"This task has already been stopped"` and
