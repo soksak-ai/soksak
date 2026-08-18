@@ -87,6 +87,61 @@ beforeEach(() => {
 });
 
 describe("layout.arrangement", () => {
+  it("answers which pane the rail is grouped with, and which rule chose it", async () => {
+    // The rail draws one outline around itself and one pane. Which pane that is came from three
+    // rules in order — an explicit binding, the focused pane, then whichever pane is visible — and
+    // none of the three was readable from outside. On 2026-08-19 a running window drew the outline
+    // around a pane that was not the focused one and there was no way to ask why: the arrangement
+    // command answered the station and the cells and said nothing about the grouping.
+    //
+    // `source` is the difference between a grouping a person chose and one that was left over.
+    const answer = (await execute("layout.arrangement", {}, {})) as unknown as {
+      ok: boolean;
+      data: {
+        focusId: string | null;
+        relation: {
+          boundPaneId: string | null;
+          boundTabId: string | null;
+          source: string;
+          side: string;
+          connected: boolean;
+          borderMode: string;
+          pathCount: number;
+        };
+      };
+    };
+    expect(answer.ok).toBe(true);
+    expect(answer.data.focusId).toBe("pan-bbbbbb");
+    expect(answer.data.relation.boundPaneId).toBe("pan-bbbbbb");
+    expect(answer.data.relation.boundTabId).toBe("tab-bbbbbb");
+    expect(answer.data.relation.source).toBe("focus");
+    expect(answer.data.relation.connected).toBe(true);
+  });
+
+  it("groups the rail with the focused pane, and a stored binding does not outrank it", async () => {
+    // Measured 2026-08-19 on a running window under PIN: the active pane was pan-ehc264 and the
+    // outline was drawn around pan-3557x4, the pane on the other side of the rail. `state.tree`
+    // named the reason — a `railBindingTabId` restored from disk, pointing into that pane.
+    //
+    // Nothing in this build ever writes that field. The preceding implementation kept it equal to
+    // the active view through a subscription, and only the reader was carried over — so the rail
+    // was grouped with a pane chosen once and never again. The field is deleted rather than given a
+    // writer (L11c): no feature here binds a specific view, and one that needs to will bring its
+    // own writer.
+    useSessions.setState((state) => ({
+      workspaces: state.workspaces.map((w) => ({
+        ...w,
+        spaces: w.spaces.map((c) => ({ ...c, railBindingTabId: "tab-aaaaaa" } as typeof c)),
+      })),
+    }));
+    const answer = (await execute("layout.arrangement", {}, {})) as unknown as {
+      data: { focusId: string | null; relation: { boundPaneId: string | null; source: string } };
+    };
+    expect(answer.data.focusId).toBe("pan-bbbbbb");
+    expect(answer.data.relation.boundPaneId).toBe("pan-bbbbbb");
+    expect(answer.data.relation.source).toBe("focus");
+  });
+
   it("tab.maximize opens the exact geometry revision before publishing and its transaction consumes the cause", async () => {
     const pinned = {
       ...workspace("pan-bbbbbb"),

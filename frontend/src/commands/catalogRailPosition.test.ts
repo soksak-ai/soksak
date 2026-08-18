@@ -263,7 +263,6 @@ describe("state.tree — the solution is a public fact", () => {
     withBinding.spaces[0] = {
       ...withBinding.spaces[0],
       activePaneId: "pan-bbbbbb",
-      railBindingTabId: "tab-bbbbbb",
       layout: {
         type: "split",
         id: "spl-aaaaaa",
@@ -280,6 +279,7 @@ describe("state.tree — the solution is a public fact", () => {
     const relation = (detached.data as { workspaces: Array<{ spaces: Array<{ railRelation: unknown }> }> })
       .workspaces[0].spaces[0].railRelation;
     expect(relation).toEqual({
+      source: "focus",
       boundTabId: "tab-bbbbbb",
       boundPaneId: "pan-bbbbbb",
       relationId: "rail-relation/spc-aaaaaa/pan-bbbbbb/tab-bbbbbb",
@@ -317,6 +317,7 @@ describe("state.tree — the solution is a public fact", () => {
     const paneRelation = (panes.data as { railRelation: unknown }).railRelation;
 
     expect(treeRelation).toEqual({
+      source: "focus",
       boundTabId: "tab-aaaaaa",
       boundPaneId: "pan-aaaaaa",
       relationId: "rail-relation/spc-aaaaaa/pan-aaaaaa/tab-aaaaaa",
@@ -347,6 +348,7 @@ describe("state.tree — the solution is a public fact", () => {
       workspaces: Array<{ spaces: Array<{ railRelation: unknown }> }>;
     }).workspaces[0].spaces[0].railRelation;
     expect(relation).toEqual({
+      source: "none",
       boundTabId: null,
       boundPaneId: null,
       relationId: "rail-relation/spc-aaaaaa/none",

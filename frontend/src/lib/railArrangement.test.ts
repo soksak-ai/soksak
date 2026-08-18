@@ -221,6 +221,7 @@ describe("effective rail relation — one rule for the renderer and the publishe
       false,
     );
     expect(resolved.state).toEqual({
+      source: "none",
       boundTabId: null,
       boundPaneId: null,
       relationId: "rail-relation/c1/none",
@@ -241,7 +242,6 @@ describe("effective rail relation — one rule for the renderer and the publishe
       contentId: "c1",
       displayed,
       destination,
-      bindingTabId: "v-br",
       placement: "flow",
       railOpen: true,
     });
@@ -268,7 +268,6 @@ describe("effective rail relation — one rule for the renderer and the publishe
       displayed,
       destination,
       // The actual order: activation's rail-binding store write arrived after the focus commit.
-      bindingTabId: "v-top",
       placement: "flow",
       railOpen: true,
     });

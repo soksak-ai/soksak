@@ -307,7 +307,6 @@ const WorkspacePlane = memo(function WorkspacePlane({
         contentId: activeContent.id,
         displayed: arrangement,
         destination: solved,
-        bindingTabId: activeContent.railBindingTabId,
         placement: placement.mode,
         railOpen: railOpen,
         station: renderedStation,
@@ -608,6 +607,11 @@ const WorkspacePlane = memo(function WorkspacePlane({
               <div
                 key={c.id}
                 className="space-plane"
+                // Which space this is and whether it is the one on screen. A parked space keeps its
+                // DOM and its box, so a reader cannot tell it apart by measuring — it is declared
+                // here and read, the same way the workspace plane declares its own.
+                data-space-plane={c.id}
+                data-space-active={isActiveContent ? "1" : undefined}
                 // Inactive content keeps its DOM lifetime and box; only visibility is turned off.
                 style={parkedStyle(isActiveContent)}
               >

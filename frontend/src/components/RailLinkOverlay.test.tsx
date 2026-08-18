@@ -31,6 +31,7 @@ const relation = (
 ): RailRelationState => ({
   boundTabId: "tab-bbbbbb",
   boundPaneId: "pan-bbbbbb",
+  source: "focus",
   relationId: "rail-relation/spc-aaaaaa/pan-bbbbbb/tab-bbbbbb",
   placement: "flow",
   connected: true,

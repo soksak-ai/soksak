@@ -82,7 +82,6 @@ describe("what a restore carries across", () => {
     expect(space.id).toBe("spc-aaaaaa");
     expect(workspace.activeSpaceId).toBe("spc-aaaaaa");
     expect(space.activePaneId).toBe("pan-aaaaaa");
-    expect(space.railBindingTabId).toBe("tab-aaaaaa");
   });
 
 });

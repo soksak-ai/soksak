@@ -25,7 +25,6 @@ const workspace: Workspace = {
       id: "spc-aaaaaa",
       title: "build",
       activePaneId: "pan-bbbbbb",
-      railBindingTabId: "tab-aaaaaa",
       layout: {
         type: "split",
         id: "spl-gaaaaa",
@@ -88,7 +87,6 @@ describe("windowSnapshot round trip", () => {
     expect(c.id).toBe("spc-aaaaaa");
     expect(c.title).toBe("build");
     expect(c.activePaneId).toBe("pan-bbbbbb");
-    expect(c.railBindingTabId).toBe("tab-aaaaaa");
 
     const gl = c.layout as Extract<PaneNode, { type: "split" }>;
     expect(gl.dir).toBe("row");

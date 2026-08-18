@@ -51,14 +51,26 @@ export function lightingRegionsIn(root: Document | ParentNode): LightingRegions 
     scope: null, base: null, aperture: null, cutouts: [], exempt: [], blocked: [],
   };
 
-  const nodes = [...root.querySelectorAll<HTMLElement>(`[data-node^="${PREFIX}"]`)];
+  // Inside the active space, and nowhere else. A window holds one plane per space and a parked
+  // space keeps both its DOM and its box, so no measurement separates them — the space plane
+  // declares which one is on screen and this reads that declaration.
+  //
+  // It read whichever plane came first until 2026-08-19, on the premise that one screen holds one
+  // plane. Measured that day on a running window: two planes, 999x757 each, and the answer named
+  // the parked space with an aperture on a pane the arrangement had never heard of. Every reading
+  // of the lighting was then about a space nobody was looking at, and all of them passed.
+  //
+  // No active plane is an empty answer, never a parked one: a window mid-switch draws none for a
+  // frame, and a veil nobody is under is worse than no veil because it reads as one.
+  const active = root.querySelector<HTMLElement>('[data-space-plane][data-space-active="1"]');
+  const nodes = active
+    ? [...active.querySelectorAll<HTMLElement>(`[data-node^="${PREFIX}"]`)]
+    : [];
   for (const el of nodes) {
     const address = el.dataset.node ?? "";
     const path = address.slice(PREFIX.length);
     const [scope, kind, ...rest] = path.split("/");
     if (!scope) continue;
-    // The first plane found names the scope. One space draws one plane, and a second would be two
-    // veils over one screen — which the arrangement solve forbids and this would silently merge.
     answer.scope ??= scope;
     if (scope !== answer.scope) continue;
 

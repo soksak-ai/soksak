@@ -23,12 +23,26 @@ vi.mock("../framework", async (importOriginal) => ({
 
 import { lightingRegionsIn } from "./focusLighting";
 
-/** Builds a lighting plane the way FocusLightingPlane draws one. */
-function plane(scope: string, parts: Array<[string, DOMRectInit]>): HTMLElement {
-  document.body.innerHTML = "";
+/** Builds a lighting plane the way FocusLightingPlane draws one, inside a space plane of its own. */
+function plane(
+  scope: string,
+  parts: Array<[string, DOMRectInit]>,
+  options: { active?: boolean; clear?: boolean } = {},
+): HTMLElement {
+  const { active = true, clear = true } = options;
+  if (clear) document.body.innerHTML = "";
+  // The space plane the App draws around it. An inactive space keeps its DOM and its box — only
+  // visibility is turned off — so a reading that takes whichever plane it meets first takes a
+  // parked one whenever a window holds more than one space.
+  const space = document.createElement("div");
+  space.className = "space-plane";
+  space.dataset.spacePlane = scope;
+  if (active) space.dataset.spaceActive = "1";
+  else space.style.visibility = "hidden";
+  document.body.append(space);
   const root = document.createElement("div");
   root.dataset.node = `focus-lighting/${scope}`;
-  document.body.append(root);
+  space.append(root);
   for (const [path, rect] of parts) {
     const el = document.createElement("div");
     el.dataset.node = `focus-lighting/${scope}/${path}`;
@@ -62,6 +76,39 @@ describe("the lighting regions", () => {
       target: "pan-focused",
       rect: { x: 100, y: 50, w: 300, h: 200 },
     });
+  });
+
+  it("reads the active space's plane, not whichever one is first in the document", () => {
+    // Measured 2026-08-19 on a running window: one window, two spaces, and `ui.focus.state` answered
+    // scope spc-3z2ud3 with an aperture on a pane the arrangement had never heard of, while the
+    // active space spc-tjnhqu held the aperture a person could see. Both planes measured 999x757 —
+    // a parked space keeps its box, so "is it laid out" cannot tell them apart.
+    //
+    // Every judgement about the lighting was then about the wrong space, and every one of them
+    // passed.
+    plane("spc-parked", [
+      ["base", { x: 0, y: 0, width: 800, height: 600 }],
+      ["aperture/pan-elsewhere", { x: 0, y: 0, width: 10, height: 10 }],
+    ], { active: false });
+    plane("spc-active", [
+      ["base", { x: 0, y: 0, width: 800, height: 600 }],
+      ["aperture/pan-seen", { x: 100, y: 50, width: 300, height: 200 }],
+    ], { active: true, clear: false });
+
+    const regions = lightingRegionsIn(document);
+    expect(regions.scope).toBe("spc-active");
+    expect(regions.aperture?.target).toBe("pan-seen");
+  });
+
+  it("answers no plane when every space is parked", () => {
+    // Not the first parked one. A window mid-switch draws no active plane for a frame, and a reading
+    // that fell back to a parked plane would report a veil nobody is under.
+    plane("spc-parked", [["aperture/pan-elsewhere", { x: 0, y: 0, width: 10, height: 10 }]], {
+      active: false,
+    });
+    const regions = lightingRegionsIn(document);
+    expect(regions.scope).toBeNull();
+    expect(regions.aperture).toBeNull();
   });
 
   it("names the base, the cutouts and the exemptions separately", () => {

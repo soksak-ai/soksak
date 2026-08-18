@@ -2,7 +2,7 @@
 // SidebarLayout) serialize through the same serializeSplitTree path in splitTree.ts (no duplication).
 //
 // [RULE] Wire keys stay on the old shape (contents·views·activeViewId·activeGroupId·activeContentId·
-// maximizedViewId·railBindingViewId) — the migration (P0-5) moves them. In-memory fields are already the new
+// maximizedViewId) — the migration (P0-5) moves them. In-memory fields are already the new
 // vocabulary (spaces·tabs·activeTabId·activePaneId·activeSpaceId·maximizedTabId·railBindingTabId), so the two
 // are joined only inside this file's serialize/deserialize. Existing user snapshots still open unchanged.
 //
@@ -57,7 +57,6 @@ interface ContentSnapshot {
   id: string;
   title: string;
   activeGroupId: string;
-  railBindingViewId?: string;
   maximizedViewId?: string;
   layout: SplitSnapshot<ViewGroupSnapshot>;
 }
@@ -120,7 +119,6 @@ const serializeContent = (c: Space): ContentSnapshot => ({
   id: c.id,
   title: c.title,
   activeGroupId: c.activePaneId,
-  ...(c.railBindingTabId ? { railBindingViewId: c.railBindingTabId } : {}),
   ...(c.maximizedTabId ? { maximizedViewId: c.maximizedTabId } : {}),
   layout: serializeSplitTree(c.layout, serializeViewGroup), // PaneNode(leaf=Pane)
 });
@@ -176,7 +174,6 @@ const deserializeContent = (s: ContentSnapshot, normalize: boolean): Space => {
     id: s.id,
     title: s.title,
     activePaneId: s.activeGroupId,
-    ...(s.railBindingViewId ? { railBindingTabId: s.railBindingViewId } : {}),
     ...(s.maximizedViewId ? { maximizedTabId: s.maximizedViewId } : {}),
     // One migration per snapshot (the vertical no-split proposition) — only an old snapshot without the
     // vlNormalized marker is healed by snapping vertical lines fragmented before companion drag (e.g. top 40.6 /

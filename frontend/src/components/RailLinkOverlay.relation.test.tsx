@@ -64,6 +64,7 @@ function overlayProps(overrides: Partial<{
   const relation: RailRelationState = {
     boundTabId: targetRect ? boundViewId : null,
     boundPaneId: targetRect ? "g2" : null,
+    source: targetRect ? "focus" : "none",
     relationId: targetRect
       ? `rail-relation/c1/g2/${boundViewId}`
       : "rail-relation/c1/none",

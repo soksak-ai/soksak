@@ -92,9 +92,16 @@ export type RailRelationBorderMode = "union" | "independent" | "none";
  * borderMode express geometry and border branching separately, so maximize/restore and resize are not
  * mistaken for a change of tab identity.
  */
+/** Why this pane is the one the rail is grouped with. `focus` is the rule; `fallback` is a space
+ *  whose focused pane is not on the screen's solution, which is a state and not a choice. Reading
+ *  it is how a grouping that followed the wrong rule is reported rather than looked at. */
+export type RailRelationSource = "focus" | "fallback" | "none";
+
 export interface RailRelationState {
   boundTabId: string | null;
   boundPaneId: string | null;
+  /** Which rule chose the bound pane. Without it a wrong grouping is a guess about three rules. */
+  source: RailRelationSource;
   relationId: string;
   placement: RailPlacement["mode"];
   connected: boolean;
@@ -129,6 +136,7 @@ function noneRailRelation<L, T>(
     state: {
       boundTabId: null,
       boundPaneId: null,
+      source: "none",
       relationId: `rail-relation/${relationPart(contentId)}/none`,
       placement,
       connected: false,
@@ -156,7 +164,6 @@ export function resolveEffectiveRailRelation<
 >(input: {
   contentId: string;
   arrangement: Arrangement<L> | null | undefined;
-  bindingTabId?: string | null;
   placement: RailPlacement["mode"];
   railOpen: boolean;
   /** The actual value the renderer passes when the displayed station differs briefly from the solution's committed station, as during a drag. */
@@ -169,24 +176,22 @@ export function resolveEffectiveRailRelation<
 
   const panes = leavesOf(arrangement.displayLayout);
   const visibleIds = new Set(arrangement.cells.map((cell) => cell.id));
-  const explicitPane = input.bindingTabId
-    ? panes.find(
-        (pane) =>
-          visibleIds.has(pane.id) &&
-          pane.tabs.some((tab) => tab.id === input.bindingTabId),
-      )
-    : undefined;
+  // The focused pane, and nothing else. A space held a `railBindingTabId` that outranked the focus
+  // until 2026-08-19 — carried over from the preceding implementation, which kept it equal to the
+  // active view through a subscription. Only the reader came across, so the field was written by
+  // nobody and restored from disk forever: measured on a running window, the active pane was
+  // pan-ehc264 and the outline was drawn around pan-3557x4 on the other side of the rail. The field
+  // is deleted rather than given a writer (L11c); a feature that binds a specific view brings one.
   const focusedPane = panes.find(
     (pane) => visibleIds.has(pane.id) && pane.id === arrangement.focusId,
   );
-  const boundPane =
-    explicitPane ?? focusedPane ?? panes.find((pane) => visibleIds.has(pane.id));
+  const fallbackPane = panes.find((pane) => visibleIds.has(pane.id));
+  const boundPane = focusedPane ?? fallbackPane;
   if (!boundPane) return none();
+  const source: RailRelationSource = focusedPane ? "focus" : "fallback";
 
-  const boundTab = explicitPane
-    ? explicitPane.tabs.find((tab) => tab.id === input.bindingTabId)
-    : (boundPane.tabs.find((tab) => tab.id === boundPane.activeTabId) ??
-      boundPane.tabs[0]);
+  const boundTab =
+    boundPane.tabs.find((tab) => tab.id === boundPane.activeTabId) ?? boundPane.tabs[0];
   const cell = arrangement.cells.find((candidate) => candidate.id === boundPane.id);
   if (!boundTab || !cell) return none();
 
@@ -203,6 +208,7 @@ export function resolveEffectiveRailRelation<
     state: {
       boundTabId: boundTab.id,
       boundPaneId: boundPane.id,
+      source,
       relationId: `rail-relation/${relationPart(input.contentId)}/${relationPart(boundPane.id)}/${relationPart(boundTab.id)}`,
       placement: input.placement,
       connected,
@@ -231,18 +237,16 @@ export function resolvePresentedRailRelation<
   contentId: string;
   displayed: Arrangement<L> | null | undefined;
   destination: Arrangement<L> | null | undefined;
-  bindingTabId?: string | null;
   placement: RailPlacement["mode"];
   railOpen: boolean;
   station?: number;
 }): PresentedRailRelation<L, T> {
-  // FLOW presentation is owned by the destination focus. Activation publishes focus and the persisted
-  // binding as separate store writes, so using a late old binding as the explicit candidate makes the
-  // outline flicker new → old → new. Only PIN prefers the explicit binding the user pinned.
+  // FLOW presentation is owned by the destination focus: the displayed solve is still the departing
+  // one while the panes travel, and reading the outline from it draws the relation the window is
+  // leaving. PIN reads the displayed solve, because under PIN nothing travels.
   const destinationHasFocus = !!input.destination?.focusId
     && input.destination.cells.some((cell) => cell.id === input.destination?.focusId);
   const useDestination = input.placement === "flow" && destinationHasFocus;
-  const bindingTabId = useDestination ? undefined : input.bindingTabId;
   const station = useDestination
     ? input.destination?.station ?? 0
     : input.station ?? input.displayed?.station ?? 0;
@@ -250,7 +254,6 @@ export function resolvePresentedRailRelation<
     ...resolveEffectiveRailRelation({
       contentId: input.contentId,
       arrangement: useDestination ? input.destination : input.displayed,
-      bindingTabId,
       placement: input.placement,
       railOpen: input.railOpen,
       station,

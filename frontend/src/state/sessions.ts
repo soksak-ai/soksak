@@ -187,9 +187,6 @@ export interface Space {
   title: string; // 1,2,3,… (renameable)
   layout: PaneNode; // group (split) tree
   activePaneId: string;
-  // The single sidebar-owning view this space workspaces. Independent of panel focus, persisted in
-  // the snapshot.
-  railBindingTabId?: string;
   // Maximized view (fills the whole content area). The layout tree is unchanged — display override
   // only. undefined = normal. normalize clears it when the view is gone.
   maximizedTabId?: string;
@@ -341,11 +338,6 @@ interface SessionsStore {
     contentId: string,
     title: string,
   ) => CmdResult;
-  bindContentRail: (
-    projectId: string,
-    contentId: string,
-    viewId: string,
-  ) => CmdResult<{ viewId: string }>;
 
   // Content view/group level. A new view tab per program in the group (terminal/claude/codex/browser).
   // opts.command = set the terminal autorun command directly (internal — bypasses program resolve.
@@ -675,12 +667,6 @@ function normalizeActiveGroupC(c: Space): Space {
     !groups.some((g) => g.tabs.some((v) => v.id === c.maximizedTabId))
       ? { ...c, maximizedTabId: undefined }
       : c;
-  if (
-    next.railBindingTabId &&
-    !groups.some((g) => g.tabs.some((v) => v.id === next.railBindingTabId))
-  ) {
-    next = { ...next, railBindingTabId: undefined };
-  }
   if (groups.some((g) => g.id === next.activePaneId)) return next;
   return { ...next, activePaneId: groups[0]?.id ?? next.activePaneId };
 }
@@ -1342,42 +1328,6 @@ export const useSessions = moduleState("state/sessions#store", () =>
         workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
           mapContent(x, contentId, (c) => ({ ...c, title })),
         ),
-      };
-    });
-    return r;
-  },
-
-  bindContentRail: (projectId, contentId, viewId) => {
-    let r: CmdResult<{ viewId: string }> = noWorkspace(projectId);
-    set((s) => {
-      const workspace = s.workspaces.find((item) => item.id === projectId);
-      const content = workspace?.spaces.find((item) => item.id === contentId);
-      if (!workspace || !content) {
-        r = err("TARGET_NOT_FOUND", tmsg("space.notFound", { id: contentId }));
-        return s;
-      }
-      // Rebinding allowed: the active content view sets the space binding — the same view is
-      // idempotent, a different view replaces it. On the same resolution (instanceKey) R1 blocks the
-      // slot switch so the rail stays calm, and empty-group focus does not take this path (the
-      // caller calls only with an active view), so the existing binding is kept.
-      if (content.railBindingTabId === viewId) {
-        r = ok({ viewId });
-        return s;
-      }
-      if (!allGroups(content.layout).some((g) => g.tabs.some((v) => v.id === viewId))) {
-        r = err("TARGET_NOT_FOUND", tmsg("view.notFound", { viewId }));
-        return s;
-      }
-      r = ok({ viewId });
-      return {
-        workspaces: mapWorkspace(s.workspaces, projectId, (item) => ({
-          ...item,
-          spaces: item.spaces.map((candidate) =>
-            candidate.id === contentId
-              ? { ...candidate, railBindingTabId: viewId }
-              : candidate,
-          ),
-        })),
       };
     });
     return r;

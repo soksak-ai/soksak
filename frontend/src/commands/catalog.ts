@@ -390,7 +390,6 @@ function serializeSpace(
   const railRelation = resolveEffectiveRailRelation({
     contentId: c.id,
     arrangement,
-    bindingTabId: c.railBindingTabId,
     placement: railPlacement,
     railOpen,
   }).state;
@@ -585,7 +584,7 @@ export function registerCatalog(): void {
     },
     params: { workspace: P.workspace },
     returns:
-      "{ projectId, spaceId, station, cleanLines[], switched, betweenIds[] (panes stranded between the rail and the focused pane when the rail could not reach it — they do not move, they dim), cells[].{id,rect,railSide} }",
+      "{ projectId, spaceId, station, cleanLines[], switched, focusId, relation:{boundPaneId,boundTabId,source(binding|focus|fallback|none),side,connected,borderMode,pathCount}, betweenIds[] (panes stranded between the rail and the focused pane when the rail could not reach it — they do not move, they dim), cells[].{id,rect,railSide} }",
     message: (d) => tmsg("msg.layout.arrangement", { n: Number(d.station) }),
     errors: ["TARGET_NOT_FOUND"],
     examples: ["layout.arrangement"],
@@ -595,12 +594,23 @@ export function registerCatalog(): void {
       const solved = projectArrangement(t);
       if (!solved) return notFound("msg.space.notFound");
       const railOpen = t.regionOpen.rail;
+      // Which pane the rail is grouped with, from the same solve the screen draws. The command
+      // answered the station and the cells and said nothing about the grouping, so an outline drawn
+      // around the wrong pane could only be reported by looking at it (measured 2026-08-19).
+      const relation = resolveEffectiveRailRelation({
+        contentId: t.activeSpaceId,
+        arrangement: solved,
+        placement: (t.railPlacement ?? DEFAULT_RAIL_PLACEMENT).mode,
+        railOpen,
+      }).state;
       return {
         projectId: t.id,
         spaceId: t.activeSpaceId,
         station: solved.station,
         cleanLines: solved.cleanLines,
         switched: solved.swapped,
+        focusId: solved.focusId,
+        relation,
         // Panes stranded between the rail and the focused pane when the rail could not travel there —
         // they do not move, they dim. A hand-written list drops one entry every time the contract grows
         // (measured 2026-08-02: this spot omitted betweenIds, so the command could not report that fact).
