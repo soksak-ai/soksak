@@ -186,23 +186,6 @@ Written here so it is not rediscovered (L2).
   against surface — two native rectangles in one window, where `presence` and
   `misparented` both answer about the window rather than about the order inside
   it.
-- **Nothing announces that a region has finished changing what it draws.**
-  `sections.link` answers when the link is recorded, and what a region draws is
-  a function of that link and of the focused view's plugin together — the
-  command changes one of the two and cannot wait on the other.
-  `ui.layout.wait-settled` does not cover it: measured 2026-08-18, it answered
-  and the section that had just been unlinked was still drawn. So the drawn gate
-  polls there, with the reason written beside each loop. An attempt to have the
-  command wait on the drawn set was reverted: it restated the rule for what is
-  drawn instead of reading it, which is a second answer to the same question and
-  was wrong on its first run.
-
-  Confirmed from a second gate 2026-08-18: the arrangement gate clicks a pane,
-  the click's own transaction closes, `ui.layout.wait-settled` answers, and the
-  sidebar is still holding the section of the pane that was left. Every
-  rectangle in that window reads right, which is why the section is asked for by
-  name. A person sees the previous view's sidebar for that stretch.
-
 - **The application dies inside Wails' asset server during a recording.** Measured
   2026-08-18: one full-suite run in four, the arrangement gate's `window.record`
   answered `the backend closed without answering: EOF` and the socket was gone.

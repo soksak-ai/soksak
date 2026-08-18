@@ -65,10 +65,8 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 		// no evidence that motion plays — and that is what the reading below is for.
 		gate.run("ui.layout.wait-settled", "window="+window)
 
-		// Polled for the same reason as the clear below: what a region draws answers to the link
-		// and to the focus together, and no event marks the pair as landed.
-		gate.until(5*time.Second, func() bool { return contains(gate.drawnIn(window, region), section) },
-			"the "+region+" region to draw "+section)
+		// Read once. sections.link waits for the region to declare it is standing the set now
+		// linked here, so a region not drawing the section at this point is not drawing it.
 		if drawn := gate.drawnIn(window, region); !contains(drawn, section) {
 			t.Errorf("%s is linked to the %s region and is not drawn there.\n"+
 				"%s holds %v, and every node the window exposes there is:\n%s\n"+
@@ -91,19 +89,6 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 		// be a second rule about placement living in the unlink.
 		gate.run("sections.link", "window="+window, "plugin="+plugin, "region="+region)
 		gate.run("ui.layout.wait-settled", "window="+window)
-		// Polled, and the reason is that nothing announces this one. `sections.link` answers when
-		// the link is recorded, and what a region draws is a function of that link and of the
-		// focused view's plugin — the command changed one of the two and cannot wait on the other.
-		// `ui.layout.wait-settled` is not it either: measured 2026-08-18, it answered and the
-		// section that had just been unlinked was still drawn. What leaves, leaves with the space
-		// it stood in — the region's width travels with the panes, and the sections are drawn until
-		// that motion has closed it.
-		//
-		// Building the event means deciding which layer owns "this region has finished changing
-		// what it draws", and that is not settled. Until it is, this is the alternative and not
-		// the method.
-		gate.until(5*time.Second, func() bool { return !contains(gate.drawnIn(window, region), section) },
-			"the "+region+" region to close on "+section)
 		if drawn := gate.drawnIn(window, region); contains(drawn, section) {
 			t.Errorf("the link to %s was removed and %s is still drawn in the %s region: %v\n"+
 				"Not connected is not present.", plugin, section, region, drawn)
@@ -125,11 +110,6 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+leftSet, "region=left")
 		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+rightSet, "region=right")
 		gate.focusPluginPane(window, plugin)
-		// Polled — the same missing event, and here for two regions at once.
-		gate.until(5*time.Second, func() bool {
-			return contains(gate.drawnIn(window, "left"), left) &&
-				contains(gate.drawnIn(window, "right"), right)
-		}, "both regions to draw the set standing in them")
 		for _, stood := range []struct{ region, section string }{{"left", left}, {"right", right}} {
 			if drawn := gate.drawnIn(window, stood.region); !contains(drawn, stood.section) {
 				t.Errorf("%s and %s stand at once and the %s region holds %v.\n"+

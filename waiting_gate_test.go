@@ -40,14 +40,15 @@ var relativeDirToTheApplication = regexp.MustCompile(`"(?:dir|path)="\+\s*filepa
 // floor.
 //
 // They are not zero and neither is claimed to be finished. What each remaining one is waiting for
-// is written where it is — and where it is a poll, why there is nothing to wait on instead. The
-// drawn gate holds three and the arrangement gate one, all for a single reason: nothing announces
-// that a region has finished changing what it draws (GATES.md, Not done). That one went up by one
-// when a poll was removed and the gap it had been covering answered wrong — which is the count
-// doing its work rather than failing at it.
+// is written where it is — and where it is a poll, why there is nothing to wait on instead.
+//
+// The two that remain are the harness starting a process and the polling loop itself. Four others
+// went when the region began declaring what it stands: a caller had been working that out from
+// which elements had a rectangle, and every one of them polled because an inference has no edge to
+// wait on.
 const (
 	clockWaits   = 6
-	pollingWaits = 6
+	pollingWaits = 2
 )
 
 func gateSources(t *testing.T) map[string]string {
