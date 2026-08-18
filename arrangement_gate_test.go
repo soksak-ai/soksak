@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -110,8 +111,7 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 	// window's edge and the first pane is the window's own inset. Reading it from the gap in front
 	// of the sidebar made the measurement depend on the thing being measured — it went to zero the
 	// day the sidebar was moved against the view it serves.
-	gate.run("tab.activate", "window="+window, "tab="+built.rightTab)
-	gate.settle(window)
+	gate.activate(window, built.rightTab, "arrangement/inset")
 	inset := gate.arrangementNow(window).panesStart
 	if inset <= 0 || inset > 40 {
 		t.Fatalf("the panes begin %0.f from the window's edge, which is not an inset", inset)
@@ -134,8 +134,7 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 	for _, from := range panes {
 		for _, click := range panes {
 			// The starting point, settled, so what follows is one move and not the tail of another.
-			gate.run("tab.activate", "window="+window, "tab="+from.tab)
-			gate.settle(window)
+			gate.activate(window, from.tab, "arrangement/from/"+slug.Replace(from.what))
 
 			what := fmt.Sprintf("%s from %s", click.what, from.what)
 			name := slug.Replace(click.what) + "-from-" + slug.Replace(from.what)
@@ -148,9 +147,8 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 			// 2026-08-17, nine recordings answered OK and left no frame anywhere here.
 			dir := gate.evidencePath("arrangement", "moves", name)
 			wait := gate.recording(window, dir, 6, 40)
-			gate.run("tab.activate", "window="+window, "tab="+click.tab)
+			gate.activate(window, click.tab, "arrangement/"+name)
 			said := wait()
-			gate.settle(window)
 			now := gate.arrangementNow(window)
 
 			// The sidebar is on the screen. Every plugin in this window has a set linked in the
@@ -298,28 +296,84 @@ func (gate *arrangementGate) sectionOf(window string, region string, plugin stri
 	return ""
 }
 
-// settle waits until the window has stopped changing shape, so what is read is what a person is
-// left looking at rather than a frame of the way there.
-// settleFloorMs is the shortest a settle may take: a layout motion lasts that long, and two
-// readings taken before it starts are two readings of the window it is leaving. Measured
-// 2026-08-17, a click was judged against the arrangement of the click before it.
-const settleFloorMs = 220
+// activate clicks a tab and returns once the window that click opened has closed.
+//
+// The stimulus is stamped with its own cause, and layout.transaction.wait waits for that one
+// transaction after the journal sequence the click was issued at. Both halves are needed: the id
+// picks the transaction, and the sequence bounds it to a later one — without that a caller can be
+// answered by the transaction the previous click left in the journal.
+//
+// What was here read the arrangement every 250ms and called the window settled when two readings
+// agreed, with a floor to wait out the motions that had not started yet. That is true of a window
+// that has finished, of one whose motion the readings straddled, and of one that has not begun; it
+// passed most runs and failed three of six under load. A gate that passes because two samples
+// landed together is not a gate.
+func (gate *arrangementGate) activate(window string, tab string, cause string) {
+	gate.t.Helper()
+	at := gate.journalSequence(window)
+	out := gate.run("tab.activate", "window="+window, "tab="+tab, "causeTraceId="+cause)
+	var answer struct {
+		Data struct {
+			Moved        bool   `json:"moved"`
+			CauseTraceID string `json:"causeTraceId"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("reading what tab.activate did: %v\n%s", err, out)
+	}
+	// Only a click that moved the screen has a transaction to wait for. Clicking the pane already
+	// active changes nothing and opens none — waiting for one there waits out a timeout and calls
+	// it a defect.
+	if answer.Data.Moved {
+		if answer.Data.CauseTraceID != cause {
+			gate.t.Fatalf("tab.activate moved the screen and answered cause %q, not %q\n%s",
+				answer.Data.CauseTraceID, cause, out)
+		}
+		waited, err := gate.try("layout.transaction.wait", "window="+window,
+			"causeTraceId="+cause, "afterSequence="+strconv.Itoa(at), "timeoutMs=8000")
+		if err != nil {
+			gate.t.Fatalf("the transaction %s opened never closed: %v\n%s%s\n"+
+				"Every reading after this describes a frame of the way there.",
+				cause, err, waited, gate.lastWords())
+		}
+	} else if answer.Data.CauseTraceID != "" {
+		gate.t.Fatalf("tab.activate moved nothing and still answered a cause %q — there is no "+
+			"transaction to find it on\n%s", answer.Data.CauseTraceID, out)
+	}
+	// The transaction is closed; the frame it produced is what the next reading is of.
+	gate.run("ui.layout.wait-settled", "window="+window)
+}
 
+// journalSequence is the newest entry in the layout journal right now, so a wait can name a
+// transaction later than every one already in it.
+func (gate *arrangementGate) journalSequence(window string) int {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Entries []struct {
+				Sequence int `json:"sequence"`
+			} `json:"entries"`
+		} `json:"data"`
+	}
+	out := gate.run("layout.transactions", "window="+window)
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("reading the layout journal of %s: %v\n%s", window, err, out)
+	}
+	highest := 0
+	for _, entry := range answer.Data.Entries {
+		if entry.Sequence > highest {
+			highest = entry.Sequence
+		}
+	}
+	return highest
+}
+
+// settle waits out a change this gate did not make with a stimulus of its own — opening a region,
+// installing a set. Those have no cause to wait for, and the window's own barrier is the end of
+// them.
 func (gate *arrangementGate) settle(window string) {
 	gate.t.Helper()
-	started := time.Now()
-	last := arrangement{}
-	same := 0
-	gate.until(5*time.Second, func() bool {
-		now := gate.arrangementNow(window)
-		if now.regionEnds == last.regionEnds && now.panesStart == last.panesStart {
-			same++
-		} else {
-			same = 0
-		}
-		last = now
-		return same >= 2 && time.Since(started) >= settleFloorMs*time.Millisecond
-	}, "the window to settle")
+	gate.run("ui.layout.wait-settled", "window="+window)
 }
 
 // arrangementNow is where the region ends, where the panes begin, and whose sections are standing,

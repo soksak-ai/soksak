@@ -90,6 +90,9 @@ type restoreGate struct {
 	home       string
 	identifier string
 	proc       *exec.Cmd
+	// log is where the application's own output went. Read it when the process stops answering: the
+	// socket has only "the door is closed", and this has what happened behind it.
+	log string
 }
 
 // quietGate is the same harness under the name its own gate reads by.
@@ -213,10 +216,21 @@ func (gate *restoreGate) start() {
 		"HOME="+gate.home,
 		"SOKSAK_IDENTIFIER="+gate.identifier,
 	)
+	// The application's own output, kept. Thrown away, a process that dies leaves the gate holding
+	// "connection refused" and nothing about why — measured 2026-08-18, the app died mid-run three
+	// times in six and the panic that killed it went nowhere. A refusal names what is missing, and
+	// so must a death.
+	log, err := os.Create(filepath.Join(gate.home, "application.log"))
+	if err != nil {
+		gate.t.Fatalf("making the application's log: %v", err)
+	}
+	gate.log = log.Name()
+	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Start(); err != nil {
 		gate.t.Fatalf("starting the application: %v", err)
 	}
 	gate.proc = cmd
+	gate.t.Cleanup(func() { _ = log.Close() })
 
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) {
@@ -275,6 +289,23 @@ func (gate *restoreGate) until(limit time.Duration, ready func() bool, what stri
 	gate.t.Fatalf("%s within %s", what, limit)
 }
 
+// lastWords is what the application said before it stopped, or nothing when it is still answering.
+// A dead backend and a refused command look the same from the socket; this is the difference.
+func (gate *restoreGate) lastWords() string {
+	if gate.log == "" {
+		return ""
+	}
+	body, err := os.ReadFile(gate.log)
+	if err != nil || len(body) == 0 {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(string(body), "\n"), "\n")
+	if len(lines) > 40 {
+		lines = lines[len(lines)-40:]
+	}
+	return "\nthe application's last words:\n" + strings.Join(lines, "\n") + "\n"
+}
+
 func (gate *restoreGate) try(command string, args ...string) (string, error) {
 	full := append([]string{"--socket", gate.socket(), command}, args...)
 	out, err := exec.Command("./"+gate.client, full...).CombinedOutput()
@@ -285,7 +316,7 @@ func (gate *restoreGate) run(command string, args ...string) string {
 	gate.t.Helper()
 	out, err := gate.try(command, args...)
 	if err != nil {
-		gate.t.Fatalf("%s: %v\n%s", command, err, out)
+		gate.t.Fatalf("%s: %v\n%s%s", command, err, out, gate.lastWords())
 	}
 	return out
 }
@@ -338,7 +369,11 @@ func (gate *restoreGate) openWorkspace() string {
 	if err != nil {
 		gate.t.Fatalf("resolving a workspace root: %v", err)
 	}
-	out := gate.run("window.open", "window=main", "root="+root)
+	// Opened without focus. window.open takes it by default, which is right for a person clicking
+	// and wrong for a run: it takes the machine from whoever is at it, and it makes every gate that
+	// opens a window contend with every other for the front. Coming to the front is a deliberate
+	// act here — layout_scenarios requests it behind SOKSAK_GATE_FRONT and nothing else does.
+	out := gate.run("window.open", "window=main", "root="+root, "focus=false")
 	var answer struct {
 		Data struct {
 			Label string `json:"label"`

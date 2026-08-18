@@ -64,6 +64,15 @@ move between its three panes is a test of its own, run by name. What it refuses:
 Each of those was added the day a person saw what the gate did not ask. Held by
 `arrangement_gate_test.go`.
 
+It waits on the window's own events, not on a clock. Each click stamps a `causeTraceId` and
+`layout.transaction.wait` waits for that one transaction after the journal sequence the click was
+issued at; a click that moves nothing opens none, and `tab.activate` answers `moved` so the wait is
+not asked for where there is nothing to wait on. What was there read the arrangement every 250ms
+and called the window settled when two readings agreed — true of a window that has finished, of one
+whose motion the readings straddled, and of one that had not begun. It failed three runs in six and
+the failure named the socket rather than the reason, because the application's output was thrown
+away; the gate keeps it now and reports the last of it when the process stops answering.
+
 ## G1 — one terminal
 
 A real login shell in a pane, driven from outside. `sok term.exec` round-trips
