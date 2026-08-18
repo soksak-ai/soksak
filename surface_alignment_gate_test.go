@@ -80,6 +80,10 @@ func longestOff(samples []alignmentSample) (time.Duration, float64, int) {
 	return longest, worst, count
 }
 
+// pressInterval is how far apart the clicks are. It is the stimulus, not a barrier — a longer one
+// settles between presses and measures a different thing.
+const pressInterval = 250 * time.Millisecond
+
 func TestAPageStaysOnItsPaneWhileTheSidebarOpens(t *testing.T) {
 	gate := newGate(t, surfaceAlignmentGateHome, surfaceAlignmentGateIdentifier)
 	plugins := gate.installPlugins()
@@ -120,8 +124,14 @@ func TestAPageStaysOnItsPaneWhileTheSidebarOpens(t *testing.T) {
 	gate.run("sections.link", "window="+window,
 		"plugin="+gate.aPluginWithAPane(window), "set="+set, "region=left")
 	gate.run("workspace.region.toggle", "window="+window, "region=left", "open=false")
-	gate.until(5*time.Second, func() bool { return gate.worstOff(window) == 0 },
-		"the page to settle on its pane before the click")
+	// workspace.region.toggle waits for its own DOM commit; the surface half settles after it, and
+	// ui.layout.wait-settled is what answers for that one. Read once after: a window that is out of
+	// place here is out of place, not early.
+	gate.run("ui.layout.wait-settled", "window="+window)
+	if off := gate.worstOff(window); off != 0 {
+		t.Fatalf("the page is %v off its pane before the first click, so what the clicks do cannot "+
+			"be told from what was already wrong", off)
+	}
 
 	// The clicks a person makes, on the node the window exposes. Repeated, because that is what was
 	// recorded: the sidebar came and went six times in three seconds, and a change that starts while
@@ -129,7 +139,10 @@ func TestAPageStaysOnItsPaneWhileTheSidebarOpens(t *testing.T) {
 	samples := gate.watchAlignment(window, func() {
 		for press := 0; press < 6; press++ {
 			gate.run("ui.input.click", "window="+window, "address=chrome/titlebar/region/left")
-			time.Sleep(250 * time.Millisecond)
+			// Not a wait for anything: this is the interval that produces the case. A press that
+			// lands while the last one is still moving is what was recorded and what a single
+			// settled press never makes.
+			time.Sleep(pressInterval)
 		}
 	})
 

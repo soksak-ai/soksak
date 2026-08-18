@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -294,78 +293,6 @@ func (gate *arrangementGate) sectionOf(window string, region string, plugin stri
 		"placed there: %v\nThe plugin is installed from the development tree; a build without it "+
 		"cannot be asked whose section stands.", plugin, region, available)
 	return ""
-}
-
-// activate clicks a tab and returns once the window that click opened has closed.
-//
-// The stimulus is stamped with its own cause, and layout.transaction.wait waits for that one
-// transaction after the journal sequence the click was issued at. Both halves are needed: the id
-// picks the transaction, and the sequence bounds it to a later one — without that a caller can be
-// answered by the transaction the previous click left in the journal.
-//
-// What was here read the arrangement every 250ms and called the window settled when two readings
-// agreed, with a floor to wait out the motions that had not started yet. That is true of a window
-// that has finished, of one whose motion the readings straddled, and of one that has not begun; it
-// passed most runs and failed three of six under load. A gate that passes because two samples
-// landed together is not a gate.
-func (gate *arrangementGate) activate(window string, tab string, cause string) {
-	gate.t.Helper()
-	at := gate.journalSequence(window)
-	out := gate.run("tab.activate", "window="+window, "tab="+tab, "causeTraceId="+cause)
-	var answer struct {
-		Data struct {
-			Moved        bool   `json:"moved"`
-			CauseTraceID string `json:"causeTraceId"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(out), &answer); err != nil {
-		gate.t.Fatalf("reading what tab.activate did: %v\n%s", err, out)
-	}
-	// Only a click that moved the screen has a transaction to wait for. Clicking the pane already
-	// active changes nothing and opens none — waiting for one there waits out a timeout and calls
-	// it a defect.
-	if answer.Data.Moved {
-		if answer.Data.CauseTraceID != cause {
-			gate.t.Fatalf("tab.activate moved the screen and answered cause %q, not %q\n%s",
-				answer.Data.CauseTraceID, cause, out)
-		}
-		waited, err := gate.try("layout.transaction.wait", "window="+window,
-			"causeTraceId="+cause, "afterSequence="+strconv.Itoa(at), "timeoutMs=8000")
-		if err != nil {
-			gate.t.Fatalf("the transaction %s opened never closed: %v\n%s%s\n"+
-				"Every reading after this describes a frame of the way there.",
-				cause, err, waited, gate.lastWords())
-		}
-	} else if answer.Data.CauseTraceID != "" {
-		gate.t.Fatalf("tab.activate moved nothing and still answered a cause %q — there is no "+
-			"transaction to find it on\n%s", answer.Data.CauseTraceID, out)
-	}
-	// The transaction is closed; the frame it produced is what the next reading is of.
-	gate.run("ui.layout.wait-settled", "window="+window)
-}
-
-// journalSequence is the newest entry in the layout journal right now, so a wait can name a
-// transaction later than every one already in it.
-func (gate *arrangementGate) journalSequence(window string) int {
-	gate.t.Helper()
-	var answer struct {
-		Data struct {
-			Entries []struct {
-				Sequence int `json:"sequence"`
-			} `json:"entries"`
-		} `json:"data"`
-	}
-	out := gate.run("layout.transactions", "window="+window)
-	if err := json.Unmarshal([]byte(out), &answer); err != nil {
-		gate.t.Fatalf("reading the layout journal of %s: %v\n%s", window, err, out)
-	}
-	highest := 0
-	for _, entry := range answer.Data.Entries {
-		if entry.Sequence > highest {
-			highest = entry.Sequence
-		}
-	}
-	return highest
 }
 
 // arrangementNow is where the region ends, where the panes begin, and whose sections are standing,

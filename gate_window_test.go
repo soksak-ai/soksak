@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 )
 
 // The window every motion gate measures, stated once.
@@ -103,9 +102,18 @@ func (gate *restoreGate) buildGateWindow(window string) gateWindow {
 	// starts measuring here would otherwise be measuring the tail of its own setup.
 	// The control group has no page in it, so waiting for one would wait forever.
 	page := os.Getenv("SOKSAK_GATE_NO_PAGE") != "1"
-	gate.until(10*time.Second, func() bool {
-		return len(gate.panes(window)) >= 3 && (!page || gate.aVisibleSurface(window) != "")
-	}, "the three panes to stand with a surface on screen")
+	// The panes are already there — every command that made one waited for its view to mount before
+	// it answered. What is left is the surface half, and ui.layout.wait-settled is what answers for
+	// that: it reports the DOM quiet with the surface sync confirmed, rather than leaving a reader
+	// to look for a surface until one turns up.
+	gate.run("ui.layout.wait-settled", "window="+window)
+	if held := gate.panes(window); len(held) < 3 {
+		gate.t.Fatalf("the window was built with %d panes, not three: %v", len(held), held)
+	}
+	if page && gate.aVisibleSurface(window) == "" {
+		gate.t.Fatal("no surface is on screen in a settled window, so the pages this gate measures " +
+			"are not there to measure")
+	}
 
 	built.terminalTab = gate.tabInPane(window, built.terminal)
 	built.browserTab = gate.tabInPane(window, built.browser)

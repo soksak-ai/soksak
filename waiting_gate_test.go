@@ -40,10 +40,12 @@ var relativeDirToTheApplication = regexp.MustCompile(`"(?:dir|path)="\+\s*filepa
 // floor.
 //
 // They are not zero and neither is claimed to be finished. What each remaining one is waiting for
-// is written where it is, and this number is what stops the count from growing back.
+// is written where it is — and where it is a poll, why there is nothing to wait on instead. The
+// drawn gate holds three of them for one reason: nothing announces that a region has finished
+// changing what it draws (GATES.md, Not done).
 const (
 	clockWaits   = 8
-	pollingWaits = 9
+	pollingWaits = 5
 )
 
 func gateSources(t *testing.T) map[string]string {

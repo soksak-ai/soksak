@@ -65,8 +65,8 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 		// no evidence that motion plays — and that is what the reading below is for.
 		gate.run("ui.layout.wait-settled", "window="+window)
 
-		// The region is drawn after a layout commit, so this waits for it rather than reading the
-		// frame the link happened to land in.
+		// Polled for the same reason as the clear below: what a region draws answers to the link
+		// and to the focus together, and no event marks the pair as landed.
 		gate.until(5*time.Second, func() bool { return contains(gate.drawnIn(window, region), section) },
 			"the "+region+" region to draw "+section)
 		if drawn := gate.drawnIn(window, region); !contains(drawn, section) {
@@ -91,9 +91,17 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 		// be a second rule about placement living in the unlink.
 		gate.run("sections.link", "window="+window, "plugin="+plugin, "region="+region)
 		gate.run("ui.layout.wait-settled", "window="+window)
-		// What leaves, leaves with the space it stood in: the region's width travels with the panes,
-		// and the sections are drawn until that motion has closed it. Reading in the render that
-		// removed the link reads the frame before the space is gone.
+		// Polled, and the reason is that nothing announces this one. `sections.link` answers when
+		// the link is recorded, and what a region draws is a function of that link and of the
+		// focused view's plugin — the command changed one of the two and cannot wait on the other.
+		// `ui.layout.wait-settled` is not it either: measured 2026-08-18, it answered and the
+		// section that had just been unlinked was still drawn. What leaves, leaves with the space
+		// it stood in — the region's width travels with the panes, and the sections are drawn until
+		// that motion has closed it.
+		//
+		// Building the event means deciding which layer owns "this region has finished changing
+		// what it draws", and that is not settled. Until it is, this is the alternative and not
+		// the method.
 		gate.until(5*time.Second, func() bool { return !contains(gate.drawnIn(window, region), section) },
 			"the "+region+" region to close on "+section)
 		if drawn := gate.drawnIn(window, region); contains(drawn, section) {
@@ -117,6 +125,7 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+leftSet, "region=left")
 		gate.run("sections.link", "window="+window, "plugin="+plugin, "set="+rightSet, "region=right")
 		gate.focusPluginPane(window, plugin)
+		// Polled — the same missing event, and here for two regions at once.
 		gate.until(5*time.Second, func() bool {
 			return contains(gate.drawnIn(window, "left"), left) &&
 				contains(gate.drawnIn(window, "right"), right)
@@ -247,7 +256,10 @@ func (gate *drawnGate) focusPluginPane(window string, plugin string) {
 				continue
 			}
 			gate.run("pane.activate", "window="+window, "pane="+pane.ID)
-			gate.run("tab.activate", "window="+window, "tab="+tab.ID)
+			// The section standing is a function of the focused view's plugin, so this activation
+			// is the stimulus that draws it. Waiting for the transaction it opens is what makes
+			// the reading after it a reading of the new region rather than the old one.
+			gate.activate(window, tab.ID, "drawn/focus/"+plugin)
 			return
 		}
 	}

@@ -362,12 +362,15 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				name := move
 				// Each case starts from the state it names, settled. A case begun mid-change measures the
 				// tail of the one before it.
-				gate.run("tab.activate", "window="+window, "tab="+where[from])
-				gate.until(5*time.Second, func() bool {
-					frame := gate.oneFrame(window)
-					return frame.hole("left") <= holeTolerance && frame.WorstOff <= offTolerance &&
-						frame.WorstLag <= offTolerance
-				}, "the window to settle before "+name)
+				gate.activate(window, where[from], "scenarios/start/"+name)
+				// The transaction is closed. What it landed on is read once, because reading it
+				// again would be reading the same frame — a window that answered wrong here is
+				// wrong, not early.
+				if frame := gate.oneFrame(window); frame.hole("left") > holeTolerance ||
+					frame.WorstOff > offTolerance || frame.WorstLag > offTolerance {
+					t.Fatalf("%s begins in a window that is not settled: hole %.1f, off %.1f, lag %.1f",
+						name, frame.hole("left"), frame.WorstOff, frame.WorstLag)
+				}
 
 				record := filepath.Join(evidence, strings.NewReplacer("→", "-to-").Replace(name))
 				// Frames for a person to look at, taken without touching the window's focus, beside the
@@ -458,9 +461,10 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 	// One move recorded for the eye, in its own pass, with the recorder already running before the
 	// change. What it is for is looking; the numbers above are what passes and fails.
 	looked := results[len(results)-1]
-	gate.run("tab.activate", "window="+window, "tab="+where[order[2]])
-	gate.until(5*time.Second, func() bool { return gate.oneFrame(window).WorstOff <= offTolerance },
-		"the window to settle before the recording")
+	gate.activate(window, where[order[2]], "scenarios/eye/start")
+	if off := gate.oneFrame(window).WorstOff; off > offTolerance {
+		t.Fatalf("the recording would begin in a window that is %.1f out of place", off)
+	}
 	burst := make(chan struct{})
 	go func() {
 		defer close(burst)
