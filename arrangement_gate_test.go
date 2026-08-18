@@ -368,14 +368,6 @@ func (gate *arrangementGate) journalSequence(window string) int {
 	return highest
 }
 
-// settle waits out a change this gate did not make with a stimulus of its own — opening a region,
-// installing a set. Those have no cause to wait for, and the window's own barrier is the end of
-// them.
-func (gate *arrangementGate) settle(window string) {
-	gate.t.Helper()
-	gate.run("ui.layout.wait-settled", "window="+window)
-}
-
 // arrangementNow is where the region ends, where the panes begin, and whose sections are standing,
 // from one reading.
 func (gate *arrangementGate) arrangementNow(window string) arrangement {

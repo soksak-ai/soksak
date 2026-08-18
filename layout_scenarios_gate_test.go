@@ -335,7 +335,14 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 	}
 	order := []string{"terminal-top-left", "browser-bottom", "terminal-right"}
 
-	evidence := filepath.Join("evidence", "scenarios")
+	// Absolute. A relative path handed to the application is resolved against the application's
+	// working directory, which is not this one — measured 2026-08-17 in the arrangement gate, nine
+	// recordings answered OK and left no frame anywhere that run could find.
+	here, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("asking where this run is: %v", err)
+	}
+	evidence := filepath.Join(here, "evidence", "scenarios")
 	if err := os.MkdirAll(evidence, 0o755); err != nil {
 		t.Fatalf("making the evidence directory: %v", err)
 	}
@@ -369,9 +376,15 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				// thread a frame at a time: with `window.record` alongside, the same six moves answered
 				// 2 to 3 frames of lag where they answer none without it — the recorder was measuring
 				// itself. Frames for the eye are recorded in their own pass, below.
-				gate.run("layout.trace.start", "window="+window, "ms=1500")
+				run := gate.startTrace(window, 1500)
 				gate.run("tab.activate", "window="+window, "tab="+where[to])
-				time.Sleep(1600 * time.Millisecond)
+				// Told, not timed. Sleeping past the recording's own length reads whatever the
+				// machine had got through by then, and on a loaded one that is a truncated
+				// recording read as a short motion.
+				if how := gate.waitTrace(window, run, 5000); how != "elapsed" {
+					t.Fatalf("%s: the recording ended %s rather than running its course, so what it "+
+						"holds is not the whole move", name, how)
+				}
 				frames := gate.readTrace(window)
 				if len(frames) < 10 {
 					t.Fatalf("%s recorded %d readings, which is not a motion", name, len(frames))
@@ -448,15 +461,35 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 	gate.run("tab.activate", "window="+window, "tab="+where[order[2]])
 	gate.until(5*time.Second, func() bool { return gate.oneFrame(window).WorstOff <= offTolerance },
 		"the window to settle before the recording")
-	go gate.try("window.record", "window="+window, "dir="+looked.record, "frames=60", "intervalMs=16")
-	time.Sleep(400 * time.Millisecond)
+	burst := make(chan struct{})
+	go func() {
+		defer close(burst)
+		gate.try("window.record", "window="+window, "dir="+looked.record, "frames=60", "intervalMs=16")
+	}()
+	// A lead-in, so the first frames are of the window before the change. Nothing is judged on its
+	// length: what the recording holds is read below, and a recording that began after the move
+	// shows that in its own frames.
+	time.Sleep(recorderLeadIn)
 	gate.run("tab.activate", "window="+window, "tab="+where[order[1]])
-	time.Sleep(1200 * time.Millisecond)
-	if trails, err := pageTrailsIn(looked.record, 0.72); err == nil && len(trails) > 0 {
+	// The burst's own end. Guessing how long sixty frames take reads whatever had landed by then,
+	// and on a loaded machine that is a recording cut in the middle of the move it is of.
+	<-burst
+	trails, err := pageTrailsIn(looked.record, 0.72)
+	switch {
+	case err != nil:
+		t.Logf("the recording of %s could not be read: %v", looked.name, err)
+	case len(trails) == 0:
+		t.Logf("the recording of %s holds no frames of a page; there is nothing to look at", looked.name)
+	default:
 		t.Logf("recorded %d frames of %s for the eye: %s", len(trails), looked.name, looked.record)
 	}
 	// Judged inside the case that measured it — see the subtest above.
 }
+
+// recorderLeadIn is how much of the window before a change the evidence recording holds. It is a
+// lead-in and not a barrier: no number in this gate comes from it, and a recording that missed the
+// move is reported rather than passed over.
+const recorderLeadIn = 400 * time.Millisecond
 
 // run is the longest unbroken stretch that answered wrong: how long it lasted, how many readings it
 // held, and the worst value in it.
@@ -631,7 +664,40 @@ func longestRun(frames []traceFrame, wrong func(traceFrame) (bool, float64)) run
 	return longest
 }
 
-// readTrace stops the recording and answers what it holds.
+// startTrace begins a recording and answers which one it is, so its end can be waited for by name.
+func (gate *layoutScenariosGate) startTrace(window string, ms int) int {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			Run int `json:"run"`
+		} `json:"data"`
+	}
+	out := gate.run("layout.trace.start", "window="+window, fmt.Sprintf("ms=%d", ms))
+	if err := json.Unmarshal([]byte(out), &answer); err != nil || answer.Data.Run < 1 {
+		gate.t.Fatalf("layout.trace.start named no recording: %v\n%s", err, out)
+	}
+	return answer.Data.Run
+}
+
+// waitTrace is told when the recording ends, and how. Nothing here counts frames or watches a
+// clock: the window announces the end and this returns on it.
+func (gate *layoutScenariosGate) waitTrace(window string, run int, timeoutMs int) string {
+	gate.t.Helper()
+	var answer struct {
+		Data struct {
+			EndedBecause string `json:"endedBecause"`
+		} `json:"data"`
+	}
+	out := gate.run("layout.trace.wait", "window="+window,
+		fmt.Sprintf("run=%d", run), fmt.Sprintf("timeoutMs=%d", timeoutMs))
+	if err := json.Unmarshal([]byte(out), &answer); err != nil {
+		gate.t.Fatalf("layout.trace.wait: %v\n%s", err, out)
+	}
+	return answer.Data.EndedBecause
+}
+
+// readTrace answers what the recording holds. It does not stop it — a read that ended the recording
+// made the answer depend on when it was asked.
 func (gate *layoutScenariosGate) readTrace(window string) []traceFrame {
 	gate.t.Helper()
 	var answer struct {
