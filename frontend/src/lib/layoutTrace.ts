@@ -85,7 +85,21 @@ interface TraceState {
   handle: number | null;
   timer: ReturnType<typeof setTimeout> | null;
   frame: number;
+  /**
+   * Which recording this is. A caller waits for the end of the one it started, and a run number is
+   * how it names that one — without it a waiter can be released by a recording that had already
+   * ended before it asked, or by the next one.
+   */
+  run: number;
+  /** The run that has ended, and how it ended. Zero before any recording has finished. */
+  endedRun: number;
+  endedBecause: TraceEnd;
+  /** Who is waiting to be told a recording ended. */
+  waiters: Set<(run: number) => void>;
 }
+
+/** How a recording ended: on its own clock, or because something stopped it. */
+export type TraceEnd = "" | "elapsed" | "stopped" | "replaced";
 
 const trace = moduleState<TraceState>("lib/layoutTrace#state", () => ({
   frames: [],
@@ -95,6 +109,10 @@ const trace = moduleState<TraceState>("lib/layoutTrace#state", () => ({
   handle: null,
   timer: null,
   frame: 0,
+  run: 0,
+  endedRun: 0,
+  endedBecause: "",
+  waiters: new Set(),
 }));
 
 // How long the recorder waits for a frame before recording on the wall clock instead.
@@ -141,11 +159,12 @@ const FIRST_FRAME_LIMIT_MS = 1_000;
  * anyway left the caller holding an empty trace with no reason in it. Measured 2026-08-17: the same
  * gate wrote down 85 readings in one run and none in the next.
  */
-export async function startLayoutTrace(ms: number): Promise<{ ms: number; frames: number }> {
-  stopLayoutTrace();
+export async function startLayoutTrace(ms: number): Promise<{ ms: number; frames: number; run: number }> {
+  stopLayoutTrace("replaced");
   const limited = Math.max(1, Math.min(TRACE_LIMIT_MS, Math.round(ms)));
   trace.frames = [];
   trace.running = true;
+  trace.run += 1;
   trace.frame = 0;
   trace.startedAtUnixMs = presentationNowUnixMs();
   trace.stopAtUnixMs = trace.startedAtUnixMs + limited;
@@ -155,32 +174,85 @@ export async function startLayoutTrace(ms: number): Promise<{ ms: number; frames
     await new Promise((done) => setTimeout(done, 8));
   }
   if (trace.frames.length === 0) {
-    stopLayoutTrace();
+    stopLayoutTrace("stopped");
     throw new Error(
       `this window recorded nothing in ${FIRST_FRAME_LIMIT_MS}ms: neither its frame clock nor a ` +
         `${WALL_CLOCK_MS}ms timer ran, which is a window that is not running`,
     );
   }
-  return { ms: limited, frames: trace.frames.length };
+  return { ms: limited, frames: trace.frames.length, run: trace.run };
 }
 
-/** Stops a running trace and keeps what it recorded. */
-export function stopLayoutTrace(): void {
+/**
+ * Stops a running trace and keeps what it recorded.
+ *
+ * Whoever is waiting is told, with how it ended. A recording that ends on its own clock and one cut
+ * short are both an end and the reason is the difference — a caller reading ten frames of a
+ * fifteen-hundred-millisecond recording needs to know it was cut, not to guess from the count.
+ */
+export function stopLayoutTrace(because: TraceEnd = "stopped"): void {
   if (trace.handle !== null) cancelAnimationFrame(trace.handle);
   if (trace.timer !== null) clearTimeout(trace.timer);
   trace.handle = null;
   trace.timer = null;
+  if (!trace.running) return;
   trace.running = false;
+  trace.endedRun = trace.run;
+  trace.endedBecause = because;
+  // A copy, because a waiter released here removes itself from the set.
+  for (const told of [...trace.waiters]) told(trace.run);
+}
+
+/**
+ * Resolves when the recording identified by `run` has ended, or when it already had.
+ *
+ * The end is announced, not looked for: this subscribes before it reads, so a recording that ends
+ * between the two cannot be missed, and it never polls. Asking about a run that has already ended
+ * answers at once — waiting is idempotent, and two calls answer the same.
+ */
+export function whenLayoutTraceEnds(run: number, timeoutMs: number): Promise<TraceEnd> {
+  return new Promise<TraceEnd>((resolve, reject) => {
+    let done = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const told = (ended: number) => {
+      if (done || ended < run) return;
+      done = true;
+      trace.waiters.delete(told);
+      if (timer !== null) clearTimeout(timer);
+      resolve(trace.endedBecause);
+    };
+    trace.waiters.add(told);
+    // Read after subscribing. The other order loses a recording that ends in between.
+    if (trace.endedRun >= run) {
+      told(trace.endedRun);
+      return;
+    }
+    timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      trace.waiters.delete(told);
+      reject(new Error(
+        `recording ${run} was still running after ${timeoutMs}ms; it holds ${trace.frames.length} ` +
+        `frames and was to end at ${trace.stopAtUnixMs}`,
+      ));
+    }, timeoutMs);
+  });
 }
 
 /** What the trace holds. */
 export function layoutTrace(): {
   running: boolean;
+  run: number;
+  endedBecause: TraceEnd;
   startedAtUnixMs: number;
   frames: LayoutTraceFrame[];
 } {
   return {
     running: trace.running,
+    run: trace.run,
+    // How the recording that is in hand ended, so a short one is read as cut or as complete rather
+    // than counted and guessed at. Empty while it is still going.
+    endedBecause: trace.running ? "" : trace.endedBecause,
     startedAtUnixMs: trace.startedAtUnixMs,
     frames: trace.frames,
   };
@@ -236,7 +308,7 @@ function tick(drawn: boolean): void {
     Math.round((presentationNowUnixMs() - atUnixMs) * 100) / 100;
   trace.frame += 1;
   if (atUnixMs >= trace.stopAtUnixMs) {
-    stopLayoutTrace();
+    stopLayoutTrace("elapsed");
     return;
   }
   if (drawn) scheduleFrame(); else scheduleTimer();

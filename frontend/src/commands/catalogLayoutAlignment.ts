@@ -4,7 +4,7 @@
 // disagree about what `off` means. This is the command that answers it once.
 import { key, tmsg } from "../i18n";
 import { readAlignment } from "../lib/layoutAlignment";
-import { layoutTrace, startLayoutTrace, stopLayoutTrace } from "../lib/layoutTrace";
+import { layoutTrace, startLayoutTrace, whenLayoutTraceEnds } from "../lib/layoutTrace";
 import { presentationNowUnixMs } from "../lib/presentationClock";
 import { register } from "./registry";
 
@@ -42,7 +42,7 @@ export function registerLayoutTraceCatalog(): void {
     params: {
       ms: { type: "number", description: key("cmd.layout.trace.start.param.ms"), required: true },
     },
-    returns: "{ ms, frames }",
+    returns: "{ ms, frames, run } — run names this recording, and layout.trace.wait waits for the end of it",
     message: (d) => tmsg("msg.layout.trace.start", { ms: Number(d.ms ?? 0) }),
     examples: ['layout.trace.start \'{"ms":2000}\''],
     handler: async (p) => {
@@ -56,16 +56,51 @@ export function registerLayoutTraceCatalog(): void {
     },
   });
 
+  register("layout.trace.wait", {
+    description: key("cmd.layout.trace.wait.desc"),
+    triggers: { ko: "레이아웃 추적 종료 대기 녹화 완료 이벤트" },
+    params: {
+      run: { type: "number", description: key("cmd.layout.trace.wait.param.run"), required: true },
+      timeoutMs: {
+        type: "number",
+        description: key("cmd.layout.trace.wait.param.timeoutMs"),
+        required: true,
+      },
+    },
+    returns: "{ run, endedBecause:'elapsed'|'stopped'|'replaced', frames }",
+    message: (d) => tmsg("msg.layout.trace.wait", { how: String(d.endedBecause ?? "") }),
+    errors: ["INVALID_PARAMS", "TIMEOUT"],
+    examples: ['layout.trace.wait \'{"run":1,"timeoutMs":5000}\''],
+    handler: async (p) => {
+      const run = Number(p.run);
+      const timeoutMs = Number(p.timeoutMs);
+      if (!Number.isInteger(run) || run < 1) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.trace.run") };
+      }
+      if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 30_000) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.trace.timeout") };
+      }
+      try {
+        const endedBecause = await whenLayoutTraceEnds(run, timeoutMs);
+        return { run, endedBecause, frames: layoutTrace().frames.length };
+      } catch (cause) {
+        return { ok: false as const, code: "TIMEOUT" as const, message: String(cause) };
+      }
+    },
+  });
+
   register("layout.trace.read", {
     description: key("cmd.layout.trace.read.desc"),
     triggers: { ko: "레이아웃 추적 읽기 프레임 기록 조회" },
     params: {},
-    returns: "{ running, startedAtUnixMs, frames: [{ frame, atUnixMs, appliedAgeMs, regions, panes, surfaces, worstOff, worstLag, worstDrift, worstOver }] }",
+    returns: "{ running, run, endedBecause:''|'elapsed'|'stopped'|'replaced', startedAtUnixMs, frames: [{ frame, atUnixMs, appliedAgeMs, regions, panes, surfaces, worstOff, worstLag, worstDrift, worstOver }] } — reading does not stop a running recording, so two reads of a finished one answer the same thing",
     message: (d) =>
       tmsg("msg.layout.trace.read", { n: Number((d.frames as unknown[] | undefined)?.length ?? 0) }),
     examples: ["layout.trace.read"],
     handler: () => {
-      stopLayoutTrace();
+      // Reading does not stop it. A read that ended the recording made the answer depend on when it
+      // was asked and made a second read a different answer — wait for the end with
+      // layout.trace.wait, which is announced rather than looked for.
       return layoutTrace();
     },
   });
