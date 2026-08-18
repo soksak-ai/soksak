@@ -210,6 +210,11 @@ func (gate *restoreGate) socket() string {
 // start runs the application against the gate's home and waits until its control
 // plane answers. Waiting on the answer rather than on a duration is what makes
 // this repeatable on a loaded machine.
+// startupPollInterval is the gap between one poll and the next. Two places have nothing to wait on
+// and use it: a process that has not answered yet, and the loop for a fact the window announces
+// nothing about. Each of those states its own reason where it is.
+const startupPollInterval = 250 * time.Millisecond
+
 func (gate *restoreGate) start() {
 	gate.t.Helper()
 	cmd := exec.Command("./" + gate.app)
@@ -233,12 +238,15 @@ func (gate *restoreGate) start() {
 	gate.proc = cmd
 	gate.t.Cleanup(func() { _ = log.Close() })
 
+	// Polled, because there is nothing yet to wait on: a process that has not opened its socket
+	// publishes nothing, and the first thing this run can be told is an answer to a command. Every
+	// wait after this one is on an event the window announces.
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) {
 		if out, err := gate.try("window.list", "window=main"); err == nil && strings.Contains(out, "main") {
 			return
 		}
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(startupPollInterval)
 	}
 	gate.t.Fatal("the application did not answer within 45s")
 }
@@ -285,7 +293,7 @@ func (gate *restoreGate) until(limit time.Duration, ready func() bool, what stri
 		if ready() {
 			return
 		}
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(startupPollInterval)
 	}
 	gate.t.Fatalf("%s within %s", what, limit)
 }

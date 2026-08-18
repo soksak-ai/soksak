@@ -413,6 +413,9 @@ func (b band) String() string {
 
 func (b band) empty() bool { return b.bottom <= b.top }
 
+// captureLeadIn is how much of the window before a change the recording holds.
+const captureLeadIn = 40 * time.Millisecond
+
 // recording captures the window while something happens to it, and returns the wait.
 //
 // The pictures this gate keeps are of settled windows — one per click, taken once nothing is moving.
@@ -434,9 +437,10 @@ func (gate *arrangementGate) recording(window string, dir string, frames int, in
 		out, err = gate.try("window.record", "window="+window, "dir="+dir,
 			fmt.Sprintf("frames=%d", frames), fmt.Sprintf("intervalMs=%d", intervalMs))
 	}()
-	// The capture is running before the thing it is meant to capture. Without the wait the first
-	// frames are of a window nothing has happened to yet.
-	time.Sleep(40 * time.Millisecond)
+	// A lead-in, so the first frames are of the window before the change. Not a barrier: no number
+	// in this gate comes from it, and a recording that began after the move shows that in its own
+	// frames.
+	time.Sleep(captureLeadIn)
 	// A recording that failed is reported where it failed. Swallowed, it leaves a case with no
 	// evidence and a run with no reason in it.
 	return func() string {

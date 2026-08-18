@@ -44,7 +44,7 @@ var relativeDirToTheApplication = regexp.MustCompile(`"(?:dir|path)="\+\s*filepa
 // drawn gate holds three of them for one reason: nothing announces that a region has finished
 // changing what it draws (GATES.md, Not done).
 const (
-	clockWaits   = 8
+	clockWaits   = 6
 	pollingWaits = 5
 )
 

@@ -336,12 +336,11 @@ func (gate *drawnGate) showASurface(window string) {
 	for _, pane := range gate.panes(window) {
 		for _, tab := range pane.Tabs {
 			gate.run("pane.activate", "window="+window, "pane="+pane.ID)
-			gate.run("tab.activate", "window="+window, "tab="+tab.ID)
-			for attempt := 0; attempt < 20; attempt++ {
-				if len(gate.visibleSurfaces(window)) > 0 {
-					return
-				}
-				time.Sleep(100 * time.Millisecond)
+			gate.activate(window, tab.ID, "drawn/surface/"+tab.ID)
+			// Read once. The activation's own transaction has closed, so a pane with no surface on
+			// screen here is a pane that has none, and the next pane is tried.
+			if len(gate.visibleSurfaces(window)) > 0 {
+				return
 			}
 		}
 	}

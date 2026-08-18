@@ -159,12 +159,11 @@ func (gate *surfaceMotionGate) aVisibleSurface(window string) string {
 	for _, pane := range gate.panes(window) {
 		for _, tab := range pane.Tabs {
 			gate.run("pane.activate", "window="+window, "pane="+pane.ID)
-			gate.run("tab.activate", "window="+window, "tab="+tab.ID)
-			for attempt := 0; attempt < 40; attempt++ {
-				if found := gate.visibleSurfaces(window); len(found) > 0 {
-					return found[0]
-				}
-				time.Sleep(50 * time.Millisecond)
+			gate.activate(window, tab.ID, "motion/surface/"+tab.ID)
+			// Read once. The activation's own transaction has closed, so a pane showing no surface
+			// here shows none, and the next pane is tried.
+			if found := gate.visibleSurfaces(window); len(found) > 0 {
+				return found[0]
 			}
 		}
 	}

@@ -189,6 +189,9 @@ func (gate *quietGate) activityHealthy(window string) (bool, string) {
 		if a.Attempts > 0 {
 			break
 		}
+		// Polled: the ledger is written as a side effect of whatever runs, and nothing announces
+		// that it has been written to for the first time. What is being asked is whether the
+		// observation wiring records at all, which has no edge of its own to wait on.
 		time.Sleep(100 * time.Millisecond)
 	}
 	if a.Attempts == 0 {
