@@ -10,8 +10,22 @@
 // readers differently.
 import { beforeAll, describe, expect, it } from "vitest";
 import { registerCatalog } from "./catalog";
-import { catalogJson } from "./registry";
+import { catalogJson, getSpec } from "./registry";
 import { withReaderLanguage } from "../i18n";
+
+/** Every description as it was registered: a key, or a literal nobody keyed. */
+function registeredSentences(): { where: string; value: string | { i18nKey: string } }[] {
+  const registered: { where: string; value: string | { i18nKey: string } }[] = [];
+  for (const command of catalogJson()) {
+    const spec = getSpec(command.name);
+    if (!spec) continue;
+    registered.push({ where: command.name, value: spec.description });
+    for (const [param, declared] of Object.entries(spec.params)) {
+      registered.push({ where: `${command.name}.${param}`, value: declared.description });
+    }
+  }
+  return registered;
+}
 
 /** Every description the catalogue shows, in one flat list, read as one language. */
 function sentencesIn(language: "ko" | "en"): string[] {
@@ -29,12 +43,10 @@ function sentencesIn(language: "ko" | "en"): string[] {
 // in English rather than keys. It only goes down. Lower it when a batch lands; the failure names
 // the new floor.
 //
-// It is not zero yet and the number is the honest size of that: a literal reads correct to whoever
-// wrote it, because whoever wrote it reads English (I18N.md I1).
-//
-// A keyed sentence whose two translations happen to be identical counts here too. That overcounts
-// and never undercounts, which is the direction a ratchet can absorb.
-const unkeyedDescriptions = 168;
+// It is counted from what was registered, not from what two readings have in common: a keyed
+// sentence whose Korean and English are the same string — `{ kind:'at'|'every'|'cron' }` — is
+// keyed, and reading it twice cannot tell it from a literal.
+const unkeyedDescriptions = 0;
 
 describe("the catalogue in the reader's language", () => {
   beforeAll(() => {
@@ -54,9 +66,9 @@ describe("the catalogue in the reader's language", () => {
   });
 
   it("the sentences still written as literals are counted, and the count only falls", () => {
-    const ko = sentencesIn("ko");
-    const en = sentencesIn("en");
-    const literals = ko.filter((sentence, index) => sentence === en[index]);
+    const literals = registeredSentences()
+      .filter((entry) => typeof entry.value === "string")
+      .map((entry) => `${entry.where}=${entry.value as string}`);
 
     if (literals.length > unkeyedDescriptions) {
       expect.fail(
@@ -68,7 +80,10 @@ describe("the catalogue in the reader's language", () => {
     if (literals.length < unkeyedDescriptions) {
       expect.fail(
         `${literals.length} hardcoded sentences remain, below the floor of ${unkeyedDescriptions}. ` +
-          `Lower unkeyedDescriptions to ${literals.length} so the ratchet holds the new floor.`,
+          `Lower unkeyedDescriptions to ${literals.length} so the ratchet holds the new floor.\n` +
+          // Named, because the next batch needs the list and reading it out of the source means
+          // finding the multi-line ones by eye.
+          literals.join("\n"),
       );
     }
   });

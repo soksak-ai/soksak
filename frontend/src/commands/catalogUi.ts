@@ -10,7 +10,7 @@ import { register } from "./registry";
 export function registerUiCatalog(): void {
   register("ui.validate", {
     description:
-      "Validate the border ownership contract (docs/UI.md §B) against the live DOM. Compares computed border values on all four edges with the contract table and reports violations. Use as the single RED/GREEN gate for border rules.",
+      key("cmd.ui.validate.desc"),
     triggers: { ko: "보더검증 테두리확인 ui검증 border contract" },
     params: {
       rule: {
@@ -29,10 +29,10 @@ export function registerUiCatalog(): void {
 
   register("ui.expect", {
     description:
-      "Look up which border rules apply to a given DOM selector according to the contract table. Returns matched rules and their expected edge configuration; no matching rule is also a valid answer (add to the contract table if coverage is needed).",
+      key("cmd.ui.expect.desc"),
     triggers: { ko: "보더기대 계약조회 border expect ui계약" },
     params: {
-      selector: { type: "string", description: "CSS selector", required: true },
+      selector: { type: "string", description: key("cmd.ui.expect.param.selector"), required: true },
     },
     returns: "{ matchedElements, rules: [{id, active, kind, edges?, seam?, note}] }",
     message: (d) => tmsg("msg.ui.expect", { n: ((d.rules as unknown[]) ?? []).length }),

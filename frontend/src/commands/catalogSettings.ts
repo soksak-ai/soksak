@@ -68,7 +68,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("settings.set", {
-    description: `Change an application setting. key: ${SETTING_KEYS.join("|")}`,
+    description: key("cmd.settings.set.desc", { keys: SETTING_KEYS.join("|") }),
     triggers: { ko: "설정 변경 설정 바꾸기 환경설정 변경 폰트 크기 언어" },
     params: {
       key: {
@@ -199,7 +199,7 @@ export function registerSettingsCatalog(): void {
       roles: {
         type: "json",
         description:
-          'Optional label→role map, e.g. {"main":"orchestrator"} — unlisted windows count as workspace windows',
+          key("cmd.layout.suggest.param.roles"),
       },
     },
     returns: "{ placements: [{label,monitor,x,y,w,h}] }",

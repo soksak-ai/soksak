@@ -857,8 +857,7 @@ export function registerDomCatalog(): void {
     handler: () => pluginViewHostOverlayStatus(),
   });
   register("ui.tree", {
-    description:
-      "Return the exposed DOM address tree — absolute addresses of nodes declared via data-node by plugin views and host-chrome elements. Every node includes its complete declared data-* dataset and nodeIdentity, an opaque token stable for that live Element instance and changed when a different Element is mounted at the same address; compare it across observations to detect remounts. Use to discover addressable targets and their public roles before calling ui.measure or ui.input.click; unexposed elements are absent and unreachable. Pass rects:true to include each node's viewport rect for coordinate work (drags, precision clicks).",
+    description: key("cmd.ui.tree.desc"),
     triggers: { ko: "DOM 트리 주소목록 노드목록 ui트리 노드식별자 재마운트 인스턴스" },
     params: {
       rects: {
@@ -902,39 +901,35 @@ export function registerDomCatalog(): void {
   });
 
   register("ui.measure", {
-    description:
-      "Measure an exposed node — its nodeIdentity, viewport rect (px), exact inline height/flexBasis, and computed style. nodeIdentity is the same opaque live-Element token exposed by ui.tree: stable for the same Element and changed on remount at the same address. style always includes the layout fields plus the interaction/visibility axis (pointerEvents, opacity, visibility) so you can tell whether a node is actually visible and clickable, not just where it sits. Pass props to read any extra computed properties by name (e.g. zIndex, transform, backgroundColor). Pass occlusion:true to also hit-test the node's center (through Shadow DOM) and report what covers it and whether it is reachable. Pass screen:true to also get the node's GLOBAL logical screen coordinates (screen.x/y = rect origin, screen.cx/cy = center) — feed cx/cy straight to an OS pointer tool (e.g. cliclick c:cx,cy) when a real hit-tested click is required; synthetic ui.input.click bypasses hit-testing and default actions, so it cannot verify pointer-events or focus-on-mouseup behavior. Accepts structural addresses from ui.tree only; CSS selectors are rejected.",
+    description: key("cmd.ui.measure.desc"),
     triggers: { ko: "DOM 측정 레이아웃 rect 크기 스타일 포인터이벤트 가시성 가림 도달성 스크린 전역좌표 실클릭 노드식별자 재마운트 인스턴스" },
     params: {
-      address: { type: "string", description: "Exposed node address from ui.tree", required: true },
+      address: { type: "string", description: key("cmd.ui.measure.param.address"), required: true },
       props: {
         type: "json",
         description:
-          'Extra computed-style property names to read, camelCase or kebab (e.g. ["zIndex","backgroundColor"]) — lifts the fixed field set',
+          key("cmd.ui.measure.param.props"),
         required: false,
       },
       pseudo: {
         type: "string",
         description:
-          'Read the computed style of a pseudo-element instead of the node itself ("::before" | "::after"). rect and dataset still describe the node. Required when a surface paints through a pseudo-element veil — those pixels belong to no measurable node otherwise',
+          key("cmd.ui.measure.param.pseudo"),
         required: false,
       },
       occlusion: {
         type: "boolean",
-        description:
-          "Also hit-test the node's center (Shadow-DOM-piercing): report the topmost element there and whether this node owns that point (reachable) or something covers it. Ownership is containment across shadow boundaries — the topmost element being this node, inside it, or the node it is inside — read the same way the hit-test descends, never by matching names or address prefixes",
+        description: key("cmd.ui.measure.param.occlusion"),
         default: false,
       },
       screen: {
         type: "boolean",
-        description:
-          "Also return global logical screen coordinates (window inner origin + viewport rect). cx/cy is the node center — pass it directly to an OS-level pointer tool for a real hit-tested click",
+        description: key("cmd.ui.measure.param.screen"),
         default: false,
       },
       stacking: {
         type: "boolean",
-        description:
-          "Also return the ancestor chain that decides paint order: every stacking-context ancestor, every positioned ancestor, and the node itself, root first. Compare two nodes by their chains — subtracting two z-index values skips the stacking context between them and can answer the opposite of the screen",
+        description: key("cmd.ui.measure.param.stacking"),
         default: false,
       },
     },
@@ -1080,8 +1075,7 @@ export function registerDomCatalog(): void {
   });
 
   register("ui.slot", {
-    description:
-      "Measure a content view's slot rectangle — the bare host container a view renders into (viewport px + devicePixelRatio). Use so an engine plugin learns its present-target rect (device px = css px * dpr) to align a native/offscreen surface, and so AI can verify placement. Address is a VIEW container (no /node): win/<label>/<region>/view/<pluginId.viewId>. Unexposed returns NOT_EXPOSED.",
+    description: key("cmd.ui.slot.desc"),
     triggers: { ko: "슬롯 뷰컨테이너 rect present타깃 dpr 측정" },
     params: {
       address: {
@@ -1129,8 +1123,7 @@ export function registerDomCatalog(): void {
   });
 
   register("ui.focus.state", {
-    description:
-      "Return the keyboard-focus owner through the public view-host boundary: the requested view, whether its provider is mounted/delivered, and the view containing the active element. Pierces Shadow DOM — plugin views mount inside a shadow root, so this descends shadowRoot.activeElement to the real focused element (and finds its view across the shadow boundary) instead of stopping at the shadow host. settled only proves the DOM active element — widgets paint their focused state (e.g. a terminal's block cursor) only when they received a focus event AND the window is key, so also check windowFocused (document.hasFocus) and activeElement.ancestors (class chain up to the view container — a widget's own focus class appears here). Use after real-device input to verify focus settled in the intended view without querying plugin-private DOM.",
+    description: key("cmd.ui.focus.state.desc"),
     triggers: { ko: "키보드 포커스 소유자 활성 뷰 포커스 상태 창키 커서" },
     params: {},
     returns:
@@ -1204,8 +1197,7 @@ export function registerDomCatalog(): void {
   // real-device input. Registers 4 listeners and cleans itself up after the given ms — not an unbounded
   // watch.
   register("ui.focus.trace.start", {
-    description:
-      "Start recording a focus-causality timeline: every mousedown/mouseup/focusin/focusout (capture, Shadow-DOM composed target) with document.hasFocus() at each event. Self-terminates after ms and removes its listeners. Use when focus lands wrong under real input: start the trace, have the real click happen, then ui.focus.trace.read for the timeline — post-hoc state reads are contaminated by the window blurring when the user switches away.",
+    description: key("cmd.ui.focus.trace.start.desc"),
     triggers: { ko: "포커스 추적 타임라인 기록 클릭 인과" },
     params: {
       ms: {
@@ -1251,8 +1243,7 @@ export function registerDomCatalog(): void {
   });
 
   register("ui.focus.trace.read", {
-    description:
-      "Read the focus-causality timeline recorded by ui.focus.trace.start (idempotent; keeps the last trace after it self-terminates). recording tells whether the window is still open; each event carries its composed target and document.hasFocus() at that instant.",
+    description: key("cmd.ui.focus.trace.read.desc"),
     triggers: { ko: "포커스 추적 읽기 타임라인 결과" },
     params: {},
     returns: "{ recording, events: [{ t, type, tag, className, dataNode, hasFocus }] }",
@@ -1508,24 +1499,21 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
 }
 
   register("ui.input.click", {
-    description:
-      "Dispatch a real-click sequence (mousedown → mouseup → click) to an exposed node (E2E injection). Nodes that live on another surface - a content view, or a projected plugin-view node - receive a real engine pointer inside that surface instead, and the answer names it as surface; button:'right' drives context menus there. Use to drive UI flows programmatically or in tests. atUnixMs is the epoch the stimulus actually left, on the same presentation clock as layout.transactions and native display ledgers — join causality with it instead of inferring the click time from frames. Pass phase:'down' to send only the mousedown, then observe the mid-gesture state (ui.hit / ui.measure), then phase:'up' to finish with mouseup+click — the only way to verify contracts that live BETWEEN down and up. recordDir starts finite framework-neutral visual evidence before the click without focusing the window; recording.status reports its independent outcome, and capture/storage failure never cancels the click transaction. Unexposed addresses return NOT_EXPOSED — no guessing.",
+    description: key("cmd.ui.input.click.desc"),
     triggers: { ko: "클릭 주입 ui클릭 버튼클릭 E2E 게스처 다운 업 분해" },
     params: {
-      address: { type: "string", description: "Exposed node address from ui.tree", required: true },
+      address: { type: "string", description: key("cmd.ui.input.click.param.address"), required: true },
       phase: {
         type: "string",
-        description:
-          "'down' = mousedown only; 'up' = mouseup+click only; omit for the full sequence",
+        description: key("cmd.ui.input.click.param.phase"),
         required: false,
       },
       x: {
         type: "number",
-        description:
-          "Content-view-relative x (CSS px). Only when the address resolves to a content view; the click is delivered inside it as real input.",
+        description: key("cmd.ui.input.click.param.x"),
         required: false,
       },
-      y: { type: "number", description: "Content-view-relative y (CSS px).", required: false },
+      y: { type: "number", description: key("cmd.ui.input.click.param.y"), required: false },
       button: {
         type: "string",
         description: key("cmd.ui.input.click.param.button"),
@@ -1559,14 +1547,12 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       },
       traceAddresses: {
         type: "json",
-        description:
-          "Optional exposed node addresses sampled on each saved recording frame. Requires recordDir; every sample maps 1:1 to fNNNN.png.",
+        description: key("cmd.ui.input.click.param.traceAddresses"),
         required: false,
       },
       causeTraceId: {
         type: "string",
-        description:
-          "Caller-owned observation-transaction id stamped on the layout transaction this stimulus opens; read it back as causeTraceId in layout.transactions. Without it a caller can only guess which journal entry the click caused.",
+        description: key("cmd.ui.input.click.param.causeTraceId"),
         required: false,
       },
     },
@@ -1744,12 +1730,11 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   // If only committed strings can be injected, the composition span is never exercised and "Hangul input
   // works" gets claimed anyway.
   register("ui.input.compose", {
-    description:
-      "Set the in-progress composition (IME preedit) on a surface, or end it. Korean, Japanese and Chinese pass through a composition state before anything is committed: the page receives compositionstart/compositionupdate, shows characters that are not yet its value, and backspace removes a jamo rather than a character. ui.input.fill and typing commit finished text and never enter that state, so they cannot prove the composition path. Call with text to set what is being composed, and without text to unmark it — the place a person reaches with space or enter. Leaving a composition open makes the next input stack on top of it. Addresses that are not a surface return NOT_A_SURFACE.",
+    description: key("cmd.ui.input.compose.desc"),
     triggers: { ko: "조합 IME 한글 미확정 preedit 입력중 컴포지션 주입" },
     params: {
-      address: { type: "string", description: "Exposed surface address from ui.tree", required: true },
-      text: { type: "string", description: "What is being composed. Omit to end the composition.", required: false },
+      address: { type: "string", description: key("cmd.ui.input.compose.param.address"), required: true },
+      text: { type: "string", description: key("cmd.ui.input.compose.param.text"), required: false },
     },
     returns: "{ address, surface, composing }",
     message: (d) => tmsg(d.composing == null ? "msg.ui.input.compose.end" : "msg.ui.input.compose"),
@@ -1796,13 +1781,12 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   // determines delivery is state of that surface and window — with nowhere to ask, the cause stays a
   // guess forever.
   register("ui.input.state", {
-    description:
-      "Ask a surface whether it can receive pointer input right now, and why not. Answers with the framework's own facts about delivery: whether the surface is attached to a window, whether that window accepts moved events, whether this view is the input responder, and the visibleRect the engine clips hover against. Use this the moment ui.input.click/pointer/drag reports success but nothing reaches the page — the answer names the condition instead of leaving you to guess coordinates. Read-only: it never focuses, moves, or activates anything. Addresses that are not a surface return NOT_A_SURFACE.",
+    description: key("cmd.ui.input.state.desc"),
     triggers: { ko: "표면 입력 상태 왜 안닿음 배달조건 responder 보이는사각형 진단" },
     params: {
-      address: { type: "string", description: "Exposed surface address from ui.tree (a content view or a projected plugin-view surface)", required: true },
-      x: { type: "number", description: "Surface-relative x (CSS px) to ask about. Some delivery conditions differ per point — notably which window is topmost there. Omit to ask about the cursor's current position.", required: false },
-      y: { type: "number", description: "Surface-relative y (CSS px).", required: false },
+      address: { type: "string", description: key("cmd.ui.input.state.param.address"), required: true },
+      x: { type: "number", description: key("cmd.ui.input.state.param.x"), required: false },
+      y: { type: "number", description: key("cmd.ui.input.state.param.y"), required: false },
     },
     returns: "{ address, surface, state:{ attached, hidden?, windowIsKey?, acceptsMouseMovedEvents?, isFirstResponder?, bounds?, visibleRect?, askedPoint?, topWindowAtPoint?, windowTopmostAtPoint? } }",
     message: () => tmsg("msg.ui.input.state"),
@@ -1845,16 +1829,15 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   // checked by click injection. With no surface for that, "the keyboard path was not verified" is what
   // remains — so keys are injected.
   register("ui.input.key", {
-    description:
-      "Dispatch a keydown (and keyup) to an exposed node — the only way to drive keyboard-only paths: palette arrows, Escape, Enter, and shortcuts like Ctrl+R. key takes a KeyboardEvent key value ('Enter', 'Escape', 'ArrowDown', 'r'). Modifiers are separate booleans. Returns defaultPrevented so you can tell whether a handler claimed the key or it fell through. Unexposed addresses return NOT_EXPOSED — no guessing.",
+    description: key("cmd.ui.input.key.desc"),
     triggers: { ko: "키 입력 키보드 단축키 방향키 엔터 이스케이프 주입 E2E" },
     params: {
-      address: { type: "string", description: "Exposed node address from ui.tree", required: true },
-      key: { type: "string", description: "KeyboardEvent key value: Enter, Escape, ArrowDown, Tab, r, …", required: true },
-      ctrl: { type: "boolean", description: "Ctrl held" },
-      meta: { type: "boolean", description: "Meta/Cmd held" },
-      shift: { type: "boolean", description: "Shift held" },
-      alt: { type: "boolean", description: "Alt/Option held" },
+      address: { type: "string", description: key("cmd.ui.input.key.param.address"), required: true },
+      key: { type: "string", description: key("cmd.ui.input.key.param.key"), required: true },
+      ctrl: { type: "boolean", description: key("cmd.ui.input.key.param.ctrl") },
+      meta: { type: "boolean", description: key("cmd.ui.input.key.param.meta") },
+      shift: { type: "boolean", description: key("cmd.ui.input.key.param.shift") },
+      alt: { type: "boolean", description: key("cmd.ui.input.key.param.alt") },
     },
     returns: "{ key, address, defaultPrevented }",
     message: (d) => tmsg("msg.ui.input.key", { key: String(d.key ?? "") }),
@@ -1929,13 +1912,12 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   // is not a separate verb but the absence of the same verb — one command emits both (the pair is never
   // split).
   register("ui.input.pointer", {
-    description:
-      "Drive the pointer the way the OS does: enter/move onto an exposed node, or leave (no address = the pointer is not over us). Hover state that a native child surface can steal — gutter highlight — is owned by app state, not CSS :hover, precisely so it can be driven and read back here. Returns the gutter-hover key now held, so a test can assert both the arming and the release. Addresses that resolve to a native surface may be refused with SURFACE_INPUT_UNAVAILABLE: some engines only update hover from the real pointer stream, and moving the real cursor would take it away from the person using the machine. Where that is so, a press is what creates hover — ui.input.click delivers mouseover/mouseenter/pointerover along with it.",
+    description: key("cmd.ui.input.pointer.desc"),
     triggers: { ko: "포인터 이동 hover 강조 진입 이탈 마우스 주입 E2E" },
     params: {
-      address: { type: "string", description: "Exposed node to move onto. Omit to signal the pointer left us." },
-      x: { type: "number", description: "Surface-relative x (CSS px) when the address is a content view.", required: false },
-      y: { type: "number", description: "Surface-relative y (CSS px).", required: false },
+      address: { type: "string", description: key("cmd.ui.input.pointer.param.address") },
+      x: { type: "number", description: key("cmd.ui.input.pointer.param.x"), required: false },
+      y: { type: "number", description: key("cmd.ui.input.pointer.param.y"), required: false },
     },
     returns: "{ address, surface?, gutterHover }",
     message: () => tmsg("msg.ui.input.pointer"),
@@ -1997,8 +1979,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   // starts from scratch the next time. Observation must be a command — what is here is the standard, and
   // the e2e gate only calls this command.
   register("ui.verify", {
-    description:
-      "Check this window's structural invariants and report each by name. Answers whether the window is coherent right now: every exposed address resolves to exactly one node, no rail layer is left behind after a travel, no visible tab body has collapsed to nothing, and the motion clocks agree. Use after any layout change, and as the assertion in end-to-end gates — read passed (the verdict) and checks[].detail, which names the invariant and shows the offending addresses; the envelope only says the query ran.",
+    description: key("cmd.ui.verify.desc"),
     triggers: { ko: "창 점검 불변식 검증 무결성 주소중복 레일잔존 빈슬롯 자가진단" },
     params: {},
     returns: "{ passed, failed, unanswered, checks: [{ name, ok, answered, detail }] }",
@@ -2180,8 +2161,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.layout.status", {
-    description:
-      "Return this window's event-driven layout barrier facts: motion owners, pending settlement revision and bounded producer-owned revision epochs, running layout animations, visible content-view labels, and every pending presentation owner/provider substage.",
+    description: key("cmd.ui.layout.status.desc"),
     triggers: { ko: "레이아웃 거래 상태 장벽 진단 정착 리비전 애니메이션" },
     params: {},
     returns: "{ settled, motion, settlement, settlementEvents:[{key,phase:'invalidated'|'settled',revision,clock,atUnixMs}], arrangementPhases:[{ownerKey,current,displayed,phase,preparationTargetKey,lastFailure}], transitionIntents:{owners:[{ownerKey,active,queued}],events:[{sequence,ownerKey,revision,generation,phase,reason?,transactionId?,failure?}],maxEvents}, decorationMotions:[{scope,receipt:{status,owner,generation,sequence,activeAnimations}}], decorationClearance:{owners:[{transactionId,status,producer,railRole,railVisibility,callbackCount,clearedAtUnixUs?,failure?,sequence}],events,maxEvents}, animations, contentViewLabels, presentationPending:[{owner:'content'|'view',stage?,labels,startedAtUnixMs,elapsedMs}] }",
@@ -2195,11 +2175,10 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.layout.wait-settled", {
-    description:
-      "Wait until the current layout transaction is fully settled. A successful receipt explicitly returns settled:true; callers never infer success from timestamps or an empty pending list. Event-driven: consumes layout-motion edges and Web Animations finished promises; timeoutMs is a command-owned finite failure bound that aborts provider/substage waiters and removes their timers before the outer RPC transport deadline, never a polling interval. A timeout receipt preserves the pending owner/stage snapshot before cleanup. settledAtUnixMs is the settle epoch on the same presentation clock as layout.transactions and native display ledgers. syncPending reports whether a surface owner confirmed this settlement — true means the DOM went quiet with nothing confirming the surface sync, not that the sync finished.",
+    description: key("cmd.ui.layout.wait-settled.desc"),
     triggers: { ko: "레이아웃 거래 정착 대기 애니메이션 완료" },
     params: {
-      timeoutMs: { type: "number", description: "Finite failure bound in ms (default 4000, max 30000)" },
+      timeoutMs: { type: "number", description: key("cmd.ui.layout.wait-settled.param.timeoutMs") },
     },
     returns: "{ settled:true, waitedMs, animations, settledAtUnixMs, clock, syncPending, presentation:{content:{owner:'content',status:'settled',elapsedMs,labels,details?}|null,view:{owner:'view',status:'settled',elapsedMs,labels,details?}|null} }",
     message: () => tmsg("msg.ui.motion"),
@@ -2240,12 +2219,11 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.motion", {
-    description:
-      "Slow down or freeze layout motion so a transient state can be inspected. scale multiplies every transition/animation duration; hold pauses them in place. Without params it reports the current setting. Transient defects — a surface stranded at its old rect, a pane briefly narrow, a flash on tab return — are invisible to a still capture; this is how you stop time and then read the DOM with ui.tree / ui.measure.",
+    description: key("cmd.ui.motion.desc"),
     triggers: { ko: "모션 느리게 정지 일시정지 애니메이션 배속 관측 디버그" },
     params: {
-      scale: { type: "number", description: "Duration multiplier (1 = normal, 20 = twenty times slower)" },
-      hold: { type: "boolean", description: "Freeze motion in place (true) or resume (false)" },
+      scale: { type: "number", description: key("cmd.ui.motion.param.scale") },
+      hold: { type: "boolean", description: key("cmd.ui.motion.param.hold") },
     },
     returns: "{ scale, hold, applied, running, rates, wallMs, animations }",
     message: () => tmsg("msg.ui.motion"),
@@ -2289,15 +2267,14 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   // whether the app blocks it or removes it. Arrived but the app did not move is a fact about the app;
   // not arrived is a fact about the injection surface.
   register("ui.input.observe", {
-    description:
-      "Record which input events actually reach this window over a bounded span (ms ≤ 5000). Listens on window in the capture phase, so arrivals are recorded even if app handlers stop propagation. Use it to split a failed injection into 'the event never arrived' versus 'it arrived and nothing moved' — the two have different fixes. Drive the input from another connection while this runs.",
+    description: key("cmd.ui.input.observe.desc"),
     triggers: { ko: "입력 도착 관측 이벤트 수신 확인 주입 검증" },
     params: {
       events: {
         type: "json",
         description: key("cmd.ui.input.observe.param.events"),
       },
-      ms: { type: "number", description: "Recording window in ms (default 1000, max 5000)" },
+      ms: { type: "number", description: key("cmd.ui.input.observe.param.ms") },
     },
     returns: "{ ms, counts: { <type>: n }, samples: [{ t, type, x, y, target }] }",
     message: (d) =>
@@ -2346,12 +2323,11 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.trace", {
-    description:
-      "Sample an exposed node's rect over a bounded window (ms ≤ 5000) at animation-frame cadence and return the series. This is how you verify that a layout change actually moves — and how slow/hold (ui.motion) visibly stretch or freeze that movement. Trigger the mutation right after starting the trace (it samples from the next frame).",
+    description: key("cmd.ui.trace.desc"),
     triggers: { ko: "노드 추적 이동 기록 rect 시계열 트레이스" },
     params: {
-      address: { type: "string", description: "Exposed node address (ui.tree)", required: true },
-      ms: { type: "number", description: "Sampling window in ms (default 1000, max 5000)" },
+      address: { type: "string", description: key("cmd.ui.trace.param.address"), required: true },
+      ms: { type: "number", description: key("cmd.ui.trace.param.ms") },
     },
     returns:
       "{ address, from, to, samples: [{ t, x, y, w, h }], moved, translatedOnly(true = x/y changed while w/h stayed — the move-contract), resized }",
@@ -2408,8 +2384,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.trace.multi.start", {
-    description:
-      "Resolve multiple exposed DOM nodes, record the initial raw rects, install the public layout DOM-commit subscription, and return its trace id only after arming is complete.",
+    description: key("cmd.ui.trace.multi.start.desc"),
     triggers: { ko: "다중 DOM 거래 추적 시작 구독 무장" },
     params: {
       addresses: {
@@ -2419,14 +2394,11 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       },
       maxMs: {
         type: "number",
-        description: `Bounded subscription lifetime in ms (default 5000, max ${MULTI_DOM_TRACE_MAX_MS})`,
+        description: key("cmd.ui.trace.multi.start.param.maxMs", { max: MULTI_DOM_TRACE_MAX_MS }),
       },
       producers: {
         type: "json",
-        description:
-          "Which display-column observers to install: { interval?: boolean } (default all on)."
-          + " Turning the 8ms recorder off costs samples but stops its forced layout reads —"
-          + " use it to tell whether the instrument displaced the frames it was measuring.",
+        description: key("cmd.ui.trace.multi.start.param.producers"),
       },
     },
     returns:
@@ -2570,11 +2542,10 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.trace.multi.close", {
-    description:
-      "Close one armed multi-DOM trace, unsubscribe synchronously, and return initial, layout DOM-commit, and WebKit presentation-frame raw samples.",
+    description: key("cmd.ui.trace.multi.close.desc"),
     triggers: { ko: "다중 DOM 거래 추적 닫기 원장 조회" },
     params: {
-      traceId: { type: "string", description: "Trace id returned by ui.trace.multi.start", required: true },
+      traceId: { type: "string", description: key("cmd.ui.trace.multi.close.param.traceId"), required: true },
     },
     returns:
       "{ traceId, clock, addresses, startedAtUnixMs, endedAtUnixMs, timedOut, producers:{arm,layout-commit,commit-anchor,frame-callback,native-display-frame,interval,animation-end,settlement}, producersEnabled:{interval}, slotObservation:{status:'observed'|'unmeasured',producer:'frame-callback'|'native-display-frame',clock,transactionId,sourceGeneration,firstFrameSequence,lastFrameSequence,callbackCount,callbackIntervalsSkipped}, samples:[{sequence,sampledAtUnixMs,trigger:'initial'|'layout-dom-commit'|'presentation-frame',producer,transactionId:string|null,domCommittedAtUnixMs:number|null,displayFrame?:{traceId,producer:'native-display-link',clock,sourceGeneration,frameSequence,presentationRevision,presentedAtUnixMs},chrome:{projectId,spaceNode,traveling,rail:{count,role,visibility,nodeIdentity},movingPaneIds:[pane],paneChrome:[{pane,nodeIdentity,rect}],structuralFrames:[{pane,nodeIdentity,rect}],focusBoundaries:[{pane,nodeIdentity,rect}],relationOutlines:[{pane,nodeIdentity,rect,railRect,paneRect,geometry}]},nodes:[{address,connected,rect:{x,y,w,h},motion:null|{producer:'web-animation',phase:'active'|'completed',transactionId,animationName:'rail-flip-x',playState,startTime,currentTime,visualAtUnixMs,startFrame:{x,y,w,h},endFrame:{x,y,w,h}|null}}]}] }",
@@ -2628,17 +2599,15 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   // once: which vertical line is where, how wide the panel is, how large the slots and surfaces inside
   // it are. Several round trips let the state move in between, so different moments end up compared.
   register("ui.snapshot.dom", {
-    description:
-      "Measure every exposed node in one pass — one consistent instant, not several round trips that drift apart. Returns address, rect, and the requested computed properties for each, so you can read where a line sits, how wide a pane is, and how big its children are, all from the same moment. Pair with ui.motion hold to stop time first. filter narrows by address substring; selector measures raw elements that carry no address (a content-view host, a plugin body) — read-only, it drives nothing.",
+    description: key("cmd.ui.snapshot.dom.desc"),
     triggers: { ko: "돔 일괄 측정 스냅샷 좌표 폭 한번에 관측 선 위치" },
     params: {
-      filter: { type: "string", description: "Only addresses containing this substring" },
+      filter: { type: "string", description: key("cmd.ui.snapshot.dom.param.filter") },
       selector: {
         type: "string",
-        description:
-          "CSS selector for elements that carry no exposed address (e.g. webview[data-content-view]). Observation only — input still requires an address.",
+        description: key("cmd.ui.snapshot.dom.param.selector"),
       },
-      props: { type: "json", description: "Extra computed-style property names, e.g. [\"backgroundColor\",\"zIndex\"]" },
+      props: { type: "json", description: key("cmd.ui.snapshot.dom.param.props") },
     },
     examples: [
       "ui.snapshot.dom",
@@ -2703,14 +2672,13 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.input.dblclick", {
-    description:
-      "Dispatch a double-click (two clicks + a dblclick event) to an exposed node (E2E injection). Use to drive double-click UI flows like inline tab/label rename. Unexposed addresses return NOT_EXPOSED — no guessing. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first.",
+    description: key("cmd.ui.input.dblclick.desc"),
     triggers: { ko: "더블클릭 두번클릭 이름변경 rename 주입 E2E" },
     params: {
-      address: { type: "string", description: "Exposed node address from ui.tree", required: true },
-      x: { type: "number", description: "Surface-relative x (CSS px) when the address is a content view.", required: false },
-      y: { type: "number", description: "Surface-relative y (CSS px).", required: false },
-      button: { type: "string", description: "left (default) or right.", enum: ["left", "right"], required: false },
+      address: { type: "string", description: key("cmd.ui.input.dblclick.param.address"), required: true },
+      x: { type: "number", description: key("cmd.ui.input.dblclick.param.x"), required: false },
+      y: { type: "number", description: key("cmd.ui.input.dblclick.param.y"), required: false },
+      button: { type: "string", description: key("cmd.ui.input.dblclick.param.button"), enum: ["left", "right"], required: false },
     },
     returns: "{ dblclicked, address, surface? }",
     message: () => tmsg("msg.ui.input.dblclick"),
@@ -2754,12 +2722,11 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.input.fill", {
-    description:
-      "Set the value of an exposed input/textarea node and dispatch input+change events (E2E injection). Uses the native value setter so React controlled inputs pick the value up. Contenteditable nodes are filled too: textContent is replaced and input+focusout fire, so blur-commit inline editors take the value. Unexposed addresses return NOT_EXPOSED. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first.",
+    description: key("cmd.ui.input.fill.desc"),
     triggers: { ko: "입력 주입 값입력 텍스트입력 폼입력 E2E" },
     params: {
-      address: { type: "string", description: "Exposed node address from ui.tree", required: true },
-      value: { type: "string", description: "Value to set into the field", required: true },
+      address: { type: "string", description: key("cmd.ui.input.fill.param.address"), required: true },
+      value: { type: "string", description: key("cmd.ui.input.fill.param.value"), required: true },
     },
     returns: "{ filled, address }",
     message: () => tmsg("msg.ui.input.fill"),
@@ -2809,22 +2776,21 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.input.drag", {
-    description:
-      "Drive a pointer drag (mousedown on `from` -> mousemove -> mouseup). Two modes: (1) drop onto a target — give `to` (+ optional zone); (2) drag by dx/dy for resize handles. steps and durationMs expose a finite real-time sequence for animation/layout verification; defaults preserve the immediate two-move behavior. recordDir starts independent visual evidence before the drag without focusing the window; recording.status reports capture/storage failure without cancelling the finite pointer transaction. mousemove+mouseup dispatch on window so window-level drag listeners receive them.",
+    description: key("cmd.ui.input.drag.desc"),
     triggers: { ko: "드래그 주입 드롭 탭이동 분할 합치기 리사이즈 디바이더 E2E 포인터드래그" },
     params: {
-      from: { type: "string", description: "Source node address (the tab / gutter / element to grab)", required: true },
-      to: { type: "string", description: "Target node address to drop onto (mode 1). Omit when using dx/dy.", required: false },
+      from: { type: "string", description: key("cmd.ui.input.drag.param.from"), required: true },
+      to: { type: "string", description: key("cmd.ui.input.drag.param.to"), required: false },
       zone: {
         type: "string",
         description: key("cmd.ui.input.drag.param.zone"),
         enum: ["center", "left", "right", "top", "bottom"],
       },
-      x: { type: "number", description: "Surface-relative start x (CSS px) when `from` is a content view. Defaults to its top-left.", required: false },
-      y: { type: "number", description: "Surface-relative start y (CSS px).", required: false },
-      button: { type: "string", description: "left (default) or right.", enum: ["left", "right"], required: false },
-      dx: { type: "number", description: "Horizontal drag distance in CSS px from `from` center (mode 2 — resize/gutter). Alternative to `to`.", required: false },
-      dy: { type: "number", description: "Vertical drag distance in CSS px from `from` center (mode 2).", required: false },
+      x: { type: "number", description: key("cmd.ui.input.drag.param.x"), required: false },
+      y: { type: "number", description: key("cmd.ui.input.drag.param.y"), required: false },
+      button: { type: "string", description: key("cmd.ui.input.drag.param.button"), enum: ["left", "right"], required: false },
+      dx: { type: "number", description: key("cmd.ui.input.drag.param.dx"), required: false },
+      dy: { type: "number", description: key("cmd.ui.input.drag.param.dy"), required: false },
       steps: {
         type: "number",
         description: key("cmd.ui.input.drag.param.steps"),
@@ -3043,12 +3009,11 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.input.dnd", {
-    description:
-      "Synthesize an HTML5 drag-and-drop sequence (dragstart on `from` -> dragenter/dragover on `to` -> drop -> dragend) with a shared DataTransfer (E2E injection). ui.input.drag drives pointer(mouse) drags; this drives draggable/ondrop surfaces. Pass files to drop constructed File objects (base64 payload) onto a drop target — from is then optional. position picks the pointer y inside the target (before=upper quarter, after=lower quarter) for order-sensitive drop zones. Frames are yielded between steps so the UI can re-render (drop zones appearing after dragstart). Unexposed addresses return NOT_EXPOSED.",
+    description: key("cmd.ui.input.dnd.desc"),
     triggers: { ko: "드래그앤드롭 주입 dnd 파일드롭 재정렬 드롭존 E2E" },
     params: {
-      from: { type: "string", description: "Source node address (draggable). Optional when only dropping files.", required: false },
-      to: { type: "string", description: "Drop-target node address", required: true },
+      from: { type: "string", description: key("cmd.ui.input.dnd.param.from"), required: false },
+      to: { type: "string", description: key("cmd.ui.input.dnd.param.to"), required: true },
       position: {
         type: "string",
         description: key("cmd.ui.input.dnd.param.position"),
@@ -3056,7 +3021,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       },
       files: {
         type: "json",
-        description: '[{ name, type, base64 }] — constructed Files added to the DataTransfer (file drop)',
+        description: key("cmd.ui.input.dnd.param.files"),
         required: false,
       },
     },
@@ -3121,11 +3086,10 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   });
 
   register("ui.hit", {
-    description:
-      "Return the topmost DOM element at viewport x,y (tag, classes, data-* attrs, rect) — hit-test diagnostics for drag/click E2E (what would elementFromPoint see?). Pierces Shadow DOM: plugin views mount inside a shadow root, so this descends shadowRoots to the real deepest element instead of stopping at the shadow host (symmetric with ui.tree, which collects data-node across shadow boundaries). owners is the declared owner chain at that point, topmost first — read layer order from it instead of stitching dataset, host and painters together with your own rule; an empty chain means no exposed node owns that point. The chain is the ancestor path of that element, so every later entry contains every earlier one: ask whether a node owns the point by looking for it IN the chain, never by matching the topmost name against an address prefix — a slash-shaped name proves nothing about containment.",
+    description: key("cmd.ui.hit.desc"),
     params: {
-      x: { type: "number", description: "viewport x", required: true },
-      y: { type: "number", description: "viewport y", required: true },
+      x: { type: "number", description: key("cmd.ui.hit.param.x"), required: true },
+      y: { type: "number", description: key("cmd.ui.hit.param.y"), required: true },
     },
     returns: "{ tag, className, dataset, owners, host, painters, rect } | { tag: null }",
     message: (d) => (d.tag ? tmsg("msg.ui.hit.found", { tag: String(d.tag) }) : tmsg("msg.ui.hit.none")),

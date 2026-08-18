@@ -34,11 +34,7 @@ export function registerSystemCatalog(): void {
   // Two apps on one home hold the same name. This command quits **the app that hosts the calling
   // window** — that is why it is window-scoped (turning windowScoped off kills both apps).
   register("app.shutdown.commit", {
-    description:
-      "Quit one app on this home. Two frameworks can run here at once and both name their " +
-      "orchestrator window `main`, so a call that names no framework reaches every app holding " +
-      "that label and quits them all. Name the one you mean. The answer says which app replied " +
-      "and whether it quit, so a caller can tell the two apart in a fan-out reply.",
+    description: key("cmd.app.shutdown.commit.desc"),
     triggers: { ko: "앱 종료 끄기 quit" },
     params: {
       framework: {

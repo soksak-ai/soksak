@@ -557,19 +557,19 @@ export function registerCaptureCatalog(): void {
       },
       frames: {
         type: "number",
-        description: `Number of frames (default 40, range 1..${WINDOW_RECORD_MAX_FRAMES})`,
+        description: key("cmd.window.record.param.frames", { max: WINDOW_RECORD_MAX_FRAMES }),
       },
       intervalMs: {
         type: "number",
-        description: `Interval between frames in ms (default 40, range 0..${WINDOW_RECORD_MAX_INTERVAL_MS})`,
+        description: key("cmd.window.record.param.intervalMs", { max: WINDOW_RECORD_MAX_INTERVAL_MS }),
       },
       maxBytes: {
         type: "number",
-        description: `Optional total encoded PNG byte budget (positive safe integer, max ${WINDOW_RECORD_MAX_BYTES})`,
+        description: key("cmd.window.record.param.maxBytes", { max: WINDOW_RECORD_MAX_BYTES }),
       },
       frameTimeoutMs: {
         type: "number",
-        description: `Per-frame native completion deadline in ms (default ${WINDOW_RECORD_DEFAULT_FRAME_TIMEOUT_MS}, max ${WINDOW_RECORD_MAX_FRAME_TIMEOUT_MS})`,
+        description: key("cmd.window.record.param.frameTimeoutMs", { default: WINDOW_RECORD_DEFAULT_FRAME_TIMEOUT_MS, max: WINDOW_RECORD_MAX_FRAME_TIMEOUT_MS }),
       },
     },
     returns: "{ dir, frames, maxBytes:number|null, frameTimeoutMs }",

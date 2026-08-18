@@ -169,7 +169,7 @@ export function registerWindowCatalog(): void {
       recordIntervalMs: { type: "number", description: key("cmd.window.resizeSequence.param.recordIntervalMs") },
       recordMaxBytes: {
         type: "number",
-        description: `Optional total encoded PNG byte budget (positive safe integer, max ${WINDOW_RECORD_MAX_BYTES})`,
+        description: key("cmd.window.resizeSequence.param.recordMaxBytes", { max: WINDOW_RECORD_MAX_BYTES }),
       },
     },
     returns:

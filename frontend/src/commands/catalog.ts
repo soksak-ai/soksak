@@ -1067,7 +1067,7 @@ export function registerCatalog(): void {
     params: {
       workspace: { ...P.workspace, required: true },
       title: { type: "string", description: key("cmd.workspace.update.param.title") },
-      color: { type: "string", description: 'Accent color ("" = remove)' },
+      color: { type: "string", description: key("cmd.workspace.update.param.color") },
     },
     returns: "{ projectId }",
     message: () => tmsg("msg.workspace.update"),

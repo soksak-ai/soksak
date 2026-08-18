@@ -94,8 +94,7 @@ function serializeRuntime(p: PluginRuntime) {
 
 export function registerPluginCatalog(): void {
   register("program.list", {
-    description:
-      "List all programs available in the new-tab menu. Every entry is plugin-registered; nothing is built-in. Use to discover launchable programs and their menu category paths.",
+    description: key("cmd.program.list.desc"),
     triggers: { ko: "프로그램 목록 앱 메뉴 새탭" },
     params: {},
     returns: "{ programs: [{ id, title, path?, kind, pluginId }] }",
@@ -123,11 +122,10 @@ export function registerPluginCatalog(): void {
   });
 
   register("program.wait", {
-    description:
-      "Wait for one declared program to enter the live registry. This is an event subscription, not a polling loop; use it at boot boundaries before opening a plugin-owned view.",
+    description: key("cmd.program.wait.desc"),
     triggers: { ko: "프로그램 준비 대기 플러그인 등록 이벤트" },
     params: {
-      id: { type: "string", description: "Program id to await", required: true },
+      id: { type: "string", description: key("cmd.program.wait.param.id"), required: true },
       timeoutMs: {
         type: "number",
         description: key("cmd.program.wait.param.timeoutMs"),
@@ -250,8 +248,7 @@ export function registerPluginCatalog(): void {
   // consent, enable, update and the refusal reasons unreachable from anywhere. A surface the core
   // mounts and nothing opens is a surface that is gone.
   register("plugin.manager", {
-    description:
-      "Open or close the plugin manager — verified release install, consent, enable and disable, update, remove, and the reason a plugin was refused. Omit open to flip it.",
+    description: key("cmd.plugin.manager.desc"),
     triggers: { ko: "플러그인 관리 설치 마켓 열기 닫기" },
     params: {
       open: { type: "boolean", description: key("cmd.plugin.manager.param.open") },
@@ -267,8 +264,7 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.list", {
-    description:
-      "List all installed and dev plugins with their runtime status, permissions, and rejection reasons. rejected holds one entry per directory whose manifest failed validation (dir = plugin folder, errors = the specific validation failures). Use to check which plugins exist and whether any failed to load.",
+    description: key("cmd.plugin.list.desc"),
     triggers: { ko: "플러그인 목록 설치된 확장 상태" },
     params: {},
     returns: "{ plugins: [{id, name, version, status, permissions, …}], rejected: [{dir, errors}] }",
@@ -305,8 +301,7 @@ export function registerPluginCatalog(): void {
   };
 
   register("registry.list", {
-    description:
-      "List configured official, public, and private registry descriptors with pinned public-key metadata and per-registry status. A private credential is represented only by its core-derived opaque slot reference; secret values are never returned.",
+    description: key("cmd.registry.list.desc"),
     triggers: { ko: "레지스트리 목록 공개 비공개 신뢰키 상태" },
     params: {},
     returns:
@@ -322,15 +317,13 @@ export function registerPluginCatalog(): void {
   });
 
   register("registry.add", {
-    description:
-      "Add a public or private registry descriptor. The descriptor is strict: a credential-free HTTPS index URL and pinned Ed25519 public key. For private registries the core derives one vault credential slot from registry id; descriptors cannot select a namespace/key, and raw tokens, headers, passwords, URL userinfo, queries, and fragments are rejected.",
+    description: key("cmd.registry.add.desc"),
     triggers: { ko: "레지스트리 추가 공개 비공개 신뢰키 vault" },
     params: {
       descriptor: {
         type: "json",
         required: true,
-        description:
-          "{id,name,indexUrl,visibility:'public'|'private',trustedPublicKey:{algorithm:'ed25519',keyId,value}}; private credentialRef is core-derived read-only metadata",
+        description: key("cmd.registry.add.param.descriptor"),
       },
     },
     returns: "{ registryId }",
@@ -359,11 +352,10 @@ export function registerPluginCatalog(): void {
   });
 
   register("registry.remove", {
-    description:
-      "Remove a user-added registry descriptor and its cached units. The built-in official registry is immutable and cannot be removed.",
+    description: key("cmd.registry.remove.desc"),
     triggers: { ko: "레지스트리 제거 삭제" },
     params: {
-      registryId: { type: "string", required: true, description: "Registry descriptor id" },
+      registryId: { type: "string", required: true, description: key("cmd.registry.remove.param.registryId") },
     },
     returns: "{ registryId }",
     message: (d) => tmsg("msg.registry.remove", { id: String(d.registryId) }),
@@ -378,12 +370,11 @@ export function registerPluginCatalog(): void {
   });
 
   register("registry.refresh", {
-    description:
-      "Fetch and verify one registry or all registries. Only an index signed by the descriptor-pinned Ed25519 key becomes live; unsigned or mismatched indexes remain uncertified and cached units are not replaced.",
+    description: key("cmd.registry.refresh.desc"),
     triggers: { ko: "레지스트리 새로고침 서명 검증 인증" },
     params: {
-      registryId: { type: "string", description: "Registry id; omit to refresh all" },
-      force: { type: "boolean", description: "Refetch even when this session already fetched", default: true },
+      registryId: { type: "string", description: key("cmd.registry.refresh.param.registryId") },
+      force: { type: "boolean", description: key("cmd.registry.refresh.param.force"), default: true },
     },
     returns: "{ results: [{registryId,status,error?,skipped?}] }",
     message: (d) => tmsg("msg.registry.refresh", { n: ((d.results as unknown[]) ?? []).length }),
@@ -407,11 +398,10 @@ export function registerPluginCatalog(): void {
   });
 
   register("registry.status", {
-    description:
-      "Read per-registry fetch, certification, error, last-fetch, and recent lifecycle-event state without performing network I/O.",
+    description: key("cmd.registry.status.desc"),
     triggers: { ko: "레지스트리 상태 오류 이벤트 인증" },
     params: {
-      registryId: { type: "string", description: "Registry id; omit for all" },
+      registryId: { type: "string", description: key("cmd.registry.status.param.registryId") },
     },
     returns: "{ registries: [descriptor+status], events: [{seq,at,type,registryId,detail?}] }",
     message: (d) => tmsg("msg.registry.status", { n: ((d.registries as unknown[]) ?? []).length }),
@@ -434,8 +424,7 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.catalog", {
-    description:
-      "List authenticated plugin release references from configured registries, merged with local install state. Unit-owned display metadata and commands become available only after release verification.",
+    description: key("cmd.plugin.catalog.desc"),
     triggers: { ko: "플러그인 카탈로그 레지스트리 설치 가능 목록 마켓 검색" },
     params: {
       registryId: {
@@ -499,8 +488,7 @@ export function registerPluginCatalog(): void {
   });
 
   register("command.docs", {
-    description:
-      "The whole executable command surface in one call: core command specs, installed plugin command specs, and authenticated release references for units that are not installed. A registry never supplies unit command declarations.",
+    description: key("cmd.command.docs.desc"),
     triggers: { ko: "전체 명령 문서 레퍼런스 매뉴얼 한눈에 코어 플러그인 미설치" },
     params: {
       refresh: {
@@ -553,16 +541,15 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.install", {
-    description:
-      "Install one authenticated plugin release and its complete plugin/sidecar/kit dependency closure from one registry. Git URLs, branches, package registries, and local paths are not installation sources.",
+    description: key("cmd.plugin.install.desc"),
     triggers: { ko: "플러그인 설치 추가 install" },
     params: {
       source: {
         type: "string",
-        description: 'Official registry short name (for example "activity")',
+        description: key("cmd.plugin.install.param.source"),
       },
-      registryId: { type: "string", description: "Registry id for a qualified catalog install" },
-      unitId: { type: "string", description: "Unit id for a qualified catalog install" },
+      registryId: { type: "string", description: key("cmd.plugin.install.param.registryId") },
+      unitId: { type: "string", description: key("cmd.plugin.install.param.unitId") },
     },
     primary: "source",
     returns: "{ id, generation }",
@@ -645,12 +632,11 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.update", {
-    description:
-      "Replace an installed plugin and its complete dependency closure with the greatest authenticated release from its registry. Re-consent is required when the verified manifest changes permissions.",
+    description: key("cmd.plugin.update.desc"),
     triggers: { ko: "플러그인 업데이트 갱신 최신화" },
     params: {
-      id: { type: "string", description: "Plugin id", required: true },
-      registryId: { type: "string", description: "Origin registry id when the unit id exists in multiple registries" },
+      id: { type: "string", description: key("cmd.plugin.update.param.id"), required: true },
+      registryId: { type: "string", description: key("cmd.plugin.update.param.registryId") },
     },
     // The owner determines the answer — it is the same from any window (registry.ts windowScoped).
     windowScoped: false,
@@ -669,11 +655,10 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.remove", {
-    description:
-      "Remove a plugin and its directory. Plugin-owned data (plugins-data) is preserved. Blocked with CASCADE_REQUIRED if dependents exist unless cascade:true is passed to remove them transitively.",
+    description: key("cmd.plugin.remove.desc"),
     triggers: { ko: "플러그인 제거 삭제 uninstall" },
     params: {
-      id: { type: "string", description: "Plugin id", required: true },
+      id: { type: "string", description: key("cmd.plugin.remove.param.id"), required: true },
       cascade: {
         type: "boolean",
         description: key("cmd.plugin.remove.param.cascade"),
@@ -692,11 +677,10 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.deps", {
-    description:
-      "Inspect the plugin dependency graph. With an id, returns that plugin's dependencies, dependents, reference count, and cascade impact. Without an id, returns all version integrity issues across installed plugins.",
+    description: key("cmd.plugin.deps.desc"),
     triggers: { ko: "플러그인 의존성 의존 그래프" },
     params: {
-      id: { type: "string", description: "Plugin id. Omit to list all version integrity issues." },
+      id: { type: "string", description: key("cmd.plugin.deps.param.id") },
     },
     returns: "{ summary?, issues? }",
     message: (d) =>
@@ -721,11 +705,10 @@ export function registerPluginCatalog(): void {
 
 
   register("plugin.enable", {
-    description:
-      "Activate a plugin so its code begins executing. Returns CONSENT_REQUIRED if the user has not yet consented via the UI consent modal — remote enable without recorded consent is always blocked.",
+    description: key("cmd.plugin.enable.desc"),
     triggers: { ko: "플러그인 활성화 켜기 enable" },
     params: {
-      id: { type: "string", description: "Plugin id", required: true },
+      id: { type: "string", description: key("cmd.plugin.enable.param.id"), required: true },
     },
     returns: "{ id, status }",
     message: (d) => tmsg("msg.plugin.enable", { id: String(d.id) }),
@@ -754,11 +737,10 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.disable", {
-    description:
-      "Deactivate a plugin and revoke all of its registered commands, views, and extensions (spec §0-4). Use when you want to stop a plugin without removing it.",
+    description: key("cmd.plugin.disable.desc"),
     triggers: { ko: "플러그인 비활성화 끄기 disable" },
     params: {
-      id: { type: "string", description: "Plugin id", required: true },
+      id: { type: "string", description: key("cmd.plugin.disable.param.id"), required: true },
     },
     returns: "{ id, status }",
     message: (d) => tmsg("msg.plugin.disable", { id: String(d.id) }),
@@ -769,10 +751,9 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.consent.summary", {
-    description:
-      "Fetch the consent display data for a plugin — permissions, contribution counts, and dependency tree (plugins + libraries). Same single source used by the consent modal. Use to inspect what the user will be asked to consent to.",
+    description: key("cmd.plugin.consent.summary.desc"),
     triggers: { ko: "플러그인 동의 요약 권한 확인" },
-    params: { id: { type: "string", description: "Plugin id", required: true } },
+    params: { id: { type: "string", description: key("cmd.plugin.consent.summary.param.id"), required: true } },
     returns: "{ id, version, permissions, contributes, dependencies:{plugins,libraries} }",
     message: (d) => tmsg("msg.plugin.consent.summary", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND"],
@@ -786,10 +767,9 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.consent.revoke", {
-    description:
-      "Revoke a recorded consent, putting the plugin back into a re-consent-required state. If active, the plugin and all transitive dependents are disabled first. Safe because it only reduces permissions.",
+    description: key("cmd.plugin.consent.revoke.desc"),
     triggers: { ko: "동의 철회 취소 revoke 권한 제거" },
-    params: { id: { type: "string", description: "Plugin id", required: true } },
+    params: { id: { type: "string", description: key("cmd.plugin.consent.revoke.param.id"), required: true } },
     returns: "{ id }",
     message: (d) => tmsg("msg.plugin.consent.revoke", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND"],
@@ -799,10 +779,9 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.consent.grant", {
-    description:
-      "Grant consent for a plugin's requested permissions — the CLI/headless equivalent of approving the consent modal. Records consent (manifest version + permissions) so the plugin can then be enabled without opening the webview. Review first with plugin.consent.summary. Dev-sourced plugins bypass consent and do not need this. Danger-gated: granting permissions is a deliberate, security-sensitive act.",
+    description: key("cmd.plugin.consent.grant.desc"),
     triggers: { ko: "동의 승인 허가 grant 권한 부여 부여" },
-    params: { id: { type: "string", description: "Plugin id", required: true } },
+    params: { id: { type: "string", description: key("cmd.plugin.consent.grant.param.id"), required: true } },
     returns: "{ id, granted }",
     message: (d) =>
       d.granted
@@ -821,10 +800,9 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.consent.chain", {
-    description:
-      "Return the ordered list of plugins still needing consent before the target plugin can be activated (dependencies first). Dev-sourced and already-consented plugins are excluded. An empty pending array means the plugin can be activated immediately.",
+    description: key("cmd.plugin.consent.chain.desc"),
     triggers: { ko: "동의 체인 미동의 순서 활성화 전" },
-    params: { id: { type: "string", description: "Plugin id", required: true } },
+    params: { id: { type: "string", description: key("cmd.plugin.consent.chain.param.id"), required: true } },
     returns: "{ id, pending }",
     message: (d) =>
       ((d.pending as unknown[]) ?? []).length === 0
@@ -841,8 +819,7 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.consent.preview", {
-    description:
-      "Open the consent modal for inspection without activating the plugin. Use when a human wants to review permissions, contributions, and dependencies before deciding to consent. Idempotent — call again or pass an empty id to close.",
+    description: key("cmd.plugin.consent.preview.desc"),
     triggers: { ko: "동의 모달 미리보기 확인 권한 검사" },
     params: {
       id: {
@@ -885,10 +862,9 @@ export function registerPluginCatalog(): void {
   };
 
   register("plugin.settings.schema", {
-    description:
-      "Return the plugin's settings schema from its manifest configuration block. This is the single source of truth from which both UI and CLI derive setting fields and validation rules.",
+    description: key("cmd.plugin.settings.schema.desc"),
     triggers: { ko: "플러그인 설정 스키마 구성 항목" },
-    params: { id: { type: "string", description: "Plugin id", required: true } },
+    params: { id: { type: "string", description: key("cmd.plugin.settings.schema.param.id"), required: true } },
     returns: "{ id, configuration: ConfigSetting[] }",
     message: (d) => tmsg("msg.plugin.settings.schema", { n: ((d.configuration as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
@@ -901,14 +877,13 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.settings.get", {
-    description:
-      "Read plugin setting values at a given scope. Scope 'effective' (default) merges global defaults with workspace overrides. Omit key to retrieve all settings at once.",
+    description: key("cmd.plugin.settings.get.desc"),
     triggers: { ko: "플러그인 설정 조회 읽기 값 확인" },
     params: {
-      id: { type: "string", description: "Plugin id", required: true },
-      key: { type: "string", description: "Setting key. Omit to return all settings." },
-      scope: { type: "string", description: "effective (default, merges global+workspace) | global | workspace", enum: ["effective", "global", "workspace"] },
-      workspace: { type: "string", description: "Workspace id. Defaults to active workspace. Applies to workspace and effective scopes." },
+      id: { type: "string", description: key("cmd.plugin.settings.get.param.id"), required: true },
+      key: { type: "string", description: key("cmd.plugin.settings.get.param.key") },
+      scope: { type: "string", description: key("cmd.plugin.settings.get.param.scope"), enum: ["effective", "global", "workspace"] },
+      workspace: { type: "string", description: key("cmd.plugin.settings.get.param.workspace") },
     },
     returns: "{ id, scope, projectId, values } or { id, scope, projectId, key, value }",
     message: (d) =>
@@ -946,15 +921,14 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.settings.set", {
-    description:
-      "Write a plugin setting value after schema validation. Scope defaults to global; use workspace to override per-workspace. Validation failures are rejected without saving.",
+    description: key("cmd.plugin.settings.set.desc"),
     triggers: { ko: "플러그인 설정 변경 저장 set 값 지정" },
     params: {
-      id: { type: "string", description: "Plugin id", required: true },
-      key: { type: "string", description: "Setting key", required: true },
-      value: { type: "json", description: "Value to set (boolean | number | string — must match schema type)", required: true },
-      scope: { type: "string", description: "global (default) | workspace", enum: ["global", "workspace"] },
-      workspace: { type: "string", description: "Workspace id. Defaults to active workspace. Applies when scope=workspace." },
+      id: { type: "string", description: key("cmd.plugin.settings.set.param.id"), required: true },
+      key: { type: "string", description: key("cmd.plugin.settings.set.param.key"), required: true },
+      value: { type: "json", description: key("cmd.plugin.settings.set.param.value"), required: true },
+      scope: { type: "string", description: key("cmd.plugin.settings.set.param.scope"), enum: ["global", "workspace"] },
+      workspace: { type: "string", description: key("cmd.plugin.settings.set.param.workspace") },
     },
     returns: "{ id, scope, key, value, projectId?, workspaceRoot? }",
     message: (d) => tmsg("msg.plugin.settings.set", { key: String(d.key), value: String(d.value) }),
@@ -991,14 +965,13 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.settings.reset", {
-    description:
-      "Remove a setting override and restore the default value. Scope defaults to global. Omit key to reset all settings at once.",
+    description: key("cmd.plugin.settings.reset.desc"),
     triggers: { ko: "플러그인 설정 초기화 리셋 기본값" },
     params: {
-      id: { type: "string", description: "Plugin id", required: true },
-      key: { type: "string", description: "Setting key. Omit to reset all settings." },
-      scope: { type: "string", description: "global (default) | workspace", enum: ["global", "workspace"] },
-      workspace: { type: "string", description: "Workspace id. Defaults to active workspace. Applies when scope=workspace." },
+      id: { type: "string", description: key("cmd.plugin.settings.reset.param.id"), required: true },
+      key: { type: "string", description: key("cmd.plugin.settings.reset.param.key") },
+      scope: { type: "string", description: key("cmd.plugin.settings.reset.param.scope"), enum: ["global", "workspace"] },
+      workspace: { type: "string", description: key("cmd.plugin.settings.reset.param.workspace") },
     },
     returns: "{ id, scope, key, projectId?, workspaceRoot? }",
     message: (d) =>
@@ -1031,11 +1004,10 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.settings.open", {
-    description:
-      "Open the unified settings modal. With a plugin id, navigates directly to that plugin's settings section. Omit id for the general preferences section. Pass an empty string to close the modal. Idempotent.",
+    description: key("cmd.plugin.settings.open.desc"),
     triggers: { ko: "설정 열기 환경설정 모달 플러그인 설정 패널" },
     params: {
-      id: { type: "string", description: "Plugin id (omit for general preferences, empty string to close)" },
+      id: { type: "string", description: key("cmd.plugin.settings.open.param.id") },
     },
     returns: "{ section }",
     message: (d) =>
@@ -1063,8 +1035,7 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.reload", {
-    description:
-      "Rescan the plugins directory and reactivate every plugin whose consent is still valid; the response reports which manifests were rejected during the rescan and why. With id, reload only that one plugin instead: its plugin.json is read from disk again and re-validated, then the plugin is disabled and re-enabled (same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. A manifest that no longer validates is refused with its reason instead of activating fresh code against a stale declaration. Use after manually editing plugin files or adding new plugin folders.",
+    description: key("cmd.plugin.reload.desc"),
     triggers: { ko: "플러그인 재적재 리로드 새로고침" },
     params: {
       id: {
@@ -1093,13 +1064,12 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.view.open", {
-    description:
-      "Open a plugin view in the specified placement. Defaults to the view's declared defaultPlacement when placement is omitted. View implementation and placement are orthogonal (spec §0-6).",
+    description: key("cmd.plugin.view.open.desc"),
     triggers: { ko: "플러그인 뷰 열기 사이드바 칸 탭 보기" },
     params: {
       viewKey: {
         type: "string",
-        description: 'Global view key in the form "<pluginId>.<viewId>"',
+        description: key("cmd.plugin.view.open.param.viewKey"),
         required: true,
       },
       placement: {
@@ -1107,7 +1077,7 @@ export function registerPluginCatalog(): void {
         description: key("cmd.plugin.view.open.param.placement"),
         enum: VIEW_PLACEMENTS,
       },
-      workspace: { type: "string", description: "Workspace id. Defaults to the active workspace." },
+      workspace: { type: "string", description: key("cmd.plugin.view.open.param.workspace") },
     },
     returns:
       "{ viewKey, placement, projectId } (sidebar placements) | { viewKey, placement, projectId, paneId, tabId, existing } (content placement)",
@@ -1162,16 +1132,15 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.view.close", {
-    description:
-      "Close a plugin view. Sidebar placements are deselected and revert to the file tree. Content placements close the tab in every pane where the view is open.",
+    description: key("cmd.plugin.view.close.desc"),
     triggers: { ko: "플러그인 뷰 닫기 사이드바 탭 제거" },
     params: {
       viewKey: {
         type: "string",
-        description: 'Global view key in the form "<pluginId>.<viewId>"',
+        description: key("cmd.plugin.view.close.param.viewKey"),
         required: true,
       },
-      workspace: { type: "string", description: "Workspace id. Defaults to the active workspace." },
+      workspace: { type: "string", description: key("cmd.plugin.view.close.param.workspace") },
     },
     returns: "{ viewKey, projectId, closed: [placement list], tabIds: [closed content tab ids] }",
     message: (d) => tmsg("msg.plugin.view.close", { view: String(d.viewKey), n: ((d.closed as unknown[]) ?? []).length }),
@@ -1217,11 +1186,10 @@ export function registerPluginCatalog(): void {
 
 
   register("plugin.dev.load", {
-    description:
-      "Select an existing absolute plugin workspace as this identity home's development source, validate its plugin.json, and load it without replacing a separate official installation. Development (dev) identity only — debug and release homes verify published installs (home-lane rule). Dev-sourced plugins bypass the consent gate (spec §0-5 exception).",
+    description: key("cmd.plugin.dev.load.desc"),
     triggers: { ko: "플러그인 개발 로드 dev 임시 적재" },
     params: {
-      path: { type: "string", description: "Absolute path to the plugin directory", required: true },
+      path: { type: "string", description: key("cmd.plugin.dev.load.param.path"), required: true },
     },
     returns: "{ id, dir }",
     message: (d) => tmsg("msg.plugin.dev.load", { id: String(d.id) }),
@@ -1246,11 +1214,10 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.dev.create", {
-    description:
-      "Scaffold a new plugin in the current identity home's workspaces/plugins/<id> directory, register that absolute directory as its development source, initialize Git, and reload plugins. Available in every build, not only development builds.",
+    description: key("cmd.plugin.dev.create.desc"),
     triggers: { ko: "플러그인 개발 새로 만들기 스캐폴드 scaffold 생성" },
     params: {
-      id: { type: "string", description: "Plugin id (must match ^[a-z0-9][a-z0-9-]*$)", required: true },
+      id: { type: "string", description: key("cmd.plugin.dev.create.param.id"), required: true },
     },
     returns: "{ ok, dir, pluginId }",
     message: (d) => tmsg("msg.plugin.dev.create", { id: String(d.pluginId) }),
@@ -1270,8 +1237,7 @@ export function registerPluginCatalog(): void {
   // soksak-validate (headless, plugins/spec) — separate. This queries, over the e2e socket, whether
   // the declared commands and nodes are actually registered and exposed.
   register("plugin.conformance", {
-    description:
-      "Report a plugin's declared-vs-actual conformance: manifest declarations vs what is actually registered/exposed at runtime, across every register-gated contribution (commands/views/fileViewers/iconSets) plus DOM nodes. Read-only diagnosis. The publish-time schema gate is soksak-validate (headless, plugins/spec); this is the in-app runtime surface.",
+    description: key("cmd.plugin.conformance.desc"),
     triggers: { ko: "플러그인 정합성 선언 실제 conformance" },
     params: { id: { type: "string", required: true, description: key("cmd.plugin.conformance.param.id") } },
     returns:

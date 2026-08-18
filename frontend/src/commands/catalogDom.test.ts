@@ -9,6 +9,8 @@
 //  2) ui.measure — style always includes the interaction/visibility axes (pointerEvents/opacity/visibility),
 //     props[] requests arbitrary computed props (removing the hardcoded field limit), plus occlusion reachability.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// A command description is a key, resolved where the catalogue is read.
+import { text, withReaderLanguage } from "../i18n";
 import { startPointerOrderRepair } from "../lib/pointerOrderRepair";
 import {
   __resetLayoutTransitionHostForTest,
@@ -277,7 +279,12 @@ describe("ui.tree/ui.measure — public DOM node instance identity", () => {
   it("the discoverable spec of both commands declares the nodeIdentity contract", () => {
     for (const name of ["ui.tree", "ui.measure"] as const) {
       const spec = getSpec(name)!;
-      expect(spec.description).toContain("nodeIdentity");
+      // The description is a key now; read the sentence, in both editions, because a contract
+      // stated to one reader and not the other is the defect a key exists to prevent.
+      for (const language of ["en", "ko"] as const) {
+        expect(withReaderLanguage(language, () => text(spec.description)), language)
+          .toContain("nodeIdentity");
+      }
       expect(spec.returns).toContain("nodeIdentity");
     }
   });
