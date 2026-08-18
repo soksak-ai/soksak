@@ -64,8 +64,18 @@ What a plugin contributes, and how many of the 46 use each: `commands` 81 declar
 `skill` 5, `notify` 4, `network` 4.
 
 These are the four attachment seams of `ARCHITECTURE.md` in manifest form: a program declares a
-`kind` the skeleton routes to, a view declares a slot, a command registers once and is reachable
+`kind` the skeleton routes to, a view declares a surface, a command registers once and is reachable
 through every transport, and a permission gates a capability.
+
+A view's `surfaces` is `tab`, `side`, or both — what it is drawn on, never where that is. A `tab`
+view is a content tab a person opens and closes; a `side` view stands beside the work, in whichever
+of the three places a person arranged the set holding it into (`SIDEBAR.md` P1–P3). A view naming a
+place would be arranging the window from inside the plugin.
+
+`placements` and `defaultPlacement` were how a view named a place, and both are deleted rather than
+mapped (L11c). A manifest carrying either is refused by name: read and dropped, the view would
+stand somewhere its author never chose. 26 of the 46 sampled manifests carry them and are refused
+until each is brought over.
 
 ## P5. A plugin's spec is the plugin's, and the core's is the core's
 

@@ -31,7 +31,7 @@ contract is in its own canonical document, linked below.
 | `go test ./core/...` | the core answers commands with no window |
 | `sok ui.tree` | every reachable node carries `data-node` |
 | `sok window.snapshot` | writes a PNG without taking focus |
-| `task verify:drawn` | what a link names is what the window draws, and an open modal leaves no surface above it |
+| `task verify:drawn` | what a link names is what the window draws — in each of the three places and in all three at once — and an open modal leaves no surface above it |
 | `task verify:arrangement` | each of the nine ways focus moves between three panes leaves the window it is meant to |
 
 Contracts: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`CONTROL-PROTOCOL.md`](CONTROL-PROTOCOL.md),
@@ -58,7 +58,7 @@ move between its three panes is a test of its own, run by name. What it refuses:
 | the band it holds | the panes' band — it held 45..617 where the panes held 87..612 |
 | what it looks like | the same card as the view it stands against: rgb(14,15,21) beside rgb(21,22,30) failed |
 | the three panes | the shape they were built in, whatever the sidebar does |
-| every address | one node each — both regions had written their cells under the same name |
+| every address | one node each — two places had written their cells under the same name |
 | the evidence | a picture per case, kept from the recording of that case |
 
 Each of those was added the day a person saw what the gate did not ask. Held by
@@ -108,7 +108,7 @@ Contract: [`NATIVE-SURFACES.md`](NATIVE-SURFACES.md).
 
 | Judged by | Answered 2026-08-16 |
 | --- | --- |
-| `sok layout.transition.journal` | 2026-08-16: every travelling record held 0 rail surfaces and every settled record exactly 1. The rule changed 2026-08-17 — a region that owns width stays on the screen while the panes travel, so a travelling record now holds 1 as well. Removing it left 165 points belonging to nobody for 183–194ms on every move that changed which pane the rail follows, measured over all six moves in the named three-pane window and seen in the recorded frames |
+| `sok layout.transition.journal` | 2026-08-16: every travelling record held 0 rail surfaces and every settled record exactly 1. The rule changed 2026-08-17 — a place that owns width stays on the screen while the panes travel, so a travelling record now holds 1 as well. Removing it left 165 points belonging to nobody for 183–194ms on every move that changed which pane the rail follows, measured over all six moves in the named three-pane window and seen in the recorded frames |
 | `sok layout.arrangement` under PIN | a focus change wrote no arrangement record — nothing moved |
 | `sok layout.arrangement` under FLOW | four focus changes, each landing the station on the focused pane's left clean line |
 | `sok ui.focus.state` | the aperture's target is the focused pane |
@@ -150,8 +150,9 @@ has watched fail is a claim, not a gate.
 | `observation_gate_test.go` | what the build claims to observe, it serves |
 | `docs_carried_gate_test.go` | a carried document is not cited as contract before its review |
 | `task verify:motion` | the window keeps drawing while the layout changes — run where the machine is quiet, because a stalled window and a loaded machine produce the same number |
-| `layout_scenarios_gate_test.go` | in the named window — a terminal top left, a browser under it, a terminal filling the right — every one of the six ways focus can move leaves no hole between a region and the panes, no stale declaration, and no page the native layer holds away from where the document put it. Read frame by frame inside the window (`layout.trace`), and a case whose window stalled is reported rather than judged: a page cannot follow a pane that jumped 160 points in one step |
-| `surface_alignment_gate_test.go` | a person's click on the exposed region toggle leaves the page on its pane |
+| `layout_scenarios_gate_test.go` | in the named window — a terminal top left, a browser under it, a terminal filling the right — every one of the six ways focus can move leaves no hole between a place and the panes, no stale declaration, and no page the native layer holds away from where the document put it. Read frame by frame inside the window (`layout.trace`), and a case whose window stalled is reported rather than judged: a page cannot follow a pane that jumped 160 points in one step |
+| `surface_alignment_gate_test.go` | a person's click on the exposed rail toggle leaves the page on its pane |
+| `drawn_gate_test.go` | a section stands in the place its link names and in no other, and clearing the link takes it off the screen. Three places at once, because a host that never reads which place the link names passes a one-place run — measured 2026-08-17, a planted one survived until a section stood in two |
 | `surface_cover_gate_test.go` | no native surface stands over another, in a window holding two pages, through a sidebar opening, a tab switch and the plugin manager. Every surface here is layer 0 — peers — and two peers holding one place is one of them being in the wrong place. Each state reports how many surfaces it held, because a state with one proves nothing and reads the same as one that asked a real question |
 
 ---
@@ -248,7 +249,7 @@ Written here so it is not rediscovered (L2).
   change stopped it for 68 to 217ms. Nothing on the screen
   moves in that time — the pane, the rail, and the page composited above them all
   wait together — and every other motion number is downstream of it. The page is
-  drawn 160 points over the region for about 105ms on one of the six moves, which
+  drawn 160 points over the rail for about 105ms on one of the six moves, which
   is this stall seen from the surface's side.
 
   Where it goes is half answered. The paths this build owns are timed and cost 1
