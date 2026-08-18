@@ -199,6 +199,16 @@ func TestEachClickLeavesTheArrangementItIsMeantTo(t *testing.T) {
 			// And whose section is in it. A sidebar holding another plugin's section is what a
 			// person reported as "this is not the browser's sidebar", and it is a different window
 			// from the one defined here even though every rectangle in it measures right.
+			//
+			// Polled, and the reason is the one the drawn gate holds three of: nothing announces
+			// that a region has finished changing what it draws. Measured 2026-08-18 here — the
+			// click's own transaction closed, ui.layout.wait-settled answered, and the sidebar was
+			// still holding the section of the pane that had just been left. Every rectangle in
+			// that window read right, which is why this is asked by name.
+			gate.until(5*time.Second, func() bool {
+				return strings.Join(gate.arrangementNow(window).sections["left"], ",") == click.section
+			}, "the sidebar to hold "+click.section)
+			now = gate.arrangementNow(window)
 			if got := now.sections["left"]; strings.Join(got, ",") != click.section {
 				t.Errorf("clicking %s: the sidebar holds %s where the set linked to this view's "+
 					"plugin is %s.\n%s\nA sidebar's width does not name whose section is in it.",

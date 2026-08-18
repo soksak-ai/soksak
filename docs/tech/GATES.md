@@ -177,13 +177,6 @@ Written here so it is not rediscovered (L2).
   items now, and no gate refuses a core-drawn one coming back.
 - **Plugin loading beyond these two plugins is untried.** The terminal and the
   browser are installed and driven; nothing has exercised a third.
-- **Two plugin types are still in the host's own signatures.** `register.go`
-  types `HostDeps.Sessions` as `terminalcmd.Sessions`, and `terminal_sink.go`
-  takes `terminal.Handle` and `terminal.InputTrace`. A second terminal plugin
-  would need a second field. Both are entered in `couplingWiring` marked DEBT
-  with the reason, so the gate refuses any *new* file in `frameworks/` that
-  names a plugin. The core owns no session contract and no trace contract for
-  them to be typed against yet.
 - **One surface behind another is still unmeasured.** A DOM overlay is covered:
   `surfaceShown` takes the open-overlay count as a layer, and `verify:drawn`
   opens the plugin manager and reads `surface.composition` for anything still
@@ -203,6 +196,12 @@ Written here so it is not rediscovered (L2).
   command wait on the drawn set was reverted: it restated the rule for what is
   drawn instead of reading it, which is a second answer to the same question and
   was wrong on its first run.
+
+  Confirmed from a second gate 2026-08-18: the arrangement gate clicks a pane,
+  the click's own transaction closes, `ui.layout.wait-settled` answers, and the
+  sidebar is still holding the section of the pane that was left. Every
+  rectangle in that window reads right, which is why the section is asked for by
+  name. A person sees the previous view's sidebar for that stretch.
 
 - **The application dies inside Wails' asset server during a recording.** Measured
   2026-08-18: one full-suite run in four, the arrangement gate's `window.record`
