@@ -68,15 +68,47 @@ func TestAGeneratedWindowIDMakesAnAddressableName(t *testing.T) {
 	}
 }
 
-func TestGeneratedWindowIDsDoNotRepeat(t *testing.T) {
-	// A counter reset to zero each launch would pass every other test in this
-	// package and still hand two windows the same name across a restart.
-	seen := map[string]bool{}
-	for range 4096 {
+func TestAWindowIDIsDrawnFromASpaceTooLargeToCollideIn(t *testing.T) {
+	// The size of the space, not a sample of it. Six characters of a 32-character alphabet is
+	// 32**6, and that number is the whole guarantee: shortening either one is what makes two
+	// windows share a name, and it is checkable exactly.
+	//
+	// This replaces a draw of 4096 that refused any repeat. Over 32**6 that draw collides about
+	// 0.78% of the time by construction — one run in a hundred and twenty-eight failed on
+	// arithmetic rather than on a defect, and measured 2026-08-18 one did. A gate that passes 99%
+	// of the time is passing by luck.
+	space := 1
+	for range windowIDLength {
+		space *= len(windowIDAlphabet)
+	}
+	if space < 1<<30 {
+		t.Errorf("a window id is drawn from %d values, which two windows can share.\n"+
+			"Six characters of a 32-character alphabet is 2**30; lengthening the id or the "+
+			"alphabet is what widens it.", space)
+	}
+}
+
+func TestAWindowIDIsNotASequence(t *testing.T) {
+	// A counter reset to zero each launch would pass every other test in this package and still
+	// hand two windows the same name across a restart. What that looks like is a generator whose
+	// draws collapse onto a small set — so this refuses that, at a bound the arithmetic above
+	// cannot reach: 4096 draws over 2**30 are expected to repeat 0.008 times, and three repeats is
+	// something other than chance by a factor of hundreds.
+	const draws = 4096
+	const allowed = 2
+	seen := map[string]int{}
+	repeats := 0
+	for range draws {
 		id := newWindowID()
-		if seen[id] {
-			t.Fatalf("generated %q twice", id)
+		seen[id]++
+		if seen[id] > 1 {
+			repeats++
 		}
-		seen[id] = true
+	}
+	if repeats > allowed {
+		t.Errorf("%d of %d draws repeated, where chance accounts for 0.008.\n"+
+			"That is a generator drawing from a smaller set than its alphabet and length say — a "+
+			"counter, a seeded sequence, or an entropy source answering the same bytes.",
+			repeats, draws)
 	}
 }

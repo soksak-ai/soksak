@@ -189,6 +189,25 @@ Written here so it is not rediscovered (L2).
   reportable: the gates keep the application's own output and every refusal after
   the process stops answering carries it.
 
+  Read rather than guessed at, 2026-08-18: Wails catches the scheme-task
+  exception whose reason is exactly `"This task has already been stopped"` and
+  re-throws every other one — its own comment there says "this is very bad to
+  detect a stopped schemeTask". An ObjC exception leaving cgo is a fatal signal,
+  which is the register dump that was captured. The task is retained and
+  released around the call, so it is not a dead object. That is where the crash
+  is; which exception reaches it is not established. A probe that logged the
+  reason before re-throwing ran six full suites and never fired, so the probe is
+  gone: it measured nothing and a modification to the pinned checkout that
+  measures nothing is not kept.
+
+- **A capture can refuse without words.** Measured 2026-08-18 in a run that did
+  not crash: a recording stopped with `frame 0 could not be captured: ` and the
+  colon was the whole reason. The native layer had filled its error field with
+  an empty string. Both halves are named now — the ObjC side substitutes a
+  sentence rather than passing nothing on, and the Go side refuses to build an
+  error out of no words. Why that path produced an empty message is not
+  established; what is fixed is that the next one says so.
+
 - **A blank browser after a restart is reported and not reproduced.** A person
   reported 2026-08-17 that a restart comes up with the page empty until
   something else happens. Nine cold starts that day, read at t+2s, t+3s, t+4s,
