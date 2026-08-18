@@ -193,6 +193,17 @@ Written here so it is not rediscovered (L2).
   against surface — two native rectangles in one window, where `presence` and
   `misparented` both answer about the window rather than about the order inside
   it.
+- **The application dies inside Wails' asset server during a recording.** Measured
+  2026-08-18: one full-suite run in four, the arrangement gate's `window.record`
+  answered `the backend closed without answering: EOF` and the socket was gone.
+  The crash is in the pinned Wails commit's own request path —
+  `internal/assetserver/assetserver_webview.go:50`, a goroutine created by
+  `AssetServer.ServeWebViewRequest` — and it appears under the load of the whole
+  suite, not when that gate runs alone (8 runs, none). Nothing here reproduces it
+  deliberately and no cause is claimed. What is fixed is that it is now
+  reportable: the gates keep the application's own output and every refusal after
+  the process stops answering carries it.
+
 - **A blank browser after a restart is reported and not reproduced.** A person
   reported 2026-08-17 that a restart comes up with the page empty until
   something else happens. Nine cold starts that day, read at t+2s, t+3s, t+4s,

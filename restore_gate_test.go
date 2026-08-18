@@ -300,8 +300,19 @@ func (gate *restoreGate) lastWords() string {
 		return ""
 	}
 	lines := strings.Split(strings.TrimRight(string(body), "\n"), "\n")
-	if len(lines) > 40 {
-		lines = lines[len(lines)-40:]
+	// A crash states its reason on the first line and spends the rest on where it was. Kept from
+	// the tail, the reason is what falls off — measured 2026-08-18, forty lines of register values
+	// and the sentence that named the fault was gone.
+	for index, line := range lines {
+		if strings.HasPrefix(line, "panic:") || strings.HasPrefix(line, "fatal error:") ||
+			strings.HasPrefix(line, "signal ") || strings.Contains(line, "SIGSEGV") ||
+			strings.Contains(line, "SIGABRT") {
+			lines = lines[index:]
+			break
+		}
+	}
+	if len(lines) > 60 {
+		lines = lines[:60]
 	}
 	return "\nthe application's last words:\n" + strings.Join(lines, "\n") + "\n"
 }
