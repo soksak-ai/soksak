@@ -163,12 +163,6 @@ Written here so it is not rediscovered (L2).
 - **Windows and Linux are compile-only.** Every driver fails by name. Their
   runtime and visual behaviour is unverified, and no green is recorded for them.
 - **Windows terminal needs ConPTY.** `creack/pty` does not cover it.
-- **The transition journal's frame number is null.** `window.record` numbers its
-  frames and that number is meant to be the clock every journal shares; the
-  arrangement records are not stamped with it yet, so a record cannot be lined
-  up with a saved picture.
-- **`rail.settled` is a check, not a command.** It reports inside the validation
-  surface.
 - **Four things the core used to do, nobody does yet.** Each left as a feature
   under C6 (`CORE-CENSUS.md`), and no plugin has written its replacement:
   bookmarks, opening a file in a tab, a natural-language console, and a media

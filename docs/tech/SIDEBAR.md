@@ -206,7 +206,7 @@ and none lit is a real state.
   arrangement records are not yet stamped with it, so a record cannot be lined
   up with a saved picture. The numbers above stand on their own; the pairing
   does not exist yet.
-- **`rail.settled` is a check, not a command.** It lives inside the validation
-  surface (`ui.validate`) and answers whether a departing rail was left behind.
-  The plan names it as a command; the check reports the same fact and nothing
-  reads it as a command yet.
+- **`rail.settled` is a command and a check, from one function.** It answers
+  whether a departing rail was left behind, with no verdict mid-journey. The
+  check of that name inside `ui.verify` reads the same function, so the two
+  cannot disagree.
