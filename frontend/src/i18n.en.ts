@@ -886,6 +886,8 @@ export const en: Record<MsgKey, string> = {
   "msg.layout.trace.wait": "The recording ended ({how})",
   "msg.trace.run": "run must be an integer of 1 or more — the value layout.trace.start answered",
   "msg.trace.timeout": "timeoutMs must be within 1..30000",
+  "cmd.rail.settled.desc": "Whether the rail has finished travelling and left nothing behind. A departing rail that stays makes the sidebar look doubled. Mid-journey there is no verdict: a rail is meant to be in two places for the length of the move, and calling that a defect would refuse the thing working. When traveling is true, settled is not a verdict.",
+  "msg.rail.settled": "The rail: {detail}",
   "cmd.layout.trace.read.desc": "What the trace recorded, one entry per animation frame: the regions, the panes, and every surface's dom / declared / applied boxes with lag, drift and off. appliedAgeMs is how old the native half of that frame is: the time since the commit that carried it was answered. No round trip is made for it, so that age is the pipeline's own latency rather than the reading's. Stops a running trace.",
   "cmd.clipboard.write.param.text": "Text to place in the clipboard",
   "cmd.secret.status.desc": "Query the transparent-unlock status: KEK backend label, seal_available (whether the OS key store is reachable, so sealing/opening works), expect_vault (app.data envelope keys registered), and the stored app.data key ids. Use to check whether secrets can be sealed before performing operations.",

@@ -891,6 +891,8 @@ export const ko = {
   "msg.layout.trace.wait": "녹화가 끝났습니다 ({how})",
   "msg.trace.run": "run 은 1 이상의 정수여야 합니다 — layout.trace.start 가 답한 값입니다",
   "msg.trace.timeout": "timeoutMs 는 1 에서 30000 사이여야 합니다",
+  "cmd.rail.settled.desc": "레일이 이동을 마쳤고 뒤에 아무것도 남기지 않았는지 답합니다. 떠나는 레일이 남아 있으면 사이드바가 둘로 보입니다. 이동 중에는 판정하지 않습니다 — 레일은 이동하는 동안 두 곳에 있는 것이 맞고, 그것을 결함이라 하면 제대로 도는 것을 거절하는 셈입니다. traveling 이 true 이면 settled 를 판정으로 읽지 마십시오.",
+  "msg.rail.settled": "레일: {detail}",
   "cmd.layout.trace.read.desc": "추적이 기록한 것을 애니메이션 프레임당 한 항목으로 냅니다: 영역들, 판들, 그리고 모든 표면의 dom / declared / applied 상자와 lag·drift·off. appliedAgeMs 는 그 프레임의 네이티브 절반이 얼마나 오래됐는지입니다 — 그것을 실어 온 커밋이 답한 뒤 흐른 시간입니다. 그 값을 위해 왕복하지 않으므로, 그 나이는 판독의 지연이 아니라 파이프라인 자신의 지연입니다. 돌고 있는 추적은 멈춥니다.",
   "cmd.clipboard.write.param.text": "클립보드에 넣을 텍스트",
   "cmd.secret.status.desc": "투명 잠금 해제 상태를 조회합니다: KEK 백엔드 라벨, seal_available(OS 키 저장소에 닿을 수 있어 봉인·해제가 되는지), expect_vault(app.data 봉투 키가 등록됐는지), 그리고 보관된 app.data 키 id 들. 작업 전에 시크릿을 봉인할 수 있는지 확인할 때 씁니다.",

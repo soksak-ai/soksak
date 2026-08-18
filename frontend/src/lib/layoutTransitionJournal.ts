@@ -39,6 +39,16 @@ type LayoutTransitionJournalEntryBase = {
    *  no stimulus declared one. */
   causeTraceId?: string;
   sequence: number;
+  /**
+   * The frame a recording was on when this record opened, or absent when nothing was recording.
+   *
+   * `window.record` numbers the files it writes and that number is the clock every journal is meant
+   * to share, so a record can be lined up with the picture of the moment it describes. Until this
+   * carried it the numbers and the pictures stood side by side with nothing joining them.
+   *
+   * Absent, not zero: no recording is a different fact from the first frame of one.
+   */
+  recordingFrame?: number;
   phase: "preparing" | "prepared" | "committed" | "cancelled" | "failed";
   openedAtUnixMs: number;
   preparedAtUnixMs?: number;
@@ -308,6 +318,26 @@ export function waitForLayoutTransaction(input: {
  * single transaction it opens takes it. It is cleared on consumption, so it does not leak into a
  * later transaction opened by someone else.
  */
+/**
+ * The frame the recording in this window is on, or null when nothing is recording.
+ *
+ * One value for the window rather than a parameter threaded through every caller: a journal record
+ * is opened deep inside a state write, and the command that starts a recording has none of that in
+ * scope. The recorder announces each frame after its file is on disk (`onFrame`), and this is where
+ * that announcement is kept.
+ */
+let recordingFrameNow: number | null = null;
+
+/** What the recorder announced last, for a record opened now. */
+export function recordingFrame(): number | null {
+  return recordingFrameNow;
+}
+
+/** Called by a recording as each frame lands, and with null when it ends. */
+export function noteRecordingFrame(frame: number | null): void {
+  recordingFrameNow = frame;
+}
+
 export function declareLayoutCause(traceId: string): void {
   journal.pendingCauseTraceId = traceId;
 }
@@ -384,6 +414,7 @@ export function journalPreparingLayoutTransition(
     clock: PRESENTATION_CLOCK,
     ...(causeTraceId === null ? {} : { causeTraceId }),
     sequence,
+    ...(recordingFrame() === null ? {} : { recordingFrame: recordingFrame() as number }),
     phase: "preparing",
     mode: null,
     openedAtUnixMs: presentationNowUnixMs(),

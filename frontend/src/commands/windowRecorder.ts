@@ -1,5 +1,6 @@
 import { createStream, invoke } from "../framework";
 import { tmsg } from "../i18n";
+import { noteRecordingFrame } from "../lib/layoutTransitionJournal";
 
 export type WindowRecordRequest = {
   dir: string;
@@ -102,6 +103,10 @@ export function startWindowRecording(
       ...request,
       onFrame: (frame) => {
         savedFrames += 1;
+        // The clock every journal shares. Kept here rather than at each call site: the command
+        // that starts a recording has no layout record in scope, and the state write that opens a
+        // record has no recording in scope.
+        noteRecordingFrame(frame);
         if (!onFrame) return;
         try {
           onFrame(frame);
@@ -115,7 +120,13 @@ export function startWindowRecording(
     const completion = Promise.resolve(recording).then(
       (frames) => ({ ok: true as const, frames }),
       (error) => ({ ok: false as const, reason: recordingFailureReason(error) }),
-    );
+    ).then((outcome) => {
+      // Cleared when the burst ends, either way. A record opened after it would otherwise carry the
+      // last frame of a recording that is over, which is a number pointing at a picture of an
+      // earlier moment — worse than no number, because it looks like one.
+      noteRecordingFrame(null);
+      return outcome;
+    });
     // The final handler is attached first. Even when a bad recorder's ready getter itself throws,
     // the final rejection does not escape as a separate unhandledrejection.
     const ready = recording.ready as unknown;
