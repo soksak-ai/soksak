@@ -89,10 +89,15 @@ beforeEach(() => {
   registerDomCatalog();
 });
 afterEach(() => {
-  // Unregisters everything the catalog registered — a hand-written list kills the next beforeEach with "duplicate
-  // registration" every time a command is added (measured: adding ui.input.key failed 23 cases).
+  // Everything on the table, not everything whose name starts a certain way. A prefix is a
+  // hand-written list wearing a pattern: this file registers `rail.settled` too, and the next
+  // beforeEach failed 89 cases with "duplicate registration" the day it was added — the same way a
+  // literal list failed 23 when ui.input.key arrived.
+  //
+  // Only this file registers into this suite's registry, so clearing it is clearing what it put
+  // there.
   for (const { name } of catalogJson()) {
-    if (name.startsWith("ui.")) unregister(name);
+    unregister(name);
   }
   document.body.innerHTML = "";
 });

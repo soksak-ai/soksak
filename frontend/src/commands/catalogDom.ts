@@ -720,6 +720,39 @@ export type Resolved =
   | { el: HTMLElement }
   | { ok: false; code: "NOT_EXPOSED" | "AMBIGUOUS"; message: string };
 
+/**
+ * Whether the rail has finished travelling and left nothing behind.
+ *
+ * A departing rail that stays makes the sidebar look doubled. Mid-journey there is no verdict to
+ * give: a rail is meant to be in two places for the length of the move, and calling that a defect
+ * would refuse the thing working.
+ *
+ * One function, read by the `rail.settled` command and by the check of that name inside
+ * `ui.validate`. The plan names it as a command and the validation surface held the only
+ * implementation; two of them would be two answers to one question.
+ */
+export function railSettled(scanned: ScannedNode[]): {
+  settled: boolean;
+  traveling: boolean;
+  leftBehind: string[];
+  detail: string;
+} {
+  const traveling = document.querySelector(".space-body.rail-traveling") != null;
+  const leftBehind = scanned
+    .filter((node) => node.nodePath === "rail/left/leaving")
+    .map((node) => node.address);
+  return {
+    settled: traveling || leftBehind.length === 0,
+    traveling,
+    leftBehind,
+    detail: traveling
+      ? "travel in progress — verdict withheld"
+      : leftBehind.length === 0
+        ? "no rail left behind"
+        : leftBehind.join(", "),
+  };
+}
+
 export function resolveExposed(addressStr: string): Resolved {
   const parsed = parseAddress(addressStr);
   if (isParseError(parsed)) return notExposed(addressStr);
@@ -1972,12 +2005,24 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
   //
   // scale: stretches every transition/animation by this factor (:root --motion-scale).
   // hold:  freezes the running phase in place (animation-play-state: paused plus transitions stopped).
-  //        Whether the window holds together structurally right now — the defects people reported are
-  //        stated as invariants and the app answers for itself.
+  // The plan names this as a command and only ui.verify had it. One question, for a person driving
+  // the rail — reading it out of a list of every invariant is a different act.
+  register("rail.settled", {
+    description: key("cmd.rail.settled.desc"),
+    triggers: { ko: "레일 정착 이동완료 잔여 확인" },
+    params: {},
+    returns: "{ settled, traveling, leftBehind[], detail } — settled is not a verdict while traveling",
+    message: (d) => tmsg("msg.rail.settled", { detail: String(d.detail ?? "") }),
+    examples: ["rail.settled"],
+    handler: () => railSettled(collectExposed()),
+  });
+
+  // Whether the window holds together structurally right now — the defects people reported are
+  // stated as invariants and the app answers for itself.
   //
-  // These defects have to be checked the same way every time, and writing a one-off probe for each check
-  // starts from scratch the next time. Observation must be a command — what is here is the standard, and
-  // the e2e gate only calls this command.
+  // These defects have to be checked the same way every time, and writing a one-off probe for each
+  // check starts from scratch the next time. Observation must be a command — what is here is the
+  // standard, and the e2e gate only calls this command.
   register("ui.verify", {
     description: key("cmd.ui.verify.desc"),
     triggers: { ko: "창 점검 불변식 검증 무결성 주소중복 레일잔존 빈슬롯 자가진단" },
@@ -2013,17 +2058,13 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       });
 
       // Once the journey ends no departing rail remains — one that remains makes the sidebar look
-      // doubled.
-      const traveling = document.querySelector(".space-body.rail-traveling") != null;
-      const leaving = scanned.filter((n) => n.nodePath === "rail/left/leaving");
+      // doubled. Read from the one function that answers it, so this check and the command of the
+      // same name cannot disagree.
+      const settled = railSettled(scanned);
       checks.push({
         name: "rail.settled",
-        ok: traveling || leaving.length === 0,
-        detail: traveling
-          ? "travel in progress — verdict withheld"
-          : leaving.length === 0
-            ? "no rail left behind"
-            : leaving.map((n) => n.address).join(", "),
+        ok: settled.settled,
+        detail: settled.detail,
       });
 
       // A visible tab body has a size — 0 means that cell is a blank screen.

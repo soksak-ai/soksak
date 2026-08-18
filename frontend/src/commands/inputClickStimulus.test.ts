@@ -63,8 +63,12 @@ beforeEach(() => {
   registerDomCatalog();
 });
 afterEach(() => {
+  // Everything on the table, not everything whose name starts a certain way. A prefix is a
+  // hand-written list wearing a pattern — measured 2026-08-18, `rail.settled` joined catalogDom and
+  // the next beforeEach failed with "duplicate registration". Only catalogDom registers into this
+  // suite's registry, so clearing it is clearing what it put there.
   for (const { name } of catalogJson()) {
-    if (name.startsWith("ui.")) unregister(name);
+    unregister(name);
   }
   document.body.innerHTML = "";
   __resetLayoutTransitionHostForTest();
