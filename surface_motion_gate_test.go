@@ -46,6 +46,11 @@ func TestASurfaceStaysOnScreenWhileTheLayoutMoves(t *testing.T) {
 	defer gate.quit()
 
 	window := gate.openWorkspace()
+	// This gate records presentation without taking keyboard focus. Disable
+	// background rendering suspension for the test window and restore it before
+	// shutdown.
+	gate.run("window_occlusion", "window="+window, "enabled=false")
+	defer gate.run("window_occlusion", "window="+window, "enabled=true")
 	gate.consentAndEnable(window, plugins)
 	for _, program := range gate.programs(window) {
 		gate.open(window, program)

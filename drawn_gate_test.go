@@ -31,6 +31,11 @@ func TestWhatTheLinkSaysIsWhatIsDrawn(t *testing.T) {
 	defer gate.quit()
 
 	window := gate.openWorkspace()
+	// This gate waits for rendered DOM and native-surface frames without taking
+	// keyboard focus. Disable background rendering suspension for this window
+	// during the test and restore the default before shutdown.
+	gate.run("window_occlusion", "window="+window, "enabled=false")
+	defer gate.run("window_occlusion", "window="+window, "enabled=true")
 	gate.consentAndEnable(window, plugins)
 	for _, program := range gate.programs(window) {
 		gate.open(window, program)
