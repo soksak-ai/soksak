@@ -49,6 +49,10 @@ type CaptureService struct {
 	// occlusion turns the window's rendering throttle off or on and answers how many web views it
 	// reached. Injected so the hold-and-restore rule is provable with no window.
 	occlusion func(window unsafe.Pointer, enabled bool) int
+	// prepare tells the document that a capture will read its next rendered frame.
+	// Renderers with their own retained surface use this event to redraw after
+	// the occlusion throttle has been removed.
+	prepare func()
 }
 
 func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureService {
@@ -198,6 +202,9 @@ func (service *CaptureService) holdRendering(handle unsafe.Pointer) func() {
 	}
 	if service.occlusion(handle, false) == 0 {
 		return func() {}
+	}
+	if service.prepare != nil {
+		service.prepare()
 	}
 	time.Sleep(occlusionResumeMillis * time.Millisecond)
 	return func() { service.occlusion(handle, true) }

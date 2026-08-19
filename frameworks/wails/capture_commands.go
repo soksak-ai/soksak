@@ -33,6 +33,9 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 	// Measured 2026-08-15: capture could only reach the window this host
 	// captured at registration, so a theme defect in a workspace window
 	// answered with a picture of the orchestrator.
+	type capturePreparer interface {
+		PrepareCapture(name string)
+	}
 	target := func(args control.Args) (*CaptureService, error) {
 		name, err := control.OptionalArg(args, "window", "")
 		if err != nil {
@@ -51,7 +54,11 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 		if handle == nil {
 			return nil, i18n.Errorf("wails.capture.noPixels", map[string]string{"window": name})
 		}
-		return NewCaptureService(name, func() unsafe.Pointer { return handle }), nil
+		service := NewCaptureService(name, func() unsafe.Pointer { return handle })
+		if preparer, ok := host.(capturePreparer); ok {
+			service.prepare = func() { preparer.PrepareCapture(name) }
+		}
+		return service, nil
 	}
 
 	registry.MustRegister(control.Command{

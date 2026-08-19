@@ -371,6 +371,13 @@ func (h *wailsHost) Reload(name string) error {
 	return nil
 }
 
+func (h *wailsHost) PrepareCapture(name string) {
+	if _, addressable := h.live(name); !addressable {
+		return
+	}
+	_ = dispatchToWindow(h.app, name, "capture.prepare", nil)
+}
+
 func (h *wailsHost) OpenInspector(name string) error {
 	window, addressable := h.live(name)
 	if !addressable {
