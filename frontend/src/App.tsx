@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { listenThisWindow } from "./lib/windowEvents";
 import { addWorkspaceClaimed, closeWorkspaceReleased, useOtherWindowWorkspaces } from "./state/workspaceRegistry";
@@ -82,7 +83,13 @@ import { prepareLayoutChange, viewLayoutChange } from "./lib/layoutTransitionHos
 import { registerLayoutTransitionIntentHost } from "./lib/layoutTransitionIntent";
 import { ownsNativeSurfaceFromManifests } from "./lib/nativeSurfaceOwnership";
 import { useAddTabIntent } from "./state/addTabIntent";
-import { focusedPluginOf, usePlacePresent } from "./state/sectionSets";
+import { focusedPluginOf, usePlacePresent, type SectionPlace } from "./state/sectionSets";
+import {
+  PLACE_WIDTH_BOUNDS,
+  onPlaceWidthChange,
+  placeWidth,
+  setPlaceWidth,
+} from "./state/placeWidth";
 import "./App.css";
 
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
@@ -93,14 +100,8 @@ const nativeSurfaceViewIds = (content: Workspace["spaces"][number]): string[] =>
     .map((view) => view.id))
 );
 
-// Left sidebar (file tree) width range in CSS px. The actual width is drag-adjusted (global, persisted in localStorage).
-const SIDEBAR_MIN = 160;
-const SIDEBAR_MAX = 640;
-const SIDEBAR_DEFAULT = 320;
-// Right plugin sidebar width range.
-const EDGE_MIN = 200;
-const EDGE_MAX = 640;
-const EDGE_DEFAULT = 300;
+// The three places a sidebar stands in take their bounds from `state/placeWidth` — one place, so
+// what a drag is clamped to and what `sidebar.width` refuses by are one rule.
 // Left workspace rail width.
 // Product layout contract: workspace rail default 54px, drag 44–110px.
 const RAIL_MIN = 44;
@@ -109,6 +110,52 @@ const RAIL_DEFAULT = 54;
 
 // Shared hook for drag-resizable panel width (persisted in localStorage). dir = the side the panel is attached to:
 // left (default) grows when the right handle is dragged right; right has a left handle, so the sign is inverted.
+/**
+ * A place's width, and the drag that changes it.
+ *
+ * The width is held in `state/placeWidth`, so `sidebar.width` and a pointer write the same value
+ * and the plane reads one. Three keys and three sets of constants stood here, and a drag was the one
+ * layout change nothing outside could produce — a stuttering drag had no numeric handle at all.
+ *
+ * The store is subscribed rather than mirrored into React state: mirrored, a width set by the
+ * command would be in the store and not on the screen until something else re-rendered.
+ */
+function usePlaceWidth(place: SectionPlace): readonly [number, (e: React.MouseEvent) => void] {
+  const width = useSyncExternalStore(onPlaceWidthChange, () => placeWidth(place));
+  const bounds = PLACE_WIDTH_BOUNDS[place];
+  // Which way the pointer widens it: an edge on the right grows as the pointer goes left.
+  const sign = place === "right" ? -1 : 1;
+  const widthRef = useRef(width);
+  widthRef.current = width;
+  const begin = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = widthRef.current;
+      // One write per frame (principle 4) — the plane and every pane re-lay out on each one.
+      const commit = rafThrottle((next: number) => setPlaceWidth(place, next));
+      const onMove = (ev: MouseEvent) =>
+        commit(Math.min(bounds.max, Math.max(bounds.min, startW + sign * (ev.clientX - startX))));
+      const onUp = () => {
+        commit.flush(); // Before the listeners go — a lost last frame is a snap back.
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        endLayoutMotion("resize");
+      };
+      // A width drag is a layout motion phase too — hole clipping and the native follow read it.
+      beginLayoutMotion("resize");
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [place, bounds.min, bounds.max, sign],
+  );
+  return [width, begin] as const;
+}
+
 function useResizableWidth(
   key: string,
   def: number,
@@ -958,12 +1005,10 @@ function App() {
   // first terminal starting with no cwd (at home).
 
   // Drag-adjusted panel widths (global, persisted in localStorage).
-  const [sidebarW, startResize] = useResizableWidth(
-    "sidebarW",
-    SIDEBAR_DEFAULT,
-    SIDEBAR_MIN,
-    SIDEBAR_MAX,
-  );
+  // The three places, from the store a command reads and writes. They were three keys and three
+  // sets of constants here, and a drag was the one layout change nothing outside could produce —
+  // so a stuttering drag had no numeric handle at all.
+  const [sidebarW, startResize] = usePlaceWidth("rail");
   const [railW, startRailResize] = useResizableWidth(
     "railW",
     RAIL_DEFAULT,
@@ -976,20 +1021,8 @@ function App() {
     [workspaceTabPosition, railW].join(":"),
     activeWorkspace?.activeSpaceId ?? null,
   );
-  const [leftW, startLeftResize] = useResizableWidth(
-    "leftSidebarW",
-    EDGE_DEFAULT,
-    EDGE_MIN,
-    EDGE_MAX,
-    "left",
-  );
-  const [rightW, startRightResize] = useResizableWidth(
-    "rightSidebarW",
-    EDGE_DEFAULT,
-    EDGE_MIN,
-    EDGE_MAX,
-    "right",
-  );
+  const [leftW, startLeftResize] = usePlaceWidth("left");
+  const [rightW, startRightResize] = usePlaceWidth("right");
 
   // The right sidebar (.sidebar-right) is a DOM overlay above the full-size browser webview
   // (position:absolute, z-index 20). Reporting its rectangle as a "hole" to the native hit_test keeps scrolls and

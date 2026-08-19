@@ -41,7 +41,13 @@ import {
   type CmdErr,
   type SidebarRegion,
 } from "../state/sessions";
-import { SECTION_PLACES, byPlace } from "../state/sectionSets";
+import { SECTION_PLACES, byPlace, type SectionPlace } from "../state/sectionSets";
+import {
+  PLACE_WIDTH_BOUNDS,
+  placeWidth,
+  setPlaceWidth,
+  widthWithinBounds,
+} from "../state/placeWidth";
 import {
   canonicalGutter,
   isCanonicalSide,
@@ -1444,6 +1450,64 @@ export function registerCatalog(): void {
       return withTargets(S().moveSidebarView(t.id, p.region as SidebarRegion, p.viewKey as string, drop), {
         projectId: t.id,
       });
+    },
+  });
+
+  // The width of a place, read and set by name.
+  //
+  // A drag was the one layout change with no numeric handle: the width followed the pointer and
+  // nothing outside could read it or set it, so "the sidebar drag stutters and the document and the
+  // native layer come apart" could not be measured at all (L10).
+  register("sidebar.width", {
+    description: key("cmd.sidebar.width.desc"),
+    triggers: { ko: "사이드바 폭 너비 드래그 크기 좌측 레일 우측" },
+    params: {
+      place: {
+        type: "string",
+        enum: [...SECTION_PLACES],
+        description: key("cmd.sidebar.param.region"),
+        required: true,
+      },
+      width: { type: "number", description: key("cmd.sidebar.width.param.width") },
+    },
+    returns: "{ place, width, min, max }",
+    message: (d) =>
+      tmsg("msg.sidebar.width", { place: String(d.place), width: Number(d.width ?? 0) }),
+    errors: ["INVALID_PARAMS"],
+    examples: ['sidebar.width \'{"place":"rail"}\'', 'sidebar.width \'{"place":"left","width":320}\''],
+    handler: async (p) => {
+      const place = p.place as SectionPlace;
+      if (!(SECTION_PLACES as readonly string[]).includes(place)) {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: tmsg("msg.sidebar.width.placeRequired", { places: SECTION_PLACES.join(" | ") }),
+        };
+      }
+      const bounds = PLACE_WIDTH_BOUNDS[place];
+      const width = p.width as number | undefined;
+      if (width !== undefined) {
+        // The same bounds a drag is clamped to. Accepted past them, this sets a width no pointer can
+        // produce, and then the reading is of a state nobody can reach.
+        if (!widthWithinBounds(place, width)) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: tmsg("msg.sidebar.width.outOfBounds", {
+              min: bounds.min,
+              max: bounds.max,
+              width,
+            }),
+          };
+        }
+        setPlaceWidth(place, width);
+        // The answer waits for the frame, so a caller reading the screen next reads the new one.
+        await waitForDomCommit(() => {
+          const element = document.querySelector<HTMLElement>(`[data-region="${place}"]`);
+          return Math.round(element?.getBoundingClientRect().width ?? -1) === Math.round(width);
+        });
+      }
+      return { place, width: placeWidth(place), min: bounds.min, max: bounds.max };
     },
   });
 
