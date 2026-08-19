@@ -8,6 +8,17 @@ import (
 	"testing"
 )
 
+func TestFrontendUsesThePinnedWailsRuntime(t *testing.T) {
+	body, err := os.ReadFile("frontend/package.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `"@wailsio/runtime": "file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime"`
+	if !strings.Contains(string(body), want) {
+		t.Fatalf("frontend runtime is not pinned to the framework checkout; want %s", want)
+	}
+}
+
 // The record keeps reasons and drops sources.
 //
 // A comment states why a rule exists, with the measurement that produced it. It
