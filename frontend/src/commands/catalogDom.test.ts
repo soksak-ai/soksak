@@ -1868,6 +1868,35 @@ describe("ui.focus.trace — focus causality timeline at the instant of a click"
       vi.useRealTimers();
     }
   });
+
+  it("records which pane and tab own both the event target and the actual input focus", async () => {
+    document.body.innerHTML = `
+      <div data-pane="pan-source"><div class="tab-viewer" data-view-addr="center/view/p.v" data-tab-id="tab-source">
+        <div class="terminal xterm focus"><textarea data-node="input"></textarea></div>
+      </div></div>
+      <div data-pane="pan-target"><div class="tab-viewer" data-view-addr="center/view/p.v" data-tab-id="tab-target">
+        <div data-node="target"></div>
+      </div></div>`;
+    const input = document.querySelector("textarea")!;
+    const target = document.querySelector('[data-node="target"]')!;
+    input.focus();
+    await execute("ui.focus.trace.start", { ms: 500 }, {});
+    input.dispatchEvent(new CompositionEvent("compositionupdate", { data: "x", bubbles: true }));
+    target.dispatchEvent(new MouseEvent("mousedown", { clientX: 40, clientY: 60, bubbles: true }));
+
+    const result = await execute("ui.focus.trace.read", {}, {});
+    const events = (result.data as { events: Array<Record<string, unknown>> }).events;
+    expect(events[0]).toMatchObject({
+      type: "compositionupdate", targetTabId: "tab-source", targetPaneId: "pan-source",
+      activeTabId: "tab-source", activePaneId: "pan-source", composition: "x",
+      inputLanded: true,
+    });
+    expect(events[1]).toMatchObject({
+      type: "mousedown", targetTabId: "tab-target", targetPaneId: "pan-target",
+      activeTabId: "tab-source", activePaneId: "pan-source", x: 40, y: 60,
+      inputLanded: true,
+    });
+  });
 });
 
 describe("ui.input.click — phase split (makes the mid-gesture state verifiable)", () => {

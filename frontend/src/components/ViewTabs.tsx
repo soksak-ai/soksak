@@ -169,6 +169,7 @@ export const ViewTabs = memo(function ViewTabs({
             key={v.id}
             className={`tab${v.id === group.activeTabId ? " active" : ""}`}
             data-node={`tab/view/${v.id}`}
+            data-input-activate-tab={v.id}
             onMouseDown={(e) => onTabPointerDown(v.id, e)}
             // Double click = maximize(whole content area) — the header turns into a title,
             // and a double click or the button there restores it.

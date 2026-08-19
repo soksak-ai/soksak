@@ -11,11 +11,8 @@ import {
 import { Icon } from "../ui/icons/Icon";
 import { GroupStatusBar } from "./GroupStatusBar";
 import { PluginViewHost } from "./PluginViewHost";
-import {
-  activeSessionViewId,
-  transferViewFocus,
-} from "../plugins/viewFocus";
 import { armSlotActivation } from "../lib/slotGesture";
+import { activatePaneIntent, activateTabIntent } from "../lib/viewActivation";
 import { beginLayoutMotion, endLayoutMotion } from "../lib/layoutMotion";
 import { CHROME_BANDS } from "../lib/chromeBands";
 import { createRectMotionTracker } from "../lib/layoutRectMotion";
@@ -520,18 +517,9 @@ export const GroupArea = memo(function GroupArea({
             else void execute("pane.move", { workspace: projectId, src: id, dst: target.groupId, zone: target.zone }, {});
           }
         } else if (kind === "view") {
-          transferViewFocus(activeSessionViewId(), id, () =>
-            void execute("tab.activate", { tab: id }, {}),
-          ); // Click = tab switch + real focus
+          activateTabIntent(id); // Click = tab switch + real focus
         } else {
-          const targetViewId = sourceGroup?.activeTabId;
-          if (targetViewId) {
-            transferViewFocus(activeSessionViewId(), targetViewId, () =>
-              void execute("pane.activate", { pane: id }, {}),
-            );
-          } else {
-            void execute("pane.activate", { pane: id }, {});
-          }
+          activatePaneIntent(id);
         }
         setDrag(null);
         setHover(null);
@@ -929,6 +917,7 @@ export const GroupArea = memo(function GroupArea({
               // For native click resolution (App.tsx native-mousedown → elementFromPoint).
               // The value is the id of the cell (pane) containing this slot — name and value point at the same entity (IDENTITY).
               data-pane={group.id}
+              data-input-activate-pane={group.id}
               data-workspace-id={projectId}
               data-node={`layout/tab/${view.id}`}
               data-wv-geometry-owner
@@ -950,15 +939,7 @@ export const GroupArea = memo(function GroupArea({
                 // so the click (pane tracking, xterm self-focus) is always confirmed and activation is attributed to
                 // the starting slot (straddling is impossible).
                 armSlotActivation(() => {
-                  if (group.activeTabId) {
-                    transferViewFocus(
-                      activeSessionViewId(),
-                      group.activeTabId,
-                      () => void execute("pane.activate", { pane: group.id }, {}),
-                    );
-                  } else {
-                    void execute("pane.activate", { pane: group.id }, {});
-                  }
+                  activatePaneIntent(group.id);
                 });
               }}
             >

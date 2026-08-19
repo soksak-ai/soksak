@@ -84,7 +84,8 @@ export type CmdErrCode =
   // One address resolved to more than one target (address axiom A1 violation) — do not pick one of
   // them. The defect is on the address-producing side, so the caller narrows with the instance axis
   // (inst), or the mount supplies an instance.
-  | "AMBIGUOUS";
+  | "AMBIGUOUS"
+  | "WINDOW_NOT_FOCUSED";
 
 // data = per-code extra information (optional). E.g. the unconsented chain of CONSENT_REQUIRED
 // (for the consecutive consent popup).

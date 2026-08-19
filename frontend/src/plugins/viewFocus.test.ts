@@ -335,6 +335,41 @@ describe("delivery lands or reports", () => {
 });
 
 describe("readiness window", () => {
+  it("exposes an event-driven finite wait for actual input landing", async () => {
+    const { coordinator, flushFrame } = fixture();
+    const container = document.createElement("section");
+    const input = document.createElement("textarea");
+    container.append(input);
+    document.body.append(container);
+    coordinator.registerMountedView(
+      "tab-aaaaaa",
+      container,
+      provider({ focus: () => input.focus() }),
+      () => context,
+    );
+    coordinator.requestFocus("tab-aaaaaa");
+    const settled = coordinator.awaitSettled(1000);
+    flushFrame();
+    await expect(settled).resolves.toBe(true);
+  });
+
+  it("never accepts an already-settled previous view for a named target", async () => {
+    const { coordinator, flushFrame } = fixture();
+    for (const id of ["tab-old", "tab-new"]) {
+      const container = document.createElement("section");
+      const input = document.createElement("textarea");
+      container.append(input);
+      document.body.append(container);
+      coordinator.registerMountedView(id, container, provider({ focus: () => input.focus() }), () => context);
+    }
+    coordinator.requestFocus("tab-old");
+    flushFrame();
+    const targetSettled = coordinator.awaitSettled(1000, "tab-new");
+    coordinator.requestFocus("tab-new");
+    flushFrame();
+    await expect(targetSettled).resolves.toBe(true);
+  });
+
   it("the finite retries cover the warm restore window (ready several frames later) — it lands on the fifth frame", () => {
     const { coordinator, flushFrame } = fixture();
     const container = document.createElement("div");

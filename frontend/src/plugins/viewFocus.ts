@@ -45,6 +45,7 @@ export class ViewFocusCoordinator {
   private readonly onError: (error: unknown) => void;
   private intent: FocusIntent | null = null;
   private focusedViewId: string | null = null;
+  private readonly changeListeners = new Set<() => void>();
 
   constructor(options: ViewFocusCoordinatorOptions = {}) {
     this.schedule =
@@ -202,6 +203,7 @@ export class ViewFocusCoordinator {
     };
     this.publishFocused(viewId, true);
     this.queueCurrentIntent();
+    this.notifyChange();
     return this.intent.controller.signal;
   }
 
@@ -209,6 +211,7 @@ export class ViewFocusCoordinator {
     if (this.focusedViewId) this.publishFocused(this.focusedViewId, false);
     this.intent?.controller.abort();
     this.intent = null;
+    this.notifyChange();
   }
 
   /**
@@ -255,6 +258,32 @@ export class ViewFocusCoordinator {
     };
   }
 
+  awaitSettled(timeoutMs: number, targetViewId?: string): Promise<boolean> {
+    const settled = () => {
+      const intent = this.intent;
+      if (targetViewId && intent?.viewId !== targetViewId) return false;
+      if (!intent?.delivered) return false;
+      const mounted = this.mounted.get(intent.viewId);
+      const active = mounted?.container.ownerDocument.activeElement;
+      return Boolean(mounted && active && mounted.container.contains(active));
+    };
+    if (settled()) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (value: boolean) => {
+        if (done) return;
+        done = true;
+        this.changeListeners.delete(changed);
+        clearTimeout(timer);
+        resolve(value);
+      };
+      const changed = () => { if (settled()) finish(true); };
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      this.changeListeners.add(changed);
+      changed();
+    });
+  }
+
   private queueCurrentIntent(): void {
     const intent = this.intent;
     if (
@@ -282,11 +311,13 @@ export class ViewFocusCoordinator {
     };
     if (landed()) {
       intent.delivered = true;
+      this.notifyChange();
       return;
     }
 
     if (!target.provider.focus) {
       intent.delivered = true;
+      this.notifyChange();
       return;
     }
     try {
@@ -303,6 +334,7 @@ export class ViewFocusCoordinator {
     // a warm restore right after reload, is the reason this retry exists.
     if (landed()) {
       intent.delivered = true;
+      this.notifyChange();
       return;
     }
     const retries = (intent.retries ?? 0) + 1;
@@ -313,11 +345,16 @@ export class ViewFocusCoordinator {
       return;
     }
     intent.delivered = true;
+    this.notifyChange();
     this.onError(
       new Error(
         `focus did not land: ${intent.viewId} — provider.focus did not move input focus`,
       ),
     );
+  }
+
+  private notifyChange(): void {
+    for (const listener of this.changeListeners) listener();
   }
 
   private publishFocused(viewId: string, focused: boolean): void {
@@ -351,6 +388,10 @@ export function awaitViewMounted(viewId: string, timeoutMs = 5000): Promise<bool
 
 export function requestViewFocus(viewId: string): AbortSignal {
   return coordinator.requestFocus(viewId);
+}
+
+export function awaitViewFocusSettled(timeoutMs = 4000, targetViewId?: string): Promise<boolean> {
+  return coordinator.awaitSettled(timeoutMs, targetViewId);
 }
 
 export function transferViewFocus<T>(

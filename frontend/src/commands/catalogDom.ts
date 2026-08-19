@@ -25,7 +25,7 @@ import { lightingRegionsIn } from "./focusLighting";
 import { scanNodes, type ScannedNode } from "../plugins/nodeScan";
 import { register } from "./registry";
 import { tmsg, key} from "../i18n";
-import { viewFocusSnapshot } from "../plugins/viewFocus";
+import { activeSessionViewId, awaitViewFocusSettled, viewFocusSnapshot } from "../plugins/viewFocus";
 import { useGutterHover } from "../state/gutterHover";
 import { useSessions } from "../state/sessions";
 import { motionLiveList, motionLiveRates, setMotionDebug, motionRecentBirths, motionJourneys, motionSwaps, motionTriggers } from "../lib/motionDebug";
@@ -52,6 +52,7 @@ import {
   serializePresentationProviderError,
 } from "../lib/presentationSettlement";
 import { stackingPathOf, type StackingComputedStyle } from "../lib/stackingOrder";
+import { windowPointerActivationState } from "../lib/windowPointerActivation";
 
 type FocusTraceEntry = {
   t: number;
@@ -60,6 +61,18 @@ type FocusTraceEntry = {
   className: string;
   dataNode: string | null;
   hasFocus: boolean;
+  targetTabId: string | null;
+  targetPaneId: string | null;
+  activeTabId: string | null;
+  activePaneId: string | null;
+  sessionTabId: string | null;
+  requestedTabId: string | null;
+  delivered: boolean;
+  activeDataNode: string | null;
+  inputLanded: boolean;
+  composition?: string;
+  x?: number;
+  y?: number;
 };
 
 // Distinct things stand apart — put them in one bag and it is a bag, not state.
@@ -880,6 +893,28 @@ export function viewContainerOf(el: Element | null): HTMLElement | null {
   return null;
 }
 
+function focusOwnerOf(el: Element | null): { tabId: string | null; paneId: string | null } {
+  const host = viewContainerOf(el);
+  const pane = host?.closest<HTMLElement>("[data-pane]") ?? null;
+  return { tabId: tabIdOfContainer(host), paneId: pane?.dataset.pane ?? null };
+}
+
+function xtermFocusLanded(el: Element | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  let current: Element | null = el;
+  while (current) {
+    if (current.classList.contains("xterm")) return current.classList.contains("focus");
+    const parent: Element | null = current.parentElement;
+    if (parent) current = parent;
+    else {
+      const root = current.getRootNode();
+      current = root instanceof ShadowRoot ? root.host : null;
+    }
+  }
+  // A non-xterm exposed input still counts as landed when it is the active element.
+  return el.matches("input,textarea,[contenteditable=true]");
+}
+
 export function registerDomCatalog(): void {
   register("ui.plugin-view.overlay", {
     description: key("cmd.ui.plugin-view.overlay.desc"),
@@ -1160,7 +1195,7 @@ export function registerDomCatalog(): void {
     triggers: { ko: "키보드 포커스 소유자 활성 뷰 포커스 상태 창키 커서" },
     params: {},
     returns:
-      "{ requestedTabId, mounted, delivered, activeTabId, realms:[{ realm, focused, node }], settled, windowFocused, activeElement:{ tag, dataNode, className, ancestors }, lighting:{ scope, base, aperture, cutouts[], exempt[], blocked[] } — each region is { node, target, rect:{x,y,w,h} }; aperture null means nothing is focused, which is a real state }",
+      "{ requestedTabId, mounted, delivered, activeTabId, realms:[{ realm, focused, node }], settled, windowFocused, nativePointer:{ sequence,phase,source,x,y,atUnixMs,targetNode,domDelivered,fallbackPending,fallbackApplied }|null, activeElement:{ tag, dataNode, className, ancestors }, lighting:{ scope, base, aperture, cutouts[], exempt[], blocked[] } }",
     message: (d) =>
       tmsg("msg.ui.focus.state", {
         view: String(d.activeTabId ?? "none"),
@@ -1203,6 +1238,7 @@ export function registerDomCatalog(): void {
         delivered: request.delivered,
         activeTabId,
         realms,
+        nativePointer: windowPointerActivationState(),
         // Where the light is, as addresses. Whether the lighting dims the right pane is a visual
         // question with a numeric answer — the aperture's address is the focused pane's — and
         // without this the only way to ask it was to look at a picture, which is not a judgement (L6).
@@ -1220,6 +1256,47 @@ export function registerDomCatalog(): void {
                 ancestors,
               }
             : null,
+      };
+    },
+  });
+
+  register("ui.focus.wait", {
+    description: key("cmd.ui.focus.wait.desc"),
+    params: {
+      tab: { type: "string", description: key("cmd.ui.focus.wait.param.tab") },
+      timeoutMs: { type: "number", description: key("cmd.ui.focus.wait.param.timeoutMs") },
+    },
+    returns: "{ settled:true, tabId, requestedTabId, mounted, delivered }",
+    message: (d) => tmsg("msg.ui.focus.wait", { view: String(d.requestedTabId ?? "none") }),
+    errors: ["INVALID_PARAMS", "TIMEOUT", "WINDOW_NOT_FOCUSED"],
+    examples: ["ui.focus.wait tab=tab-k5m6n7 timeoutMs=4000"],
+    handler: async (p) => {
+	  if (!document.hasFocus()) {
+		return {
+		  ok: false as const,
+		  code: "WINDOW_NOT_FOCUSED" as const,
+		  message: "window does not have keyboard focus",
+		};
+	  }
+      const timeoutMs = p.timeoutMs == null ? 4000 : Number(p.timeoutMs);
+      if (!Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 30000) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "timeoutMs must be 1..30000" };
+      }
+      const tab = typeof p.tab === "string" && p.tab ? p.tab : undefined;
+      if (!(await awaitViewFocusSettled(timeoutMs, tab))) {
+        return {
+          ok: false as const,
+          code: "TIMEOUT" as const,
+          message: `focus did not land within ${timeoutMs}ms`,
+        };
+      }
+      const state = viewFocusSnapshot();
+      return {
+        settled: true,
+        tabId: state.requestedViewId,
+        requestedTabId: state.requestedViewId,
+        mounted: state.mounted,
+        delivered: state.delivered,
       };
     },
   });
@@ -1252,6 +1329,11 @@ export function registerDomCatalog(): void {
         const path = e.composedPath?.();
         const target = (path && path.length ? path[0] : e.target) as Element | null;
         const el = target instanceof HTMLElement ? target : null;
+        const active = deepActiveElement();
+        const targetOwner = focusOwnerOf(target);
+        const activeOwner = focusOwnerOf(active);
+        const request = viewFocusSnapshot();
+        const mouse = e instanceof MouseEvent ? e : null;
         buf.push({
           t: Math.round(performance.now() - t0),
           type: e.type,
@@ -1259,9 +1341,23 @@ export function registerDomCatalog(): void {
           className: (el?.className ?? "").slice(0, 80),
           dataNode: el?.dataset.node ?? null,
           hasFocus: document.hasFocus(),
+          targetTabId: targetOwner.tabId,
+          targetPaneId: targetOwner.paneId,
+          activeTabId: activeOwner.tabId,
+          activePaneId: activeOwner.paneId,
+          sessionTabId: activeSessionViewId(),
+          requestedTabId: request.requestedViewId,
+          delivered: request.delivered,
+          activeDataNode: active instanceof HTMLElement ? active.dataset.node ?? null : null,
+          inputLanded: xtermFocusLanded(active),
+          ...(e instanceof CompositionEvent ? { composition: e.data } : {}),
+          ...(mouse ? { x: mouse.clientX, y: mouse.clientY } : {}),
         });
       };
-      const types = ["mousedown", "mouseup", "focusin", "focusout"] as const;
+      const types = [
+        "mousedown", "mouseup", "focusin", "focusout",
+        "compositionstart", "compositionupdate", "compositionend",
+      ] as const;
       for (const t of types) window.addEventListener(t, record, true);
       const timer = window.setTimeout(() => focusTrace.focusTraceStop?.(), ms);
       focusTrace.focusTrace = { events: buf, recording: true };
@@ -1279,7 +1375,7 @@ export function registerDomCatalog(): void {
     description: key("cmd.ui.focus.trace.read.desc"),
     triggers: { ko: "포커스 추적 읽기 타임라인 결과" },
     params: {},
-    returns: "{ recording, events: [{ t, type, tag, className, dataNode, hasFocus }] }",
+    returns: "{ recording, events: [{ t,type,targetTabId,targetPaneId,activeTabId,activePaneId,sessionTabId,requestedTabId,delivered,activeDataNode,inputLanded,composition?,x?,y?,hasFocus }] }",
     message: (d) =>
       tmsg("msg.ui.focus.trace.read", {
         n: Array.isArray(d.events) ? (d.events as unknown[]).length : 0,

@@ -20,6 +20,7 @@ import { createRectMotionTracker } from "./lib/layoutRectMotion";
 import { timed, useEngineLayoutCost, useRenderCost } from "./lib/mainThreadCost";
 import { emitPathsDropped, emitPluginEvent } from "./plugins/hooks";
 import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
+import { startWindowPointerActivation } from "./lib/windowPointerActivation";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
 import { beginLayoutMotion, endLayoutMotion } from "./lib/layoutMotion";
 import { writePreference } from "./lib/preferenceStore";
@@ -1018,6 +1019,10 @@ function App() {
   );
   // Ghost hold recovery — blocks a lost mouseup from a window-activating click from spreading into a terminal drag selection.
   useEffect(() => startPointerOrderRepair(), []);
+  // The platform pointer event is recorded before DOM delivery. During IME
+  // composition WebKit may omit the first DOM click. The fallback activates
+  // the exposed target only when no matching trusted DOM event exists.
+  useEffect(() => startWindowPointerActivation(), []);
 
   // Dev-only mock trigger — opens the modal without a live phone for visual verification (import.meta.env.DEV gate).
   // Installs nothing in a production bundle (DEV=false). window.__soksakMockRemoteConfirm() emits a mock request.
