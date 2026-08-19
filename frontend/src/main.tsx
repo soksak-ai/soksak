@@ -67,7 +67,6 @@ import { initPluginSettingsPersistence } from "./state/pluginSettings";
 import { initPluginsPersistence } from "./state/plugins";
 import { initRegistryPersistence } from "./state/registry";
 import { startActivityFeed } from "./state/activityFeed";
-import { OrchestratorApp } from "./orchestrator/OrchestratorApp";
 import "./assets/fonts.css";
 import { applySavedWindowZoom } from "./lib/zoomIntent";
 import { tmsg } from "./i18n";
@@ -264,6 +263,7 @@ async function boot(): Promise<void> {
       bootDone();
       return;
     }
+    const { OrchestratorApp } = await import("./orchestrator/OrchestratorApp");
     ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <OrchestratorApp />,
     );
