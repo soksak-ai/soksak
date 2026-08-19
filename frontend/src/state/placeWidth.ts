@@ -65,7 +65,7 @@ export function widthWithinBounds(place: SectionPlace, width: number): boolean {
 /**
  * Sets one. Writes nothing.
  *
- * `localStorage.setItem` is synchronous and reaches disk on the browser's own schedule, so a write
+ * `localStorage.setItem` is synchronous and its flush to disk is on the browser's own schedule, so a write
  * per frame puts an unpredictable stall in the middle of a gesture. Measured 2026-08-19 with the
  * write here: most width changes cost 11-15ms and roughly one in three cost 226-402ms, whatever the
  * panes held. The hook this replaced wrote on mouse-up and nowhere else.

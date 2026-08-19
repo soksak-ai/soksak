@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 // A width being dragged is written down once, at the end, not on every frame.
 //
-// `localStorage.setItem` is synchronous and reaches disk on the browser's own schedule, so a write
+// `localStorage.setItem` is synchronous and its flush to disk is on the browser's own schedule, so a write
 // per frame puts an unpredictable stall in the middle of a gesture. The hook this replaced knew it:
 // it wrote on mouse-up and nowhere else.
 //
 // Measured 2026-08-19 with a write per change: most width changes cost 11-15ms and roughly one in
 // three cost 226-402ms, whatever the panes held — terminals only, a browser only, or both. The
-// median says the layout is not the cost; the spread says something intermittent is.
+// A median that low is not a layout cost; a spread that wide is something intermittent.
 //
 // So the store keeps the width and the write is its own act. What is on the screen never waits for
 // what is on disk.
