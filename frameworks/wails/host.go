@@ -38,7 +38,7 @@ type Options struct {
 	// Terminal is the session owner the launcher built. It is registered as a
 	// framework service for its shutdown hook: the children have to be reaped
 	// when the application quits, and only the application has that moment.
-	Terminal *terminal.Service
+	Terminal terminal.Owner
 	// Bridge is the launcher's late-bound half of the host: the core was handed
 	// its Emit and Live before this framework existed, and Run fills it in.
 	Bridge *Bridge
@@ -52,6 +52,11 @@ type Options struct {
 	// answering 404.
 	UnitRoot string
 }
+
+type terminalOwnerService struct{ owner terminal.Owner }
+
+func (service *terminalOwnerService) ServiceName() string    { return service.owner.ServiceName() }
+func (service *terminalOwnerService) ServiceShutdown() error { return service.owner.ServiceShutdown() }
 
 const (
 	appName        = "soksak-core"
@@ -108,7 +113,7 @@ func Run(options Options) error {
 		Name:        appName,
 		Description: appDescription,
 		Services: []application.Service{
-			application.NewService(options.Terminal),
+			application.NewService(&terminalOwnerService{owner: options.Terminal}),
 			application.NewService(nativeCompositor),
 			application.NewService(nativebrowser.NewService(browserBackend)),
 			// The capture finishes its image with content that draws outside this process. Without
@@ -213,8 +218,8 @@ func Run(options Options) error {
 		},
 	})
 	options.Registry.MustRegister(control.Command{
-		Name:  "control_plane_bootstrap_status",
-		Owner: control.OwnerFramework,
+		Name:    "control_plane_bootstrap_status",
+		Owner:   control.OwnerFramework,
 		Handler: func(control.Args) (any, error) { return bootstrap.status(), nil },
 	})
 

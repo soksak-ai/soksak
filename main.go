@@ -90,10 +90,22 @@ func main() {
 	// The session owner is built here rather than by the host: a PTY needs no
 	// window, and a terminal that only a windowed process could have would put
 	// this group outside headless for no reason the code requires.
-	terminals := terminalplugin.NewService(
+	terminalSource := os.Getenv("SOKSAK_PTYD_BIN")
+	if terminalSource == "" {
+		terminalSource = filepath.Join(resolved.Home, "bin", "soksak-ptyd-p1")
+	}
+	terminals, err := terminalplugin.NewDaemonService(
 		wails.NewTerminalSink(bridge, os.Getenv("SOKSAK_TERMINAL_INPUT_TRACE") == "1"),
-		terminalplugin.DefaultOptions(),
+		terminalplugin.DaemonOptions{
+			Home:         resolved.Home,
+			SourceBinary: terminalSource,
+			LoginShell:   os.Getenv("SHELL"),
+			Environment:  os.Environ(),
+		},
 	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Started before the registry so `watch_dir` is either served or refused by name from the first
 	// command, never accepted and silently dead.
