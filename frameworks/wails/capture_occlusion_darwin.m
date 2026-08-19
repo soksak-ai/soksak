@@ -45,6 +45,17 @@ int soksakSetWindowOcclusionDetection(void *windowPointer, int enabled) {
             setter(view, selector, enabled != 0);
             applied++;
         }
+        // The SPI changes the rule used to compute IsVisible; it does not
+        // recalculate the page activity state by itself. WebKit's own
+        // WKWindowVisibilityObserver performs that recalculation from this
+        // AppKit notification. Without it requestAnimationFrame remains
+        // suspended after detection is disabled, so a capture reads the stale
+        // retained layer even though the property changed.
+        if (applied > 0) {
+            [[NSNotificationCenter defaultCenter]
+                postNotificationName:NSWindowDidChangeOcclusionStateNotification
+                              object:(NSWindow *)windowPointer];
+        }
     };
     if ([NSThread isMainThread]) block(); else dispatch_sync(dispatch_get_main_queue(), block);
     return applied;
