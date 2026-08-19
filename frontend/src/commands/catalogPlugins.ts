@@ -80,6 +80,8 @@ function serializeRuntime(p: PluginRuntime) {
     status: p.status,
     error: p.error,
     permissions: p.manifest.permissions,
+    implements: p.manifest.implements ?? [],
+    consumes: p.manifest.consumes ?? [],
     views: p.manifest.contributes.views.map((v) => ({
       id: v.id,
       title: v.title,
@@ -265,7 +267,7 @@ export function registerPluginCatalog(): void {
     description: key("cmd.plugin.list.desc"),
     triggers: { ko: "플러그인 목록 설치된 확장 상태" },
     params: {},
-    returns: "{ plugins: [{id, name, version, status, permissions, …}], rejected: [{dir, errors}] }",
+    returns: "{ plugins: [{id, name, version, status, permissions, implements, consumes, …}], rejected: [{dir, errors}] }",
     message: (d) =>
       d.note
         ? tmsg("msg.list.controlPlane")
