@@ -27,7 +27,7 @@ export interface SurfaceInputProvider {
 
 /** The registry is outside the hot-swap boundary — a registered owner must survive a new module instance. */
 const state = moduleState("lib/surfaceInputProviders#registry", () => ({
-  byOwner: new Map<string, SurfaceInputProvider>(),
+  byPlugin: new Map<string, SurfaceInputProvider>(),
 }));
 
 /**
@@ -38,12 +38,12 @@ const state = moduleState("lib/surfaceInputProviders#registry", () => ({
  * collide with itself.
  */
 export function registerSurfaceInputProvider(
-  owner: string,
+  pluginId: string,
   provider: SurfaceInputProvider,
 ): () => void {
-  state.byOwner.set(owner, provider);
+  state.byPlugin.set(pluginId, provider);
   return () => {
-    if (state.byOwner.get(owner) === provider) state.byOwner.delete(owner);
+    if (state.byPlugin.get(pluginId) === provider) state.byPlugin.delete(pluginId);
   };
 }
 
@@ -56,36 +56,32 @@ export function registerSurfaceInputProvider(
 export function surfaceInputProvider(label: string): SurfaceInputProvider | null {
   const claimed: string[] = [];
   let found: SurfaceInputProvider | null = null;
-  for (const [owner, provider] of state.byOwner) {
+  for (const [pluginId, provider] of state.byPlugin) {
     let owns: boolean;
     try {
       owns = provider.owns(label);
     } catch (error) {
       // Swallowing a failed verdict leaks delivery to the framework silently.
       throw new Error(
-        tmsg("msg.ui.input.surfaceOwnerCheckFailed", {
-          owner,
+        tmsg("msg.ui.input.surfaceProviderCheckFailed", {
+          pluginId,
           label,
           error: error instanceof Error ? error.message : String(error),
         }),
       );
     }
     if (!owns) continue;
-    claimed.push(owner);
+    claimed.push(pluginId);
     found = provider;
   }
   if (claimed.length > 1) {
-    throw new Error(tmsg("msg.ui.input.surfaceOwnerConflict", { label, owners: claimed.join(", ") }));
+    throw new Error(tmsg("msg.ui.input.surfaceProviderConflict", { label, plugins: claimed.join(", ") }));
   }
   return found;
 }
 
 /** Currently registered owners — an observation surface (with no count of who took what, "nobody took it" is invisible). */
-export function surfaceInputOwners(): string[] {
-  return [...state.byOwner.keys()].sort();
-}
-
 /** Test-only reset — the registry is outside the hot-swap boundary, so re-evaluating the module does not clear it. */
 export function __resetSurfaceInputProvidersForTest(): void {
-  state.byOwner.clear();
+  state.byPlugin.clear();
 }
