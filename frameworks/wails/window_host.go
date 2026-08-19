@@ -1,6 +1,9 @@
 package wails
 
-import "unsafe"
+import (
+	"time"
+	"unsafe"
+)
 
 // Window facts and window effects, behind a contract.
 //
@@ -92,6 +95,17 @@ type WindowHost interface {
 	// theme was wrong in a workspace window and every snapshot answered with the
 	// orchestrator.
 	NativeHandle(name string) unsafe.Pointer
+	// InputState identifies the platform object that currently owns keyboard
+	// input, including whether it holds an unfinished composition.
+	InputState(name string) (WindowInputState, error)
+	// SetMarkedText creates or clears a real platform composition on the current
+	// input owner. It is the reproducible input half of the diagnostics contract.
+	SetMarkedText(name, text string) (WindowInputState, error)
+	InjectInputPointer(name string, x, y float64) (WindowPointerInjectionReceipt, error)
+	WaitInputPointer(sequence uint64, timeout time.Duration) (WindowPointerReceipt, error)
+	// DrainInputMonitor removes this host's physical-input observer. It is a
+	// shutdown child with an explicit count, never a process-global leak.
+	DrainInputMonitor() int
 	// ContentSize is the area a document occupies, in device-independent points,
 	// with the window's own chrome subtracted.
 	//

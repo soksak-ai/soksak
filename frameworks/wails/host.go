@@ -184,8 +184,9 @@ func Run(options Options) error {
 		// existed and had no command, so the only way to quit was to kill the
 		// process, and killing it skips the drain the phase exists for.
 		Reaper: hostReaper{
-			shells:   options.Terminal.Reap,
-			surfaces: nativeCompositor.Drain,
+			shells:        options.Terminal.Reap,
+			surfaces:      nativeCompositor.Drain,
+			inputMonitors: windowHost.DrainInputMonitor,
 		},
 		Quit: app.Quit,
 		Dispatch: func(target, event string, payload any) error {

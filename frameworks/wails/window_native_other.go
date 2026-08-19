@@ -61,3 +61,17 @@ func fitWebviewToWindow(unsafe.Pointer) error { return ErrFitUnsupported }
 // field answering "not visible", which would report every window on this
 // platform as hidden.
 func windowPresence(unsafe.Pointer) WindowPresence { return WindowPresence{} }
+
+var ErrWindowInputUnsupported = i18n.Errorf("wails.window.inputUnsupported", nil)
+
+func windowInputState(unsafe.Pointer) (WindowInputState, error) {
+	return WindowInputState{}, ErrWindowInputUnsupported
+}
+
+func setWindowMarkedText(unsafe.Pointer, string) (WindowInputState, error) {
+	return WindowInputState{}, ErrWindowInputUnsupported
+}
+
+func installWindowInputMonitor(*windowInputMonitor) {}
+
+func removeWindowInputMonitor(*windowInputMonitor) {}

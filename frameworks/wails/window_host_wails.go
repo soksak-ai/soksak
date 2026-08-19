@@ -2,12 +2,15 @@ package wails
 
 import (
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/soksak/soksak-core/core/i18n"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
+
+var windowInputClickSequence atomic.Uint64
 
 // The one WindowHost implementation. Every vendor type in this group stops
 // here: above it there are only names, frames, and booleans.
@@ -32,7 +35,8 @@ type wailsHost struct {
 	// rather than a poll, and it is never read from the platform: dispatching
 	// to a main thread that does not exist yet takes the process down instead
 	// of answering, so this fact has to be certain before any command runs.
-	started atomic.Bool
+	started      atomic.Bool
+	inputMonitor *windowInputMonitor
 }
 
 // NewWindowHost binds the window commands to this application.
@@ -47,8 +51,22 @@ func NewWindowHost(app *application.App, template application.WebviewWindowOptio
 		panic("wails: the window host needs an application")
 	}
 	host := &wailsHost{app: app, template: template}
+	host.inputMonitor = newWindowInputMonitor(
+		func(native uintptr) string {
+			for _, window := range host.app.Window.GetAll() {
+				if uintptr(window.NativeWindow()) == native {
+					return window.Name()
+				}
+			}
+			return ""
+		},
+		func(window, event string, payload any) error {
+			return dispatchToWindow(host.app, window, event, payload)
+		},
+	)
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		host.started.Store(true)
+		application.InvokeSync(host.inputMonitor.start)
 	})
 	return host
 }
@@ -106,6 +124,62 @@ func (h *wailsHost) NativeHandle(name string) unsafe.Pointer {
 		return nil
 	}
 	return window.NativeWindow()
+}
+
+func (h *wailsHost) InputState(name string) (WindowInputState, error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return WindowInputState{}, i18n.Errorf("wails.host.noInputWindow", map[string]string{"window": name})
+	}
+	var state WindowInputState
+	var failure error
+	native := window.NativeWindow()
+	application.InvokeSync(func() { state, failure = windowInputState(native) })
+	state.LastPointer = h.inputMonitor.latest()
+	state.PointerEventsQueued, state.PointerEventsDropped = h.inputMonitor.queueState()
+	return state, failure
+}
+
+func (h *wailsHost) SetMarkedText(name, text string) (WindowInputState, error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return WindowInputState{}, i18n.Errorf("wails.host.noInputWindow", map[string]string{"window": name})
+	}
+	var state WindowInputState
+	var failure error
+	native := window.NativeWindow()
+	application.InvokeSync(func() { state, failure = setWindowMarkedText(native, text) })
+	return state, failure
+}
+
+func (h *wailsHost) WaitInputPointer(sequence uint64, timeout time.Duration) (WindowPointerReceipt, error) {
+	return h.inputMonitor.waitForUp(sequence, timeout)
+}
+
+func (h *wailsHost) InjectInputPointer(name string, x, y float64) (WindowPointerInjectionReceipt, error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return WindowPointerInjectionReceipt{}, i18n.Errorf("wails.host.noInputWindow", map[string]string{"window": name})
+	}
+	sequence := (uint64(1) << 40) + windowInputClickSequence.Add(1)
+	now := float64(time.Now().UnixMilli())
+	native := uintptr(window.NativeWindow())
+	h.inputMonitor.enqueue(windowPointerEnvelope{native: native, sequence: sequence, phase: "down", source: "contract-injection", x: x, y: y, atUnixMs: now})
+	h.inputMonitor.enqueue(windowPointerEnvelope{native: native, sequence: sequence, phase: "up", source: "contract-injection", x: x, y: y, atUnixMs: now})
+	return WindowPointerInjectionReceipt{
+		Sequence: sequence, Posted: true, InputRoute: "contract-injection",
+		CursorPositionMayChange: false, X: x, Y: y,
+		WindowFocused: window.IsFocused(),
+	}, nil
+}
+
+func (h *wailsHost) DrainInputMonitor() int {
+	if !h.started.Load() {
+		return 0
+	}
+	drained := 0
+	application.InvokeSync(func() { drained = h.inputMonitor.drain() })
+	return drained
 }
 
 // ContentSize reads the window's content rect off the native window. The main

@@ -1,0 +1,87 @@
+package wails
+
+import "testing"
+import "time"
+
+func TestWindowInputMonitorPublishesOneObservableEdgePerNativeSequence(t *testing.T) {
+	var events []WindowPointerReceipt
+	monitor := newWindowInputMonitor(
+		func(native uintptr) string {
+			if native == 41 {
+				return "win-a"
+			}
+			return ""
+		},
+		func(window, event string, payload any) error {
+			if window != "win-a" || event != windowInputPointerEvent {
+				t.Fatalf("dispatch = %s %s", window, event)
+			}
+			events = append(events, payload.(WindowPointerReceipt))
+			return nil
+		},
+	)
+	monitor.active = true
+
+	for _, phase := range []string{"down", "down", "up", "up"} {
+		if err := monitor.deliver(41, 7, phase, 20, 30, 1000); err != nil {
+			t.Fatalf("deliver %s: %v", phase, err)
+		}
+	}
+	if len(events) != 2 || events[0].Phase != "down" || events[1].Phase != "up" {
+		t.Fatalf("events = %+v", events)
+	}
+	if latest := monitor.latest(); latest == nil || latest.Sequence != 7 || latest.Phase != "up" {
+		t.Fatalf("latest = %+v", latest)
+	}
+}
+
+func TestWindowInputClickWaitsForItsExactObservedMouseUp(t *testing.T) {
+	monitor := newWindowInputMonitor(func(uintptr) string { return "win-a" }, func(string, string, any) error { return nil })
+	monitor.active = true
+	waiting := make(chan WindowPointerReceipt, 1)
+	go func() {
+		receipt, _ := monitor.waitForUp(91, time.Second)
+		waiting <- receipt
+	}()
+	if err := monitor.deliver(1, 90, "up", 1, 2, 3); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-waiting:
+		t.Fatal("another pointer sequence satisfied the click receipt")
+	default:
+	}
+	if err := monitor.deliver(1, 91, "up", 4, 5, 6); err != nil {
+		t.Fatal(err)
+	}
+	if receipt := <-waiting; receipt.Sequence != 91 || receipt.X != 4 {
+		t.Fatalf("receipt = %+v", receipt)
+	}
+}
+
+func TestPhysicalInputCallbackQueuesBeforeAnyWebviewDispatch(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	monitor := newWindowInputMonitor(
+		func(uintptr) string { return "win-a" },
+		func(string, string, any) error {
+			close(started)
+			<-release
+			return nil
+		},
+	)
+	monitor.active = true
+	monitor.worker.Add(1)
+	go monitor.run()
+
+	// If enqueue dispatches inline this call never returns: dispatch is waiting
+	// on release, which is closed only below.
+	monitor.enqueue(windowPointerEnvelope{native: 1, sequence: 1, phase: "down"})
+	<-started
+	close(release)
+	monitor.mu.Lock()
+	monitor.active = false
+	close(monitor.queue)
+	monitor.mu.Unlock()
+	monitor.worker.Wait()
+}

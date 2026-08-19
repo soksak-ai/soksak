@@ -11,10 +11,60 @@ package wails
 import "C"
 
 import (
+	"sync"
 	"unsafe"
 
 	"github.com/soksak/soksak-core/core/i18n"
 )
+
+var windowInputMonitorOwner struct {
+	sync.RWMutex
+	monitor *windowInputMonitor
+	token   unsafe.Pointer
+}
+
+//export soksakWindowInputPointer
+func soksakWindowInputPointer(window unsafe.Pointer, sequence C.ulonglong, phase C.int, x, y, atUnixMs C.double) {
+	windowInputMonitorOwner.RLock()
+	monitor := windowInputMonitorOwner.monitor
+	windowInputMonitorOwner.RUnlock()
+	if monitor == nil {
+		return
+	}
+	edge := "down"
+	if phase == 1 {
+		edge = "up"
+	}
+	monitor.enqueue(windowPointerEnvelope{
+		native: uintptr(window), sequence: uint64(sequence), phase: edge, source: "system",
+		x: float64(x), y: float64(y), atUnixMs: float64(atUnixMs),
+	})
+}
+
+func installWindowInputMonitor(monitor *windowInputMonitor) {
+	windowInputMonitorOwner.Lock()
+	defer windowInputMonitorOwner.Unlock()
+	if windowInputMonitorOwner.monitor != nil {
+		panic("wails: a window input monitor is already installed")
+	}
+	windowInputMonitorOwner.monitor = monitor
+	windowInputMonitorOwner.token = C.soksakInstallWindowInputMonitor()
+	if windowInputMonitorOwner.token == nil {
+		windowInputMonitorOwner.monitor = nil
+		panic("wails: AppKit refused the window input monitor")
+	}
+}
+
+func removeWindowInputMonitor(monitor *windowInputMonitor) {
+	windowInputMonitorOwner.Lock()
+	defer windowInputMonitorOwner.Unlock()
+	if windowInputMonitorOwner.monitor != monitor {
+		return
+	}
+	C.soksakRemoveWindowInputMonitor(windowInputMonitorOwner.token)
+	windowInputMonitorOwner.token = nil
+	windowInputMonitorOwner.monitor = nil
+}
 
 // orderWindowFrontWithoutKey brings a window forward and leaves the keyboard
 // where it is. The caller is on the main thread.
@@ -116,4 +166,37 @@ func windowPresence(window unsafe.Pointer) WindowPresence {
 		Occluded:     bool(read.occluded),
 		Alpha:        float64(read.alpha),
 	}
+}
+
+func windowInputState(window unsafe.Pointer) (WindowInputState, error) {
+	read := C.soksakWindowInputState(window)
+	defer freeWindowInputState(read)
+	if read.errorMessage != nil {
+		return WindowInputState{}, i18n.Errorf("wails.input.stateFailed", map[string]string{"reason": C.GoString(read.errorMessage)})
+	}
+	return WindowInputState{
+		WindowFocused:   bool(read.windowFocused),
+		InputOwner:      C.GoString(read.inputOwner),
+		ResponderMarked: bool(read.marked),
+	}, nil
+}
+
+func setWindowMarkedText(window unsafe.Pointer, text string) (WindowInputState, error) {
+	nativeText := C.CString(text)
+	defer C.free(unsafe.Pointer(nativeText))
+	read := C.soksakSetWindowMarkedText(window, nativeText)
+	defer freeWindowInputState(read)
+	if read.errorMessage != nil {
+		return WindowInputState{}, i18n.Errorf("wails.input.markFailed", map[string]string{"reason": C.GoString(read.errorMessage)})
+	}
+	return WindowInputState{
+		WindowFocused:   bool(read.windowFocused),
+		InputOwner:      C.GoString(read.inputOwner),
+		ResponderMarked: bool(read.marked),
+	}, nil
+}
+
+func freeWindowInputState(read C.SoksakWindowInputState) {
+	C.free(unsafe.Pointer(read.inputOwner))
+	C.free(unsafe.Pointer(read.errorMessage))
 }

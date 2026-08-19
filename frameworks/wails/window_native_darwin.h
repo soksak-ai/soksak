@@ -101,4 +101,29 @@ typedef struct {
 
 SoksakWindowPresence soksakWindowPresence(void *nsWindow);
 
+// Platform result types use copied strings. The Go adapter owns and frees
+// inputOwner, hitOwner and errorMessage after every call.
+typedef struct {
+  bool windowFocused;
+  bool marked;
+  char *inputOwner;
+  char *errorMessage;
+} SoksakWindowInputState;
+
+// Read and drive the native text-input contract. Coordinates have a top-left
+// origin and are expressed in device-independent content points, matching the
+// document command surface.
+//
+// Must be called on the main thread.
+SoksakWindowInputState soksakWindowInputState(void *nsWindow);
+SoksakWindowInputState soksakSetWindowMarkedText(void *nsWindow, const char *text);
+
+// Observe physical left-button edges before WebKit decides whether its DOM
+// receives them. The returned token owns exactly one local monitor and must be
+// removed during application shutdown.
+//
+// Must be called on the main thread.
+void *soksakInstallWindowInputMonitor(void);
+void soksakRemoveWindowInputMonitor(void *token);
+
 #endif

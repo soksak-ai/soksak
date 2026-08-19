@@ -35,6 +35,8 @@ type Reaper interface {
 	// process exits is a native child outliving its parent, and "four came down"
 	// leaves open whether a fifth is left.
 	DrainSurfaces() (drained int, remaining int, err error)
+	// DrainInputMonitors removes every process-local physical input observer.
+	DrainInputMonitors() int
 }
 
 // ShutdownDeps is what the process supplies.
@@ -96,6 +98,7 @@ func RegisterShutdown(registry *control.Registry, deps ShutdownDeps) {
 		// windows, its native surfaces — and a process with no host has none.
 		Handler: func(control.Args) (any, error) {
 			shells := deps.Reaper.ReapShells()
+			inputMonitors := deps.Reaper.DrainInputMonitors()
 			surfaces, remaining, err := deps.Reaper.DrainSurfaces()
 			if err != nil {
 				return nil, fmt.Errorf(
@@ -115,10 +118,11 @@ func RegisterShutdown(registry *control.Registry, deps ShutdownDeps) {
 				// The two this host owns. The rest are zero because this build
 				// has no daemon, no transferred pty, no pane host and no input
 				// monitor — that is a count, not an absence of one.
-				LocalPtysReaped:       shells,
-				NativeSurfacesDrained: surfaces,
-				ServicesReaped:        2,
-				NativeRemaining:       0,
+				LocalPtysReaped:            shells,
+				NativeSurfacesDrained:      surfaces,
+				NativeInputMonitorsDrained: inputMonitors,
+				ServicesReaped:             2,
+				NativeRemaining:            0,
 			}, nil
 		},
 	})
@@ -136,10 +140,13 @@ func RegisterShutdown(registry *control.Registry, deps ShutdownDeps) {
 // hostReaper is this host's children: the terminal's shells and the
 // compositor's surfaces.
 type hostReaper struct {
-	shells   func() int
-	surfaces func() (int, int, error)
+	shells        func() int
+	surfaces      func() (int, int, error)
+	inputMonitors func() int
 }
 
 func (reaper hostReaper) ReapShells() int { return reaper.shells() }
 
 func (reaper hostReaper) DrainSurfaces() (int, int, error) { return reaper.surfaces() }
+
+func (reaper hostReaper) DrainInputMonitors() int { return reaper.inputMonitors() }

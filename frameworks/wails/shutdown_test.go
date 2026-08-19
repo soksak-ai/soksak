@@ -25,11 +25,13 @@ type reaper struct {
 	surfaces int
 	left     int
 	err      error
+	monitors int
 }
 
 func (r *reaper) ReapShells() int { return r.shells }
 
 func (r *reaper) DrainSurfaces() (int, int, error) { return r.surfaces, r.left, r.err }
+func (r *reaper) DrainInputMonitors() int          { return r.monitors }
 
 func shutdownRegistry(t *testing.T, deps ShutdownDeps) *control.Registry {
 	t.Helper()
@@ -60,18 +62,19 @@ func receiptOf(t *testing.T, registry *control.Registry) map[string]any {
 // rather than as the Go value.
 func TestThePrepareReceiptSaysWhatItReaped(t *testing.T) {
 	registry := shutdownRegistry(t, ShutdownDeps{
-		Reaper: &reaper{shells: 3, surfaces: 4},
+		Reaper: &reaper{shells: 3, surfaces: 4, monitors: 1},
 		Quit:   func() {},
 	})
 
 	receipt := receiptOf(t, registry)
 
 	for key, want := range map[string]any{
-		"phase":                 "reaped",
-		"reaped":                true,
-		"localPtysReaped":       float64(3),
-		"nativeSurfacesDrained": float64(4),
-		"nativeRemaining":       float64(0),
+		"phase":                      "reaped",
+		"reaped":                     true,
+		"localPtysReaped":            float64(3),
+		"nativeSurfacesDrained":      float64(4),
+		"nativeInputMonitorsDrained": float64(1),
+		"nativeRemaining":            float64(0),
 	} {
 		if receipt[key] != want {
 			t.Errorf("receipt[%q] = %v, want %v", key, receipt[key], want)

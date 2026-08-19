@@ -60,6 +60,7 @@ func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
 	}
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
 	RegisterCapture(registry, deps.Host, deps.Frames)
+	RegisterWindowInput(registry, deps.Host)
 	RegisterShutdown(registry, ShutdownDeps{Reaper: deps.Reaper, Quit: deps.Quit})
 	// The readings over a recording need no window, so they answer in a process
 	// with none — a recording outlives the session it was taken in.

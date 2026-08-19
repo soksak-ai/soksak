@@ -242,3 +242,4 @@ type idleReaper struct{}
 func (idleReaper) ReapShells() int { return 0 }
 
 func (idleReaper) DrainSurfaces() (int, int, error) { return 0, 0, nil }
+func (idleReaper) DrainInputMonitors() int          { return 0 }

@@ -639,4 +639,58 @@ export function registerWindowCatalog(): void {
       return {};
     },
   });
+
+  register("window.input.state", {
+    description: key("cmd.window.input.state.desc"),
+    params: {},
+    returns: "{ windowFocused, inputOwner, responderMarked, lastPointer, pointerEventsQueued, pointerEventsDropped }",
+    message: (d) => tmsg("msg.window.input.state", {
+      owner: String(d.inputOwner ?? ""),
+      marked: String(Boolean(d.responderMarked)),
+    }),
+    examples: ["window.input.state window=win-example"],
+    handler: async () => invoke("window.input.state"),
+  });
+
+  register("window.input.mark", {
+    description: key("cmd.window.input.mark.desc"),
+    params: {
+      text: { type: "string", description: key("cmd.window.input.mark.param.text") },
+    },
+    returns: "{ windowFocused, inputOwner, responderMarked }",
+    message: (d) => tmsg("msg.window.input.mark", {
+      owner: String(d.inputOwner ?? ""),
+      marked: String(Boolean(d.responderMarked)),
+    }),
+    examples: ["window.input.mark window=win-example text=ㅎ", "window.input.mark window=win-example text="],
+    handler: async (p) => invoke("window.input.mark", { text: p.text ?? "" }),
+  });
+
+  register("window.input.pointer.wait", {
+    description: key("cmd.window.input.pointer.wait.desc"),
+    params: {
+      sequence: { type: "number", description: key("cmd.window.input.pointer.wait.param.sequence"), required: true },
+      timeoutMs: { type: "number", description: key("cmd.window.input.pointer.wait.param.timeoutMs"), required: true },
+    },
+    returns: "{ sequence, phase:'up', x, y, atUnixMs, window }",
+    message: (d) => tmsg("msg.window.input.pointer.wait", { sequence: String(d.sequence ?? "") }),
+    errors: ["INVALID_PARAMS", "TIMEOUT"],
+    examples: ["window.input.pointer.wait window=win-example sequence=1099511627777 timeoutMs=2000"],
+    handler: async (p) => invoke("window.input.pointer.wait", {
+      sequence: p.sequence,
+      timeoutMs: p.timeoutMs,
+    }),
+  });
+
+  register("window.input.pointer.inject", {
+    description: key("cmd.window.input.pointer.inject.desc"),
+    params: {
+      x: { type: "number", description: key("cmd.window.input.pointer.inject.param.x"), required: true },
+      y: { type: "number", description: key("cmd.window.input.pointer.inject.param.y"), required: true },
+    },
+    returns: "{ sequence, posted:true, inputRoute:'contract-injection', cursorPositionMayChange:false, x, y }",
+    message: (d) => tmsg("msg.window.input.pointer.inject", { sequence: String(d.sequence ?? "") }),
+    examples: ["window.input.pointer.inject window=win-example x=400 y=200"],
+    handler: async (p) => invoke("window.input.pointer.inject", { x: p.x, y: p.y }),
+  });
 }

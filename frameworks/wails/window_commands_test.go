@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/soksak/soksak-core/core/control"
@@ -85,6 +86,19 @@ func (h *fakeHost) Live(name string) bool {
 func (h *fakeHost) Presence(name string) WindowPresence { return h.presence[name] }
 
 func (h *fakeHost) NativeHandle(string) unsafe.Pointer { return nil }
+func (h *fakeHost) InputState(string) (WindowInputState, error) {
+	return WindowInputState{}, nil
+}
+func (h *fakeHost) SetMarkedText(string, string) (WindowInputState, error) {
+	return WindowInputState{}, nil
+}
+func (h *fakeHost) WaitInputPointer(uint64, time.Duration) (WindowPointerReceipt, error) {
+	return WindowPointerReceipt{}, nil
+}
+func (h *fakeHost) InjectInputPointer(string, float64, float64) (WindowPointerInjectionReceipt, error) {
+	return WindowPointerInjectionReceipt{}, nil
+}
+func (h *fakeHost) DrainInputMonitor() int { return 0 }
 
 // ContentSize: this package has no application, so a window here has no content
 // area. The commands must answer that rather than invent a size.

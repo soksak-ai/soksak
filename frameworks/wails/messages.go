@@ -8,6 +8,38 @@ import "github.com/soksak/soksak-core/core/i18n"
 
 func init() {
 	i18n.Declare(map[string]i18n.Sentence{
+		"wails.input.negativeCoordinates": {
+			EN: "window input coordinates must be non-negative: x={x}, y={y}",
+			KO: "창 입력 좌표는 0 이상이어야 합니다: x={x}, y={y}",
+		},
+		"wails.input.invalidTimeout": {
+			EN: "timeoutMs must be between 1 and 30000: {timeout}",
+			KO: "timeoutMs는 1에서 30000 사이여야 합니다: {timeout}",
+		},
+		"wails.input.pointerTimeout": {
+			EN: "mouseup was not observed for sequence {sequence} within {timeout}",
+			KO: "sequence {sequence}의 mouseup이 {timeout} 안에 확인되지 않았습니다",
+		},
+		"wails.input.invalidPhase": {
+			EN: "pointer phase must be down or up: {phase}",
+			KO: "포인터 phase는 down 또는 up이어야 합니다: {phase}",
+		},
+		"wails.input.windowUnknown": {
+			EN: "the pointer event has no associated window",
+			KO: "포인터 이벤트에 연결된 창이 없습니다",
+		},
+		"wails.input.monitorInactive": {
+			EN: "the window input monitor is not active",
+			KO: "창 입력 모니터가 활성 상태가 아닙니다",
+		},
+		"wails.input.stateFailed": {
+			EN: "window input state failed: {reason}",
+			KO: "창 입력 상태 조회 실패: {reason}",
+		},
+		"wails.input.markFailed": {
+			EN: "IME composition update failed: {reason}",
+			KO: "IME 조합 상태 변경 실패: {reason}",
+		},
 		"wails.renderer.needsWindow": {
 			EN: `{command} needs a window: name one of {windows}, or call from a window`,
 			KO: `{command} 은(는) 창이 필요합니다 — {windows} 중 하나를 지정하거나 창 안에서 호출하십시오`,
