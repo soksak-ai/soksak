@@ -116,8 +116,7 @@ func requestFrom(argv []string) (control.Request, error) {
 			ID:      "1",
 			Command: "command.docs",
 			Args: map[string]json.RawMessage{
-				"name":   encoded,
-				"window": json.RawMessage(`"` + control.ControlPlaneWindow + `"`),
+				"name": encoded,
 			},
 		}, nil
 	}

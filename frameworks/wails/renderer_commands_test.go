@@ -485,6 +485,22 @@ func TestADelegatedNameIsOwnedByTheFramework(t *testing.T) {
 	}
 }
 
+func TestCommandDocsWithoutAWindowUsesTheFirstDeclaringRenderer(t *testing.T) {
+	registry, bridge, document := bridged(t)
+	_ = bridge.Declare("win-a", []string{"command.docs"})
+	_ = bridge.Declare("win-b", []string{"command.docs"})
+	answerOnce(t, registry, document, `{"ok":true}`)
+
+	if _, err := registry.Invoke("command.docs", control.Args{
+		"name": json.RawMessage(`"window.snapshot"`),
+	}); err != nil {
+		t.Fatalf("command.docs: %v", err)
+	}
+	if document.lastWindow() != "win-a" {
+		t.Fatalf("command.docs reached %q, want first declaring renderer win-a", document.lastWindow())
+	}
+}
+
 func receiptsFor(document *page, window string) int {
 	document.mu.Lock()
 	defer document.mu.Unlock()

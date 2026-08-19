@@ -13,8 +13,8 @@ func TestHelpRequestsOneDiscoverableCommandDocument(t *testing.T) {
 	if got := string(request.Args["name"]); got != `"window.snapshot"` {
 		t.Fatalf("help name = %s, want window.snapshot", got)
 	}
-	if got := string(request.Args["window"]); got != `"main"` {
-		t.Fatalf("help window = %s, want the control plane", got)
+	if _, targeted := request.Args["window"]; targeted {
+		t.Fatal("help is pinned to one window instead of a renderer that declares command.docs")
 	}
 }
 

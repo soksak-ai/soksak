@@ -44,9 +44,10 @@ const (
 	// The declaration channel. Spelled the same in
 	// frontend/src/framework/wails/rendererDoor.ts — a wire name has to be
 	// written on both sides of a language boundary.
-	rendererDeclareEvent  = "renderer:commands.declare"
-	rendererWithdrawEvent = "renderer:commands.withdraw"
-	rendererReceiptEvent  = "renderer:commands.declared"
+	rendererDeclareEvent         = "renderer:commands.declare"
+	rendererWithdrawEvent        = "renderer:commands.withdraw"
+	rendererReceiptEvent         = "renderer:commands.declared"
+	rendererDocumentationCommand = "command.docs"
 )
 
 // rendererDeadline bounds one call to a page.
@@ -408,6 +409,14 @@ func (r *RendererCommands) forward() func(string, control.Args) (any, error) {
 			window, err = control.OptionalArg(args, control.CallerWindowArgument, "")
 			if err != nil {
 				return nil, err
+			}
+		}
+		if window == "" {
+			if name == rendererDocumentationCommand {
+				serving := r.serving(name)
+				if len(serving) > 0 {
+					window = serving[0]
+				}
 			}
 		}
 		if window == "" {
