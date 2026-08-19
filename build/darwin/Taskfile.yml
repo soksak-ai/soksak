@@ -40,6 +40,13 @@ tasks:
     cmds:
       - go build {{.BUILD_FLAGS}} -o {{.OUTPUT}}
     vars:
+      HOST_ARCH:
+        sh: |
+          case "$(uname -m)" in
+            arm64) echo arm64 ;;
+            x86_64) echo amd64 ;;
+            *) uname -m ;;
+          esac
       # `devtools` rides with `production`: the framework compiles its inspector away under
       # `production` alone, and `window_devtools` then answers OK while nothing opens. Every rule
       # about a rectangle in this build is checked against a number, and on 2026-08-17 every number
@@ -51,7 +58,7 @@ tasks:
     env:
       GOOS: darwin
       CGO_ENABLED: 1
-      GOARCH: '{{.ARCH | default ARCH}}'
+      GOARCH: '{{.ARCH | default .HOST_ARCH}}'
       CGO_CFLAGS: "-mmacosx-version-min=10.15"
       CGO_LDFLAGS: "-mmacosx-version-min=10.15"
       MACOSX_DEPLOYMENT_TARGET: "10.15"
