@@ -29,7 +29,7 @@ type reaper struct {
 	monitors    int
 }
 
-func (r *reaper) ReapShells() int { return r.shells }
+func (r *reaper) ReleaseShells() (int, int) { return r.shells, r.transferred }
 
 func (r *reaper) DrainSurfaces() (int, int, error) { return r.surfaces, r.left, r.err }
 func (r *reaper) DrainInputMonitors() int          { return r.monitors }

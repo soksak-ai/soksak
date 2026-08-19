@@ -189,7 +189,10 @@ func Run(options Options) error {
 		// existed and had no command, so the only way to quit was to kill the
 		// process, and killing it skips the drain the phase exists for.
 		Reaper: hostReaper{
-			shells:        options.Terminal.Reap,
+			shells: func() (int, int) {
+				released := options.Terminal.Reap()
+				return released.LocalReaped, released.DaemonTransferred
+			},
 			surfaces:      nativeCompositor.Drain,
 			inputMonitors: windowHost.DrainInputMonitor,
 		},

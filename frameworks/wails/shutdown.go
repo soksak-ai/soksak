@@ -26,8 +26,9 @@ import (
 // terminal's fact and the number of surfaces the compositor placed is the
 // compositor's; a host counting for them would be a second ledger of one thing.
 type Reaper interface {
-	// ReapShells closes every shell session and answers how many it closed.
-	ReapShells() int
+	// ReleaseShells closes process-owned sessions and detaches daemon-owned
+	// sessions. The two counts cannot be merged: only the former shells ended.
+	ReleaseShells() (localReaped int, daemonTransferred int)
 	// DrainSurfaces takes every native surface down and answers how many came
 	// down, how many are still held, and what stopped it.
 	//
@@ -97,7 +98,7 @@ func RegisterShutdown(registry *control.Registry, deps ShutdownDeps) {
 		// Framework-owned: the children are this host's — its services, its
 		// windows, its native surfaces — and a process with no host has none.
 		Handler: func(control.Args) (any, error) {
-			shells := deps.Reaper.ReapShells()
+			localShells, transferredShells := deps.Reaper.ReleaseShells()
 			inputMonitors := deps.Reaper.DrainInputMonitors()
 			surfaces, remaining, err := deps.Reaper.DrainSurfaces()
 			if err != nil {
@@ -118,7 +119,8 @@ func RegisterShutdown(registry *control.Registry, deps ShutdownDeps) {
 				// The two this host owns. The rest are zero because this build
 				// has no daemon, no transferred pty, no pane host and no input
 				// monitor — that is a count, not an absence of one.
-				LocalPtysReaped:            shells,
+				LocalPtysReaped:            localShells,
+				DaemonPtysTransferred:      transferredShells,
 				NativeSurfacesDrained:      surfaces,
 				NativeInputMonitorsDrained: inputMonitors,
 				ServicesReaped:             2,
@@ -140,12 +142,12 @@ func RegisterShutdown(registry *control.Registry, deps ShutdownDeps) {
 // hostReaper is this host's children: the terminal's shells and the
 // compositor's surfaces.
 type hostReaper struct {
-	shells        func() int
+	shells        func() (int, int)
 	surfaces      func() (int, int, error)
 	inputMonitors func() int
 }
 
-func (reaper hostReaper) ReapShells() int { return reaper.shells() }
+func (reaper hostReaper) ReleaseShells() (int, int) { return reaper.shells() }
 
 func (reaper hostReaper) DrainSurfaces() (int, int, error) { return reaper.surfaces() }
 
