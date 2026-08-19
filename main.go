@@ -97,10 +97,11 @@ func main() {
 	terminals, err := terminalplugin.NewDaemonService(
 		wails.NewTerminalSink(bridge, os.Getenv("SOKSAK_TERMINAL_INPUT_TRACE") == "1"),
 		terminalplugin.DaemonOptions{
-			Home:         resolved.Home,
-			SourceBinary: terminalSource,
-			LoginShell:   os.Getenv("SHELL"),
-			Environment:  os.Environ(),
+			Home:                resolved.Home,
+			SourceBinary:        terminalSource,
+			LoginShell:          os.Getenv("SHELL"),
+			Environment:         os.Environ(),
+			RestoreSourceBinary: os.Getenv("SOKSAK_TERMINAL_SIDECAR_BIN"),
 		},
 	)
 	if err != nil {

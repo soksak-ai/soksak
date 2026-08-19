@@ -227,7 +227,7 @@ func (discardProcessOutput) EmitProcessExit(process.Exit) process.Delivery {
 // depends on an owner being present, never on what it can do.
 type idleSessions struct{}
 
-func (idleSessions) Open(string, string, uint16, uint16) (terminalcmd.Handle, error) {
+func (idleSessions) Open(string, string, uint16, uint16, *uint64) (terminalcmd.Handle, error) {
 	return terminalcmd.Handle{}, nil
 }
 
