@@ -26,6 +26,10 @@ export type ResizeBaselineReport =
   | { status: "unavailable"; reason: string }
   | { status: "observed"; observation: unknown };
 
+export type ResizeSampleReport =
+  | { step: number; size: ResizeSequenceStep; status: "observed"; observation: unknown }
+  | { step: number; size: ResizeSequenceStep; status: "unavailable"; reason: string };
+
 export type WindowResizeRecording = Pick<
   WindowRecordRequest,
   "dir" | "frames" | "intervalMs" | "maxBytes"
@@ -43,6 +47,7 @@ interface ResizeSequenceRequest {
 }
 
 const MAX_STEPS = 120;
+const NO_OBSERVATION_REASON = "resize observer returned no observation";
 
 const delay = (ms: number): Promise<void> =>
   ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
@@ -52,7 +57,10 @@ async function observeBaseline(
 ): Promise<ResizeBaselineReport> {
   if (!observe) return { status: "not-observed" };
   try {
-    return { status: "observed", observation: await observe({ kind: "baseline" }) };
+    const observation = await observe({ kind: "baseline" });
+    return observation == null
+      ? { status: "unavailable", reason: NO_OBSERVATION_REASON }
+      : { status: "observed", observation };
   } catch (error) {
     return {
       status: "unavailable",
@@ -107,7 +115,8 @@ export async function runWindowResizeSequence({
   elapsedMs: number;
   final: ResizeSequenceStep;
   baseline: ResizeBaselineReport;
-  samples: { step: number; size: ResizeSequenceStep; observation: unknown }[];
+  samples: ResizeSampleReport[];
+  measurement: { passed: boolean; unavailableSteps: number };
 }> {
   if (!Array.isArray(sizes) || sizes.length === 0) throw new Error(tmsg("msg.window.resizeSequence.sizesEmpty"));
   if (sizes.length > MAX_STEPS) throw new Error(tmsg("msg.window.resizeSequence.maxSteps", { max: MAX_STEPS }));
@@ -144,21 +153,20 @@ export async function runWindowResizeSequence({
   const baseline = await observeBaseline(observe);
 
   const resizeStartedAt = performance.now();
-  const samples: { step: number; size: ResizeSequenceStep; observation: unknown }[] = [];
+  const samples: ResizeSampleReport[] = [];
   for (let index = 0; index < sizes.length; index += 1) {
     const size = sizes[index];
     await setSize(size.w, size.h);
     if (observe) {
-      samples.push({
+      const observation = await observe({
+        kind: "step",
         step: index,
-        size,
-        observation: await observe({
-          kind: "step",
-          step: index,
-          size: { w: size.w, h: size.h },
-          ...(size.phase === undefined ? {} : { phase: size.phase }),
-        }),
+        size: { w: size.w, h: size.h },
+        ...(size.phase === undefined ? {} : { phase: size.phase }),
       });
+      samples.push(observation == null
+        ? { step: index, size, status: "unavailable", reason: NO_OBSERVATION_REASON }
+        : { step: index, size, status: "observed", observation });
     }
     if (index + 1 < sizes.length) await delay(intervalMs);
   }
@@ -167,6 +175,7 @@ export async function runWindowResizeSequence({
   const recordingResult: WindowResizeRecordingResult = recording
     ? await recording.report
     : { status: "not-requested", mode: "realtime" };
+  const unavailableSteps = samples.filter((sample) => sample.status === "unavailable").length;
 
   return {
     steps: sizes.length,
@@ -176,5 +185,11 @@ export async function runWindowResizeSequence({
     final: sizes[sizes.length - 1],
     baseline,
     samples,
+    measurement: {
+      passed: baseline.status === "observed"
+        && samples.length === sizes.length
+        && unavailableSteps === 0,
+      unavailableSteps,
+    },
   };
 }

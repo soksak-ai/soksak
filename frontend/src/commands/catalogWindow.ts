@@ -173,7 +173,7 @@ export function registerWindowCatalog(): void {
       },
     },
     returns:
-      "{ steps, recording:{status:'not-requested'|'complete'|'failed',mode:'realtime',dir?,requestedFrames?,frames?,reason?}, resizeElapsedMs, elapsedMs, final:{w,h}, baseline:{status:'not-observed'|'unavailable'|'observed',reason?,observation?}, samples:[{step,size,observation}] }",
+      "{ steps, recording:{status:'not-requested'|'complete'|'failed',mode:'realtime',dir?,requestedFrames?,frames?,reason?}, resizeElapsedMs, elapsedMs, final:{w,h}, baseline:{status:'not-observed'|'unavailable'|'observed',reason?,observation?}, samples:[{step,size,status:'observed'|'unavailable',observation?,reason?}], measurement:{passed,unavailableSteps} }",
     message: (d) => {
       const recording = d.recording as Record<string, unknown> | undefined;
       return tmsg("msg.window.resizeSequence", {

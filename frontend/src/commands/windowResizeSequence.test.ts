@@ -207,11 +207,13 @@ describe("window resize sequence", () => {
       {
         step: 0,
         size: { w: 900, h: 700 },
+        status: "observed",
         observation: { request: { kind: "step", step: 0, size: { w: 900, h: 700 } }, current: "900x700" },
       },
       {
         step: 1,
         size: { w: 1500, h: 900 },
+        status: "observed",
         observation: { request: { kind: "step", step: 1, size: { w: 1500, h: 900 } }, current: "1500x900" },
       },
     ]);
@@ -302,5 +304,27 @@ describe("window resize sequence", () => {
     });
     expect(result.baseline).toEqual({ status: "not-observed" });
     expect(result.samples).toEqual([]);
+  });
+
+  it("marks null observations unavailable instead of reporting observed null", async () => {
+    const result = await runWindowResizeSequence({
+      sizes: [{ w: 900, h: 700 }],
+      intervalMs: 0,
+      setSize: vi.fn(async () => {}),
+      observe: vi.fn(async () => null),
+      recordFrames: vi.fn() as never,
+    });
+
+    expect(result.baseline).toEqual({
+      status: "unavailable",
+      reason: "resize observer returned no observation",
+    });
+    expect(result.samples).toEqual([{
+      step: 0,
+      size: { w: 900, h: 700 },
+      status: "unavailable",
+      reason: "resize observer returned no observation",
+    }]);
+    expect(result.measurement).toEqual({ passed: false, unavailableSteps: 1 });
   });
 });
