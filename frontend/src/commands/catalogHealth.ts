@@ -10,6 +10,7 @@ import { register } from "./registry";
 import { catalogJson } from "./registry";
 import { commandHealth, noteActivityPersist, noteLedgerAudit } from "./commandObservation";
 import { useUi } from "../state/ui";
+import { preferenceStoreContents, preferenceWriteFailures } from "../lib/preferenceStore";
 import { invoke } from "../framework";
 
 export function registerHealthCatalog(): void {
@@ -69,4 +70,29 @@ export function registerHealthCatalog(): void {
     },
   });
 
+  // What the window has written to the synchronous store it reads at boot.
+  //
+  // The store is a cache — the authority is the core's — but it is a shared, bounded one, and a
+  // quota spent by something is a quota unavailable to everything. Measured 2026-08-19: it was
+  // full, a sidebar drag threw `QuotaExceededError` out of a React commit, and the window went
+  // blank. What was in it could not be asked: the boot error named `setItem` and nothing named the
+  // keys. So the sizes are a reading, and the biggest is first because that is the question.
+  register("state.storage", {
+    description: key("cmd.state.storage.desc"),
+    triggers: { ko: "로컬 저장소 용량 키 크기 할당량 초과 설정 저장 실패" },
+    params: {},
+    returns: "{ totalChars, keys[].{key,chars}, failures[].{key,reason,atUnixMs} }",
+    message: (d) =>
+      tmsg("msg.state.storage", {
+        n: ((d.keys as unknown[]) ?? []).length,
+        chars: Number(d.totalChars ?? 0),
+      }),
+    examples: ["state.storage"],
+    handler: () => ({
+      ...preferenceStoreContents(),
+      // Which writes did not land. Read from the same place the health verdict reads, so the two
+      // cannot disagree about whether this window is still remembering anything.
+      failures: preferenceWriteFailures(),
+    }),
+  });
 }

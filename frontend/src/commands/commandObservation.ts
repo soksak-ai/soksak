@@ -13,6 +13,7 @@ import { dataChangeHealth } from "../state/dataChangeHealth";
 import { activityHealth } from "../state/activityHealth";
 import { tmsg } from "../i18n";
 import { moduleState } from "../lib/moduleState";
+import { preferenceWriteFailures } from "../lib/preferenceStore";
 import type { CommandTrace } from "./registry";
 
 // Health of the tracing — **when tracing dies, that fact is not traced either.** So it is counted
@@ -166,6 +167,20 @@ export function degradedAxes(registeredCount: number): string[] | undefined {
         pending: persistBox.v.pending ?? 0,
         failures: persistBox.v.failures ?? 0,
         drops: persistBox.v.drops ?? 0,
+      }),
+    );
+  }
+  // A preference the window could not write down. The store is a cache and not the authority, so a
+  // failed write is not fatal — but a window that has quietly stopped remembering anything looks
+  // exactly like one that is remembering, and the first sign of it was a blank screen on 2026-08-19
+  // rather than a reading. Named here so the reading comes first.
+  const unwritten = preferenceWriteFailures();
+  if (unwritten.length > 0) {
+    bad.push(
+      tmsg("msg.health.preference.writeFailed", {
+        n: unwritten.length,
+        keys: unwritten.map((one) => one.key).join(", "),
+        reason: unwritten[0].reason.slice(0, 80),
       }),
     );
   }

@@ -442,6 +442,13 @@ export interface ManifestValidation {
 export function qualifiedViewId(pluginId: string, viewId: string): string {
   return `${pluginId}.${viewId}`;
 }
+/** The plugin half of a global view key. The inverse of the join, written beside it so the two
+ *  cannot disagree — a plugin id holds no dot (the id format is checked at parse), so the first one
+ *  is the seam. */
+export function pluginOfViewKey(viewKey: string): string {
+  const at = viewKey.indexOf(".");
+  return at < 0 ? viewKey : viewKey.slice(0, at);
+}
 export function pluginCommandName(pluginId: string, name: string): string {
   return `plugin.${pluginId}.${name}`;
 }

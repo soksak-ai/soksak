@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// A place appears when the thing that decides it changes, and not one change later.
+// A place appears when what settles it changes, and not one change later.
 //
 // Whether a place stands is `open && a set stands there`. The second half is read from the section
 // store, and the reader used a hand-built version number — `sets.length + Object.keys(byPlugin)`.
@@ -10,8 +10,8 @@
 // drew nothing at width 0, and a person who toggled the place off and on got it. What the toggle
 // did was force the recompute the store change should have caused.
 //
-// So there is no counter. The reader subscribes to the store and the question it asks is the whole
-// of what it reads — a count kept in step with a state by hand is a count that goes out of step.
+// So there is no counter. The reader subscribes to the store and its question is the whole of what
+// it reads — a count kept in step with a state by hand is a count that goes out of step.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

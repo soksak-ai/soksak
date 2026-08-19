@@ -19,6 +19,8 @@ import { bindingIdentity } from "../plugins/viewContext";
 import { registerMountedViewFocus } from "../plugins/viewFocus";
 import { useSessions } from "../state/sessions";
 import { useBootPhase } from "../state/bootPhase";
+import { usePlugins } from "../state/plugins";
+import { pluginOfViewKey } from "../plugins/spec";
 import { useT } from "../i18n";
 import {
   pluginViewPresentationHost,
@@ -374,13 +376,29 @@ export const PluginViewHost = memo(function PluginViewHost({
       containerGeneration: generation,
     });
   }, [viewKey, viewId, generation, reg, bootPhase, overlayReason, error]);
+  // Why this view is not here, in the words of what actually happened.
+  //
+  // One sentence covered every reason until 2026-08-19 — "the plugin is disabled or removed" — and
+  // after the manifest contract changed, three installed, enabled plugins were refused by name and
+  // every pane in the window said that. Nothing was disabled and nothing was removed. The reason
+  // was in `plugin.list` the whole time and the screen said something else, which sends a person to
+  // look in the wrong place.
+  const pluginId = pluginOfViewKey(viewKey);
+  const refusal = usePlugins((s) => s.rejected.find((r) => r.id === pluginId));
+  const installed = usePlugins((s) => !!s.plugins[pluginId]);
+  const absence = refusal
+    ? t("plugin.view.refused", { plugin: pluginId, reason: refusal.errors.join("; ") })
+    : installed
+      ? t("plugin.view.off", { plugin: pluginId })
+      : t("plugin.view.absent", { plugin: pluginId });
+
   // The container always renders (the ref stays) — error and absent states are drawn on top, so a
   // re-registration recovers.
   const overlay = !reg ? (
     bootPhase !== "ready" ? (
       <div className="plugin-loading">{t("plugin.view.loading")}</div>
     ) : (
-      <div className="plugin-empty">{t("plugin.view.missing")}</div>
+      <div className="plugin-empty">{absence}</div>
     )
   ) : error ? (
     <div className="plugin-error">

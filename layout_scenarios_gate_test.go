@@ -255,6 +255,12 @@ const stalledFrameMs = 40.0
 // the reading writes down two rounded numbers.
 const holeTolerance = 12.0
 
+// The place this gate stands a set in and then measures. It read "left" in ten places while the
+// link above stood the set in the rail — `left` named the rail until 2026-08-18 and became the
+// window's own left edge, so every reading measured the gap in front of a closed edge and reported
+// 165 points of hole that nobody could see. One name, one place to change it.
+const scenarioPlace = "rail"
+
 // offTolerance is the distance that is rounding rather than a displacement.
 const offTolerance = 2.0
 
@@ -367,10 +373,10 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 				// The transaction is closed. What it landed on is read once, because reading it
 				// again would be reading the same frame — a window that answered wrong here is
 				// wrong, not early.
-				if frame := gate.oneFrame(window); frame.hole("left") > holeTolerance ||
+				if frame := gate.oneFrame(window); frame.hole(scenarioPlace) > holeTolerance ||
 					frame.WorstOff > offTolerance || frame.WorstLag > offTolerance {
 					t.Fatalf("%s begins in a window that is not settled: hole %.1f, off %.1f, lag %.1f",
-						name, frame.hole("left"), frame.WorstOff, frame.WorstLag)
+						name, frame.hole(scenarioPlace), frame.WorstOff, frame.WorstLag)
 				}
 
 				record := filepath.Join(evidence, strings.NewReplacer("→", "-to-").Replace(name))
@@ -408,7 +414,7 @@ func TestEveryWayTheFocusMovesInTheNamedWindow(t *testing.T) {
 						return d > offTolerance, d
 					}),
 					hole: longestRun(frames, func(f traceFrame) (bool, float64) {
-						return f.hole("left") > holeTolerance, f.hole("left")
+						return f.hole(scenarioPlace) > holeTolerance, f.hole(scenarioPlace)
 					}),
 					blink: longestRun(frames, func(f traceFrame) (bool, float64) {
 						missing := float64(len(f.Panes) - len(f.Frames))
@@ -943,7 +949,7 @@ func judgeMove(t *testing.T, r moveResult) {
 				"what the paths this build owns cost: %s",
 				r.name, late, len(gaps)+1, stall, floor,
 				quantile(gaps, 0.5), quantile(gaps, 0.9), quantile(gaps, 0.99),
-				traceLines(r.frames, "left"), r.record,
+				traceLines(r.frames, scenarioPlace), r.record,
 				stallLines(r.frames), costLines(r.frames))
 		}
 	}
@@ -977,13 +983,13 @@ func judgeMove(t *testing.T, r moveResult) {
 		t.Errorf("%s: the declaration was %.0f points behind its element for %.0fms.\n%s\nframes: %s\n"+
 			"The document writes the declaration in the frame it measures, so this is the page "+
 			"standing still while its pane travels.",
-			r.name, r.lag.worst, r.lag.ms, traceLines(r.frames, "left"), r.record)
+			r.name, r.lag.worst, r.lag.ms, traceLines(r.frames, scenarioPlace), r.record)
 	}
 	if r.applied.ms > budgetMs && judged(r.applied) {
 		t.Errorf("%s: the native layer held a page %.0f points from where the document put it, for %.0fms.\n%s\nframes: %s\n"+
 			"The document's rectangle and the native layer's are the same commit; a difference "+
 			"here is the native layer holding something else.",
-			r.name, r.applied.worst, r.applied.ms, traceLines(r.frames, "left"), r.record)
+			r.name, r.applied.worst, r.applied.ms, traceLines(r.frames, scenarioPlace), r.record)
 	}
 	// The sentence a person put it in: the document and the native layer move as one, and the size
 	// is adjusted. A page that took more than the two sizes of a travel was being resized on the
@@ -1001,7 +1007,7 @@ func judgeMove(t *testing.T, r moveResult) {
 		t.Errorf("%s: %.0f panes were on the screen without their frame for %.0fms.\n%s\nframes: %s\n"+
 			"The line around a pane is a separate element from the pane, and a person sees it go "+
 			"out and come back.",
-			r.name, r.blink.worst, r.blink.ms, traceLines(r.frames, "left"), r.record)
+			r.name, r.blink.worst, r.blink.ms, traceLines(r.frames, scenarioPlace), r.record)
 	}
 	// The gap between the sidebar and the panes is not judged here, and the outlines say why.
 	//
@@ -1018,13 +1024,13 @@ func judgeMove(t *testing.T, r moveResult) {
 			"The sidebar and the panes are one layout: what one gives up the other takes, over "+
 			"the same motion and not before it.",
 			r.name, r.hole.worst, r.hole.ms, panesSeen(r.frames, r.hole),
-			traceLines(r.frames, "left"), r.record)
+			traceLines(r.frames, scenarioPlace), r.record)
 	}
 	if r.over.ms > budgetMs && judged(r.over) {
 		t.Errorf("%s: a page was drawn %.0f points over the region for %.0fms.\n%s\nframes: %s\n"+
 			"A native surface is composited above the document, so a page reaching into the "+
 			"region is drawn over it.",
-			r.name, r.over.worst, r.over.ms, traceLines(r.frames, "left"), r.record)
+			r.name, r.over.worst, r.over.ms, traceLines(r.frames, scenarioPlace), r.record)
 	}
 }
 
@@ -1087,7 +1093,7 @@ func lateWhileMoving(frames []traceFrame, over float64) (int, float64) {
 // somethingMoved answers whether any box a person watches is in a different place in the second
 // reading than in the first.
 func somethingMoved(before traceFrame, after traceFrame) bool {
-	if before.panesStart() != after.panesStart() || before.regionEnds("left") != after.regionEnds("left") {
+	if before.panesStart() != after.panesStart() || before.regionEnds(scenarioPlace) != after.regionEnds(scenarioPlace) {
 		return true
 	}
 	for _, was := range before.Surfaces {

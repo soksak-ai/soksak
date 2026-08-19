@@ -21,6 +21,7 @@ import { emitPathsDropped, emitPluginEvent } from "./plugins/hooks";
 import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
 import { beginLayoutMotion, endLayoutMotion } from "./lib/layoutMotion";
+import { writePreference } from "./lib/preferenceStore";
 import { startSurfaceActivationSync, startViewFocusSync } from "./plugins/viewFocus";
 import { safeListen } from "./lib/safeListen";
 import { SectionSetHost } from "./components/SectionSetHost";
@@ -141,10 +142,14 @@ function useResizableWidth(
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       endLayoutMotion("resize");
-      setW((cur) => {
-        localStorage.setItem(key, String(cur));
-        return cur;
-      });
+      // Outside the state update, and through a write that cannot throw.
+      //
+      // It was `setW((cur) => { localStorage.setItem(...); return cur; })`. A state updater is
+      // called during render and must be pure; that one wrote to storage, and on 2026-08-19 with a
+      // full store `setItem` threw `QuotaExceededError` during the commit and the window went
+      // blank — dragging the sidebar boundary blanked the application. The width is already in the
+      // ref, so there is nothing to read out of React here.
+      writePreference(key, String(wRef.current), Date.now());
     };
     // A width drag is a layout motion phase too (hole clipping, native follow) — shared by sidebar, rail and right panel.
     beginLayoutMotion("resize");

@@ -2,7 +2,7 @@
 //
 // The two edges are drawn by one component, after the work surface, inside a `flex-direction: row`
 // plane. In `overlay` mode each is absolutely positioned and the CSS `left: 0` / `right: 0` puts it
-// where its name says. In `push` mode the overlay is released and the element joins the flow — and
+// where its name states. In `push` mode the overlay is released and the element joins the flow — and
 // the flow order is the DOM order, which puts both of them after the body.
 //
 // Measured 2026-08-19 on a running window, 999 wide, left edge open at width 300: `sidebar/left`
@@ -52,8 +52,8 @@ describe("an edge sidebar taking room from the body", () => {
   });
 
   it("leaves the right edge where the flow already puts it", () => {
-    // It is drawn after the body and belongs after the body — an order declared here would be a
-    // second statement of what the DOM already says, and the two would drift.
+    // It is drawn after the body and its place is after the body — an order declared here would be
+    // a second statement of what the DOM already states, and the two would drift.
     expect(order(".sidebar-edge-right.push")).toBeNull();
   });
 

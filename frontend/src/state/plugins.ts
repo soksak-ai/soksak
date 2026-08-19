@@ -71,6 +71,9 @@ export interface UnitDevSource {
 }
 
 export interface RejectedPlugin {
+  /** The directory's name, which is the id the manifest had to declare. Carried so a reader asking
+   *  "was this plugin refused" matches on the id it already holds rather than parsing a path. */
+  id: string;
   dir: string;
   errors: string[];
 }
@@ -412,12 +415,12 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     try {
       raw = JSON.parse(rawText);
     } catch (e) {
-      rejected.push({ dir, errors: [tmsg("plugin.manifest.parseFailed", { error: String(e) })] });
+      rejected.push({ id: dirName, dir, errors: [tmsg("plugin.manifest.parseFailed", { error: String(e) })] });
       return null;
     }
     const { manifest, validation } = parseManifest(raw, dirName);
     if (!manifest) {
-      rejected.push({ dir, errors: validation.errors });
+      rejected.push({ id: dirName, dir, errors: validation.errors });
       return null;
     }
     const appVersion = get().appVersion;
@@ -428,6 +431,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
         );
       } else if (semverGte(appVersion, manifest.minAppVersion) === false) {
         rejected.push({
+          id: dirName,
           dir,
           errors: [
             tmsg("plugin.manifest.appVersionTooLow", {
@@ -560,7 +564,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
           // it is a core tool (validation CLI etc.) or a stray folder under the plugin folder. Skip it quietly (not an error).
           // State present but manifest missing is a genuinely broken install, so surface it as rejected (no silence).
           if (e.state == null) continue;
-          rejected.push({ dir: e.dir, errors: [e.error ?? tmsg("plugin.manifest.missing")] });
+          rejected.push({ id: e.dir_name, dir: e.dir, errors: [e.error ?? tmsg("plugin.manifest.missing")] });
           continue;
         }
         const rt = parseRuntime(e.manifest, e.dir, e.dir_name, "installed", rejected);
@@ -592,6 +596,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
         } catch (e2) {
           delete next[unit.id];
           rejected.push({
+            id: unit.id,
             dir: unit.source,
             errors: [tmsg("plugin.dev.readFailed", { error: String(e2) })],
           });
