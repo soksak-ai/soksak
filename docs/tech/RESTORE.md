@@ -58,6 +58,27 @@ run forgot 0.
 
 # R. Restored
 
+## R0. `main` is a bootstrap window, not a retained workspace
+
+Wails v3.0.0-beta.2 creates a separate `WKWebView` for every top-level window, and each window
+loads the frontend independently. Keeping the launch-time `main` window after workspace restore
+therefore retains another WebContent heap and graphics backing store.
+
+The launch-time `main` window restores every saved workspace window and reports
+`control_plane_bootstrap_complete`. It closes only after both facts are true:
+
+1. all saved windows have been requested;
+2. at least one workspace renderer has declared its command catalogue.
+
+Both are events. There is no timer or polling loop. With no workspace renderer, `main` remains so
+the application still has a usable window. An explicit `window.open mode=orchestrator` recreates
+`main` under the same reserved name and the one-shot bootstrap state does not close it.
+
+Measured 2026-08-19 on macOS 15.6.1 with Wails beta.2 (`3ae6893b`): three retained shell webviews
+used 312 MB physical footprint. Retiring bootstrap `main` reduced the total to 277 MB immediately;
+the closed WebContent process remained in WebKit's process cache at 12 MB. The application does not
+use private WebKit APIs to force process reuse or cache eviction.
+
 ## R1. A record this build cannot read costs that record only
 
 Measured 2026-08-16, a cold restart brought nothing back. The ledger held 23
