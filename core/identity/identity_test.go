@@ -81,6 +81,19 @@ func TestResolveReadsTheAmbientOnce(t *testing.T) {
 	}
 }
 
+func TestRuntimeSocketCanBeSeparatedFromPersistentStateWithoutSplittingIdentity(t *testing.T) {
+	resolved := Resolve("com.soksak.gate", Environment{
+		Home:    "/workspace/.task/gates/123/1",
+		Runtime: "<local-evidence>/soksak-gates/123/1",
+	})
+	if resolved.Home != "/workspace/.task/gates/123/1/.soksak-gate" {
+		t.Fatalf("persistent state moved outside the declared gate root: %s", resolved.Home)
+	}
+	if resolved.Socket != "<local-evidence>/soksak-gates/123/1/com.soksak.gate.sock" {
+		t.Fatalf("runtime endpoint did not use the declared short runtime root: %s", resolved.Socket)
+	}
+}
+
 func TestReleaseCarriesNoSuffix(t *testing.T) {
 	resolved := Resolve("com.soksak.app", Environment{Home: "<local-evidence>/user"})
 

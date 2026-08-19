@@ -21,6 +21,10 @@ type Environment struct {
 	Windows     bool
 	Home        string
 	UserProfile string
+	// Runtime is an optional absolute directory for ephemeral endpoints such as the control socket.
+	// Persistent state still derives only from Home and the identifier. Keeping the two roots in one
+	// resolved value prevents callers from mixing identities while allowing short Unix socket paths.
+	Runtime string
 }
 
 // Resolved is one identity, derived once.
@@ -105,10 +109,14 @@ func Resolve(identifier string, env Environment) Resolved {
 	}
 
 	home := HomeFor(identifier, env)
+	runtimeRoot := home
+	if env.Runtime != "" {
+		runtimeRoot = env.Runtime
+	}
 	return Resolved{
 		Identifier: identifier,
 		Home:       home,
-		Socket:     filepath.Join(home, identifier+".sock"),
+		Socket:     filepath.Join(runtimeRoot, identifier+".sock"),
 		CoreBuild:  axis,
 		CLI:        cli,
 		Release:    release,
@@ -122,6 +130,9 @@ func Resolve(identifier string, env Environment) Resolved {
 func Require(identifier string, env Environment) (Resolved, error) {
 	if identifier == "" {
 		return Resolved{}, i18n.Errorf("identity.require.noIdentifier", nil)
+	}
+	if env.Runtime != "" && !filepath.IsAbs(env.Runtime) {
+		return Resolved{}, i18n.Errorf("identity.require.runtimeNotAbsolute", map[string]string{"path": env.Runtime})
 	}
 	return Resolve(identifier, env), nil
 }

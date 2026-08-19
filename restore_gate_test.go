@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -27,10 +28,9 @@ import (
 // This runs the real binaries against a home of its own, so it neither reads nor
 // disturbs the store a person is using.
 
-// restoreGateHome is short on purpose. A unix socket path has 104 bytes on this
-// platform and the identity derives one from the home, so a home under the
-// repository or under a test temp directory overruns it and the application
-// refuses to start with a message about path length rather than about restore.
+// The prefix names this gate's short runtime endpoint family. Persistent state is kept under the
+// repository's declared .task/gates root; only the Unix socket uses <local-evidence> because sockaddr_un holds
+// 104 bytes on macOS. State and endpoint are resolved together by identity, never guessed apart.
 const restoreGateHome = "<local-evidence>/soksak-restore-gate"
 
 const restoreGateIdentifier = "com.soksak.restoregate"
@@ -89,11 +89,57 @@ type restoreGate struct {
 	app        string
 	client     string
 	home       string
+	runtime    string
 	identifier string
 	proc       *exec.Cmd
 	// log is where the application's own output went. Read it when the process stops answering: the
 	// socket has only "the door is closed", and this has what happened behind it.
 	log string
+}
+
+var gateRunSequence atomic.Uint64
+
+func reclaimRunDirectories(parent string) error {
+	entries, err := os.ReadDir(parent)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		ownerText, _, found := strings.Cut(entry.Name(), "-")
+		owner, parseErr := strconv.Atoi(ownerText)
+		if !found || parseErr != nil || owner < 1 || pidAlive(owner) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(parent, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func reclaimGateState(root string) error {
+	axes, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, axis := range axes {
+		if !axis.IsDir() || axis.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		if err := reclaimRunDirectories(filepath.Join(root, axis.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // quietGate is the same harness under the name its own gate reads by.
@@ -103,12 +149,49 @@ func newQuietGate(t *testing.T) *quietGate {
 	return newGate(t, quietGateHome, quietGateIdentifier)
 }
 
+func TestGateHomesAreOwnedByOneRunAndNeverEraseAnotherRun(t *testing.T) {
+	first := newGate(t, "<local-evidence>/soksak-idempotent-gate", "com.soksak.idempotentgate")
+	marker := filepath.Join(first.home, "owned-by-first")
+	if err := os.WriteFile(marker, []byte("first"), 0o644); err != nil {
+		t.Fatalf("writing first run marker: %v", err)
+	}
+	second := newGate(t, "<local-evidence>/soksak-idempotent-gate", "com.soksak.idempotentgate")
+	if first.home == second.home {
+		t.Fatalf("two runs were handed the same home: %s", first.home)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("starting the second run erased the first run's owned state: %v", err)
+	}
+}
+
+func TestGateStartupReclaimsOnlyRunsWhoseOwnerIsDead(t *testing.T) {
+	root := t.TempDir()
+	dead := filepath.Join(root, "99999999-1")
+	live := filepath.Join(root, strconv.Itoa(os.Getpid())+"-1")
+	for _, path := range []string{dead, live} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatalf("making fixture %s: %v", path, err)
+		}
+	}
+	if err := reclaimRunDirectories(root); err != nil {
+		t.Fatalf("reclaiming dead gate runs: %v", err)
+	}
+	if _, err := os.Stat(dead); !os.IsNotExist(err) {
+		t.Fatalf("dead run was not reclaimed: %v", err)
+	}
+	if _, err := os.Stat(live); err != nil {
+		t.Fatalf("live run was touched: %v", err)
+	}
+}
+
 // socket is the address the identity derives from the home and the identifier:
 // `<home>/.soksak-<axis>/<identifier>.sock`. Derived here rather than asked for,
 // because the application has to be answering before it can be asked anything.
-// newGate prepares a home of its own, emptied first: a reading taken against a
-// store some earlier run left behind is a reading about that run.
-func newGate(t *testing.T, home string, identifier string) *restoreGate {
+//
+// homePrefix names the gate and supplies the platform's short runtime root. Persistent state is
+// discovered from the repository and placed under .task/gates. PID plus invocation sequence makes
+// both paths deterministic and collision-free without random temp directories.
+func newGate(t *testing.T, homePrefix string, identifier string) *restoreGate {
 	t.Helper()
 	app := filepath.Join("bin", "soksak")
 	client := filepath.Join("bin", "sok")
@@ -117,16 +200,34 @@ func newGate(t *testing.T, home string, identifier string) *restoreGate {
 			t.Skipf("%s is not built; run `wails3 task build` and `wails3 task build:sok` first", binary)
 		}
 	}
-	gate := &restoreGate{t: t, app: app, client: client, home: home, identifier: identifier}
-	if err := os.RemoveAll(home); err != nil {
-		t.Fatalf("clearing the gate home: %v", err)
+	root, err := filepath.Abs(filepath.Join(".task", "gates"))
+	if err != nil {
+		t.Fatalf("resolving the declared gate state root: %v", err)
 	}
-	if err := os.MkdirAll(home, 0o755); err != nil {
-		t.Fatalf("creating the gate home: %v", err)
+	if err := reclaimGateState(root); err != nil {
+		t.Fatalf("reclaiming dead gate state under %s: %v", root, err)
 	}
+	sequence := gateRunSequence.Add(1)
+	run := strconv.Itoa(os.Getpid()) + "-" + strconv.FormatUint(sequence, 10)
+	axis := strings.TrimPrefix(identifier, "com.soksak.")
+	home := filepath.Join(root, axis, run)
+	runtimeRoot := filepath.Join(filepath.Dir(homePrefix), "soksak-gate-runtime", run)
+	if err := reclaimRunDirectories(filepath.Dir(runtimeRoot)); err != nil {
+		t.Fatalf("reclaiming dead gate runtime endpoints: %v", err)
+	}
+	for _, directory := range []string{home, runtimeRoot} {
+		if !filepath.IsAbs(directory) {
+			t.Fatalf("gate path is not absolute: %s", directory)
+		}
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatalf("creating run-owned gate path %s: %v", directory, err)
+		}
+	}
+	gate := &restoreGate{t: t, app: app, client: client, home: home, runtime: runtimeRoot, identifier: identifier}
 	t.Cleanup(func() {
 		gate.quit()
 		_ = os.RemoveAll(home)
+		_ = os.RemoveAll(runtimeRoot)
 	})
 	return gate
 }
@@ -200,7 +301,7 @@ func (gate *restoreGate) installationHome() string {
 }
 
 func (gate *restoreGate) socket() string {
-	return filepath.Join(gate.installationHome(), gate.identifier+".sock")
+	return filepath.Join(gate.runtime, gate.identifier+".sock")
 }
 
 // start runs the application against the gate's home and waits until its control
@@ -217,6 +318,7 @@ func (gate *restoreGate) start() {
 	cmd.Env = append(os.Environ(),
 		"HOME="+gate.home,
 		"SOKSAK_IDENTIFIER="+gate.identifier,
+		"SOKSAK_RUNTIME="+gate.runtime,
 	)
 	// The application's own output, kept. Thrown away, a process that dies leaves the gate holding
 	// "connection refused" and nothing about why — measured 2026-08-18, the app died mid-run three

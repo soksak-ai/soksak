@@ -11,5 +11,9 @@ func init() {
 			EN: "identity: no identifier was given, and one is never derived",
 			KO: "identity: 식별자를 받지 못했으며 식별자는 추론하지 않습니다",
 		},
+		"identity.require.runtimeNotAbsolute": {
+			EN: "identity: runtime endpoint directory must be absolute: {path}",
+			KO: "identity: 런타임 끝점 디렉터리는 절대 경로여야 합니다: {path}",
+		},
 	})
 }

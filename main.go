@@ -76,6 +76,7 @@ func main() {
 		Windows:     runtime.GOOS == "windows",
 		Home:        os.Getenv("HOME"),
 		UserProfile: os.Getenv("USERPROFILE"),
+		Runtime:     os.Getenv("SOKSAK_RUNTIME"),
 	})
 	if err != nil {
 		log.Fatal(err)
