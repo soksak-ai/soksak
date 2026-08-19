@@ -455,15 +455,6 @@ func createName(deps Deps, label *string) (name string, held string, err error) 
 			// answers with the window that exists and opens nothing.
 			return "", *label, nil
 		}
-		if *label == controlPlaneWindow {
-			// The orchestrator is one window or none, and the launcher opens
-			// it. Letting a command open it too makes how many exist depend on
-			// what anyone happened to call — and two of them is not a state
-			// anything downstream is written for.
-			return "", "", fmt.Errorf(
-				"%q is the orchestrator and the launcher opens it; a command may only reopen one that is already there",
-				controlPlaneWindow)
-		}
 		return *label, "", nil
 	}
 

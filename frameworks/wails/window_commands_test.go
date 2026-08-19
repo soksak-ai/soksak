@@ -1100,20 +1100,21 @@ func remarshal(t *testing.T, value any, into any) {
 	}
 }
 
-// The orchestrator is one window or none, and the launcher is the only thing
-// that opens it. A command that could open it too makes "how many are there"
-// depend on what anyone happened to call, and two identical windows is what a
-// user sees when that goes wrong.
-func TestTheControlPlaneWindowIsNotACommandsToCreate(t *testing.T) {
+// The bootstrap orchestrator is closed after workspace restoration. The same reserved name must be
+// creatable again on explicit request; uniqueness is still enforced by the held-name check.
+func TestTheControlPlaneWindowCanBeRecreatedWhenAbsent(t *testing.T) {
 	host := startedHost()
 	registry := registryFor(t, host, counter("1"))
 
-	_, err := registry.Invoke("window_create", callArgs(t, map[string]any{"label": controlPlaneWindow}))
-	if err == nil {
-		t.Fatal("window_create opened the orchestrator")
+	name, err := registry.Invoke("window_create", callArgs(t, map[string]any{"label": controlPlaneWindow}))
+	if err != nil {
+		t.Fatalf("window_create: %v", err)
 	}
-	if len(host.calls) != 0 {
-		t.Errorf("window_create acted: %v", host.calls)
+	if name != controlPlaneWindow {
+		t.Fatalf("name = %v, want %q", name, controlPlaneWindow)
+	}
+	if !strings.Contains(strings.Join(host.calls, " "), "open main") {
+		t.Errorf("window_create calls = %v, want main opened", host.calls)
 	}
 }
 

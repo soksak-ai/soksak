@@ -257,7 +257,13 @@ async function boot(): Promise<void> {
     // makes the whole window jump once even when the traffic lights and the DOM agree.
     await initControlPlaneFrame();
     bootStamp("control-frame");
-    void respawnSavedWindows();
+    await respawnSavedWindows();
+    const bootstrap = await bootInvoke<{ closing: boolean }>("control_plane_bootstrap_complete");
+    if (bootstrap.closing) {
+      bootStamp("bootstrap-close");
+      bootDone();
+      return;
+    }
     ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <OrchestratorApp />,
     );

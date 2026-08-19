@@ -193,12 +193,40 @@ func Run(options Options) error {
 			return dispatchToWindow(app, target, event, payload)
 		},
 	})
+	bootstrap := newControlPlaneBootstrap()
+	closeBootstrap := func() {
+		application.InvokeAsync(func() {
+			if controlPlane, held := app.Window.GetByName(controlPlaneWindow); held {
+				controlPlane.Close()
+			}
+		})
+	}
+	options.Registry.MustRegister(control.Command{
+		Name:  "control_plane_bootstrap_complete",
+		Owner: control.OwnerFramework,
+		Handler: func(control.Args) (any, error) {
+			closing := bootstrap.restoreCompleted()
+			if closing {
+				closeBootstrap()
+			}
+			return map[string]any{"closing": closing, "status": bootstrap.status()}, nil
+		},
+	})
+	options.Registry.MustRegister(control.Command{
+		Name:  "control_plane_bootstrap_status",
+		Owner: control.OwnerFramework,
+		Handler: func(control.Args) (any, error) { return bootstrap.status(), nil },
+	})
 
 	app.Event.On(rendererDeclareEvent, func(event *application.CustomEvent) {
 		// Sender is stamped by the framework, never by the page. A page that
 		// named itself could name another page and take over its commands.
 		if err := renderer.DeclareFrom(event.Sender, event.Data); err != nil {
 			log.Printf("renderer commands: %v", err)
+			return
+		}
+		if event.Sender != controlPlaneWindow && bootstrap.workspaceDeclared() {
+			closeBootstrap()
 		}
 	})
 	app.Event.On(rendererWithdrawEvent, func(event *application.CustomEvent) {
