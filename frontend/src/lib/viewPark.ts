@@ -8,7 +8,6 @@
 //      and re-snap races are replaced by one rule.
 // Idempotent: re-committing the same state is a no-op — calling it every render costs only on change.
 import { moduleState } from "../lib/moduleState";
-import { layoutMotionFacts } from "./layoutMotion";
 import { contentViewHost, lastAppliedSurfaces } from "./contentViews";
 import { emitPluginEvent } from "../plugins/hooks";
 import { nextFrame } from "./nextFrame";
@@ -39,23 +38,6 @@ import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost
 //
 // CSS hides these layers separately, but the native layer is outside CSS, so the judgment is
 // collected into one expression.
-/**
- * Whether the panes are moving, from every reason they move.
- *
- * A travel names the slots it moves, and a drag opens a motion phase. Read as the travel alone,
- * a width drag left every surface live: the page's position is written across a round trip, so
- * between two commits it is showing where its pane used to be. Measured 2026-08-19, dragging the
- * window's left edge in `push`, the page and its pane were 200 points apart for 15 of 21 frames
- * while `surface.composition` answered `worst 0` — the native layer had applied the declaration
- * exactly and the declaration was a commit behind.
- *
- * A declaration cannot be made instant, so what must not happen is the surface being on the screen
- * while one is in flight. Both reasons, one term.
- */
-export function panesAreMoving(movingSlotIds: readonly string[]): boolean {
-  return movingSlotIds.length > 0 || layoutMotionFacts().active;
-}
-
 export function surfaceShown(
   workspaceActive: boolean,
   spaceActive: boolean,

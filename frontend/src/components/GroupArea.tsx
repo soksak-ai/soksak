@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { moduleState } from "../lib/moduleState";
 import { execute } from "../commands/registry";
 import { rafThrottle } from "../lib/rafThrottle";
@@ -25,7 +25,6 @@ import { recordRailPhase } from "../lib/railJournal";
 import { useGutterHover } from "../state/gutterHover";
 import { ViewTabs } from "./ViewTabs";
 import { FocusLightingPlane } from "./FocusLightingPlane";
-import { layoutMotionFacts, onLayoutMotion } from "../lib/layoutMotion";
 import { ParkedPicture } from "./ParkedPicture";
 import { railLightingExemption } from "./focusLightingGeometry";
 import { computeSplitLayout, hitTestCells } from "../lib/splitLayout";
@@ -236,14 +235,6 @@ export const GroupArea = memo(function GroupArea({
   const displayLayout = solvedLayout ?? content.layout;
   const focusProjectionApplied = displayLayout !== content.layout;
   const traveling = (moves?.length ?? 0) > 0;
-  // Whether the panes are moving at all — a travel names the slots it moves, a width drag opens a
-  // motion phase, and the surface has to be off the screen for either. `traveling` stays the travel alone: the CSS
-  // flip and the phase key belong to it and a drag has none of them.
-  //
-  // Subscribed, because a motion phase opens outside React: read once at render, a drag that began
-  // after this render would leave every surface live for the whole of it.
-  const motionOpen = useSyncExternalStore(onLayoutMotion, () => layoutMotionFacts().active);
-  const panesMoving = traveling || motionOpen;
   const moveOf = (groupId?: string) =>
     groupId ? moves?.find((move) => move.id === groupId) : undefined;
   const nativeSurfaceViews = new Set(nativeSurfaceViewIds);
@@ -407,7 +398,7 @@ export const GroupArea = memo(function GroupArea({
         const tabActive = maxCell ? v.id === maximizedId : v.id === group.activeTabId;
         commitViewVisibility(
           v.id,
-          surfaceShown(surfaceActive, true, tabActive, overlayed, panesMoving),
+          surfaceShown(surfaceActive, true, tabActive, overlayed, traveling),
         );
       }
     }
@@ -923,7 +914,7 @@ export const GroupArea = memo(function GroupArea({
             view.id,
             group.activeTabId,
             overlayed,
-            panesMoving,
+            traveling,
           );
           const slotRect = maxCell && shown ? FULL_RECT : rect;
           // B4 restore hydration gate — a cold view (restored but not yet visible) defers its body mount
