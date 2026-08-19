@@ -1505,11 +1505,18 @@ export function registerCatalog(): void {
         // One caller, one width, so it is written down here — a drag writes at the end of the
         // gesture instead, because a synchronous disk write per frame stalls it.
         persistPlaceWidth(place);
-        // The answer waits for the frame, so a caller reading the screen next reads the new one.
-        await waitForDomCommit(() => {
-          const element = document.querySelector<HTMLElement>(`[data-region="${place}"]`);
-          return Math.round(element?.getBoundingClientRect().width ?? -1) === Math.round(width);
-        });
+        // The answer waits for the frame, so a caller reading the screen next reads the new one —
+        // and only while the place is standing. A place with no set standing in it is zero wide by
+        // rule, so waiting for the element to be this wide waits for something that will never
+        // happen: measured 2026-08-19, every call in a window like that took the full two-second
+        // timeout, and the reading taken from it was of the timeout rather than of the window.
+        const element = () => document.querySelector<HTMLElement>(`[data-region="${place}"]`);
+        const standing = Math.round(element()?.getBoundingClientRect().width ?? 0) > 0;
+        if (standing) {
+          await waitForDomCommit(
+            () => Math.round(element()?.getBoundingClientRect().width ?? -1) === Math.round(width),
+          );
+        }
       }
       return { place, width: placeWidth(place), min: bounds.min, max: bounds.max };
     },
