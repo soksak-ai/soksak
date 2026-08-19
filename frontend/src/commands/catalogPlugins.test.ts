@@ -319,3 +319,29 @@ describe("plugin.view.open — only a center view opens as a tab", () => {
 // harness) used a hand-written table of plugin ids — that table needs an edit whenever a plugin is
 // added, and it diverges silently whenever a plugin changes its contract.
 // Measured 2026-08-07: that silent divergence killed engine execution with a `traceId must be number` rejection.
+describe("plugin.list — contract discovery", () => {
+  it("exposes provider versions and consumer ranges from the manifest", async () => {
+    const provider = manifestOf("provider", {
+      implements: [{ id: "terminal-renderer", version: "0.0.1" }],
+    });
+    const consumer = manifestOf("consumer", {
+      consumes: [{ id: "terminal-renderer", range: ">=0.0.1 <1.0.0" }],
+    });
+    usePlugins.setState({
+      plugins: {
+        provider: runtimeOf(provider),
+        consumer: runtimeOf(consumer),
+      },
+    });
+
+    const result = await execute("plugin.list", {}, {});
+    expect(result.ok).toBe(true);
+    const plugins = (result as unknown as { data: { plugins: Record<string, unknown>[] } }).data.plugins;
+    expect(plugins.find((plugin) => plugin.id === "provider")?.implements).toEqual([
+      { id: "terminal-renderer", version: "0.0.1" },
+    ]);
+    expect(plugins.find((plugin) => plugin.id === "consumer")?.consumes).toEqual([
+      { id: "terminal-renderer", range: ">=0.0.1 <1.0.0" },
+    ]);
+  });
+});
