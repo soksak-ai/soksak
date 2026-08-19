@@ -869,19 +869,10 @@ export function targetPluginId(name: string): string | null {
 // Versions are install-time business.
 // Call boundary — another plugin's command cannot be called without a declaration. There are two
 // declaration axes, and either one passes:
-//   L2 contract pin (consumes): the caller declares a contract and the target implements it → pass. The
-//     caller calls without knowing the implementation name (implementation-blind — swapping
-//     implementations leaves the manifest unchanged).
-//   L1 name pin (dependencies): the caller declares the target plugin id directly → pass. Forbidden for
-//     new couplings; only transitional couplings in domains that have no contract yet remain on this
-//     axis.
+//   L2 contract pin (consumes): the caller declares a contract and the target implements it → pass.
+//   L1 name pin (dependencies): the caller declares the target plugin id directly → pass.
 // Neither one = denied. The boundary itself is unchanged; what changes is what gets declared (name →
 // contract).
-// One route across the plugin boundary: a declared dependency.
-//
-// A second route stood beside it until 2026-08-16 — a consumed contract the target implemented, so
-// that any implementation would do. Not one contract ever had both sides declared, and the id was a
-// second name for what the plugin id already names (C3, C4).
 function crossPluginDenyReason(
   selfId: string,
   dependencies: Record<string, string> | undefined,
