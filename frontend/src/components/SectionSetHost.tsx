@@ -33,7 +33,7 @@ import {
   getRegisteredView,
 } from "../plugins/viewRegistry";
 import { useHeldWhileLeaving } from "../lib/heldWhileLeaving";
-import { LAYOUT_MOTION_MS } from "../lib/layoutMotion";
+import { beginLayoutMotion, endLayoutMotion, LAYOUT_MOTION_MS } from "../lib/layoutMotion";
 import { useSectionSets } from "../state/sectionSets";
 import { useSessions, type Workspace, type SidebarRegion } from "../state/sessions";
 import { useTheme } from "../state/theme";
@@ -269,12 +269,12 @@ export const SectionSetHost = memo(function SectionSetHost({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
-      document.body.style.userSelect = "";
+      endLayoutMotion("resize");
     };
+    beginLayoutMotion("resize");
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     document.body.style.cursor = d.dir === "row" ? "col-resize" : "row-resize";
-    document.body.style.userSelect = "none";
   };
 
   const hoverCell = hover && cells.find((c) => cellId(c.value) === hover.cellId);

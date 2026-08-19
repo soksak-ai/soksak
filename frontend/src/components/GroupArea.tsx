@@ -644,7 +644,6 @@ export const GroupArea = memo(function GroupArea({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
-      document.body.style.userSelect = "";
       ms.resizeDragActive = false;
       // Report the end after flush (the final layout commit) — subscribers (the browser provider) trust the slot
       // rect at this point as final and commit bounds once.
@@ -653,7 +652,6 @@ export const GroupArea = memo(function GroupArea({
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     document.body.style.cursor = d.dir === "row" ? "col-resize" : "row-resize";
-    document.body.style.userSelect = "none";
   };
 
   const hoverCell = hover && cells.find((c) => c.group.id === hover.groupId);

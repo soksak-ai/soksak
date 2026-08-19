@@ -59,6 +59,16 @@ describe("layoutMotion — refcount edge notification", () => {
 });
 
 describe("layoutMotion — kind axis (move|resize)", () => {
+  it("publishes one document selection lock for the whole resize phase, including overlap", () => {
+    beginLayoutMotion("resize");
+    beginLayoutMotion("resize");
+    expect(document.documentElement.dataset.layoutResizing).toBe("true");
+    endLayoutMotion("resize");
+    expect(document.documentElement.dataset.layoutResizing).toBe("true");
+    endLayoutMotion("resize");
+    expect(document.documentElement.dataset.layoutResizing).toBeUndefined();
+  });
+
   it("the payload kinds list the active kinds", () => {
     beginLayoutMotion("move");
     expect(payloads[payloads.length - 1]).toEqual({ active: true, kinds: ["move"] });

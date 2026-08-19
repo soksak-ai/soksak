@@ -4452,3 +4452,11 @@ select.dctl {
   color: var(--fg3);
   pointer-events: none;
 }
+
+/* Every boundary drag is one shared resize phase. Prevent selection at the document boundary so a
+   new gutter or sidebar cannot forget the rule; the initiating mousedown also prevents its default
+   so a selection cannot begin before this state is published. */
+:root[data-layout-resizing="true"] {
+  -webkit-user-select: none;
+  user-select: none;
+}

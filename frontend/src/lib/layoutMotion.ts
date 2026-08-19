@@ -77,6 +77,13 @@ function syncEmit(): void {
   const active = depth() > 0;
   const kinds = activeKinds();
   const scopeViews = activeScope();
+  // Selection is a property of the shared resize phase, not of whichever handle happened to open
+  // it. Publishing it on the root makes the status observable and keeps overlapping resize owners
+  // locked until the final matching end.
+  if (typeof document !== "undefined") {
+    if (counts.resize > 0) document.documentElement.dataset.layoutResizing = "true";
+    else delete document.documentElement.dataset.layoutResizing;
+  }
   // The suppression key includes the scope — a different scope is a different fact. Without the
   // scope in the key, when scoped phases start back to back the second notification is swallowed
   // and the surface that actually moves is never notified of its phase (observed incident).
@@ -148,4 +155,5 @@ export function __resetLayoutMotionForTest(): void {
   scopes.length = 0;
   emitted.lastEmittedKey = null;
   listeners.clear();
+  if (typeof document !== "undefined") delete document.documentElement.dataset.layoutResizing;
 }
