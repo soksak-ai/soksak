@@ -73,6 +73,8 @@ import {
   snapRailStation,
 } from "./lib/railPlacement";
 import { railGeometryScopeId, railPresentation } from "./lib/railMotion";
+import { computeSplitLayout } from "./lib/splitLayout";
+import { railWidthResizePlan } from "./lib/railWidthResize";
 import { useAppChromeLayoutReflow } from "./lib/appChromeLayoutReflow";
 import { useArrangementPhase } from "./components/useArrangementPhase";
 import {
@@ -121,8 +123,12 @@ const RAIL_DEFAULT = 54;
  * The store is subscribed rather than mirrored into React state: mirrored, a width set by the
  * command would be in the store and not on the screen until something else re-rendered.
  */
+function usePlaceWidthValue(place: SectionPlace): number {
+  return useSyncExternalStore(onPlaceWidthChange, () => placeWidth(place));
+}
+
 function usePlaceWidth(place: SectionPlace): readonly [number, (e: React.MouseEvent) => void] {
-  const width = useSyncExternalStore(onPlaceWidthChange, () => placeWidth(place));
+  const width = usePlaceWidthValue(place);
   const bounds = PLACE_WIDTH_BOUNDS[place];
   // Which way the pointer widens it: an edge on the right grows as the pointer goes left.
   const sign = place === "right" ? -1 : 1;
@@ -142,7 +148,6 @@ function usePlaceWidth(place: SectionPlace): readonly [number, (e: React.MouseEv
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
         document.body.style.cursor = "";
-        document.body.style.userSelect = "";
         endLayoutMotion("resize");
         // Written down once, here. On every frame it is a synchronous disk write in the middle of
         // a gesture — measured 2026-08-19, one width change in three cost 226-402ms with it.
@@ -153,7 +158,6 @@ function usePlaceWidth(place: SectionPlace): readonly [number, (e: React.MouseEv
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
       document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
     },
     [place, bounds.min, bounds.max, sign],
   );
@@ -191,7 +195,6 @@ function useResizableWidth(
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
-      document.body.style.userSelect = "";
       endLayoutMotion("resize");
       // Outside the state update, and through a write that cannot throw.
       //
@@ -207,7 +210,6 @@ function useResizableWidth(
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
     // key/min/max/dir are constant at each call site.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, min, max, dir]);
@@ -228,24 +230,22 @@ export interface EdgeSidebar {
 const WorkspacePlane = memo(function WorkspacePlane({
   workspace,
   isActiveWorkspace,
-  sidebarW,
   left,
   right,
   contentTabPosition,
-  startResize,
 }: {
   workspace: Workspace;
   isActiveWorkspace: boolean;
-  sidebarW: number;
   // The two window edges. One object each, because they hold the same three axes and passing six
   // loose props is where a change to one silently misses the other.
   left: EdgeSidebar;
   right: EdgeSidebar;
   contentTabPosition: TabPosition;
-  startResize: (e: React.MouseEvent) => void;
 }) {
   const t = useT();
   const setLeftRailPlacement = useSessions((s) => s.setLeftRailPlacement);
+  const resizeSplits = useSessions((s) => s.resizeSplits);
+  const sidebarW = usePlaceWidthValue("rail");
   useRenderCost("render.workspace");
   const railPlaneRef = useRef<HTMLDivElement>(null);
   // The rail travels with the panes, on the same interpolation they use.
@@ -350,6 +350,64 @@ const WorkspacePlane = memo(function WorkspacePlane({
   const effectiveStation = arrangement?.station ?? 0;
   const [dragStation, setDragStation] = useState<number | null>(null);
   const renderedStation = dragStation ?? effectiveStation;
+
+  // The rail's right grip changes two state owners in one preview transaction: the place width and
+  // the canonical line the flow rail occupies. Width-only resizing keeps the logical percentage
+  // fixed while the pane plane shrinks, moving the rail's left edge in the opposite direction and
+  // making a 120px pointer move reach the grabbed boundary by only about 60px.
+  const startResize = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0 || !railOpen || !arrangement) return;
+    e.preventDefault();
+    const plane = railPlaneRef.current;
+    if (!plane) return;
+    const hostWidthPx = plane.getBoundingClientRect().width;
+    const startWidthPx = sidebarW;
+    const startStation = renderedStation;
+    const gutters = computeSplitLayout(arrangement.displayLayout).gutters;
+    const bounds = PLACE_WIDTH_BOUNDS.rail;
+    const startX = e.clientX;
+    const commit = rafThrottle((requested: number) => {
+      const bounded = Math.min(bounds.max, Math.max(bounds.min, requested));
+      if (placement.mode === "flow") {
+        const plan = railWidthResizePlan({
+          gutters,
+          startStation,
+          hostWidthPx,
+          startWidthPx,
+          requestedWidthPx: bounded,
+        });
+        if (plan) {
+          // One event callback, one React batch: the pane line and rail width cannot render from
+          // different previews. The line-group contract also preserves a vertically shared seam.
+          resizeSplits(workspace.id, plan.moves);
+          setPlaceWidth("rail", plan.widthPx);
+          return;
+        }
+        // At the leading edge the physical left is already zero. At the trailing edge a right grip
+        // has nowhere to move without leaving the plane, so it is intentionally immovable.
+        if (startStation === 0) setPlaceWidth("rail", bounded);
+        return;
+      }
+      const leftPx = ((hostWidthPx - startWidthPx) * startStation) / 100;
+      const station = railStationFromLeftPx(leftPx, hostWidthPx, bounded);
+      setLeftRailPlacement(workspace.id, { mode: "pin", station });
+      setPlaceWidth("rail", bounded);
+    });
+    const onMove = (event: MouseEvent) => commit(startWidthPx + event.clientX - startX);
+    const onUp = () => {
+      commit.flush();
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      endLayoutMotion("resize");
+      persistPlaceWidth("rail");
+    };
+    beginLayoutMotion("resize");
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+  }, [arrangement, railOpen, placement.mode, renderedStation, resizeSplits,
+    setLeftRailPlacement, sidebarW, workspace.id]);
   // The renderer and state.tree/pane.list consume the same solver. With no explicit binding it is this solution's
   // focused active tab; a closed or empty panel gives none/0. Group, adjacency and border are never re-decided here.
   const effectiveRailRelation = activeContent
@@ -642,6 +700,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   {railOpen && (
                     <div
                       className="sidebar-resizer"
+                      data-node="sidebar/rail/resizer"
                       data-wv-occlusion="sidebar-resizer"
                       onMouseDown={startResize}
                       title={t("sidebar.resize")}
@@ -1012,7 +1071,6 @@ function App() {
   // The three places, from the store a command reads and writes. They were three keys and three
   // sets of constants here, and a drag was the one layout change nothing outside could produce —
   // so a stuttering drag had no numeric handle at all.
-  const [sidebarW, startResize] = usePlaceWidth("rail");
   const [railW, startRailResize] = useResizableWidth(
     "railW",
     RAIL_DEFAULT,
@@ -1429,11 +1487,9 @@ function App() {
               key={workspace.id}
               workspace={workspace}
               isActiveWorkspace={workspace.id === activeId}
-              sidebarW={sidebarW}
               left={{ width: leftW, mode: leftSidebarMode, startResize: startLeftResize }}
               right={{ width: rightW, mode: rightSidebarMode, startResize: startRightResize }}
               contentTabPosition={contentTabPosition}
-              startResize={startResize}
             />
           ))}
         </div>
