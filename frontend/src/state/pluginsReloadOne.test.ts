@@ -31,6 +31,7 @@ const PATH = "<local-evidence>/arbitrary-checkout";
 
 // Current manifest on disk — the test mutates it mid-run, standing in for the author editing the file.
 let onDisk: Record<string, unknown> = {};
+const fetchOptions: (RequestInit | undefined)[] = [];
 
 const invoke = vi.fn(async (cmd: string, args?: { path?: string }) => {
   if (cmd === "read_text_file") {
@@ -43,8 +44,14 @@ const invoke = vi.fn(async (cmd: string, args?: { path?: string }) => {
 // The bundle arrives over the **engine resource path**, not IPC — the fixture answers on that path too.
 // The manifest is still read over IPC (it must pass the path check). Two distinct channels is the fact
 // this file records; collapsing them into one makes the test measure a world other than the real one.
-vi.stubGlobal("fetch", async (url: string) =>
-  new Response(String(url).endsWith("/plugin.json") ? JSON.stringify(onDisk) : "export const activate = () => {};"));
+vi.stubGlobal("fetch", async (url: string, options?: RequestInit) => {
+  fetchOptions.push(options);
+  return new Response(
+    String(url).endsWith("/plugin.json")
+      ? JSON.stringify(onDisk)
+      : "export const activate = () => {};",
+  );
+});
 vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
   invoke: (...a: unknown[]) => invoke(...(a as [string, { path?: string }])),
@@ -81,6 +88,7 @@ beforeEach(() => {
   activatedIds.length = 0;
   activeIds.clear();
   invoke.mockClear();
+  fetchOptions.length = 0;
   onDisk = manifestJson(["thing.run"]);
   usePlugins.setState({
     release: false,
@@ -104,6 +112,12 @@ describe("reloadOne — a reload by id reads the manifest from disk again", () =
     expect(declared).toContain("thing.head");
     expect(after.status).toBe("enabled");
     expect(activatedIds).toContain(ID); // fresh code was actually activated again
+  });
+
+  it("bypasses the engine resource cache when it reloads the bundle", async () => {
+    const result = await usePlugins.getState().reloadOne(ID);
+    expect(result.ok).toBe(true);
+    expect(fetchOptions).toContainEqual({ cache: "no-store" });
   });
 
   it("a malformed file answers with the refusal reason instead of silently starting on the old manifest", async () => {
