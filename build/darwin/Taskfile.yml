@@ -18,7 +18,7 @@ tasks:
     cmds:
       - task: '{{if eq OS "darwin"}}build:native{{else}}build:docker{{end}}'
         vars:
-          ARCH: '{{.ARCH}}'
+          TARGET_ARCH: '{{.TARGET_ARCH}}'
           DEV: '{{.DEV}}'
           OUTPUT: '{{.OUTPUT}}'
     vars:
@@ -47,6 +47,7 @@ tasks:
             x86_64) echo amd64 ;;
             *) uname -m ;;
           esac
+      TARGET_ARCH: '{{.TARGET_ARCH | default .HOST_ARCH}}'
       # `devtools` rides with `production`: the framework compiles its inspector away under
       # `production` alone, and `window_devtools` then answers OK while nothing opens. Every rule
       # about a rectangle in this build is checked against a number, and on 2026-08-17 every number
@@ -58,7 +59,7 @@ tasks:
     env:
       GOOS: darwin
       CGO_ENABLED: 1
-      GOARCH: '{{.ARCH | default .HOST_ARCH}}'
+      GOARCH: '{{.TARGET_ARCH}}'
       CGO_CFLAGS: "-mmacosx-version-min=10.15"
       CGO_LDFLAGS: "-mmacosx-version-min=10.15"
       MACOSX_DEPLOYMENT_TARGET: "10.15"
@@ -82,7 +83,7 @@ tasks:
       - mkdir -p {{.BIN_DIR}}
       - mv "bin/{{.APP_NAME}}-darwin-{{.DOCKER_ARCH}}" "{{.OUTPUT}}"
     vars:
-      DOCKER_ARCH: '{{if eq .ARCH "arm64"}}arm64{{else if eq .ARCH "amd64"}}amd64{{else}}arm64{{end}}'
+      DOCKER_ARCH: '{{if eq .TARGET_ARCH "arm64"}}arm64{{else if eq .TARGET_ARCH "amd64"}}amd64{{else}}arm64{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
       # Mount Go module cache for faster builds
@@ -109,11 +110,11 @@ tasks:
     deps:
       - task: build
         vars:
-          ARCH: amd64
+          TARGET_ARCH: amd64
           OUTPUT: "{{.BIN_DIR}}/{{.APP_NAME}}-amd64"
       - task: build
         vars:
-          ARCH: arm64
+          TARGET_ARCH: arm64
           OUTPUT: "{{.BIN_DIR}}/{{.APP_NAME}}-arm64"
     cmds:
       - task: '{{if eq OS "darwin"}}build:universal:lipo:native{{else}}build:universal:lipo:go{{end}}'

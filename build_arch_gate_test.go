@@ -15,10 +15,14 @@ func TestDarwinBuildDefaultsToTheHostArchitecture(t *testing.T) {
 	for _, required := range []string{
 		"HOST_ARCH:",
 		"uname -m",
-		"GOARCH: '{{.ARCH | default .HOST_ARCH}}'",
+		"TARGET_ARCH: '{{.TARGET_ARCH | default .HOST_ARCH}}'",
+		"GOARCH: '{{.TARGET_ARCH}}'",
 	} {
 		if !strings.Contains(text, required) {
 			t.Errorf("darwin build rule is missing %q", required)
 		}
+	}
+	if strings.Contains(text, "GOARCH: '{{.ARCH") {
+		t.Error("darwin build still defaults GOARCH from Task's process architecture")
 	}
 }
