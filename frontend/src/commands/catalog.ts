@@ -44,6 +44,7 @@ import {
 import { SECTION_PLACES, byPlace, type SectionPlace } from "../state/sectionSets";
 import {
   PLACE_WIDTH_BOUNDS,
+  persistPlaceWidth,
   placeWidth,
   setPlaceWidth,
   widthWithinBounds,
@@ -1501,6 +1502,9 @@ export function registerCatalog(): void {
           };
         }
         setPlaceWidth(place, width);
+        // One caller, one width, so it is written down here — a drag writes at the end of the
+        // gesture instead, because a synchronous disk write per frame stalls it.
+        persistPlaceWidth(place);
         // The answer waits for the frame, so a caller reading the screen next reads the new one.
         await waitForDomCommit(() => {
           const element = document.querySelector<HTMLElement>(`[data-region="${place}"]`);

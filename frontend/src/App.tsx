@@ -87,6 +87,7 @@ import { focusedPluginOf, usePlacePresent, type SectionPlace } from "./state/sec
 import {
   PLACE_WIDTH_BOUNDS,
   onPlaceWidthChange,
+  persistPlaceWidth,
   placeWidth,
   setPlaceWidth,
 } from "./state/placeWidth";
@@ -143,6 +144,9 @@ function usePlaceWidth(place: SectionPlace): readonly [number, (e: React.MouseEv
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
         endLayoutMotion("resize");
+        // Written down once, here. On every frame it is a synchronous disk write in the middle of
+        // a gesture — measured 2026-08-19, one width change in three cost 226-402ms with it.
+        persistPlaceWidth(place);
       };
       // A width drag is a layout motion phase too — hole clipping and the native follow read it.
       beginLayoutMotion("resize");

@@ -63,15 +63,26 @@ export function widthWithinBounds(place: SectionPlace, width: number): boolean {
 }
 
 /**
- * Sets one, and writes it down.
+ * Sets one. Writes nothing.
  *
- * The write goes through `writePreference`, which never throws: this runs on every frame of a drag,
- * and a full store used to take the window down from here (measured 2026-08-19).
+ * `localStorage.setItem` is synchronous and reaches disk on the browser's own schedule, so a write
+ * per frame puts an unpredictable stall in the middle of a gesture. Measured 2026-08-19 with the
+ * write here: most width changes cost 11-15ms and roughly one in three cost 226-402ms, whatever the
+ * panes held. The hook this replaced wrote on mouse-up and nowhere else.
  */
 export function setPlaceWidth(place: SectionPlace, width: number): void {
   widths()[place] = width;
-  writePreference(placeWidthKey(place), String(width), Date.now());
   for (const listener of box.listeners) listener();
+}
+
+/**
+ * Writes the current width down — the end of a gesture, or a caller that set one and is done.
+ *
+ * Through `writePreference`, which never throws: a full store used to take the window down from
+ * here (measured 2026-08-19).
+ */
+export function persistPlaceWidth(place: SectionPlace): void {
+  writePreference(placeWidthKey(place), String(widths()[place]), Date.now());
 }
 
 /** Subscribers redrawn when a width changes. A drag writes here and the plane reads here, so the
