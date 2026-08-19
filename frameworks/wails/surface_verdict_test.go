@@ -52,6 +52,33 @@ func TestTheCompositionAnswersOneNumber(t *testing.T) {
 	}
 }
 
+func TestTheCompositionExposesInteractivePresentationAndSettledFrame(t *testing.T) {
+	placement := placedSurface(
+		"browser-main-tab-7k2qx3",
+		SurfaceFrame{X: 40, Y: 20, W: 760, H: 580},
+		SurfaceFrame{X: 40, Y: 20, W: 760, H: 580},
+	)
+	settled := SurfaceFrame{X: 256, Y: 20, W: 544, H: 580}
+	placement.Settled = &settled
+	placement.LayerContentsRedrawPolicy = 2
+	placement.LayerContentsPlacement = 11
+	registry := surfaceRegistry(t, Composition{Interactive: true, Sequence: 8, Placements: []SurfacePlacement{placement}}, true)
+
+	payload := compositionPayload(t, registry)
+	if payload["interactive"] != true {
+		t.Fatalf("interactive phase is not exposed: %v", payload["interactive"])
+	}
+	surfaces := payload["surfaces"].([]any)
+	settledPayload := surfaces[0].(map[string]any)["settled"].(map[string]any)
+	if settledPayload["x"] != float64(256) || settledPayload["w"] != float64(544) {
+		t.Fatalf("raw settled frame is not exposed: %v", settledPayload)
+	}
+	surface := surfaces[0].(map[string]any)
+	if surface["layerContentsRedrawPolicy"] != float64(2) || surface["layerContentsPlacement"] != float64(11) {
+		t.Fatalf("live resize layer policy is not exposed: %v", surface)
+	}
+}
+
 func TestTheWorstDifferenceIsTheLargestOneAnywhere(t *testing.T) {
 	// Largest across every surface and every component. Reporting the first
 	// difference, or only the origin, lets a surface that is the right size in

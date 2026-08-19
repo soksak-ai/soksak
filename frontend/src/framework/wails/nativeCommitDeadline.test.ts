@@ -18,8 +18,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test" }));
 
 let answer: (value: unknown) => void = () => {};
+let calls = 0;
 vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/service", () => ({
-  Commit: vi.fn(() => new Promise((resolve) => { answer = resolve; })),
+  Commit: vi.fn(() => { calls++; return new Promise((resolve) => { answer = resolve; }); }),
   Latest: vi.fn(async () => ({ surfaces: [] })),
 }));
 vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/models", () => ({
@@ -33,6 +34,7 @@ const snapshot = { window: "win-test", sequence: 4, surfaces: [] };
 describe("a commit the backend never answers", () => {
   beforeEach(() => {
     vi.useRealTimers();
+    calls = 0;
   });
 
   it("fails by name after the bound, naming the sequence nobody answered for", async () => {
@@ -54,5 +56,11 @@ describe("a commit the backend never answers", () => {
     // would never be reached, and the failure would carry the caller's words instead of these.
     expect(NATIVE_COMMIT_LIMIT_MS).toBeGreaterThan(0);
     expect(NATIVE_COMMIT_LIMIT_MS).toBeLessThan(3_750);
+  });
+
+  it("delivers interactive geometry without giving the bridge reply ownership of the next frame", async () => {
+    const delivered = commitNativeSurfaces({ ...snapshot, interactive: true } as never);
+    await expect(delivered).resolves.toMatchObject({ sequence: 4, accepted: true });
+    expect(calls).toBe(1);
   });
 });

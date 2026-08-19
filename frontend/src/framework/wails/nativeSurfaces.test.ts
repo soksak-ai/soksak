@@ -12,10 +12,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // held, and a workspace window's browser was created inside the orchestrator (measured 2026-08-16).
 vi.mock("../../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test" }));
 
-const commits: Array<{ window: string; sequence: number; surfaces: unknown[] }> = [];
+const commits: Array<{ window: string; sequence: number; interactive: boolean; surfaces: unknown[] }> = [];
 vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/service", () => ({
-  Commit: vi.fn(async (snapshot: { window: string; sequence: number; surfaces: unknown[] }) => {
-    commits.push({ window: snapshot.window, sequence: snapshot.sequence, surfaces: snapshot.surfaces });
+  Commit: vi.fn(async (snapshot: { window: string; sequence: number; interactive: boolean; surfaces: unknown[] }) => {
+    commits.push({ window: snapshot.window, sequence: snapshot.sequence, interactive: snapshot.interactive, surfaces: snapshot.surfaces });
     return { sequence: snapshot.sequence, accepted: true, surfaces: snapshot.surfaces };
   }),
 }));
@@ -29,6 +29,7 @@ vi.stubGlobal("ResizeObserver", class {
 });
 
 import { clearNativeSurfaces, resetNativeSurfaces, startNativeSurfaces } from "./nativeSurfaces";
+import { __resetLayoutMotionForTest, beginLayoutMotion, endLayoutMotion } from "../../lib/layoutMotion";
 
 /** One pane's declaration, written the way the browser plugin writes it. */
 function declare(id: string): HTMLElement {
@@ -48,9 +49,11 @@ function declare(id: string): HTMLElement {
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 describe("the native surface observer", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await clearNativeSurfaces();
     commits.length = 0;
     document.body.innerHTML = "";
+    __resetLayoutMotionForTest();
   });
 
   it("carries a surface declared after start", async () => {
@@ -59,6 +62,18 @@ describe("the native surface observer", () => {
     declare("browser.win-main.tab-a");
     await settle();
     expect(commits.at(-1)?.surfaces).toHaveLength(1);
+  });
+
+  it("carries the explicit interactive motion edges", async () => {
+    startNativeSurfaces();
+    await settle();
+
+    beginLayoutMotion("resize");
+    await settle();
+    endLayoutMotion("resize");
+    await settle();
+
+    expect(commits.map((commit) => commit.interactive)).toEqual([false, true, false]);
   });
 
   it("carries a surface declared after the boot reset", async () => {

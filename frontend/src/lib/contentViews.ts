@@ -180,6 +180,8 @@ export interface ContentViewHost {
  */
 let lastApplied: {
   surfaces: readonly AppliedSurface[];
+  /** The explicit layout phase carried by this exact receipt. */
+  interactive: boolean;
   atUnixMs: number;
   /** How long the commit that carried these took, from the rectangles being measured to the native
    *  layer answering. This is the distance a page can be behind its pane: the pane moves in the
@@ -203,6 +205,7 @@ let lastApplied: {
   latencyWorstMs: number;
 } = {
   surfaces: [],
+  interactive: false,
   atUnixMs: 0,
   latencyMs: 0,
   appliedMs: -1,
@@ -219,9 +222,11 @@ export function noteAppliedSurfaces(
   latencyMs: number,
   appliedMs: number,
   carriedMs: number,
+  interactive: boolean,
 ): void {
   lastApplied = {
     surfaces,
+    interactive,
     atUnixMs,
     latencyMs,
     appliedMs,
@@ -236,6 +241,7 @@ export function noteAppliedSurfaces(
  *  answered. */
 export function lastAppliedSurfaces(): {
   surfaces: readonly AppliedSurface[];
+  interactive: boolean;
   atUnixMs: number;
   latencyMs: number;
   appliedMs: number;
@@ -255,6 +261,8 @@ export interface AppliedSurface {
   y: number;
   w: number;
   h: number;
+  /** Raw native layout frame while the presented frame above is transformed interactively. */
+  settled?: { x: number; y: number; w: number; h: number };
   visible: boolean;
 }
 

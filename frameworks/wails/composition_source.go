@@ -34,27 +34,35 @@ func (source *CompositorSource) Latest(window string) Composition {
 	// same function that answers what a point lands on, so what a person clicks
 	// and what covers a surface cannot answer differently.
 	covers := source.service.CoverIn(window)
+	return renamedComposition(composed, covers)
+}
 
+func renamedComposition(composed compositor.Composition, covers map[string]compositor.Cover) Composition {
 	composition := Composition{
-		Sequence:       composed.Sequence,
-		Unapplied:      composed.Unapplied,
-		Failure:        composed.Failure,
-		FailedSequence: composed.FailedSequence,
+		Sequence:        composed.Sequence,
+		AppliedAtUnixMs: composed.AppliedAtUnixMs,
+		Interactive:     composed.Interactive,
+		Unapplied:       composed.Unapplied,
+		Failure:         composed.Failure,
+		FailedSequence:  composed.FailedSequence,
 	}
 	for _, placement := range composed.Surfaces {
 		composition.Placements = append(composition.Placements, SurfacePlacement{
-			ID:              placement.ID,
-			Kind:            string(placement.Kind),
-			Generation:      placement.Generation,
-			Layer:           placement.Layer,
-			Declared:        compositorFrame(placement.Declared),
-			DeclaredVisible: placement.DeclaredVisible,
-			DeclaredAlpha:   placement.DeclaredAlpha,
-			Applied:         compositorFrame(placement.Applied),
-			AppliedVisible:  placement.AppliedVisible,
-			AppliedAlpha:    placement.AppliedAlpha,
-			Misparented:     placement.Misparented,
-			Undeclared:      placement.Undeclared,
+			ID:                        placement.ID,
+			Kind:                      string(placement.Kind),
+			Generation:                placement.Generation,
+			Layer:                     placement.Layer,
+			Declared:                  compositorFrame(placement.Declared),
+			DeclaredVisible:           placement.DeclaredVisible,
+			DeclaredAlpha:             placement.DeclaredAlpha,
+			Applied:                   compositorFrame(placement.Applied),
+			Settled:                   compositorFramePointer(placement.Settled),
+			LayerContentsRedrawPolicy: placement.LayerContentsRedrawPolicy,
+			LayerContentsPlacement:    placement.LayerContentsPlacement,
+			AppliedVisible:            placement.AppliedVisible,
+			AppliedAlpha:              placement.AppliedAlpha,
+			Misparented:               placement.Misparented,
+			Undeclared:                placement.Undeclared,
 			// Read, not recomputed. The service subtracted it from the two
 			// halves of one commit; subtracting again here would be a second
 			// definition of one number.
@@ -65,6 +73,14 @@ func (source *CompositorSource) Latest(window string) Composition {
 		})
 	}
 	return composition
+}
+
+func compositorFramePointer(frame *compositor.Frame) *SurfaceFrame {
+	if frame == nil {
+		return nil
+	}
+	converted := compositorFrame(*frame)
+	return &converted
 }
 
 // compositorFrame renames one rectangle. The compositor spells the two sides

@@ -7,6 +7,7 @@ import { noteAppliedSurfaces } from "../../lib/contentViews";
 import { presentationNowUnixMs } from "../../lib/presentationClock";
 import { nextFrame } from "../../lib/nextFrame";
 import { currentWindowLabel } from "../../lib/webviewLabels";
+import { layoutMotionFacts, onLayoutMotion } from "../../lib/layoutMotion";
 
 /**
  * How long a commit may go unanswered before it fails by name.
@@ -28,8 +29,42 @@ export const NATIVE_COMMIT_LIMIT_MS = 2_000;
  * releases the observer for the next delivery; a receipt that arrives late is refused by its
  * sequence, which the observer already does.
  */
+type CompositorReceipt = Awaited<ReturnType<typeof CompositorService.Commit>>;
+let lastNotedSequence = 0;
+let interactiveDeliveryFailure: unknown = null;
+
+function noteReceipt(snapshot: Parameters<NativeSurfaceCommit>[0], receipt: CompositorReceipt, askedAt: number): void {
+  if (!receipt.accepted || receipt.sequence !== snapshot.sequence || receipt.sequence <= lastNotedSequence) return;
+  lastNotedSequence = receipt.sequence;
+  const answeredAt = presentationNowUnixMs();
+  noteAppliedSurfaces(
+    (receipt.surfaces ?? []).map((surface) => ({
+      id: surface.id, x: surface.frame.x, y: surface.frame.y,
+      w: surface.frame.width, h: surface.frame.height,
+      ...(surface.settled ? { settled: { x: surface.settled.x, y: surface.settled.y, w: surface.settled.width, h: surface.settled.height } } : {}),
+      visible: surface.visible,
+    })),
+    answeredAt, answeredAt - askedAt, receipt.appliedMs ?? -1, receipt.carriedMs ?? -1,
+    snapshot.interactive,
+  );
+  document.documentElement.dataset.nativeSnapshotSequence = String(receipt.sequence);
+  document.documentElement.dataset.nativeSnapshotAccepted = String(receipt.accepted);
+  document.documentElement.dataset.nativeSnapshotCount = String(receipt.surfaces.length);
+}
+
 export const commitNativeSurfaces: NativeSurfaceCommit = async (snapshot) => {
   const askedAt = presentationNowUnixMs();
+  if (snapshot.interactive) {
+    void CompositorService.Commit(Snapshot.createFrom(snapshot))
+      .then((receipt) => noteReceipt(snapshot, receipt, askedAt))
+      .catch((error) => { interactiveDeliveryFailure = error; });
+    return { sequence: snapshot.sequence, accepted: true, surfaces: [] };
+  }
+  if (interactiveDeliveryFailure) {
+    const failure = interactiveDeliveryFailure;
+    interactiveDeliveryFailure = null;
+    throw new Error(`interactive native surface delivery failed before sequence ${snapshot.sequence}: ${String(failure)}`);
+  }
   let expiry = 0;
   const receipt = await Promise.race([
     CompositorService.Commit(Snapshot.createFrom(snapshot)),
@@ -46,37 +81,14 @@ export const commitNativeSurfaces: NativeSurfaceCommit = async (snapshot) => {
       );
     }),
   ]).finally(() => clearTimeout(expiry));
-  const answeredAt = presentationNowUnixMs();
-  // The applied rectangles come back with the commit that asked for them. Written down here, the
-  // freshest native reading a window can have costs no round trip of its own.
-  noteAppliedSurfaces(
-    (receipt.surfaces ?? []).map((surface) => ({
-      id: surface.id,
-      x: surface.frame.x,
-      y: surface.frame.y,
-      w: surface.frame.width,
-      h: surface.frame.height,
-      visible: surface.visible,
-    })),
-    answeredAt,
-    answeredAt - askedAt,
-    receipt.appliedMs ?? -1,
-    // How long the commit took to reach the backend. The round trip minus this and the
-    // native work is the answer's way back; without it the two ends agree and the middle
-    // is time nobody can name.
-    receipt.carriedMs ?? -1,
-  );
-  // Publish the applied inventory on the document, so the composition check reads this one receipt instead
-  // of recomputing the geometry from a second source.
-  document.documentElement.dataset.nativeSnapshotSequence = String(receipt.sequence);
-  document.documentElement.dataset.nativeSnapshotAccepted = String(receipt.accepted);
-  document.documentElement.dataset.nativeSnapshotCount = String(receipt.surfaces.length);
+  noteReceipt(snapshot, receipt, askedAt);
   return receipt;
 };
 
 const commit: NativeSurfaceCommit = commitNativeSurfaces;
 
 let controller: NativeSurfaceObserverController | null = null;
+let stopMotion: (() => void) | null = null;
 // The compositor refuses a sequence it has already passed, so the counter has to survive a restart.
 // A fresh observer starts its own at 1, and every commit after a restart would be rejected as stale:
 // the screen would hold the last accepted inventory and nothing after it.
@@ -105,9 +117,12 @@ function declaringWindow(): string {
 }
 
 export function startNativeSurfaces(root: Document = document): void {
+  stopMotion?.();
   controller?.stop();
   watching = root;
   controller = startNativeSurfaceObserver(nativeSurfaceDOMRuntime(root), commit, declaringWindow(), sequenceFloor);
+  controller.setInteractive(layoutMotionFacts().active);
+  stopMotion = onLayoutMotion((active) => controller?.setInteractive(active));
 }
 
 /**
@@ -120,6 +135,8 @@ export function startNativeSurfaces(root: Document = document): void {
  */
 export async function clearNativeSurfaces(): Promise<void> {
   if (controller) sequenceFloor = controller.status().sequence;
+  stopMotion?.();
+  stopMotion = null;
   controller?.stop();
   controller = null;
   sequenceFloor += 1;
@@ -127,6 +144,7 @@ export async function clearNativeSurfaces(): Promise<void> {
   await commit({
     window: declaringWindow(),
     sequence: sequenceFloor,
+    interactive: false,
     surfaces: [],
     sentAtUnixMs: Date.now(),
   });

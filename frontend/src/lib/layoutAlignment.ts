@@ -29,6 +29,8 @@ export interface SurfaceAlignment {
   declared: Box | null;
   /** The box the native layer holds. */
   applied: Box | null;
+  /** Raw native layout frame when presentation is transformed during an interactive phase. */
+  settled: Box | null;
   visible: boolean;
   /** dom vs declared — how far the declaration has fallen behind the element. */
   lag: number | null;
@@ -151,11 +153,20 @@ export function alignmentOf(
     const appliedBox = held
       ? { x: rounded(held.x), y: rounded(held.y), w: rounded(held.w), h: rounded(held.h) }
       : null;
+    const settledBox = held?.settled
+      ? {
+          x: rounded(held.settled.x),
+          y: rounded(held.settled.y),
+          w: rounded(held.settled.w),
+          h: rounded(held.settled.h),
+        }
+      : null;
     return {
       id: declaration.id,
       dom: declaration.dom,
       declared: declaration.declared,
       applied: appliedBox,
+      settled: settledBox,
       visible: held?.visible ?? false,
       lag: declaration.declared ? apart(declaration.dom, declaration.declared) : null,
       drift: declaration.declared && appliedBox ? apart(declaration.declared, appliedBox) : null,

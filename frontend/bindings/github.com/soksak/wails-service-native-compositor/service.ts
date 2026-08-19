@@ -72,6 +72,21 @@ export function Drain(): $CancellablePromise<[number, number]> {
 }
 
 /**
+ * History answers the last retained successful application before sinceUnixMs as a baseline, then
+ * every application at or after it, in apply order. A DOM trace whose first frame precedes the first
+ * motion Apply still needs to know what the native layer already held; omitting that baseline calls
+ * the first displayed frame unobserved. An exact timestamp starts at that exact sample.
+ *
+ * The compositor owns this timeline because it is the only layer that observes Apply itself;
+ * reconstructing it from frontend responses measures bridge return order instead.
+ */
+export function History(window: string, sinceUnixMs: number): $CancellablePromise<$models.Composition[]> {
+    return $Call.ByID(3659221496, window, sinceUnixMs).then(($result: any) => {
+        return $$createType5($result);
+    });
+}
+
+/**
  * Latest answers one window's last commit as a composition.
  * 
  * Per window. One window's inventory is no answer about another's: a
@@ -121,7 +136,7 @@ export function SurfaceAt(window: string, x: number, y: number): $CancellablePro
  */
 export function Windows(): $CancellablePromise<string[]> {
     return $Call.ByID(3374928189).then(($result: any) => {
-        return $$createType5($result);
+        return $$createType6($result);
     });
 }
 
@@ -131,4 +146,5 @@ const $$createType1 = $models.Cover.createFrom;
 const $$createType2 = $Create.Map($Create.Any, $$createType1);
 const $$createType3 = $Create.Map($Create.Any, $Create.Any);
 const $$createType4 = $models.Composition.createFrom;
-const $$createType5 = $Create.Array($Create.Any);
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = $Create.Array($Create.Any);

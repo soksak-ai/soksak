@@ -7,10 +7,10 @@
 //
 // This records inside the window instead: once per animation frame, before the paint, the document
 // half of the alignment — every declared surface's box, every region, every pane. The native half is
-// the answer to the last commit, which already holds the applied rectangles, so no round trip is
-// made for it and the recorder does not slow the window it watches. Each frame writes down how old
-// that answer is, which is the pipeline's latency rather than the instrument's. Nothing here judges
-// anything; it writes down what each frame held, and whoever reads it does the judging.
+// the latest bridge receipt held by the page, so no round trip is made for it and the recorder does
+// not slow the window it watches. That receipt is a diagnostic cache, not the native timing oracle:
+// `layout.trace.native` joins these DOM frames to compositor-owned Apply timestamps afterwards.
+// Nothing here judges anything; it writes down what each frame held.
 import { lastAppliedSurfaces } from "./contentViews";
 import { alignmentOf, documentAlignment, type LayoutAlignment } from "./layoutAlignment";
 import { mainThreadCosts, sinceCommitMs } from "./mainThreadCost";
@@ -23,10 +23,11 @@ export interface LayoutTraceFrame {
   frame: number;
   /** When the document half was read, on the presentation clock. */
   atUnixMs: number;
-  /** How old the native half is, in milliseconds: the time since the commit that carried it was
-   *  answered. Not an artefact of the reading — no round trip is made for it — but the pipeline's
-   *  own latency, which is the number a verdict about "do they move together" is made of. */
+  /** How long this page has held its latest bridge receipt. It costs no read-time round trip, but it
+   *  is not when native Apply happened; use layout.trace.native for that verdict. */
   appliedAgeMs: number;
+  /** The explicit interactive layout phase carried by the native receipt used by this frame. */
+  interactive: boolean;
   /** Which clock recorded this reading: the window's frame clock, or the timer that keeps the
    *  recording honest when the window is not drawing. Only the first kind can carry a verdict about
    *  motion — the second measures the recorder. */
@@ -287,6 +288,7 @@ function tick(drawn: boolean): void {
     commits: applied.commits,
     costs: mainThreadCosts(),
     appliedAgeMs: applied.atUnixMs === 0 ? -1 : Math.round(atUnixMs - applied.atUnixMs),
+    interactive: applied.interactive,
     commitMs: Math.round(applied.latencyMs),
     commitTotalMs: Math.round(applied.latencyTotalMs),
     commitWorstMs: Math.round(applied.latencyWorstMs),

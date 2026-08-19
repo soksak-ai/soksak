@@ -89,9 +89,14 @@ type SurfacePlacement struct {
 	DeclaredVisible bool
 	DeclaredAlpha   float64
 
-	Applied        SurfaceFrame
-	AppliedVisible bool
-	AppliedAlpha   float64
+	Applied SurfaceFrame
+	// Settled is the native owner's raw layout frame while Applied is its presented frame. Nil for
+	// native kinds that do not separate presentation from layout.
+	Settled                   *SurfaceFrame
+	LayerContentsRedrawPolicy int
+	LayerContentsPlacement    int
+	AppliedVisible            bool
+	AppliedAlpha              float64
 
 	// Drift is the applied rectangle minus the declared one, per component, as
 	// the compositor subtracted it.
@@ -150,6 +155,10 @@ type Composition struct {
 	// inventory that was applied and held nothing: one is a window whose panes
 	// declare no native surface, the other is a compositor that has never run.
 	Sequence uint64
+	// AppliedAtUnixMs is the compositor-owned instant at which the backend finished this commit.
+	AppliedAtUnixMs float64
+	// Interactive is the layout phase carried by this exact inventory.
+	Interactive bool
 	// Placements is one entry per surface the native layer reported.
 	Placements []SurfacePlacement
 	// Unapplied names the surfaces the document declared and the native layer
@@ -290,7 +299,9 @@ func RegisterSurface(registry *control.Registry, deps SurfaceDeps) {
 // could then disagree about it. It is taken once, here, next to the coordinate
 // system it was measured in.
 type compositionJudgement struct {
-	Sequence uint64 `json:"sequence"`
+	Sequence        uint64  `json:"sequence"`
+	AppliedAtUnixMs float64 `json:"appliedAtUnixMs"`
+	Interactive     bool    `json:"interactive"`
 	// Coordinates names the frame both halves are in. The declaration is
 	// written by the document in CSS pixels from the top left, and the native
 	// layer reports back in the same frame — a reader who assumes the
@@ -340,9 +351,12 @@ type compositionPlace struct {
 	DeclaredVisible bool         `json:"declaredVisible"`
 	DeclaredAlpha   float64      `json:"declaredAlpha"`
 
-	Applied        SurfaceFrame `json:"applied"`
-	AppliedVisible bool         `json:"appliedVisible"`
-	AppliedAlpha   float64      `json:"appliedAlpha"`
+	Applied                   SurfaceFrame  `json:"applied"`
+	Settled                   *SurfaceFrame `json:"settled,omitempty"`
+	LayerContentsRedrawPolicy int           `json:"layerContentsRedrawPolicy"`
+	LayerContentsPlacement    int           `json:"layerContentsPlacement"`
+	AppliedVisible            bool          `json:"appliedVisible"`
+	AppliedAlpha              float64       `json:"appliedAlpha"`
 
 	// Misparented is the surface being in a window other than the one that
 	// declared it. Separate from drift: drift is a distance and this is not.
@@ -393,26 +407,31 @@ func compositionJudgementOf(composition Composition, parentPresent bool) composi
 			coveredBy = []string{}
 		}
 		places = append(places, compositionPlace{
-			ID:              placement.ID,
-			Kind:            placement.Kind,
-			Generation:      placement.Generation,
-			Layer:           placement.Layer,
-			Declared:        placement.Declared,
-			DeclaredVisible: placement.DeclaredVisible,
-			DeclaredAlpha:   placement.DeclaredAlpha,
-			Applied:         placement.Applied,
-			AppliedVisible:  placement.AppliedVisible,
-			AppliedAlpha:    placement.AppliedAlpha,
-			Misparented:     placement.Misparented,
-			Drift:           drift,
-			CoveredBy:       coveredBy,
-			CoveredFraction: placement.CoveredFraction,
-			Worst:           here,
+			ID:                        placement.ID,
+			Kind:                      placement.Kind,
+			Generation:                placement.Generation,
+			Layer:                     placement.Layer,
+			Declared:                  placement.Declared,
+			DeclaredVisible:           placement.DeclaredVisible,
+			DeclaredAlpha:             placement.DeclaredAlpha,
+			Applied:                   placement.Applied,
+			Settled:                   placement.Settled,
+			LayerContentsRedrawPolicy: placement.LayerContentsRedrawPolicy,
+			LayerContentsPlacement:    placement.LayerContentsPlacement,
+			AppliedVisible:            placement.AppliedVisible,
+			AppliedAlpha:              placement.AppliedAlpha,
+			Misparented:               placement.Misparented,
+			Drift:                     drift,
+			CoveredBy:                 coveredBy,
+			CoveredFraction:           placement.CoveredFraction,
+			Worst:                     here,
 		})
 	}
 
 	return compositionJudgement{
 		Sequence:            composition.Sequence,
+		AppliedAtUnixMs:     composition.AppliedAtUnixMs,
+		Interactive:         composition.Interactive,
 		Coordinates:         "css-top-left",
 		NativeParentPresent: parentPresent,
 		Worst:               worst,

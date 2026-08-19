@@ -14,6 +14,10 @@ export class SurfaceStatus {
     "generation": number;
     "url": string;
     "frame": nativesurface$0.Frame;
+    "settledFrame": nativesurface$0.Frame;
+    "interactive": boolean;
+    "layerContentsRedrawPolicy": number;
+    "layerContentsPlacement": number;
     "visible": boolean;
     "alpha": number;
     "layer": number;
@@ -31,6 +35,18 @@ export class SurfaceStatus {
         }
         if (!("frame" in $$source)) {
             this["frame"] = (new nativesurface$0.Frame());
+        }
+        if (!("settledFrame" in $$source)) {
+            this["settledFrame"] = (new nativesurface$0.Frame());
+        }
+        if (!("interactive" in $$source)) {
+            this["interactive"] = false;
+        }
+        if (!("layerContentsRedrawPolicy" in $$source)) {
+            this["layerContentsRedrawPolicy"] = 0;
+        }
+        if (!("layerContentsPlacement" in $$source)) {
+            this["layerContentsPlacement"] = 0;
         }
         if (!("visible" in $$source)) {
             this["visible"] = false;
@@ -50,9 +66,13 @@ export class SurfaceStatus {
      */
     static createFrom($$source: any = {}): SurfaceStatus {
         const $$createField3_0 = $$createType0;
+        const $$createField4_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("frame" in $$parsedSource) {
             $$parsedSource["frame"] = $$createField3_0($$parsedSource["frame"]);
+        }
+        if ("settledFrame" in $$parsedSource) {
+            $$parsedSource["settledFrame"] = $$createField4_0($$parsedSource["settledFrame"]);
         }
         return new SurfaceStatus($$parsedSource as Partial<SurfaceStatus>);
     }

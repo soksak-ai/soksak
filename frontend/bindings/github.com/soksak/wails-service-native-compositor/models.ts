@@ -9,6 +9,14 @@ export class AppliedSurface {
     "id": string;
     "generation": number;
     "frame": Frame;
+
+    /**
+     * Settled is the native view's raw layout frame when presentation differs from layout during
+     * an interactive phase. Nil means this native kind has no separate settled geometry.
+     */
+    "settled"?: Frame | null;
+    "layerContentsRedrawPolicy": number;
+    "layerContentsPlacement": number;
     "visible": boolean;
     "alpha": number;
     "layer": number;
@@ -37,6 +45,12 @@ export class AppliedSurface {
         if (!("frame" in $$source)) {
             this["frame"] = (new Frame());
         }
+        if (!("layerContentsRedrawPolicy" in $$source)) {
+            this["layerContentsRedrawPolicy"] = 0;
+        }
+        if (!("layerContentsPlacement" in $$source)) {
+            this["layerContentsPlacement"] = 0;
+        }
         if (!("visible" in $$source)) {
             this["visible"] = false;
         }
@@ -58,9 +72,13 @@ export class AppliedSurface {
      */
     static createFrom($$source: any = {}): AppliedSurface {
         const $$createField2_0 = $$createType0;
+        const $$createField3_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("frame" in $$parsedSource) {
             $$parsedSource["frame"] = $$createField2_0($$parsedSource["frame"]);
+        }
+        if ("settled" in $$parsedSource) {
+            $$parsedSource["settled"] = $$createField3_0($$parsedSource["settled"]);
         }
         return new AppliedSurface($$parsedSource as Partial<AppliedSurface>);
     }
@@ -77,6 +95,16 @@ export class Composition {
      * never run, the other is a window whose document declares no surface.
      */
     "sequence": number;
+
+    /**
+     * AppliedAtUnixMs is when the backend finished applying this exact inventory.
+     */
+    "appliedAtUnixMs": number;
+
+    /**
+     * Interactive is the explicit layout phase carried by this commit.
+     */
+    "interactive": boolean;
 
     /**
      * Surfaces is one entry per surface either half holds.
@@ -105,6 +133,12 @@ export class Composition {
         if (!("sequence" in $$source)) {
             this["sequence"] = 0;
         }
+        if (!("appliedAtUnixMs" in $$source)) {
+            this["appliedAtUnixMs"] = 0;
+        }
+        if (!("interactive" in $$source)) {
+            this["interactive"] = false;
+        }
         if (!("surfaces" in $$source)) {
             this["surfaces"] = [];
         }
@@ -119,14 +153,14 @@ export class Composition {
      * Creates a new Composition instance from a string or object.
      */
     static createFrom($$source: any = {}): Composition {
-        const $$createField1_0 = $$createType2;
-        const $$createField2_0 = $$createType3;
+        const $$createField3_0 = $$createType3;
+        const $$createField4_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("surfaces" in $$parsedSource) {
-            $$parsedSource["surfaces"] = $$createField1_0($$parsedSource["surfaces"]);
+            $$parsedSource["surfaces"] = $$createField3_0($$parsedSource["surfaces"]);
         }
         if ("unapplied" in $$parsedSource) {
-            $$parsedSource["unapplied"] = $$createField2_0($$parsedSource["unapplied"]);
+            $$parsedSource["unapplied"] = $$createField4_0($$parsedSource["unapplied"]);
         }
         return new Composition($$parsedSource as Partial<Composition>);
     }
@@ -164,7 +198,7 @@ export class Cover {
      * Creates a new Cover instance from a string or object.
      */
     static createFrom($$source: any = {}): Cover {
-        const $$createField0_0 = $$createType3;
+        const $$createField0_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("by" in $$parsedSource) {
             $$parsedSource["by"] = $$createField0_0($$parsedSource["by"]);
@@ -223,6 +257,9 @@ export class Placement {
     "declaredVisible": boolean;
     "declaredAlpha": number;
     "applied": Frame;
+    "settled"?: Frame | null;
+    "layerContentsRedrawPolicy": number;
+    "layerContentsPlacement": number;
     "appliedVisible": boolean;
     "appliedAlpha": number;
 
@@ -283,6 +320,12 @@ export class Placement {
         if (!("applied" in $$source)) {
             this["applied"] = (new Frame());
         }
+        if (!("layerContentsRedrawPolicy" in $$source)) {
+            this["layerContentsRedrawPolicy"] = 0;
+        }
+        if (!("layerContentsPlacement" in $$source)) {
+            this["layerContentsPlacement"] = 0;
+        }
         if (!("appliedVisible" in $$source)) {
             this["appliedVisible"] = false;
         }
@@ -308,7 +351,8 @@ export class Placement {
     static createFrom($$source: any = {}): Placement {
         const $$createField4_0 = $$createType0;
         const $$createField7_0 = $$createType0;
-        const $$createField10_0 = $$createType4;
+        const $$createField8_0 = $$createType1;
+        const $$createField13_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("declared" in $$parsedSource) {
             $$parsedSource["declared"] = $$createField4_0($$parsedSource["declared"]);
@@ -316,8 +360,11 @@ export class Placement {
         if ("applied" in $$parsedSource) {
             $$parsedSource["applied"] = $$createField7_0($$parsedSource["applied"]);
         }
+        if ("settled" in $$parsedSource) {
+            $$parsedSource["settled"] = $$createField8_0($$parsedSource["settled"]);
+        }
         if ("drift" in $$parsedSource) {
-            $$parsedSource["drift"] = $$createField10_0($$parsedSource["drift"]);
+            $$parsedSource["drift"] = $$createField13_0($$parsedSource["drift"]);
         }
         return new Placement($$parsedSource as Partial<Placement>);
     }
@@ -327,6 +374,13 @@ export class Receipt {
     "sequence": number;
     "accepted": boolean;
     "surfaces": AppliedSurface[];
+
+    /**
+     * AppliedAtUnixMs is the wall-clock instant immediately after the backend applied this inventory.
+     * It is recorded here, where Apply actually returns. A frontend response timestamp includes the
+     * return bridge and cannot say when the native view moved.
+     */
+    "appliedAtUnixMs": number;
 
     /**
      * AppliedMs is how long the backend held this commit — the native work alone, without the
@@ -358,6 +412,9 @@ export class Receipt {
         }
         if (!("surfaces" in $$source)) {
             this["surfaces"] = [];
+        }
+        if (!("appliedAtUnixMs" in $$source)) {
+            this["appliedAtUnixMs"] = 0;
         }
         if (!("appliedMs" in $$source)) {
             this["appliedMs"] = 0;
@@ -392,6 +449,12 @@ export class Snapshot {
      */
     "window": string;
     "sequence": number;
+
+    /**
+     * Interactive is the layout system's explicit gesture phase. It is carried with the whole
+     * inventory so each native kind owns how its live surface is presented during that phase.
+     */
+    "interactive": boolean;
     "surfaces": Surface[];
 
     /**
@@ -416,6 +479,9 @@ export class Snapshot {
         if (!("sequence" in $$source)) {
             this["sequence"] = 0;
         }
+        if (!("interactive" in $$source)) {
+            this["interactive"] = false;
+        }
         if (!("surfaces" in $$source)) {
             this["surfaces"] = [];
         }
@@ -430,10 +496,10 @@ export class Snapshot {
      * Creates a new Snapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): Snapshot {
-        const $$createField2_0 = $$createType8;
+        const $$createField3_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("surfaces" in $$parsedSource) {
-            $$parsedSource["surfaces"] = $$createField2_0($$parsedSource["surfaces"]);
+            $$parsedSource["surfaces"] = $$createField3_0($$parsedSource["surfaces"]);
         }
         return new Snapshot($$parsedSource as Partial<Snapshot>);
     }
@@ -506,10 +572,10 @@ export type SurfaceSource = { [_ in string]?: string };
 
 // Private type creation functions
 const $$createType0 = Frame.createFrom;
-const $$createType1 = Placement.createFrom;
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = $Create.Array($Create.Any);
-const $$createType4 = $Create.Nullable($$createType0);
+const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = Placement.createFrom;
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = $Create.Array($Create.Any);
 const $$createType5 = AppliedSurface.createFrom;
 const $$createType6 = $Create.Array($$createType5);
 const $$createType7 = Surface.createFrom;
