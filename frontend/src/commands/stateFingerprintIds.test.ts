@@ -23,7 +23,7 @@ const tree = (paneId: string, spaceId: string, workspaceId: string) => ({
     {
       id: workspaceId,
       root: "/workspaces/one",
-      leftRailPosition: { mode: "flow", effectiveStation: 0, cleanLines: [] },
+      railPosition: { mode: "flow", effectiveStation: 0, cleanLines: [] },
       spaces: [
         {
           id: spaceId,

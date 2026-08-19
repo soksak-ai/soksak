@@ -23,7 +23,10 @@ export type TabCloseConfirm = "warn" | "off";
 // How a sidebar standing at a window edge takes its room: overlay = floats over the work, push =
 // takes area and the panes move aside. The rail has neither — it stands between the panes, so
 // there is no side to float over.
-export type EdgeSidebarMode = "overlay" | "push";
+/** How an edge sidebar takes its room. `overlay` draws over the content, `push` takes space from
+ *  it. The list is the values — a command reading it answers the same set the state accepts. */
+export const EDGE_SIDEBAR_MODES = ["overlay", "push"] as const;
+export type EdgeSidebarMode = (typeof EDGE_SIDEBAR_MODES)[number];
 // Left rail visual mode (§12-⑤): pane = like a split pane (card tint + elevation), ground = a flat
 // plane lying on the floor.
 export type RailLook = "pane" | "ground";

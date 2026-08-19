@@ -62,7 +62,7 @@ export function fingerprintOf(tree: unknown): StateFingerprint {
   const source = (tree ?? {}) as { workspaces?: unknown[] };
   const workspaces: FingerprintWorkspace[] = (source.workspaces ?? []).map((raw) => {
     const workspace = (raw ?? {}) as Record<string, unknown>;
-    const rail = (workspace.leftRailPosition ?? {}) as Record<string, unknown>;
+    const rail = (workspace.railPosition ?? {}) as Record<string, unknown>;
     const spaces = ((workspace.spaces ?? []) as unknown[]).map((rawSpace) => {
       const space = (rawSpace ?? {}) as Record<string, unknown>;
       const active = space.activePaneId;

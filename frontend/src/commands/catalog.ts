@@ -41,7 +41,7 @@ import {
   type CmdErr,
   type SidebarRegion,
 } from "../state/sessions";
-import { SECTION_PLACES } from "../state/sectionSets";
+import { SECTION_PLACES, byPlace } from "../state/sectionSets";
 import {
   canonicalGutter,
   isCanonicalSide,
@@ -56,7 +56,7 @@ import {
   activeSessionViewId,
   transferViewFocus,
 } from "../plugins/viewFocus";
-import { useSettings } from "../state/settings";
+import { useSettings, EDGE_SIDEBAR_MODES, type EdgeSidebarMode } from "../state/settings";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { awaitViewMounted } from "../plugins/viewFocus";
 import { useViewLabels } from "../state/viewLabels";
@@ -425,7 +425,7 @@ function serializeSpace(
 // Public facts about the left rail position. The stored PIN station and the station actually applied
 // on the current grid are kept apart. Reading a stale snapshot's dirty PIN does not change the stored
 // value; only an explicit PIN command snaps to a valid line and stores it.
-function serializeLeftRailPosition(t: Workspace) {
+function serializeRailPosition(t: Workspace) {
   const arrangement = projectArrangement(t);
   const cleanLines = arrangement?.cleanLines ?? [0, 100];
   const placement: RailPlacement = t.railPlacement ?? DEFAULT_RAIL_PLACEMENT;
@@ -445,15 +445,19 @@ function serializeTree() {
   return {
     activeProjectId: s.activeId,
     workspaces: s.workspaces.map((t) => {
-      const leftRailPosition = serializeLeftRailPosition(t);
+      const railPosition = serializeRailPosition(t);
       const arrangement = projectArrangement(t);
       return {
         id: t.id,
         title: t.title,
         root: t.root ?? null,
         color: t.color ?? null,
-        sidebarOpen: t.regionOpen.rail,
-        leftRailPosition,
+        // One entry per place, by name. It was `sidebarOpen`, a single boolean, from the days when
+        // the window had one sidebar and `left` named the rail — so whether either window edge
+        // stood could not be asked from outside at all (measured 2026-08-19: the left edge was open
+        // with a set standing in it, drawing nothing, and only the DOM named it).
+        regionOpen: byPlace((place) => t.regionOpen[place]),
+        railPosition: railPosition,
         active: t.id === s.activeId,
         activeSpaceId: t.activeSpaceId,
         spaces: t.spaces.map((c) =>
@@ -462,7 +466,7 @@ function serializeTree() {
             t.activeSpaceId,
             c.id === t.activeSpaceId ? arrangement : null,
             t.regionOpen.rail,
-            leftRailPosition.mode,
+            railPosition.mode,
           ),
         ),
       };
@@ -551,7 +555,7 @@ export function registerCatalog(): void {
     description: key("cmd.state.tree.desc"),
     params: {},
     returns:
-      "{ activeProjectId, workspaces[].{ leftRailPosition, spaces[].{ layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] } } } — layout/panes are displayed state; canonicalLayout is the stored SplitTree",
+      "{ activeProjectId, workspaces[].{ regionOpen{left,rail,right}, railPosition, spaces[].{ layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] } } } — layout/panes are displayed state; canonicalLayout is the stored SplitTree",
     message: (d) => tmsg("msg.state.tree", { n: ((d.workspaces as unknown[]) ?? []).length }),
     examples: ["state.tree"],
     handler: () => serializeTree(),
@@ -576,7 +580,7 @@ export function registerCatalog(): void {
   // shows whether the screen matches the contract.
   // No command sets the arrangement directly — the solve comes out of the tree and the focus, so a
   // surface that writes it directly becomes a second truth (position is owned by
-  // sidebar.left.position, structure by pane.*).
+  // rail.position, structure by pane.*).
   register("layout.arrangement", {
     description: key("cmd.layout.arrangement.desc"),
     triggers: {
@@ -1217,25 +1221,67 @@ export function registerCatalog(): void {
     },
   });
 
-  register("sidebar.right.mode", {
-    description: key("cmd.sidebar.right.mode.desc"),
-    triggers: { ko: "우측 사이드바 밀기 영역차지 오버레이 모드 도킹" },
+  // How an edge sidebar takes its room, for either edge.
+  //
+  // There was one command for the right and none for the left. The left edge holds the same setting
+  // with the same two values and defaults to `push`, so the mode a person meets first was one
+  // nothing outside could read or drive — measured 2026-08-19, the left edge drew on the wrong side
+  // of the window in `push` and no command could put it in the other mode to tell the two apart.
+  //
+  // The place is a parameter, not a command name. Two commands are two places to change one rule,
+  // and the second is the one that gets forgotten.
+  register("sidebar.edge.mode", {
+    description: key("cmd.sidebar.edge.mode.desc"),
+    triggers: { ko: "사이드바 가장자리 밀기 영역차지 오버레이 모드 도킹 좌측 우측" },
     params: {
-      mode: { type: "string", description: key("cmd.sidebar.right.mode.param.mode") },
+      place: {
+        type: "string",
+        enum: ["left", "right"],
+        description: key("cmd.sidebar.edge.mode.param.place"),
+        required: true,
+      },
+      mode: {
+        type: "string",
+        enum: [...EDGE_SIDEBAR_MODES],
+        description: key("cmd.sidebar.edge.mode.param.mode"),
+      },
     },
-    returns: "{ mode }",
-    message: (d) => tmsg("msg.sidebar.right.mode", { mode: String(d.mode) }),
+    returns: "{ place, mode }",
+    message: (d) =>
+      tmsg("msg.sidebar.edge.mode", { place: String(d.place), mode: String(d.mode) }),
     errors: ["INVALID_PARAMS"],
-    examples: ["sidebar.right.mode", 'sidebar.right.mode \'{"mode":"push"}\''],
+    examples: [
+      'sidebar.edge.mode \'{"place":"left"}\'',
+      'sidebar.edge.mode \'{"place":"right","mode":"push"}\'',
+    ],
     handler: (p) => {
-      const s = useSettings.getState();
-      if (p.mode !== undefined) {
-        if (p.mode !== "overlay" && p.mode !== "push")
-          return { ok: false as const, code: "INVALID_PARAMS", message: "mode: overlay | push" };
-        s.setRightSidebarMode(p.mode);
-        return { mode: p.mode };
+      // The rail takes its room from the panes and holds no such setting. Accepted here, the answer
+      // would be about a setting that does not exist.
+      const place = p.place;
+      if (place !== "left" && place !== "right") {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: tmsg("msg.sidebar.edge.placeRequired"),
+        };
       }
-      return { mode: s.rightSidebarMode };
+      const s = useSettings.getState();
+      const mode = p.mode;
+      if (mode !== undefined) {
+        if (!EDGE_SIDEBAR_MODES.includes(mode as EdgeSidebarMode)) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: tmsg("msg.sidebar.edge.modeRequired", {
+              modes: EDGE_SIDEBAR_MODES.join(" | "),
+            }),
+          };
+        }
+        if (place === "left") s.setLeftSidebarMode(mode as EdgeSidebarMode);
+        else s.setRightSidebarMode(mode as EdgeSidebarMode);
+        return { place, mode };
+      }
+      return { place, mode: place === "left" ? s.leftSidebarMode : s.rightSidebarMode };
     },
   });
 
@@ -1265,8 +1311,8 @@ export function registerCatalog(): void {
     },
   });
 
-  register("sidebar.left.position", {
-    description: key("cmd.sidebar.left.position.desc"),
+  register("rail.position", {
+    description: key("cmd.rail.position.desc"),
     triggers: {
       ko: "좌측 사이드바 레일 위치 플로우 포커스 추종 핀 고정 그립 스냅",
     },
@@ -1274,23 +1320,23 @@ export function registerCatalog(): void {
       workspace: P.workspace,
       mode: {
         type: "string",
-        description: key("cmd.sidebar.left.position.param.mode"),
+        description: key("cmd.rail.position.param.mode"),
         enum: ["flow", "pin"],
       },
       station: {
         type: "number",
-        description: key("cmd.sidebar.left.position.param.station"),
+        description: key("cmd.rail.position.param.station"),
       },
     },
     returns:
-      "{ projectId, leftRailPosition:{ mode, station?(persisted), effectiveStation, cleanLines[] } }",
-    message: () => tmsg("msg.sidebar.left.position"),
+      "{ projectId, railPosition:{ mode, station?(persisted), effectiveStation, cleanLines[] } }",
+    message: () => tmsg("msg.rail.position"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      "sidebar.left.position",
-      'sidebar.left.position \'{"mode":"pin"}\'',
-      'sidebar.left.position \'{"mode":"pin","station":50}\'',
-      'sidebar.left.position \'{"mode":"flow"}\'',
+      "rail.position",
+      'rail.position \'{"mode":"pin"}\'',
+      'rail.position \'{"mode":"pin","station":50}\'',
+      'rail.position \'{"mode":"flow"}\'',
     ],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
@@ -1303,12 +1349,12 @@ export function registerCatalog(): void {
           return {
             ok: false as const,
             code: "INVALID_PARAMS",
-            message: tmsg("msg.sidebar.left.position.stationNeedsPin"),
+            message: tmsg("msg.rail.position.stationNeedsPin"),
           };
         }
         return {
           projectId: t.id,
-          leftRailPosition: serializeLeftRailPosition(t),
+          railPosition: serializeRailPosition(t),
         };
       }
 
@@ -1317,7 +1363,7 @@ export function registerCatalog(): void {
           return {
             ok: false as const,
             code: "INVALID_PARAMS",
-            message: tmsg("msg.sidebar.left.position.flowNoStation"),
+            message: tmsg("msg.rail.position.flowNoStation"),
           };
         }
         const changed = S().setLeftRailPlacement(t.id, { mode: "flow" });
@@ -1330,10 +1376,10 @@ export function registerCatalog(): void {
           return {
             ok: false as const,
             code: "INVALID_PARAMS",
-            message: tmsg("msg.sidebar.left.position.stationRange"),
+            message: tmsg("msg.rail.position.stationRange"),
           };
         }
-        const current = serializeLeftRailPosition(t);
+        const current = serializeRailPosition(t);
         const station = snapRailStation(
           current.cleanLines,
           requested ?? current.effectiveStation,
@@ -1349,7 +1395,7 @@ export function registerCatalog(): void {
       if (!updated) return notFound("msg.workspace.notFound");
       return {
         projectId: updated.id,
-        leftRailPosition: serializeLeftRailPosition(updated),
+        railPosition: serializeRailPosition(updated),
       };
     },
   });

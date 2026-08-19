@@ -17,7 +17,7 @@ const layout = {
     {
       id: "wsp-aaaaaa",
       root: "<local-evidence>/a",
-      leftRailPosition: { mode: "flow", effectiveStation: 50, cleanLines: [0, 50, 100] },
+      railPosition: { mode: "flow", effectiveStation: 50, cleanLines: [0, 50, 100] },
       spaces: [
         {
           id: "spc-aaaaaa",
@@ -45,7 +45,7 @@ describe("the state fingerprint", () => {
 
   it("changes when the rail station changes", () => {
     const pinned = structuredClone(layout);
-    pinned.workspaces[0].leftRailPosition.effectiveStation = 0;
+    pinned.workspaces[0].railPosition.effectiveStation = 0;
     expect(fingerprintOf(pinned).digest).not.toBe(fingerprintOf(layout).digest);
   });
 

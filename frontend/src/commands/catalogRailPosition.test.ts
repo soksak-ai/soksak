@@ -125,12 +125,12 @@ type Position = {
 };
 
 function resultPosition(result: Awaited<ReturnType<typeof execute>>): Position {
-  return (result.data as { leftRailPosition: Position }).leftRailPosition;
+  return (result.data as { railPosition: Position }).railPosition;
 }
 
-describe("sidebar.left.position", () => {
+describe("rail.position", () => {
   it("an omitted call reads the current FLOW state — the rail aligns to the left line of the focused pane", async () => {
-    const result = await execute("sidebar.left.position", {}, {});
+    const result = await execute("rail.position", {}, {});
     expect(result.ok).toBe(true);
     expect(resultPosition(result)).toEqual({
       mode: "flow",
@@ -140,7 +140,7 @@ describe("sidebar.left.position", () => {
   });
 
   it("PIN with no station pins the current FLOW effective line where it is", async () => {
-    const result = await execute("sidebar.left.position", { mode: "pin" }, {});
+    const result = await execute("rail.position", { mode: "pin" }, {});
     expect(result.ok).toBe(true);
     expect(resultPosition(result)).toEqual({
       mode: "pin",
@@ -156,7 +156,7 @@ describe("sidebar.left.position", () => {
 
   it("PIN with a station snaps to the nearest clean line and stores that", async () => {
     const result = await execute(
-      "sidebar.left.position",
+      "rail.position",
       { mode: "pin", station: 31 },
       {},
     );
@@ -178,7 +178,7 @@ describe("sidebar.left.position", () => {
       activeId: "wsp-aaaaaa",
     });
 
-    const result = await execute("sidebar.left.position", {}, {});
+    const result = await execute("rail.position", {}, {});
     expect(result.ok).toBe(true);
     expect(resultPosition(result)).toEqual({
       mode: "pin",
@@ -198,7 +198,7 @@ describe("sidebar.left.position", () => {
       activeId: "wsp-aaaaaa",
     });
 
-    const result = await execute("sidebar.left.position", { mode: "flow" }, {});
+    const result = await execute("rail.position", { mode: "flow" }, {});
     expect(result.ok).toBe(true);
     expect(resultPosition(result)).toEqual({
       mode: "flow",
@@ -216,7 +216,7 @@ describe("sidebar.left.position", () => {
       activeId: "wsp-aaaaaa",
     });
 
-    const unchanged = await execute("sidebar.left.position", { mode: "flow" }, {});
+    const unchanged = await execute("rail.position", { mode: "flow" }, {});
     expect(unchanged.ok).toBe(true);
     expect(resultPosition(unchanged)).toMatchObject({
       mode: "flow",
@@ -228,7 +228,7 @@ describe("sidebar.left.position", () => {
       workspaces: [workspace({ mode: "pin", station: 0 })],
       activeId: "wsp-aaaaaa",
     });
-    const changed = await execute("sidebar.left.position", { mode: "flow" }, {});
+    const changed = await execute("rail.position", { mode: "flow" }, {});
     expect(changed.ok).toBe(true);
     expect(resultPosition(changed)).toMatchObject({
       mode: "flow",
@@ -242,14 +242,14 @@ describe("sidebar.left.position", () => {
 
   it("refuses a station outside the logical plane, and FLOW+station ambiguity, as structural errors", async () => {
     const outside = await execute(
-      "sidebar.left.position",
+      "rail.position",
       { mode: "pin", station: 101 },
       {},
     );
     expect(outside).toMatchObject({ ok: false, code: "INVALID_PARAMS" });
 
     const ambiguous = await execute(
-      "sidebar.left.position",
+      "rail.position",
       { mode: "flow", station: 50 },
       {},
     );
@@ -386,7 +386,7 @@ describe("state.tree — the solution is a public fact", () => {
         const result = await execute("state.tree", {}, {});
         return (result.data as {
           workspaces: Array<{
-            leftRailPosition: Position;
+            railPosition: Position;
             spaces: Array<{
               layout: unknown;
               canonicalLayout: unknown;
@@ -397,7 +397,7 @@ describe("state.tree — the solution is a public fact", () => {
       };
 
       const before = await read();
-      expect(before.leftRailPosition).toMatchObject({
+      expect(before.railPosition).toMatchObject({
         mode: "pin",
         station: 50,
         effectiveStation: 50,
@@ -407,11 +407,11 @@ describe("state.tree — the solution is a public fact", () => {
       expect(useSessions.getState().maximizeView("wsp-aaaaaa", tabId)).toMatchObject({ ok: true });
       const maximized = await read();
       expect(maximized.spaces[0].railRelation.side).toBe(side);
-      expect(maximized.leftRailPosition.station).toBe(50);
+      expect(maximized.railPosition.station).toBe(50);
 
       expect(useSessions.getState().restoreView("wsp-aaaaaa")).toMatchObject({ ok: true });
       const restored = await read();
-      expect(restored.leftRailPosition).toEqual(before.leftRailPosition);
+      expect(restored.railPosition).toEqual(before.railPosition);
       expect(restored.spaces[0].layout).toEqual(before.spaces[0].layout);
       expect(restored.spaces[0].canonicalLayout).toEqual(
         before.spaces[0].canonicalLayout,
@@ -429,9 +429,9 @@ describe("state.tree — the solution is a public fact", () => {
     const result = await execute("state.tree", {}, {});
     expect(result.ok).toBe(true);
     const workspaces = (result.data as {
-      workspaces: Array<{ leftRailPosition: Position }>;
+      workspaces: Array<{ railPosition: Position }>;
     }).workspaces;
-    expect(workspaces[0].leftRailPosition).toEqual({
+    expect(workspaces[0].railPosition).toEqual({
       mode: "pin",
       station: 31,
       effectiveStation: 50,
@@ -446,7 +446,7 @@ describe("state.tree — the solution is a public fact", () => {
     const result = await execute("state.tree", {}, {});
     const space = (result.data as {
       workspaces: Array<{
-        leftRailPosition: Position;
+        railPosition: Position;
         spaces: Array<{
           layout: { children: unknown[] };
           canonicalLayout: { children: unknown[] };
@@ -461,7 +461,7 @@ describe("state.tree — the solution is a public fact", () => {
       }>;
     }).workspaces[0];
 
-    expect(space.leftRailPosition.effectiveStation).toBeCloseTo(100 / 3, 1);
+    expect(space.railPosition.effectiveStation).toBeCloseTo(100 / 3, 1);
     const first = space.spaces[0];
     expect(first.projection).toEqual({
       kind: "switched",
