@@ -224,14 +224,16 @@ tasks:
     cmds:
       - |
         set -e
-        # One list and one copy rule. A `for:` list is not templated, so a source under $HOME had to
-        # be spelled by a second command — and a second copy of this rule is what drifts the day one
-        # of them is edited.
+        # This repository's own plugins, found rather than listed. The file tree was borrowed from
+        # the preceding implementation's home until 2026-08-19 — a build installing a plugin it does
+        # not contain, and one nobody here could fix because that application still runs on it. Its
+        # manifest still named a place, so the install put a refused plugin in the home and the
+        # window came up with every pane saying the plugin was removed.
+        #
+        # Found, not listed: a name written here is a name that goes stale the day a plugin is added,
+        # and the gate already reads the same directory.
         home="${SOKSAK_HOME:-$HOME/.soksak-wails}"
-        for source in \
-          "../soksak-plugins/soksak-plugin-browser-native" \
-          "../soksak-plugins/soksak-plugin-terminal-xterm" \
-          "$HOME/.soksak-dev/plugins/soksak-plugin-file-tree"
+        for source in ../soksak-plugins/*
         do
           name="$(basename "$source")"
           if [ ! -f "$source/plugin.json" ]; then
