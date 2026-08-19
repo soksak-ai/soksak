@@ -2,6 +2,7 @@ package wails
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"unsafe"
@@ -54,6 +55,33 @@ func TestACaptureTurnsDetectionOffAndBackOn(t *testing.T) {
 	}
 	if len(log.asked) != 2 || log.asked[0] != false || log.asked[1] != true {
 		t.Errorf("a capture must turn detection off and put it back: %v", log.asked)
+	}
+}
+
+func TestACaptureRequestsAWebRendererRefreshAfterRemovingTheThrottle(t *testing.T) {
+	png := solidPNG(t, 4, 4, background)
+	steps := make([]string, 0, 4)
+	log := &occlusionLog{applied: 1}
+	service := capturingWith(t, log, func() ([]byte, error) {
+		steps = append(steps, "capture")
+		return png, nil
+	})
+	service.occlusion = func(_ unsafe.Pointer, enabled bool) int {
+		if enabled {
+			steps = append(steps, "throttle-on")
+		} else {
+			steps = append(steps, "throttle-off")
+		}
+		return 1
+	}
+	service.prepare = func() { steps = append(steps, "refresh") }
+
+	if _, err := service.Pixels(Whole); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"throttle-off", "refresh", "capture", "throttle-on"}
+	if fmt.Sprint(steps) != fmt.Sprint(want) {
+		t.Fatalf("capture steps = %v, want %v", steps, want)
 	}
 }
 
