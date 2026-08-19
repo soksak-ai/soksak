@@ -238,11 +238,26 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
       //    global (scope null) move takes a conservative blanket skip.
       const skipAll =
         facts.active && (facts.kinds.includes("resize") || facts.scope === null);
+
+      // Three passes, and the order between them is the whole point.
+      //
+      // This walked the elements one at a time — cancel, measure, animate — so a measurement sat
+      // between two writes and forced a layout of its own, and element two was measured against a
+      // layout element one had already perturbed. The cost is the number of elements times a
+      // reflow, and the rects are from as many instants as there are elements.
+      //
+      // Measured 2026-08-19, dragging the window's left edge in `push` mode, where every pane
+      // re-lays out on every frame: `panes.flush` 315ms, the frame gap 315ms, and a commit that
+      // could not be answered for the same 315ms while the native side had done its work in 0.2ms.
+      // The page came apart from its pane by 200 points. In `overlay`, where the panes do not move,
+      // the same drag measured 0 points off and 13ms worst.
+      const live: HTMLElement[] = [];
       for (const el of els) {
         if (!el.isConnected) {
           els.delete(el);
           continue;
         }
+        live.push(el);
         // Cancel the previous interpolation before measuring — cancel restores the style to its final value,
         // so the rect measured now is always "the layout's true present" (blocks contamination by
         // interpolated intermediate values).
@@ -255,10 +270,17 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
           }
           running.delete(el);
         }
+      }
+
+      // Every rect from one layout. One instant, one reading — the same rule every other measurement
+      // in this build is held to.
+      const measured = live.map((el) => {
         const r = el.getBoundingClientRect();
-        const now: Snap = { x: r.x, y: r.y, w: r.width, h: r.height };
-        const was = prev.get(el);
-        prev.set(el, now);
+        return { el, now: { x: r.x, y: r.y, w: r.width, h: r.height } as Snap, was: prev.get(el) };
+      });
+      for (const one of measured) prev.set(one.el, one.now);
+
+      for (const { el, now, was } of measured) {
         if (mode === "replace") {
           const held = frozen.get(el);
           if (held) {

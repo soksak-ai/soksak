@@ -42,6 +42,7 @@ import {
   type SidebarRegion,
 } from "../state/sessions";
 import { SECTION_PLACES, byPlace, type SectionPlace } from "../state/sectionSets";
+import { beginLayoutMotion, endLayoutMotion } from "../lib/layoutMotion";
 import {
   PLACE_WIDTH_BOUNDS,
   placeWidth,
@@ -1500,12 +1501,25 @@ export function registerCatalog(): void {
             }),
           };
         }
-        setPlaceWidth(place, width);
-        // The answer waits for the frame, so a caller reading the screen next reads the new one.
-        await waitForDomCommit(() => {
-          const element = document.querySelector<HTMLElement>(`[data-region="${place}"]`);
-          return Math.round(element?.getBoundingClientRect().width ?? -1) === Math.round(width);
-        });
+        // Inside a motion phase, which is what a pointer drag opens. A width change moves every
+        // pane, and a native surface's position is written across a round trip — so for the length
+        // of that trip the page is showing where its pane used to be. The phase is what takes the
+        // surface off the screen and puts its picture in the slot, where it moves with the pane and
+        // cannot disagree with it.
+        //
+        // Set without one, this command left the surfaces live: measured 2026-08-19, the page and
+        // its pane 200 points apart for 17 of 21 frames.
+        beginLayoutMotion("resize");
+        try {
+          setPlaceWidth(place, width);
+          // The answer waits for the frame, so a caller reading the screen next reads the new one.
+          await waitForDomCommit(() => {
+            const element = document.querySelector<HTMLElement>(`[data-region="${place}"]`);
+            return Math.round(element?.getBoundingClientRect().width ?? -1) === Math.round(width);
+          });
+        } finally {
+          endLayoutMotion("resize");
+        }
       }
       return { place, width: placeWidth(place), min: bounds.min, max: bounds.max };
     },
