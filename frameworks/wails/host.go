@@ -58,7 +58,7 @@ const (
 	appDescription = "Plugin-driven recursive terminal and browser workspace"
 	windowTitle    = appName
 	// The orchestrator window's reserved name. Workspaces are w-<uuid>.
-	controlPlaneWindow = "main"
+	controlPlaneWindow = control.ControlPlaneWindow
 	// The window opens at the golden ratio (1000 / 618 ≈ 1.618).
 	windowWidth  = 1000
 	windowHeight = 618
