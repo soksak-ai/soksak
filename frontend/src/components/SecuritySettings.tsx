@@ -2,18 +2,8 @@ import { useEffect, useState } from "react";
 import { execute } from "../commands/registry";
 import { useSessions } from "../state/sessions";
 import { useVault } from "../state/vault";
-import { useT, type MsgKey } from "../i18n";
-
-// Sealing KEK backend raw value (secrets.rs) → localized label. Unmapped values ("—" while loading,
-// and others) are shown verbatim.
-const BACKEND_LABEL: Record<string, MsgKey> = {
-  keychain: "settings.security.kind.keychain",
-  wincred: "settings.security.kind.wincred",
-  "secret-service": "settings.security.kind.secretService",
-  "os-key": "settings.security.kind.osKey",
-  e2e: "settings.security.kind.e2e",
-  none: "settings.security.kind.none",
-};
+import { useT } from "../i18n";
+import { SECURITY_BACKEND_LABEL, securityLimitKey } from "./securityBackend";
 
 // Settings security section — global sealing state (backend and availability, secret.status) and the
 // scope-limit notice, plus per-scope management (enable encryption, recover, rotate key, change
@@ -98,7 +88,7 @@ export function SecuritySettings() {
       <div className="drow">
         <span className="drow-label">{t("settings.security.backend")}</span>
         <span className="dctl dctl-static">
-          {BACKEND_LABEL[backend] ? t(BACKEND_LABEL[backend]) : backend}
+          {SECURITY_BACKEND_LABEL[backend] ? t(SECURITY_BACKEND_LABEL[backend]) : backend}
         </span>
       </div>
       <div className="drow">
@@ -107,7 +97,7 @@ export function SecuritySettings() {
           {sealAvailable ? t("settings.security.sealOn") : t("settings.security.sealOff")}
         </span>
       </div>
-      <div className="plugin-consent-notice">{t("settings.security.limits")}</div>
+      <div className="plugin-consent-notice">{t(securityLimitKey(backend))}</div>
       <div className="drow">
         <span className="drow-label">{t("settings.security.scope")}</span>
         <input
