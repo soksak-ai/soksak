@@ -372,10 +372,11 @@ func (h *wailsHost) Reload(name string) error {
 }
 
 func (h *wailsHost) PrepareCapture(name string) {
-	if _, addressable := h.live(name); !addressable {
+	window, addressable := h.live(name)
+	if !addressable {
 		return
 	}
-	_ = dispatchToWindow(h.app, name, "capture.prepare", nil)
+	window.ExecJS(`window.dispatchEvent(new Event("soksak:capture-prepare"))`)
 }
 
 func (h *wailsHost) OpenInspector(name string) error {
