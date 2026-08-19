@@ -106,60 +106,34 @@ All of these are hard.
   address that can only be read is a picture, and a picture is not a seam — two
   builds that answer the same tree and behave differently are indistinguishable
   through it.
-- **C3.** A plugin reaches another only through what that plugin declared, and
-  only when it declared the dependency. Never reach into another plugin's DOM,
-  internal state, file layout, or load order.
+- **C3.** A plugin crosses another plugin boundary only through declarations.
+  It never reads another plugin's DOM, internal state, file layout or load order.
 
-  A plugin that needs another names it in `dependencies` — the plugin id is the
-  identity, and there is no second one. `implements` and `consumes` stood here
-  until 2026-08-16, naming an interface a provider offered and a consumer asked
-  for so either side could be swapped. Not one interface ever had both sides
-  declared, the id duplicated what the plugin id already names, and the core
-  ended up holding one as a constant. If two implementations of one thing ever
-  exist, that is the day to design a choice between them — with the case in
-  hand.
-- **C3a.** Standing in the same place is not sharing a spec. Chromium and a
-  platform webview cannot have the same one — what they expose and how they
-  behave differ in fact, and a common spec over them is a convenience that
-  **forces a rule onto the parts that differ**. Each writes what it is; a
-  resemblance between two plugins is a resemblance, not an interface.
+  Two dependency forms exist and represent different requirements:
 
-  A shared spec is what the interface ids were, and the cost showed: all
-  forty-seven sample plugins carried one, forty-two of which stand beside nothing,
-  and the core itself came to hold one as a constant. A convenience for a few was
-  a rule for everyone.
+  - `dependencies` names a specific plugin and version range. Use it when that
+    implementation is required.
+  - `consumes` names a public contract and compatible range. A provider declares
+    the exact contract version in `implements`. Use it when any compatible
+    implementation is valid.
 
-  Whoever needs a thing names the plugin (C3). Substituting one implementation
-  for another by declaration is the convenience being given up, knowingly.
+  Both fields are optional. An independent plugin declares neither. A contract is
+  introduced only after multiple implementations or consumers require the same
+  public behavior.
+- **C3a.** A shared contract covers common behavior only. Implementation-specific
+  settings, commands and status remain in the plugin's own specification.
 
-  **Who a separated spec is for.** The gain is one author writing several
-  implementations at once — the same hand building a terminal and a browser twice
-  over, keeping them level. That is a first-party circumstance, not a property of
-  the platform, and a rule written from it charges every other plugin for a
-  convenience it never asked for. In general each feature owns its spec.
-
-  **A plugin holds its own spec, and the consequence is accepted here rather than
-  discovered later.** Building something like an existing plugin means copying it,
-  and the copies drift apart in time — a fix lands in one and not the other, and
-  after long enough two plugins that began identical answer differently. That is
-  the price, and it is paid because the alternative charges every plugin for the
-  few that stand beside another: a shared spec forces a rule onto the parts that
-  genuinely differ, and it did so to forty-seven of them.
-
-  Nothing gates drift, because nothing can: two plugins are two plugins. What is
-  gated is the core holding another's spec, which is the part that would make the
-  drift the core's problem.
-
-  **Where two are meant to match, the hand that writes them keeps them level.**
-  Three browsers behave alike because one author built them to a standard and
-  directed each to the same result — not because an interface made them. That is
-  a discipline held while writing, and it costs the platform nothing; a mechanism
-  in its place would charge every plugin for it.
+  Contract declarations are not permissions by themselves. The ordinary command,
+  process and data permission gates still apply. At a cross-plugin call boundary,
+  either the exact plugin dependency or a compatible consumed/provided contract
+  must match. An absent, malformed or incompatible declaration is refused.
 
 - **C4.** The core has one spec and a plugin has its own. `CORE_SPEC` is the
   version the core stamps into the envelopes it defines — the plugin-runtime
   transport, both ends of which are the core's. A plugin's manifest is that
-  plugin's spec, and the plugin id names it.
+  plugin's spec, and the plugin id names it. A shared domain contract is a
+  separate versioned document outside the core. Providers and consumers reference
+  it; the core compares ids and versions without interpreting domain fields.
 
   A document the core reads and does not publish is stamped by its publisher, and
   the core reads that stamp: the registry index, a release manifest, a conformance
@@ -174,9 +148,6 @@ All of these are hard.
   shares. A format per plugin, `soksak-spec-plugin-terminal@`, is a second name
   for what the plugin id already names (C1), and that stays deleted.
 
-  There was a third thing until 2026-08-16: `soksak-spec-<kind>-<domain>`
-  interface ids that a provider declared and a consumer asked for. Nothing
-  collects specs centrally, and nothing needs to.
 - **C5.** Standards do not weaken silently. A red test against a correct standard
   means fixing the implementation, the fixture, or the exposed interface. A
   standard that is itself wrong changes in the open, with the evidence and the

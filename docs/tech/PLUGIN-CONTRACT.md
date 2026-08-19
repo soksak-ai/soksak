@@ -77,27 +77,24 @@ mapped (L11c). A manifest carrying either is refused by name: read and dropped, 
 stand somewhere its author never chose. 26 of the 46 sampled manifests carry them and are refused
 until each is brought over.
 
-## P5. A plugin's spec is the plugin's, and the core's is the core's
+## P5. Plugin specifications and shared contracts are separate
 
-There is no place that collects specs. `CORE_SPEC` is stamped into the envelopes the core defines
-both ends of; a plugin's manifest is that plugin's spec, and the plugin id names it.
+`CORE_SPEC` is stamped into the envelopes the core defines both ends of. A plugin's manifest is that
+plugin's specification, and the plugin id names it.
 
 A document the core reads and does not publish is stamped by its publisher — a manifest is
 `soksak-spec-plugin@0.0.1`, and so are the release, index and conformance formats it travels with. A
 manifest arrives alone, so its `spec` is the only thing in it that names the format.
 
-A plugin that needs another declares it in `dependencies`. That is the whole coupling: one identity,
-declared, checked at the call boundary.
+A plugin may use either dependency form:
 
-`implements` and `consumes` stood here until 2026-08-16, naming an interface so either side could be
-swapped without knowing the other. All forty-seven sample plugins carried one, forty-two of which
-stand beside nothing: a convenience for the few was a rule for everyone.
+- `dependencies`: a specific plugin id and version range;
+- `consumes`: a public contract id and compatible range, matched against a provider's exact
+  `implements` version.
 
-What a separated spec buys is one author writing several implementations at once and keeping them
-level — a first-party circumstance, not a property of the platform. In general each feature owns its
-spec, and two plugins that do a similar job are built by copying, the copies drifting apart in time.
-That is accepted (C3a). A shared spec would force a rule onto the parts that genuinely differ — chromium and
-a platform webview do not expose the same things — and the drift would then be everyone's.
+Both are optional. A shared contract is created only for behavior with multiple real providers or
+consumers. The contract is an independently versioned unit outside the core. The core validates and
+matches ids and versions but does not define domain behavior.
 
 ## P6. Permissions are declarations, not isolation
 

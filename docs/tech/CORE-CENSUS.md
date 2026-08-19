@@ -219,29 +219,18 @@ Gate: `TestTheCoreNamesOnlyItsOwnSpecs` lists the six ids this repository define
 other `soksak-spec-` literal. It caught one more on the way in — a `plugin.implementers` example
 naming `soksak-spec-plugin-git`, a contract nobody implements. The example reads the registry now.
 
-### 10. A second identity for what the plugin id already names
+### 10. Plugin identity and shared contract identity are separate
 
-Raised as a question and then stated plainly: a plugin has a spec, and there is no stage that
-collects specs. The core has the core's spec; a plugin has the plugin's.
+A plugin id selects one implementation. A contract id selects compatible behavior. They are not
+alternate names for the same requirement.
 
-Three things existed where one was needed.
+The 2026-08-16 removal used an incomplete runtime sample and removed `implements` and `consumes`.
+The full corpus already contained multiple providers and consumers. The terminal matrix now has two
+renderers and four restore engines, so the common-contract case is concrete.
 
-**Interface ids.** `implements` and `consumes` named a contract a provider offered and a consumer
-asked for, so either side could be swapped without knowing the other. The id duplicated the plugin
-id, and the core ended up holding one as a constant (entry 9).
-
-The measurement written here first was wrong and is corrected: it read the two plugins installed in
-the run home and concluded no interface ever had both sides. The corpus is 47 plugins in the
-development home, and nine interfaces have both — three browsers implement one, two terminals
-implement another, seven plugins consume git. What that changes is the sentence, not the entry:
-a sample is brought to the rule, not the rule to the sample. Those manifests are the list of things
-to bring into conformance. Removed: the fields, the grammar, discovery, selection, resolution,
-`ContractEngineSettings`, `plugin.implementers`, the activation-boundary enforcement, and the
-installer's provider axis. A plugin that needs another names it in `dependencies` — one route across
-the boundary, and the call gate checks that one thing.
-
-A sidebar slot named a contract; it names a plugin and a view. A program had `viewContract` beside
-`viewPlugin` — two ways to say one thing — and keeps `viewPlugin`.
+The fields were restored on 2026-08-19 with two optional paths: `dependencies` for a specific plugin,
+and `consumes` matched against a provider's exact `implements` version. `plugin.list` exposes both.
+The core validates ids and versions and contains no terminal contract constant.
 
 **Seven names for the core's own format — and six of them were not the core's.** `soksak-spec-release
 @0.0.1`, `-registry@`, one per unit kind: all defined in one file, all moving together at `0.0.1`.
@@ -261,8 +250,8 @@ defines both ends of — the plugin-runtime transport.
 **The prefix itself.** The reason written down for it was that a scanner could tell a contract id
 from a plugin id in core sources — a rule shaped to suit a scanner. Gone with the thing it named.
 
-A mechanism for choosing between two implementations gets built against the case that needs it. The
-sample corpus holds three browsers and two terminals, so that case is real and is not this entry's.
+A provider-selection mechanism is built against the terminal matrix. Contract declaration and
+version matching are complete; provider choice remains part of that investigation.
 
 Gate: `TestTheCoreHoldsNoSecondIdentityNamespace` reads three things — a spec stamp written outside
 `plugins/spec/unit.ts`, a stamp that names a plugin rather than a document kind, and a declared stamp

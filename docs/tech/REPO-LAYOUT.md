@@ -15,6 +15,9 @@ A folder name declares who owns what is inside it.
 wails3beta/
 ├── soksak-core/        the application
 ├── soksak-plugins/     plugins, one repository each
+├── soksak-kits/        shared plugin code, one repository each
+├── soksak-sidecars/    plugin-owned processes, one repository each
+├── soksak-contracts/   shared public contracts and acceptance suites
 ├── wails-services/     Wails services this project wrote
 ├── frameworks/         framework checkouts, pinned
 ├── externals/          third-party libraries
@@ -25,8 +28,9 @@ Four rules produce this:
 
 1. Ours and not-ours are separate. `frameworks/` and `externals/` hold code from elsewhere;
    everything else is written here.
-2. A plugin adds a feature and can be switched off (A8). A Wails service extends the host and cannot.
-   They are different kinds, so they are different folders.
+2. A plugin adds a feature and can be switched off (A8). Shared plugin code, public contracts and
+   plugin processes remain independently versioned units. A Wails service extends the host and
+   cannot be switched off as a plugin. These are different kinds, so they are different folders.
 3. A checkout is pinned. `frameworks/wails3` is at one commit, and moving it is legislation with its
    own commit, not a side effect (see NATIVE-LAYER.md).
 4. `backup/` is invisible to every build and gate. Anything the build needs is not in it.
