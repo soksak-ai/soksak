@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@soksak/wails-service-native-compositor": "file:../../wails-services/wails-service-native-compositor/frontend",
-    "@wailsio/runtime": "latest",
+    "@wailsio/runtime": "file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime",
     "pngjs": "^7.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

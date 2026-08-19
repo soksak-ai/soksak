@@ -12,8 +12,8 @@ importers:
         specifier: file:../../wails-services/wails-service-native-compositor/frontend
         version: file:../../wails-services/wails-service-native-compositor/frontend
       '@wailsio/runtime':
-        specifier: latest
-        version: 3.0.0-beta.8
+        specifier: file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime
+        version: file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime
       pngjs:
         specifier: ^7.0.0
         version: 7.0.0
@@ -588,8 +588,8 @@ packages:
   '@vitest/utils@3.2.7':
     resolution: {integrity: sha512-x6BDOd7dyo3PFLY3I9/HJ25X/6OurhGXk2/B9gOZNPF7XDVjeBK4k01lQE5uvDpbuheErh91qYuE1E2OEjK3Rw==}
 
-  '@wailsio/runtime@3.0.0-beta.8':
-    resolution: {integrity: sha512-c9PZJcOR9z1a6cxtBS2q5cygNajlxDE8Oxv/vvcTFYRbZSoOGBszq4uzlkPTOd0Bot1xkM81jnpaBgKWRpBh2g==}
+  '@wailsio/runtime@file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime':
+    resolution: {directory: ../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime, type: directory}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -1413,7 +1413,7 @@ snapshots:
       loupe: 3.2.1
       tinyrainbow: 2.0.0
 
-  '@wailsio/runtime@3.0.0-beta.8': {}
+  '@wailsio/runtime@file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime': {}
 
   assertion-error@2.0.1: {}
 
