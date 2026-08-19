@@ -24,6 +24,10 @@ import {
 
 type NamedAnimation = Animation & { animationName?: string };
 
+/** How long before this wait's own deadline the barrier gives up, so its reason travels back before
+ *  the timer here fires. One round trip through the compositor and the socket is what it leaves. */
+const PRESENTATION_BARRIER_MARGIN_MS = 250;
+
 const presentationPendingState = moduleState("commands/waitLayoutSettled#presentationPending", () => ({
   sequence: 0,
   content: new Map<number, {
@@ -227,11 +231,18 @@ export function waitLayoutSettled(timeoutMs = 4_000, settlementKey?: string): Pr
               }
             };
             const labels = hasContentViewHost() ? visibleContentViewLabels() : [];
+            // The barrier's deadline is this wait's, less a margin. The two had their own limits
+            // and the barrier's was the longer one, so the side holding the reason never reached
+            // its own limit — this wait expired first and answered TIMEOUT with a pending entry and
+            // no cause (measured 2026-08-19, twice in one suite). The margin is what leaves room for
+            // that reason to travel back before the timer here fires.
+            const elapsedMs = performance.now() - started;
+            const barrierLimitMs = Math.max(1, timeoutMs - elapsedMs - PRESENTATION_BARRIER_MARGIN_MS);
             const barrierAbort = new AbortController();
             presentationAbort = barrierAbort;
             const barriers = [
               ...(hasContentViewHost()
-                ? [timed("content", labels, contentViewHost().presentationSettled(labels)).then((receipt) => {
+                ? [timed("content", labels, contentViewHost().presentationSettled(labels, barrierLimitMs)).then((receipt) => {
                   spent.content = receipt;
                 })]
                 : []),

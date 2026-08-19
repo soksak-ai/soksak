@@ -8,9 +8,44 @@ import { presentationNowUnixMs } from "../../lib/presentationClock";
 import { nextFrame } from "../../lib/nextFrame";
 import { currentWindowLabel } from "../../lib/webviewLabels";
 
-const commit: NativeSurfaceCommit = async (snapshot) => {
+/**
+ * How long a commit may go unanswered before it fails by name.
+ *
+ * The observer runs one commit at a time — `running` is true for the whole round trip and every
+ * change made meanwhile only marks the inventory dirty. With no bound, a backend that accepted a
+ * delivery and never replied left `running` true for the rest of the session: nothing else could be
+ * delivered and the status read `declared 22, committed 21, still dirty` with no error, forever.
+ *
+ * Measured 2026-08-19, three times in one suite. Shorter than the barrier that reads this status,
+ * so the failure is stated in these words rather than the caller's.
+ */
+export const NATIVE_COMMIT_LIMIT_MS = 2_000;
+
+/**
+ * One delivery to the compositor, bounded.
+ *
+ * The bound cancels nothing — nothing here can reach into the backend. It names the failure and
+ * releases the observer for the next delivery; a receipt that arrives late is refused by its
+ * sequence, which the observer already does.
+ */
+export const commitNativeSurfaces: NativeSurfaceCommit = async (snapshot) => {
   const askedAt = presentationNowUnixMs();
-  const receipt = await CompositorService.Commit(Snapshot.createFrom(snapshot));
+  let expiry = 0;
+  const receipt = await Promise.race([
+    CompositorService.Commit(Snapshot.createFrom(snapshot)),
+    new Promise<never>((_, reject) => {
+      expiry = window.setTimeout(
+        () =>
+          reject(
+            new Error(
+              `the compositor did not answer the commit for sequence ${snapshot.sequence} ` +
+                `within ${NATIVE_COMMIT_LIMIT_MS}ms`,
+            ),
+          ),
+        NATIVE_COMMIT_LIMIT_MS,
+      );
+    }),
+  ]).finally(() => clearTimeout(expiry));
   const answeredAt = presentationNowUnixMs();
   // The applied rectangles come back with the commit that asked for them. Written down here, the
   // freshest native reading a window can have costs no round trip of its own.
@@ -38,6 +73,8 @@ const commit: NativeSurfaceCommit = async (snapshot) => {
   document.documentElement.dataset.nativeSnapshotCount = String(receipt.surfaces.length);
   return receipt;
 };
+
+const commit: NativeSurfaceCommit = commitNativeSurfaces;
 
 let controller: NativeSurfaceObserverController | null = null;
 // The compositor refuses a sequence it has already passed, so the counter has to survive a restart.
@@ -141,15 +178,16 @@ export function __setNativeSurfaceStatusForTest(
  * outside. The wait still ends on the sequence; what is added is that a wait which cannot end names
  * the two numbers instead of never returning.
  */
-export async function nativeSurfacesSettled(limitMs: number = SETTLE_LIMIT_MS): Promise<void> {
+export async function nativeSurfacesSettled(limitMs?: number): Promise<void> {
+  const limit = limitMs !== undefined && limitMs > 0 ? limitMs : SETTLE_LIMIT_MS;
   const startedAt = Date.now();
   for (;;) {
     const status = statusOverride ? statusOverride() : controller?.status();
     if (!status) return; // No observer means no surfaces.
     if (!status.dirty && status.committedSequence >= status.sequence) return;
-    if (Date.now() - startedAt >= limitMs) {
+    if (Date.now() - startedAt >= limit) {
       throw new Error(
-        `native surfaces did not reach a frame in ${limitMs}ms: declared ${status.sequence}, ` +
+        `native surfaces did not reach a frame in ${limit}ms: declared ${status.sequence}, ` +
           `committed ${status.committedSequence}` +
           (status.dirty ? ", still dirty" : "") +
           (status.running ? "" : ", observer not running") +

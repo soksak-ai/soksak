@@ -161,6 +161,22 @@ has watched fail is a claim, not a gate.
 
 Written here so it is not rediscovered (L2).
 
+- **A commit the compositor never answers stalls `ui.layout.wait-settled`.**
+  `TestWhatTheLinkSaysIsWhatIsDrawn` fails in a full suite run and passes alone —
+  measured five times on 2026-08-19. Once, with the barrier's own deadline made
+  shorter than the caller's, it stated itself: `native surfaces did not reach a
+  frame in 3750ms: declared 22, committed 21, still dirty`, with `running` true
+  and no error. So one delivery is in flight and the round trip does not return,
+  and while it is in flight the observer takes no other.
+
+  What is done: the barrier's deadline is the caller's less a margin, so the side
+  holding the reason expires first; and a commit that goes unanswered for
+  `NATIVE_COMMIT_LIMIT_MS` fails by name and releases the observer. What is not:
+  the runs after those changes still ended in the caller's plain `TIMEOUT` with
+  `presentationPending [{owner:"content", labels:[], elapsedMs:4101}]`, so the
+  inner deadline is not being reached and the cause is unmeasured. Nothing here
+  claims the flake is fixed.
+
 - **Windows and Linux are compile-only.** Every driver fails by name. Their
   runtime and visual behaviour is unverified, and no green is recorded for them.
 - **Windows terminal needs ConPTY.** `creack/pty` does not cover it.

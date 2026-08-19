@@ -98,10 +98,34 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
     const waiting = waitLayoutSettled().then(() => { done = true; });
     await Promise.resolve();
     expect(done).toBe(false);
-    expect(presentationSettled).toHaveBeenCalledWith(["browser.main.tab-current"]);
+    expect(presentationSettled).toHaveBeenCalledWith(["browser.main.tab-current"], expect.any(Number));
     present();
     await waiting;
     expect(done).toBe(true);
+  });
+
+  it("gives the content barrier a shorter deadline than its own, so the reason arrives first", async () => {
+    // The surface barrier has its own limit and the words for what is wrong — declared N, committed
+    // M, still dirty, observer not running, last error. Its limit was 5,000ms and this wait's was
+    // 4,000, so it never once got to say any of it: the caller gave up first and answered TIMEOUT
+    // with a pending entry and no cause.
+    //
+    // Measured 2026-08-19, twice, in the full suite: `ui.layout.wait-settled` failed with
+    // `presentationPending [{owner:"content", labels:[], elapsedMs:4101}]` and everything else in
+    // the reading said settled. Two deadlines, and the one with nothing to report expires first.
+    animations([]);
+    document.body.innerHTML = '<div data-content-view-body="browser.main.tab-current"></div>';
+    const presentationSettled = vi.fn(() => new Promise<void>(() => {}));
+    registerContentViewHost({ presentationSettled } as unknown as ContentViewHost);
+    const waiting = waitLayoutSettled(4_000).catch(() => {});
+    await Promise.resolve();
+    const [, limit] = presentationSettled.mock.calls[0] as unknown as [string[], number];
+    expect(limit).toBeGreaterThan(0);
+    expect(limit).toBeLessThan(4_000);
+    vi.useFakeTimers();
+    vi.advanceTimersByTime(4_000);
+    vi.useRealTimers();
+    await waiting;
   });
 
   it("does not answer before the content surface and the plugin view presentation barrier both close", async () => {
@@ -133,7 +157,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
 
     settlePluginView();
     await waiting;
-    expect(contentPresentationSettled).toHaveBeenCalledWith(["browser.main.tab-current"]);
+    expect(contentPresentationSettled).toHaveBeenCalledWith(["browser.main.tab-current"], expect.any(Number));
     expect(pluginViewPresentationSettled).toHaveBeenCalledWith(expect.any(AbortSignal));
     expect(bothArmedBeforeSettlement).toBe(true);
     expect(doneWithPluginViewPending).toBe(false);

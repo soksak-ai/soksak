@@ -43,8 +43,8 @@ export const wailsContentViewHost: ContentViewHost = {
   // Position is declared too. There is nothing to match, so there is no mismatch.
   bounds: async () => true,
   // Until the declared surfaces are reflected in a real frame — reads one compositor receipt only.
-  presentationSettled: async () => {
-    await nativeSurfacesSettled();
+  presentationSettled: async (_labels, limitMs) => {
+    await nativeSurfacesSettled(limitMs);
   },
   chromePresentationSettled: async () => {
     await nativeSurfacesSettled();

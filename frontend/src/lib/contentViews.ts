@@ -53,8 +53,15 @@ export interface ContentViewHost {
    */
   bounds(label: string, x: number, y: number, w: number, h: number): Promise<boolean>;
   visible(label: string, visible: boolean, focus?: boolean): Promise<void>;
-  /** Completes when the coordinate and visibility change of the given views is applied to the actual displayed frame. */
-  presentationSettled(labels: readonly string[]): Promise<void>;
+  /** Completes when the coordinate and visibility change of the given views is applied to the actual
+   *  displayed frame.
+   *
+   *  `limitMs` is the caller's deadline, less a margin. This barrier holds the words for what is
+   *  wrong — declared N, committed M, still dirty, observer not running, last error — and its own
+   *  limit was longer than the caller's, so it never got to say any of them: the caller gave up
+   *  first and answered TIMEOUT with no cause (measured 2026-08-19, twice in one suite). One
+   *  deadline, and the side holding the reason expires first. */
+  presentationSettled(labels: readonly string[], limitMs?: number): Promise<void>;
   /** Completes when the previous commit of the main DOM chrome is applied to the actual displayed frame. */
   chromePresentationSettled(): Promise<void>;
   history(label: string, delta: number): Promise<void>;

@@ -30,6 +30,7 @@ import {
   migrateSpaceTitle,
   type Workspace,
 } from "./sessions";
+import { dropWindowCache, sweepWindowCaches, windowCacheKey } from "./windowCacheSweep";
 import {
   snapshotWindow,
   restoreWindow,
@@ -104,7 +105,7 @@ export async function initWorkspacePersistence(
   const label = currentWindowLabel();
   const winStore = makeCoreStore<WindowSnapshot>({
     key: `window/${label}`,
-    lsKey: `soksak.window.${label}`,
+    lsKey: windowCacheKey(label),
     fallback: EMPTY_WINDOW,
     ...coreStoreDeps,
   });
@@ -295,6 +296,16 @@ export async function respawnSavedWindows(): Promise<void> {
 
   try {
     let manifest = await manifestStore.hydrate();
+    // The caches of windows this installation no longer has. One boot, once, after the authority
+    // has answered — swept from the manifest alone, so a manifest that could not be read sweeps
+    // nothing.
+    //
+    // Measured 2026-08-19 before this existed: 3,442 cache entries for 2 live windows, 2,579,554 of
+    // the store's 2,580,350 characters against a quota of about 2.5 million. The store had been
+    // full long enough that the manifest itself was no longer in it, and the first anybody knew was
+    // a window going blank on a sidebar drag.
+    const swept = sweepWindowCaches(manifest);
+    if (swept > 0) respawnFact(`respawn:sweptWindowCaches:${swept}`);
     let pruned = false;
     // Occupancy is a fact of every host, so it is queried from cored — counting this process alone reads a window
     // held by the other framework as "absent" and creates the same label again (restorableSlots header).
@@ -307,7 +318,7 @@ export async function respawnSavedWindows(): Promise<void> {
     for (const slot of slots) {
       const snapStore = makeCoreStore<WindowSnapshot>({
         key: `window/${slot.label}`,
-        lsKey: `soksak.window.${slot.label}`,
+        lsKey: windowCacheKey(slot.label),
         fallback: EMPTY_WINDOW,
         ...coreStoreDeps,
       });
@@ -471,6 +482,10 @@ export async function forgetWindowSlot(label: string): Promise<void> {
     const manifest = await manifestStore.hydrate();
     const next = forgetWindow(manifest, label);
     if (next !== manifest) await manifestStore.save(next);
+    // The slot and the snapshot go together. The slot left the ledger and the cache stayed until
+    // 2026-08-19, so a label that would never be read again kept its whole window in the store —
+    // 3,442 of them, and the store was full.
+    dropWindowCache(label);
   } catch (e) {
     console.error(`window slot pruning failed (${label}):`, e);
   }
