@@ -2044,6 +2044,38 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     },
   });
 
+  register("ui.input.scroll", {
+    description: key("cmd.ui.input.scroll.desc"),
+    triggers: { ko: "노출 DOM 스크롤 화면 안으로 이동" },
+    params: {
+      address: { type: "string", description: key("cmd.ui.input.scroll.param.address"), required: true },
+      block: {
+        type: "string",
+        description: key("cmd.ui.input.scroll.param.block"),
+        enum: ["start", "center", "end", "nearest"],
+      },
+    },
+    returns: "{ address, before:{x,y,w,h}, after:{x,y,w,h}, dx, dy }",
+    message: () => tmsg("msg.ui.input.scroll"),
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS"],
+    danger: "inject",
+    examples: ['ui.input.scroll \'{"address":"win/main/chrome/settings/security/scope","block":"center"}\''],
+    handler: (p) => {
+      const addr = p.address as string;
+      const found = resolveExposed(addr);
+      if (!("el" in found)) return found;
+      const block = (p.block as ScrollLogicalPosition | undefined) ?? "nearest";
+      const rect = (element: Element) => {
+        const value = element.getBoundingClientRect();
+        return { x: value.x, y: value.y, w: value.width, h: value.height };
+      };
+      const before = rect(found.el);
+      found.el.scrollIntoView({ behavior: "instant", block, inline: "nearest" });
+      const after = rect(found.el);
+      return { address: addr, before, after, dx: after.x - before.x, dy: after.y - before.y };
+    },
+  });
+
   // Drives both pointer presence and absence on the same surface.
   //
   // Why: a hover state such as gutter emphasis was owned by CSS :hover, and :hover can be neither turned

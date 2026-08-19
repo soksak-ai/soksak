@@ -2066,6 +2066,26 @@ describe("ui.input.key — drive surface for paths open only to the keyboard", (
   });
 });
 
+describe("ui.input.scroll — bring an exposed node into its scroll viewport", () => {
+  it("uses scrollIntoView and returns the before/after rectangles", async () => {
+    mountNode(`<div data-node="btn">x</div>`);
+    const el = document.querySelector("[data-node=btn]") as HTMLElement;
+    let y = 900;
+    vi.spyOn(el, "getBoundingClientRect").mockImplementation(() => ({
+      x: 10, y, top: y, left: 10, right: 110, bottom: y + 20,
+      width: 100, height: 20, toJSON: () => ({}),
+    }));
+    const scrollIntoView = vi.fn(() => { y = 120; });
+    el.scrollIntoView = scrollIntoView;
+
+    const result = await execute("ui.input.scroll", { address: ADDR, block: "center" }, {});
+
+    expect(result.ok).toBe(true);
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "instant", block: "center", inline: "nearest" });
+    expect(result.data).toMatchObject({ address: ADDR, before: { y: 900 }, after: { y: 120 }, dx: 0, dy: -780 });
+  });
+});
+
 // ui.verify's tab.sized — a diagnosis must state for itself what it scanned.
 //
 // (Measured defect) After the tab body's DOM address moved from layout/slot/ to layout/tab/, this check was still
