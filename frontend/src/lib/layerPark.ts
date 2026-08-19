@@ -10,11 +10,13 @@ export function applyParked(el: HTMLElement, active: boolean): void {
   // `visible` is not a local fact but a command that breaks the parking above.
   el.style.visibility = active ? "" : "hidden";
   el.style.pointerEvents = active ? "" : "none";
+  el.style.contentVisibility = active ? "" : "hidden";
 }
 
 export function parkedStyle(active: boolean): CSSProperties {
   return {
     visibility: active ? undefined : "hidden",
     pointerEvents: active ? undefined : "none",
+    contentVisibility: active ? undefined : "hidden",
   } as CSSProperties;
 }
