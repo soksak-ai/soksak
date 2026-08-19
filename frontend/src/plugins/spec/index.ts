@@ -51,8 +51,11 @@
 // Contract id grammar (C3 L2 contract-pin). Single source: contracts.ts — CONTRACT_ID_RE, validateImplements.
 import {
   SIDECAR_CONTRACT_ID_RE,
+  type ContractProviderRef,
   type ContractRequirement,
   parseContractRequirement,
+  validateConsumes,
+  validateImplements,
 } from "./contracts";
 export * from "./contracts";
 // plugin service (third form) declaration axis. Single source: service.ts (norm docs/PLUGIN-SERVICE.md).
@@ -398,12 +401,10 @@ export interface PluginManifest {
   // references a resident binary in sidecars[], interface is the wire contract id (PS5, PS6).
   // Requires the "service" permission.
   service?: ServiceDecl;
-  // A plugin this one needs is named in `dependencies`. There is no second identity for it.
-  //
-  // `implements` and `consumes` stood here until 2026-08-16, naming an interface a provider offered
-  // and a consumer asked for, so that either side could be swapped. Not one interface ever had both
-  // sides declared, and the id was a second name for what the plugin id already names (C3, C4). If
-  // two implementations of one thing ever exist, that is the day to design a choice between them.
+  // Optional common contracts. Independent plugins omit both. A provider declares an exact version;
+  // a consumer declares a compatible range and remains independent of a provider plugin id.
+  implements?: ContractProviderRef[];
+  consumes?: ContractRequirement[];
   // User configuration schema (optional). Global + per-workspace override. Harmless (declarative) →
   // no permission needed.
   configuration?: ConfigSetting[];
@@ -895,6 +896,9 @@ export function parseManifest(
 
   // service: plugin service declaration (optional) — format in service.ts, cross-checks after contributes parsing.
   const service = parseServiceDecl(raw.service, errors);
+
+  const implementsIds = validateImplements(raw.implements, errors);
+  const consumesIds = validateConsumes(raw.consumes, errors);
 
   // configuration: user settings schema (optional). key/type/default consistency + enum/enumLabels/
   // min/max validation. Single source of truth — UI, stored defaults, and CLI/MCP all derive from it.
@@ -1525,6 +1529,8 @@ export function parseManifest(
       ...(raw.requiresEngine === "chromium" ? { requiresEngine: "chromium" as const } : {}),
       ...(raw.requiresNativeChildWebview === true ? { requiresNativeChildWebview: true } : {}),
       ...(service !== undefined ? { service } : {}),
+      ...(implementsIds.length > 0 ? { implements: implementsIds } : {}),
+      ...(consumesIds.length > 0 ? { consumes: consumesIds } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
       contributes: {

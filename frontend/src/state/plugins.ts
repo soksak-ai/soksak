@@ -448,13 +448,17 @@ export const usePlugins = moduleState("state/plugins#store", () =>
 
   // Load entry → activate → keep the instance. Failure throws (the caller records status).
   const activateRuntime = async (p: PluginRuntime): Promise<void> => {
+    const apiDeps = () => defaultPluginDeps(
+      get().appVersion,
+      (id) => get().plugins[id]?.manifest.implements ?? [],
+    );
     // Pure contract plugin (PS4, docs/PLUGIN-SERVICE.md) — activates without an entry. No code load and no chrome
     // scan (parseManifest enforces zero code-requiring contributions) — gate + data contributions + service proxy.
     if (p.manifest.entry === null) {
       const instance = await activateContractPlugin(
         p.manifest,
         p.dir,
-        defaultPluginDeps(get().appVersion),
+        apiDeps(),
       );
       setActive(p.manifest.id, instance);
       return;
@@ -488,7 +492,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       module,
       p.manifest,
       p.dir,
-      defaultPluginDeps(get().appVersion),
+      apiDeps(),
       data.content,
     );
     setActive(p.manifest.id, instance);

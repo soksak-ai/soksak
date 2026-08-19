@@ -57,9 +57,12 @@ import {
 import { EVENT_PERMISSIONS } from "./hooks";
 import type { IconSetData } from "../ui/icons/types";
 import {
+  contractRequirementSatisfiedBy,
   configDefaults,
   pluginCommandName,
   qualifiedViewId,
+  type ContractProviderRef,
+  type ContractRequirement,
   type PluginManifest,
   type PluginPermission,
   type LocalizedText,
@@ -87,9 +90,7 @@ export interface PluginApiDeps {
   registerCommand: (name: string, spec: CommandSpec) => void;
   unregisterCommand: (name: string) => boolean;
   getCommandDanger: (name: string) => "destructive" | "inject" | undefined;
-  // Contracts the target plugin declared (manifest implements) — used for the contract-pin decision at
-  // the call boundary. The core does not identify implementations by name here either: it compares
-  // contract id sets only.
+  implementsOf?: (pluginId: string) => ContractProviderRef[];
   on: typeof onPluginEvent;
   currentWorkspace: () => { id: string; root: string | null } | null;
   // Core fs watcher (fs-change) subscription — callback receives the changed parent directory string.
@@ -884,11 +885,20 @@ export function targetPluginId(name: string): string | null {
 function crossPluginDenyReason(
   selfId: string,
   dependencies: Record<string, string> | undefined,
+  consumes: ContractRequirement[] | undefined,
+  implementsOf: ((pluginId: string) => ContractProviderRef[]) | undefined,
   commandName: string,
 ): string | null {
   const target = targetPluginId(commandName);
   if (target === null || target === selfId) return null;
   if (target in (dependencies ?? {})) return null;
+  if (implementsOf) {
+    const provided = implementsOf(target);
+    if ((consumes ?? []).some((required) =>
+      provided.some((provider) => contractRequirementSatisfiedBy(required, provider)))) {
+      return null;
+    }
+  }
   return tmsg("plugin.call.undeclaredDependency", { target, command: commandName });
 }
 
@@ -1363,6 +1373,8 @@ export function buildPluginApi(
     const crossDeny = crossPluginDenyReason(
       id,
       manifest.dependencies,
+      manifest.consumes,
+      deps.implementsOf,
       name,
     );
     if (crossDeny) {
@@ -1823,6 +1835,8 @@ export function buildPluginApi(
             const crossDeny = crossPluginDenyReason(
               id,
               manifest.dependencies,
+              manifest.consumes,
+              deps.implementsOf,
               job.command,
             );
             if (crossDeny) {

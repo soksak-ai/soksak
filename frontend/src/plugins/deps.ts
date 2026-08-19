@@ -19,6 +19,7 @@ import {
 } from "../terminal/ptyBridge";
 import { onPluginEvent } from "./hooks";
 import type { DataChangeEvent, PluginApiDeps } from "./api";
+import type { ContractProviderRef } from "./spec";
 
 // Safe global listen subscription — consolidated into the single lib/safeListen util (hand-rolled version removed).
 function subscribe<T>(event: string, onPayload: (payload: T) => void): () => void {
@@ -34,7 +35,10 @@ const WIRE: Record<ContentViewEventKey, string> = {
   loading: CONTENT_VIEW_EVENT.loading,
 } as const;
 
-export function defaultPluginDeps(appVersion: string): PluginApiDeps {
+export function defaultPluginDeps(
+  appVersion: string,
+  implementsOf?: (pluginId: string) => ContractProviderRef[],
+): PluginApiDeps {
   return {
     appVersion,
     invoke: (cmd, args) => invoke(cmd, args),
@@ -42,9 +46,7 @@ export function defaultPluginDeps(appVersion: string): PluginApiDeps {
     registerCommand: register,
     unregisterCommand: unregister,
     getCommandDanger: (name) => getSpec(name)?.danger,
-    // Contracts declared by the target plugin (manifest implements). The contract-pin check at the
-    // call boundary reads only this — core reads which implementation fills which contract from the
-    // declaration and holds no plugin names.
+    implementsOf,
     on: onPluginEvent,
     currentWorkspace: () => {
       const s = useSessions.getState();
