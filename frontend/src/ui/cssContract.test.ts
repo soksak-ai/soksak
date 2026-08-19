@@ -167,6 +167,11 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     expect(focusVeilStackingViolations(css)).toEqual([]);
   });
 
+  it("contains each definite tab body layout and paint", () => {
+    const tabBody = rules().find((rule) => rule.selector === ".tab-body");
+    expect(tabBody?.decls).toMatch(/contain\s*:\s*layout paint style/);
+  });
+
   it("workspace and rail are global chrome above the DOM browser content stack", () => {
     expect(workspaceRailStackingViolations(css)).toEqual([]);
   });

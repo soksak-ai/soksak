@@ -529,12 +529,12 @@ body,
   /* The left rail travels under the work surface. Where it crosses a tab view the
      work surface owns hit testing and painting; in the empty corridor only the
      real elements of this plane take input. Exemption from dimming is not
-     z-index — the FocusLightingPlane mask uses this same rail geometry. */
+     z-index — FocusLightingPlane uses this same rail geometry. */
   z-index: 0;
   pointer-events: none;
 }
 /* The relation surface between rail and feature. It reuses no border, gap or
-   radius from paneStyle: one SVG over the union of the published rects owns it,
+   radius from paneStyle: one overlay over the union of the published rects owns it,
    drawn from the theme relation tokens. flat, card and floating therefore keep
    the same meaning and no real panel edge is drawn twice. */
 .rail-link-overlay {
@@ -604,13 +604,12 @@ body,
    forbidden: changing a filter on a subtree that holds a WebGL canvas makes
    WKWebView rebuild that composited surface, and a live texture atlas can break.
 
-   This one SVG paints black pixels over the DOM and over WebGL inside it. It does
-   not reach a native surface: that is composited above the document, and the
-   sentence here claimed otherwise until 2026-08-17 — measured, the same rectangle
-   inside a browser page read the same brightness focused and not. A surface is
-   dimmed by its own alpha, from the same `--dim` strength this veil paints by
-   (SIDEBAR S5). Input passes through. The mask subtracts focus and blocked first,
-   then paints blocked once at its own density, so alpha never stacks. */
+   Idle and blocked panes are independent black rectangles painted exactly once;
+   focused and exempt panes paint nothing. A full-window SVG luminance mask is
+   forbidden: sampling the WebContent GPU process showed WebCore converting that
+   mask to an image buffer during geometry changes. A native surface is composited
+   above the document and receives the same strength through its own alpha
+   declaration (SIDEBAR S5). Input passes through. */
 .focus-lighting-plane {
   position: absolute;
   inset: 0;
@@ -620,28 +619,20 @@ body,
   pointer-events: none;
   z-index: 6;
 }
-.focus-lighting-mask {
-  /* White base keeps the veil; black aperture and cutout remove it. The meaning is
-     carried by lightness, so this is luminance and not alpha — in alpha both are
-     opaque (alpha=1) and the hole disappears. */
-  mask-type: luminance;
-}
-/* SVG2 geometry properties — the same variables and the same arithmetic as
-   pane and tab-body. Nothing is measured again or followed, so no second clock
-   appears. */
+/* The same variables and arithmetic as pane and tab-body. Nothing is measured
+   again or followed, so no second clock appears. */
 .focus-lighting-region {
-  x: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
-  y: calc(var(--t) + var(--pane-inset));
+  position: absolute;
+  left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  top: calc(var(--t) + var(--pane-inset));
   width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
   height: calc(var(--h) - var(--pane-inset) * 2);
 }
 :root[data-pane-style="card"] .focus-lighting-region {
-  rx: 11px;
-  ry: 11px;
+  border-radius: 11px;
 }
 :root[data-pane-style="floating"] .focus-lighting-region {
-  rx: 14px;
-  ry: 14px;
+  border-radius: 14px;
 }
 /* [temporary — a switch to compare two relation backgrounds] The railFill
    setting (none | faint), asked for by the user: (1) remove it, (2) very faint.
@@ -926,7 +917,7 @@ body,
   inset: 0;
   /* Position plus layer makes its own stacking context. This plane sits above the
      left rail and confines the focus lighting (.focus-lighting-plane) inside
-     itself. The lighting mask excludes the rail's real geometry, so the rail is
+     itself. The lighting declaration exempts the rail's real geometry, so the rail is
      not dimmed even when a tab view is above it (gate:
      src/ui/focusVeilStacking.ts). A visibility change does not change z. A rail
      in travel passes behind this grid of cards. The container itself is
@@ -1118,6 +1109,7 @@ body,
    legitimate. The body area is the cell minus the header minus the status bar. */
 .tab-body {
   position: absolute;
+  contain: layout paint style;
   left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
   top: calc(var(--t) + var(--pane-inset) + var(--header-h));
   width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);

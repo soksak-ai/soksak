@@ -45,17 +45,16 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
       );
     });
 
-    const plane = host.querySelector<SVGSVGElement>("[data-node='focus-lighting/space-a']");
+    const plane = host.querySelector<HTMLDivElement>("[data-node='focus-lighting/space-a']");
     expect(plane).not.toBeNull();
     expect(plane?.getAttribute("aria-hidden")).toBe("true");
-    expect(host.querySelector("mask")?.getAttribute("data-node")).toBe(
-      "focus-lighting/space-a/mask",
-    );
+    expect(host.querySelector("svg")).toBeNull();
+    expect(host.querySelector("mask")).toBeNull();
     expect(host.querySelectorAll("[data-lighting-base]")).toHaveLength(1);
     expect(host.querySelector("[data-lighting-base]")?.getAttribute("data-node")).toBe(
-      "focus-lighting/space-a/base",
+      "focus-lighting/space-a/content/left",
     );
-    expect(host.querySelector("[data-lighting-base]")?.getAttribute("fill-opacity")).toBe("0.5");
+    expect((host.querySelector("[data-lighting-base]") as HTMLElement)?.style.opacity).toBe("0.5");
 
     const aperture = host.querySelector<SVGRectElement>("[data-lighting-aperture='focused']");
     expect(aperture).not.toBeNull();
@@ -80,20 +79,15 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
       );
     });
 
-    // The mask's blocked cutout prevents base and blocked veil from overlapping. An implementation
-    // that paints 0.7 over 0.5 and lands at 0.85 is not allowed.
-    expect(host.querySelectorAll("[data-lighting-cutout='blocked']")).toHaveLength(1);
-    expect(
-      host.querySelector("[data-lighting-cutout='blocked']")?.getAttribute("data-node"),
-    ).toBe("focus-lighting/space-b/cutout/blocked");
-    const blocked = host.querySelector<SVGRectElement>("[data-lighting-blocked='blocked']");
+    expect(host.querySelectorAll("[data-lighting-content='blocked']")).toHaveLength(0);
+    const blocked = host.querySelector<HTMLElement>("[data-lighting-blocked='blocked']");
     expect(blocked?.getAttribute("data-node")).toBe(
       "focus-lighting/space-b/blocked/blocked",
     );
-    expect(blocked?.getAttribute("fill-opacity")).toBe("0.7");
+    expect(blocked?.style.opacity).toBe("0.7");
   });
 
-  it("the left rail area under the work surface is excluded from the lighting mask exactly", async () => {
+  it("the left rail area under the work surface is exempt from lighting exactly", async () => {
     const exempt = railLightingExemption(240, 50);
     await act(async () => {
       root.render(
@@ -129,15 +123,14 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
       );
     });
 
-    const mask = host.querySelector("[data-node='focus-lighting/space-d/mask']")!;
-    const layers = [...mask.children].map((node) => (
+    const plane = host.querySelector("[data-node='focus-lighting/space-d']")!;
+    const layers = [...plane.children].map((node) => (
       node.getAttribute("data-lighting-exempt")
       ?? node.getAttribute("data-lighting-content")
       ?? node.getAttribute("data-lighting-aperture")
-      ?? "base"
+      ?? "other"
     ));
-    expect(layers).toEqual(["base", "left-rail", "left", "right", "right"]);
-    expect(mask.querySelector("[data-lighting-content='left']")?.getAttribute("fill")).toBe("white");
-    expect(mask.querySelector("[data-lighting-exempt='left-rail']")?.getAttribute("fill")).toBe("black");
+    expect(layers).toEqual(["left-rail", "left", "right"]);
+    expect(plane.querySelector("[data-lighting-content='left']")).not.toBeNull();
   });
 });

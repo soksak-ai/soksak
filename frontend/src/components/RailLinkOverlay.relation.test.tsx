@@ -315,10 +315,12 @@ describe("railRelation mode CSS branches (style surface)", () => {
 
   it("focus spotlight: only the inactive dims and the active stays clean (selection alone is explicit)", () => {
     // A filter on a content ancestor changes the DOM/canvas/WebGL compositing path, so it is banned. The overall
-    // dimming and the focus aperture are drawn by one SVG plane outside the work surface.
+    // dimming is drawn by pane-local rectangles outside the content subtree.
     expect(css).not.toMatch(/\.(?:pane|tab-body)\[data-dim\][^{]*\{[^}]*filter\s*:/s);
     expect(decls(".focus-lighting-plane")).toMatch(/pointer-events:\s*none/);
-    expect(decls(".focus-lighting-mask")).toMatch(/mask-type:\s*luminance/);
+    expect(decls(".focus-lighting-region")).toMatch(/position:\s*absolute/);
+    expect(css).not.toMatch(/mask-type:\s*luminance/);
+    expect(css).not.toMatch(/\.focus-lighting-mask\b/);
     // No rule branches on a stage name — with two branches they compete on specificity again.
     expect(css).not.toMatch(/\.(?:pane|tab-body)\[data-dim="/);
   });

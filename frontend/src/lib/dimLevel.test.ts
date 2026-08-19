@@ -79,7 +79,10 @@ describe("dim level — surface rules", () => {
     expect(rules).not.toMatch(/\.(?:pane|tab-body)\[data-dim\][^{]*\{[^}]*filter\s*:/s);
     expect(rules).toMatch(/\.focus-lighting-plane\b/);
     expect(rules).toMatch(/\.focus-lighting-region\b/);
-    expect(rules).toMatch(/\.focus-lighting-mask\s*\{[^}]*mask-type:\s*luminance/s);
+    // Full-window luminance masks force WebCore to rebuild an image buffer on every geometry
+    // frame. Lighting is pane-local rectangles, and the expensive path is a forbidden contract.
+    expect(rules).not.toMatch(/mask-type:\s*luminance/);
+    expect(rules).not.toMatch(/\.focus-lighting-mask\b/);
     for (const [sel, body] of [...rules.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(
       (m) => [m[1] ?? "", m[2] ?? ""] as const,
     )) {

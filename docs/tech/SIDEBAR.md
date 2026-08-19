@@ -230,8 +230,10 @@ it cost and what the six moves answer since.
 
 ## L1. The light is outside the content
 
-No `filter` and no `opacity` on a content subtree. One SVG plane outside the
-content lays a base veil and opens an aperture over the focused pane.
+No `filter` and no `opacity` on a content subtree. Pane-local black rectangles
+outside the content paint idle and blocked panes exactly once; focused and exempt
+panes paint nothing. A full-window SVG luminance mask is forbidden: it makes
+WebCore rebuild a luminance image buffer while geometry moves.
 
 An ancestor `filter` breaks a WebGL terminal's glyph compositing, and it does
 not reach a native surface at all — that content is not in the document, so a

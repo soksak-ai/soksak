@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type { LightingExemption } from "./FocusLightingPlane";
 
-/** Declares the same coordinates in the lighting mask as the left rail's actual CSS placement formula. */
+/** Declares the same exempt coordinates as the left rail's actual CSS placement formula. */
 export function railLightingExemption(
   railWidthPx: number,
   railStation: number,

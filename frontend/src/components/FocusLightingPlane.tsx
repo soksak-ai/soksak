@@ -1,4 +1,4 @@
-import { useId, type CSSProperties } from "react";
+import { type CSSProperties } from "react";
 
 /** Pane box projected onto the lighting plane. Coordinate math ends in one place, GroupArea's cellVars. */
 export type LightingRegion = {
@@ -7,7 +7,7 @@ export type LightingRegion = {
   moving?: boolean;
 };
 
-/** Chrome box excluded from the lighting. Owns the SVG geometry directly. */
+/** Chrome box explicitly named as exempt from lighting. */
 export type LightingExemption = {
   id: string;
   style: CSSProperties;
@@ -16,13 +16,13 @@ export type LightingExemption = {
 type BlockedLightingRegion = LightingRegion & { amount: number };
 
 /**
- * Workspace lighting is not a property of the content but a single visual plane placed over it.
+ * Workspace lighting is not a property of the content but pane-local rectangles in a visual plane.
  *
- * A black base veil darkens the whole workspace, and only the focused aperture exposes the original
- * pixels. Blocked regions are subtracted from the base mask too and painted exactly once at their own
- * density. So DOM, WebGL, and out-of-document native surfaces produce the same result without any
- * filter/opacity on the content subtree. The SVG owns visuals only and does not participate in input
- * or the accessibility tree.
+ * Idle and blocked regions are each painted exactly once; focused and exempt regions paint nothing.
+ * A full-window SVG luminance mask is forbidden: WebCore converts it to an image buffer while its
+ * geometry moves, consuming the render path the drag needs. Native surfaces receive the same amount
+ * through their alpha declaration. This plane owns visuals only and does not participate in input or
+ * the accessibility tree.
  */
 export function FocusLightingPlane({
   scopeId,
@@ -41,98 +41,55 @@ export function FocusLightingPlane({
   /** Every tabview/pane box. Restores the veil behind the rail exemption. */
   content: LightingRegion[];
 }) {
-  const maskId = `focus-light-${useId().replace(/:/g, "")}`;
   const regionClass = (moving?: boolean) =>
     `focus-lighting-region${moving ? " flip-move" : ""}`;
+  const geometryKey = (style: CSSProperties) => {
+    const values = style as Record<string, string | number | undefined>;
+    return ["--l", "--t", "--w", "--h"].map((key) => String(values[key] ?? "")).join("|");
+  };
+  const focusedGeometry = focused ? geometryKey(focused.style) : null;
+  const blockedGeometries = new Set(blocked.map((region) => geometryKey(region.style)));
+  const exemptionStyle = (style: CSSProperties): CSSProperties => {
+    const svg = style as CSSProperties & { x?: string; y?: string };
+    return {
+      ...style,
+      position: "absolute",
+      left: svg.x,
+      top: svg.y,
+      width: style.width,
+      height: style.height,
+    };
+  };
 
   return (
-    <svg
+    <div
       className="focus-lighting-plane"
       data-node={`focus-lighting/${scopeId}`}
       aria-hidden="true"
-      focusable="false"
     >
-      <defs>
-        <mask
-          id={maskId}
-          className="focus-lighting-mask"
-          data-node={`focus-lighting/${scopeId}/mask`}
-          x="0"
-          y="0"
-          width="100%"
-          height="100%"
-          maskUnits="userSpaceOnUse"
-        >
-          <rect
-            data-node={`focus-lighting/${scopeId}/mask/base`}
-            data-lighting-mask-base="white"
-            width="100%"
-            height="100%"
-            fill="white"
-          />
-          {exempt.map((region) => (
-            <rect
-              key={`exempt-${region.id}`}
-              data-node={`focus-lighting/${scopeId}/exempt/${region.id}`}
-              data-lighting-exempt={region.id}
-              style={region.style}
-              fill="black"
-            />
-          ))}
-          {content.map((region) => (
-            <rect
-              key={`content-${region.id}`}
-              className={regionClass(region.moving)}
-              data-node={`focus-lighting/${scopeId}/content/${region.id}`}
-              data-lighting-content={region.id}
-              style={region.style}
-              fill="white"
-            />
-          ))}
-          {focused && (
-            <rect
-              className={regionClass(focused.moving)}
-              data-node={`focus-lighting/${scopeId}/aperture/${focused.id}`}
-              data-lighting-aperture={focused.id}
-              style={focused.style}
-              fill="black"
-            />
-          )}
-          {blocked.map((region) => (
-            <rect
-              key={`cutout-${region.id}`}
-              className={regionClass(region.moving)}
-              data-node={`focus-lighting/${scopeId}/cutout/${region.id}`}
-              data-lighting-cutout={region.id}
-              style={region.style}
-              fill="black"
-            />
-          ))}
-        </mask>
-      </defs>
-
-      <rect
-        className="focus-lighting-base"
-        data-node={`focus-lighting/${scopeId}/base`}
-        data-lighting-base="idle"
-        width="100%"
-        height="100%"
-        fill="black"
-        fillOpacity={baseAmount}
-        mask={`url(#${maskId})`}
-      />
+      {exempt.map((region) => (
+        <div key={`exempt-${region.id}`} data-node={`focus-lighting/${scopeId}/exempt/${region.id}`}
+          data-lighting-exempt={region.id} style={exemptionStyle(region.style)} />
+      ))}
+      {content.filter((region) => geometryKey(region.style) !== focusedGeometry
+        && !blockedGeometries.has(geometryKey(region.style))).map((region) => (
+        <div key={`idle-${region.id}`} className={regionClass(region.moving)}
+          data-node={`focus-lighting/${scopeId}/content/${region.id}`} data-lighting-content={region.id}
+          data-lighting-base="idle" style={{ ...region.style, background: "black", opacity: baseAmount }} />
+      ))}
+      {focused && <div className={regionClass(focused.moving)}
+        data-node={`focus-lighting/${scopeId}/aperture/${focused.id}`}
+        data-lighting-aperture={focused.id} style={focused.style} />}
 
       {blocked.map((region) => (
-        <rect
+        <div
           key={`blocked-${region.id}`}
           className={regionClass(region.moving)}
           data-node={`focus-lighting/${scopeId}/blocked/${region.id}`}
           data-lighting-blocked={region.id}
-          style={region.style}
-          fill="black"
-          fillOpacity={region.amount}
+          style={{ ...region.style, background: "black", opacity: region.amount }}
         />
       ))}
-    </svg>
+    </div>
   );
 }
