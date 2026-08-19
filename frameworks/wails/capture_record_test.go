@@ -5,8 +5,36 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 )
+
+func TestAFrameDeadlineNeverLeavesCaptureUsingTheWindowAfterRecordReturns(t *testing.T) {
+	service := recorderOf(t, t.TempDir(), func(int) []byte { return nil })
+	started := make(chan struct{})
+	release := make(chan struct{})
+	service.capture = func(unsafe.Pointer, Rect) ([]byte, error) {
+		close(started)
+		<-release
+		return solidPNG(t, 2, 2, background), nil
+	}
+	done := make(chan RecordReport, 1)
+	go func() {
+		report, _ := service.Record(RecordRequest{Dir: t.TempDir(), Frames: 1, FrameTimeoutMs: 1})
+		done <- report
+	}()
+	<-started
+	select {
+	case <-done:
+		t.Fatal("record returned while a detached capture still owned the native window")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	report := <-done
+	if !strings.Contains(report.Stopped, "did not arrive") {
+		t.Fatalf("the completed late capture must still be reported late: %+v", report)
+	}
+}
 
 // A burst of frames is captured by this host.
 //

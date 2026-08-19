@@ -29,8 +29,20 @@ import {
   WINDOW_RECORD_MAX_INTERVAL_MS,
   WINDOW_RECORD_MAX_BYTES,
 } from "./windowRecorder";
+
 import { CAPTURE_CALIBRATION_ID, setCaptureCalibration } from "./captureCalibration";
 import { setCaptureMotionAnchors } from "./captureMotionAnchors";
+
+/** The native capture service returns a receipt object. Older adapters returned the path directly;
+ *  both carry one path, and no other shape is accepted or stringified. */
+export function savedCapturePath(value: unknown): string | null {
+  if (typeof value === "string" && value.length > 0) return value;
+  if (value && typeof value === "object" && typeof (value as { path?: unknown }).path === "string") {
+    const path = (value as { path: string }).path;
+    return path.length > 0 ? path : null;
+  }
+  return null;
+}
 
 /**
  * Absolute address of a tab's body slot — GroupArea exposes it as `layout/tab/<viewId>` (one set with
@@ -478,9 +490,11 @@ export function registerCaptureCatalog(): void {
           `snapshot-${Date.now()}.png`,
         );
       }
-      const saved = await invoke<string>("window_snapshot", {
+      const receipt = await invoke<unknown>("window_snapshot", {
         path,
       });
+      const saved = savedCapturePath(receipt);
+      if (!saved) throw new Error("window_snapshot returned no saved path");
       // A file capture is declared in media too — the feed reads the path and renders an image, so
       // the path text is not all that shows.
       return { saved, media: { kind: "image/png", path: saved } };

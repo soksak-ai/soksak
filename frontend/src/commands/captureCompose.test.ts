@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 // The description is a key now, resolved where the catalogue is read — so read it that way.
 import { text, withReaderLanguage } from "../i18n";
+import { savedCapturePath } from "./catalogCapture";
 
 const BAG_KEY = "__soksakModuleState";
 
@@ -18,6 +19,12 @@ describe("capture — cropping and saving compose", () => {
   beforeEach(() => {
     delete (globalThis as Record<string, unknown>)[BAG_KEY];
     vi.resetModules();
+  });
+
+  it("reads the saved path from the backend receipt instead of stringifying the object", () => {
+    expect(savedCapturePath({ path: "<local-evidence>/shot.png" })).toBe("<local-evidence>/shot.png");
+    expect(savedCapturePath("<local-evidence>/legacy.png")).toBe("<local-evidence>/legacy.png");
+    expect(savedCapturePath({})).toBeNull();
   });
 
   it("the spec accepts rect, node, path, and base64", async () => {

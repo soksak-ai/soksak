@@ -163,27 +163,21 @@ func frameFile(dir string, frame int) string {
 // the report still names how many.
 type StreamSink func(stream string, frame any)
 
-// grab takes one frame, or gives up at the deadline.
+// grab takes one frame and classifies it against the deadline.
 //
-// The capture runs on its own goroutine with a buffered answer, so a grab that
-// comes back late writes into a channel nobody reads rather than into the
-// recording. A frame that arrived after its turn would be numbered as the one
-// after it, and the recording would then hold two frames of one instant and
-// none of another.
+// A native window pointer may not outlive the call that owns it. The former timeout wrapper returned
+// while its goroutine was still inside AppKit; the gate then closed the window and that detached
+// capture dereferenced the released NSWindow (SIGSEGV in windowNumber). The platform capture already
+// has its own finite completion bound. We wait for that owned call to finish, discard a late frame,
+// and only then let the recording or window lifetime advance.
 func (service *CaptureService) grab(handle unsafe.Pointer, region Rect, deadline time.Duration) ([]byte, error) {
-	type frame struct {
-		png []byte
-		err error
+	started := time.Now()
+	png, _, err := service.capturing(handle, region)
+	if err != nil {
+		return nil, err
 	}
-	answer := make(chan frame, 1)
-	go func() {
-		png, _, err := service.capturing(handle, region)
-		answer <- frame{png: png, err: err}
-	}()
-	select {
-	case taken := <-answer:
-		return taken.png, taken.err
-	case <-time.After(deadline):
+	if time.Since(started) > deadline {
 		return nil, i18n.Errorf("wails.record.frameLate", map[string]string{"deadline": deadline.String()})
 	}
+	return png, nil
 }
