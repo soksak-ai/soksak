@@ -155,7 +155,7 @@ async function declareCommandsToBackend(): Promise<void> {
           message: `· ${tmsg("msg.renderer.commands", {
             window: declaration.window,
             held: declaration.held.length,
-            refused: declaration.refused.length,
+            excluded: declaration.excluded.length,
           })}`,
         },
       }).catch(() => {});

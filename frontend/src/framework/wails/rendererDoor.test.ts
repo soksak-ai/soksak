@@ -51,7 +51,7 @@ function door(overrides: Partial<RendererDoorOptions> = {}) {
 const declaration: RendererDeclaration = {
   window: "main",
   held: ["ui.tree"],
-  refused: [{ name: "state.tree", reason: "this process serves state.tree itself" }],
+  excluded: [{ name: "state.tree", reason: "provided by process" }],
 };
 
 describe("renderer door", () => {
@@ -87,13 +87,13 @@ describe("renderer door", () => {
     ]);
   });
 
-  it("reports the receipt, refusals and all", async () => {
+  it("reports the receipt and exclusions", async () => {
     const bench = door();
     await installRendererDoor(bench.options);
     bench.receive(declaration);
 
     expect(bench.reported).toEqual([declaration]);
-    expect(bench.reported[0].refused[0].reason).toContain("state.tree");
+    expect(bench.reported[0].excluded[0].reason).toBe("provided by process");
   });
 
   it("withdraws when the page goes away", async () => {

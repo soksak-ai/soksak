@@ -68,12 +68,9 @@ const rendererDeadline = 20 * time.Second
 // below is answerable in a test with no application at all.
 type RendererDelivery func(window, event string, payload any) error
 
-// RendererRefusal is one name a window declared and does not hold.
-type RendererRefusal struct {
-	Name string `json:"name"`
-	// Reason is why. A page that is told only "refused" cannot tell a name
-	// another window took from a name this process serves itself, and those
-	// have different answers.
+// RendererExclusion is one declared name that is not delegated to the window.
+type RendererExclusion struct {
+	Name   string `json:"name"`
 	Reason string `json:"reason"`
 }
 
@@ -87,9 +84,9 @@ type RendererDeclaration struct {
 	// Prefix is what every name of this window is addressable under, whatever
 	// happened to the bare form.
 	// Held is the bare names this window answers. A name that is missing here
-	// and absent from Refused was never declared.
-	Held    []string          `json:"held"`
-	Refused []RendererRefusal `json:"refused"`
+	// and absent from Excluded was never declared.
+	Held     []string            `json:"held"`
+	Excluded []RendererExclusion `json:"excluded"`
 }
 
 // RendererCommands is the backend half of the bridge.
@@ -318,15 +315,15 @@ func (r *RendererCommands) reconcileLocked() []RendererDeclaration {
 	delegable := names[:0:0]
 	for _, name := range names {
 		if r.registry.ServedLocally(name) {
-			taken[name] = "this process serves " + name + " itself"
+			taken[name] = "provided by process"
 			continue
 		}
 		delegable = append(delegable, name)
 	}
 
-	var refused []RendererRefusal
+	var excluded []RendererExclusion
 	if err := r.registry.Delegate(rendererSource, control.OwnerFramework, delegable, r.forward()); err != nil {
-		refused = append(refused, RendererRefusal{Reason: err.Error()})
+		excluded = append(excluded, RendererExclusion{Reason: err.Error()})
 	}
 
 	var changed []RendererDeclaration
@@ -336,21 +333,21 @@ func (r *RendererCommands) reconcileLocked() []RendererDeclaration {
 		for _, name := range declared.names {
 			switch {
 			case name == "":
-				receipt.Refused = append(receipt.Refused, RendererRefusal{
+				receipt.Excluded = append(receipt.Excluded, RendererExclusion{
 					Reason: "a command with no name cannot be addressed"})
 			case name == control.HelloCommand:
 				// The socket answers this one before the registry sees it, so a
 				// delegation would be accepted and never reached.
-				receipt.Refused = append(receipt.Refused, RendererRefusal{Name: name,
-					Reason: "the control transport answers this name itself as the greeting"})
+				receipt.Excluded = append(receipt.Excluded, RendererExclusion{Name: name,
+					Reason: "provided by control transport"})
 			case taken[name] != "":
-				receipt.Refused = append(receipt.Refused, RendererRefusal{
+				receipt.Excluded = append(receipt.Excluded, RendererExclusion{
 					Name: name, Reason: taken[name]})
 			default:
 				receipt.Held = append(receipt.Held, name)
 			}
 		}
-		receipt.Refused = append(receipt.Refused, refused...)
+		receipt.Excluded = append(receipt.Excluded, excluded...)
 
 		if !declared.told || !sameDeclaration(declared.receipt, receipt) {
 			declared.receipt = receipt
@@ -365,7 +362,7 @@ func sameDeclaration(before, after RendererDeclaration) bool {
 	if before.Window != after.Window {
 		return false
 	}
-	if len(before.Held) != len(after.Held) || len(before.Refused) != len(after.Refused) {
+	if len(before.Held) != len(after.Held) || len(before.Excluded) != len(after.Excluded) {
 		return false
 	}
 	for index := range before.Held {
@@ -373,8 +370,8 @@ func sameDeclaration(before, after RendererDeclaration) bool {
 			return false
 		}
 	}
-	for index := range before.Refused {
-		if before.Refused[index] != after.Refused[index] {
+	for index := range before.Excluded {
+		if before.Excluded[index] != after.Excluded[index] {
 			return false
 		}
 	}

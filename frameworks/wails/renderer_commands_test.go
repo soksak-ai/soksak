@@ -73,13 +73,13 @@ func (p *page) lastReceipt(t *testing.T, window string) RendererDeclaration {
 	return RendererDeclaration{}
 }
 
-func refusalFor(declaration RendererDeclaration, name string) (RendererRefusal, bool) {
-	for _, refusal := range declaration.Refused {
-		if refusal.Name == name {
-			return refusal, true
+func exclusionFor(declaration RendererDeclaration, name string) (RendererExclusion, bool) {
+	for _, exclusion := range declaration.Excluded {
+		if exclusion.Name == name {
+			return exclusion, true
 		}
 	}
-	return RendererRefusal{}, false
+	return RendererExclusion{}, false
 }
 
 func holds(declaration RendererDeclaration, name string) bool {
@@ -302,8 +302,8 @@ func TestASecondWindowServingTheSameNameIsNotRefused(t *testing.T) {
 		if !holds(receipt, "ui.tree") {
 			t.Errorf("%s was not told it holds ui.tree: %+v", window, receipt)
 		}
-		if len(receipt.Refused) != 0 {
-			t.Errorf("%s was refused something: %+v", window, receipt.Refused)
+		if len(receipt.Excluded) != 0 {
+			t.Errorf("%s excluded declarations: %+v", window, receipt.Excluded)
 		}
 	}
 
@@ -355,12 +355,12 @@ func TestADeclarationCannotShadowWhatThisProcessServes(t *testing.T) {
 		t.Fatalf("Declare: %v", err)
 	}
 
-	refusal, refused := refusalFor(document.lastReceipt(t, "main"), "app_environment")
-	if !refused {
+	exclusion, excluded := exclusionFor(document.lastReceipt(t, "main"), "app_environment")
+	if !excluded {
 		t.Fatal("the page was told nothing about a name this process serves")
 	}
-	if !strings.Contains(refusal.Reason, "app_environment") {
-		t.Errorf("the refusal did not name the command: %s", refusal.Reason)
+	if exclusion.Reason != "provided by process" {
+		t.Errorf("exclusion reason = %q", exclusion.Reason)
 	}
 
 	result, err := registry.Invoke("app_environment", nil)
@@ -377,7 +377,7 @@ func TestTheGreetingIsNotDelegatable(t *testing.T) {
 	_ = bridge.Declare("main", []string{control.HelloCommand, "ui.tree"})
 
 	receipt := document.lastReceipt(t, "main")
-	if _, refused := refusalFor(receipt, control.HelloCommand); !refused {
+	if _, excluded := exclusionFor(receipt, control.HelloCommand); !excluded {
 		t.Fatalf("%s was accepted as a bare name: %+v", control.HelloCommand, receipt)
 	}
 	if !holds(receipt, "ui.tree") {

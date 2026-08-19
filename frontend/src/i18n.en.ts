@@ -1792,7 +1792,7 @@ export const en: Record<MsgKey, string> = {
   "msg.workspace.open.folderRequired": "folder is required when root is omitted (^[a-z0-9][a-z0-9-]*$)",
   "msg.pty.session.sessionRequired": "session is required",
   "msg.pty.session.writeParamsRequired": "session and data are required",
-  "msg.renderer.commands": "{window} — {held} commands declared, {refused} refused",
+  "msg.renderer.commands": "{window}: {held} commands, {excluded} excluded",
   "msg.schedule.cancel.idRequired": "id is required",
   "msg.schedule.register.paramsRequired": "trigger and command are required",
   "msg.schedule.set.paramsRequired": "at and command are required",

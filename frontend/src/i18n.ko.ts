@@ -1798,7 +1798,7 @@ export const ko = {
   "msg.workspace.open.folderRequired": "root 생략 시 folder 필수(^[a-z0-9][a-z0-9-]*$)",
   "msg.pty.session.sessionRequired": "session 필요",
   "msg.pty.session.writeParamsRequired": "session, data 필요",
-  "msg.renderer.commands": "{window} 명령 {held}개(거절 {refused})",
+  "msg.renderer.commands": "{window} 명령 {held}개(제외 {excluded}개)",
   "msg.schedule.cancel.idRequired": "id 필요",
   "msg.schedule.register.paramsRequired": "trigger·command 필요",
   "msg.schedule.set.paramsRequired": "at·command 필요",

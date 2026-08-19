@@ -16,7 +16,7 @@ export const RENDERER_WITHDRAW_EVENT = "renderer:commands.withdraw";
 export const RENDERER_RECEIPT_EVENT = "renderer:commands.declared";
 
 /** One name this window declared and does not hold, and why. */
-export interface RendererRefusal {
+export interface RendererExclusion {
   name: string;
   reason: string;
 }
@@ -27,7 +27,7 @@ export interface RendererDeclaration {
   /** The names this window answers. One entry per name on the whole table —
    *  which window answers is the caller's argument, not part of the name. */
   held: string[];
-  refused: RendererRefusal[];
+  excluded: RendererExclusion[];
 }
 
 export interface RendererDoorOptions {
