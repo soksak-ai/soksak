@@ -468,7 +468,11 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     const prefetched = prefetchedSources.get(p.manifest.id);
     const data = prefetched !== undefined
       ? { content: prefetched }
-      : { content: await (await fetch(await unitFileUrl(`${p.dir}/${p.manifest.entry}`))).text() };
+      : {
+          content: await (
+            await fetch(await unitFileUrl(`${p.dir}/${p.manifest.entry}`), { cache: "no-store" })
+          ).text(),
+        };
     if (prefetched === undefined) {
       reloadStep(`read:${p.manifest.id}:${Math.round(performance.now() - readStart)}ms:${data.content.length}b`);
     }
@@ -654,7 +658,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       const fetched: Bundle[] = await Promise.all(
         wanted.map(async (w): Promise<Bundle> => {
           try {
-            const res = await fetch(await unitFileUrl(w.path));
+            const res = await fetch(await unitFileUrl(w.path), { cache: "no-store" });
             if (!res.ok) return { id: w.id, why: `HTTP ${res.status}` };
             return { id: w.id, content: await res.text() };
           } catch (error) {
