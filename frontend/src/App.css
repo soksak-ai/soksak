@@ -2874,6 +2874,18 @@ select.dctl {
   z-index: auto;
   flex: none;
 }
+/* One component draws both edges and it is drawn after the work surface, so the flow puts both of
+   them after the body. Absolute positioning hid that — `left: 0` said where the left one goes —
+   and push mode releases it. Measured 2026-08-19 on a 999-wide window with the left edge open at
+   width 300: it stood at x=699 and its content drew at x=1003, outside the window. push is this
+   edge's default, so that is what a person meets first.
+   Order rather than a second place in the tree: the same component draws both, and moving one of
+   them would be two renders of the same thing. Everything else here is at the default 0, so a
+   negative number puts this one first without naming the others. */
+.sidebar-edge-left.push,
+.sidebar-edge-left-resizer {
+  order: -1;
+}
 /* The shadow only when open — closed it is zero wide, and the shadow would
    linger at the edge. It falls away from the work, so each edge casts its own way. */
 .sidebar-edge-left.open {

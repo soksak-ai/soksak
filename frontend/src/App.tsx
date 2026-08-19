@@ -81,7 +81,7 @@ import { prepareLayoutChange, viewLayoutChange } from "./lib/layoutTransitionHos
 import { registerLayoutTransitionIntentHost } from "./lib/layoutTransitionIntent";
 import { ownsNativeSurfaceFromManifests } from "./lib/nativeSurfaceOwnership";
 import { useAddTabIntent } from "./state/addTabIntent";
-import { focusedPluginOf, placePresent, useSectionSets } from "./state/sectionSets";
+import { focusedPluginOf, usePlacePresent } from "./state/sectionSets";
 import "./App.css";
 
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
@@ -211,21 +211,15 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // the right did not until 2026-08-17, so the right opened with nothing in it and reserved its
   // width — the hole this rule exists to prevent, and the empty strip in every capture of that day.
   // Re-read when the sets change, not only when the workspace does.
-  const sectionsVersion = useSectionSets((s) => s.sets.length + Object.keys(s.byPlugin).length);
   // The rail: between the panes, travelling with the focus. `railOpen` named it until 2026-08-18,
   // when the window's own left edge took that name.
-  const railOpen = useMemo(
-    () => placePresent(workspace.regionOpen.rail, "rail", focusedPluginId),
-    [workspace.regionOpen.rail, focusedPluginId, sectionsVersion],
-  );
-  const leftPresent = useMemo(
-    () => placePresent(workspace.regionOpen.left, "left", focusedPluginId),
-    [workspace.regionOpen.left, focusedPluginId, sectionsVersion],
-  );
-  const rightPresent = useMemo(
-    () => placePresent(workspace.regionOpen.right, "right", focusedPluginId),
-    [workspace.regionOpen.right, focusedPluginId, sectionsVersion],
-  );
+  //
+  // Subscribed, one per place. A version number counted from `sets.length` and the linked plugins
+  // stood here until 2026-08-19 and `sections.left` moved neither of them, so the left edge stayed
+  // at width 0 with a set standing in it until something else forced a render.
+  const railOpen = usePlacePresent(workspace.regionOpen.rail, "rail", focusedPluginId);
+  const leftPresent = usePlacePresent(workspace.regionOpen.left, "left", focusedPluginId);
+  const rightPresent = usePlacePresent(workspace.regionOpen.right, "right", focusedPluginId);
 
   const activeContent =
     workspace.spaces.find((content) => content.id === workspace.activeSpaceId) ??
@@ -1003,15 +997,14 @@ function App() {
     () => focusedPluginOf(activeWorkspace),
     [activeWorkspace],
   );
-  const activeSections = useSectionSets((s) => s.sets.length + Object.keys(s.byPlugin).length);
-  const rightRect = useMemo(
-    () =>
-      placePresent(activeWorkspace?.regionOpen.right ?? false, "right", activeFocusedPlugin) &&
-      rightSidebarMode !== "push"
-        ? rightW
-        : 0,
-    [activeWorkspace, activeFocusedPlugin, activeSections, rightSidebarMode, rightW],
+  const rightStands = usePlacePresent(
+    activeWorkspace?.regionOpen.right ?? false,
+    "right",
+    activeFocusedPlugin,
   );
+  // The width the surface underneath is told to keep clear. Zero in push mode: the place takes its
+  // room from the flow, so nothing is over anything.
+  const rightRect = rightStands && rightSidebarMode !== "push" ? rightW : 0;
   useLayoutEffect(() => {
     // Opening, closing and widening the sidebar is **the layout being laid out again** — publish that fact. What to
     // do with it is up to the listener (a framework with surfaces outside the document resends its hole list, and a

@@ -233,8 +233,13 @@ export function focusedPluginOf(workspace: Workspace | null | undefined): string
   return view?.pluginId ?? null;
 }
 
-export function standingSet(place: SectionPlace, focusedPluginId: string | null): SectionSet | null {
-  const s = useSectionSets.getState();
+/** The set standing in a place, against a given state. Taking the state rather than reading it is
+ *  what lets a subscriber ask the same question the imperative callers ask. */
+export function standingSetIn(
+  s: Pick<SectionSetsState, "sets" | "byPlugin" | "left">,
+  place: SectionPlace,
+  focusedPluginId: string | null,
+): SectionSet | null {
   // The place is the rule. `left` holds one set for the installation; the other two hold the
   // focused view's plugin's set. There is no switch between the two, because a switch would let two
   // places answer the same way and then there is no reason for there to be two.
@@ -246,6 +251,29 @@ export function standingSet(place: SectionPlace, focusedPluginId: string | null)
         : undefined;
   if (!id) return null;
   return s.sets.find((x) => x.id === id) ?? null;
+}
+
+export function standingSet(place: SectionPlace, focusedPluginId: string | null): SectionSet | null {
+  return standingSetIn(useSectionSets.getState(), place, focusedPluginId);
+}
+
+/**
+ * Whether a place stands, for a reader that redraws when it changes.
+ *
+ * Subscribed rather than counted. The caller kept a version number — `sets.length` plus the number
+ * of linked plugins — and standing a set at the window's left edge moves neither: it writes `left`.
+ * Measured 2026-08-19 on a running window, the left edge was open with a set standing in it, drew
+ * nothing at width 0, and appeared when the place was toggled off and on. The toggle forced the
+ * recompute the store change should have caused.
+ *
+ * The whole question is asked here, so there is nothing to keep in step.
+ */
+export function usePlacePresent(
+  open: boolean,
+  place: SectionPlace,
+  focusedPluginId: string | null,
+): boolean {
+  return useSectionSets((s) => open && standingSetIn(s, place, focusedPluginId) !== null);
 }
 
 /** The same standing with one place settled — a set stands there, or nothing does. */
