@@ -21,11 +21,12 @@ import (
 // terminal reaps its shells on shutdown. The phase existed and had no command,
 // so the one way to quit this application was to kill the process.
 type reaper struct {
-	shells   int
-	surfaces int
-	left     int
-	err      error
-	monitors int
+	shells      int
+	transferred int
+	surfaces    int
+	left        int
+	err         error
+	monitors    int
 }
 
 func (r *reaper) ReapShells() int { return r.shells }
@@ -95,6 +96,17 @@ func TestThePrepareReceiptSaysWhatItReaped(t *testing.T) {
 		if value < 0 {
 			t.Errorf("receipt[%q] = %v", key, value)
 		}
+	}
+}
+
+func TestThePrepareReceiptSeparatesLocalReapsFromDaemonTransfers(t *testing.T) {
+	registry := shutdownRegistry(t, ShutdownDeps{
+		Reaper: &reaper{shells: 3, transferred: 2},
+		Quit:   func() {},
+	})
+	receipt := receiptOf(t, registry)
+	if receipt["localPtysReaped"] != float64(3) || receipt["daemonPtysTransferred"] != float64(2) {
+		t.Fatalf("PTY shutdown counts were merged: %#v", receipt)
 	}
 }
 
