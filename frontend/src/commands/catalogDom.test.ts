@@ -216,6 +216,29 @@ function mountNode(html: string): void {
 }
 const ADDR = "win/main/center/view/test.v/node/btn";
 
+describe("ui.input.compose — exposed DOM IME stimulus", () => {
+  it("opens, updates, and ends composition on the addressed input with public state", async () => {
+    const jamo = "\u314e";
+    const syllable = "\ud55c";
+    mountNode('<textarea data-node="btn"></textarea>');
+    const input = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const events: string[] = [];
+    for (const type of ["compositionstart", "compositionupdate", "compositionend"]) {
+      input.addEventListener(type, (event) => events.push(`${type}:${(event as CompositionEvent).data}`));
+    }
+
+    expect((await execute("ui.input.compose", { address: ADDR, text: jamo }, {})).ok).toBe(true);
+    expect((await execute("ui.input.compose", { address: ADDR, text: syllable }, {})).ok).toBe(true);
+    expect(input.dataset.uiComposing).toBe(syllable);
+    expect((await execute("ui.input.compose", { address: ADDR }, {})).ok).toBe(true);
+    expect(input.dataset.uiComposing).toBeUndefined();
+    expect(events).toEqual([
+      "compositionstart:", `compositionupdate:${jamo}`,
+      `compositionupdate:${syllable}`, `compositionend:${syllable}`,
+    ]);
+  });
+});
+
 type NodeIdentityData = {
   nodeIdentity?: string;
 };
@@ -1404,6 +1427,38 @@ describe("ui.input.drag — realtime reproduction surface", () => {
     expect(xs).toHaveLength(5);
     expect(xs[0]).toBe(40);
     expect(xs[4]).toBe(120);
+  });
+
+  it("keeps one held pointer while following a back-and-forth path", async () => {
+    mountNode(`<div data-node="btn">drag</div>`);
+    const node = document.querySelector<HTMLElement>("[data-node=btn]")!;
+    vi.spyOn(node, "getBoundingClientRect").mockReturnValue({
+      x: 10, y: 10, left: 10, top: 10, right: 30, bottom: 30,
+      width: 20, height: 20, toJSON: () => ({}),
+    });
+    const xs: number[] = [];
+    const downs: number[] = [];
+    const ups: number[] = [];
+    const move = (event: MouseEvent) => xs.push(event.clientX);
+    const down = () => downs.push(1);
+    const up = () => ups.push(1);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mousedown", down);
+    window.addEventListener("mouseup", up);
+    const result = await execute("ui.input.drag", {
+      from: ADDR,
+      path: [{ dx: 100, dy: 0 }, { dx: 20, dy: 0 }, { dx: 80, dy: 0 }],
+      steps: 2,
+      durationMs: 0,
+    }, {});
+    window.removeEventListener("mousemove", move);
+    window.removeEventListener("mousedown", down);
+    window.removeEventListener("mouseup", up);
+
+    expect(result.ok).toBe(true);
+    expect(downs).toHaveLength(1);
+    expect(ups).toHaveLength(1);
+    expect(xs).toEqual([70, 120, 80, 40, 70, 100]);
   });
 
   /**

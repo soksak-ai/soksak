@@ -1769,9 +1769,9 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       address: { type: "string", description: key("cmd.ui.input.compose.param.address"), required: true },
       text: { type: "string", description: key("cmd.ui.input.compose.param.text"), required: false },
     },
-    returns: "{ address, surface, composing }",
+    returns: "{ address, surface:string|null, composing:string|null }",
     message: (d) => tmsg(d.composing == null ? "msg.ui.input.compose.end" : "msg.ui.input.compose"),
-    errors: ["NOT_EXPOSED", "AMBIGUOUS", "NOT_A_SURFACE", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
     danger: "inject",
     examples: [
       'ui.input.compose \'{"address":"win/main/…/surface","text":"한"}\'',
@@ -1783,15 +1783,30 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       if (!("el" in found)) return found;
       const surface = gestureSurface(found.el, addr);
       if (surface && "ok" in surface) return surface;
+      const text = typeof p.text === "string" ? (p.text as string) : "";
       if (surface === null) {
-        return {
-          ok: false as const,
-          code: "NOT_A_SURFACE" as const,
-          message: tmsg("msg.ui.compose.notASurface", { address: addr }),
-        };
+        const target = found.el;
+        const current = target.dataset.uiComposing;
+        target.focus({ preventScroll: true });
+        if (text.length > 0) {
+          if (current === undefined) {
+            target.dispatchEvent(new CompositionEvent("compositionstart", {
+              data: "", bubbles: true, composed: true,
+            }));
+          }
+          target.dispatchEvent(new CompositionEvent("compositionupdate", {
+            data: text, bubbles: true, composed: true,
+          }));
+          target.dataset.uiComposing = text;
+        } else {
+          target.dispatchEvent(new CompositionEvent("compositionend", {
+            data: current ?? "", bubbles: true, composed: true,
+          }));
+          delete target.dataset.uiComposing;
+        }
+        return { address: addr, surface: null, composing: text.length === 0 ? null : text };
       }
       if (!hasContentViewHost()) return noGesturePath(addr);
-      const text = typeof p.text === "string" ? (p.text as string) : "";
       try {
         // Composition is still a fact of the surface the framework holds — the axis opens when an owner
         // declares that spot.
@@ -2832,6 +2847,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       button: { type: "string", description: key("cmd.ui.input.drag.param.button"), enum: ["left", "right"], required: false },
       dx: { type: "number", description: key("cmd.ui.input.drag.param.dx"), required: false },
       dy: { type: "number", description: key("cmd.ui.input.drag.param.dy"), required: false },
+      path: { type: "json", description: key("cmd.ui.input.drag.param.path"), required: false },
       steps: {
         type: "number",
         description: key("cmd.ui.input.drag.param.steps"),
@@ -2868,22 +2884,31 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         required: false,
       },
     },
-    returns: "{ dragged, click?, from, to?, zone?, dx?, dy?, steps, durationMs, surface?, recording:{status:'not-requested'|'complete'|'failed',dir?,requestedFrames?,frames?,mode:'realtime',reason?} }",
+    returns: "{ dragged, click?, from, to?, zone?, dx?, dy?, path?, steps, durationMs, surface?, recording:{status:'not-requested'|'complete'|'failed',dir?,requestedFrames?,frames?,mode:'realtime',reason?} }",
     message: (d) => (d.dragged ? tmsg("msg.ui.input.drag.dragged") : tmsg("msg.ui.input.drag.tap")),
     errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
     danger: "inject",
     examples: [
       'ui.input.drag \'{"from":"win/main/chrome/tab/left/a.x","to":"win/main/chrome/tab/left/b.y","zone":"center"}\'',
       'ui.input.drag \'{"from":"win/main/chrome/gutter/pan-g2h3j4/right","dx":120}\'',
+      'ui.input.drag \'{"from":"win/main/chrome/sidebar/left/resizer","path":[{"dx":160,"dy":0},{"dx":20,"dy":0},{"dx":140,"dy":0}],"steps":10,"durationMs":1500}\'',
     ],
     handler: async (p) => {
       const steps = p.steps === undefined ? 2 : Number(p.steps);
       const durationMs = p.durationMs === undefined ? 0 : Number(p.durationMs);
+      const path = p.path as Array<{ dx: number; dy: number }> | undefined;
       if (!Number.isInteger(steps) || steps < 1 || steps > 120) {
         return { ok: false as const, code: "INVALID_PARAMS", message: tmsg("msg.ui.input.drag.stepsInvalid") };
       }
       if (!Number.isFinite(durationMs) || durationMs < 0 || durationMs > 10_000) {
         return { ok: false as const, code: "INVALID_PARAMS", message: tmsg("msg.ui.input.drag.durationInvalid") };
+      }
+      if (path !== undefined && (
+        !Array.isArray(path) || path.length < 1 || path.length > 16 || path.length * steps > 120 ||
+        path.some((point) => !Number.isFinite(point?.dx) || !Number.isFinite(point?.dy)) ||
+        p.dx !== undefined || p.dy !== undefined || p.to !== undefined
+      )) {
+        return { ok: false as const, code: "INVALID_PARAMS", message: tmsg("msg.ui.input.drag.pathInvalid") };
       }
       const recordDir = p.recordDir as string | undefined;
       const recordFrames = p.recordFrames === undefined ? 120 : Number(p.recordFrames);
@@ -2917,11 +2942,15 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       let toSurfacePt: { x: number; y: number } | null = null;
       const fr = fromR.el.getBoundingClientRect();
       const fromPt = { x: fr.left + fr.width / 2, y: fr.top + fr.height / 2 };
-      const byDelta = p.dx != null || p.dy != null;
+      const byDelta = path !== undefined || p.dx != null || p.dy != null;
       let toPt: { x: number; y: number };
       if (byDelta) {
         // Mode 2 — pixel delta (resize handle/divider). Grabs the center of from and drags by dx/dy.
-        toPt = { x: fromPt.x + (Number(p.dx) || 0), y: fromPt.y + (Number(p.dy) || 0) };
+        const end = path?.at(-1);
+        toPt = {
+          x: fromPt.x + (end?.dx ?? (Number(p.dx) || 0)),
+          y: fromPt.y + (end?.dy ?? (Number(p.dy) || 0)),
+        };
       } else {
         // Mode 1 — drop on a target (tab merge/split).
         const toR = resolveExposed(p.to as string);
@@ -2966,7 +2995,29 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
             buttons: type === "mouseup" ? 0 : 1,
           }),
         );
-      const dist = Math.hypot(toPt.x - fromPt.x, toPt.y - fromPt.y);
+      const deltas = path ?? [{ dx: toPt.x - fromPt.x, dy: toPt.y - fromPt.y }];
+      const totalMoves = deltas.length * steps;
+      const pointsFrom = (start: { x: number; y: number }) => {
+        const points: Array<{ x: number; y: number }> = [];
+        let previous = { dx: 0, dy: 0 };
+        for (const target of deltas) {
+          for (let step = 1; step <= steps; step += 1) {
+            const progress = step / steps;
+            points.push({
+              x: start.x + previous.dx + (target.dx - previous.dx) * progress,
+              y: start.y + previous.dy + (target.dy - previous.dy) * progress,
+            });
+          }
+          previous = target;
+        }
+        return points;
+      };
+      let prior = { dx: 0, dy: 0 };
+      const dist = deltas.reduce((sum, target) => {
+        const next = sum + Math.hypot(target.dx - prior.dx, target.dy - prior.dy);
+        prior = target;
+        return next;
+      }, 0);
       const recording = recordDir
         ? startWindowRecording({
             dir: recordDir,
@@ -2983,7 +3034,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         if (!hasContentViewHost()) return noGesturePath(p.from as string);
         const start = gesturePoint(dragSurface, p);
         const end = byDelta
-          ? { x: start.x + (Number(p.dx) || 0), y: start.y + (Number(p.dy) || 0) }
+          ? { x: start.x + deltas.at(-1)!.dx, y: start.y + deltas.at(-1)!.dy }
           : toSurfacePt ?? start;
         const button = p.button === "right" ? "right" as const : "left" as const;
         // No move is placed before the grab. The press itself creates hover at that spot (measured
@@ -2991,11 +3042,10 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         // cannot receive moves that one leading step kills the whole drag.
         const seq: SurfacePointerInput[] = [{ ...start, kind: "down", button, clickCount: 1 }];
         if (dist >= 5) {
-          for (let step = 1; step <= steps; step += 1) {
-            const progress = step / steps;
+          for (const point of pointsFrom(start)) {
             seq.push({
-              x: Math.round(start.x + (end.x - start.x) * progress),
-              y: Math.round(start.y + (end.y - start.y) * progress),
+              x: Math.round(point.x),
+              y: Math.round(point.y),
               kind: "drag", button, clickCount: 1,
             });
           }
@@ -3007,7 +3057,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
           const refused = await playGesture(dragSurface.label, [step]);
           if (refused) return refused;
           if (durationMs > 0 && step.kind === "drag" && index < seq.length - 2) {
-            await new Promise((resolve) => window.setTimeout(resolve, durationMs / steps));
+            await new Promise((resolve) => window.setTimeout(resolve, durationMs / totalMoves));
           }
         }
         const surfaceRecording = recording
@@ -3015,7 +3065,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
           : { status: "not-requested" as const, mode: "realtime" as const };
         return {
           dragged: dist >= 5, click: dist < 5, from: p.from,
-          ...(byDelta ? { dx: p.dx ?? 0, dy: p.dy ?? 0 } : { to: p.to, zone: p.zone ?? "center" }),
+          ...(byDelta ? (path ? { path } : { dx: p.dx ?? 0, dy: p.dy ?? 0 }) : { to: p.to, zone: p.zone ?? "center" }),
           steps, durationMs, surface: dragSurface.label, recording: surfaceRecording,
         };
       }
@@ -3024,17 +3074,17 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // when sent to the window.
       fire("mousedown", fromPt.x, fromPt.y, fromR.el);
       if (dist >= 5) {
-        for (let step = 1; step <= steps; step += 1) {
-          const progress = step / steps;
+        const points = pointsFrom(fromPt);
+        for (const [index, point] of points.entries()) {
           fire(
             "mousemove",
-            fromPt.x + (toPt.x - fromPt.x) * progress,
-            fromPt.y + (toPt.y - fromPt.y) * progress,
+            point.x,
+            point.y,
             window,
           );
-          if (durationMs > 0 && step < steps) {
+          if (durationMs > 0 && index < points.length - 1) {
             await new Promise((resolve) =>
-              window.setTimeout(resolve, durationMs / steps),
+              window.setTimeout(resolve, durationMs / totalMoves),
             );
           }
         }
@@ -3044,7 +3094,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         ? await recording.report
         : { status: "not-requested" as const, mode: "realtime" as const };
       return byDelta
-        ? { dragged: dist >= 5, from: p.from, dx: p.dx ?? 0, dy: p.dy ?? 0, steps, durationMs, recording: recordingResult }
+        ? { dragged: dist >= 5, from: p.from, ...(path ? { path } : { dx: p.dx ?? 0, dy: p.dy ?? 0 }), steps, durationMs, recording: recordingResult }
         : { dragged: dist >= 5, click: dist < 5, from: p.from, to: p.to, zone: p.zone ?? "center", steps, durationMs, recording: recordingResult };
     },
   });
