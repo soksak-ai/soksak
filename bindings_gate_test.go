@@ -104,7 +104,7 @@ func TestTheBindingsSayWhatTheGoSays(t *testing.T) {
 	if len(wrong) > 0 {
 		sort.Strings(wrong)
 		t.Errorf("the bindings and the Go disagree in %d places:\n%s\n"+
-			"Run wails3 generate bindings -d frontend/bindings -ts and commit what it writes.",
+			"Run wails3 generate bindings -d frontend/bindings -ts ./... and commit what it writes.",
 			len(wrong), strings.Join(wrong, "\n"))
 	}
 }

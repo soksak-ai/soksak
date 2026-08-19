@@ -8,6 +8,9 @@ version: '3'
 env:
   GOWORK: "off"
 
+vars:
+  WAILS3: '{{.WAILS3 | default (joinPath .ROOT_DIR ".." "bin" "wails3")}}'
+
 tasks:
   go:mod:tidy:
     summary: Runs `go mod tidy`
@@ -104,7 +107,13 @@ tasks:
     cmds:
       # -ts: typed bindings. With JS only, the adapter takes the generated output as any, and the backend
       # signature can change while the frontend still compiles — the drift stays silent until runtime.
-      - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true -ts
+      # The package set is explicit. With no pattern the current CLI scans only the root package;
+      # measured 2026-08-19, it found 0 services and cleaned every existing binding before writing
+      # nothing. ./... discovers the five registered services and their sibling-module models.
+      - '"{{.WAILS3}}" generate bindings -f ''{{.BUILD_FLAGS}}'' -clean=true -ts ./...'
+    preconditions:
+      - sh: 'test "$("{{.WAILS3}}" version 2>&1)" = "v3.0.0-beta.2"'
+        msg: "This workspace requires its pinned Wails CLI v3.0.0-beta.2 at {{.WAILS3}}"
 
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` from an image; on macOS, `-iconcomposerinput appicon.icon -macassetdir darwin` also produces `Assets.car` from a `.icon` file (skipped on other platforms).
@@ -116,7 +125,7 @@ tasks:
       - "darwin/icons.icns"
       - "windows/icon.ico"
     cmds:
-      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico -iconcomposerinput appicon.icon -macassetdir darwin
+      - '"{{.WAILS3}}" generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico -iconcomposerinput appicon.icon -macassetdir darwin'
 
   dev:frontend:
     summary: Runs the frontend in development mode
@@ -134,7 +143,7 @@ tasks:
     summary: Updates the build assets
     dir: build
     cmds:
-      - wails3 update build-assets -name "{{.APP_NAME}}" -binaryname "{{.APP_NAME}}" -config config.yml -dir .
+      - '"{{.WAILS3}}" update build-assets -name "{{.APP_NAME}}" -binaryname "{{.APP_NAME}}" -config config.yml -dir .'
 
   build:server:
     summary: Builds the application in server mode (no GUI, HTTP server only)
