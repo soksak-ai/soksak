@@ -880,7 +880,7 @@ describe("app.scheduler — general scheduler surface (schedule permission)", ()
   });
 });
 
-describe("cross-plugin dependency gate (executeGated and scheduler.register, §dependencyGraph call boundary)", () => {
+describe("cross-plugin dependency gate (executeGated and scheduler.register)", () => {
   it("targetPluginId — extracts only plugin.<id>.<cmd> and gives null for core, view, dev, and management", () => {
     expect(targetPluginId("plugin.foo-bar.baz")).toBe("foo-bar");
     expect(targetPluginId("plugin.foo-bar.baz.qux")).toBe("foo-bar"); // multi-segment cmd.
@@ -910,9 +910,42 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register, §d
     expect(d.execute).toHaveBeenCalledWith("plugin.other-plugin.foo", {}, {});
   });
 
+  it("passes a compatible contract call without a plugin id dependency", async () => {
+    const d = fakeDeps({
+      implementsOf: (id) =>
+        id === "other-plugin" ? [{ id: "terminal-session", version: "0.2.0" }] : [],
+    });
+    const { api } = buildPluginApi(
+      manifestOf({
+        permissions: ["commands"],
+        consumes: [{ id: "terminal-session", range: ">=0.1.0 <1.0.0" }],
+      }),
+      "/d",
+      d,
+    );
+    const out = await api.commands!.execute("plugin.other-plugin.foo");
+    expect(out).toEqual({ ok: true, code: "OK", message: "ok" });
+    expect(d.execute).toHaveBeenCalledWith("plugin.other-plugin.foo", {}, {});
+  });
+
+  it("rejects an incompatible contract provider", async () => {
+    const d = fakeDeps({
+      implementsOf: () => [{ id: "terminal-session", version: "1.0.0" }],
+    });
+    const { api } = buildPluginApi(
+      manifestOf({
+        permissions: ["commands"],
+        consumes: [{ id: "terminal-session", range: ">=0.1.0 <1.0.0" }],
+      }),
+      "/d",
+      d,
+    );
+    const out = await api.commands!.execute("plugin.other-plugin.foo");
+    expect(out).toMatchObject({ ok: false, code: "PERMISSION_DENIED" });
+    expect(d.execute).not.toHaveBeenCalled();
+  });
+
   it("rejects a call to a plugin that is not a declared dependency", async () => {
-    // One route across the boundary. A consumed contract the target implemented was a second route
-    // until 2026-08-16, and the interface id was a second name for what the plugin id already names.
     const { api } = buildPluginApi(
       manifestOf({ permissions: ["commands"] }),
       "/d",
@@ -983,7 +1016,6 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register, §d
     expect(inv).toHaveBeenCalledTimes(2);
   });
 });
-
 describe("app.sidecar — permission gate and declaration equals reality", () => {
   beforeEach(() => {
   });

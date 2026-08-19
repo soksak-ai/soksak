@@ -515,6 +515,42 @@ describe("parseManifest — dependencies(plugin ↔ plugin)", () => {
   });
 });
 
+describe("parseManifest — optional shared contracts", () => {
+  it("preserves provider versions and consumer ranges", () => {
+    const { manifest, validation } = parseManifest(
+      base({
+        implements: [{ id: "terminal-renderer", version: "0.0.1" }],
+        consumes: [{ id: "terminal-session", range: ">=0.0.1 <1.0.0" }],
+      }),
+      "demo",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest?.implements).toEqual([{ id: "terminal-renderer", version: "0.0.1" }]);
+    expect(manifest?.consumes).toEqual([{ id: "terminal-session", range: ">=0.0.1 <1.0.0" }]);
+  });
+
+  it("keeps an independent plugin free of contract declarations", () => {
+    const { manifest, validation } = parseManifest(base(), "demo");
+    expect(validation.ok).toBe(true);
+    expect(manifest).not.toHaveProperty("implements");
+    expect(manifest).not.toHaveProperty("consumes");
+  });
+
+  it("rejects malformed and duplicate declarations", () => {
+    expect(errorsOf(base({ implements: [{ id: "Bad_Id", version: "0.0.1" }] }))).toContain(
+      "implements[0].id: version-free public contract id required",
+    );
+    expect(
+      errorsOf(base({
+        consumes: [
+          { id: "terminal-session", range: "^0.1.0" },
+          { id: "terminal-session", range: "^0.2.0" },
+        ],
+      })),
+    ).toContain('consumes: duplicate contract id "terminal-session"');
+  });
+});
+
 describe("parseManifest — libraries(external CLI dependencies)", () => {
   const lib = {
     name: "@google/gemini-cli",
@@ -983,5 +1019,4 @@ describe("parseManifest — sidecars(engine module dependency declaration)", () 
     }
   });
 });
-
 
