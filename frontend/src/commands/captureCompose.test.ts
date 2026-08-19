@@ -50,7 +50,9 @@ describe("capture — cropping and saving compose", () => {
     // must state that and the promise to restore, or the caller reads the brief screen change as a defect.
     // Both editions, because a promise that only one language makes is the defect a key exists to
     // prevent: the English reader is told the screen comes back and the Korean reader is not.
-    expect(withReaderLanguage("en", () => text(spec.description))).toContain("restores");
+    expect(withReaderLanguage("en", () => text(spec.description))).toContain(
+      "An inactive tab is restored after capture.",
+    );
     expect(withReaderLanguage("ko", () => text(spec.description))).toContain("되돌리");
   });
 
