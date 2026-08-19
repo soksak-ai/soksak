@@ -10,6 +10,7 @@ import { createStream, invoke } from "../framework";
 import { register, type CommandBrokerSpec, type CommandMachineObjectSchema } from "./registry";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { tmsg, key} from "../i18n";
+import { BoundedTextTail } from "./ptyOutputTail";
 
 // broker = the plugin call permission contract (pluginCallable). This surface exists for native
 // runtime plugins (view-less session owners), so every command opens a broker. danger pairs with
@@ -30,8 +31,7 @@ const DEFAULT_ROWS = 50;
 
 interface SessionState {
   id: number;
-  ring: string[];
-  ringBytes: number;
+  tail: BoundedTextTail;
   bytesSeen: number;
   decoder: TextDecoder;
   spawnedAt: number;
@@ -74,19 +74,18 @@ export function registerPtySessionCatalog(): void {
       additionalProperties: false,
     }),
     returns: "{ session, attached }",
-    message: (d) => `headless session ${d.session} ${d.attached ? "attached" : "spawned"}`,
+    message: () => tmsg("msg.pty.session.spawn"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['pty.session.spawn \'{"session":"agent-k3f9a2-1","cwd":"<local-evidence>"}\''],
     handler: async (p) => {
       const session = sessionOf(p);
       if (!session) return invalid(tmsg("msg.pty.session.sessionRequired"));
       if (sessions.has(session)) {
-        return { ok: false as const, code: "INVALID_PARAMS" as const, message: `already attached: ${session}` };
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.pty.session.alreadyAttached", { session }) };
       }
       const st: SessionState = {
         id: 0,
-        ring: [],
-        ringBytes: 0,
+        tail: new BoundedTextTail(RING_CAP_BYTES),
         bytesSeen: 0,
         decoder: new TextDecoder(),
         spawnedAt: Date.now(),
@@ -96,13 +95,7 @@ export function registerPtySessionCatalog(): void {
         const bytes = new Uint8Array(m);
         const text = st.decoder.decode(bytes, { stream: true });
         st.bytesSeen += bytes.byteLength;
-        if (text) {
-          st.ring.push(text);
-          st.ringBytes += text.length;
-          while (st.ringBytes > RING_CAP_BYTES && st.ring.length > 1) {
-            st.ringBytes -= st.ring.shift()!.length;
-          }
-        }
+        st.tail.append(text);
         // Core-owned flow control: ack exactly what was drained so the daemon reader
         // never pauses at the high watermark for a session nobody renders.
         void invoke("ack_terminal", { id: st.id, bytes: bytes.byteLength }).catch(() => {});
@@ -139,7 +132,7 @@ export function registerPtySessionCatalog(): void {
       additionalProperties: false,
     }),
     returns: "{ session, bytes }",
-    message: (d) => `wrote ${d.bytes} byte(s) to ${d.session}`,
+    message: () => tmsg("msg.pty.session.write"),
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
     examples: ['pty.session.write \'{"session":"agent-k3f9a2-1","data":"ls\\r"}\''],
     handler: async (p) => {
@@ -148,10 +141,10 @@ export function registerPtySessionCatalog(): void {
       if (!session || data == null) return invalid(tmsg("msg.pty.session.writeParamsRequired"));
       const st = sessions.get(session);
       if (!st) {
-        return { ok: false as const, code: "TARGET_NOT_FOUND" as const, message: `no session: ${session}` };
+        return { ok: false as const, code: "TARGET_NOT_FOUND" as const, message: tmsg("msg.pty.session.notFound", { session }) };
       }
       await invoke("write_terminal", { id: st.id, data });
-      return { session, bytes: data.length };
+      return { session, bytes: new TextEncoder().encode(data).byteLength };
     },
   });
 
@@ -168,12 +161,15 @@ export function registerPtySessionCatalog(): void {
         session: { type: "string" },
         tail: { type: "string" },
         bytesSeen: { type: "number" },
+        capacityBytes: { type: "number" },
+        retainedBytes: { type: "number" },
+        droppedBytes: { type: "number" },
       },
-      required: ["session", "tail", "bytesSeen"],
+      required: ["session", "tail", "bytesSeen", "capacityBytes", "retainedBytes", "droppedBytes"],
       additionalProperties: false,
     }),
-    returns: "{ session, tail, bytesSeen }",
-    message: (d) => `read tail of ${d.session}`,
+    returns: "{ session, tail, bytesSeen, capacityBytes, retainedBytes, droppedBytes }",
+    message: () => tmsg("msg.pty.session.read"),
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
     examples: ['pty.session.read \'{"session":"agent-k3f9a2-1","lines":200}\''],
     handler: async (p) => {
@@ -181,13 +177,13 @@ export function registerPtySessionCatalog(): void {
       if (!session) return invalid(tmsg("msg.pty.session.sessionRequired"));
       const st = sessions.get(session);
       if (!st) {
-        return { ok: false as const, code: "TARGET_NOT_FOUND" as const, message: `no session: ${session}` };
+        return { ok: false as const, code: "TARGET_NOT_FOUND" as const, message: tmsg("msg.pty.session.notFound", { session }) };
       }
-      let tail = st.ring.join("");
+      let tail = st.tail.text();
       if (typeof p.lines === "number" && p.lines > 0) {
         tail = tail.split("\n").slice(-p.lines).join("\n");
       }
-      return { session, tail, bytesSeen: st.bytesSeen };
+      return { session, tail, bytesSeen: st.bytesSeen, ...st.tail.state() };
     },
   });
 
@@ -206,7 +202,7 @@ export function registerPtySessionCatalog(): void {
       additionalProperties: false,
     }),
     returns: "{ session, alive, attached }",
-    message: (d) => `${d.session}: ${d.alive ? "alive" : "gone"}`,
+    message: () => tmsg("msg.pty.session.alive"),
     errors: ["INVALID_PARAMS"],
     examples: ['pty.session.alive \'{"session":"agent-k3f9a2-1"}\''],
     handler: async (p) => {
@@ -229,7 +225,7 @@ export function registerPtySessionCatalog(): void {
       additionalProperties: false,
     }),
     returns: "{ session }",
-    message: (d) => `session ${d.session} closed`,
+    message: () => tmsg("msg.pty.session.kill"),
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
     examples: ['pty.session.kill \'{"session":"agent-k3f9a2-1"}\''],
     handler: async (p) => {
@@ -237,7 +233,7 @@ export function registerPtySessionCatalog(): void {
       if (!session) return invalid(tmsg("msg.pty.session.sessionRequired"));
       const st = sessions.get(session);
       if (!st) {
-        return { ok: false as const, code: "TARGET_NOT_FOUND" as const, message: `no session: ${session}` };
+        return { ok: false as const, code: "TARGET_NOT_FOUND" as const, message: tmsg("msg.pty.session.notFound", { session }) };
       }
       sessions.delete(session);
       await invoke("close_terminal", { id: st.id });
@@ -270,7 +266,7 @@ export function registerPtySessionCatalog(): void {
       additionalProperties: false,
     }),
     returns: "{ sessions: [{session, bytesSeen, spawnedAt}] }",
-    message: (d) => `${(d.sessions as unknown[]).length} headless session(s)`,
+    message: () => tmsg("msg.pty.session.list"),
     errors: [],
     examples: ["pty.session.list"],
     handler: async () => ({
