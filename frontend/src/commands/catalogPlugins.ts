@@ -487,8 +487,13 @@ export function registerPluginCatalog(): void {
 
   register("command.docs", {
     description: key("cmd.command.docs.desc"),
-    triggers: { ko: "전체 명령 문서 레퍼런스 매뉴얼 한눈에 코어 플러그인 미설치" },
+    triggers: { ko: "명령 사용법 도움말 목록 코어 플러그인 미설치" },
     params: {
+      name: {
+        type: "string",
+        description: key("cmd.command.docs.param.name"),
+        required: false,
+      },
       refresh: {
         type: "boolean",
         description: key("cmd.command.docs.param.refresh"),
@@ -500,19 +505,29 @@ export function registerPluginCatalog(): void {
       },
     },
     returns:
-      "{ core: [spec], plugins: { [pluginId]: [spec] }, registry: [{registryId,unitId,id,kind,version,manifest,reports,installed}] }",
+      "{ command: spec } when name is given; otherwise { core: [spec], plugins: { [pluginId]: [spec] }, registry: [...] }",
     message: (d) =>
-      tmsg("msg.command.docs", {
-        core: ((d.core as unknown[]) ?? []).length,
-        registry: ((d.registry as unknown[]) ?? []).length,
-      }),
-    examples: ["command.docs", "docs", 'command.docs \'{"lang":"ko"}\''],
+      d.command
+        ? tmsg("msg.command.docs.one", { name: String((d.command as { name?: unknown }).name ?? "") })
+        : tmsg("msg.command.docs", {
+            core: ((d.core as unknown[]) ?? []).length,
+            registry: ((d.registry as unknown[]) ?? []).length,
+          }),
+    examples: ["command.docs", 'command.docs \'{"name":"window.snapshot"}\'', 'command.docs \'{"lang":"ko"}\''],
     handler: async (p) => {
       const reg = useRegistry.getState();
       await reg.refresh(p.refresh === true).catch(() => {});
       const st = useRegistry.getState();
       const installed = usePlugins.getState().plugins;
       const all = catalogJson() as { name: string }[];
+      const requested = typeof p.name === "string" ? p.name.trim() : "";
+      if (requested) {
+        const command = all.find((entry) => entry.name === requested);
+        if (!command) {
+          return { ok: false as const, code: "UNKNOWN_COMMAND", message: tmsg("msg.command.unknown", { name: requested }) };
+        }
+        return { command };
+      }
       const core: unknown[] = [];
       const plugins: Record<string, unknown[]> = {};
       for (const c of all) {

@@ -23,6 +23,7 @@ import (
 const usage = `sok — drive a running soksak backend
 
   sok <command> [name=value ...]     run one command
+  sok help <command>                 show one command's public schema
   sok commands                       list what this build serves and refuses
   sok hello                          greet the backend and print its identity
 
@@ -103,6 +104,23 @@ func address() (string, error) {
 // when a string that looks like JSON is meant.
 func requestFrom(argv []string) (control.Request, error) {
 	name := argv[0]
+	if name == "help" {
+		if len(argv) != 2 {
+			return control.Request{}, i18n.Errorf("sok.help.oneName", nil)
+		}
+		encoded, err := json.Marshal(argv[1])
+		if err != nil {
+			return control.Request{}, err
+		}
+		return control.Request{
+			ID:      "1",
+			Command: "command.docs",
+			Args: map[string]json.RawMessage{
+				"name":   encoded,
+				"window": json.RawMessage(`"` + control.ControlPlaneWindow + `"`),
+			},
+		}, nil
+	}
 	switch name {
 	case "commands":
 		name = control.HelloCommand
