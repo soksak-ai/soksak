@@ -61,11 +61,12 @@ describe("pty.session.read retention status", () => {
 describe("pty.session.write byte count", () => {
   it("reports UTF-8 bytes rather than JavaScript character units", async () => {
     const session = "utf8-input-test";
+    const koreanSyllable = "\uD55C";
     await execute("pty.session.spawn", { session }, {});
 
-    const result = await execute("pty.session.write", { session, data: "한" }, {});
+    const result = await execute("pty.session.write", { session, data: koreanSyllable }, {});
 
     expect(result).toMatchObject({ ok: true, data: { session, bytes: 3 } });
-    expect(invoke).toHaveBeenCalledWith("write_terminal", { id: 41, data: "한" });
+    expect(invoke).toHaveBeenCalledWith("write_terminal", { id: 41, data: koreanSyllable });
   });
 });
