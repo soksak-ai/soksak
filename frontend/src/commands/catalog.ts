@@ -90,7 +90,7 @@ import { registerClipboardCatalog } from "./catalogClipboard";
 import { registerNotifyCatalog } from "./catalogNotify";
 import { registerScheduleCatalog } from "./catalogSchedule";
 import { registerServiceCatalog } from "./catalogService";
-import { registerFrameworkCatalog } from "./catalogFramework";
+import { registerRuntimeCatalog } from "./catalogRuntime";
 import { registerSystemCatalog } from "./catalogSystem";
 import {
   declareLayoutCause,
@@ -2564,7 +2564,7 @@ export function registerCatalog(): void {
   registerNotifyCatalog();
   registerScheduleCatalog();
   registerServiceCatalog();
-  registerFrameworkCatalog();
+  registerRuntimeCatalog();
   registerSystemCatalog();
   registerUnitDevCatalog();
   registerWebviewCatalog();
