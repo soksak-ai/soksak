@@ -42,11 +42,14 @@ tasks:
     vars:
       HOST_ARCH:
         sh: |
-          case "$(uname -m)" in
-            arm64) echo arm64 ;;
-            x86_64) echo amd64 ;;
-            *) uname -m ;;
-          esac
+          if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
+            echo arm64
+          else
+            case "$(uname -m)" in
+              x86_64) echo amd64 ;;
+              *) uname -m ;;
+            esac
+          fi
       TARGET_ARCH: '{{.TARGET_ARCH | default .HOST_ARCH}}'
       # `devtools` rides with `production`: the framework compiles its inspector away under
       # `production` alone, and `window_devtools` then answers OK while nothing opens. Every rule

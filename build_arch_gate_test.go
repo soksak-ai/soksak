@@ -14,6 +14,7 @@ func TestDarwinBuildDefaultsToTheHostArchitecture(t *testing.T) {
 	text := string(contents)
 	for _, required := range []string{
 		"HOST_ARCH:",
+		"hw.optional.arm64",
 		"uname -m",
 		"TARGET_ARCH: '{{.TARGET_ARCH | default .HOST_ARCH}}'",
 		"GOARCH: '{{.TARGET_ARCH}}'",
