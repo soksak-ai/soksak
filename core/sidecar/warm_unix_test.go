@@ -15,7 +15,7 @@ import (
 // This is the claim the whole shape rests on. A unit is a separate process so that shells outlive
 // an application generation, and every piece under that — the record, the adoption, the release
 // that is not an end — exists for this one reading. Each piece is tested on its own and none of
-// them says the thing they are for is true.
+// them states that the thing they are for is true.
 //
 // Two hosts over one home stand in for two runs. What separates them is what separates two runs: an
 // empty map, and whatever the first wrote down. The unit holds state across them, and it is that

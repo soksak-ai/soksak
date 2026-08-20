@@ -260,11 +260,6 @@ Written here so it is not rediscovered (L2).
   What that leaves running is one unit's sessions per closed window, until the application quits and
   the reaper ends the unit.
 
-- **Nothing measures warm restore end to end.** A second host adopts a unit a first one started, and
-  a stale record starts a fresh one — both are tested. What is not: an application that quits and
-  comes back to a shell it left running, with what was on the screen still there. The pieces are
-  each measured and the thing they are for is not.
-
 - **Whether a distributed build may load a third-party module is unmeasured.**
   This build ad-hoc signs and carries no entitlements, so nothing stops a load
   today. A distributed one is notarised, notarisation wants the hardened
