@@ -55,6 +55,13 @@ export interface FrameworkWindowHandle {
   onResized(cb: (size: { width: number; height: number }) => void): Promise<Unlisten>;
   onMoved(cb: (pos: { x: number; y: number }) => void): Promise<Unlisten>;
   onDragDrop(cb: (event: unknown) => void): Promise<Unlisten>;
+  /** A window of this application is going away, named by its label.
+   *
+   *  Every window is told, including the one that is closing: a document about to be torn down
+   *  acting on it changes nothing, and filtering here would make the host decide which documents
+   *  care. What it is for is whatever was kept under that label — a session in a separate process
+   *  outlives the window that opened it, and no other reading reports that the window has gone. */
+  onWindowGone(cb: (windowLabel: string) => void): Promise<Unlisten>;
   /** Receives only events **targeted** at this window (not a global broadcast). */
   listen<T>(event: string, cb: (e: FrameworkEvent<T>) => void): Promise<Unlisten>;
 }

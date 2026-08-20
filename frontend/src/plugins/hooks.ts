@@ -8,6 +8,7 @@ import { moduleState } from "../lib/moduleState";
 import { tmsg } from "../i18n";
 import { safeListen } from "../lib/safeListen";
 import { listenThisWindow } from "../lib/windowEvents";
+import { currentWindow } from "../framework";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { allGroups, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
@@ -61,6 +62,13 @@ export interface PluginEventMap {
   // relay). No permission required (non-sensitive lifecycle). Only signals emit_to'd to this window
   // arrive (per-window — listenThisWindow).
   "window.live-resize": { active: boolean };
+  // A window of this application has gone. Whatever was kept under its label — a session in a
+  // separate process, a subscription, a record — is this plugin's to let go of: a unit outlives the
+  // window that opened it, and no other reading reports that the window is not coming back.
+  //
+  // The window it names is not this one. A plugin in the closing window dies with it, so acting on
+  // this is the surviving instances' work.
+  "window.gone": { windowLabel: string };
   // Panel divider drag gesture start (true) / end (false) — a layout-internal gesture channel
   // isomorphic with window.live-resize (window edge). The signal a native surface adapter uses to
   // separate move from resize and to start/end its own placement transition. Emitted by the GroupArea
@@ -158,6 +166,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "locale.changed",
   "app.focus",
   "window.live-resize",
+  "window.gone",
   "layout.resize-gesture",
   "layout.reflow",
   "layout.travel-finished",
@@ -363,6 +372,21 @@ const startedFlag = moduleState("plugins/hooks#startedFlag.on", () => ({ on: fal
 export function startPluginHooks(): void {
   if (startedFlag.on) return;
   startedFlag.on = true;
+
+  // A window of this application has gone, and whatever was kept under its label is somebody's to
+  // let go of. The host publishes the label and nothing else; what it means is decided here and in
+  // the plugins that subscribe.
+  //
+  // The host used to invoke a command named for terminals at this moment, which is a host that knew
+  // what a terminal is — and it broke without a word the day that command left with the plugin that
+  // registered it.
+  void currentWindow()
+    .onWindowGone((windowLabel) => emitPluginEvent("window.gone", { windowLabel }))
+    .catch(() => {
+      // A framework with no window facts publishes none. That is a build without windows rather
+      // than a failure, and a plugin that never hears the event keeps what it kept until the
+      // application quits and the units are reaped.
+    });
 
   // Do not run an O(n) snapshot+diff on every store write (principles 1 and 5,
   // docs/PERFORMANCE.md) — resizeSplit writes at 60Hz+ during a drag, but these events

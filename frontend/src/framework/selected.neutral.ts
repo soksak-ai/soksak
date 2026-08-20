@@ -27,7 +27,8 @@ const testWindow: FrameworkWindowHandle = {
   unmaximize: unsupported,
   onResized: unsupported,
   onMoved: unsupported,
-  onDragDrop: unsupported,
+  onWindowGone: async () => () => {},
+    onDragDrop: unsupported,
   listen: unsupported,
 };
 

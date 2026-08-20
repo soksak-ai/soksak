@@ -85,6 +85,13 @@ function windowHandle(label: string): FrameworkWindowHandle {
     onResized: async (cb) => Events.On("window:resized", () => { void win.Size().then(cb); }),
     onMoved: async (cb) => Events.On("window:moved", () => { void win.Position().then(cb); }),
     onDragDrop: async (cb) => Events.On("window:filedrop", (event) => cb(event.data)),
+    // Same string as WindowGoneEvent on the Go side. A broadcast rather than a targeted event:
+    // the window it is about is the one that cannot act on it.
+    onWindowGone: async (cb) =>
+      Events.On("window:gone", (event) => {
+        const data = event.data as { windowLabel?: unknown } | undefined;
+        if (typeof data?.windowLabel === "string") cb(data.windowLabel);
+      }),
     listen: async <T,>(event: string, cb: (e: FrameworkEvent<T>) => void) =>
       Events.On(event, (received) => cb({ payload: received.data as T })),
   };

@@ -295,17 +295,16 @@ func Run(options Options) error {
 			if err := renderer.Withdraw(created.Name()); err != nil {
 				log.Printf("renderer commands: %v", err)
 			}
-			// Nothing here ends what a closing window's plugins hold, and that is a gap rather than
-			// a decision (GATES.md).
+			// The one fact this host has: which window is going.
 			//
-			// This invoked `close_window_terminals` until 2026-08-20 — a host that knew what a
-			// terminal is, which is what C1 refuses, and which broke the day the command left with
+			// It invoked `close_window_terminals` until 2026-08-20 — a host that knew what a
+			// terminal is, which is what C1 refuses, and which broke the day that command left with
 			// the plugin that registered it: an invoke of an absent name is answered with "not
 			// registered" and logged, so every window close printed a line nobody was reading for.
 			//
-			// What replaces it is not another call from here. A session keyed to a closed window is
-			// the plugin's to let go of, and what is missing is the plugin ever learning the window
-			// closed: plugin events are published from the document, and this is the host.
+			// A fact rather than an instruction. What to do about it is for whoever kept something
+			// under this window, and this host reads nothing into the label it publishes.
+			app.Event.Emit(WindowGoneEvent, WindowGone{WindowLabel: created.Name()})
 		})
 	})
 
