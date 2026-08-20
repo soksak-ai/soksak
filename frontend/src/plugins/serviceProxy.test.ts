@@ -22,7 +22,7 @@ function demoManifest(): PluginManifest {
       description: "Test fixture",
       entry: null,
       permissions: ["commands", "sidecar", "service"],
-      sidecars: [{ name: "demo-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: ">=0.0.1 <1.0.0" } }],
+      sidecars: [{ name: "demo-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: "0.0.1" } }],
       service: {
         sidecar: "demo-svc",
         interface: { id: "vault", range: SERVICE_CONTRACT_REQUIREMENT_RANGE },
@@ -156,7 +156,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
         description: "Test fixture",
         entry: null,
         permissions: ["commands", "sidecar", "service", "secrets"],
-        sidecars: [{ name: "vaulted-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: ">=0.0.1 <1.0.0" } }],
+        sidecars: [{ name: "vaulted-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: "0.0.1" } }],
         service: { sidecar: "vaulted-svc", interface: { id: "vault", range: SERVICE_CONTRACT_REQUIREMENT_RANGE }, subscribe: [] },
         contributes: {
           commands: [

@@ -15,7 +15,12 @@
 //
 // The kind is not in the name either. Whether a plugin or a sidecar provides a thing is the
 // provider's business, and a consumer that had to know would be coupled to the implementation (C3).
-import { isStrictSemver, isUnitDependencyRange, semverSatisfies } from "./semver";
+import {
+  initialDevelopmentRangeIsExact,
+  isStrictSemver,
+  isUnitDependencyRange,
+  semverSatisfies,
+} from "./semver";
 import { checkKnownKeys, isRecord } from "./util";
 
 export const CONTRACT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -56,6 +61,11 @@ function parseContractObject(
     if (!isStrictSemver(raw.version)) errors.push(`${label}.version: strict SemVer required`);
   } else if (!isUnitDependencyRange(raw.range)) {
     errors.push(`${label}.range: supported SemVer range required`);
+  } else if (!initialDevelopmentRangeIsExact(raw.range)) {
+    errors.push(
+      `${label}.range: a contract still in initial development (0.0.x) is consumed at one exact ` +
+        `version, never across a range — SemVer promises nothing about 0.0.x`,
+    );
   }
   if (errors.length !== before) return null;
   return valueKey === "version"

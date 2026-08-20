@@ -325,7 +325,7 @@ describe("plugin.list — contract discovery", () => {
       implements: [{ id: "terminal-renderer", version: "0.0.1" }],
     });
     const consumer = manifestOf("consumer", {
-      consumes: [{ id: "terminal-renderer", range: ">=0.0.1 <1.0.0" }],
+      consumes: [{ id: "terminal-renderer", range: "0.0.1" }],
     });
     usePlugins.setState({
       plugins: {
@@ -341,7 +341,7 @@ describe("plugin.list — contract discovery", () => {
       { id: "terminal-renderer", version: "0.0.1" },
     ]);
     expect(plugins.find((plugin) => plugin.id === "consumer")?.consumes).toEqual([
-      { id: "terminal-renderer", range: ">=0.0.1 <1.0.0" },
+      { id: "terminal-renderer", range: "0.0.1" },
     ]);
   });
 });

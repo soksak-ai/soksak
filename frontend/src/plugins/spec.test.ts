@@ -520,13 +520,13 @@ describe("parseManifest — optional shared contracts", () => {
     const { manifest, validation } = parseManifest(
       base({
         implements: [{ id: "terminal-renderer", version: "0.0.1" }],
-        consumes: [{ id: "terminal-session", range: ">=0.0.1 <1.0.0" }],
+        consumes: [{ id: "terminal-session", range: "0.0.1" }],
       }),
       "demo",
     );
     expect(validation.ok).toBe(true);
     expect(manifest?.implements).toEqual([{ id: "terminal-renderer", version: "0.0.1" }]);
-    expect(manifest?.consumes).toEqual([{ id: "terminal-session", range: ">=0.0.1 <1.0.0" }]);
+    expect(manifest?.consumes).toEqual([{ id: "terminal-session", range: "0.0.1" }]);
   });
 
   it("keeps an independent plugin free of contract declarations", () => {
@@ -780,7 +780,7 @@ describe("parseManifest — programs contribution(§2.6)", () => {
         permissions: ["programs"],
         contributes: {
           programs: [
-            { id: "a", title: "x", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", viewContract: { id: "soksak-spec-plugin-terminal", range: ">=0.0.1 <1.0.0" } },
+            { id: "a", title: "x", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", viewContract: { id: "soksak-spec-plugin-terminal", range: "0.0.1" } },
           ],
         },
       }),
@@ -934,7 +934,7 @@ describe("scanHostChromeViolations — host chrome standard static gate", () => 
 });
 
 describe("parseManifest — sidecars(engine module dependency declaration)", () => {
-  const sc = { name: "browser-chromium", interface: { id: "soksak-spec-sidecar-browser", range: ">=0.0.1 <1.0.0" } };
+  const sc = { name: "browser-chromium", interface: { id: "soksak-spec-sidecar-browser", range: "0.0.1" } };
   it("accepts valid sidecars(with the sidecar permission)", () => {
     const { manifest, validation } = parseManifest(
       base({ permissions: ["sidecar"], sidecars: [sc] }),
@@ -952,7 +952,7 @@ describe("parseManifest — sidecars(engine module dependency declaration)", () 
     expect(validation.errors.join()).toContain("sidecars:");
   });
   it('a service-model sidecar declares sidecars with the "process" permission(a separate process, not the engine)', () => {
-    const svc = { name: "terminal-alacritty", interface: { id: "soksak-spec-sidecar-terminal", range: ">=0.0.1 <1.0.0" } };
+    const svc = { name: "terminal-alacritty", interface: { id: "soksak-spec-sidecar-terminal", range: "0.0.1" } };
     const { manifest, validation } = parseManifest(
       base({ permissions: ["process"], sidecars: [svc] }),
       "demo",

@@ -46,6 +46,32 @@ export function isUnitDependencyRange(value: unknown): value is string {
   });
 }
 
+// Initial development promises nothing, so a consumer names one version.
+//
+// SemVer reserves 0.y.z for initial development and states that anything may change at any time.
+// A range across it — `>=0.0.1 <0.1.0` — therefore claims that 0.0.1 and 0.0.9 are interchangeable,
+// which is a promise the publisher never made. The claim does not fail at install: it resolves, and
+// the mismatch arrives later as behaviour nobody declared.
+//
+// The check applies while both major and minor are zero, because that is the range SemVer excludes
+// from every compatibility rule. From 0.1.0 onwards a minor bump is additive and `^` means
+// something, so ranges are left alone. Nothing here is written against a particular version, so the
+// rule outlives the version the repository happens to be at.
+export function initialDevelopmentRangeIsExact(range: string): boolean {
+  if (!isUnitDependencyRange(range)) return false;
+  if (range === "*") return true;
+  const clauses = range.split(" ");
+  const touchesInitialDevelopment = clauses.some((clause) => {
+    const match = /^(\^|~|>=|<=|>|<|=)?(.+)$/.exec(clause);
+    const parsed = match === null ? null : parseSemver(match[2]);
+    return parsed !== null && parsed.core[0] === 0n && parsed.core[1] === 0n;
+  });
+  if (!touchesInitialDevelopment) return true;
+  if (clauses.length !== 1) return false;
+  const match = /^(\^|~|>=|<=|>|<|=)?(.+)$/.exec(clauses[0]);
+  return match !== null && (match[1] === undefined || match[1] === "=");
+}
+
 interface ParsedSemver {
   core: readonly [bigint, bigint, bigint];
   prerelease: readonly string[] | null;

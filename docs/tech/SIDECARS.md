@@ -19,28 +19,50 @@ builds no sidecar.
 
 The two differ in what depends on them, so they are different folders (REPO-LAYOUT.md L1).
 
-## S2. One envelope, not a second ABI
+## S2. A sidecar registers no command
 
-A sidecar speaks the control envelope of CONTROL-PROTOCOL.md and registers its commands on the same
-registry. There is no separate sidecar ABI.
+The plugin that declared a sidecar registers every command, and every request and every answer
+passes through that plugin. A sidecar with commands of its own would put its own name on the public
+surface, so replacing it would change what the application answers; two plugins driving one sidecar
+would collide on the same names; and the permission that admitted a call would have been granted to
+a unit no manifest declared.
 
-A second protocol is the defect this rule prevents: two wires diverge, and a divergence does not
-fail — it arrives as a different answer. An earlier design had a private engine ABI beside the
-control plane, and every rule then existed twice.
+How a sidecar is spoken to follows from how it is opened, and the release declares which:
 
-## S3. Two models, and in-process is not linked
-
-A sidecar takes one of two runtime shapes. The axis is where it runs, not what it is called.
-
-| | `service` | `engine` |
+| Artefact | Opened by | Spoken to through |
 | --- | --- | --- |
-| Runs as | its own process | a dylib in this process, loaded at boot |
+| `process[]` | spawning it | the control envelope of CONTROL-PROTOCOL.md, over its own socket |
+| `library[]` | loading it | a C ABI — a library cannot be opened over an envelope |
+
+The rule this replaces stated that there is no separate ABI at all. Applied to a loaded library, it
+forbids the only way to open one. What stays forbidden is the case it was written for: a second
+envelope beside the control plane, for work the control plane already does. Two wires diverge, and a
+divergence does not fail — it arrives as a different answer.
+
+## S3. A unit ships artefacts, and in-process is not linked
+
+A release declares its artefacts and how each one is opened: `process[]` for an artefact that is
+spawned, `library[]` for one that is loaded. Both are optional and neither excludes the other — one
+unit ships a loaded library together with the helper processes that library spawns.
+
+| | spawned — `process[]` | loaded — `library[]` |
+| --- | --- | --- |
+| Runs in | its own process | this process |
 | Draws | nothing | into a pane's surface |
 | Channel | the control-plane envelope over its socket | opaque bytes across the loading ABI |
-| Describes itself by | its manifest | the symbols it exports — the binary is the truth |
+| Described by | its manifest | the symbols it exports — the binary is the truth |
 | The core understands | the envelope, not the payload | nothing; it relays |
 
-`engine` is in this process because a view does not cross a process boundary. Measured 2026-08-20
+`service` and `engine` are shorthand for the two columns and appear in prose only. Neither is a
+field, and no manifest states which one a unit is. A unit graded by a label can be labelled wrong
+and nothing catches it, while a declared path is opened and read: measured 2026-08-20, one installed
+browser unit holds a `.dylib` **and** five helper application bundles, which no single label
+describes.
+
+That is also why this section was wrong before. It presented the two columns as exclusive shapes a
+unit takes, and a unit takes neither — its artefacts do.
+
+A loaded artefact is in this process because a view does not cross a process boundary. Measured 2026-08-20
 across the three targets this build ships to:
 
 | Attaching another process's view to this window | |
@@ -122,10 +144,10 @@ application did not write.
 
 ## S7. What is built, and what is not
 
-| Shape | State |
+| Artefact | State |
 | --- | --- |
-| `service` — its own process | Built. The PTY daemon owns the shells so they outlive an application generation, which is the whole reason a process is split. |
-| `engine` — a loaded dylib | Not built. Nothing loads a module, so a plugin that must draw into a pane has nowhere to be except the core binary. |
+| `process[]` — spawned | Built, and wired past its own rule. The PTY daemon owns the shells so they outlive an application generation, which is the whole reason a process is split. No manifest declares it: measured 2026-08-20, `main.go` names `<home>/bin/soksak-ptyd-p1` directly, a path neither the release layout nor `core/process` produces, and a plugin package stages and supervises it in Go that duplicates `core/daemon`. |
+| `library[]` — loaded | Not built. Nothing loads a library, so a plugin that must draw into a pane has nowhere to be except the core binary. |
 
 The second row is why `ARCHITECTURE.md` C1a is red. The browser's native half is not linked because
 a dylib could not do the work — it is linked because there is no host to load one.

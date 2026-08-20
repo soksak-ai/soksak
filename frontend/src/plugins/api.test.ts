@@ -1026,7 +1026,7 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
   it("opens only a declared sidecar and rejects an undeclared name", async () => {
     const m = manifestOf({
       permissions: ["sidecar"],
-      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", range: ">=0.0.1 <1.0.0" } }],
+      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", range: "0.0.1" } }],
     });
     const { api } = buildPluginApi(m, "/d", fakeDeps());
     await expect(api.sidecar!.open("undeclared")).rejects.toThrow(/undeclared/);
@@ -1035,7 +1035,7 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
     const invoke = vi.fn<PluginApiDeps["invoke"]>(async () => 7);
     const m = manifestOf({
       permissions: ["sidecar"],
-      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", range: ">=0.0.1 <1.0.0" } }],
+      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", range: "0.0.1" } }],
     });
     const { api } = buildPluginApi(m, "/d", fakeDeps({ invoke }));
     const h = await api.sidecar!.open("chromium");
@@ -1043,7 +1043,7 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
       "sidecar_open",
       expect.objectContaining({
         name: "chromium",
-        requirement: { id: "soksak-spec-sidecar-chromium", range: ">=0.0.1 <1.0.0" },
+        requirement: { id: "soksak-spec-sidecar-chromium", range: "0.0.1" },
       }),
     );
     const openArgs = invoke.mock.calls.find((call) => call[0] === "sidecar_open")?.[1];
@@ -1069,7 +1069,7 @@ describe("single truth for unit selection — manifest sidecars[]", () => {
   const withSidecar = (name: string) =>
     manifestOf({
       permissions: ["process"],
-      sidecars: [{ name, interface: { id: "soksak-spec-sidecar-terminal", range: ">=0.0.1 <1.0.0" } }],
+      sidecars: [{ name, interface: { id: "soksak-spec-sidecar-terminal", range: "0.0.1" } }],
     });
 
   it("gives the unit name declared as implementing the contract", () => {

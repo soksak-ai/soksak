@@ -74,7 +74,7 @@ describe("consuming the engine model is itself a surface need", () => {
   const engineManifest = {
     id: "demo",
     permissions: ["sidecar"],
-    sidecars: [{ name: "browser-chromium", interface: { id: "soksak-spec-sidecar-browser", range: ">=0.0.1" } }],
+    sidecars: [{ name: "browser-chromium", interface: { id: "soksak-spec-sidecar-browser", range: "0.0.1" } }],
   };
 
   it("engine sidecar consumption raises the need without a written declaration", async () => {
@@ -107,7 +107,7 @@ describe("consuming the engine model is itself a surface need", () => {
     const both = {
       ...engineManifest,
       permissions: ["sidecar", "process"],
-      service: { sidecar: "wf", interface: { id: "soksak-spec-service", range: ">=0.0.1" } },
+      service: { sidecar: "wf", interface: { id: "soksak-spec-service", range: "0.0.1" } },
     };
     expect(() => enforceEngineNeeds(both as never, ELECTRON)).not.toThrow();
   });
