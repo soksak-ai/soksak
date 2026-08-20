@@ -37,14 +37,6 @@ import { unmetNeeds, type EngineProvision, type PluginManifest } from "./spec";
  * field for exactly this meaning (`service: { sidecar, interface }`). When it is present, this
  * plugin's sidecar consumption is a process spawn and requires no surface.
  */
-function consumesEngineSidecar(manifest: PluginManifest): boolean {
-  const sidecars = manifest.sidecars ?? [];
-  if (sidecars.length === 0) return false;
-  if (manifest.service !== undefined) return false;
-  const permissions: readonly string[] = manifest.permissions ?? [];
-  return permissions.includes("sidecar");
-}
-
 /**
  * Refuse, with the name, when this framework cannot meet a requirement.
  *
@@ -58,15 +50,17 @@ export function enforceEngineNeeds(
     {
       requiresEngine: manifest.requiresEngine,
       requiresNativeChildWebview: manifest.requiresNativeChildWebview,
-      // Union of what is written and what is **derived**. Without the derivation, the author's
-      // memory is the only defence.
+      // What is written, and nothing derived from the permission list.
       //
-      // This is the **module loading** axis, not the child view axis. Of the two composition modes
-      // (SIDECARS.md §8), offscreen uses no child view but still needs module loading — merging
-      // the two axes rejects that consumer for the wrong reason, and a false reason sends the next
-      // person to fix the wrong thing.
-      requiresEngineModules:
-        manifest.requiresEngineModules || consumesEngineSidecar(manifest),
+      // It was derived until 2026-08-20: a manifest holding the `sidecar` permission with any
+      // `sidecars[]` entry was read as needing a loader. That grades a unit by a label on the
+      // consumer, and under SIDECARS.md S3 no manifest states which shape a unit is — the unit's
+      // release does, in `process[]` and `library[]`. So the reading moved to where that fact is,
+      // and `ProvidedFromRelease` refuses a unit shipping a library, naming the artefact.
+      //
+      // Measured 2026-08-20: with the derivation here, the terminal plugin was refused for
+      // requiring a loader it has no use for — every one of its units is spawned.
+      requiresEngineModules: manifest.requiresEngineModules,
     },
     has,
   );

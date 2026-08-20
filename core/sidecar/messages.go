@@ -69,6 +69,10 @@ func init() {
 			EN: "sidecar {name} implements {wanted} at {found} and the manifest requires exactly {wanted2} — an unstable contract is consumed at one version, never across a range",
 			KO: "사이드카 {name} 이(가) 구현하는 판은 {found} 이고 매니페스트는 정확히 {wanted2} 를 요구합니다 — 불안정 계약은 범위가 아니라 한 판으로만 소비합니다",
 		},
+		"sidecar.libraryNotLoadable": {
+			EN: "sidecar {name} ships {artefacts} to be loaded and this build loads nothing — it spawns units and speaks the control envelope to them, so the half of this unit that draws has nowhere to run",
+			KO: "사이드카 {name} 은(는) 적재되어야 할 {artefacts} 을(를) 담고 있고 이 빌드는 아무것도 적재하지 않습니다 — 유닛을 띄우고 제어 봉투로 말할 뿐이므로, 이 유닛에서 그리는 쪽이 돌 자리가 없습니다",
+		},
 		"sidecar.noRelease": {
 			EN: "sidecar {name} states no contract: {path} is missing — an installed unit declares what it implements beside its binary, and without it nothing can be checked against what was asked for",
 			KO: "사이드카 {name} 이(가) 어떤 계약도 밝히지 않습니다 — {path} 이(가) 없습니다. 설치된 유닛은 무엇을 구현하는지를 바이너리 옆에 선언하며, 그것이 없으면 요구한 것과 대조할 수 없습니다",

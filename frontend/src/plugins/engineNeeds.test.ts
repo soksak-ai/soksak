@@ -60,55 +60,45 @@ describe("the load boundary actually applies that comparison", () => {
   });
 });
 
-// The definition of the engine model is itself a surface need — docs/SIDECARS.md §1 states it in that
-// table: engine = "renders into pane surfaces (NSView)", in-process dylib.
+// What a unit is made of is the unit's fact, not a label on its consumer.
 //
-// So making a plugin write `requiresNativeChildWebview: true` by hand again is a second copy. Two
-// copies stay quiet until they diverge: measured 2026-07-31, one browser plugin consumed an engine
-// sidecar while declaring no need at all, so it loaded as-is on Electron and the screen showed only
-// "engine surface creation failed".
+// This block stated the reverse until 2026-08-20: consuming any sidecar under the `sidecar`
+// permission raised a module-loading need. Its reason was measured and real — 2026-07-31, a browser
+// plugin consumed a loaded engine while declaring no need, loaded as-is on Electron, and showed
+// "engine surface creation failed" on a blank pane.
 //
-// Nothing depends on the author remembering. The need is derived from consumption — writing that it
-// uses an engine is writing that it needs a surface.
-describe("consuming the engine model is itself a surface need", () => {
-  const engineManifest = {
+// The rule was still wrong, and SIDECARS.md S3 has the reason: no manifest states which shape a
+// unit is.
+// A release declares its artefacts — `process[]` spawned, `library[]` loaded — and one unit may
+// ship both. Read from the consumer's permission list instead, the answer is the same for a unit
+// that is spawned and a unit that is loaded, so every consumer of a spawned unit was refused for a
+// requirement it does not have. Measured the same day: the terminal plugin, whose units are all
+// spawned, could not be enabled at all.
+//
+// The 2026-07-31 case is still caught, one layer down and by the declaring side:
+// `ProvidedFromRelease` refuses a unit shipping a library on a host that loads none, and names the
+// artefact (`core/sidecar/library_test.go`).
+describe("a need is declared, never inferred from a permission", () => {
+  const spawnedUnits = {
     id: "demo",
     permissions: ["sidecar"],
-    sidecars: [{ name: "browser-chromium", interface: { id: "soksak-spec-sidecar-browser", range: "0.0.1" } }],
+    sidecars: [{ name: "pty", interface: { id: "soksak-spec-sidecar-pty", range: "0.0.1" } }],
   };
 
-  it("engine sidecar consumption raises the need without a written declaration", async () => {
+  it("declaring units to spawn raises no loader need anywhere", async () => {
     const { enforceEngineNeeds } = await import("./engineNeeds");
-    expect(() => enforceEngineNeeds(engineManifest as never, ELECTRON)).toThrow(
-      /requiresEngineModules/,
-    );
+    expect(() => enforceEngineNeeds(spawnedUnits as never, ELECTRON)).not.toThrow();
   });
 
-  it("loads as-is where that device is present", async () => {
+  it("a written declaration is still honoured", async () => {
     const { enforceEngineNeeds } = await import("./engineNeeds");
-    expect(() => enforceEngineNeeds(engineManifest as never, TAURI_MACOS)).not.toThrow();
+    const written = { ...spawnedUnits, requiresEngineModules: true };
+    expect(() => enforceEngineNeeds(written as never, ELECTRON)).toThrow(/requiresEngineModules/);
   });
 
-  it("the service model (process permission) needs no surface — it is headless", async () => {
+  it("and loads where that device is present", async () => {
     const { enforceEngineNeeds } = await import("./engineNeeds");
-    const svc = { ...engineManifest, permissions: ["process"] };
-    expect(() => enforceEngineNeeds(svc as never, ELECTRON)).not.toThrow();
-  });
-
-  // Measured 2026-07-31: reading a permission as evidence of use is too broad. One measured plugin
-  // over-declared the `sidecar` permission while actually being a service model that uses only
-  // app.process, and the rule caught it and dropped a headless plugin entirely on Electron.
-  //
-  // A permission is a door left open, not a footprint. The evidence of the service model is the
-  // `service` declaration — the spec already reserves that slot with that meaning
-  // (service: { sidecar, interface }).
-  it("a declared service is not read as an engine even with the sidecar permission", async () => {
-    const { enforceEngineNeeds } = await import("./engineNeeds");
-    const both = {
-      ...engineManifest,
-      permissions: ["sidecar", "process"],
-      service: { sidecar: "wf", interface: { id: "soksak-spec-service", range: "0.0.1" } },
-    };
-    expect(() => enforceEngineNeeds(both as never, ELECTRON)).not.toThrow();
+    const written = { ...spawnedUnits, requiresEngineModules: true };
+    expect(() => enforceEngineNeeds(written as never, TAURI_MACOS)).not.toThrow();
   });
 });

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/soksak/soksak-core/core/i18n"
 )
@@ -32,6 +33,10 @@ func ProvidedFromRelease(home string) func(unit string) (Provided, error) {
 				ID      string `json:"id"`
 				Version string `json:"version"`
 			} `json:"interface"`
+			// What the unit ships, and how each artefact is opened: `process` is spawned and
+			// answered over the control envelope, `library` is loaded across a C ABI (SIDECARS.md
+			// S3). Both are optional and one unit may declare both.
+			Library []string `json:"library"`
 		}
 		if err := json.Unmarshal(raw, &release); err != nil {
 			return Provided{}, i18n.Errorf("sidecar.releaseUnreadable", map[string]string{
@@ -48,6 +53,17 @@ func ProvidedFromRelease(home string) func(unit string) (Provided, error) {
 		if release.ID != name {
 			return Provided{}, i18n.Errorf("sidecar.releaseNamesAnotherUnit", map[string]string{
 				"name": name, "found": release.ID, "path": path,
+			})
+		}
+		// A library has to be loaded, and this host loads nothing — it spawns processes and speaks
+		// the control envelope to them. Nothing in this build loads one either (SIDECARS.md S7).
+		//
+		// Opened anyway, the unit's spawned half would run and the half that draws would be absent,
+		// which reads on screen as an empty pane. The refusal names the artefact so the reader is
+		// looking at what this build has no place for rather than at the pane.
+		if len(release.Library) > 0 {
+			return Provided{}, i18n.Errorf("sidecar.libraryNotLoadable", map[string]string{
+				"name": unit, "artefacts": strings.Join(release.Library, ", "),
 			})
 		}
 		return Provided{ID: release.Interface.ID, Version: release.Interface.Version}, nil
