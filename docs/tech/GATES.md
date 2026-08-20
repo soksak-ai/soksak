@@ -183,15 +183,51 @@ Written here so it is not rediscovered (L2).
   `soksak-plugin-terminal-xterm` and its `command` package, imported by
   `main.go` and `frameworks/wails/host.go` (measured 2026-08-20).
 
-  Not because a loaded module could not do the work. A native half that must run
-  in this process is an engine module — a dylib loaded because the manifest
-  declared it — and nothing loads one yet (`SIDECARS.md` S7). Wails offers no
-  shape for it either: `RegisterService` takes a Go value and refuses anything
-  after `Run`, so a service is a compile-time fact and is the right home for the
-  host that loads engines, not for the engines.
+  Read again on 2026-08-20, none of those 3,516 lines is a plugin's, and the
+  reason differs for each:
+
+  - The browser unit's 1,290 lines of Go and Objective-C create, move, navigate
+    and report a child web view. `api.ts` already declares that capability as
+    `app.webview` under the `webview` permission, and all three browser units
+    written against this substrate declare that permission — so the code serves
+    every one of them and is one unit's only by where the file sits. It is the
+    host's, and `S1` names the folder: a Wails service.
+  - The terminal unit's 2,226 lines stage a binary, spawn it, wait for it,
+    supervise it, relay to it and register its commands. `core/daemon` and
+    `core/process` already do the first six for any declared process. The copy
+    diverged where it matters: it sets the child's stdout to `io.Discard` and
+    watches for a socket file, which is the readiness rule `core/daemon` refuses
+    by name, and the envelope version that travels on the discarded line is never
+    negotiated.
+  - Neither unit's manifest declares what its Go stands in for. The terminal's
+    has no `sidecars`, so the daemon has no declared source and `main.go` names
+    `<home>/bin/soksak-ptyd-p1` — a path neither the release layout nor
+    `core/process` produces.
 
   `linked_plugin_gate_test.go` holds the count at three: a fourth fails, and so
   does a third once one has gone.
+
+- **A Wails service is registered under a plugin's id.** `host.go` registers a
+  service whose `ServiceName()` answers `soksak-plugin-browser-native`, so a
+  plugin id is on the host's service list at run time (measured 2026-08-20).
+
+  `coupling_gate_test.go` walks core sources for that string and stays green: the
+  literal is written in the unit's file, outside every scanned root, and only
+  arrives here when the value is registered. A scan finds where a name is
+  written; what is needed is a reading of where it arrives.
+
+- **Whether a unit is loaded rather than spawned is inferred from an absence.**
+  `engineNeeds.ts` treats a manifest with `sidecars[]` and no `service` key as
+  one that draws, and blocks loading when the host provides no child surface.
+  The release already states it — `library[]` for an artefact that is loaded,
+  `process[]` for one that is spawned (`SIDECARS.md` S3) — and an inference from
+  a missing key is not that statement. The record of the bug that produced the
+  current rule is in the file: a unit over-declaring a permission was dropped
+  from a whole host on 2026-07-31.
+
+  What is missing is the path: the installed record does not carry the artefact
+  facts forward to load time, so nothing at load can read what the release
+  declared. Half-fixing it would swap one inference for another.
 
 - **Whether a distributed build may load a third-party module is unmeasured.**
   This build ad-hoc signs and carries no entitlements, so nothing stops a load

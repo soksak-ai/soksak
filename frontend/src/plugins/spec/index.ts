@@ -309,10 +309,14 @@ export type ReachStrategy =
 // External runtime dependency = 4-tuple: identity (name, bin) + observe (working observation) +
 // accept (acceptance predicate) + reach (supply). observe/accept/reach are optional — unset gives
 // legacy behavior (presence = acceptance, install = supply). The reconcile engine (M3) runs it.
-// Sidecar (engine model) dependency declaration — a shared native module the plugin opens. name is
-// the sidecar name (the <name> in soksak-sidecar-<name>), interface is the contract requirement
-// `{ id, range }`. Checked at load against the binary self-report (soksak_sidecar_abi) — a mismatch
-// is rejected (declaration ≡ reality). Canonical docs/SIDECARS.md.
+// A sidecar this plugin drives. `name` is the <name> in soksak-sidecar-<name>, and `interface` is
+// the contract requirement `{ id, range }` its release must satisfy. Checked at load against what
+// the unit reports about itself — declaration ≡ reality, and a mismatch is refused.
+//
+// This declaration states no runtime shape and no manifest field does. Whether an artefact is
+// spawned or loaded is what the release declares, in `process[]` and `library[]`, and one unit may
+// declare both (SIDECARS.md S3). The comment here read "engine model" for every entry, which is
+// wrong for every sidecar that is a process.
 export interface SidecarDep {
   name: string; // ^[a-z0-9][a-z0-9-]*$
   interface: ContractRequirement;
