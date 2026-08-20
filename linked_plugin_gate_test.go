@@ -19,12 +19,19 @@ import (
 // What the linker did is a different reading, and it is the one that settles whether a plugin is
 // installed or built in.
 //
-// Measured 2026-08-20: three packages, imported by `main.go` and `frameworks/wails/host.go`.
+// Measured 2026-08-20: two packages, both the terminal unit's, imported by `main.go` and
+// `frameworks/wails/host.go`.
 //
-// The debt stands until the two native halves move behind the seam that exists for them. Their
-// reason for being in this process is real — a parent view is process-local on macOS and a message
-// pump needs this process's main queue — and it is a reason to be *loaded* here, not to be *built*
-// here (SIDECARS.md S3). What is missing is the host that loads one.
+// A third was the browser unit's, and it was never that unit's code. Its 1,290 lines of Go and
+// Objective-C create, move, navigate and report a child web view — the capability `api.ts` declares
+// as `app.webview`, which every unit holding the `webview` permission is served by. It was one
+// unit's by where the file sat and by nothing else, and it now stands as the host service it is
+// (`wails-services/wails-service-webview-surface`).
+//
+// What remains is the terminal unit's, and it is a different case: it stages a binary, spawns it,
+// waits for it, supervises it and relays to it, which `core/daemon` and `core/process` already do
+// for any declared process. Nothing has to move for it to go — the manifest has to declare the
+// process, and this one does not.
 //
 // The rule is absolute and this gate is a ratchet, which are not the same thing and both are true.
 // The rule — no plugin package in the core binary — is stated in full in `ARCHITECTURE.md` C1a and
@@ -35,7 +42,7 @@ import (
 // Failing outright instead would leave the whole suite red for as long as the engine host takes,
 // and a gate everyone runs past is worth less than one that blocks the next step. The debt is
 // listed as not done in `GATES.md`, which is where a standard that is not met yet is named.
-const linkedPluginDebt = 3
+const linkedPluginDebt = 2
 
 func TestTheCoreBinaryLinksNoPlugin(t *testing.T) {
 	out, err := exec.Command("go", "list", "-deps", "./...").Output()

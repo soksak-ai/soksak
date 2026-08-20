@@ -31,8 +31,8 @@ const bindingsRoot = "frontend/bindings/github.com/soksak"
 // directive, which a walk of this tree cannot find.
 var bindingsModule = map[string]string{
 	"soksak-core/frameworks/wails":    "frameworks/wails",
-	"soksak-plugin-browser-native":    "../soksak-plugins/soksak-plugin-browser-native",
 	"wails-service-native-compositor": "../wails-services/wails-service-native-compositor",
+	"wails-service-webview-surface":   "../wails-services/wails-service-webview-surface",
 }
 
 // The table above was one entry longer until 2026-08-20. The terminal's shells moved to a daemon

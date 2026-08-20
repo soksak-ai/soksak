@@ -13,11 +13,11 @@ import (
 	"time"
 	"unsafe"
 
-	nativebrowser "github.com/soksak/soksak-plugin-browser-native"
 	terminal "github.com/soksak/soksak-plugin-terminal-xterm"
 	terminalplugin "github.com/soksak/soksak-plugin-terminal-xterm"
 	terminalcmd "github.com/soksak/soksak-plugin-terminal-xterm/command"
 	compositor "github.com/soksak/wails-service-native-compositor"
+	webviewsurface "github.com/soksak/wails-service-webview-surface"
 
 	"github.com/soksak/soksak-core/core/control"
 	"github.com/soksak/soksak-core/core/i18n"
@@ -53,9 +53,46 @@ type Options struct {
 	UnitRoot string
 }
 
+// hostServices is every value this host registers with the framework, in one place a reader and a
+// test can both get at.
+//
+// The list was written inline in the options literal, where nothing outside the call could read it.
+// A service reports its own name and the framework registers whatever it reports, so what ends up
+// on the host's service list is only visible from the list itself — and a name that arrives there
+// from a unit's source is invisible to a scan of this repository (measured 2026-08-20: a service
+// named after a plugin id sat here while the scan for that string stayed green).
+//
+// The capture service is included for a reason of its own: it finishes an image with content that
+// draws outside this process, and without it a pane holding a page is a flat rectangle in every
+// screenshot while the page behind it loads correctly. It is bound to the control plane's window by
+// name because a bound service has no caller to ask; every other capture arrives through the command
+// path, which names the window it is a capture of.
+func hostServices(
+	terminalOwner *terminalOwnerService,
+	nativeCompositor *compositor.Service,
+	webviewSurface *webviewsurface.Service,
+	capture *CaptureService,
+	control *ControlService,
+) []application.Service {
+	return []application.Service{
+		application.NewService(terminalOwner),
+		application.NewService(nativeCompositor),
+		application.NewService(webviewSurface),
+		application.NewService(capture),
+		application.NewService(control),
+	}
+}
+
 type terminalOwnerService struct{ owner terminal.Owner }
 
-func (service *terminalOwnerService) ServiceName() string    { return service.owner.ServiceName() }
+// The name is this host's, not the owner's.
+//
+// It read `service.owner.ServiceName()` until 2026-08-20, which let a unit decide what appears on
+// the host's service list. This service exists for one thing the host has and the owner does not —
+// the moment the application quits — so the name is that, and a nil owner is a wiring fault rather than
+// a name nobody can read.
+func (service *terminalOwnerService) ServiceName() string { return "session-reaper" }
+
 func (service *terminalOwnerService) ServiceShutdown() error { return service.owner.ServiceShutdown() }
 
 const (
@@ -90,43 +127,37 @@ func Run(options Options) error {
 		return windowHost.NativeHandle(name)
 	}
 
-	browserBackend := nativebrowser.NewBackend()
+	webviewBackend := webviewsurface.NewBackend()
 	// What a surface's page does becomes the events the page already listens for. Without this the
 	// address a person sees never moves off the one the pane was declared with, and the back button
 	// is enabled by nothing.
-	nativebrowser.PublishPagesTo(options.Bridge.Emit)
+	webviewsurface.PublishPagesTo(options.Bridge.Emit)
 
 	// The compositor service, held so the surface commands can read what it
 	// applied. The service list below registers the same value.
-	nativeCompositor := compositor.NewService(nativeWindow, browserBackend)
+	nativeCompositor := compositor.NewService(nativeWindow, webviewBackend)
 	// One reader of the last commit, shared by the surface commands and the capture. Two would
 	// answer from two moments, and the capture would draw a page at a rectangle the numbers say it
 	// is not at.
 	// Which surface a point landed on. The plugin sees the click and holds the window handles; the
 	// compositor holds every applied rectangle in the contract they are declared in. Neither answers
 	// alone, and a plugin deciding it would re-derive the rectangles in its own coordinate space.
-	nativebrowser.ReadSurfacesWith(nativeCompositor.SurfaceAt)
+	webviewsurface.ReadSurfacesWith(nativeCompositor.SurfaceAt)
 
 	surfaceComposition := NewCompositorSource(nativeCompositor)
 
 	app := application.New(application.Options{
 		Name:        appName,
 		Description: appDescription,
-		Services: []application.Service{
-			application.NewService(&terminalOwnerService{owner: options.Terminal}),
-			application.NewService(nativeCompositor),
-			application.NewService(nativebrowser.NewService(browserBackend)),
-			// The capture finishes its image with content that draws outside this process. Without
-			// it a browser pane is a flat rectangle in every screenshot while the page behind it
-			// is loading correctly.
-			// Bound to the control plane's window by name, because a bound service has no
-			// caller to ask. Every other capture arrives through the command path, which
-			// names the window it is a capture of.
-			application.NewService(NewCaptureService(controlPlaneWindow, func() unsafe.Pointer {
+		Services: hostServices(
+			&terminalOwnerService{owner: options.Terminal},
+			nativeCompositor,
+			webviewsurface.NewService(webviewBackend),
+			NewCaptureService(controlPlaneWindow, func() unsafe.Pointer {
 				return nativeWindow(controlPlaneWindow)
-			})),
-			application.NewService(NewControlService(options.Registry)),
-		},
+			}),
+			NewControlService(options.Registry),
+		),
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(options.Assets),
 			// Unit files are not in the embedded FS: they are installed under

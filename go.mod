@@ -4,9 +4,9 @@ go 1.25.0
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/soksak/soksak-plugin-browser-native v0.0.1
 	github.com/soksak/soksak-plugin-terminal-xterm v0.0.1
 	github.com/soksak/wails-service-native-compositor v0.0.1
+	github.com/soksak/wails-service-webview-surface v0.0.1
 	github.com/wailsapp/wails/v3 v3.0.0-dev
 	modernc.org/sqlite v1.56.0
 )
@@ -35,7 +35,7 @@ replace github.com/wailsapp/wails/v3 => ../frameworks/wails3/v3
 
 replace github.com/soksak/wails-service-native-compositor => ../wails-services/wails-service-native-compositor
 
-replace github.com/soksak/soksak-plugin-browser-native => ../soksak-plugins/soksak-plugin-browser-native
+replace github.com/soksak/wails-service-webview-surface => ../wails-services/wails-service-webview-surface
 
 replace github.com/soksak/soksak-plugin-terminal-xterm => ../soksak-plugins/soksak-plugin-terminal-xterm
 

@@ -152,8 +152,8 @@ function sameSelection(
 // Which artifact runs here is what the artifact declares, never what kind of unit declared it.
 //
 // Every artifact states its own `target`, and the release parser already holds the shapes apart: a
-// sidecar release carries native triples, every other kind carries exactly one `any`. Asking the
-// kind again re-derives a fact that is already written down, and the two can disagree — the day a
+// sidecar release declares native triples, every other kind declares exactly one `any`. Reading the
+// kind instead re-derives a fact already written down, and the two can disagree — the day a
 // plugin ships a per-target artifact, a rule keyed on the kind quietly picks the wrong one, or
 // reports none at all while the right one is in the list.
 //
