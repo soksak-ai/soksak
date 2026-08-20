@@ -69,6 +69,22 @@ func init() {
 			EN: "sidecar {name} implements {wanted} at {found} and the manifest requires exactly {wanted2} — an unstable contract is consumed at one version, never across a range",
 			KO: "사이드카 {name} 이(가) 구현하는 판은 {found} 이고 매니페스트는 정확히 {wanted2} 를 요구합니다 — 불안정 계약은 범위가 아니라 한 판으로만 소비합니다",
 		},
+		"sidecar.noRelease": {
+			EN: "sidecar {name} states no contract: {path} is missing — an installed unit declares what it implements beside its binary, and without it nothing can be checked against what was asked for",
+			KO: "사이드카 {name} 이(가) 어떤 계약도 밝히지 않습니다 — {path} 이(가) 없습니다. 설치된 유닛은 무엇을 구현하는지를 바이너리 옆에 선언하며, 그것이 없으면 요구한 것과 대조할 수 없습니다",
+		},
+		"sidecar.releaseUnreadable": {
+			EN: "sidecar {name}: {path} is not a release manifest: {reason}",
+			KO: "사이드카 {name}: {path} 이(가) 릴리스 매니페스트가 아닙니다: {reason}",
+		},
+		"sidecar.releaseDeclaresNoInterface": {
+			EN: "sidecar {name}: {path} names no interface — a unit that states no contract cannot be matched to one",
+			KO: "사이드카 {name}: {path} 이(가) 인터페이스를 밝히지 않습니다 — 계약을 밝히지 않는 유닛은 어떤 계약과도 대조할 수 없습니다",
+		},
+		"sidecar.releaseNamesAnotherUnit": {
+			EN: "sidecar {name}: {path} names unit {found} — the install put one unit's release under another's name, and opening it would run something nobody asked for",
+			KO: "사이드카 {name}: {path} 이(가) 유닛 {found} 을(를) 가리킵니다 — 설치가 한 유닛의 릴리스를 다른 이름 아래 두었고, 여는 것은 아무도 요청하지 않은 것을 실행하는 일입니다",
+		},
 		"sidecar.greetingRefused": {
 			EN: "sidecar {name} refused the greeting: {reason} — nothing was sent on this connection, so no command ran against a protocol neither side agreed",
 			KO: "사이드카 {name} 이(가) 그리팅을 거절했습니다: {reason} — 이 연결로 아무것도 보내지 않았으므로, 양쪽이 합의하지 않은 프로토콜로 실행된 명령은 없습니다",

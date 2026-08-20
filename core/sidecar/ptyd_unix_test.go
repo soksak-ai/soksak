@@ -42,6 +42,18 @@ func TestARealShellEchoesThroughTheRelay(t *testing.T) {
 	})
 	t.Cleanup(func() { host.StopAll() })
 
+	// Opening is where the declaration is checked, and nothing travels to a unit that was not
+	// opened. What is declared here is what the unit's own release states it implements, read off
+	// disk — the two halves of declared-equals-actual, neither taken on the other's word.
+	stated, err := ProvidedFromRelease(home)("pty")
+	if err != nil {
+		t.Fatalf("reading what the unit states it implements: %v", err)
+	}
+	if _, err := (Registration{Host: host, Provided: ProvidedFromRelease(home)}).
+		openDeclared("pty", Requirement{ID: stated.ID, Range: stated.Version}); err != nil {
+		t.Fatalf("opening the unit: %v", err)
+	}
+
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/sh"
@@ -142,6 +154,20 @@ func stagePTY(t *testing.T, home, source string) {
 	build.Dir = source
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building the pty unit: %v\n%s", err, out)
+	}
+	// The release manifest is staged with the binary, because it is what states the contract the
+	// unit implements. A staged binary with no release beside it is a unit nothing can be checked
+	// against, and this is where an install would have put it.
+	release := filepath.Join(home, "sidecars", unit, "release")
+	if err := os.MkdirAll(release, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	declared, err := os.ReadFile(filepath.Join(source, "release", "unit.json"))
+	if err != nil {
+		t.Fatalf("reading the unit's release manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(release, "unit.json"), declared, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 

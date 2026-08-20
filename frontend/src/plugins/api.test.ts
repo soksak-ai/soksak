@@ -1048,13 +1048,19 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
     );
     const openArgs = invoke.mock.calls.find((call) => call[0] === "sidecar_open")?.[1];
     expect(openArgs).not.toHaveProperty("interface");
-    // send delegates to sidecar_send with the handle
+    // The name is the identity, and there is no handle beside it.
+    //
+    // A handle would be a way to hold one unit open twice, and the host refuses that on purpose:
+    // two processes behind one name is a process nothing can reach and nothing ends. The assertion
+    // held a handle until 2026-08-20, which is the shape from when open answered with one.
     invoke.mockResolvedValueOnce({ ok: true });
     await h.send({ type: "ping" });
     expect(invoke).toHaveBeenCalledWith(
       "sidecar_send",
-      expect.objectContaining({ name: "chromium", handle: 7, payload: '{"type":"ping"}' }),
+      expect.objectContaining({ name: "chromium", payload: '{"type":"ping"}' }),
     );
+    const sendArgs = invoke.mock.calls.find((call) => call[0] === "sidecar_send")?.[1];
+    expect(sendArgs).not.toHaveProperty("handle");
     // close is idempotent
     await h.close();
     await h.close();

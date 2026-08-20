@@ -24,8 +24,9 @@ import (
 
 // Send takes one request to a unit and answers with what came back.
 //
-// The unit is started if it is not running. A caller asking a unit to do something is a caller who
-// wants it running, and refusing because it is not would make every first call fail.
+// A unit that is not open is refused rather than started. Opening is where the declaration is
+// checked — that the caller declared this unit, and that the unit implements the contract that was
+// declared — and a send that started one would be a way past both checks.
 func (host *Host) Send(name string, request controlwire.Request) (controlwire.Response, error) {
 	conn, reader, _, err := host.connect(name)
 	if err != nil {
@@ -112,10 +113,13 @@ func (s *stream) Close() error                  { return s.conn.Close() }
 // that started the unit reads, and no caller ever sees it — a caller holding it could greet the
 // unit directly, and this relay is the only thing between a plugin and a process.
 func (host *Host) connect(name string) (io.ReadWriteCloser, *bufio.Reader, Open, error) {
-	open, err := host.Start(name)
-	if err != nil {
-		return nil, nil, Open{}, err
+	host.mu.Lock()
+	held := host.open[name]
+	host.mu.Unlock()
+	if held == nil {
+		return nil, nil, Open{}, i18n.Errorf("sidecar.notOpen", map[string]string{"name": name})
 	}
+	open := held.open
 	if host.deps.Dial == nil {
 		return nil, nil, Open{}, i18n.Errorf("sidecar.noDial", map[string]string{"name": name})
 	}

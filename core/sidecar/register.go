@@ -22,12 +22,13 @@ import (
 // Deps for registration. Each field is something this package refuses to derive.
 type Registration struct {
 	Host *Host
-	// Declared answers what a plugin's manifest states about a unit name: the contract it requires,
-	// and whether the plugin declared it at all. Nil means no manifest is readable in this build and
-	// the commands are declared unserved by name rather than opening whatever they are asked to.
-	Declared func(unit string) (Requirement, bool)
 	// Provided answers what the installed unit states it implements. Nil means this build cannot
 	// check declared against actual, and the commands say so rather than checking nothing quietly.
+	//
+	// What was *declared* arrives with the open request instead of being read here. The manifest is
+	// the caller's, and the caller's API object was built from that manifest and no other — so a
+	// plugin can only ask about a unit its own manifest names. Reading manifests here as well would
+	// be a second source for one fact.
 	Provided func(unit string) (Provided, error)
 	// Sink is where a unit's stream bytes arrive for the caller. Nil means this host has no stream,
 	// and `sidecar_stream` is declared unserved rather than opening a connection whose output has
@@ -77,9 +78,9 @@ func Register(registry *control.Registry, deps Registration) {
 	}
 
 	// One reason, and it names what is missing rather than that something is.
-	if deps.Host == nil || deps.Declared == nil || deps.Provided == nil {
-		reason := "this build was given no way to start a unit, read what a manifest declared, " +
-			"or read what an installed unit provides"
+	if deps.Host == nil || deps.Provided == nil {
+		reason := "this build was given no way to start a unit, or no way to read what an " +
+			"installed unit provides"
 		for _, name := range Names() {
 			declare(name, reason)
 		}
@@ -91,20 +92,17 @@ func Register(registry *control.Registry, deps Registration) {
 		if err != nil {
 			return nil, err
 		}
-		open, err := deps.openDeclared(name)
+		requirement, err := control.Arg[Requirement](args, "requirement")
 		if err != nil {
 			return nil, err
 		}
-		return open, nil
+		return deps.openDeclared(name, requirement)
 	})
 
 	serve("sidecar_send", func(args control.Args) (any, error) {
 		name, err := control.Arg[string](args, "name")
 		if err != nil {
 			return nil, err
-		}
-		if _, declared := deps.Declared(name); !declared {
-			return nil, i18n.Errorf("sidecar.undeclared", map[string]string{"name": name})
 		}
 		payload, err := control.Arg[string](args, "payload")
 		if err != nil {
@@ -127,9 +125,6 @@ func Register(registry *control.Registry, deps Registration) {
 			name, err := control.Arg[string](args, "name")
 			if err != nil {
 				return nil, err
-			}
-			if _, declared := deps.Declared(name); !declared {
-				return nil, i18n.Errorf("sidecar.undeclared", map[string]string{"name": name})
 			}
 			stream, err := control.Arg[string](args, "stream")
 			if err != nil {
@@ -194,11 +189,7 @@ func Register(registry *control.Registry, deps Registration) {
 // Both halves are checked. A name nobody declared is a process a person never consented to, and a
 // unit implementing a different contract answers a plugin's request with something else's semantics
 // — which does not fail, it arrives as a different answer.
-func (deps Registration) openDeclared(name string) (Open, error) {
-	requirement, declared := deps.Declared(name)
-	if !declared {
-		return Open{}, i18n.Errorf("sidecar.undeclared", map[string]string{"name": name})
-	}
+func (deps Registration) openDeclared(name string, requirement Requirement) (Open, error) {
 	provided, err := deps.Provided(name)
 	if err != nil {
 		return Open{}, err

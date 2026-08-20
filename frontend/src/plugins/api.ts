@@ -1094,23 +1094,25 @@ function createSidecarApi(
         const ev = typeof m?.event === "string" ? (m.event as string) : "";
         listeners.get(ev)?.forEach((f) => f(m));
       };
-      const handle = (await deps.invoke("sidecar_open", {
+      // The requirement travels with the open, because the manifest is this side's. The core reads
+      // what the installed unit states it implements and refuses the two if they differ — declared
+      // against actual, and neither taken on the other's word.
+      await deps.invoke("sidecar_open", {
         name,
         requirement: decl.interface,
         onEvent,
-      })) as number;
+      });
       let closed = false;
       const close = async () => {
         if (closed) return;
         closed = true;
-        await deps.invoke("sidecar_close", { name, handle }).catch(() => {});
+        await deps.invoke("sidecar_close", { name }).catch(() => {});
       };
       tracker.wrap(() => void close()); // reclaim the channel when the plugin is disabled
       return {
         send: async (msg) =>
           (await deps.invoke("sidecar_send", {
             name,
-            handle,
             payload: JSON.stringify(msg),
           })) as Record<string, unknown>,
         on: (event, cb) => {
@@ -1134,7 +1136,6 @@ function createSidecarApi(
             handlers.onEnd?.(typeof m?.reason === "string" ? (m.reason as string) : "");
           const answer = (await deps.invoke("sidecar_stream", {
             name,
-            handle,
             stream: label,
             payload: JSON.stringify(request),
             onBytes,
@@ -1143,7 +1144,7 @@ function createSidecarApi(
           // Disposing ends this stream and nothing else. A unit outlives any one connection to it,
           // and closing the unit because a view unmounted would end every other view's stream too.
           const stop = tracker.wrap(() => {
-            void deps.invoke("sidecar_stream_close", { name, handle, stream: label }).catch(() => {});
+            void deps.invoke("sidecar_stream_close", { name, stream: label }).catch(() => {});
           });
           return { answer, close: stop };
         },
