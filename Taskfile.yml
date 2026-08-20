@@ -45,6 +45,7 @@ tasks:
       - task: verify:windows
       - task: verify:frontend
       - task: verify:modules
+      - task: verify:plugins
 
   verify:go:
     summary: Go build, vet, and tests for this module
@@ -167,9 +168,19 @@ tasks:
 
   verify:modules:
     summary: The sibling modules this one resolves through `replace`
+    desc: |
+      Every entry is a Go module. The two plugins were here until 2026-08-20 and
+      are not modules any more — their native halves left for the services below
+      and what remains is TypeScript, checked by verify:plugins.
     cmds:
-      - for: ["../wails-services/wails-service-native-compositor", "../soksak-plugins/soksak-plugin-browser-native", "../soksak-plugins/soksak-plugin-terminal-xterm"]
+      - for: ["../wails-services/wails-service-native-compositor", "../wails-services/wails-service-webview-surface"]
         cmd: cd {{.ITEM}} && go vet ./... && go test ./...
+
+  verify:plugins:
+    summary: The sibling plugins, which are TypeScript and no longer Go
+    cmds:
+      - for: ["../soksak-plugins/soksak-plugin-browser-native", "../soksak-plugins/soksak-plugin-terminal-xterm"]
+        cmd: cd {{.ITEM}}/frontend && {{.PACKAGE_MANAGER}} typecheck && {{.PACKAGE_MANAGER}} test
 
   build:
     summary: Builds the application
