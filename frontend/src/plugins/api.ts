@@ -1044,21 +1044,39 @@ function createProcessApi(
   };
 }
 
-// app.sidecar channel handle — an opaque JSON channel to an opened engine module. Meaning is a private
-// plugin↔sidecar contract (docs/SIDECARS.md); neither the core nor this API interprets the content.
+// app.sidecar channel handle — an opaque channel to a declared unit. Meaning is a private
+// plugin↔sidecar contract (docs/tech/SIDECARS.md); neither the core nor this API reads the content.
 export interface SidecarHandle {
-  /** Opaque request → the module's synchronous response (JSON). */
+  /** Opaque request → the unit's synchronous response (JSON). */
   send: (msg: Record<string, unknown>) => Promise<Record<string, unknown>>;
-  /** Subscribe to module events — an event has the shape {event, ...payload} and demuxes on the event
+  /** Subscribe to unit events — an event has the shape {event, ...payload} and demuxes on the event
    *  field. Returns the unsubscribe. */
   on: (event: string, cb: (payload: Record<string, unknown>) => void) => Disposable;
-  /** Release the channel (the module stays resident — there is no unload). Idempotent. */
+  /** Open a byte stream on this unit: one request, then whatever the unit writes after it.
+   *
+   *  Bytes rather than JSON events because a stream's whole point is volume, and base64 inside an
+   *  envelope costs a third more on every byte of it. The request is opaque here exactly as `send`'s
+   *  is; what makes this different is that the answer is the connection.
+   *
+   *  `onEnd` fires once when the unit closes it, with a reason when there was one. It is separate
+   *  from the bytes because "the unit stopped" is not a byte, and a consumer folding the two would
+   *  have to decide what an empty read means. Disposing the returned handle ends the stream. */
+  stream: (
+    request: Record<string, unknown>,
+    handlers: { onBytes: (data: Uint8Array) => void; onEnd?: (reason: string) => void },
+  ) => Promise<{ answer: Record<string, unknown>; close: Disposable }>;
+  /** Release the channel. Idempotent. */
   close: () => Promise<void>;
 }
 
-// app.sidecar implementation — opens only engine modules declared in manifest sidecars[] (declaration ≡
-// reality: an undeclared open throws). Events are delivered by stream to this caller alone (no global
-// emit — code that never opened the channel receives nothing, and nothing leaks).
+// app.sidecar implementation — opens only units declared in manifest sidecars[] (declaration ≡
+// reality: an undeclared open throws). Events and bytes are delivered by stream to this caller alone
+// (no global emit — code that never opened the channel receives nothing, and nothing leaks).
+
+// streamSeq names one caller's streams apart from each other. It is this side's counter: the core
+// stamps arrivals with whatever label it was given and reads nothing into it.
+let streamSeq = 0;
+
 function createSidecarApi(
   deps: PluginApiDeps,
   tracker: DisposableTracker,
@@ -1103,6 +1121,31 @@ function createSidecarApi(
           }
           set.add(cb);
           return tracker.wrap(() => void listeners.get(event)?.delete(cb));
+        },
+        stream: async (request, handlers) => {
+          // A name of this caller's own, so two streams on one unit stay apart. The core never
+          // reads it: it stamps arrivals with it and nothing else.
+          streamSeq += 1;
+          const label = `${name}#${streamSeq}`;
+          const onBytes = createStream<ArrayBuffer>();
+          onBytes.onmessage = (m) => handlers.onBytes(new Uint8Array(m));
+          const onEnd = createStream<Record<string, unknown>>();
+          onEnd.onmessage = (m) =>
+            handlers.onEnd?.(typeof m?.reason === "string" ? (m.reason as string) : "");
+          const answer = (await deps.invoke("sidecar_stream", {
+            name,
+            handle,
+            stream: label,
+            payload: JSON.stringify(request),
+            onBytes,
+            onEnd,
+          })) as Record<string, unknown>;
+          // Disposing ends this stream and nothing else. A unit outlives any one connection to it,
+          // and closing the unit because a view unmounted would end every other view's stream too.
+          const stop = tracker.wrap(() => {
+            void deps.invoke("sidecar_stream_close", { name, handle, stream: label }).catch(() => {});
+          });
+          return { answer, close: stop };
         },
         close,
       };

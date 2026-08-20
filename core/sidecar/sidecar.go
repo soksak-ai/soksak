@@ -99,6 +99,9 @@ type Host struct {
 
 	mu   sync.Mutex
 	open map[string]*unit
+	// streams are the live stream connections, under the labels their callers chose. Held so one
+	// can be ended without ending the unit it is on.
+	streams map[string]io.Closer
 }
 
 type unit struct {

@@ -48,6 +48,45 @@ type Sink interface {
 	EmitSidecarEnd(End) Delivery
 }
 
+// openStream records a connection under the caller's label so one stream can be ended without
+// ending the unit.
+//
+// A unit outlives any one connection to it. Closing the unit because a view unmounted would end
+// every other view's stream on the same unit, which is a fault nobody would look for in the view
+// that closed.
+func (host *Host) openStream(label string, from io.ReadCloser) {
+	host.mu.Lock()
+	if host.streams == nil {
+		host.streams = make(map[string]io.Closer)
+	}
+	previous := host.streams[label]
+	host.streams[label] = from
+	host.mu.Unlock()
+	if previous != nil {
+		// A label reused while its stream is live is the caller's own mistake, and leaving the first
+		// one open would leak a connection nothing can name any more.
+		_ = previous.Close()
+	}
+}
+
+// CloseStream ends one stream. A label nobody opened is not an error: a caller disposing twice, or
+// disposing after the unit ended it, is doing the right thing both times.
+func (host *Host) CloseStream(label string) {
+	host.mu.Lock()
+	held := host.streams[label]
+	delete(host.streams, label)
+	host.mu.Unlock()
+	if held != nil {
+		_ = held.Close()
+	}
+}
+
+func (host *Host) forgetStream(label string) {
+	host.mu.Lock()
+	delete(host.streams, label)
+	host.mu.Unlock()
+}
+
 // pump moves a stream connection into a sink until one end stops.
 //
 // The read size is chosen here rather than by the contract: it is how much this process is willing

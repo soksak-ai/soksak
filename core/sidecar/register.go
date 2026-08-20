@@ -10,7 +10,7 @@ import (
 
 // The surface a declared unit is received through.
 //
-// Five names, and what they are for is one thing: a plugin declares a unit in its manifest, and
+// Six names, and what they are for is one thing: a plugin declares a unit in its manifest, and
 // these open the one it declared and nothing else. The declaration is checked here
 // rather than trusted, because "declared equals actual" is the only thing standing between a
 // manifest a person consented to and a process this application starts.
@@ -36,6 +36,12 @@ type Registration struct {
 	Sink Sink
 }
 
+// streamUnserved is why both stream names refuse when this host has no sink.
+//
+// Opening the connection anyway would leave a unit writing into nothing, and a unit blocked on a full
+// buffer is indistinguishable from a unit that stopped.
+const streamUnserved = "this host carries no stream for a unit's output to arrive on"
+
 // Requirement is a contract a plugin asked for: an id and one exact version.
 type Requirement struct {
 	ID    string `json:"id"`
@@ -53,7 +59,7 @@ type Provided struct {
 // A build with no host registers none of them, and the difference between "this build starts no
 // units" and "this build forgot a command" is only visible if the names are still declared.
 func Names() []string {
-	return []string{"sidecar_open", "sidecar_send", "sidecar_stream", "sidecar_close", "sidecar_status"}
+	return []string{"sidecar_open", "sidecar_send", "sidecar_stream", "sidecar_stream_close", "sidecar_close", "sidecar_status"}
 }
 
 // Register puts this group on the registry.
@@ -114,7 +120,8 @@ func Register(registry *control.Registry, deps Registration) {
 	})
 
 	if deps.Sink == nil {
-		declare("sidecar_stream", "this host carries no stream for a unit's output to arrive on")
+		declare("sidecar_stream", streamUnserved)
+		declare("sidecar_stream_close", streamUnserved)
 	} else {
 		serve("sidecar_stream", func(args control.Args) (any, error) {
 			name, err := control.Arg[string](args, "name")
@@ -147,8 +154,21 @@ func Register(registry *control.Registry, deps Registration) {
 			if bytes == nil {
 				return answer, nil
 			}
-			go pump(bytes, deps.Sink, stream, DefaultReadSize)
+			deps.Host.openStream(stream, bytes)
+			go func() {
+				pump(bytes, deps.Sink, stream, DefaultReadSize)
+				deps.Host.forgetStream(stream)
+			}()
 			return answer, nil
+		})
+
+		serve("sidecar_stream_close", func(args control.Args) (any, error) {
+			stream, err := control.Arg[string](args, "stream")
+			if err != nil {
+				return nil, err
+			}
+			deps.Host.CloseStream(stream)
+			return map[string]any{"stream": stream, "open": false}, nil
 		})
 	}
 
