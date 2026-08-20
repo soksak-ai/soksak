@@ -38,6 +38,23 @@ Four rules produce this:
 `go.mod` `replace` directives and `frontend/package.json` `file:` dependencies both address these
 paths, so a move here is a two-line change in the application.
 
+## L1b. A message is owned by whatever it is about
+
+One registry per owner, not one for everything. The application's sentences are in the application,
+a unit's are in the unit, and nothing outside a tree declares into that tree's registry.
+
+The reason is not tidiness. A unit that declared into an application's registry can only be used by
+that application: its sentences are absent everywhere else, and what a person sees is a refusal with
+no words in it. It also puts the wording in one place and the fact in another, so the two part the
+day the application rewords something the unit meant precisely.
+
+So a unit states the fact — which target, which operation, what was missing — and whoever embeds it
+does the wording. Measured 2026-08-20: one host service's entire dependency on this application was
+a single sentence declared into its registry.
+
+`i18n_ownership_gate_test.go` reads the sibling trees for that import. It is one-directional on
+purpose: this repository importing its own registry is what the registry is for.
+
 ## L1a. Material from another tree is copied in, and the copy decides where
 
 A unit that came from somewhere else is copied into this workspace and the original is never
