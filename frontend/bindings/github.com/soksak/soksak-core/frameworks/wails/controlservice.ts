@@ -16,6 +16,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as controlwire$0 from "../../../soksak-contract-control/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as control$0 from "../../core/control/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -51,5 +54,5 @@ export function Invoke(name: string, args: { [_ in string]?: any }): $Cancellabl
 }
 
 // Private type creation functions
-const $$createType0 = control$0.Table.createFrom;
+const $$createType0 = controlwire$0.Table.createFrom;
 const $$createType1 = $models.Reply.createFrom;

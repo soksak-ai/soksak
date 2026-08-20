@@ -87,6 +87,15 @@ export function History(window: string, sinceUnixMs: number): $CancellablePromis
 }
 
 /**
+ * Kinds is every surface kind this compositor can place. It answers what is wired, not what exists.
+ */
+export function Kinds(): $CancellablePromise<$models.SurfaceKind[]> {
+    return $Call.ByID(4054897763).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
  * Latest answers one window's last commit as a composition.
  * 
  * Per window. One window's inventory is no answer about another's: a
@@ -136,7 +145,7 @@ export function SurfaceAt(window: string, x: number, y: number): $CancellablePro
  */
 export function Windows(): $CancellablePromise<string[]> {
     return $Call.ByID(3374928189).then(($result: any) => {
-        return $$createType6($result);
+        return $$createType7($result);
     });
 }
 
@@ -148,3 +157,4 @@ const $$createType3 = $Create.Map($Create.Any, $Create.Any);
 const $$createType4 = $models.Composition.createFrom;
 const $$createType5 = $Create.Array($$createType4);
 const $$createType6 = $Create.Array($Create.Any);
+const $$createType7 = $Create.Array($Create.Any);
