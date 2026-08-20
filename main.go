@@ -182,7 +182,11 @@ func main() {
 			Registry:     registry,
 			Bridge:       bridge,
 			Reapers:      []wails.UnitReaper{units},
-			UnitRoot:     filepath.Join(resolved.Home, "plugins"),
+			// Declared by whoever started this process. Unset is a person at the application, which
+			// is what a launch with nothing stated about it is. A measurement run declares the
+			// opposite and gets a window that draws without taking the front.
+			Attended: os.Getenv("SOKSAK_UNATTENDED") == "",
+			UnitRoot: filepath.Join(resolved.Home, "plugins"),
 		})
 	})
 	if err != nil {

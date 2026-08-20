@@ -47,11 +47,35 @@ type Options struct {
 	// its window-owning commands onto it; everything else was registered by the
 	// launcher, which is what keeps those answerable with no window at all.
 	Registry *control.Registry
+	// Attended is whether a person is at this launch.
+	//
+	// An unattended one is a measurement run: it opens windows, drives them and quits, and nobody is
+	// looking at any of it. Coming to the front there interrupts whoever is actually at the machine.
+	//
+	// The application cannot work this out — a window is a window, and an identifier is a name. It is
+	// a fact about the launch, so the launch declares it, the same way it declares the home.
+	Attended bool
 	// UnitRoot is the directory holding installed units. The asset server reads
 	// unit files out of it and refuses every path outside it. Empty means this
 	// build serves no unit files, and the route states that rather than
 	// answering 404.
 	UnitRoot string
+}
+
+// macActivation is how this launch presents itself to the desktop.
+//
+// Regular is an application a person opened: it activates, takes the front and holds a dock icon.
+// Accessory still draws its windows and is still captured — it just does not take the front and is
+// not in the dock, which is the whole difference between measuring a build and interrupting a
+// person.
+//
+// Nothing else on this axis fits: Prohibited refuses to show a window at all, and the gates measure
+// windows.
+func macActivation(attended bool) application.ActivationPolicy {
+	if attended {
+		return application.ActivationPolicyRegular
+	}
+	return application.ActivationPolicyAccessory
 }
 
 // hostServices is every value this host registers with the framework, in one place a reader and a
@@ -194,6 +218,7 @@ func Run(options Options) error {
 			},
 		},
 		Mac: application.MacOptions{
+			ActivationPolicy: macActivation(options.Attended),
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
@@ -356,6 +381,10 @@ func Run(options Options) error {
 			app.Quit()
 		}()
 	}
+
+	// An unattended launch is one run's application. Started here rather than earlier because the
+	// quit it calls is the framework's, and it does not exist until the application does.
+	watchSpawner(options.Attended, app.Quit)
 
 	return app.Run()
 }

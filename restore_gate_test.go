@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -93,6 +94,9 @@ type restoreGate struct {
 	runtime    string
 	identifier string
 	proc       *exec.Cmd
+	// held is this process's end of the application's channel. It is written to never — what the
+	// application reads is its close, which happens when this process ends by any route.
+	held io.WriteCloser
 	// log is where the application's own output went. Read it when the process stops answering: the
 	// socket has only "the door is closed", and this has what happened behind it.
 	log string
@@ -326,6 +330,10 @@ func (gate *restoreGate) start() {
 		"HOME="+gate.home,
 		"SOKSAK_IDENTIFIER="+gate.identifier,
 		"SOKSAK_RUNTIME="+gate.runtime,
+		// Nobody is watching this one. Nine of these start over a verify run, and each took the
+		// front and a dock icon until 2026-08-20 — a person at the machine had nine windows arrive
+		// over what they were doing. It still draws and is still captured; it does not activate.
+		"SOKSAK_UNATTENDED=1",
 	)
 	// The application's own output, kept. Thrown away, a process that dies leaves the gate holding
 	// "connection refused" and nothing about why — measured 2026-08-18, the app died mid-run three
@@ -337,6 +345,17 @@ func (gate *restoreGate) start() {
 	}
 	gate.log = log.Name()
 	cmd.Stdout, cmd.Stderr = log, log
+	// The channel the application reads to know this process is still here. Nothing is written on
+	// it; the far end closing is the message, and that happens on its own when this process dies by
+	// any route — including the ones that skip quit(): an interrupt, a timeout, a panic.
+	//
+	// Measured 2026-08-20, before this: three applications from earlier runs were still up, the
+	// oldest an hour and seventeen minutes, each holding a window and a home nothing could reach.
+	held, err := cmd.StdinPipe()
+	if err != nil {
+		gate.t.Fatalf("opening the application's channel: %v", err)
+	}
+	gate.held = held
 	if err := cmd.Start(); err != nil {
 		gate.t.Fatalf("starting the application: %v", err)
 	}
@@ -361,6 +380,12 @@ func (gate *restoreGate) start() {
 func (gate *restoreGate) quit() {
 	if gate.proc == nil {
 		return
+	}
+	// The channel goes with the process it named. Left open, this gate's own end outlives the run
+	// inside the test binary and the next gate's application sees a spawner that is still there.
+	if gate.held != nil {
+		_ = gate.held.Close()
+		gate.held = nil
 	}
 	// What the command answered, kept. A refused shutdown — an unknown command, a window that had
 	// already gone — and an accepted one that did nothing are the same twenty seconds from here,
