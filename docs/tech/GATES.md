@@ -177,6 +177,22 @@ Written here so it is not rediscovered (L2).
   inner deadline is not being reached and the cause is unmeasured. Nothing here
   claims the flake is fixed.
 
+- **The core binary links three plugin packages.** C1a says the core assembles
+  from what an installation declares and links no plugin;
+  `go list -deps ./...` names `soksak-plugin-browser-native`,
+  `soksak-plugin-terminal-xterm` and its `command` package, imported by
+  `main.go` and `frameworks/wails/host.go` (measured 2026-08-20).
+
+  Not because a loaded module could not do the work. A native half that must run
+  in this process is an engine module — a dylib loaded because the manifest
+  declared it — and nothing loads one yet (`SIDECARS.md` S7). Wails offers no
+  shape for it either: `RegisterService` takes a Go value and refuses anything
+  after `Run`, so a service is a compile-time fact and is the right home for the
+  host that loads engines, not for the engines.
+
+  `linked_plugin_gate_test.go` holds the count at three: a fourth fails, and so
+  does a third once one has gone.
+
 - **Windows and Linux are compile-only.** Every driver fails by name. Their
   runtime and visual behaviour is unverified, and no green is recorded for them.
 - **Windows terminal needs ConPTY.** `creack/pty` does not cover it.

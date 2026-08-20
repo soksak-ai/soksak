@@ -96,6 +96,30 @@ All of these are hard.
   Measured 2026-08-16: the id scan had been green for a day while the core held
   a bookmarks store, three `bookmark.*` commands, a `bookmarks.changed` plugin
   event, and the browser panel's stylesheet.
+- **C1a.** The core assembles from what an installation declares, never from its
+  own source. No plugin package is linked into the core binary.
+
+  A plugin is installed. What the core reads to assemble it is the manifest and
+  the artefacts beside it — not an import. A plugin whose name is in the core's
+  source is not installed, it is compiled: removing it breaks the build, adding
+  the next one edits the core, and A9 is false for both.
+
+  Measured 2026-08-20: `go list -deps ./...` named three plugin packages, and
+  `main.go` and `frameworks/wails/host.go` imported them. The composition root
+  was the stated reason, and a composition root that requires a rebuild to
+  compose is a build step wearing the name.
+
+  In-process is not the same as linked, and reading it that way is what put them
+  there. A native half that must run in this process — a parent view is
+  process-local, and a message pump needs this process's main queue — is an
+  **engine module**: a dylib the core loads because the installation declared it,
+  described by the symbols it exports, whose messages the core relays without
+  understanding (`SIDECARS.md` S3).
+
+  Gate: `coupling_gate_test.go` reads `go list -deps` and refuses a plugin
+  package in the core binary's dependency graph. It is red until the two native
+  halves move behind the seam that already exists for them.
+
 - **C2.** Every feature exposes three surfaces — command, status, and DOM — and
   the exposure is operable, not decorative.
   A view with no command fails. A view no status axis can see fails. An element

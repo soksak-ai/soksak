@@ -28,15 +28,37 @@ A second protocol is the defect this rule prevents: two wires diverge, and a div
 fail — it arrives as a different answer. An earlier design had a private engine ABI beside the
 control plane, and every rule then existed twice.
 
-## S3. In-process is a service, not a sidecar
+## S3. Two models, and in-process is not linked
 
-A native child view is process-local on macOS: another process cannot attach a view to this
-application's windows, and the engine's message pump needs this process's main queue. Anything that
-draws into a pane is therefore linked into the application as a Wails service, not spawned.
+A sidecar takes one of two runtime shapes. The axis is where it runs, not what it is called.
 
-That is what `wails-services/wails-service-native-compositor` and
-`soksak-plugins/soksak-plugin-browser-native` are: linked Go, listed in the service list, reachable
-from the page through their commands.
+| | `service` | `engine` |
+| --- | --- | --- |
+| Runs as | its own process | a dylib in this process, loaded at boot |
+| Draws | nothing | into a pane's surface |
+| Channel | the control-plane envelope over its socket | opaque bytes across the loading ABI |
+| Describes itself by | its manifest | the symbols it exports — the binary is the truth |
+| The core understands | the envelope, not the payload | nothing; it relays |
+
+`engine` is in this process because a native child view is process-local on macOS: another process
+cannot attach a view to this application's windows, and the message pump needs this process's main
+queue. That is a fact about the process, and it was read as a fact about the build until 2026-08-20
+— this section said such a plugin is "linked into the application as a Wails service, not spawned",
+and the browser's and compositor's Go halves were linked accordingly.
+
+**In-process is not linked.** An engine module is installed like any other artefact and loaded
+because the manifest declared it. Wails' own service concept cannot carry it: `RegisterService`
+takes a Go value and refuses anything after `Run`, so a service is a compile-time fact — which is
+the right shape for the *host* that loads engines, and the wrong one for the engines.
+
+One constraint the loading side carries: a module that brings a second Go runtime into this process
+is not loadable, because the process already has one. An engine exports a C ABI and holds no runtime
+of its own. The Go half of a plugin that needs a window belongs to the host that loads it, not to the
+module.
+
+Until that host exists, `wails-services/wails-service-native-compositor` and
+`soksak-plugins/soksak-plugin-browser-native` are linked Go, and `ARCHITECTURE.md` C1a is red for
+them. The state is written down rather than described as a design.
 
 ## S4. Lifetime
 
@@ -67,8 +89,16 @@ interface is checked against what the binary reports at load: declared equals ac
 The `sidecar` permission is disclosed with the declared names, because a sidecar runs code this
 application did not write.
 
-## S7. Not in this round
+## S7. What is built, and what is not
 
-No sidecar is built here. The terminal and the browser are in-process: linked Go plus a native
-layer. This document exists first because a boundary defined after the code is a boundary the code
-has already crossed.
+| Shape | State |
+| --- | --- |
+| `service` — its own process | Built. The PTY daemon owns the shells so they outlive an application generation, which is the whole reason a process is split. |
+| `engine` — a loaded dylib | Not built. Nothing loads a module, so a plugin that must draw into a pane has nowhere to be except the core binary. |
+
+The second row is why `ARCHITECTURE.md` C1a is red. The browser's native half is not linked because
+a dylib could not do the work — it is linked because there is no host to load one.
+
+The engine host is what this document exists to bound. A boundary defined after the code is a
+boundary the code has already crossed, and this one was: the paragraph above replaced a rule that
+had turned the absence of a host into a law that plugins must be compiled in.
