@@ -402,11 +402,31 @@ func trim(value string) string {
 	return value
 }
 
-// ServiceShutdown ends every unit this host started.
+// ServiceShutdown lets go of every unit and ends none of them.
 //
-// It is the shape a host's shutdown hook takes, and it is here rather than in the host because what
-// a unit holds is the unit's business — the host has the moment and nothing else.
+// It called StopAll until 2026-08-20, which ended every unit as the application quit — and that is
+// the one moment a unit exists to survive. A shell that dies when the application does is a shell
+// that could have been in the application, and the whole shape above it, the record, the adoption
+// and the release that is not an end, buys nothing.
+//
+// What is left behind is a running process and a record naming it, which is exactly what the next
+// run reads: it connects, greets, and finds the shells still there.
+//
+// So nothing here ends a unit, and nothing else does either. A unit is ended by `sidecar_stop`,
+// which is a statement that its work is over. An application quitting is not that statement.
 func (host *Host) ServiceShutdown() error {
-	host.StopAll()
+	host.mu.Lock()
+	for name := range host.open {
+		delete(host.open, name)
+	}
+	streams := host.streams
+	host.streams = nil
+	host.mu.Unlock()
+
+	// The connections do go. They are this process's file descriptors and nothing outside it can
+	// use them; the unit sees a reader leave, which is a thing it already handles.
+	for _, held := range streams {
+		_ = held.Close()
+	}
 	return nil
 }

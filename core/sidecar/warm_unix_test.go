@@ -45,8 +45,12 @@ func TestWhatAUnitHeldSurvivesTheApplication(t *testing.T) {
 			t.Fatalf("keeping %q: %v %+v", word, err, answer)
 		}
 	}
-	if err := first.Release("keeper"); err != nil {
-		t.Fatalf("releasing: %v", err)
+	// The application quits — the path the host actually takes, not a Release the product never
+	// calls. This is where it broke: the shutdown hook ended every unit, so a shell died with the
+	// application it was meant to outlive, and the test above passed the whole time because it let
+	// go by hand instead.
+	if err := first.ServiceShutdown(); err != nil {
+		t.Fatalf("the application's shutdown hook: %v", err)
 	}
 
 	// The second run finds it, and finds what it held.
