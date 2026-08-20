@@ -38,6 +38,30 @@ Four rules produce this:
 `go.mod` `replace` directives and `frontend/package.json` `file:` dependencies both address these
 paths, so a move here is a two-line change in the application.
 
+## L1a. Material from another tree is copied in, and the copy decides where
+
+A unit that came from somewhere else is copied into this workspace and the original is never
+written to. Two reasons, and the second is the one that governs:
+
+- A source tree that another application is running is not still while it is read. What a reading
+  found once, a second reading may not find, and neither reading states which one is the record.
+- A path that can be read is one keystroke from a path that can be written. A copy removes the
+  write entirely, which no amount of care does.
+
+Where the copy lands is decided by one question — **does a build in this workspace reference it.**
+A unit that will be built, released or installed here goes in the folder for its kind, and from that
+moment every rule here applies to it. Material that is only read goes in `backup/`, which no build
+and no gate sees.
+
+**A produced artefact is never copied.** A binary carried in from another tree makes this workspace
+appear to build something it cannot: the artefact runs, the gate that would have named the gap stays
+green, and the producer is somewhere no clone reaches. What is copied is what produces the artefact,
+or nothing.
+
+**No symbolic link, in either direction.** A declared path is resolved as declared, and a failure
+names every location it looked in. A link answers as though a file were somewhere it is not, and the
+answer is indistinguishable from the file actually being there.
+
 ## L2. Inside the application
 
 ```

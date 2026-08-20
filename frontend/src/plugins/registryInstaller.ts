@@ -149,15 +149,26 @@ function sameSelection(
   return true;
 }
 
+// Which artifact runs here is what the artifact declares, never what kind of unit declared it.
+//
+// Every artifact states its own `target`, and the release parser already holds the shapes apart: a
+// sidecar release carries native triples, every other kind carries exactly one `any`. Asking the
+// kind again re-derives a fact that is already written down, and the two can disagree — the day a
+// plugin ships a per-target artifact, a rule keyed on the kind quietly picks the wrong one, or
+// reports none at all while the right one is in the list.
+//
+// The host's own triple wins over `any`, so a unit that ships both is served the specific build.
 function selectArtifact(
   release: UnitReleaseManifest,
   target: UnitTarget,
 ): UnitReleaseArtifact {
-  const wanted = release.kind === "sidecar" ? target : ANY_TARGET;
-  const artifact = release.artifacts.find((candidate) => candidate.target === wanted);
+  const artifact =
+    release.artifacts.find((candidate) => candidate.target === target) ??
+    release.artifacts.find((candidate) => candidate.target === ANY_TARGET);
   if (!artifact) {
     throw new InstallFailure("TARGET_NOT_AVAILABLE", [
-      `${release.kind}:${release.id}@${release.version} has no artifact for ${wanted}`,
+      `${release.kind}:${release.id}@${release.version} declares no artifact for ${target} ` +
+        `and none for ${ANY_TARGET}`,
     ]);
   }
   return artifact;

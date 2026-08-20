@@ -216,8 +216,8 @@ All of these are hard.
 
   Two are necessary — fail either and it belongs to a plugin:
 
-  1. **It is named after no domain.** `app.data`, `app.pty`, `ui.input` name a
-     mechanism. `bookmark`, `favicon`, `tabstrip` name one kind of content, and
+  1. **It is named after no domain.** `app.data`, `app.process`, `ui.input` name
+     a mechanism. `bookmark`, `favicon`, `tabstrip` name one kind of content, and
      the name alone shows which plugin the code was written for.
   2. **A plugin that never heard of the first consumer can use it unchanged.**
      A store keyed by namespace serves a browser and a mail client equally. A
@@ -225,12 +225,27 @@ All of these are hard.
 
   Then one of these is the reason it is in the core at all:
 
-  3. **Either it cannot cross the plugin boundary** — a PTY's kernel object, a
-     platform webview, the window's pixels; the process that owns the window
-     owns them — **or every plugin would otherwise reinvent it**, and reinvent
-     it differently. A byte-stream parser for OSC 7/133/633 crosses fine and is
-     still the core's: it decodes a protocol and decides nothing, and three
-     plugins reading PTY output would each write it again.
+  3. **Either it cannot cross the plugin boundary** — a platform webview, the
+     window's pixels; the process that owns the window owns them — **or every
+     plugin would otherwise reinvent it**, and reinvent it differently. A
+     byte-stream parser for OSC 7/133/633 crosses fine and is still the core's:
+     it decodes a protocol and decides nothing, and three plugins reading a
+     terminal byte stream would each write it again.
+
+     A PTY's kernel object was the first example here and it was the wrong one.
+     Measured 2026-08-20: this application never holds a PTY master. A daemon in
+     another process holds it, and what crosses to this one is bytes over a
+     socket — which is what the whole first clause is about. The clause survives
+     on the cases that do not cross: a child view is process-local, and the
+     window's pixels are this process's.
+
+     What that leaves for a PTY is the second clause alone, and the second
+     clause is about a **capability**, never about where the code runs. The
+     capability's implementation is declared and installed like any other:
+     `soksak-sidecars/soksak-sidecar-pty` against `soksak-spec-pty`. Then a
+     second implementation — a console API on another platform, a shell on
+     another machine — installs with no core edit, which is the test C1c
+     applies, and the core holds no device layer for one kind of content.
 
   Question three was stated as necessary until it was applied, on the same day.
   Read that way it ejects every pure computation the core is made of — the

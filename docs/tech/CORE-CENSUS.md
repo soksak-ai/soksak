@@ -82,10 +82,16 @@ than a domain named.
   the registry.
 - `GroupStatusBar` shows a terminal's cwd in its own branch.
 
-`app.pty` stays — the kernel object cannot cross the boundary. So does `terminal/ptyObservation.ts`,
-the OSC 7/133/633 byte-stream parser: it decodes a protocol and decides nothing, and every plugin
-reading PTY output would otherwise write it again. What leaves is the opinion built on top of it —
-that a gap means a turn ended, that a running command should read as a view's status line.
+`app.pty` was kept here on the reading that the kernel object cannot cross the boundary. Measured
+2026-08-20, it already does: this application holds no PTY master, a daemon in another process holds
+it, and bytes cross a socket. The verdict is reopened in `ARCHITECTURE.md` C6 — the capability is
+common enough to keep a declared name, and its implementation is an installed unit rather than a
+device layer in the core.
+
+`terminal/ptyObservation.ts` stays: the OSC 7/133/633 byte-stream parser decodes a protocol and
+decides nothing, and every plugin reading a terminal byte stream would otherwise write it again.
+What leaves is the opinion built on top of it — that a gap means a turn ended, that a running
+command should read as a view's status line.
 
 **Done.** The terminal plugin registers `read`, `exec`, `cwd` beside `send` and `clear`, reports its
 own status through the view context, and places its working directory in the status bar as an item.
