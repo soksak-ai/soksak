@@ -36,11 +36,9 @@ var unbuilt = map[string]string{
 	// caller in this build.
 	"secret_set": "this build's vault has no writer, so a secret cannot be set through it",
 
-	// Sidecars and services. A sidecar is a plugin in its own process, and this
-	// build starts none.
-	"sidecar_open":     "this build starts no sidecar processes",
-	"sidecar_send":     "this build starts no sidecar processes to send to",
-	"sidecar_close":    "this build starts no sidecar processes to close",
+	// Services. The sidecar group is served by `core/sidecar`, which declares its own names unserved
+	// when this host is given no way to start a unit — three of them were listed here while that
+	// group owned six, so the three it grew were refused by nothing at all.
 	"service_dispatch": "this build hosts no service sidecars to dispatch to",
 	"service_status":   "this build hosts no service sidecars to report on",
 	"service_bus_push": "this build carries no service event bus",

@@ -514,7 +514,7 @@ export interface SoksakPluginApi {
      *
      *  The core decodes OSC 7/133/633 out of it — working directory, command boundaries — and
      *  answers `getCwd`, `onCommandFinished` and the rest from what it found. It decodes a protocol
-     *  and decides nothing: what a command boundary *means* is the caller's.
+     *  and interprets nothing: what a command boundary *means* is the caller's.
      *
      *  Without this the readings above stay empty on a pane that is running perfectly, which reads
      *  as shell integration that is not working rather than as a stream nobody supplied. */
@@ -522,7 +522,7 @@ export interface SoksakPluginApi {
     /** Hand the host a way to read this pane's screen and to type into it.
      *
      *  `readBuffer`, `sendText` and `onOutput` above resolve through this registration, and without
-     *  it they answer "not ready" for a pane that is running. The screen belongs to whoever drew it,
+     *  it they answer "not ready" for a pane that is running. The screen is whoever drew it's,
      *  so there is no other way for the host to reach it. Dispose on unmount. */
     registerIo?: (
       paneId: string,
@@ -1128,13 +1128,20 @@ function createSidecarApi(
         requirement: decl.interface,
         onEvent,
       });
-      let closed = false;
+      let released = false;
+      // Releasing the channel, never ending the unit.
+      //
+      // A unit is a separate process so that what it holds outlives this application — shells that
+      // survive a restart are the whole reason. A plugin being disabled is this application
+      // finishing with the unit, not the unit's work being over, and closing one on deactivation
+      // ended the shells somebody was working in (measured 2026-08-20). Ending a unit is
+      // `sidecar_stop`, and nothing here calls it.
       const close = async () => {
-        if (closed) return;
-        closed = true;
-        await deps.invoke("sidecar_close", { name }).catch(() => {});
+        if (released) return;
+        released = true;
+        await deps.invoke("sidecar_release", { name }).catch(() => {});
       };
-      tracker.wrap(() => void close()); // reclaim the channel when the plugin is disabled
+      tracker.wrap(() => void close());
       return {
         send: async (msg) =>
           (await deps.invoke("sidecar_send", {

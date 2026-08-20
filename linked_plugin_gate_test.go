@@ -19,30 +19,23 @@ import (
 // What the linker did is a different reading, and it is the one that settles whether a plugin is
 // installed or built in.
 //
-// Measured 2026-08-20: two packages, both the terminal unit's, imported by `main.go` and
-// `frameworks/wails/host.go`.
+// Measured 2026-08-20: none. The core binary links no plugin package.
 //
-// A third was the browser unit's, and it was never that unit's code. Its 1,290 lines of Go and
-// Objective-C create, move, navigate and report a child web view — the capability `api.ts` declares
-// as `app.webview`, which every unit holding the `webview` permission is served by. It was one
-// unit's by where the file sat and by nothing else, and it now stands as the host service it is
-// (`wails-services/wails-service-webview-surface`).
+// It linked three that morning. The browser unit's native half was never that unit's — it drives a
+// child web view, which every unit holding the `webview` permission is served by, so it is the host
+// service it always was. The terminal unit's staged, spawned, supervised and relayed to a daemon,
+// which `core/daemon` and `core/sidecar` already do for any declared process; nothing had to move
+// for it to go, only the manifest had to declare the unit.
 //
-// What remains is the terminal unit's, and it is a different case: it stages a binary, spawns it,
-// waits for it, supervises it and relays to it, which `core/daemon` and `core/process` already do
-// for any declared process. Nothing has to move for it to go — the manifest has to declare the
-// process, and this one does not.
+// The rule and the reading are one number now.
 //
-// The rule is absolute and this gate is a ratchet, which are not the same thing and both are true.
-// The rule — no plugin package in the core binary — is stated in full in `ARCHITECTURE.md` C1a and
-// nothing here softens it. What this gate can do today is refuse the debt growing: a fourth package
-// fails, and so does a third when one has gone, because a debt that shrinks without the number
-// moving is a debt the next one can hide behind.
+// They were two: a ratchet held the count at a written-down debt, so a build with the debt still in
+// it was green under a test named for the rule. That is a test answering a question nobody asked —
+// "is the debt what it was" — while the one in its name went unanswered, and a debt that a green
+// test reports is a debt nobody is looking at.
 //
-// Failing outright instead would leave the whole suite red for as long as the engine host takes,
-// and a gate everyone runs past is worth less than one that blocks the next step. The debt is
-// listed as not done in `GATES.md`, which is where a standard that is not met yet is named.
-const linkedPluginDebt = 2
+// A ratchet was right while the count could only come down slowly. It came down to zero in a day,
+// and keeping the machinery would leave the next person a dial to turn instead of a rule to keep.
 
 func TestTheCoreBinaryLinksNoPlugin(t *testing.T) {
 	out, err := exec.Command("go", "list", "-deps", "./...").Output()
@@ -63,15 +56,12 @@ func TestTheCoreBinaryLinksNoPlugin(t *testing.T) {
 	}
 	sort.Strings(linked)
 
-	if len(linked) > linkedPluginDebt {
-		t.Fatalf("the core binary links %d plugin packages and the debt written down is %d:\n  %s\n"+
-			"A plugin is installed, not compiled. Adding one here makes the core need a rebuild to "+
-			"gain a plugin, which is what C1a refuses.",
-			len(linked), linkedPluginDebt, strings.Join(linked, "\n  "))
-	}
-	if len(linked) < linkedPluginDebt {
-		t.Fatalf("the core binary links %d plugin packages and the debt written down is %d.\n"+
-			"One went. Lower linkedPluginDebt to %d so the next one cannot come back unnoticed.",
-			len(linked), linkedPluginDebt, len(linked))
+	if len(linked) != 0 {
+		t.Fatalf("the core binary links %d plugin package(s):\n  %s\n"+
+			"A plugin is installed, not compiled. A package here makes the core need a rebuild to gain "+
+			"a plugin, and makes removing that plugin break the build — which is what C1a refuses.\n"+
+			"What it needs instead: the plugin declares what it needs in its manifest, and the core "+
+			"reads the declaration.",
+			len(linked), strings.Join(linked, "\n  "))
 	}
 }

@@ -35,7 +35,7 @@ func TestARealShellEchoesThroughTheRelay(t *testing.T) {
 	home := shortHome(t)
 	stagePTY(t, home, daemon)
 
-	collected := &bytes{}
+	collected := newCollector("SOKSAK-RELAY-OK")
 	host := NewHost(Deps{
 		Home: home, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 15 * time.Second,
@@ -107,40 +107,54 @@ func TestARealShellEchoesThroughTheRelay(t *testing.T) {
 		t.Fatalf("writing was refused: %s", written.Error)
 	}
 
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		if strings.Contains(collected.text(), marker) {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
+	// Waited on the arrival, not on a clock. A loop that slept and looked again would pass whether
+	// the bytes arrived at once or at the last moment, and the deadline below is the one thing it is
+	// for: a shell that never echoes at all.
+	select {
+	case <-collected.sawMarker:
+	case <-time.After(15 * time.Second):
+		t.Fatalf("the shell never echoed %q through the relay. What arrived:\n%s", marker, collected.text())
 	}
-	t.Fatalf("the shell never echoed %q through the relay. What arrived:\n%s", marker, collected.text())
 }
 
-// bytes is a sink that keeps what arrived, so the assertion is on delivered output rather than on a
-// call having been made.
-type bytes struct {
-	mu   sync.Mutex
-	seen strings.Builder
+// collector is a sink that keeps what arrived and closes a channel when the marker is in it.
+//
+// The channel is what a test waits on: an arrival is an event and this is where it happens, so
+// nothing has to look again on a timer to find out that it did.
+type collector struct {
+	marker    string
+	sawMarker chan struct{}
+
+	mu     sync.Mutex
+	seen   strings.Builder
+	signal bool
 }
 
-func (b *bytes) EmitSidecarBytes(chunk Bytes) Delivery {
+func newCollector(marker string) *collector {
+	return &collector{marker: marker, sawMarker: make(chan struct{})}
+}
+
+func (c *collector) EmitSidecarBytes(chunk Bytes) Delivery {
 	raw, err := base64.StdEncoding.DecodeString(chunk.DataBase64)
 	if err != nil {
 		return Gone
 	}
-	b.mu.Lock()
-	b.seen.Write(raw)
-	b.mu.Unlock()
+	c.mu.Lock()
+	c.seen.Write(raw)
+	if !c.signal && strings.Contains(c.seen.String(), c.marker) {
+		c.signal = true
+		close(c.sawMarker)
+	}
+	c.mu.Unlock()
 	return Delivered
 }
 
-func (b *bytes) EmitSidecarEnd(End) Delivery { return Delivered }
+func (c *collector) EmitSidecarEnd(End) Delivery { return Delivered }
 
-func (b *bytes) text() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.seen.String()
+func (c *collector) text() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.seen.String()
 }
 
 func stagePTY(t *testing.T, home, source string) {

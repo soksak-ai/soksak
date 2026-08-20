@@ -113,6 +113,9 @@ type unit struct {
 	// token is what this host greets the unit with. It is never handed to a caller: a caller that
 	// held it could greet the unit directly, which is the one thing this relay exists to be.
 	token string
+	// adopted marks a unit a previous run of this application started. There is no child handle for
+	// one, so nothing here waits on it and ending it is a signal to a pid rather than a reap.
+	adopted bool
 }
 
 func NewHost(deps Deps) *Host {
@@ -137,6 +140,11 @@ func (host *Host) Started() []Open {
 //
 // A unit already open is answered with, not started again. Two processes behind one name is a
 // process nothing can reach and nothing ends.
+//
+// A unit this host did not start is found before one is started. That is the whole point of a unit
+// being a process: it outlives the application, so an application coming back finds it still there
+// with everything it held. Starting a second one instead would leave the first holding children
+// nobody can reach — and the first is the one with the work in it.
 func (host *Host) Start(name string) (Open, error) {
 	host.mu.Lock()
 	if held, running := host.open[name]; running {
@@ -144,6 +152,10 @@ func (host *Host) Start(name string) (Open, error) {
 		return held.open, nil
 	}
 	host.mu.Unlock()
+
+	if adopted, found := host.adopt(name); found {
+		return adopted, nil
+	}
 
 	if host.deps.Spawner == nil {
 		return Open{}, i18n.Errorf("sidecar.noSpawner", map[string]string{"name": name})
@@ -168,10 +180,18 @@ func (host *Host) Start(name string) (Open, error) {
 	held := &unit{child: child, stderr: newRing(64)}
 	go drain(child.Stderr(), held.stderr)
 
+	// One watcher per child, started before anything can fail. It is the only caller of Wait for
+	// this child's life, which is what the spawner's contract requires and what keeps two callers
+	// off one wait status.
+	ended := make(chan struct{})
+	go func() {
+		_, _ = child.Wait()
+		close(ended)
+	}()
+
 	announced, err := host.await(name, child)
 	if err != nil {
 		_ = child.Signal()
-		go func() { _, _ = child.Wait() }()
 		return Open{}, err
 	}
 
@@ -179,18 +199,18 @@ func (host *Host) Start(name string) (Open, error) {
 	// The token stays here rather than on Open. Open is what a caller reads, and a caller that could
 	// read the token could greet the unit itself — which is the one thing this relay exists to be.
 	held.token = announced.token
+	host.remember(name, held.open, announced.token)
 	host.mu.Lock()
 	// Another caller may have started the same unit while this one waited. The first one holds it;
 	// this one ends what it started rather than leaving a second process nobody has a handle to.
 	if existing, raced := host.open[name]; raced {
 		host.mu.Unlock()
 		_ = child.Signal()
-		go func() { _, _ = child.Wait() }()
 		return existing.open, nil
 	}
 	host.open[name] = held
 	host.mu.Unlock()
-	go host.reapWhenGone(name, held)
+	go host.forgetWhenGone(name, held, ended)
 	return held.open, nil
 }
 
@@ -266,8 +286,29 @@ func judge(name, line string) (announcement, error) {
 	return announcement{address: *said.Socket, protocol: *said.Protocol, token: token}, nil
 }
 
-// Stop ends one unit. Only what this host started is ended: a process it adopted is one whose
-// arguments it never chose and whose work it cannot know.
+// Release lets go of a unit without ending it.
+//
+// This is what a caller that has finished with a unit does, and it is not Stop. A unit is a process
+// so that it outlives the application: a plugin that is disabled, a view that unmounts, a channel
+// that is released — none of those are reasons to end shells somebody is working in, and a release
+// that ended one would undo the reason the unit is a process at all.
+//
+// The record stays, so the next Start finds the unit rather than beginning a second one.
+func (host *Host) Release(name string) error {
+	host.mu.Lock()
+	held := host.open[name]
+	delete(host.open, name)
+	host.mu.Unlock()
+	if held == nil {
+		return i18n.Errorf("sidecar.notOpen", map[string]string{"name": name})
+	}
+	return nil
+}
+
+// Stop ends one unit and forgets it.
+//
+// Ending, not releasing. This is for a unit whose work is over, not for an application that has
+// finished with one — two different questions, and Release is the other.
 func (host *Host) Stop(name string) error {
 	host.mu.Lock()
 	held := host.open[name]
@@ -276,38 +317,57 @@ func (host *Host) Stop(name string) error {
 	if held == nil {
 		return i18n.Errorf("sidecar.notOpen", map[string]string{"name": name})
 	}
-	if err := held.child.Signal(); err != nil {
-		return err
-	}
-	_, _ = held.child.Wait()
-	return nil
+	host.forget(name)
+	return host.end(held)
 }
 
-// StopAll ends every unit this host started and answers how many.
+// StopAll ends every unit this host holds and answers how many.
 func (host *Host) StopAll() int {
 	host.mu.Lock()
 	held := make([]*unit, 0, len(host.open))
 	for name, one := range host.open {
 		held = append(held, one)
+		host.forget(name)
 		delete(host.open, name)
 	}
 	host.mu.Unlock()
 	for _, one := range held {
-		_ = one.child.Signal()
-		_, _ = one.child.Wait()
+		_ = host.end(one)
 	}
 	return len(held)
 }
 
-// reapWhenGone forgets a unit that ended on its own, so the next Start begins a new one rather than
+// end signals a unit and leaves the reaping to whoever owns it.
+//
+// Wait is called by exactly one goroutine for the life of a child — the contract in `core/process`
+// states it, and two callers of it race on the same wait status. The one goroutine is the watcher
+// started beside the child; this only signals, and the watcher notices.
+//
+// A unit this host adopted has no child handle at all. It was started by a previous run, so there is
+// nothing here to wait on and ending it is a signal to the pid the record named.
+func (host *Host) end(held *unit) error {
+	if held.child != nil {
+		return held.child.Signal()
+	}
+	if held.open.PID > 0 {
+		return signalPID(held.open.PID)
+	}
+	return nil
+}
+
+// forgetWhenGone drops a unit that ended on its own, so the next Start begins a new one rather than
 // answering with an address nobody is listening at.
-func (host *Host) reapWhenGone(name string, held *unit) {
-	_, _ = held.child.Wait()
+//
+// It waits on the watcher's channel rather than calling Wait itself. Two callers of Wait race on one
+// wait status, and the spawner's contract states there is exactly one.
+func (host *Host) forgetWhenGone(name string, held *unit, ended <-chan struct{}) {
+	<-ended
 	host.mu.Lock()
 	if host.open[name] == held {
 		delete(host.open, name)
 	}
 	host.mu.Unlock()
+	host.forget(name)
 }
 
 // Complaint answers what a unit last printed to stderr.
@@ -340,4 +400,13 @@ func trim(value string) string {
 		value = value[1:]
 	}
 	return value
+}
+
+// ServiceShutdown ends every unit this host started.
+//
+// It is the shape a host's shutdown hook takes, and it is here rather than in the host because what
+// a unit holds is the unit's business — the host has the moment and nothing else.
+func (host *Host) ServiceShutdown() error {
+	host.StopAll()
+	return nil
 }

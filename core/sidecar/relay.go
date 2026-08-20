@@ -165,3 +165,8 @@ func (host *Host) greet(conn io.Writer, reader *bufio.Reader, name string) error
 	}
 	return nil
 }
+
+// bufferedReader is the one reader a connection gets. A second over the same connection starts empty
+// while the first still holds bytes it read ahead, and what that looks like is an answer that never
+// arrives on a unit that already sent it.
+func bufferedReader(conn io.ReadWriteCloser) *bufio.Reader { return bufio.NewReader(conn) }

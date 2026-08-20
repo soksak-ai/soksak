@@ -1,0 +1,98 @@
+//go:build !windows
+
+package sidecar
+
+import (
+	"os"
+	"testing"
+	"time"
+
+	controlwire "github.com/soksak/soksak-contract-control"
+	"github.com/soksak/soksak-core/core/process"
+)
+
+// A second host finds the unit the first one started, and starts nothing.
+//
+// This is the whole reason a unit is a process. An application that came back and started a second
+// one would leave the first holding everything it had — shells somebody is working in — with nothing
+// able to reach it, while the second reported healthy the entire time.
+//
+// Two hosts over one home stand in for two runs of the application. What separates them is exactly
+// what separates two runs: the second has an empty map and whatever the first wrote down.
+func TestASecondRunFindsTheUnitTheFirstStarted(t *testing.T) {
+	home := shortHome(t)
+	stageUnit(t, home, "probe", probeSource)
+	deps := func() Deps {
+		return Deps{
+			Home: home, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+			Dial: dialUnix, ReadyWithin: 10 * time.Second,
+		}
+	}
+
+	first := NewHost(deps())
+	started, err := first.Start("probe")
+	if err != nil {
+		t.Fatalf("starting the unit: %v", err)
+	}
+
+	// The first run lets go without ending anything, which is what a release is.
+	if err := first.Release("probe"); err != nil {
+		t.Fatalf("releasing the unit: %v", err)
+	}
+
+	second := NewHost(deps())
+	t.Cleanup(func() { second.StopAll() })
+	found, err := second.Start("probe")
+	if err != nil {
+		t.Fatalf("the second run could not find the unit: %v", err)
+	}
+	if found.PID != started.PID {
+		t.Fatalf("the second run started a second process: %d then %d — the first is the one with the "+
+			"work in it, and nothing can reach it now", started.PID, found.PID)
+	}
+	if found.Address != started.Address {
+		t.Fatalf("the second run reached %q and the first bound %q", found.Address, started.Address)
+	}
+
+	// And it can drive what it found, which is what adopting is for.
+	answer, err := second.Send("probe", controlwire.Request{ID: "1", Command: "probe.echo"})
+	if err != nil || !answer.Ok {
+		t.Fatalf("the adopted unit did not answer: %v %+v", err, answer)
+	}
+}
+
+// A record left by a unit that has gone starts a new one rather than failing.
+//
+// The record is not evidence that anything is listening — a path exists both when someone is and
+// when a dead unit left it behind. A connect settles it, and a connect is an event rather than a look.
+func TestARecordWithNothingBehindItStartsAUnit(t *testing.T) {
+	home := shortHome(t)
+	stageUnit(t, home, "probe", probeSource)
+	deps := Deps{
+		Home: home, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second,
+	}
+
+	first := NewHost(deps)
+	started, err := first.Start("probe")
+	if err != nil {
+		t.Fatalf("starting the unit: %v", err)
+	}
+	// Ended, so the record now names a process that is not there.
+	if err := first.Stop("probe"); err != nil {
+		t.Fatalf("stopping the unit: %v", err)
+	}
+	if err := waitUntilUnreachable(started.Address, 5*time.Second); err != nil {
+		t.Fatalf("the unit still answers after it was stopped: %v", err)
+	}
+
+	second := NewHost(deps)
+	t.Cleanup(func() { second.StopAll() })
+	fresh, err := second.Start("probe")
+	if err != nil {
+		t.Fatalf("a run with a stale record could not start a unit: %v", err)
+	}
+	if fresh.PID == started.PID {
+		t.Fatal("the stale record was adopted, so this run is talking to a process that is gone")
+	}
+}

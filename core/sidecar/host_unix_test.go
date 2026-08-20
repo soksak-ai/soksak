@@ -3,6 +3,7 @@
 package sidecar
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -84,18 +85,17 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 
 	// Stopping reaps. A unit still running after the host let go is the failure this whole boundary
 	// exists to make visible.
+	// Stop signals and the watcher reaps, so the reading that the unit is gone is the connection refusing —
+	// the same reading the host itself takes, and the one a caller would take. Looking at a pid on a
+	// timer would report a zombie as alive and a reaped one as gone at whatever moment the loop
+	// happened to look.
 	pid := open.PID
 	if err := host.Stop("probe"); err != nil {
 		t.Fatalf("stopping the unit: %v", err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if !alive(pid) {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
+	if err := waitUntilUnreachable(open.Address, 5*time.Second); err != nil {
+		t.Fatalf("unit process %d is still answering after the host stopped it: %v", pid, err)
 	}
-	t.Fatalf("unit process %d is still running after the host stopped it", pid)
 }
 
 // A unit that prints ordinary output announces nothing, and this build reports that rather than waiting.
@@ -305,3 +305,22 @@ func main() {
 	time.Sleep(30 * time.Second)
 }
 `
+
+// waitUntilUnreachable answers when nothing is listening at an address any more.
+//
+// A connect either succeeds or fails, so this is an event rather than a look: it is the same reading
+// the host takes to decide whether a recorded unit is still there, which is what makes it the right
+// one to assert on.
+func waitUntilUnreachable(address string, within time.Duration) error {
+	deadline := time.Now().Add(within)
+	for {
+		conn, err := dialUnix(address)
+		if err != nil {
+			return nil
+		}
+		_ = conn.Close()
+		if time.Now().After(deadline) {
+			return fmt.Errorf("something still answers at %s after %s", address, within)
+		}
+	}
+}

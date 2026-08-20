@@ -60,7 +60,10 @@ type Provided struct {
 // A build with no host registers none of them, and the difference between "this build starts no
 // units" and "this build forgot a command" is only visible if the names are still declared.
 func Names() []string {
-	return []string{"sidecar_open", "sidecar_send", "sidecar_stream", "sidecar_stream_close", "sidecar_close", "sidecar_status"}
+	return []string{
+		"sidecar_open", "sidecar_send", "sidecar_stream", "sidecar_stream_close",
+		"sidecar_release", "sidecar_stop", "sidecar_status",
+	}
 }
 
 // Register puts this group on the registry.
@@ -167,7 +170,25 @@ func Register(registry *control.Registry, deps Registration) {
 		})
 	}
 
-	serve("sidecar_close", func(args control.Args) (any, error) {
+	// Releasing and stopping are two questions and they were one command.
+	//
+	// A plugin that is disabled, a view that unmounts, a channel that is released — every one of
+	// those is this application finishing with a unit, and none of them is the unit's work being
+	// over. A unit is a process precisely so it outlives the application, and a release that ended
+	// it would undo the only reason it is one: measured 2026-08-20, disabling a plugin ended the
+	// shells its unit held.
+	serve("sidecar_release", func(args control.Args) (any, error) {
+		name, err := control.Arg[string](args, "name")
+		if err != nil {
+			return nil, err
+		}
+		if err := deps.Host.Release(name); err != nil {
+			return nil, err
+		}
+		return map[string]any{"name": name, "held": false}, nil
+	})
+
+	serve("sidecar_stop", func(args control.Args) (any, error) {
 		name, err := control.Arg[string](args, "name")
 		if err != nil {
 			return nil, err
@@ -175,7 +196,7 @@ func Register(registry *control.Registry, deps Registration) {
 		if err := deps.Host.Stop(name); err != nil {
 			return nil, err
 		}
-		return map[string]any{"name": name, "open": false}, nil
+		return map[string]any{"name": name, "running": false}, nil
 	})
 
 	serve("sidecar_status", func(control.Args) (any, error) {
