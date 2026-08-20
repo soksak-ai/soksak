@@ -48,9 +48,7 @@ import {
   subscribeOutput,
 } from "../terminal/ptyBridge";
 import {
-  registerPtyObservation,
   feedPtyOutput,
-  disposePtyObservation,
   registerPtyIo,
   getPtyIo,
 } from "../terminal/ptyObservationStore";
@@ -69,7 +67,7 @@ import {
 } from "./spec";
 import { localize, readingLanguage, tmsg } from "../i18n";
 import { usePluginSettings, type SettingValue } from "../state/pluginSettings";
-import { findViewById, useSessions } from "../state/sessions";
+import { useSessions } from "../state/sessions";
 
 export type { Disposable } from "./hooks";
 
@@ -641,61 +639,14 @@ export interface SoksakPluginApi {
     /** Close the webview and clean up. */
     close: (label: string) => Promise<void>;
   };
-  /** Spawn a PTY-backed terminal session with raw byte IO (a terminal plugin drives xterm). "pty"
-   *  permission. Unlike process this is a PTY (flow control, shell integration, and SOKSAK_* env
-   *  injection are owned by core pty.rs). Output arrives on the onData stream. */
-  pty?: {
-    /** Spawn a PTY session → id. The core injects windowLabel as the current window. replay controls
-     *  screen restore (plumbing): absent = default (daemon replay and cold injection, core-owned),
-     *  "none" = the consumer owns the screen (core restore suppressed), {fromSeq} = attach the raw ring
-     *  from that seq (race-free warm handoff). The core does not interpret paint bytes. */
-    spawn: (opts: {
-      cols: number;
-      rows: number;
-      cwd?: string;
-      shell?: string;
-      paneId?: string;
-      replay?: "none" | { fromSeq: number };
-    }) => Promise<number>;
-    /** Write input to the PTY (keystrokes, paste). */
-    write: (id: number, data: string) => Promise<void>;
-    /** Resize the terminal (SIGWINCH). */
-    resize: (id: number, cols: number, rows: number) => Promise<void>;
-    /** flow control ack — report the bytes consumed (resumes the kernel reader). */
-    ack: (id: number, bytes: number) => Promise<void>;
-    /** Close the session and clean up. */
-    close: (id: number) => Promise<void>;
-    /** Subscribe to PTY output (raw bytes). Bytes arriving before registration are buffered, so nothing
-     *  is lost. Returns the unsubscribe. */
-    onData: (id: number, cb: (data: Uint8Array) => void) => Disposable;
-    /** Resolve a shell/binary path from PATH (null when absent). */
-    which: (bin: string) => Promise<string | null>;
-    /** Register this paneId's IO handlers (screen read, input write) with the substrate, so
-     *  app.terminal.readBuffer/ sendText route to this terminal (no core host-div dependency). A
-     *  terminal plugin registers its TerminalInstance's readBuffer/sendInput on mount and disposes them
-     *  on unmount (the returned Disposable). */
-    registerIo: (
-      paneId: string,
-      io: { readBuffer: (lines?: number) => string; sendInput: (data: string) => void },
-    ) => Disposable;
-    /** Relay one NDJSON request/response round trip to a live service sidecar's service socket (webview
-     *  JS cannot open a UDS — the core bridges it). The core is content-blind: it passes the
-     *  request/response JSON through and stamps only the current window label (the routing coordinate).
-     *  A connection failure is an explicit error (a loud signal that the sidecar died). */
-    sidecarRequest: (req: Record<string, unknown>) => Promise<Record<string, unknown>>;
-    /** Unseal this pane's sealed blob with the app vault and return the plaintext (base64). Locked =
-     *  explicit error (fail-closed), no blob = null. The core does not interpret the bytes (the consumer
-     *  turns them into a screen).
-     *  "terminal:read". */
-    readSealedScreen: (
-      paneId: string,
-    ) => Promise<{ paintB64: string } | null>;
-    /** Whether this pane has a live daemon session — the warm-restore candidacy test
-     *  (sidecar-independent, immediate, starts no daemon). A consumer checks before spawning and puts
-     *  only the warm case (session exists) through sidecar restore resume (bounded retry over the boot
-     *  race); fresh/cold/daemon-not-running (false) proceeds at once without waiting on the sidecar. */
-    paneAlive: (paneId: string) => Promise<boolean>;
-  };
+  // `app.pty` stood here until 2026-08-20: spawn, write, resize, close, onData, and the daemon
+  // commands behind them.
+  //
+  // A shell is a unit's now. A plugin declares the unit its manifest names, drives it through
+  // `app.sidecar`, and hands the bytes to `app.terminal.observe` so the decoder still sees them —
+  // which is the only part of this the core ever needed. A second implementation of a shell, on
+  // another platform or another machine, installs with no edit here, and that was impossible while
+  // this capability was the core's.
   /** Spawn an external subprocess with bidirectional raw stdio (general purpose — LSP/MCP/ACP/any CLI).
    *  "process" permission. Pure pipes rather than a PTY, so JSON-RPC framing stays intact. Event-driven
    *  (zero polling). */
@@ -1187,121 +1138,6 @@ function createSidecarApi(
   };
 }
 
-// app.pty implementation — PTY session spawn plus raw byte IO (a terminal plugin drives xterm). The
-// native commands stay spawn/write/resize/ack/close_terminal (names unchanged). Output arrives on a
-// stream (same shape as createProcessApi — bytes arriving before onData registers are buffered, nothing
-// lost). SOKSAK_* env injection and the kernel side of flow control are owned by pty.rs.
-function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
-  type Bytes = (d: Uint8Array) => void;
-  interface PtyState {
-    out: Set<Bytes>;
-    outBuf: Uint8Array[];
-    // paneId that connected this PTY to substrate observation (when set, close reclaims the observation
-    // too). Otherwise undefined.
-    paneId?: string;
-  }
-  const ptys = new Map<number, PtyState>();
-  return {
-    spawn: async (opts: {
-      cols: number;
-      rows: number;
-      cwd?: string;
-      shell?: string;
-      paneId?: string;
-      replay?: "none" | { fromSeq: number };
-    }): Promise<number> => {
-      const paneId = opts.paneId;
-      // [substrate observation tap] With a paneId, feed this PTY's output to the observation parser so
-      // app.terminal.* (getCwd/onCwd/onCommandFinished) and command.*/turn.ended work on this plugin
-      // terminal too. Independent of the core terminal view parsing its own OSC — one paneId is filled
-      // by a single producer, so there is no double firing (the ptyObservationStore single-producer
-      // invariant).
-      if (paneId) registerPtyObservation(paneId);
-      const st: PtyState = { out: new Set(), outBuf: [], paneId };
-      const onOutput = createStream<ArrayBuffer>();
-      onOutput.onmessage = (m) => {
-        const b = new Uint8Array(m);
-        if (paneId) feedPtyOutput(paneId, b); // observation: independent of the onData subscription (automatic whoever subscribes).
-        if (st.out.size) st.out.forEach((f) => f(b));
-        else st.outBuf.push(b);
-      };
-      // The core injects windowLabel as the current window (multi-window sok target — webviewLabels is
-      // the single truth). replay is the consumer's screen-restore control (plumbing, content-blind):
-      // "none" = the consumer owns the screen (no core restore), {fromSeq} = attach the raw ring from
-      // that seq (race-free warm handoff — the consumer already painted up to that seq). Absence is read
-      // defensively by the core as equivalent to "none" (the legacy core-owned replay was removed).
-      const res = (await deps.invoke("spawn_terminal", {
-        cols: opts.cols,
-        rows: opts.rows,
-        cwd: opts.cwd ?? null,
-        shell: opts.shell ?? null,
-        paneId: paneId ?? null,
-        windowLabel: currentWindowLabel() || null,
-        replay: opts.replay ?? null,
-        onOutput,
-      })) as { id: number };
-      ptys.set(res.id, st);
-      return res.id;
-    },
-    write: (id: number, data: string): Promise<void> =>
-      deps.invoke("write_terminal", { id, data }) as Promise<void>,
-    resize: (id: number, cols: number, rows: number): Promise<void> =>
-      deps.invoke("resize_terminal", { id, cols, rows }) as Promise<void>,
-    ack: (id: number, bytes: number): Promise<void> =>
-      deps.invoke("ack_terminal", { id, bytes }) as Promise<void>,
-    close: (id: number): Promise<void> => {
-      const st = ptys.get(id);
-      if (st?.paneId) disposePtyObservation(st.paneId); // reclaim the substrate observation.
-      ptys.delete(id);
-      return deps.invoke("close_terminal", { id }) as Promise<void>;
-    },
-    onData: (id: number, cb: Bytes): Disposable => {
-      const st = ptys.get(id);
-      if (!st) return tracker.wrap(() => {});
-      st.out.add(cb);
-      for (const b of st.outBuf.splice(0)) cb(b); // replay the pre-subscribe buffer at once (0 loss)
-      return tracker.wrap(() => st.out.delete(cb));
-    },
-    which: (bin: string): Promise<string | null> =>
-      deps.invoke("shell_which", { bin }) as Promise<string | null>,
-    // Register the PTY IO handlers (substrate) — the primary path for app.terminal.readBuffer/sendText.
-    // The tracker disposes them on deactivation (no leak). Idempotent when the plugin disposes them on
-    // unmount (only the same io is released).
-    registerIo: (
-      paneId: string,
-      io: { readBuffer: (lines?: number) => string; sendInput: (data: string) => void },
-    ): Disposable => tracker.wrap(registerPtyIo(paneId, io)),
-    // Relay one NDJSON request/response round trip to a live service sidecar's service socket (webview
-    // JS cannot open a UDS, so the core bridges it — the same layer as the pty.rs daemon byte bridge).
-    // The core is content-blind: it passes the request/response JSON through unchanged and stamps only
-    // the current window label (the routing coordinate, same as spawn). A connection failure is an
-    // explicit error, never silence or a hang — a loud signal that the sidecar died. "pty" permission.
-    sidecarRequest: (req: Record<string, unknown>): Promise<Record<string, unknown>> =>
-      deps.invoke("pty_sidecar_request", {
-        request: { ...req, window: currentWindowLabel() || null },
-      }) as Promise<Record<string, unknown>>,
-    // Read this pane's sealed blob and return the plaintext unsealed with the app vault (base64). Locked
-    // = an explicit error (fail-closed — no plaintext bypass); no blob = null. The consumer turns the
-    // bytes into a screen and repaints a dead session (a path that needs no sidecar). The core does not
-    // interpret the bytes. "terminal:read".
-    readSealedScreen: (
-      paneId: string,
-    ): Promise<{ paintB64: string } | null> =>
-      deps.invoke("pty_read_sealed_screen", {
-        windowLabel: currentWindowLabel() || null,
-        paneId,
-        // Legacy key fallback (entity id migration) — the core looks up the old id the migration planted
-        // in the tab record. The plugin does not handle this coordinate; it is the core's.
-        legacyPaneId:
-          (() => {
-            const t = findViewById(useSessions.getState().workspaces, paneId);
-            return t && "legacyPaneId" in t ? (t.legacyPaneId ?? null) : null;
-          })(),
-      }) as Promise<{ paintB64: string } | null>,
-    paneAlive: (paneId: string): Promise<boolean> =>
-      deps.invoke("pty_pane_alive", { paneId }) as Promise<boolean>,
-  };
-}
 
 // app.ws implementation — per-handle message/close listeners plus a buffer for pre-registration arrivals
 // (nothing lost). Same shape as createProcessApi.
@@ -2231,7 +2067,6 @@ export function buildPluginApi(
             contentViewHost().close(label),
         }
       : undefined,
-    pty: has("pty") ? createPtyApi(deps, tracker) : undefined,
     process: has("process") ? createProcessApi(deps, tracker, id, manifest) : undefined,
     sidecar: has("sidecar") ? createSidecarApi(deps, tracker, manifest) : undefined,
     network: has("network") ? createNetworkApi(deps, id) : undefined,

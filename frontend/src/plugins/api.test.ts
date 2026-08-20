@@ -207,16 +207,20 @@ describe("terminal readBuffer/sendText — substrate IO first (GAP2, plugin term
   });
 });
 
-describe("app.pty.registerIo — substrate IO registration", () => {
+describe("app.terminal.registerIo — the owner's half of a terminal", () => {
   beforeEach(() => resetPtyObservationStoreForTest());
 
-  it("opens the app.terminal access path through registerIo under the pty permission, and the returned Disposable closes it", () => {
+  it("opens the read path through registerIo, and the returned Disposable closes it", () => {
+    // It was on app.pty until 2026-08-20, inside a device capability it has nothing to do with:
+    // one hands the host a screen, the other hands the decoder a byte stream, and neither is a PTY.
+    // They sat there while the core spawned the shell and saw the bytes on the way past; the shell
+    // is a unit's now and the core sees nothing it is not given.
     const { api } = buildPluginApi(
-      manifestOf({ permissions: ["pty", "terminal:read"] }),
+      manifestOf({ permissions: ["terminal", "terminal:read"] }),
       "/d",
       fakeDeps(),
     );
-    const reg = api.pty?.registerIo?.("tab-iiiiii", {
+    const reg = api.terminal?.registerIo?.("tab-iiiiii", {
       readBuffer: () => "hello",
       sendInput: () => {},
     });
@@ -224,6 +228,16 @@ describe("app.pty.registerIo — substrate IO registration", () => {
     expect(api.terminal?.readBuffer?.("tab-iiiiii")).toBe("hello");
     reg!.dispose();
     expect(api.terminal?.readBuffer?.("tab-iiiiii")).toBeUndefined();
+  });
+
+  it("has no owner's half without the terminal permission", () => {
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["terminal:read"] }),
+      "/d",
+      fakeDeps(),
+    );
+    expect(api.terminal?.registerIo).toBeUndefined();
+    expect(api.terminal?.observe).toBeUndefined();
   });
 });
 
@@ -1061,13 +1075,18 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
     );
     const sendArgs = invoke.mock.calls.find((call) => call[0] === "sidecar_send")?.[1];
     expect(sendArgs).not.toHaveProperty("handle");
-    // close is idempotent
+    // Closing a channel releases it and never ends the unit.
+    //
+    // A unit is a separate process so that what it holds outlives this application. A plugin being
+    // disabled, or a channel being let go, is this application finishing with the unit rather than
+    // the unit's work being over — and closing one on deactivation ended the shells somebody was
+    // working in (measured 2026-08-20). Ending a unit is `sidecar_stop`, which nothing on this path
+    // calls.
     await h.close();
     await h.close();
-    const closes = (invoke as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (c) => c[0] === "sidecar_close",
-    );
-    expect(closes.length).toBe(1);
+    const calls = (invoke as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.filter((c) => c[0] === "sidecar_release").length).toBe(1);
+    expect(calls.filter((c) => c[0] === "sidecar_stop").length).toBe(0);
   });
 });
 

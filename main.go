@@ -21,9 +21,9 @@ import (
 	"github.com/soksak/soksak-core/core/files"
 	"github.com/soksak/soksak-core/core/identity"
 	"github.com/soksak/soksak-core/core/process"
+	"github.com/soksak/soksak-core/core/sidecar"
 	"github.com/soksak/soksak-core/core/store"
 	"github.com/soksak/soksak-core/frameworks/wails"
-	terminalplugin "github.com/soksak/soksak-plugin-terminal-xterm"
 )
 
 // The frontend build is embedded here because embed paths cannot climb out of
@@ -87,26 +87,19 @@ func main() {
 	// are handed this and Run fills it in.
 	bridge := &wails.Bridge{}
 
-	// The session owner is built here rather than by the host: a PTY needs no
-	// window, and a terminal that only a windowed process could have would put
-	// this group outside headless for no reason the code requires.
-	terminalSource := os.Getenv("SOKSAK_PTYD_BIN")
-	if terminalSource == "" {
-		terminalSource = filepath.Join(resolved.Home, "bin", "soksak-ptyd-p1")
-	}
-	terminals, err := terminalplugin.NewDaemonService(
-		wails.NewTerminalSink(bridge, os.Getenv("SOKSAK_TERMINAL_INPUT_TRACE") == "1"),
-		terminalplugin.DaemonOptions{
-			Home:                resolved.Home,
-			SourceBinary:        terminalSource,
-			LoginShell:          os.Getenv("SHELL"),
-			Environment:         os.Environ(),
-			RestoreSourceBinary: os.Getenv("SOKSAK_TERMINAL_SIDECAR_BIN"),
-		},
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// The units a plugin declares are started here rather than by the host: a process needs no
+	// window, and a unit only a windowed process could start would put this outside headless for no
+	// reason the code requires.
+	//
+	// Nothing about any particular unit is named. This host resolves a declared name to what an
+	// install put on disk, starts it, and relays — the shell that used to be built into this binary
+	// is a unit like any other now, and adding the next one edits no line here.
+	units := sidecar.NewHost(sidecar.Deps{
+		Home:        resolved.Home,
+		Spawner:     process.OSSpawner{},
+		Environment: os.Environ(),
+		Dial:        sidecar.DialLocal,
+	})
 
 	// Started before the registry so `watch_dir` is either served or refused by name from the first
 	// command, never accepted and silently dead.
@@ -118,6 +111,11 @@ func main() {
 	}
 
 	registry := control.NewRegistry()
+	sidecar.Register(registry, sidecar.Registration{
+		Host:     units,
+		Provided: sidecar.ProvidedFromRelease(resolved.Home),
+		Sink:     wails.NewSidecarSink(bridge),
+	})
 	// Filled once the home is ours. Nothing this installation owns — least of
 	// all its database — is touched by a process that has not claimed it.
 	fill := func(kv *store.KV) {
@@ -183,7 +181,7 @@ func main() {
 			CaptureProbe: os.Getenv("SOKSAK_CAPTURE_PROBE"),
 			Registry:     registry,
 			Bridge:       bridge,
-			Terminal:     terminals,
+			Reapers:      []wails.UnitReaper{units},
 			UnitRoot:     filepath.Join(resolved.Home, "plugins"),
 		})
 	})

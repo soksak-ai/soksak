@@ -13,9 +13,6 @@ import (
 	"time"
 	"unsafe"
 
-	terminal "github.com/soksak/soksak-plugin-terminal-xterm"
-	terminalplugin "github.com/soksak/soksak-plugin-terminal-xterm"
-	terminalcmd "github.com/soksak/soksak-plugin-terminal-xterm/command"
 	compositor "github.com/soksak/wails-service-native-compositor"
 	webviewsurface "github.com/soksak/wails-service-webview-surface"
 
@@ -35,10 +32,14 @@ type Options struct {
 	// startup and exits. It is how the capture path is observed without a
 	// working frontend.
 	CaptureProbe string
-	// Terminal is the session owner the launcher built. It is registered as a
-	// framework service for its shutdown hook: the children have to be reaped
-	// when the application quits, and only the application has that moment.
-	Terminal terminal.Owner
+	// Reapers are what this host has to end when the application quits. A unit holding children
+	// outlives a window on purpose, and the moment the application goes is the only one that can
+	// say so — it is the host's moment and nothing else has it.
+	//
+	// They arrive as an anonymous list. A field typed by a unit's package would put that unit's name
+	// in this host's shape, which is the coupling C1a refuses and which this field held until
+	// 2026-08-20.
+	Reapers []UnitReaper
 	// Bridge is the launcher's late-bound half of the host: the core was handed
 	// its Emit and Live before this framework existed, and Run fills it in.
 	Bridge *Bridge
@@ -68,14 +69,14 @@ type Options struct {
 // name because a bound service has no caller to ask; every other capture arrives through the command
 // path, which names the window it is a capture of.
 func hostServices(
-	terminalOwner *terminalOwnerService,
+	reapers *reaperService,
 	nativeCompositor *compositor.Service,
 	webviewSurface *webviewsurface.Service,
 	capture *CaptureService,
 	control *ControlService,
 ) []application.Service {
 	return []application.Service{
-		application.NewService(terminalOwner),
+		application.NewService(reapers),
 		application.NewService(nativeCompositor),
 		application.NewService(webviewSurface),
 		application.NewService(capture),
@@ -83,7 +84,16 @@ func hostServices(
 	}
 }
 
-type terminalOwnerService struct{ owner terminal.Owner }
+// UnitReaper is something this host ends when the application quits. The name is all the host needs:
+// what it holds and why is the unit's own business.
+type UnitReaper interface {
+	ServiceShutdown() error
+}
+
+type reaperService struct {
+	name    string
+	reapers []UnitReaper
+}
 
 // The name is this host's, not the owner's.
 //
@@ -91,9 +101,21 @@ type terminalOwnerService struct{ owner terminal.Owner }
 // the host's service list. This service exists for one thing the host has and the owner does not —
 // the moment the application quits — so the name is that, and a nil owner is a wiring fault rather than
 // a name nobody can read.
-func (service *terminalOwnerService) ServiceName() string { return "session-reaper" }
+func (service *reaperService) ServiceName() string { return service.name }
 
-func (service *terminalOwnerService) ServiceShutdown() error { return service.owner.ServiceShutdown() }
+// ServiceShutdown ends every one, and answers with the first refusal rather than the last.
+//
+// Every one, not up to the first failure: a reaper that refused would otherwise leave the ones after
+// it holding children nobody ends, and the process exits with them still running.
+func (service *reaperService) ServiceShutdown() error {
+	var first error
+	for _, reaper := range service.reapers {
+		if err := reaper.ServiceShutdown(); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
+}
 
 const (
 	appName        = "soksak-core"
@@ -154,7 +176,7 @@ func Run(options Options) error {
 		Name:        appName,
 		Description: appDescription,
 		Services: hostServices(
-			&terminalOwnerService{owner: options.Terminal},
+			&reaperService{name: "session-reaper", reapers: options.Reapers},
 			nativeCompositor,
 			webviewsurface.NewService(webviewBackend),
 			NewCaptureService(controlPlaneWindow, func() unsafe.Pointer {
@@ -200,18 +222,8 @@ func Run(options Options) error {
 	// report that it closed, and its names would stay on the table pointing at
 	// a page that is gone.
 	renderer := RegisterHost(options.Registry, HostDeps{
-		Host:  windowHost,
-		NewID: newWindowID,
-		// The command groups this binary ships with. Constructed here, where the
-		// plugins are, and handed over as registrations the host runs without
-		// knowing what they register.
-		Plugins: []func(*control.Registry){
-			func(registry *control.Registry) {
-				terminalcmd.Register(registry, terminalcmd.Deps{
-					Sessions: terminalplugin.CommandSessions(options.Terminal),
-				})
-			},
-		},
+		Host:        windowHost,
+		NewID:       newWindowID,
 		Composition: surfaceComposition,
 		Frames: func(stream string, frame any) {
 			options.Bridge.Emit(control.StreamEvent, control.StreamFrame{Stream: stream, Frame: frame})
@@ -224,10 +236,11 @@ func Run(options Options) error {
 		// existed and had no command, so the only way to quit was to kill the
 		// process, and killing it skips the drain the phase exists for.
 		Reaper: hostReaper{
-			shells: func() (int, int) {
-				released := options.Terminal.Reap()
-				return released.LocalReaped, released.DaemonTransferred
-			},
+			// Shells are a unit's now, and a unit is ended by the reaper service rather than counted
+			// here. The two numbers this answered were how many were reaped in this process and how
+			// many were handed to a daemon, and neither is this process's to know any more: the
+			// shells were never in it, and what a unit holds is the unit's business.
+			shells:        func() (int, int) { return 0, 0 },
 			surfaces:      nativeCompositor.Drain,
 			inputMonitors: windowHost.DrainInputMonitor,
 		},

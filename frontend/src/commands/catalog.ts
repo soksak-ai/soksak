@@ -83,7 +83,6 @@ import { registerUpdateCatalog } from "./catalogUpdate";
 import { registerUiCatalog } from "./catalogUi";
 import { registerDomCatalog } from "./catalogDom";
 import { registerDataCatalog } from "./catalogData";
-import { registerPtySessionCatalog } from "./catalogPtySession";
 import { registerSecretsCatalog } from "./catalogSecrets";
 import { registerNetworkCatalog } from "./catalogNetwork";
 import { registerClipboardCatalog } from "./catalogClipboard";
@@ -2557,7 +2556,6 @@ export function registerCatalog(): void {
   registerUiCatalog();
   registerDomCatalog();
   registerDataCatalog();
-  registerPtySessionCatalog();
   registerSecretsCatalog();
   registerNetworkCatalog();
   registerClipboardCatalog();

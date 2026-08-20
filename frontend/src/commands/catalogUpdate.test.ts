@@ -64,7 +64,10 @@ describe("update.apply channel gate (HOME policy: a remote app body update is re
     const r = await execute("update.apply", {}, {});
 
     const called = invoke.mock.calls.map((c) => c[0]);
-    expect(called).toContain("pty_daemon_upgrade");
+    // The daemon axis no longer upgrades anything from here. A shell is a declared unit, and a unit
+    // is upgraded by installing it — the same path every other unit takes. What this asserts is that
+    // asking for the axis is answered with a refusal rather than with an empty success.
+    expect(called).not.toContain("pty_daemon_upgrade");
     expect(called).not.toContain("update_apply");
     expect(called).not.toContain("app_relaunch");
     const skipped = (r.data as { skipped: { axis: string; reason: string }[] }).skipped;
@@ -155,24 +158,24 @@ describe("update.apply axis order and selection", () => {
 
     const skipped = (r.data as { skipped: { axis: string; id?: string; reason: string }[] }).skipped;
     expect(skipped).toContainEqual({ axis: "plugin", id: "soksak-plugin-b", reason: "TARGET_NOT_FOUND" });
-    // The daemon axis proceeds even when a plugin is blocked.
-    const applied = (r.data as { applied: { axis: string }[] }).applied;
-    expect(applied.map((a) => a.axis)).toContain("daemon");
+    // The daemon axis is named as skipped rather than dropped, so a caller that asked for it is told
+    // it was not done instead of reading an empty applied list as success.
+    const notDone = (r.data as { skipped: { axis: string; reason?: string }[] }).skipped;
+    const daemon = notDone.find((entry) => entry.axis === "daemon");
+    expect(daemon, "the daemon axis was asked for and is in neither list").toBeDefined();
+    expect(daemon?.reason).toContain("declared unit");
   });
 });
 
 describe("update.check survey", () => {
-  it("reports app body availability, installed plugin count, and daemon status, excluding dev", async () => {
+  it("reports app body availability and installed plugin count, excluding dev", async () => {
     pluginState.release = false;
     pluginState.plugins = {
       "soksak-plugin-a": { source: "installed" },
       "soksak-plugin-b": { source: "installed" },
       "soksak-plugin-dev": { source: "dev" },
     };
-    route({
-      update_check: { available: false, channel: "local" },
-      pty_daemon_status: { running: true, sessions: 3 },
-    });
+    route({ update_check: { available: false, channel: "local" } });
 
     const r = await execute("update.check", {}, {});
     const d = r.data as {
@@ -184,7 +187,9 @@ describe("update.check survey", () => {
     expect(d.channel).toBe("local");
     expect(d.app.available).toBe(false);
     expect(d.plugins.installed).toBe(2); // dev excluded
-    expect(d.daemon.running).toBe(true);
-    expect(d.daemon.sessions).toBe(3);
+    // The daemon axis reports nothing running, because this application holds no daemon. A shell is
+    // a declared unit, and whether one of them has a newer release is that unit's question, answered
+    // by whatever installed it rather than by a survey written here for one of them.
+    expect(d.daemon.running).toBe(false);
   });
 });

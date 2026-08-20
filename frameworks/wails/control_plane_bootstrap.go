@@ -6,10 +6,10 @@ import "sync"
 // all saved windows were requested, and at least one workspace renderer declared its command set.
 // The close decision is one-shot. A later explicit orchestrator is a user window and is not closed.
 type controlPlaneBootstrap struct {
-	mu                sync.Mutex
-	restoreComplete   bool
-	workspaceReady    bool
-	closeIssued       bool
+	mu              sync.Mutex
+	restoreComplete bool
+	workspaceReady  bool
+	closeIssued     bool
 }
 
 func newControlPlaneBootstrap() *controlPlaneBootstrap { return &controlPlaneBootstrap{} }

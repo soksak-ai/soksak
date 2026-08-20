@@ -188,6 +188,28 @@ Written here so it is not rediscovered (L2).
   whether a shell outlives a disable, and there is none: every test here starts a unit and ends it
   inside one run.
 
+- **Host and unit are only checked where they share a type.** The contract module they both import
+  makes a shape mismatch a compile error, and nothing measures the rest: a host that greets wrongly,
+  a unit that answers a command it declared and does nothing for, an address one binds and the other
+  cannot reach.
+
+  There was a test that started the real daemon from inside the core and drove a shell through it.
+  It was removed 2026-08-20 because of how it found the daemon — a hardcoded walk out of this
+  repository into a sibling tree, which put the workspace's layout inside the application that is
+  supposed to know none of it. The reach was the defect; the reading it took was worth having.
+
+  Where such a test goes is not settled. It belongs to neither repository: a unit that tested itself
+  against the host would depend on the host, and a host that tested itself against a unit reaches
+  out of its tree — which is what was just removed. What it needs is a place that owns the pair, and
+  there is none.
+
+- **The i18n ownership rule is stated and unenforced.** `REPO-LAYOUT.md` L1b says a message is owned
+  by whatever it is about, and no gate holds it. The one written for it read the sibling trees from
+  inside this repository, which is the same reach as above, so it went with it.
+
+  It is a unit's own fact — its go.mod either names an application or does not — so the check that
+  can exist is the unit's, not this one's.
+
 - **Nothing measures warm restore end to end.** A second host adopts a unit a first one started, and
   a stale record starts a fresh one — both are tested. What is not: an application that quits and
   comes back to a shell it left running, with what was on the screen still there. The pieces are

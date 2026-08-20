@@ -19,11 +19,11 @@ import (
 // arrived here only when the value was registered. A scan finds where a name is written. This reads
 // where it arrives.
 //
-// The services are constructed with nil dependencies. Nothing is started and no method but the name
+// The services are constructed with nothing behind them. Nothing is started and no method but the name
 // is called, which is the whole point: what a service calls itself is a property of the value, not
 // of a running application, so the reading needs no window.
 func TestNoUnitIdIsOnTheHostsServiceList(t *testing.T) {
-	for _, service := range hostServices(nil, nil, nil, nil, nil) {
+	for _, service := range hostServices(&reaperService{name: "session-reaper"}, nil, nil, nil, nil) {
 		named, reports := service.Instance().(application.ServiceName)
 		if !reports {
 			// A service with no name of its own is registered under its type name, which this

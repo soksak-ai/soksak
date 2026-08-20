@@ -33,12 +33,11 @@ export function registerUpdateCatalog(): void {
       const installed = Object.values(usePlugins.getState().plugins).filter(
         (p) => p.source !== "dev",
       ).length;
-      let daemon: Record<string, unknown> = { running: false };
-      try {
-        daemon = (await invoke("pty_daemon_status")) as Record<string, unknown>;
-      } catch {
-        // A failed daemon query does not block the check — it is reported as running:false.
-      }
+      // The daemon axis was this application's own PTY daemon. A shell is a unit's now, and what
+      // units are open is `sidecar_status` — but whether one of them has a newer release is the
+      // unit's own question, answered by whatever installed it, not by a check written here for one
+      // of them.
+      const daemon: Record<string, unknown> = { running: false };
       if (app.available)
         publishActivity("update.available", "core", { version: app.version });
       return {
@@ -94,15 +93,20 @@ export function registerUpdateCatalog(): void {
         }
       }
 
-      // ② ptyd — fd-handoff drain (live shells lossless, no SIGHUP).
+      // ② The daemon axis upgraded this application's own PTY daemon in place, handing its file
+      // descriptors over so live shells survived. A shell is a unit's now, and upgrading a unit is
+      // an install — the same path every other unit takes — rather than a command written here for
+      // one of them.
+      //
+      // Named as skipped rather than dropped, so a caller that asked for the axis is told it was
+      // not done instead of reading an empty applied list as success.
       if (want("daemon")) {
-        try {
-          const r = (await invoke("pty_daemon_upgrade")) as Record<string, unknown>;
-          applied.push({ axis: "daemon", sessions: r.sessions, pid: r.pid });
-          publishActivity("update.applied", "core", { axis: "daemon", sessions: r.sessions });
-        } catch (e) {
-          skipped.push({ axis: "daemon", reason: String(e) });
-        }
+        skipped.push({
+          axis: "daemon",
+          reason:
+            "a shell is a declared unit now, and a unit is upgraded by installing it — this " +
+            "application holds no daemon of its own to hand descriptors over",
+        });
       }
 
       // ③ App body — install and restart only when a release identity actually has a new version.

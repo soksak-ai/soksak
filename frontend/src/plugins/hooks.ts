@@ -6,7 +6,6 @@
 
 import { moduleState } from "../lib/moduleState";
 import { tmsg } from "../i18n";
-import { invoke } from "../framework";
 import { safeListen } from "../lib/safeListen";
 import { listenThisWindow } from "../lib/windowEvents";
 import { currentWindowLabel } from "../lib/webviewLabels";
@@ -434,10 +433,14 @@ export function startPluginHooks(): void {
   // Terminal command start → plugin event. A discrete event, and a generic socket: the core
   // publishes what the decoder saw and reads nothing into it.
   subscribeAnyCommandStarted((paneId, commandLine, cwd) => {
-    // [R2] Best-effort capture of the foreground pid of the command that just started, emitted with it
-    // (the command/pid/sessionId triple).
+    // The foreground pid used to travel with this, read from the application's own PTY daemon. A
+    // shell is a unit's now: the application does not hold one, and asking a unit for it would be
+    // this code knowing what unit a pane's shell came from — which is the plugin's business.
+    //
+    // Absent rather than invented. A consumer reading a pid of 0 or -1 would act on a process that
+    // is not there.
     void (async () => {
-      const pid = await invoke<number | null>("pty_pane_pid", { paneId }).catch(() => null);
+      const pid = null;
       emitPluginEvent("command.started", {
         projectId: workspaceOfTab(paneId),
         paneId,

@@ -388,53 +388,13 @@ export function registerDaemonCatalog(): void {
   // processes outside the app so they survive an app restart. A status query never starts the daemon
   // (observation does not inflate its target).
 
-  register("pty.daemon.status", {
-    description: key("cmd.pty.daemon.status.desc"),
-    triggers: { ko: "pty데몬 상태 터미널 데몬 세션 데몬" },
-    params: {},
-    // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
-    windowScoped: false,
-    returns:
-      "{ running, pid?, sessions?, sessionOwners: [{owner:'pty-supervisor',session,windowLabel,paneId,shellPid,generation}], ownershipComplete, protocol, handoffContract?, handoffContractRequired, staged, stagedPath }",
-    message: (d) =>
-      d.running
-        ? tmsg("msg.pty.daemon.status", { sessions: Number(d.sessions ?? 0) })
-        : tmsg("msg.pty.daemon.status.down"),
-    errors: ["INTERNAL"],
-    examples: ["pty.daemon.status"],
-    hint: (d) =>
-      d.running
-        ? []
-        : [{ cmd: "pty.daemon.restart", why: tmsg("hint.pty.daemon.restart") }],
-    handler: async () => (await invoke("pty_daemon_status")) as Record<string, unknown>,
-  });
-
-  register("pty.daemon.restart", {
-    description: key("cmd.pty.daemon.restart.desc"),
-    triggers: { ko: "pty데몬 재시작 터미널 데몬 재시작" },
-    params: {},
-    // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
-    windowScoped: false,
-    returns: "{ killed, pid }",
-    message: (d) => tmsg("msg.pty.daemon.restart", { killed: Number(d.killed ?? 0) }),
-    danger: "destructive",
-    errors: ["INTERNAL"],
-    examples: ["pty.daemon.restart"],
-    handler: async () => (await invoke("pty_daemon_restart")) as Record<string, unknown>,
-  });
-
-  register("pty.daemon.upgrade", {
-    description: key("cmd.pty.daemon.upgrade.desc"),
-    triggers: { ko: "pty데몬 판올림 무중단 업그레이드 데몬 핫스왑" },
-    params: {},
-    // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
-    windowScoped: false,
-    returns: "{ upgraded, pid, sessions }",
-    message: (d) => tmsg("msg.pty.daemon.upgrade", { sessions: Number(d.sessions ?? 0) }),
-    errors: ["INTERNAL"],
-    examples: ["pty.daemon.upgrade"],
-    handler: async () => (await invoke("pty_daemon_upgrade")) as Record<string, unknown>,
-  });
+  // `pty.daemon.*` stood here until 2026-08-20: status, restart and a live upgrade of a daemon the
+  // application built into itself.
+  //
+  // A shell is a unit a plugin declares now, so its lifetime is the unit group's — `sidecar_status`
+  // reports what is open and `sidecar_stop` ends one. Keeping a second set of names for one unit
+  // would make the application's command table grow per unit, which is the lock-in the substrate
+  // exists to prevent: the next unit would want three of its own.
 }
 
 /** Workspace-open hook — reap recorded pids, then autostart only the allowed daemons (security contract). */

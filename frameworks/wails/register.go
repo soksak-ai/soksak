@@ -13,15 +13,13 @@ type HostDeps struct {
 	Host WindowHost
 	// NewID mints a window name.
 	NewID func() string
-	// Plugins put their own command groups on the registry. Each one is a
-	// plugin's own Register, already holding whatever that plugin needs — so
-	// this host names none of them and a build with another is a line in the
-	// composition root rather than a field here.
+	// A field for plugin command groups stood here until 2026-08-20, so a build could hand this host
+	// registrations of its own. Nothing can fill it: a plugin is installed rather than compiled
+	// (C1a), so no Go package of a plugin's exists to register anything, and the commands a plugin
+	// contributes are declared in its manifest and registered by its own entry.
 	//
-	// It was one field typed as the terminal plugin's session interface, which
-	// made a second terminal plugin need a second field and made this file name
-	// a plugin it does not otherwise know.
-	Plugins []func(*control.Registry)
+	// It is gone rather than kept empty. A seam with no possible user reads as a shape somebody is
+	// meant to use, and the next person wires a plugin package into it.
 	// Composition is the applied native inventory the surface commands read.
 	Composition CompositionSource
 	// Frames delivers stream frames to a receiver the caller passed. Nil sends
@@ -55,9 +53,6 @@ type HostDeps struct {
 // measuring the framework's startup rather than the table.
 func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
 	renderer := RegisterRendererCommands(registry, deps.Dispatch)
-	for _, plugin := range deps.Plugins {
-		plugin(registry)
-	}
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
 	RegisterCapture(registry, deps.Host, deps.Frames)
 	RegisterWindowInput(registry, deps.Host)

@@ -48,11 +48,13 @@ var couplingAllowed = map[string]string{
 // two of that plugin's types for a body that only marshals them. A build's
 // command groups arrive as their own registrations now, and a diagnostic record
 // travels on the core's own contract (control.TraceSink).
-var couplingWiring = map[string]string{
-	"frameworks/wails/host.go": "the Wails host's composition root — it constructs the plugins this " +
-		"binary ships with and hands each one what it needs. Every line here is a construction or a " +
-		"hand-off; a rule about what a plugin's data means belongs to the plugin.",
-}
+// Empty since 2026-08-20, and the gate below refuses an entry that excuses nothing so it stays that
+// way by itself.
+//
+// The one entry was the Wails host's composition root, which constructed the plugins this binary
+// shipped with. It ships with none: a plugin is installed, and what it needs is declared in its
+// manifest rather than handed to it by a line here.
+var couplingWiring = map[string]string{}
 
 func TestTheCoreNamesNoPluginAndNoEngine(t *testing.T) {
 	var plugins []string

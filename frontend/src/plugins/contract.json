@@ -14,7 +14,6 @@
     "notify",
     "process",
     "programs",
-    "pty",
     "schedule",
     "secrets",
     "service",

@@ -1,8 +1,6 @@
 package wails
 
 import (
-	terminalcmd "github.com/soksak/soksak-plugin-terminal-xterm/command"
-
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,6 +13,7 @@ import (
 	"github.com/soksak/soksak-core/core/files"
 	"github.com/soksak/soksak-core/core/identity"
 	"github.com/soksak/soksak-core/core/process"
+	"github.com/soksak/soksak-core/core/sidecar"
 	"github.com/soksak/soksak-core/core/store"
 )
 
@@ -66,6 +65,14 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		OS:          "darwin",
 		Arch:        "arm64",
 	})
+	// The units group, wired the way Run wires it. A build with no sink declares the two stream
+	// names unserved rather than leaving them off the table, and this gate is what would catch the
+	// difference between the two lists.
+	sidecar.Register(registry, sidecar.Registration{
+		Host:     sidecar.NewHost(sidecar.Deps{Home: home, Spawner: process.OSSpawner{}}),
+		Provided: sidecar.ProvidedFromRelease(home),
+		Sink:     discardSidecarOutput{},
+	})
 	// The same call Run makes. A second list here drifts from that one in both
 	// directions at once and neither side reports it: measured 2026-08-15, this
 	// gate registered the surface group the application never did, and the
@@ -77,18 +84,6 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		NewID: counter("1"),
 		// The plugin groups this build composes, named here because this gate's
 		// subject is the build and not the package: the frontend calls a
-		// terminal command and something has to serve it. RegisterHost holds no
-		// plugin name any more — a build hands over its own registrations — so
-		// the list a run composes and the list this composes are two lists
-		// again, and this is the one place they are written side by side.
-		//
-		// A test may name a plugin; the coupling gate reads sources, and what it
-		// refuses is a host that names one.
-		Plugins: []func(*control.Registry){
-			func(registry *control.Registry) {
-				terminalcmd.Register(registry, terminalcmd.Deps{Sessions: idleSessions{}})
-			},
-		},
 		Composition:  stubComposition{},
 		NativeParent: func(string) bool { return false },
 		Dispatch:     func(string, string, any) error { return nil },
@@ -223,18 +218,6 @@ func (discardProcessOutput) EmitProcessExit(process.Exit) process.Delivery {
 	return process.Delivered
 }
 
-// idleSessions is an owner that exists and holds nothing. Which names register
-// depends on an owner being present, never on what it can do.
-type idleSessions struct{}
-
-func (idleSessions) Open(string, string, uint16, uint16, *uint64) (terminalcmd.Handle, error) {
-	return terminalcmd.Handle{}, nil
-}
-
-func (idleSessions) Write(terminalcmd.Handle, string) error          { return nil }
-func (idleSessions) Resize(terminalcmd.Handle, uint16, uint16) error { return nil }
-func (idleSessions) Close(terminalcmd.Handle) error                  { return nil }
-
 // idleReaper is a host with nothing to take down. Which names register depends
 // on the dependencies being present, never on what they answer.
 type idleReaper struct{}
@@ -243,3 +226,12 @@ func (idleReaper) ReleaseShells() (int, int) { return 0, 0 }
 
 func (idleReaper) DrainSurfaces() (int, int, error) { return 0, 0, nil }
 func (idleReaper) DrainInputMonitors() int          { return 0 }
+
+// discardSidecarOutput reads a unit's stream and drops it. The gate measures which commands
+// register, never what they carry.
+type discardSidecarOutput struct{}
+
+func (discardSidecarOutput) EmitSidecarBytes(sidecar.Bytes) sidecar.Delivery {
+	return sidecar.Delivered
+}
+func (discardSidecarOutput) EmitSidecarEnd(sidecar.End) sidecar.Delivery { return sidecar.Delivered }
