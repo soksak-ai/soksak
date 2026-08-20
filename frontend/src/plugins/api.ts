@@ -502,6 +502,32 @@ export interface SoksakPluginApi {
     /** Subscribe to command completion in the pane (OSC 133/633 D) — triggers refresh of derived state
      *  such as git. Returns the unsubscribe. "terminal" permission. */
     onCommandFinished?: (paneId: string, cb: () => void) => Disposable;
+
+    // Below: the owner's half. Everything above reads a pane somebody else drives; these two are how
+    // that somebody supplies it.
+    //
+    // They were reached through `app.pty` while the core spawned the shell itself, which put the
+    // owner's half inside a device capability it has nothing to do with. Whoever drives a shell now
+    // drives it through a declared unit, and the core sees no bytes unless it is given them.
+
+    /** Hand the decoder this pane's raw output.
+     *
+     *  The core decodes OSC 7/133/633 out of it — working directory, command boundaries — and
+     *  answers `getCwd`, `onCommandFinished` and the rest from what it found. It decodes a protocol
+     *  and decides nothing: what a command boundary *means* is the caller's.
+     *
+     *  Without this the readings above stay empty on a pane that is running perfectly, which reads
+     *  as shell integration that is not working rather than as a stream nobody supplied. */
+    observe?: (paneId: string, bytes: Uint8Array) => void;
+    /** Hand the host a way to read this pane's screen and to type into it.
+     *
+     *  `readBuffer`, `sendText` and `onOutput` above resolve through this registration, and without
+     *  it they answer "not ready" for a pane that is running. The screen belongs to whoever drew it,
+     *  so there is no other way for the host to reach it. Dispose on unmount. */
+    registerIo?: (
+      paneId: string,
+      io: { readBuffer: (lines?: number) => string; sendInput: (data: string) => void },
+    ) => Disposable;
   };
   /**
    * Declares to the core that this plugin delivers pointer input for its own surfaces.
@@ -2124,6 +2150,20 @@ export function buildPluginApi(
                     }
                     return false;
                   },
+                }
+              : {}),
+            // The owner's half, under the plain "terminal" permission.
+            //
+            // Supplying a stream is not reading somebody else's: a plugin that drives a shell hands
+            // its own bytes to the decoder and its own screen to the host, and the read permissions
+            // above are what gate anyone else getting at either.
+            ...(has("terminal")
+              ? {
+                  observe: (paneId: string, bytes: Uint8Array) => feedPtyOutput(paneId, bytes),
+                  registerIo: (
+                    paneId: string,
+                    io: { readBuffer: (lines?: number) => string; sendInput: (data: string) => void },
+                  ): Disposable => tracker.wrap(registerPtyIo(paneId, io)),
                 }
               : {}),
           }
