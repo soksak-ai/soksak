@@ -49,7 +49,8 @@ func twoWindowCompositor(t *testing.T) (*compositor.Service, *windowRecordingBac
 		"win-a": unsafe.Pointer(&workspace),
 	}
 	backend := &windowRecordingBackend{attached: map[string]unsafe.Pointer{}}
-	service := compositor.NewService(func(name string) unsafe.Pointer { return handles[name] }, backend)
+	service := compositor.NewService(func(name string) unsafe.Pointer { return handles[name] },
+		map[compositor.SurfaceKind]compositor.Backend{"browser": backend})
 
 	for _, declaration := range []struct {
 		window string

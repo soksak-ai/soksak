@@ -135,7 +135,11 @@ func Run(options Options) error {
 
 	// The compositor service, held so the surface commands can read what it
 	// applied. The service list below registers the same value.
-	nativeCompositor := compositor.NewService(nativeWindow, webviewBackend)
+	// One backend per surface kind. The kind on a declaration picks it, so the next kind is another
+	// entry here and no edit inside the compositor.
+	nativeCompositor := compositor.NewService(nativeWindow, map[compositor.SurfaceKind]compositor.Backend{
+		webviewsurface.SurfaceKind: webviewBackend,
+	})
 	// One reader of the last commit, shared by the surface commands and the capture. Two would
 	// answer from two moments, and the capture would draw a page at a rectangle the numbers say it
 	// is not at.

@@ -22,7 +22,8 @@ func TestTheDriftIsTheOneTheCompositorSubtracted(t *testing.T) {
 	handle := byte(1)
 	backend := &driftingBackend{by: 3}
 	service := compositor.NewService(
-		func(string) unsafe.Pointer { return unsafe.Pointer(&handle) }, backend)
+		func(string) unsafe.Pointer { return unsafe.Pointer(&handle) },
+		map[compositor.SurfaceKind]compositor.Backend{"browser": backend})
 
 	if _, err := service.Commit(compositor.Snapshot{
 		Window: "win-3ztbjd", Sequence: 1,
