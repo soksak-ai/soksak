@@ -12,17 +12,18 @@ import (
 	"sort"
 	"sync"
 
+	controlwire "github.com/soksak/soksak-contract-control"
 	"github.com/soksak/soksak-core/core/i18n"
 )
 
-// Owner names who answers. Core commands are host-independent; framework
-// commands need this host's window.
-type Owner string
+// Owner names who answers, and it is the wire's: a client reads it to tell a
+// command that needs this host's window from one any process can answer.
+type Owner = controlwire.Owner
 
 const (
-	OwnerCore      Owner = "core"
-	OwnerFramework Owner = "framework"
-	OwnerPlugin    Owner = "plugin"
+	OwnerCore      = controlwire.OwnerCore
+	OwnerFramework = controlwire.OwnerFramework
+	OwnerPlugin    = controlwire.OwnerPlugin
 )
 
 // Args are the caller's parameters. Values a process holds — identity, home,
@@ -39,26 +40,14 @@ type Command struct {
 	Handler Handler
 }
 
-// Served describes a command this build answers.
-type Served struct {
-	Name  string `json:"name"`
-	Owner Owner  `json:"owner"`
-}
-
-// Unserved describes a command this build refuses, and why.
-type Unserved struct {
-	Name string `json:"name"`
-	// BlockedBy separates "not written yet" from "impossible here". A caller
-	// that receives only "unknown command" re-investigates settled ground, or
-	// imitates the command.
-	BlockedBy string `json:"blockedBy"`
-}
-
-// Table is what this build serves and what it refuses, together.
-type Table struct {
-	Commands []Served   `json:"commands"`
-	Unserved []Unserved `json:"unserved"`
-}
+// Served, Unserved and Table are the greeting's, so they are the wire's. What a
+// build answers and what it refuses is read by every client of the plane, and a
+// unit answering on its own socket reports the same two lists.
+type (
+	Served   = controlwire.Served
+	Unserved = controlwire.Unserved
+	Table    = controlwire.Table
+)
 
 // Registry holds every command in this process.
 type Registry struct {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	controlwire "github.com/soksak/soksak-contract-control"
 	"github.com/soksak/soksak-core/core/i18n"
 )
 
@@ -13,68 +14,31 @@ import (
 // the greeting rather than at the first command that behaves differently: a
 // mismatch discovered halfway through a session has already produced answers
 // the caller trusted.
-const Protocol = 1
-
-// Request is one command, as it arrives on the wire.
+// The wire is the contract's, and this package answers on it.
 //
-// The envelope is one line of JSON because the transport is a byte stream with
-// no framing of its own, and a length prefix would make the socket unreadable
-// by hand — which is the difference between a control plane someone can
-// operate and one they can only write a client for.
-type Request struct {
-	// ID is echoed on the answer. The caller chooses it; this build never
-	// interprets it, so a client may pipeline and match on its own terms.
-	ID string `json:"id"`
-	// Command names a registry entry. Nothing outside the registry exists.
-	Command string `json:"command"`
-	// Args are the command's arguments, still encoded. Decoding happens per
-	// command, so this boundary never has to know their shapes.
-	Args map[string]json.RawMessage `json:"args,omitempty"`
-	// Language is the language this caller reads. Empty means the language
-	// agreed in the greeting, and no greeting means English.
-	//
-	// It rides on the request rather than only on the connection because one
-	// process serves several readers: a window, a `sok` invocation and a
-	// sidecar share a build, and the language is the asker's, not the socket's.
-	Language string `json:"language,omitempty"`
-}
-
-// Response is one answer.
+// Protocol, Request, Response, Greeting and the answer shape are declared in
+// `soksak-contracts/soksak-contract-control` because more than one thing speaks
+// them: this application, and every unit that runs in its own process and
+// answers on its own socket. A wire defined here would make each of those copy
+// it, and two copies diverge without failing — they arrive as a different
+// answer.
 //
-// Ok is explicit rather than inferred from Error being empty: a command whose
-// result is null and one that failed with an empty message would otherwise be
-// the same three bytes on the wire.
-type Response struct {
-	ID     string `json:"id"`
-	Ok     bool   `json:"ok"`
-	Result any    `json:"result,omitempty"`
-	Error  string `json:"error,omitempty"`
-}
-
-// Greeting is what system.hello answers.
-type Greeting struct {
-	// Protocol is what this build speaks, which the client compares to what it
-	// asked for.
-	Protocol int `json:"protocol"`
-	// Identity names the installation, so a client that found the wrong socket
-	// receives that at the greeting rather than through surprising answers.
-	Identity string `json:"identity"`
-	// Commands is what this build serves and refuses, with reasons. Sent in the
-	// greeting because a client that must ask separately will act on a name it
-	// has not checked.
-	Commands Table `json:"commands"`
-	// Language is what this build will answer in for this session, and
-	// Languages is everything it serves. A client that asked for one this build
-	// does not have is told here, rather than receiving sentences that quietly
-	// stayed English.
-	Language  string   `json:"language"`
-	Languages []string `json:"languages"`
-}
+// They are aliases rather than wrappers so a value crossing this boundary is
+// the same value, and so nothing in this repository had to change spelling when
+// the wire moved out.
+const Protocol = controlwire.Protocol
 
 // HelloCommand is the greeting's name. It is reserved: a feature package that
 // registered it would replace the negotiation with something that answers
 // differently.
-const HelloCommand = "system.hello"
+const HelloCommand = controlwire.HelloCommand
+
+type (
+	Request     = controlwire.Request
+	Response    = controlwire.Response
+	Greeting    = controlwire.Greeting
+	PlaneAnswer = controlwire.Answer
+)
 
 // Answer runs one request against the registry and builds its response.
 //
@@ -116,22 +80,6 @@ func Answer(registry *Registry, identity string, request Request) Response {
 		return Response{ID: request.ID, Error: i18n.Render(err, language)}
 	}
 	return Response{ID: request.ID, Ok: true, Result: answerOf(registry, request.Command, result)}
-}
-
-// PlaneAnswer is the shape every control-plane answer has.
-//
-// A command handled in this process returns its value, and a window's command answers its own
-// envelope — `{ok, code, data, message, hint}` — which the relay passes through whole. Two shapes
-// reached the socket and nothing in the answer said which one it was, so a client had to know who
-// owned each command to parse it. Measured 2026-08-17: two readings in one session were taken
-// against the wrong shape and reported the opposite of what was on screen.
-//
-// The in-process caller is a different audience and keeps the value: a window calling `invoke` names
-// the command and has its type at the call site. This shape is for the plane whose caller is
-// generic.
-type PlaneAnswer struct {
-	Code string `json:"code"`
-	Data any    `json:"data"`
 }
 
 // answerOf gives a locally handled result the shape a window's answer already has. Which it is comes

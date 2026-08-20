@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/soksak/soksak-contract-control v0.0.1
 	github.com/soksak/soksak-plugin-terminal-xterm v0.0.1
 	github.com/soksak/wails-service-native-compositor v0.0.1
 	github.com/soksak/wails-service-webview-surface v0.0.1
@@ -38,5 +39,7 @@ replace github.com/soksak/wails-service-native-compositor => ../wails-services/w
 replace github.com/soksak/wails-service-webview-surface => ../wails-services/wails-service-webview-surface
 
 replace github.com/soksak/soksak-plugin-terminal-xterm => ../soksak-plugins/soksak-plugin-terminal-xterm
+
+replace github.com/soksak/soksak-contract-control => ../soksak-contracts/soksak-contract-control
 
 replace github.com/soksak/soksak-contract-terminal => ../soksak-contracts/soksak-contract-terminal
