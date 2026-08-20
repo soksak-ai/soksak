@@ -56,6 +56,19 @@ is not loadable, because the process already has one. An engine exports a C ABI 
 of its own. The Go half of a plugin that needs a window belongs to the host that loads it, not to the
 module.
 
+Loading costs Windows nothing, which is the constraint that decides whether this shape is available
+at all. `NATIVE-LAYER.md` N3 holds Windows at cgo 0 because that is the one target whose cross
+compilation a cgo dependency would break. Measured 2026-08-20 by compiling both halves of a loader:
+
+| Target | How a module is opened, its symbols found, and host callbacks handed back | cgo |
+| --- | --- | --- |
+| Windows (amd64, arm64) | `syscall.LoadDLL`, `(*DLL).FindProc`, `(*Proc).Call`, `syscall.NewCallback` | 0 |
+| macOS, Linux | `dlopen`, `dlsym` | already required by the framework |
+
+A Go function reaches a module as a C function pointer on every target, so the host half of the ABI
+needs no platform of its own. The framework itself calls Win32 this way in its own Windows layer, so
+this is the path it already takes rather than a new one.
+
 Until that host exists, `wails-services/wails-service-native-compositor` and
 `soksak-plugins/soksak-plugin-browser-native` are linked Go, and `ARCHITECTURE.md` C1a is red for
 them. The state is written down rather than described as a design.
