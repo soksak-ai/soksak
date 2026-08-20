@@ -27,28 +27,37 @@ import (
 // The unit is started if it is not running. A caller asking a unit to do something is a caller who
 // wants it running, and refusing because it is not would make every first call fail.
 func (host *Host) Send(name string, request controlwire.Request) (controlwire.Response, error) {
-	conn, open, err := host.connect(name)
+	conn, reader, _, err := host.connect(name)
 	if err != nil {
 		return controlwire.Response{}, err
 	}
 	defer func() { _ = conn.Close() }()
+	return exchange(conn, reader, name, request)
+}
 
-	if err := json.NewEncoder(conn).Encode(request); err != nil {
+// exchange writes one request and reads one answer on an already greeted connection.
+//
+// The reader is the connection's own, made once and passed along. A second bufio.Reader over the
+// same connection would start empty while the first still held bytes it had read ahead — and what
+// that looks like is an answer that never arrives, on a unit that already sent it.
+func exchange(
+	conn io.Writer, reader *bufio.Reader, name string, request controlwire.Request,
+) (controlwire.Response, error) {
+	fail := func(err error) (controlwire.Response, error) {
 		return controlwire.Response{}, i18n.Errorf("sidecar.noAnswer", map[string]string{
-			"name": open.Name, "reason": err.Error(),
+			"name": name, "reason": err.Error(),
 		})
 	}
-	line, err := bufio.NewReader(conn).ReadBytes('\n')
+	if err := json.NewEncoder(conn).Encode(request); err != nil {
+		return fail(err)
+	}
+	line, err := reader.ReadBytes('\n')
 	if err != nil {
-		return controlwire.Response{}, i18n.Errorf("sidecar.noAnswer", map[string]string{
-			"name": open.Name, "reason": err.Error(),
-		})
+		return fail(err)
 	}
 	var answer controlwire.Response
 	if err := json.Unmarshal(line, &answer); err != nil {
-		return controlwire.Response{}, i18n.Errorf("sidecar.noAnswer", map[string]string{
-			"name": open.Name, "reason": err.Error(),
-		})
+		return fail(err)
 	}
 	return answer, nil
 }
@@ -59,7 +68,7 @@ func (host *Host) Send(name string, request controlwire.Request) (controlwire.Re
 // looks at. Closing the returned reader ends the connection, which is how a caller that has gone
 // away stops the unit writing into nothing.
 func (host *Host) Stream(name string, request controlwire.Request) (controlwire.Response, io.ReadCloser, error) {
-	conn, open, err := host.connect(name)
+	conn, reader, _, err := host.connect(name)
 	if err != nil {
 		return controlwire.Response{}, nil, err
 	}
@@ -70,23 +79,9 @@ func (host *Host) Stream(name string, request controlwire.Request) (controlwire.
 		}
 	}()
 
-	if err := json.NewEncoder(conn).Encode(request); err != nil {
-		return controlwire.Response{}, nil, i18n.Errorf("sidecar.noAnswer", map[string]string{
-			"name": open.Name, "reason": err.Error(),
-		})
-	}
-	reader := bufio.NewReader(conn)
-	line, err := reader.ReadBytes('\n')
+	answer, err := exchange(conn, reader, name, request)
 	if err != nil {
-		return controlwire.Response{}, nil, i18n.Errorf("sidecar.noAnswer", map[string]string{
-			"name": open.Name, "reason": err.Error(),
-		})
-	}
-	var answer controlwire.Response
-	if err := json.Unmarshal(line, &answer); err != nil {
-		return controlwire.Response{}, nil, i18n.Errorf("sidecar.noAnswer", map[string]string{
-			"name": open.Name, "reason": err.Error(),
-		})
+		return controlwire.Response{}, nil, err
 	}
 	if !answer.Ok {
 		// A refused stream request leaves no stream. Handing back a reader that will only ever see
@@ -106,20 +101,63 @@ type stream struct {
 func (s *stream) Read(into []byte) (int, error) { return s.reader.Read(into) }
 func (s *stream) Close() error                  { return s.conn.Close() }
 
-// connect starts the unit if it is not running and opens a connection to the address it announced.
-func (host *Host) connect(name string) (io.ReadWriteCloser, Open, error) {
+// connect starts the unit if it is not running, opens a connection to the address it announced, and
+// greets it.
+//
+// The greeting is per connection because that is what it agrees: a protocol and an identity for this
+// exchange. Skipping it would leave a version mismatch to be discovered at the first command that
+// behaves differently, which is halfway through answers the caller already trusted.
+//
+// The token is this host's to send. It arrived on the unit's announcement, which only the process
+// that started the unit reads, and no caller ever sees it — a caller holding it could greet the
+// unit directly, and this relay is the only thing between a plugin and a process.
+func (host *Host) connect(name string) (io.ReadWriteCloser, *bufio.Reader, Open, error) {
 	open, err := host.Start(name)
 	if err != nil {
-		return nil, Open{}, err
+		return nil, nil, Open{}, err
 	}
 	if host.deps.Dial == nil {
-		return nil, Open{}, i18n.Errorf("sidecar.noDial", map[string]string{"name": name})
+		return nil, nil, Open{}, i18n.Errorf("sidecar.noDial", map[string]string{"name": name})
 	}
 	conn, err := host.deps.Dial(open.Address)
 	if err != nil {
-		return nil, Open{}, i18n.Errorf("sidecar.dialFailed", map[string]string{
+		return nil, nil, Open{}, i18n.Errorf("sidecar.dialFailed", map[string]string{
 			"name": name, "address": open.Address, "reason": err.Error(),
 		})
 	}
-	return conn, open, nil
+	reader := bufio.NewReader(conn)
+	if err := host.greet(conn, reader, name); err != nil {
+		_ = conn.Close()
+		return nil, nil, Open{}, err
+	}
+	return conn, reader, open, nil
+}
+
+// greet agrees a protocol on one connection before anything else travels on it.
+func (host *Host) greet(conn io.Writer, reader *bufio.Reader, name string) error {
+	host.mu.Lock()
+	held := host.open[name]
+	host.mu.Unlock()
+	token := ""
+	if held != nil {
+		token = held.token
+	}
+
+	protocol, _ := json.Marshal(controlwire.Protocol)
+	encoded, _ := json.Marshal(token)
+	request := controlwire.Request{
+		ID:      "greeting",
+		Command: controlwire.HelloCommand,
+		Args:    map[string]json.RawMessage{"protocol": protocol, "token": encoded},
+	}
+	answer, err := exchange(conn, reader, name, request)
+	if err != nil {
+		return err
+	}
+	if !answer.Ok {
+		return i18n.Errorf("sidecar.greetingRefused", map[string]string{
+			"name": name, "reason": answer.Error,
+		})
+	}
+	return nil
 }

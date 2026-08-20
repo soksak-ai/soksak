@@ -69,6 +69,10 @@ func init() {
 			EN: "sidecar {name} implements {wanted} at {found} and the manifest requires exactly {wanted2} — an unstable contract is consumed at one version, never across a range",
 			KO: "사이드카 {name} 이(가) 구현하는 판은 {found} 이고 매니페스트는 정확히 {wanted2} 를 요구합니다 — 불안정 계약은 범위가 아니라 한 판으로만 소비합니다",
 		},
+		"sidecar.greetingRefused": {
+			EN: "sidecar {name} refused the greeting: {reason} — nothing was sent on this connection, so no command ran against a protocol neither side agreed",
+			KO: "사이드카 {name} 이(가) 그리팅을 거절했습니다: {reason} — 이 연결로 아무것도 보내지 않았으므로, 양쪽이 합의하지 않은 프로토콜로 실행된 명령은 없습니다",
+		},
 		"sidecar.noAnswer": {
 			EN: "sidecar {name} took the request and answered nothing: {reason}",
 			KO: "사이드카 {name} 이(가) 요청을 받고 아무 응답도 하지 않았습니다: {reason}",

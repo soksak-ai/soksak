@@ -110,6 +110,9 @@ type unit struct {
 	// stderr is drained into a ring so a unit that fails later can be asked why, rather than
 	// filling a pipe nobody reads until it blocks and the unit stops.
 	stderr *ring
+	// token is what this host greets the unit with. It is never handed to a caller: a caller that
+	// held it could greet the unit directly, which is the one thing this relay exists to be.
+	token string
 }
 
 func NewHost(deps Deps) *Host {
@@ -173,6 +176,9 @@ func (host *Host) Start(name string) (Open, error) {
 	}
 
 	held.open = Open{Name: name, Address: announced.address, Protocol: announced.protocol, PID: child.PID()}
+	// The token stays here rather than on Open. Open is what a caller reads, and a caller that could
+	// read the token could greet the unit itself — which is the one thing this relay exists to be.
+	held.token = announced.token
 	host.mu.Lock()
 	// Another caller may have started the same unit while this one waited. The first one holds it;
 	// this one ends what it started rather than leaving a second process nobody has a handle to.
@@ -191,6 +197,9 @@ func (host *Host) Start(name string) (Open, error) {
 type announcement struct {
 	address  string
 	protocol int
+	// token is what the greeting on that address has to carry. Empty means the unit announced none,
+	// which is a unit stating its socket takes an unauthenticated greeting.
+	token string
 }
 
 // await reads the unit's first stdout line and judges it.
@@ -250,7 +259,11 @@ func judge(name, line string) (announcement, error) {
 	if trim(*said.Socket) == "" {
 		return announcement{}, i18n.Errorf("sidecar.announcedEmptyAddress", map[string]string{"name": name})
 	}
-	return announcement{address: *said.Socket, protocol: *said.Protocol}, nil
+	token := ""
+	if said.Token != nil {
+		token = *said.Token
+	}
+	return announcement{address: *said.Socket, protocol: *said.Protocol, token: token}, nil
 }
 
 // Stop ends one unit. Only what this host started is ended: a process it adopted is one whose

@@ -244,19 +244,24 @@ func main() {
 		go func() {
 			defer conn.Close()
 			reader := bufio.NewReader(conn)
-			raw, err := reader.ReadBytes('\n')
-			if err != nil {
-				return
-			}
-			var request struct {
-				ID      string ` + "`json:\"id\"`" + `
-				Command string ` + "`json:\"command\"`" + `
-			}
-			json.Unmarshal(raw, &request)
-			answer, _ := json.Marshal(map[string]any{"id": request.ID, "ok": true, "result": map[string]any{"code": "OK"}})
-			conn.Write(append(answer, '\n'))
-			if request.Command == "probe.stream" {
-				conn.Write([]byte("STREAMED-BYTES"))
+			// A connection answers every request on it, not one. The greeting is a request like any
+			// other, so a unit that answered once would close under the caller's first command.
+			for {
+				raw, err := reader.ReadBytes('\n')
+				if err != nil {
+					return
+				}
+				var request struct {
+					ID      string ` + "`json:\"id\"`" + `
+					Command string ` + "`json:\"command\"`" + `
+				}
+				json.Unmarshal(raw, &request)
+				answer, _ := json.Marshal(map[string]any{"id": request.ID, "ok": true, "result": map[string]any{"code": "OK"}})
+				conn.Write(append(answer, '\n'))
+				if request.Command == "probe.stream" {
+					conn.Write([]byte("STREAMED-BYTES"))
+					return
+				}
 			}
 		}()
 	}
