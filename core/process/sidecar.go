@@ -19,6 +19,15 @@ const sidecarScheme = "sidecar:"
 // The home arrives as an argument. Reading it here would make this function
 // assume it runs inside the app process, and the same spelling would then
 // resolve differently in a daemon or a test.
+// SidecarPath is where a unit's entry point was staged, by the same rule resolveCommand applies.
+//
+// It is exported because more than one caller needs it: a command line that names "sidecar:<name>",
+// and a host that starts a unit directly. Two derivations of one path would part without either
+// reader noticing.
+func SidecarPath(home, name string) (string, error) {
+	return resolveCommand(home, sidecarScheme+name)
+}
+
 func resolveCommand(home string, command string) (string, error) {
 	name, scheme := strings.CutPrefix(command, sidecarScheme)
 	if !scheme {

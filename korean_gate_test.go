@@ -38,6 +38,7 @@ var koreanBundles = map[string]bool{
 	"core/scan/messages.go":        true,
 	"core/secret/messages.go":      true,
 	"core/service/messages.go":     true,
+	"core/sidecar/messages.go":     true,
 	"core/store/messages.go":       true,
 	"core/workspace/messages.go":   true,
 	"frameworks/wails/messages.go": true,
