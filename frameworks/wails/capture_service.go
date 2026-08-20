@@ -46,12 +46,12 @@ type CaptureService struct {
 	// frames announces one recorded frame once its file is complete. Nil sends nothing, which is
 	// what a caller that passed no receiver asked for.
 	frames func(index int)
-	// occlusion turns the window's rendering throttle off or on and answers how many web views it
-	// reached. Injected so the hold-and-restore rule is provable with no window.
+	// occlusion turns the window's rendering throttle off or on and answers how many web views the
+	// change covered. Injected so the hold-and-restore rule is provable with no window.
 	occlusion func(window unsafe.Pointer, enabled bool) int
-	// prepare tells the document that a capture will read its next rendered frame.
-	// Renderers with their own retained surface use this event to redraw after
-	// the occlusion throttle has been removed.
+	// prepare announces to the document that a capture will read its next rendered
+	// frame. Renderers with their own retained surface use this event to redraw
+	// after the occlusion throttle has been removed.
 	prepare func()
 }
 

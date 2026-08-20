@@ -31,10 +31,18 @@ const bindingsRoot = "frontend/bindings/github.com/soksak"
 // directive, which a walk of this tree cannot find.
 var bindingsModule = map[string]string{
 	"soksak-core/frameworks/wails":    "frameworks/wails",
-	"soksak-plugin-terminal-xterm":    "../soksak-plugins/soksak-plugin-terminal-xterm",
 	"soksak-plugin-browser-native":    "../soksak-plugins/soksak-plugin-browser-native",
 	"wails-service-native-compositor": "../wails-services/wails-service-native-compositor",
 }
+
+// The table above was one entry longer until 2026-08-20. The terminal's shells moved to a daemon
+// and what the host registers for it forwards the two lifecycle methods and nothing else, so the
+// generator emits no directory for it and that is correct.
+//
+// An entry removed and left at that would stop watching. What watches instead is the other
+// direction: every directory the generator writes must be claimed below. A service that becomes
+// bindable again produces a directory no entry claims, and that is the failure — without this file
+// naming which plugin it was, which is not the core's to know (C1).
 
 // bindingsLifecycle is what Wails calls rather than binds. A service declares these for the host
 // and no page ever calls them, so their absence from the bindings is correct.
@@ -101,6 +109,32 @@ func TestTheBindingsSayWhatTheGoSays(t *testing.T) {
 		}
 	}
 
+	// Every directory the generator wrote is claimed by an entry above. Unclaimed, it is a service
+	// that became bindable with nothing checking what it publishes — and the table is a hand-written
+	// list, so the day one is added is the day it is easiest to forget.
+	written, err := os.ReadDir(bindingsRoot)
+	if err != nil {
+		t.Fatalf("reading %s: %v", bindingsRoot, err)
+	}
+	for _, entry := range written {
+		if !entry.IsDir() {
+			continue
+		}
+		// An entry may name a directory further in — this module's own bindings sit under the package
+		// path that produced them — so a directory is claimed by an entry equal to it or below it.
+		claimed := false
+		for dir := range bindingsModule {
+			if dir == entry.Name() || strings.HasPrefix(dir, entry.Name()+"/") {
+				claimed = true
+				break
+			}
+		}
+		if !claimed {
+			wrong = append(wrong, entry.Name()+
+				": the generator wrote bindings here and no entry says which package they came from")
+		}
+	}
+
 	if len(wrong) > 0 {
 		sort.Strings(wrong)
 		t.Errorf("the bindings and the Go disagree in %d places:\n%s\n"+
@@ -108,6 +142,7 @@ func TestTheBindingsSayWhatTheGoSays(t *testing.T) {
 			len(wrong), strings.Join(wrong, "\n"))
 	}
 }
+
 
 // tsArity counts the parameters in a generated signature. The generator writes one `name: Type`
 // per parameter and never a default or a rest, so commas at the top level are the count — and a

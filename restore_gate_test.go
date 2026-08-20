@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,6 +96,12 @@ type restoreGate struct {
 	// log is where the application's own output went. Read it when the process stops answering: the
 	// socket has only "the door is closed", and this has what happened behind it.
 	log string
+	// opened is every workspace window this gate asked for, in order. A whole-application command
+	// goes to one of these rather than to `main`: the launch renderer retires itself once a
+	// workspace window has declared its commands, so on any run that opens one, `main` is gone
+	// before the gate is finished (measured 2026-08-20 — four gates ran to the end and never told
+	// the application to stop).
+	opened []string
 }
 
 var gateRunSequence atomic.Uint64
@@ -355,7 +362,10 @@ func (gate *restoreGate) quit() {
 	if gate.proc == nil {
 		return
 	}
-	_, _ = gate.try("app.shutdown.commit", "window=main")
+	// What the command answered, kept. A refused shutdown — an unknown command, a window that had
+	// already gone — and an accepted one that did nothing are the same twenty seconds from here,
+	// and the answer is the only thing between them.
+	answer, answerErr := gate.try("app.shutdown.commit", "window="+gate.answeringWindow())
 	done := make(chan struct{})
 	go func() { _ = gate.proc.Wait(); close(done) }()
 	select {
@@ -363,7 +373,17 @@ func (gate *restoreGate) quit() {
 	case <-time.After(20 * time.Second):
 		_ = gate.proc.Process.Kill()
 		<-done
-		gate.t.Fatal("app.shutdown.commit did not end the process within 20s")
+		// Everything the gate already held. Measured 2026-08-20: four gates failed here at once,
+		// each after its own body had passed, and the report said only that twenty seconds had gone
+		// by — while the answer, the application's output and the shutdown's own counters were all
+		// in hand. A refusal names what is missing, and so must a death.
+		refusal := ""
+		if answerErr != nil {
+			refusal = fmt.Sprintf("\n  the command was refused: %v", answerErr)
+		}
+		gate.t.Fatalf("app.shutdown.commit did not end the process within 20s.%s"+
+			"\n  it answered: %s\n  the application's last words:\n%s",
+			refusal, strings.TrimSpace(answer), gate.lastWords())
 	}
 	gate.proc = nil
 }
@@ -553,6 +573,18 @@ func (gate *restoreGate) open(window string, program string) string {
 	return answer.Data.TabID
 }
 
+// answeringWindow is the window a whole-application command is asked of.
+//
+// The last workspace this gate opened, or `main` when it has opened none. The fallback is the other
+// half of the retirement rule: `main` closes only once a workspace renderer is ready, so before
+// there is one it is the only window there is.
+func (gate *restoreGate) answeringWindow() string {
+	if len(gate.opened) == 0 {
+		return "main"
+	}
+	return gate.opened[len(gate.opened)-1]
+}
+
 func (gate *restoreGate) openWorkspace() string {
 	gate.t.Helper()
 	root, err := filepath.Abs(".")
@@ -563,7 +595,7 @@ func (gate *restoreGate) openWorkspace() string {
 	// and wrong for a run: it takes the machine from whoever is at it, and it makes every gate that
 	// opens a window contend with every other for the front. Coming to the front is a deliberate
 	// act here — layout_scenarios requests it behind SOKSAK_GATE_FRONT and nothing else does.
-	out := gate.run("window.open", "window=main", "root="+root, "focus=false")
+	out := gate.run("window.open", "window="+gate.answeringWindow(), "root="+root, "focus=false")
 	var answer struct {
 		Data struct {
 			Label string `json:"label"`
@@ -579,6 +611,7 @@ func (gate *restoreGate) openWorkspace() string {
 	// commands has no command to subscribe to and nothing outside the process
 	// publishes its arrival.
 	gate.awaitWindow(answer.Data.Label)
+	gate.opened = append(gate.opened, answer.Data.Label)
 	return answer.Data.Label
 }
 
