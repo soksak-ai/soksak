@@ -31,6 +31,7 @@ const bindingsRoot = "frontend/bindings/github.com/soksak"
 // directive, which a walk of this tree cannot find.
 var bindingsModule = map[string]string{
 	"soksak-core/frameworks/wails":    "frameworks/wails",
+	"soksak-contract-control":         "../soksak-contracts/soksak-contract-control",
 	"wails-service-native-compositor": "../wails-services/wails-service-native-compositor",
 	"wails-service-webview-surface":   "../wails-services/wails-service-webview-surface",
 }
