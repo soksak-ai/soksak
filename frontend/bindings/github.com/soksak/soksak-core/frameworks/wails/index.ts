@@ -14,5 +14,6 @@ export {
     RecordReport,
     RecordRequest,
     Rect,
-    Reply
+    Reply,
+    WindowGone
 } from "./models.js";

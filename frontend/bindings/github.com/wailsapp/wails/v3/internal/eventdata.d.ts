@@ -8,11 +8,15 @@ import type { Events } from "@wailsio/runtime";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import type * as control$0 from "../../../../soksak/soksak-core/core/control/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import type * as wails$0 from "../../../../soksak/soksak-core/frameworks/wails/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
             "stream": control$0.StreamFrame;
+            "window:gone": wails$0.WindowGone;
         }
     }
 }

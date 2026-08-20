@@ -9,14 +9,19 @@ import { Create as $Create } from "@wailsio/runtime";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as control$0 from "../../../../soksak/soksak-core/core/control/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as wails$0 from "../../../../soksak/soksak-core/frameworks/wails/models.js";
 
 function configure() {
     Object.freeze(Object.assign($Create.Events, {
         "stream": $$createType0,
+        "window:gone": $$createType1,
     }));
 }
 
 // Private type creation functions
 const $$createType0 = control$0.StreamFrame.createFrom;
+const $$createType1 = wails$0.WindowGone.createFrom;
 
 configure();

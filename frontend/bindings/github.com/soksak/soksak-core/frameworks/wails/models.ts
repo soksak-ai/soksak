@@ -268,6 +268,34 @@ export class Reply {
     }
 }
 
+/**
+ * WindowGone names the window in a way a document can compare against what it holds.
+ */
+export class WindowGone {
+    /**
+     * WindowLabel is the name this application gave the window. It is opaque to everything between
+     * here and whoever kept something under it.
+     */
+    "windowLabel": string;
+
+    /** Creates a new WindowGone instance. */
+    constructor($$source: Partial<WindowGone> = {}) {
+        if (!("windowLabel" in $$source)) {
+            this["windowLabel"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WindowGone instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WindowGone {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WindowGone($$parsedSource as Partial<WindowGone>);
+    }
+}
+
 // Private type creation functions
 const $$createType0 = CaptureNote.createFrom;
 const $$createType1 = Rect.createFrom;
