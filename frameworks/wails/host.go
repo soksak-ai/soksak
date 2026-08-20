@@ -295,14 +295,17 @@ func Run(options Options) error {
 			if err := renderer.Withdraw(created.Name()); err != nil {
 				log.Printf("renderer commands: %v", err)
 			}
-			// The window that owned these shells is going away, and nothing else
-			// will ask about them: a session keyed to a closed window is a
-			// process with no caller and no way to be reached again.
-			if _, err := options.Registry.Invoke("close_window_terminals", control.Args{
-				"windowLabel": jsonString(created.Name()),
-			}); err != nil {
-				log.Printf("closing the window's terminals: %v", err)
-			}
+			// Nothing here ends what a closing window's plugins hold, and that is a gap rather than
+			// a decision (GATES.md).
+			//
+			// This invoked `close_window_terminals` until 2026-08-20 — a host that knew what a
+			// terminal is, which is what C1 refuses, and which broke the day the command left with
+			// the plugin that registered it: an invoke of an absent name is answered with "not
+			// registered" and logged, so every window close printed a line nobody was reading for.
+			//
+			// What replaces it is not another call from here. A session keyed to a closed window is
+			// the plugin's to let go of, and what is missing is the plugin ever learning the window
+			// closed: plugin events are published from the document, and this is the host.
 		})
 	})
 
