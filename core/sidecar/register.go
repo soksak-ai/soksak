@@ -10,7 +10,7 @@ import (
 
 // The surface a declared unit is received through.
 //
-// Three names, and what they are for is one thing: a plugin declares a unit in its manifest, and
+// Five names, and what they are for is one thing: a plugin declares a unit in its manifest, and
 // these open the one it declared and nothing else. The declaration is checked here
 // rather than trusted, because "declared equals actual" is the only thing standing between a
 // manifest a person consented to and a process this application starts.
@@ -29,6 +29,11 @@ type Registration struct {
 	// Provided answers what the installed unit states it implements. Nil means this build cannot
 	// check declared against actual, and the commands say so rather than checking nothing quietly.
 	Provided func(unit string) (Provided, error)
+	// Sink is where a unit's stream bytes arrive for the caller. Nil means this host has no stream,
+	// and `sidecar_stream` is declared unserved rather than opening a connection whose output has
+	// nowhere to go — a unit writing into nothing blocks, and what that looks like is a unit that
+	// stopped.
+	Sink Sink
 }
 
 // Requirement is a contract a plugin asked for: an id and one exact version.
@@ -48,7 +53,7 @@ type Provided struct {
 // A build with no host registers none of them, and the difference between "this build starts no
 // units" and "this build forgot a command" is only visible if the names are still declared.
 func Names() []string {
-	return []string{"sidecar_open", "sidecar_send", "sidecar_close", "sidecar_status"}
+	return []string{"sidecar_open", "sidecar_send", "sidecar_stream", "sidecar_close", "sidecar_status"}
 }
 
 // Register puts this group on the registry.
@@ -107,6 +112,45 @@ func Register(registry *control.Registry, deps Registration) {
 		}
 		return deps.Host.Send(name, request)
 	})
+
+	if deps.Sink == nil {
+		declare("sidecar_stream", "this host carries no stream for a unit's output to arrive on")
+	} else {
+		serve("sidecar_stream", func(args control.Args) (any, error) {
+			name, err := control.Arg[string](args, "name")
+			if err != nil {
+				return nil, err
+			}
+			if _, declared := deps.Declared(name); !declared {
+				return nil, i18n.Errorf("sidecar.undeclared", map[string]string{"name": name})
+			}
+			stream, err := control.Arg[string](args, "stream")
+			if err != nil {
+				return nil, err
+			}
+			payload, err := control.Arg[string](args, "payload")
+			if err != nil {
+				return nil, err
+			}
+			var request controlwire.Request
+			if err := json.Unmarshal([]byte(payload), &request); err != nil {
+				return nil, i18n.Errorf("sidecar.payloadNotARequest", map[string]string{
+					"name": name, "reason": err.Error(),
+				})
+			}
+			answer, bytes, err := deps.Host.Stream(name, request)
+			if err != nil {
+				return nil, err
+			}
+			// A refused request leaves no connection. Answering as though a stream had opened would
+			// make a refusal read as a session that produced nothing.
+			if bytes == nil {
+				return answer, nil
+			}
+			go pump(bytes, deps.Sink, stream, DefaultReadSize)
+			return answer, nil
+		})
+	}
 
 	serve("sidecar_close", func(args control.Args) (any, error) {
 		name, err := control.Arg[string](args, "name")
