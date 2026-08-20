@@ -193,6 +193,33 @@ Written here so it is not rediscovered (L2).
   `linked_plugin_gate_test.go` holds the count at three: a fourth fails, and so
   does a third once one has gone.
 
+- **Whether a distributed build may load a third-party module is unmeasured.**
+  This build ad-hoc signs and carries no entitlements, so nothing stops a load
+  today. A distributed one is notarised, notarisation wants the hardened
+  runtime, and the hardened runtime validates what a process loads — there is an
+  entitlement named for turning that off, which is a decision about the whole
+  application's posture rather than about one module.
+
+  Measure it before the engine host ships. A host built without that answer is a
+  host that works until the day the application is signed for release.
+
+- **Four things about loading a module are unmeasured.** A host loaded a module
+  built in the same language and both ran at once — two schedulers, two garbage
+  collectors, two timers, a panic recovered inside the module (measured
+  2026-08-20, macOS, 300ms). What that reading does not cover:
+
+  - **Signal handlers.** Each runtime installs its own for faults and profiling.
+    What the second installation does to the first is unknown, and a fault is
+    where it would show.
+  - **The other two targets.** Building a module needs a C toolchain for its own
+    platform; this machine has one for itself only, so Windows and Linux were
+    not reached.
+  - **Unloading.** Whether a module can be closed, or whether a load is for the
+    life of the process.
+  - **A long-lived module.** Three hundred milliseconds is not a session.
+
+  Each is a reading to take before the host ships, not a risk to accept.
+
 - **Windows and Linux are compile-only.** Every driver fails by name. Their
   runtime and visual behaviour is unverified, and no green is recorded for them.
 - **Windows terminal needs ConPTY.** `creack/pty` does not cover it.

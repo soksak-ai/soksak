@@ -40,21 +40,39 @@ A sidecar takes one of two runtime shapes. The axis is where it runs, not what i
 | Describes itself by | its manifest | the symbols it exports — the binary is the truth |
 | The core understands | the envelope, not the payload | nothing; it relays |
 
-`engine` is in this process because a native child view is process-local on macOS: another process
-cannot attach a view to this application's windows, and the message pump needs this process's main
-queue. That is a fact about the process, and it was read as a fact about the build until 2026-08-20
-— this section said such a plugin is "linked into the application as a Wails service, not spawned",
-and the browser's and compositor's Go halves were linked accordingly.
+`engine` is in this process because a view does not cross a process boundary. Measured 2026-08-20
+across the three targets this build ships to:
+
+| Attaching another process's view to this window | |
+| --- | --- |
+| macOS | no public API |
+| Windows | `SetParent` accepts it, and forces a DPI-awareness reset of the child's process |
+| Linux, GTK4 — the default this framework builds against | the API is gone; `GtkSocket` was X11-only and GTK4 removed it |
+
+One of three, with a cost, is not a shape a cross-platform plugin can take. So an engine that draws
+into a view runs in this process, and that is a fact about the process.
+
+It was read as a fact about the build until 2026-08-20 — this section said such a plugin is "linked
+into the application as a Wails service, not spawned", and the browser's and compositor's Go halves
+were linked accordingly.
 
 **In-process is not linked.** An engine module is installed like any other artefact and loaded
 because the manifest declared it. Wails' own service concept cannot carry it: `RegisterService`
 takes a Go value and refuses anything after `Run`, so a service is a compile-time fact — which is
 the right shape for the *host* that loads engines, and the wrong one for the engines.
 
-One constraint the loading side carries: a module that brings a second Go runtime into this process
-is not loadable, because the process already has one. An engine exports a C ABI and holds no runtime
-of its own. The Go half of a plugin that needs a window belongs to the host that loads it, not to the
-module.
+What a module is written in is not constrained. It exports a C ABI, and a runtime of its own is not
+in the way: measured 2026-08-20, a host built in this language loaded a module built in the same one
+and both ran at once — the module's own goroutines, timer, allocation and garbage collection beside
+the host's, its panic recovered inside itself, the host's scheduler and goroutines untouched.
+
+That was written here as impossible the same day, before it was measured. It is the reverse: the
+native half a plugin already has can be built as a module and loaded, without being rewritten in
+another language.
+
+Four things about a loaded module are unmeasured and are named in `GATES.md`: what two runtimes do
+to each other's signal handlers, whether the load holds on the other two targets, whether unloading
+is safe, and what a long-lived module does that a short-lived one does not.
 
 Loading costs Windows nothing, which is the constraint that decides whether this shape is available
 at all. `NATIVE-LAYER.md` N3 holds Windows at cgo 0 because that is the one target whose cross
@@ -112,6 +130,16 @@ application did not write.
 The second row is why `ARCHITECTURE.md` C1a is red. The browser's native half is not linked because
 a dylib could not do the work — it is linked because there is no host to load one.
 
-The engine host is what this document exists to bound. A boundary defined after the code is a
-boundary the code has already crossed, and this one was: the paragraph above replaced a rule that
-had turned the absence of a host into a law that plugins must be compiled in.
+That host is what makes a drawing plugin possible at all, and the implementation this one succeeds
+shipped three browsers on it: the platform's own webview with no engine declared, and two that
+declared the same engine and differed only by hosting mode. Three implementations of one thing,
+installed separately, with no rebuild between them — that is the whole of what a plugin system is,
+and the host is the part that carries it.
+
+Nothing in the framework offers it. A sidecar there is a process spawned and spoken to over its
+standard streams; it draws nothing. What worked before was not the framework's — it was a host
+written for it, and this one has to be written too.
+
+A boundary defined after the code is a boundary the code has already crossed, and this one was: the
+paragraph above replaced a rule that had turned the absence of a host into a law that plugins must
+be compiled in.

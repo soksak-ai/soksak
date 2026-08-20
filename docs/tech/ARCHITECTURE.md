@@ -120,6 +120,39 @@ All of these are hard.
   package in the core binary's dependency graph. It is red until the two native
   halves move behind the seam that already exists for them.
 
+- **C1b.** What shape a plugin takes is read off what it does, not chosen.
+
+  A plugin's surface is its view, in the document. Anything else it needs takes
+  the first shape below that can do the work:
+
+  | What it does | Shape |
+  | --- | --- |
+  | Draws only in the document | the view alone |
+  | Work with its own lifetime, or work this process should not carry | its own process, speaking the control-plane envelope |
+  | Draws into a pane's surface | an engine module, loaded by the core (`SIDECARS.md` S3) |
+
+  Every branch is a question of fact — does it draw, does it need to outlive a
+  window, can a view leave a process — so two readers reach the same shape.
+
+  The third branch is not a preference. A view does not cross a process
+  boundary: measured 2026-08-20, no public API on macOS, a DPI-awareness reset
+  on Windows, and nothing at all on GTK4, which is the default this framework
+  builds against. A drawing plugin that shipped as its own process would run on
+  one of three targets.
+
+- **C1c.** The core owns a content kind only while the platform supplies it and
+  the core already depends on it.
+
+  The window's own webview is such a kind: the core is built on it and there is
+  one of it. Anything else a pane draws arrives as an engine module.
+
+  **The test that decides: can a second implementation of the same thing be
+  installed with no core edit.** Where the answer is no, the core is holding a
+  content kind rather than a capability, and it goes out. The test is not an
+  opinion — it is what says which day that is, and the day is not hypothetical:
+  the implementation this one succeeds shipped three browsers, one on the
+  platform's webview and two on an engine of their own.
+
 - **C2.** Every feature exposes three surfaces — command, status, and DOM — and
   the exposure is operable, not decorative.
   A view with no command fails. A view no status axis can see fails. An element
