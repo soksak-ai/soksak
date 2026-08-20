@@ -224,6 +224,42 @@ Written here so it is not rediscovered (L2).
   What that leaves running is one unit's sessions per closed window, until the application quits and
   the reaper ends the unit.
 
+- **Host and unit are only checked where they share a type.** The contract module they both import
+  makes a shape mismatch a compile error, and nothing measures the rest: a host that greets wrongly,
+  a unit that answers a command it declared and does nothing for, an address one binds and the other
+  cannot reach.
+
+  There was a test that started the real daemon from inside the core and drove a shell through it.
+  It was removed 2026-08-20 because of how it found the daemon — a hardcoded walk out of this
+  repository into a sibling tree, which put the workspace's layout inside the application that is
+  supposed to know none of it. The reach was the defect; the reading it took was worth having.
+
+  Where such a test goes is not settled. It belongs to neither repository: a unit that tested itself
+  against the host would depend on the host, and a host that tested itself against a unit reaches
+  out of its tree — which is what was just removed. What it needs is a place that owns the pair, and
+  there is none.
+
+- **The i18n ownership rule is stated and unenforced.** `REPO-LAYOUT.md` L1b says a message is owned
+  by whatever it is about, and no gate holds it. The one written for it read the sibling trees from
+  inside this repository, which is the same reach as above, so it went with it.
+
+  It is a unit's own fact — its go.mod either names an application or does not — so the check that
+  can exist is the unit's, not this one's.
+
+- **Nothing tells a plugin its window closed.** The host invoked `close_window_terminals` when a
+  window went, which is a host that knows what a terminal is — and it broke the day that command
+  left with the plugin that registered it. An invoke of an absent name is answered with "not
+  registered" and logged, so every window close printed a line nobody was reading for, and the
+  sessions it was meant to end were left held (measured 2026-08-20, by starting the built binary).
+
+  The call is gone. What replaces it is not another call from the host: a session keyed to a closed
+  window is the plugin's to let go of, and the plugin never learns the window closed — plugin events
+  are published from the document and this is the host, and the two have no path between them for
+  this fact.
+
+  What that leaves running is one unit's sessions per closed window, until the application quits and
+  the reaper ends the unit.
+
 - **Nothing measures warm restore end to end.** A second host adopts a unit a first one started, and
   a stale record starts a fresh one — both are tested. What is not: an application that quits and
   comes back to a shell it left running, with what was on the screen still there. The pieces are
