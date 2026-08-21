@@ -253,6 +253,16 @@ func TestASilentWindowTimesOutCarryingTheWindowAndCommand(t *testing.T) {
 	}
 }
 
+func TestRendererDeadlineExceedsTheCommandTimeout(t *testing.T) {
+	args := control.Args{"timeoutMs": json.RawMessage(`20000`)}
+	if got := rendererCallDeadline(20*time.Second, args); got != 25*time.Second {
+		t.Fatalf("deadline=%s", got)
+	}
+	if got := rendererCallDeadline(20*time.Second, control.Args{}); got != 20*time.Second {
+		t.Fatalf("default deadline=%s", got)
+	}
+}
+
 func TestAWindowThatClosesStopsAnsweringAndReleasesItsCallers(t *testing.T) {
 	registry, bridge, document := bridged(t)
 	_ = bridge.Declare("win-a", []string{"ui.tree"})
