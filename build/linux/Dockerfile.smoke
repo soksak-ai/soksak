@@ -1,7 +1,7 @@
 FROM wails-cross
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    dbus-x11 imagemagick scrot xauth xdotool xvfb \
+    dbus-x11 gnome-keyring imagemagick scrot xauth xdotool xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 COPY smoke.sh /usr/local/bin/soksak-linux-smoke
