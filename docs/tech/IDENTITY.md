@@ -40,6 +40,7 @@ framework axis — the `soksak` segment names the product. `com.soksak.wails.dev
 | Derived | Release | Other axis (e.g. `dev`) |
 | --- | --- | --- |
 | home | `~/.soksak` | `~/.soksak-dev` |
+| composition | `<home>/settings.json` | same rule |
 | socket | `<home>/<identifier>.sock` | same rule |
 | CLI name | `sok` | `sok-dev` |
 
@@ -61,3 +62,9 @@ silently.
 The home is claimed before the store is opened or a window is drawn (`launch.go`). A second process
 for the same home exits before it can draw anything, so the failure is one refused start rather than
 two backends writing one database.
+
+## I7. One composition per identity
+
+The home owns one settings composition (COMPOSITION C2). Release, development and test identities
+never share install selection, development mode or provider bindings. An installer transaction and
+the backend that resolves it therefore use the same resolved identity home.
