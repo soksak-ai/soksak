@@ -8,6 +8,8 @@
 package identity
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"path/filepath"
 	"strings"
 
@@ -120,11 +122,16 @@ func Resolve(identifier string, env Environment) Resolved {
 	if env.Runtime != "" {
 		runtimeRoot = env.Runtime
 	}
+	controlAddress := filepath.Join(runtimeRoot, identifier+".sock")
+	if env.Windows {
+		digest := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(runtimeRoot)) + "\x00" + identifier))
+		controlAddress = `\\.\pipe\soksak-control-` + hex.EncodeToString(digest[:16])
+	}
 	return Resolved{
 		Identifier: identifier,
 		Home:       home,
 		Runtime:    runtimeRoot,
-		Socket:     filepath.Join(runtimeRoot, identifier+".sock"),
+		Socket:     controlAddress,
 		CoreBuild:  axis,
 		CLI:        cli,
 		Release:    release,
