@@ -6,6 +6,7 @@ import (
 	"time"
 
 	winio "github.com/Microsoft/go-winio"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 	"golang.org/x/sys/windows"
 )
 
@@ -40,7 +41,7 @@ func Dial(path string) (net.Conn, error) {
 
 func validatePipeAddress(path string) error {
 	if len(path) <= len(`\\.\pipe\`) || path[:len(`\\.\pipe\`)] != `\\.\pipe\` {
-		return fmt.Errorf("Windows control address must use the named-pipe namespace: %s", path)
+		return i18n.Errorf("control.pipe.address", map[string]string{"path": path})
 	}
 	return nil
 }
@@ -52,7 +53,7 @@ func currentUserPipeSDDL() (string, error) {
 	}
 	sid := user.User.Sid.String()
 	if sid == "" {
-		return "", fmt.Errorf("current process token has no SID")
+		return "", i18n.Errorf("control.pipe.noSID", nil)
 	}
 	return "D:P(A;;GA;;;" + sid + ")", nil
 }

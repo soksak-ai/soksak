@@ -306,7 +306,7 @@ func (gate *restoreGate) start() {
 	// wait after this one is on an event the window announces.
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) {
-		if out, err := gate.try("window.list", "window=main"); err == nil && strings.Contains(out, "main") {
+		if out, err := gate.try("window_list", "window=main"); err == nil && strings.Contains(out, "win-") {
 			return
 		}
 		time.Sleep(startupPollInterval)
@@ -544,6 +544,15 @@ func (gate *restoreGate) open(window string, program string) string {
 // there is one it is the only window there is.
 func (gate *restoreGate) answeringWindow() string {
 	if len(gate.opened) == 0 {
+		out, err := gate.try("window_list", "window=main")
+		if err == nil {
+			var response struct {
+				Data []string `json:"data"`
+			}
+			if json.Unmarshal([]byte(out), &response) == nil && len(response.Data) > 0 {
+				return response.Data[0]
+			}
+		}
 		return "main"
 	}
 	return gate.opened[len(gate.opened)-1]

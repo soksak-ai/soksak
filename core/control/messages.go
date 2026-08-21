@@ -8,6 +8,14 @@ import "github.com/soksak-ai/soksak-core/core/i18n"
 
 func init() {
 	i18n.Declare(map[string]i18n.Sentence{
+		"control.pipe.address": {
+			EN: "Windows control address must use the named-pipe namespace: {path}",
+			KO: "Windows 제어 주소는 named-pipe namespace를 사용해야 합니다: {path}",
+		},
+		"control.pipe.noSID": {
+			EN: "the current process token has no user SID",
+			KO: "현재 프로세스 토큰에 사용자 SID가 없습니다",
+		},
 		"control.delegate.noSource": {
 			EN: "control: a delegation needs a source",
 			KO: "control: 위임에는 출처가 필요합니다",
