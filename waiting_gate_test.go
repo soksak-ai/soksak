@@ -47,7 +47,7 @@ var relativeDirToTheApplication = regexp.MustCompile(`"(?:dir|path)="\+\s*filepa
 // which elements had a rectangle, and every one of them polled because an inference has no edge to
 // wait on.
 const (
-	clockWaits   = 6
+	clockWaits   = 2
 	pollingWaits = 2
 )
 

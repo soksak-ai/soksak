@@ -153,13 +153,6 @@ func reclaimGateState(root string) error {
 	return nil
 }
 
-// quietGate is the same harness under the name its own gate reads by.
-type quietGate = restoreGate
-
-func newQuietGate(t *testing.T) *quietGate {
-	return newGate(t, quietGateHome, quietGateIdentifier)
-}
-
 func TestGateHomesAreOwnedByOneRunAndNeverEraseAnotherRun(t *testing.T) {
 	first := newGate(t, "<local-evidence>/soksak-idempotent-gate", "com.soksak.idempotentgate")
 	marker := filepath.Join(first.home, "owned-by-first")
@@ -235,76 +228,19 @@ func newGate(t *testing.T, homePrefix string, identifier string) *restoreGate {
 		}
 	}
 	gate := &restoreGate{t: t, app: app, client: client, home: home, runtime: runtimeRoot, identifier: identifier}
+	if err := os.MkdirAll(gate.installationHome(), 0o700); err != nil {
+		t.Fatalf("creating installation home: %v", err)
+	}
+	settings := []byte(`{"spec":"soksak-spec-composition@0.0.1","generation":1,"plugins":[],"sidecars":[],"kits":[],"bindings":[]}`)
+	if err := os.WriteFile(filepath.Join(gate.installationHome(), "settings.json"), settings, 0o600); err != nil {
+		t.Fatalf("writing installation settings: %v", err)
+	}
 	t.Cleanup(func() {
 		gate.quit()
 		_ = os.RemoveAll(home)
 		_ = os.RemoveAll(runtimeRoot)
 	})
 	return gate
-}
-
-// installPlugins puts the sibling plugins in the gate's home, the same two files `task
-// install:plugins` copies. A gate that ran against an empty home would be asking a build with
-// nothing in it how it is, and every question about a plugin would answer "no such program".
-func (gate *restoreGate) installPlugins() []string {
-	gate.t.Helper()
-	// The same roots `task install:plugins` copies from. A gate that installs a different set than
-	// the installation measures a build nobody runs — the section plugin is kept in the development
-	// tree and the two built here are siblings.
-	// This repository's own plugins, and only those. The file tree used to be borrowed from the
-	// preceding implementation's home — a build measuring itself against a plugin it does not
-	// contain, and one that could not be fixed here because the older application still runs on it.
-	sources, err := filepath.Glob(filepath.Join("..", "soksak-plugins", "*"))
-	if err != nil {
-		gate.t.Fatalf("looking for the plugins to install: %v", err)
-	}
-	var installed []string
-	for _, source := range sources {
-		name := filepath.Base(source)
-		manifest := filepath.Join(source, "plugin.json")
-		bundle := filepath.Join(source, "main.js")
-		if _, err := os.Stat(manifest); err != nil {
-			continue
-		}
-		target := filepath.Join(gate.installationHome(), "plugins", name)
-		if err := os.MkdirAll(target, 0o755); err != nil {
-			gate.t.Fatalf("making the plugin directory: %v", err)
-		}
-		for _, file := range []string{manifest, bundle} {
-			body, err := os.ReadFile(file)
-			if err != nil {
-				gate.t.Fatalf("reading %s: %v", file, err)
-			}
-			if err := os.WriteFile(filepath.Join(target, filepath.Base(file)), body, 0o644); err != nil {
-				gate.t.Fatalf("writing %s: %v", file, err)
-			}
-		}
-		marker := filepath.Join(target, ".soksak.json")
-		if err := os.WriteFile(marker, []byte(`{"version":"0.0.1","source":"local"}`), 0o644); err != nil {
-			gate.t.Fatalf("writing the install marker: %v", err)
-		}
-		installed = append(installed, name)
-	}
-	if len(installed) == 0 {
-		gate.t.Skip("no sibling plugin is built; run `wails3 task install:plugins` first")
-	}
-	return installed
-}
-
-// consentAndEnable is the human act a plugin needs before it runs, performed through the same
-// commands a person's click goes through. A gate that skipped it would measure a build with every
-// plugin off, which is not the build anybody runs.
-func (gate *restoreGate) consentAndEnable(window string, plugins []string) {
-	gate.t.Helper()
-	for _, id := range plugins {
-		if out, err := gate.try("plugin.consent.grant", "window="+window, "id="+id); err != nil {
-			catalog, _ := gate.try("plugin.list", "window="+window)
-			gate.t.Fatalf("granting consent for %s: %v\n%s\nplugin.list:\n%s", id, err, out, catalog)
-		}
-		if out, err := gate.try("plugin.enable", "window="+window, "id="+id); err != nil {
-			gate.t.Fatalf("enabling %s: %v\n%s\nWhat the refusal says is the reason; an exit status is not one.", id, err, out)
-		}
-	}
 }
 
 // installationHome is where this identity keeps what it owns — the same derivation the application
@@ -615,6 +551,10 @@ func (gate *restoreGate) answeringWindow() string {
 
 func (gate *restoreGate) openWorkspace() string {
 	gate.t.Helper()
+	gate.until(45*time.Second, func() bool {
+		_, err := gate.try("app.boot.wait", "window="+gate.answeringWindow())
+		return err == nil
+	}, "control-plane window never declared its commands")
 	root, err := filepath.Abs(".")
 	if err != nil {
 		gate.t.Fatalf("resolving a workspace root: %v", err)

@@ -198,51 +198,6 @@ tasks:
     cmds:
       - go build -o bin/sok ./cmd/sok
 
-  install:plugins:
-    summary: Puts the sibling plugins in the home this build runs against
-    desc: |
-      A plugin is read from the installation's home, not from its source tree.
-      Without this step a plugin change cannot be run: the source is edited, the
-      bundle is rebuilt, and the application keeps loading the copy that was
-      placed by hand — with the manifest it had that day.
-
-      Measured 2026-08-16. Four commands were moved out of the core into the
-      terminal plugin, the plugin's own tests passed, and the running build kept
-      answering with the two it had before. `plugin.conformance` named the cause
-      — `declared: [clear, send]` — because it reads the installed manifest,
-      which is the right thing for it to read.
-
-      Each plugin builds its own bundle and both files are copied whole. The
-      marker states where the copy came from, so an installed tree can be told
-      apart from a published one.
-    cmds:
-      - |
-        set -e
-        # This repository's own plugins, found rather than listed. The file tree was borrowed from
-        # the preceding implementation's home until 2026-08-19 — a build installing a plugin it does
-        # not contain, and one nobody here could fix because that application still runs on it. Its
-        # manifest still named a place, so the install put a refused plugin in the home and the
-        # window came up with every pane saying the plugin was removed.
-        #
-        # Found, not listed: a name written here is a name that goes stale the day a plugin is added,
-        # and the gate already reads the same directory.
-        home="${SOKSAK_HOME:-$HOME/.soksak-wails}"
-        for source in ../soksak-plugins/*
-        do
-          name="$(basename "$source")"
-          if [ ! -f "$source/plugin.json" ]; then
-            echo "no plugin at $source" >&2
-            exit 1
-          fi
-          if [ -f "$source/frontend/build.mjs" ]; then
-            (cd "$source/frontend" && node build.mjs)
-          fi
-          mkdir -p "$home/plugins/$name"
-          cp "$source/main.js" "$source/plugin.json" "$home/plugins/$name/"
-          printf '{"version":"0.0.1","source":"local"}' > "$home/plugins/$name/.soksak.json"
-          echo "installed $name into $home/plugins"
-        done
-
   package:
     summary: Packages a production build of the application
     cmds:

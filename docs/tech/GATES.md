@@ -61,8 +61,8 @@ move between its three panes is a test of its own, run by name. What it refuses:
 | every address | one node each — two places had written their cells under the same name |
 | the evidence | a picture per case, kept from the recording of that case |
 
-Each of those was added the day a person saw what the gate did not ask. Held by
-`arrangement_gate_test.go`.
+Each of those was added the day a person saw what the gate did not ask. Installed-product checks
+belong to `externals/soksak-terminal-tests/system`, not this core repository.
 
 It waits on the window's own events, not on a clock. Each click stamps a `causeTraceId` and
 `layout.transaction.wait` waits for that one transaction after the journal sequence the click was
@@ -156,17 +156,21 @@ has watched fail is a claim, not a gate.
 | `sweep_gate_test.go` | a translation sweep changes no code |
 | `observation_gate_test.go` | what the build claims to observe, it serves |
 | `docs_carried_gate_test.go` | a carried document is not cited as contract before its review |
-| `task verify:motion` | the window keeps drawing while the layout changes — run where the machine is quiet, because a stalled window and a loaded machine produce the same number |
-| `layout_scenarios_gate_test.go` | in the named window — a terminal top left, a browser under it, a terminal filling the right — every one of the six ways focus can move leaves no hole between a place and the panes, no stale declaration, and no page the native layer holds away from where the document put it. Read frame by frame inside the window (`layout.trace`), and a case whose window stalled is reported rather than judged: a page cannot follow a pane that jumped 160 points in one step |
-| `surface_alignment_gate_test.go` | a person's click on the exposed rail toggle leaves the page on its pane |
-| `drawn_gate_test.go` | a section stands in the place its link names and in no other, and clearing the link takes it off the screen. Three places at once, because a host that never reads which place the link names passes a one-place run — measured 2026-08-17, a planted one survived until a section stood in two |
-| `surface_cover_gate_test.go` | no native surface stands over another, in a window holding two pages, through a sidebar opening, a tab switch and the plugin manager. Every surface here is layer 0 — peers — and two peers holding one place is one of them being in the wrong place. Each state reports how many surfaces it held, because a state with one proves nothing and reads the same as one that asked a real question |
+| `externals/soksak-terminal-tests/system` inventory | installed settings declare seven terminal plugins and six recovery sidecars at 0.0.1, with absolute paths and regular manifests |
+| `externals/soksak-terminal-tests/system` command suite | every terminal plugin opens, reads, writes, resizes, handles Unicode and 256 KiB output, exposes DOM/accessibility, and produces capture and recording files |
+| `externals/soksak-terminal-tests/system` lifecycle suite | every terminal preserves its shell PID and detached output across restart, restores a durable archive, and rejects archived input |
+| `externals/soksak-terminal-tests/system` UI suite | plugin rejection count is zero, `ui.verify` passes, surface coverage is zero, and steady-state surface drift is at most 2px |
 
 ---
 
 # Not done
 
 Written here so it is not rediscovered (L2).
+
+- The external installed-product suite does not yet reproduce the former frame-by-frame rail and
+  section-placement scenarios. It currently verifies steady-state alignment and coverage. The
+  motion stimulus and `layout.trace.native` verdict must be added there before claiming those
+  interaction cases are restored.
 
 - **A commit the compositor never answers stalls `ui.layout.wait-settled`.**
   `TestWhatTheLinkSaysIsWhatIsDrawn` fails in a full suite run and passes alone —

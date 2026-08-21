@@ -120,7 +120,7 @@ type PluginsBlob = {
 };
 const EMPTY_PLUGINS: PluginsBlob = { consents: {} };
 
-// Consent cache only. Enabled selection belongs to installation settings.
+// Consent cache only. Enabled selection is stored in installation settings.
 const pluginsSync = createCoreSync<PluginsBlob>({
   key: "plugins",
   lsKey: KEY,
