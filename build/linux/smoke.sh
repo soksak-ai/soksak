@@ -22,6 +22,7 @@ dbus-run-session -- xvfb-run -a -s "-screen 0 1400x900x24" sh -eu -c '
   user_home=$6
   native_output=$7
   printf '\n' | gnome-keyring-daemon --unlock ><local-evidence>/soksak-keyring.env
+  openbox ><local-evidence>/soksak-openbox.log 2>&1 &
   HOME=$user_home GDK_BACKEND=x11 GSK_RENDERER=cairo GTK_A11Y=none LIBGL_ALWAYS_SOFTWARE=1 \
     WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 \
     WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
