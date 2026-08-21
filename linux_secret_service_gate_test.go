@@ -21,4 +21,7 @@ func TestLinuxSmokeProvidesSecretService(t *testing.T) {
 	if !strings.Contains(string(smoke), "gnome-keyring-daemon --unlock") {
 		t.Fatal("Linux smoke run does not start Secret Service")
 	}
+	if !strings.Contains(string(dockerfile), "openbox") || !strings.Contains(string(smoke), "openbox") {
+		t.Fatal("Linux smoke does not provide a window manager for resize and focus contracts")
+	}
 }
