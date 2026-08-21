@@ -26,7 +26,7 @@ import (
 // That is the drift that was actually there, and it costs milliseconds.
 
 // bindingsRoot is where the generator writes.
-const bindingsRoot = "frontend/bindings/github.com/soksak"
+const bindingsRoot = "frontend/bindings/github.com/soksak-ai"
 
 // Binding directories mirror their Go import paths. go list resolves module replacements, so this
 // gate reads the declared module graph instead of naming another repository or workspace path.
