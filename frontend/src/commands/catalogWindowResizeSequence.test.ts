@@ -2,9 +2,11 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { currentWindow, onResized, outerSize, recordWindowFrames, sampleWindowResizeProbe, setPhysicalSize } = vi.hoisted(() => ({
+const { currentWindow, invoke, onResized, outerPosition, outerSize, recordWindowFrames, sampleWindowResizeProbe, setPhysicalSize } = vi.hoisted(() => ({
   currentWindow: vi.fn(),
+  invoke: vi.fn(),
   onResized: vi.fn(),
+  outerPosition: vi.fn(),
   outerSize: vi.fn(),
   recordWindowFrames: vi.fn(),
   sampleWindowResizeProbe: vi.fn(),
@@ -13,7 +15,7 @@ const { currentWindow, onResized, outerSize, recordWindowFrames, sampleWindowRes
 
 vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
-  invoke: vi.fn(),
+  invoke,
   currentWindow,
   windowByLabel: vi.fn(),
 }));
@@ -53,8 +55,10 @@ afterAll(() => {
 beforeEach(() => {
   setPhysicalSize.mockReset().mockResolvedValue(undefined);
   outerSize.mockReset().mockResolvedValue({ width: 1200, height: 800 });
+  outerPosition.mockReset().mockResolvedValue({ x: 40, y: 50 });
+  invoke.mockReset().mockResolvedValue(undefined);
   onResized.mockReset().mockResolvedValue(() => {});
-  currentWindow.mockReset().mockReturnValue({ setPhysicalSize, onResized, outerSize });
+  currentWindow.mockReset().mockReturnValue({ setPhysicalSize, onResized, outerPosition, outerSize });
   sampleWindowResizeProbe.mockReset().mockResolvedValue({ sample: true });
   recordWindowFrames.mockReset().mockImplementation(({ frames }: { frames: number }) =>
     Object.assign(Promise.resolve(frames), { ready: Promise.resolve() }));
@@ -68,7 +72,9 @@ describe("window.resize completion contract", () => {
     onResized.mockImplementation(async (listener) => { callback = listener; return unsubscribe; });
 
     const pending = execute("window.resize", { w: 900, h: 650 }, {});
-    await vi.waitFor(() => expect(setPhysicalSize).toHaveBeenCalledWith(900, 650));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("window_place", {
+      label: "main", x: 40, y: 50, w: 900, h: 650,
+    }));
     let settled = false;
     void pending.then(() => { settled = true; });
     await Promise.resolve();

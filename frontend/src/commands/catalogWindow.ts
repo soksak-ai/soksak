@@ -166,7 +166,10 @@ export function registerWindowCatalog(): void {
       try {
         before = await win.outerSize();
         if (before.width === w && before.height === h) finish();
-        await win.setPhysicalSize(w, h);
+        const position = await win.outerPosition();
+        await invoke("window_place", {
+          label: currentWindowLabel(), x: position.x, y: position.y, w, h,
+        });
         after = await win.outerSize();
         if (after.width === w && after.height === h) finish();
         await observed;
