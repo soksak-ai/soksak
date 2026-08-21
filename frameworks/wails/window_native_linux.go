@@ -36,7 +36,7 @@ var ErrWindowInputUnsupported = i18n.Errorf("wails.window.inputUnsupported", nil
 func nativeWindowTitle(unsafe.Pointer) (string, error) { return "", ErrTitleUnsupported }
 func contentSize(window unsafe.Pointer) (float64, float64, error) {
 	var width, height C.double
-	if !bool(C.soksakWindowContentSize(window, &width, &height)) {
+	if C.soksakWindowContentSize(window, &width, &height) == 0 {
 		return 0, 0, i18n.Errorf("wails.window.noNativeLifetimeContent", nil)
 	}
 	return float64(width), float64(height), nil
