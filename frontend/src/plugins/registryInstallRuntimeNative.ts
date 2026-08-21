@@ -62,11 +62,21 @@ const artifactStager: RegistryArtifactStager = {
     }),
   readUtf8: (transactionId, handle, path) =>
     invoke<string>("unit_install_read_utf8", { transactionId, handle, path }),
-  commit: (transactionId, units) =>
-    invoke<{ generation: string }>("unit_install_commit", {
+  commit: async (transactionId, units) => {
+    let expectedGeneration = 0;
+    try {
+      const settings = await invoke<{ generation: number }>("composition_settings");
+      expectedGeneration = settings.generation;
+    } catch {
+      expectedGeneration = 0;
+    }
+    return invoke<{ generation: number }>("unit_install_commit", {
       transactionId,
+      expectedGeneration,
       units,
-    }),
+      bindings: [],
+    });
+  },
   rollback: (transactionId) =>
     invoke<void>("unit_install_rollback", { transactionId }),
 };

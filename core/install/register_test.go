@@ -9,9 +9,53 @@ import (
 	"strings"
 	"testing"
 
+	composition "github.com/soksak/soksak-contract-composition"
 	"github.com/soksak/soksak-core/core/control"
 	"github.com/soksak/soksak-core/core/files"
 )
+
+type recordingChange struct {
+	event   string
+	payload any
+}
+
+func TestInstallCommandsCommitAndPublishOneCompositionChange(t *testing.T) {
+	home := t.TempDir()
+	plugin := composition.UnitRef{Kind: composition.Plugin, ID: "view", Version: "0.0.1"}
+	archive := unitArchive(t, plugin, "plugin.json")
+	var changes []recordingChange
+	registry := control.NewRegistry()
+	Register(registry, Deps{Home: home, Fetcher: memoryFetcher{body: archive}, Changed: func(event string, payload any) { changes = append(changes, recordingChange{event, payload}) }})
+	beginValue, err := registry.Invoke("unit_install_begin", arguments(t, map[string]any{"registryId": "official", "root": identityOf(plugin)}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	transaction := beginValue.(Transaction)
+	stageValue, err := registry.Invoke("unit_install_stage", arguments(t, map[string]any{
+		"transactionId": transaction.TransactionID, "registryId": "official", "unit": identityOf(plugin),
+		"artifact": Artifact{URL: "https://example.invalid/view.tgz", SHA256: sha256Hex(archive), Format: "tgz", Entrypoints: []string{composition.UnitManifestFile, "plugin.json"}},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged := stageValue.(StagedArtifact)
+	if _, err := registry.Invoke("unit_install_read_utf8", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "handle": staged.Handle, "path": composition.UnitManifestFile})); err != nil {
+		t.Fatal(err)
+	}
+	commitValue, err := registry.Invoke("unit_install_commit", arguments(t, map[string]any{
+		"transactionId": transaction.TransactionID, "expectedGeneration": uint64(0),
+		"units": []VerifiedUnit{verified(plugin, staged, "https://github.com/example/view", "https://example.invalid/view.tgz")}, "bindings": []composition.Binding{},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commitValue.(CommitResult).Generation != 1 {
+		t.Fatalf("commit = %+v", commitValue)
+	}
+	if len(changes) != 1 || changes[0].event != composition.ChangeEvent {
+		t.Fatalf("changes = %+v", changes)
+	}
+}
 
 func arguments(t *testing.T, pairs map[string]any) control.Args {
 	t.Helper()
@@ -32,7 +76,7 @@ func arguments(t *testing.T, pairs map[string]any) control.Args {
 // one.
 func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 	registry := control.NewRegistry()
-	Register(registry, Deps{Home: t.TempDir(), OS: "darwin", Arch: "arm64", LoginShell: "/bin/zsh", Run: &scriptedRunner{}})
+	Register(registry, Deps{Home: t.TempDir(), OS: "darwin", Arch: "arm64", LoginShell: "/bin/zsh", Run: &scriptedRunner{}, Fetcher: memoryFetcher{}})
 
 	table := registry.Describe()
 	served := []string{}
@@ -46,8 +90,9 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 
 	want := []string{
 		"binary_integrity", "host_unit_target", "npm_global_dirs",
-		"probe_binary", "theme_install", "unit_source_list", "unit_source_set",
-		"unit_source_validate",
+		"probe_binary", "theme_install", "unit_install_begin", "unit_install_commit",
+		"unit_install_read_utf8", "unit_install_rollback", "unit_install_stage",
+		"unit_source_list", "unit_source_set", "unit_source_validate",
 	}
 	if strings.Join(served, ",") != strings.Join(want, ",") {
 		t.Errorf("served = %v, want %v", served, want)
@@ -58,11 +103,7 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 		refused = append(refused, entry.Name)
 	}
 	sort.Strings(refused)
-	wantRefused := []string{
-		"plugin_scaffold",
-		"unit_install_begin", "unit_install_commit", "unit_install_read_utf8",
-		"unit_install_rollback", "unit_install_stage",
-	}
+	wantRefused := []string{"plugin_scaffold"}
 	if strings.Join(refused, ",") != strings.Join(wantRefused, ",") {
 		t.Errorf("refused = %v, want %v", refused, wantRefused)
 	}

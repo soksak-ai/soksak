@@ -37,10 +37,10 @@ describe("native registry install wiring", () => {
   });
 
   it("runs the closure and maps a committed generation to the root identity", async () => {
-    closure.mockResolvedValue({ ok: true, registryId: "fixture", generation: "generation-7", units: [] });
+    closure.mockResolvedValue({ ok: true, registryId: "fixture", generation: 7, units: [] });
     restore = wireNativeRegistryInstall();
     const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
-    expect(result).toEqual({ ok: true, id: "weather-plugin", version: "0.0.1", generation: "generation-7" });
+    expect(result).toEqual({ ok: true, id: "weather-plugin", version: "0.0.1", generation: 7 });
     const req = closure.mock.calls[0]![0] as any;
     expect(req.certified).toBe(CERTIFIED);
     expect(req.root).toBe(ROOT);
@@ -83,7 +83,7 @@ describe("native registry install wiring", () => {
           entrypoint: { kind: "plugin", manifest: "plugin.json" },
         },
       });
-      return { ok: true, registryId: "fixture", generation: "g", units: [] };
+      return { ok: true, registryId: "fixture", generation: 1, units: [] };
     });
     restore = wireNativeRegistryInstall();
     await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
@@ -93,6 +93,25 @@ describe("native registry install wiring", () => {
       registryId: "fixture",
       unit: ROOT,
       artifact: { url: "https://x/a.tgz", sha256: "abc", format: "tgz", entrypoints: ["plugin.json"] },
+    });
+  });
+
+  it("commits against the current composition generation with explicit bindings", async () => {
+    closure.mockImplementation(async (req: any) => {
+      invoke.mockResolvedValueOnce({ generation: 4 });
+      invoke.mockResolvedValueOnce({ generation: 5 });
+      const committed = await req.artifacts.commit("t1", []);
+      return { ok: true, registryId: "fixture", generation: committed.generation, units: [] };
+    });
+    restore = wireNativeRegistryInstall();
+    const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
+    expect(result).toEqual({ ok: true, id: "weather-plugin", version: "0.0.1", generation: 5 });
+    expect(invoke).toHaveBeenCalledWith("composition_settings");
+    expect(invoke).toHaveBeenCalledWith("unit_install_commit", {
+      transactionId: "t1",
+      expectedGeneration: 4,
+      units: [],
+      bindings: [],
     });
   });
 });

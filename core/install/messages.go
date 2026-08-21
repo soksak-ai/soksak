@@ -62,6 +62,9 @@ func init() {
 		"install.transaction.closureUnresolved":    {EN: "installed closure unit is not resolved: {unit}", KO: "설치 closure 유닛이 resolved 상태가 아닙니다: {unit}"},
 		"install.transaction.journalIdentity":      {EN: "installer commit journal identity mismatch", KO: "인스톨러 commit journal identity 가 일치하지 않습니다"},
 		"install.transaction.journalGeneration":    {EN: "installer journal generation is not current", KO: "인스톨러 journal generation 이 현재 값이 아닙니다"},
+		"install.fetch.noClient":                   {EN: "installer HTTP client is required", KO: "인스톨러 HTTP client 가 필요합니다"},
+		"install.fetch.httpStatus":                 {EN: "artifact download returned HTTP {status}", KO: "아티팩트 다운로드가 HTTP {status} 을(를) 반환했습니다"},
+		"install.fetch.sizeLimit":                  {EN: "artifact download exceeds size limit", KO: "아티팩트 다운로드가 크기 한도를 초과했습니다"},
 	})
 }
 

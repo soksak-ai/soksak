@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"path/filepath"
 
 	"github.com/soksak/soksak-core/core/activity"
@@ -386,6 +387,8 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		Arch:       boot.Arch,
 		LoginShell: boot.LoginShell,
 		Run:        boot.Run,
+		Fetcher:    install.HTTPFetcher{Client: http.DefaultClient},
+		Changed:    emit,
 	})
 
 	composition.Register(registry, composition.Deps{Home: boot.Identity.Home})

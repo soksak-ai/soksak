@@ -16,6 +16,10 @@
 package install
 
 import (
+	"context"
+	"path/filepath"
+
+	composition "github.com/soksak/soksak-contract-composition"
 	"github.com/soksak/soksak-core/core/control"
 	"github.com/soksak/soksak-core/core/files"
 )
@@ -55,6 +59,9 @@ type Deps struct {
 	// two a missing shell is — and that disagreement arrives as "nothing is
 	// installed" rather than as an error.
 	Run files.Runner
+
+	Fetcher Fetcher
+	Changed func(event string, payload any)
 }
 
 // Register adds this group's six commands and declares its seven refusals.
@@ -62,6 +69,14 @@ type Deps struct {
 // Every served command is OwnerCore: none needs a window, which is what lets
 // `sok binary_integrity` answer identically to the same call from a page.
 func Register(registry *control.Registry, deps Deps) {
+	var transactions *TransactionManager
+	if deps.Home != "" && deps.Fetcher != nil {
+		root := filepath.Join(deps.Home, ".transactions")
+		if err := RecoverTransactions(deps.Home, root); err != nil {
+			panic(err)
+		}
+		transactions = NewTransactionManager(root, deps.Fetcher)
+	}
 	registry.MustRegister(control.Command{
 		Name: "binary_integrity",
 		Handler: func(args control.Args) (any, error) {
@@ -76,6 +91,10 @@ func Register(registry *control.Registry, deps Deps) {
 			return binaryIntegrity(binPath, libPath)
 		},
 	})
+
+	if transactions != nil {
+		registerInstallTransactions(registry, transactions, deps)
+	}
 
 	registry.MustRegister(control.Command{
 		Name: "probe_binary",
@@ -158,10 +177,95 @@ func Register(registry *control.Registry, deps Deps) {
 	})
 
 	for _, refusal := range unbuilt {
+		if transactions != nil && isInstallTransactionCommand(refusal.name) {
+			continue
+		}
 		if err := registry.DeclareUnserved(refusal.name, refusal.blockedBy); err != nil {
 			// A refusal that cannot be declared is a programming fact at boot,
 			// the same as a name registered twice.
 			panic(err)
 		}
 	}
+}
+
+func isInstallTransactionCommand(name string) bool {
+	return len(name) > len("unit_install_") && name[:len("unit_install_")] == "unit_install_"
+}
+
+func registerInstallTransactions(registry *control.Registry, manager *TransactionManager, deps Deps) {
+	registry.MustRegister(control.Command{Name: "unit_install_begin", Handler: func(args control.Args) (any, error) {
+		registryID, err := control.Arg[string](args, "registryId")
+		if err != nil {
+			return nil, err
+		}
+		root, err := control.Arg[UnitIdentity](args, "root")
+		if err != nil {
+			return nil, err
+		}
+		return manager.Begin(registryID, root)
+	}})
+	registry.MustRegister(control.Command{Name: "unit_install_stage", Handler: func(args control.Args) (any, error) {
+		transactionID, err := control.Arg[string](args, "transactionId")
+		if err != nil {
+			return nil, err
+		}
+		registryID, err := control.Arg[string](args, "registryId")
+		if err != nil {
+			return nil, err
+		}
+		unit, err := control.Arg[UnitIdentity](args, "unit")
+		if err != nil {
+			return nil, err
+		}
+		artifact, err := control.Arg[Artifact](args, "artifact")
+		if err != nil {
+			return nil, err
+		}
+		return manager.Stage(context.Background(), StageRequest{TransactionID: transactionID, RegistryID: registryID, Unit: unit, Artifact: artifact})
+	}})
+	registry.MustRegister(control.Command{Name: "unit_install_read_utf8", Handler: func(args control.Args) (any, error) {
+		transactionID, err := control.Arg[string](args, "transactionId")
+		if err != nil {
+			return nil, err
+		}
+		handle, err := control.Arg[string](args, "handle")
+		if err != nil {
+			return nil, err
+		}
+		path, err := control.Arg[string](args, "path")
+		if err != nil {
+			return nil, err
+		}
+		return manager.ReadUTF8(transactionID, handle, path)
+	}})
+	registry.MustRegister(control.Command{Name: "unit_install_commit", Handler: func(args control.Args) (any, error) {
+		transactionID, err := control.Arg[string](args, "transactionId")
+		if err != nil {
+			return nil, err
+		}
+		expected, err := control.Arg[uint64](args, "expectedGeneration")
+		if err != nil {
+			return nil, err
+		}
+		units, err := control.Arg[[]VerifiedUnit](args, "units")
+		if err != nil {
+			return nil, err
+		}
+		bindings, err := control.OptionalArg[[]composition.Binding](args, "bindings", []composition.Binding{})
+		if err != nil {
+			return nil, err
+		}
+		result, err := manager.Commit(CommitRequest{TransactionID: transactionID, ExpectedGeneration: expected, Units: units, Bindings: bindings, Home: deps.Home})
+		if err == nil && deps.Changed != nil {
+			deps.Changed(composition.ChangeEvent, composition.Change{PreviousGeneration: expected, Generation: result.Generation})
+		}
+		return result, err
+	}})
+	registry.MustRegister(control.Command{Name: "unit_install_rollback", Handler: func(args control.Args) (any, error) {
+		transactionID, err := control.Arg[string](args, "transactionId")
+		if err != nil {
+			return nil, err
+		}
+		return nil, manager.Rollback(transactionID)
+	}})
 }

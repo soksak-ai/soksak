@@ -48,7 +48,7 @@ export interface RegistryArtifactStager {
   commit(
     transactionId: string,
     units: readonly VerifiedInstallUnit[],
-  ): Promise<{ generation: string }>;
+  ): Promise<{ generation: number }>;
   rollback(transactionId: string): Promise<void>;
 }
 
@@ -76,7 +76,7 @@ export type RegistryInstallResult =
   | {
       ok: true;
       registryId: string;
-      generation: string;
+      generation: number;
       units: readonly VerifiedInstallUnit[];
     }
   | {
