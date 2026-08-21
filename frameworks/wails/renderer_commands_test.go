@@ -158,6 +158,26 @@ func TestADeclaredNameAnswersBareAndAddressed(t *testing.T) {
 	}
 }
 
+func TestWaitDeclaredCompletesOnTheExactWindowDeclaration(t *testing.T) {
+	_, bridge, _ := bridged(t)
+	done := make(chan error, 1)
+	go func() { done <- bridge.WaitDeclared("win-a", time.Second) }()
+	if err := bridge.Declare("win-b", []string{"ui.tree"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("another window released the waiter: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+	if err := bridge.Declare("win-a", []string{"ui.tree"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTheArgumentsReachThePageUntouched(t *testing.T) {
 	registry, bridge, document := bridged(t)
 	_ = bridge.Declare("main", []string{"ui.measure"})
