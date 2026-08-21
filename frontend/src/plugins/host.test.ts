@@ -7,12 +7,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const calls: [string, unknown][] = [];
+const order: string[] = [];
+const reload = vi.fn(async () => {});
+const listeners = new Map<string, (event: { payload: unknown }) => void>();
 
 vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
   invoke: (cmd: string, args?: unknown) => {
     calls.push([cmd, args]);
     if (cmd === "app_is_release") return Promise.resolve(false);
+    if (cmd === "composition_settings") {
+      order.push("settings");
+      return Promise.resolve({ generation: 3 });
+    }
     return Promise.resolve(undefined);
   },
   appInfo: { version: () => Promise.resolve("0.0.1") },
@@ -20,16 +27,26 @@ vi.mock("../framework", async (importOriginal) => ({
 vi.mock("./hooks", () => ({ startPluginHooks: () => {} }));
 vi.mock("./registryInstallRuntimeNative", () => ({ wireNativeRegistryInstall: () => {} }));
 vi.mock("../state/plugins", () => ({
-  usePlugins: { setState: () => {}, getState: () => ({ reload: async () => {} }) },
+  usePlugins: { setState: () => {}, getState: () => ({ reload }) },
 }));
 vi.mock("../state/registry", () => ({
   useRegistry: { setState: () => {}, getState: () => ({ refresh: async () => {} }) },
 }));
 vi.mock("../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test" }));
+vi.mock("../lib/safeListen", () => ({
+  safeListenReady: async (event: string, listener: (event: { payload: unknown }) => void) => {
+    order.push("listen");
+    listeners.set(event, listener);
+    return () => { listeners.delete(event); };
+  },
+}));
 
 describe("reclaiming the previous runtime's children", () => {
   beforeEach(() => {
     calls.length = 0;
+    order.length = 0;
+    reload.mockClear();
+    listeners.clear();
     vi.resetModules();
   });
 
@@ -60,5 +77,16 @@ describe("reclaiming the previous runtime's children", () => {
     const { initPluginHost } = await import("./host");
     await initPluginHost();
     expect(calls.filter(([c]) => c.startsWith("process_reclaim"))).toEqual([]);
+  });
+
+  it("reloads plugins after a newer installation settings generation", async () => {
+    const { initPluginHost } = await import("./host");
+    await initPluginHost();
+    expect(order.slice(0, 2)).toEqual(["listen", "settings"]);
+    expect(reload).toHaveBeenCalledTimes(1);
+    listeners.get("composition.changed")?.({
+      payload: { previousGeneration: 3, generation: 4 },
+    });
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
   });
 });

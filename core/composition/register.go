@@ -45,6 +45,25 @@ func Register(registry *control.Registry, deps Deps) {
 		}
 		return PluginManifests(deps.Home)
 	}})
+	registry.MustRegister(control.Command{Name: "plugin_enabled_set", Handler: func(args control.Args) (any, error) {
+		plugins, err := control.Arg[[]contract.PluginRef](args, "plugins")
+		if err != nil {
+			return nil, err
+		}
+		enabled, err := control.Arg[bool](args, "enabled")
+		if err != nil {
+			return nil, err
+		}
+		expected, err := control.Arg[uint64](args, "expectedGeneration")
+		if err != nil {
+			return nil, err
+		}
+		change, err := SetPluginsEnabled(deps.Home, plugins, enabled, expected)
+		if err == nil && deps.Changed != nil {
+			deps.Changed(contract.ChangeEvent, change)
+		}
+		return change, err
+	}})
 	registerDevelopmentCommands(registry, deps)
 }
 func registerDevelopmentCommands(registry *control.Registry, deps Deps) {

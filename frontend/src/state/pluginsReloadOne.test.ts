@@ -39,6 +39,8 @@ const invoke = vi.fn(async (cmd: string, args?: { path?: string }) => {
     if (path.endsWith("/plugin.json")) return { content: JSON.stringify(onDisk) };
     return { content: "export const activate = () => {};" };
   }
+  if (cmd === "composition_settings") return { generation: 1 };
+  if (cmd === "plugin_enabled_set") return { previousGeneration: 1, generation: 2 };
   return undefined;
 });
 // The bundle arrives over the **engine resource path**, not IPC — the fixture answers on that path too.
@@ -65,7 +67,7 @@ function manifestJson(commands: string[]): Record<string, unknown> {
     spec: "soksak-spec-plugin@0.0.1",
     id: ID,
     name: "Demo",
-    version: "1.0.0",
+    version: "0.0.1",
     description: "plugin for tests",
     permissions: ["commands"],
     entry: "main.js",
@@ -112,6 +114,12 @@ describe("reloadOne — a reload by id reads the manifest from disk again", () =
     expect(declared).toContain("thing.head");
     expect(after.status).toBe("enabled");
     expect(activatedIds).toContain(ID); // fresh code was actually activated again
+    expect(invoke).toHaveBeenCalledWith("plugin_enabled_set", {
+      plugins: [{ id: ID, version: "0.0.1" }], enabled: false, expectedGeneration: 1,
+    });
+    expect(invoke).toHaveBeenCalledWith("plugin_enabled_set", {
+      plugins: [{ id: ID, version: "0.0.1" }], enabled: true, expectedGeneration: 1,
+    });
   });
 
   it("bypasses the engine resource cache when it reloads the bundle", async () => {

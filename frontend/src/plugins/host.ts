@@ -3,10 +3,14 @@
 
 import { appInfo, invoke } from "../framework";
 import { currentWindowLabel } from "../lib/webviewLabels";
+import { safeListenReady } from "../lib/safeListen";
 import { startPluginHooks } from "./hooks";
 import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 import { usePlugins } from "../state/plugins";
 import { useRegistry } from "../state/registry";
+import { createPluginCompositionEventHandler, type CompositionChange } from "../state/pluginCompositionEvents";
+
+let stopCompositionEvents = () => {};
 
 export async function initPluginHost(): Promise<void> {
   // Point where this window's plugin runtime starts anew. Children spawned by a previous runtime(window still
@@ -43,7 +47,22 @@ export async function initPluginHost(): Promise<void> {
     console.warn("app version read failed:", e);
   }
   try {
+    stopCompositionEvents();
+    const queued: CompositionChange[] = [];
+    let onChange: ReturnType<typeof createPluginCompositionEventHandler> | null = null;
+    stopCompositionEvents = await safeListenReady<CompositionChange>("composition.changed", (event) => {
+      if (onChange === null) queued.push(event.payload);
+      else void onChange(event.payload).catch((error) => {
+        console.error("plugin settings reload failed:", error);
+      });
+    });
+    const settings = await invoke<{ generation: number }>("composition_settings");
     await usePlugins.getState().reload();
+    onChange = createPluginCompositionEventHandler(
+      () => usePlugins.getState().reload(),
+      settings.generation,
+    );
+    for (const change of queued) await onChange(change);
   } catch (e) {
     console.error("initial plugin load failed:", e);
   }

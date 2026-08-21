@@ -10,6 +10,30 @@
 
 import { listen, type FrameworkEvent } from "../framework";
 
+function safeUnlisten(unlisten: () => void): void {
+  try {
+    const result = unlisten() as unknown;
+    if (result && typeof (result as Promise<unknown>).catch === "function") {
+      void (result as Promise<unknown>).catch(() => {});
+    }
+  } catch {
+    // Already released.
+  }
+}
+
+export async function safeListenReady<T>(
+  event: string,
+  handler: (e: FrameworkEvent<T>) => void,
+): Promise<() => void> {
+  const unlisten = await listen<T>(event, handler);
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    safeUnlisten(unlisten);
+  };
+}
+
 /** Subscribe to a global event (broadcast reception). Returns an idempotent, safe disposer. */
 export function safeListen<T>(
   event: string,
@@ -17,20 +41,6 @@ export function safeListen<T>(
 ): () => void {
   let un = () => {};
   let disposed = false;
-  const safeUnlisten = (u: () => void) => {
-    try {
-      // tauri v2's UnlistenFn is async internally — the TypeError from an already-released
-      // listener arrives as a reject of the returned promise, not a synchronous throw (measured
-      // stack: _unlisten async → unhandledrejection → boot.error). Both the sync and async paths
-      // must be neutralized for re-disposal to be idempotent.
-      const r = u() as unknown;
-      if (r && typeof (r as Promise<unknown>).catch === "function") {
-        void (r as Promise<unknown>).catch(() => {});
-      }
-    } catch {
-      // Already-released listener (tauri internal map cleared) — re-disposal is a no-op.
-    }
-  };
   listen<T>(event, handler).then(
     (u) => {
       if (disposed) safeUnlisten(u);

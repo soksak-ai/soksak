@@ -94,7 +94,7 @@ interface PluginsState {
   plugins: Record<string, PluginRuntime>;
   rejected: RejectedPlugin[];
   consents: Record<string, ConsentRecord>; // persisted to localStorage
-  enabledIds: string[]; // persisted to localStorage — re-activation targets on restart
+  enabledIds: string[]; // runtime cache loaded from installation settings
   reload: () => Promise<void>;
   // Reload by id — re-reads that plugin's manifest from disk and enables it with fresh code.
   reloadOne: (id: string) => Promise<CmdResult<{ id: string; status: string }>>;
@@ -117,12 +117,10 @@ const KEY = "soksak.plugins";
 
 type PluginsBlob = {
   consents: Record<string, ConsentRecord>;
-  enabledIds: string[];
 };
-const EMPTY_PLUGINS: PluginsBlob = { consents: {}, enabledIds: [] };
+const EMPTY_PLUGINS: PluginsBlob = { consents: {} };
 
-// app.data authority + ls sync cache (coreSync) — consents/enabledIds consistent across windows (with ls alone,
-// windows went stale and re-consent/re-enable got confused). set on authority arrival (activation itself stays in reload's reconcile — the existing model).
+// Consent cache only. Enabled selection belongs to installation settings.
 const pluginsSync = createCoreSync<PluginsBlob>({
   key: "plugins",
   lsKey: KEY,
@@ -130,7 +128,6 @@ const pluginsSync = createCoreSync<PluginsBlob>({
   apply: (v) =>
     usePlugins.setState({
       consents: v?.consents ?? {},
-      enabledIds: Array.isArray(v?.enabledIds) ? v.enabledIds : [],
     }),
 });
 export const initPluginsPersistence = (deps: CoreStoreDeps): (() => void) =>
@@ -140,7 +137,6 @@ function loadPersisted(): PluginsBlob {
   const v = pluginsSync.loadSync();
   return {
     consents: v?.consents ?? {},
-    enabledIds: Array.isArray(v?.enabledIds) ? v.enabledIds : [],
   };
 }
 
@@ -387,7 +383,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
 
   const persist = () => {
     const s = get();
-    pluginsSync.save({ consents: s.consents, enabledIds: s.enabledIds });
+    pluginsSync.save({ consents: s.consents });
   };
 
   const setRuntime = (id: string, patch: Partial<PluginRuntime>) => {
@@ -395,6 +391,18 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       const cur = s.plugins[id];
       if (!cur) return s;
       return { plugins: { ...s.plugins, [id]: { ...cur, ...patch } } };
+    });
+  };
+
+  const setEnabledInSettings = async (
+    plugins: Array<{ id: string; version: string }>,
+    enabled: boolean,
+  ): Promise<void> => {
+    const settings = await invoke<{ generation: number }>("composition_settings");
+    await invoke("plugin_enabled_set", {
+      plugins,
+      enabled,
+      expectedGeneration: settings.generation,
     });
   };
 
@@ -522,7 +530,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     plugins: {},
     rejected: [],
     consents: persisted.consents,
-    enabledIds: persisted.enabledIds,
+    enabledIds: [],
 
     // bind ledger sync (PS9, docs/PLUGIN-SERVICE.md) — derived from manifests that are enabled and declare
     // service, then pushed to the core. Same result from any window (the core no-ops when the content is identical).
@@ -723,6 +731,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       }
       // Activate dependencies first (cascade) — in activationChain order, only inactive and consented ones. Dependencies are ready first.
       const chain = activationChain(id, pluginDepNodes(get().plugins));
+      const activated: string[] = [];
       for (const cid of chain) {
         const cp = get().plugins[cid];
         if (!cp) continue; // uninstalled dependency (install flow is separate) — skipped
@@ -731,12 +740,14 @@ export const usePlugins = moduleState("state/plugins#store", () =>
           await activateRuntime(cp);
         } catch (e) {
           setRuntime(cid, { status: "error", error: String(e) });
-          throw e; // the command layer converts it to INTERNAL; the UI shows it as status.
+          for (const active of [...activated].reverse()) {
+            await deactivateById(active);
+            setRuntime(active, { status: "disabled", error: undefined });
+          }
+          return err("INTERNAL", tmsg("plugin.activate.failed", { id: cid, error: String(e) }));
         }
         setRuntime(cid, { status: "enabled", error: undefined });
-        if (!get().enabledIds.includes(cid)) {
-          set((s) => ({ enabledIds: [...s.enabledIds, cid] }));
-        }
+        activated.push(cid);
         // Program and library ensure (§2.6) — at activation time, exactly the command shown on the consent screen.
         void ensureProgramBinaries(cp.manifest);
         void reconcileDependencies(cp.manifest, get().plugins, (command) => {
@@ -749,6 +760,19 @@ export const usePlugins = moduleState("state/plugins#store", () =>
           });
         });
       }
+      try {
+        await setEnabledInSettings(
+          activated.map((cid) => ({ id: cid, version: get().plugins[cid]!.manifest.version })),
+          true,
+        );
+      } catch (cause) {
+        for (const cid of [...activated].reverse()) {
+          await deactivateById(cid);
+          setRuntime(cid, { status: "disabled", error: undefined });
+        }
+        return err("INTERNAL", tmsg("plugin.enabled.writeFailed", { error: String(cause) }));
+      }
+      set((s) => ({ enabledIds: [...new Set([...s.enabledIds, ...activated])] }));
       persist();
       await get().syncLedger();
       return ok({ id, status: "enabled" });
@@ -757,6 +781,11 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     disable: async (id) => {
       const p = get().plugins[id];
       if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
+      try {
+        await setEnabledInSettings([{ id, version: p.manifest.version }], false);
+      } catch (cause) {
+        return err("INTERNAL", tmsg("plugin.enabled.writeFailed", { error: String(cause) }));
+      }
       await deactivateById(id);
       setRuntime(id, { status: "disabled", error: undefined });
       set((s) => ({ enabledIds: s.enabledIds.filter((x) => x !== id) }));
@@ -797,7 +826,6 @@ export const usePlugins = moduleState("state/plugins#store", () =>
         delete consents[id];
         return {
           consents,
-          enabledIds: s.enabledIds.filter((x) => !affected.includes(x)),
         };
       });
       persist();
