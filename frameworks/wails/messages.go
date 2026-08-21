@@ -443,6 +443,18 @@ func init() {
 			EN: "these windows were not told what they hold: {windows}",
 			KO: "다음 창들은 자기가 무엇을 가졌는지 통지받지 못했습니다: {windows}",
 		},
+		"wails.rendererWait.invalidTimeout": {
+			EN: "renderer wait timeout must be between 1 and 60000 milliseconds",
+			KO: "renderer 대기 제한 시간은 1~60000밀리초여야 합니다",
+		},
+		"wails.rendererWait.timeout": {
+			EN: "window {window} did not declare its renderer commands before the deadline",
+			KO: "창 {window}이(가) 제한 시간 안에 renderer 명령을 선언하지 않았습니다",
+		},
+		"wails.rendererWait.closed": {
+			EN: "window {window} closed before declaring its renderer commands",
+			KO: "창 {window}이(가) renderer 명령을 선언하기 전에 닫혔습니다",
+		},
 		"wails.pluginFile.noRoots": {
 			EN: "settings declares no active plugin path",
 			KO: "설정에 활성 플러그인 경로가 없습니다",

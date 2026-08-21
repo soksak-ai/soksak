@@ -102,6 +102,7 @@ type RendererCommands struct {
 	nextID  uint64
 	pending map[uint64]*rendererCall
 	windows map[string]*rendererWindow
+	waiters map[string][]chan error
 	// order is declaration order, which is what a refusal lists when a caller
 	// named no window.
 	order []string
@@ -148,6 +149,7 @@ func RegisterRendererCommands(registry *control.Registry, deliver RendererDelive
 		deadline: rendererDeadline,
 		pending:  map[uint64]*rendererCall{},
 		windows:  map[string]*rendererWindow{},
+		waiters:  map[string][]chan error{},
 	}
 
 	registry.MustRegister(control.Command{
@@ -163,6 +165,27 @@ func RegisterRendererCommands(registry *control.Registry, deliver RendererDelive
 				return nil, err
 			}
 			return nil, bridge.answer(id, result)
+		},
+	})
+	registry.MustRegister(control.Command{
+		Name:  "window_renderer_wait",
+		Owner: control.OwnerFramework,
+		Handler: func(args control.Args) (any, error) {
+			window, err := control.Arg[string](args, "targetWindow")
+			if err != nil {
+				return nil, err
+			}
+			timeoutMs, err := control.OptionalArg[uint64](args, "timeoutMs", 30000)
+			if err != nil {
+				return nil, err
+			}
+			if timeoutMs == 0 || timeoutMs > 60000 {
+				return nil, i18n.Errorf("wails.rendererWait.invalidTimeout", nil)
+			}
+			if err := bridge.WaitDeclared(window, time.Duration(timeoutMs)*time.Millisecond); err != nil {
+				return nil, err
+			}
+			return map[string]any{"window": window, "declared": true}, nil
 		},
 	})
 	return bridge
@@ -231,9 +254,54 @@ func (r *RendererCommands) Declare(window string, names []string) error {
 	// never heard which of its names were refused.
 	previous.told = false
 	r.windows[window] = previous
+	waiters := r.waiters[window]
+	delete(r.waiters, window)
 	receipts := r.reconcileLocked()
 	r.mu.Unlock()
+	for _, waiter := range waiters {
+		waiter <- nil
+	}
 	return r.tell(receipts)
+}
+
+func (r *RendererCommands) WaitDeclared(window string, timeout time.Duration) error {
+	if window == "" {
+		return i18n.Errorf("wails.declare.noWindow", nil)
+	}
+	r.mu.Lock()
+	if _, declared := r.windows[window]; declared {
+		r.mu.Unlock()
+		return nil
+	}
+	waiter := make(chan error, 1)
+	r.waiters[window] = append(r.waiters[window], waiter)
+	r.mu.Unlock()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-waiter:
+		return err
+	case <-timer.C:
+		r.mu.Lock()
+		removeWaiter(r.waiters, window, waiter)
+		r.mu.Unlock()
+		return i18n.Errorf("wails.rendererWait.timeout", map[string]string{"window": window})
+	}
+}
+
+func removeWaiter(waiters map[string][]chan error, window string, target chan error) {
+	values := waiters[window]
+	for index, waiter := range values {
+		if waiter == target {
+			values = append(values[:index], values[index+1:]...)
+			break
+		}
+	}
+	if len(values) == 0 {
+		delete(waiters, window)
+	} else {
+		waiters[window] = values
+	}
 }
 
 // Withdraw removes a window's names.
@@ -244,7 +312,12 @@ func (r *RendererCommands) Declare(window string, names []string) error {
 func (r *RendererCommands) Withdraw(window string) error {
 	r.mu.Lock()
 	if _, known := r.windows[window]; !known {
+		waiters := r.waiters[window]
+		delete(r.waiters, window)
 		r.mu.Unlock()
+		for _, waiter := range waiters {
+			waiter <- i18n.Errorf("wails.rendererWait.closed", map[string]string{"window": window})
+		}
 		return nil
 	}
 	delete(r.windows, window)
@@ -266,8 +339,13 @@ func (r *RendererCommands) Withdraw(window string) error {
 		}
 	}
 	receipts := r.reconcileLocked()
+	waiters := r.waiters[window]
+	delete(r.waiters, window)
 	r.mu.Unlock()
 
+	for _, waiter := range waiters {
+		waiter <- i18n.Errorf("wails.rendererWait.closed", map[string]string{"window": window})
+	}
 	for _, call := range abandoned {
 		call.answer <- rendererAnswer{err: fmt.Errorf(
 			"window %s stopped answering %s before it replied", call.window, call.command)}
