@@ -94,7 +94,7 @@ A plugin participates in installation composition through its installed unit man
   `implements` version.
 
 Both are optional. A shared contract is created only for behavior with multiple real providers or
-consumers. The contract is an independently versioned unit outside the core. The core validates and
+consumers. The contract is independently versioned outside the core but is not an installed unit. The core validates and
 matches ids and versions but does not define domain behavior.
 The plugin manifest declares runtime contributions and permissions; it is not the installation
 record and does not select providers.

@@ -14,10 +14,11 @@ Soksak product uses it. It does not duplicate the schema.
 The official catalogue is soksak-ai/soksak-plugin-registry. A user selects plugins. A plugin
 release may depend on sidecars and kits; the installer resolves and installs that closure.
 
-Sidecars and kits are visible dependency nodes, not independent catalogue products. Two plugins
-that reference the same exact sidecar or kit share one installed node. Contracts and specifications
-are exact manifest references plus certified conformance reports, not runtime installations. Wails
-services are core build components and are not registry units.
+Sidecars and runtime kits are visible dependency nodes, not independent catalogue products. Two
+plugins that reference the same exact sidecar or runtime kit share one installed node. Build-time
+kits are bundled or linked into the owner artifact and are not installed separately. Contracts and
+specifications are exact manifest references plus certified conformance reports, not runtime
+installations. Wails services are core build components and are not registry units.
 
 ## C2. One installation record
 
