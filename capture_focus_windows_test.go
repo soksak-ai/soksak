@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	user32Window             = windows.NewLazySystemDLL("user32.dll")
-	getForegroundWindow      = user32Window.NewProc("GetForegroundWindow")
-	getWindowThreadProcessID = user32Window.NewProc("GetWindowThreadProcessId")
+	user32Capture            = windows.NewLazySystemDLL("user32.dll")
+	getForegroundWindow      = user32Capture.NewProc("GetForegroundWindow")
+	getWindowThreadProcessID = user32Capture.NewProc("GetWindowThreadProcessId")
 )
 
 func activeInputOwner(t *testing.T) string {

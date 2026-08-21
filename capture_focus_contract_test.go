@@ -7,7 +7,7 @@ import (
 )
 
 func TestDarwinFocusObservationUsesTheNativeWorkspace(t *testing.T) {
-	source, err := os.ReadFile("terminal_focus_darwin_test.go")
+	source, err := os.ReadFile("capture_focus_darwin_test.go")
 	if err != nil {
 		t.Fatal(err)
 	}
