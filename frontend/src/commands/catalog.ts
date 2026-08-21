@@ -91,6 +91,7 @@ import { registerScheduleCatalog } from "./catalogSchedule";
 import { registerServiceCatalog } from "./catalogService";
 import { registerRuntimeCatalog } from "./catalogRuntime";
 import { registerSystemCatalog } from "./catalogSystem";
+import { registerSidecarCatalog } from "./catalogSidecar";
 import {
   declareLayoutCause,
   layoutTransitionJournal,
@@ -2564,6 +2565,7 @@ export function registerCatalog(): void {
   registerServiceCatalog();
   registerRuntimeCatalog();
   registerSystemCatalog();
+  registerSidecarCatalog();
   registerDevelopmentCatalog();
   registerWebviewCatalog();
   registerLayoutAlignmentCatalog();

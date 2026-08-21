@@ -329,6 +329,7 @@ describe("commands.execute — danger to permission mapping and management comma
       "plugin.enable",
       "plugin.install",
       "plugin.development.set",
+      "sidecar.request",
       "registry.list",
       "registry.add",
       "registry.remove",

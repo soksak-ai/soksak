@@ -822,6 +822,7 @@ export function isBlockedForPlugins(name: string): boolean {
     BLOCKED_MANAGEMENT.has(name) ||
     name.startsWith("plugin.dev.") ||
     name.startsWith("plugin.development.") ||
+    name === "sidecar.request" ||
     name.startsWith("registry.") ||
     // Plugins already receive ownership-fixed app.secrets/app.network facades. Exposing the
     // operator commands as a second path would let commands.execute choose an arbitrary vault

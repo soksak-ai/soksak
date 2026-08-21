@@ -24,6 +24,11 @@ Commands name the resource they change. There is no public generic resource type
 The set commands take `id`, `version`, `development` and an absolute `path`. Development mode
 disables updates. It does not change plugin enabled state.
 
+`sidecar.request` is the operator and system-test relay for an installed sidecar control request.
+It accepts a sidecar name and one request object, forwards the object without interpreting its
+command, and returns the sidecar response. Plugin code cannot call this operator command; plugins
+use their declared sidecar capability instead.
+
 ## Parameter forms
 
 Two forms produce the same parameter map.
