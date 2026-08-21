@@ -103,7 +103,11 @@ paths.
 
 ## C6. Windows
 
-Windows requires a named pipe carrying the same envelope. `core/control/listen_windows.go` currently
-refuses startup because that transport has not been implemented. Windows system verification cannot
-be declared complete until the application and `sok` both use the named pipe and the same protocol
-tests pass on Windows.
+Windows uses a named pipe carrying the same envelope. The identity derives one opaque pipe name from
+the runtime root and installation identifier; the application listener, `sok` and the sidecar host
+use that address without converting it to a file path. The pipe ACL grants access only to the current
+process user.
+
+Windows system verification is not complete yet. The PTY sidecar still needs its named-pipe listener,
+and the application, `sok`, sidecar host and ConPTY process must pass the installed terminal system
+suite on Windows. A cross-build is not that runtime verdict.
