@@ -37,8 +37,8 @@ func init() {
 
 func init() {
 	i18n.Declare(map[string]i18n.Sentence{
-		"install.transaction.noFetcher":            {EN: "unit installer requires a fetcher", KO: "유닛 설치기에 fetcher 가 필요합니다"},
-		"install.transaction.identityRequired":     {EN: "unit installer requires registry and root identity", KO: "유닛 설치기에 registry 와 root identity 가 필요합니다"},
+		"install.transaction.noFetcher":            {EN: "installer requires a fetcher", KO: "인스톨러에 fetcher 가 필요합니다"},
+		"install.transaction.identityRequired":     {EN: "installer requires registry and root identity", KO: "인스톨러에 registry 와 root identity 가 필요합니다"},
 		"install.transaction.notFound":             {EN: "install transaction not found: {id}", KO: "설치 트랜잭션이 없습니다: {id}"},
 		"install.transaction.registryMismatch":     {EN: "registry does not match the install transaction", KO: "registry 가 설치 트랜잭션과 일치하지 않습니다"},
 		"install.transaction.unsupportedFormat":    {EN: "unsupported artifact format: {format}", KO: "지원하지 않는 아티팩트 형식입니다: {format}"},
