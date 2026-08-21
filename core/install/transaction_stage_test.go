@@ -118,3 +118,21 @@ func TestStageRequiresEveryDeclaredEntrypointAsARegularFile(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestStagedHandleRetainsExactUnitAndDigest(t *testing.T) {
+	archive := tgz(t, archiveEntry{name: "plugin.json", body: "{}"})
+	manager := NewTransactionManager(t.TempDir(), memoryFetcher{body: archive})
+	unit := UnitIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"}
+	transaction, _ := manager.Begin("official", unit)
+	staged, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Unit: unit, Artifact: Artifact{URL: "https://example.invalid/a.tgz", SHA256: sha256Hex(archive), Format: "tgz", Entrypoints: []string{"plugin.json"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := manager.staged(transaction.TransactionID, staged.Handle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.unit != unit || state.sha256 != staged.SHA256 {
+		t.Fatalf("state = %+v", state)
+	}
+}

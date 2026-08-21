@@ -68,7 +68,13 @@ type StagedArtifact struct {
 type transactionState struct {
 	registryID string
 	root       UnitIdentity
-	handles    map[string]string
+	handles    map[string]stagedState
+}
+
+type stagedState struct {
+	path   string
+	unit   UnitIdentity
+	sha256 string
 }
 
 type TransactionManager struct {
@@ -98,7 +104,7 @@ func (manager *TransactionManager) Begin(registryID string, root UnitIdentity) (
 		return Transaction{}, fmt.Errorf("create install transaction: %w", err)
 	}
 	manager.mu.Lock()
-	manager.transactions[id] = &transactionState{registryID: registryID, root: root, handles: map[string]string{}}
+	manager.transactions[id] = &transactionState{registryID: registryID, root: root, handles: map[string]stagedState{}}
 	manager.mu.Unlock()
 	return Transaction{TransactionID: id}, nil
 }
@@ -155,7 +161,7 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 		_ = os.RemoveAll(destination)
 		return StagedArtifact{}, i18n.Errorf("install.transaction.ended", nil)
 	}
-	transaction.handles[handle] = destination
+	transaction.handles[handle] = stagedState{path: destination, unit: request.Unit, sha256: digest}
 	manager.mu.Unlock()
 	return StagedArtifact{Handle: handle, SHA256: digest, Extraction: "regular-files-only", VerifiedEntrypoints: verified}, nil
 }
@@ -168,7 +174,7 @@ func (manager *TransactionManager) ReadUTF8(transactionID, handle, path string) 
 	transaction := manager.transactions[transactionID]
 	var root string
 	if transaction != nil {
-		root = transaction.handles[handle]
+		root = transaction.handles[handle].path
 	}
 	manager.mu.Unlock()
 	if root == "" {
@@ -186,6 +192,20 @@ func (manager *TransactionManager) ReadUTF8(transactionID, handle, path string) 
 		return "", i18n.Errorf("install.transaction.stagedNotUTF8", map[string]string{"path": path})
 	}
 	return string(body), nil
+}
+
+func (manager *TransactionManager) staged(transactionID, handle string) (stagedState, error) {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	transaction := manager.transactions[transactionID]
+	if transaction == nil {
+		return stagedState{}, i18n.Errorf("install.transaction.notFound", map[string]string{"id": transactionID})
+	}
+	state, found := transaction.handles[handle]
+	if !found {
+		return stagedState{}, i18n.Errorf("install.transaction.stagedNotFound", nil)
+	}
+	return state, nil
 }
 
 func (manager *TransactionManager) Rollback(transactionID string) error {
