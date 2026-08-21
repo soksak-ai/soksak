@@ -49,17 +49,12 @@ var unbuilt = map[string]string{
 	"daemon_run_once": "this build was given no spawner that can run a declared command once",
 
 	// Installation and units.
-	"plugin_scaffold":        "this build scaffolds no plugin sources",
-	"unit_install_begin":     "this build installs no units",
-	"unit_install_stage":     "this build installs no units",
-	"unit_install_commit":    "this build installs no units",
-	"unit_install_rollback":  "this build installs no units",
-	"unit_install_read_utf8": "this build installs no units, so there is no staged file to read",
-	"unit_source_remove":     "this build keeps no development unit registry",
-	"verify_and_link":        "this build verifies and links no downloaded artefacts",
-	"download_verify":        "this build downloads no artefacts to verify",
-	"update_check":           "this build has no updater",
-	"update_apply":           "this build has no updater",
+	"plugin_scaffold": "this build scaffolds no plugin sources",
+	"plugin_remove":   "this build has no settings transaction that removes a plugin record and its installed artifact together",
+	"verify_and_link": "this build verifies and links no downloaded artefacts",
+	"download_verify": "this build downloads no artefacts to verify",
+	"update_check":    "this build has no updater",
+	"update_apply":    "this build has no updater",
 
 	// The control plane's own facts that need a running listener to answer.
 	"ipc_hello_info": "the control plane answers system.hello on its own transport, not as a command",

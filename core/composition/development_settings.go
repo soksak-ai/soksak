@@ -2,12 +2,12 @@ package composition
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 
 	contract "github.com/soksak-ai/soksak-contract-composition"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 func SetPluginDevelopment(home string, value contract.Plugin, expected uint64) (contract.Change, error) {
@@ -70,21 +70,21 @@ func SetKitDevelopment(home string, value contract.Kit, expected uint64) (contra
 
 func validateDevelopmentPath(root, manifest string) error {
 	if !filepath.IsAbs(root) {
-		return fmt.Errorf("development path must be absolute")
+		return i18n.Errorf("composition.development.absolute", nil)
 	}
 	info, err := os.Lstat(root)
 	if err != nil {
 		return err
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return fmt.Errorf("development path must be a regular directory")
+		return i18n.Errorf("composition.development.notDirectory", nil)
 	}
 	info, err = os.Lstat(filepath.Join(root, filepath.FromSlash(manifest)))
 	if err != nil {
 		return err
 	}
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("development manifest must be a regular file")
+		return i18n.Errorf("composition.development.entrypoint", nil)
 	}
 	return nil
 }

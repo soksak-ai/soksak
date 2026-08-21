@@ -28,6 +28,7 @@ var koreanBundles = map[string]bool{
 	// the name for something else.
 	"cmd/sok/messages.go":          true,
 	"core/boot/messages.go":        true,
+	"core/composition/messages.go": true,
 	"core/control/messages.go":     true,
 	"core/daemon/messages.go":      true,
 	"core/files/messages.go":       true,
@@ -35,7 +36,6 @@ var koreanBundles = map[string]bool{
 	"core/install/messages.go":     true,
 	"core/net/messages.go":         true,
 	"core/process/messages.go":     true,
-	"core/scan/messages.go":        true,
 	"core/secret/messages.go":      true,
 	"core/service/messages.go":     true,
 	"core/sidecar/messages.go":     true,
@@ -99,7 +99,7 @@ var koreanReading = regexp.MustCompile(`withReaderLanguage\(\s*"ko"`)
 // It is a ratchet: the number may only go down. Anything that raises it is a
 // new sentence in the wrong place. If it falls, lower this and say which
 // category shrank — a floor nobody can explain is not a floor.
-const koreanDebt = 43
+const koreanDebt = 42
 
 func TestKoreanStaysInTheBundles(t *testing.T) {
 	type finding struct {

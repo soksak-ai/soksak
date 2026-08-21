@@ -64,12 +64,6 @@ export interface PluginRuntime {
   error?: string;
 }
 
-export interface UnitDevSource {
-  kind: "plugin" | "sidecar" | "kit";
-  id: string;
-  source: string;
-}
-
 export interface RejectedPlugin {
   /** The directory's name, which is the id the manifest had to declare. Carried so a reader asking
    *  "was this plugin refused" matches on the id it already holds rather than parsing a path. */
@@ -83,12 +77,14 @@ export interface ConsentRecord {
   permissions: PluginPermission[];
 }
 
-interface PluginScanEntry {
-  dir: string;
-  dir_name: string;
+interface PluginManifestRecord {
+  id: string;
+  version: string;
+  installPath: string;
+  manifestPath: string;
+  development: boolean;
+  enabled: boolean;
   manifest: string | null;
-  // Raw .soksak.json — the official install state.
-  state: string | null;
   error: string | null;
 }
 
@@ -113,7 +109,6 @@ interface PluginsState {
   grantConsent: (id: string) => boolean;
   // Revoke consent — a safe permission-reducing operation (back to re-consent required). Deactivates if active. Command exposure allowed.
   revokeConsent: (id: string) => Promise<CmdResult<{ id: string }>>;
-  devLoad: (path: string, expectedId?: string) => Promise<CmdResult<{ id: string; dir: string }>>;
   // bind ledger sync (PS9) — derived from enabled ∧ service manifests and pushed to the core (idempotent).
   syncLedger: () => Promise<void>;
 }
@@ -508,21 +503,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     const p = get().plugins[id];
     if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
     if (p.source === "dev") {
-      if (isActive(id)) await deactivateById(id);
-      try {
-        // The workspace is the user's source, so it is not deleted. Only the selection is cleared, so the next reload
-        // does not bring it back, and a separate official install takes over when one exists.
-        await invoke("unit_source_remove", { kind: "plugin", id });
-      } catch (e) {
-        return err("INTERNAL", tmsg("plugin.dev.deselectFailed", { error: String(e) }));
-      }
-      set((s) => {
-        const plugins = { ...s.plugins };
-        delete plugins[id];
-        return { plugins, enabledIds: s.enabledIds.filter((x) => x !== id) };
-      });
-      persist();
-      return ok({ id });
+      return err("INVALID_PARAMS", tmsg("plugin.development.removeUnavailable", { id }));
     }
     if (isActive(id)) await get().disable(id);
     await invoke("plugin_remove", { id });
@@ -561,64 +542,38 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       // Full restart: deactivate every active instance and rescan — no partial state (§0-3).
       await deactivateAll();
       reloadStep("deactivated");
-      const entries = await invoke<PluginScanEntry[]>("plugin_scan");
-      reloadStep(`scanned:${entries.length}`);
+      const entries = await invoke<PluginManifestRecord[]>("plugin_manifest_list");
+      reloadStep(`declared:${entries.length}`);
       const rejected: RejectedPlugin[] = [];
       const next: Record<string, PluginRuntime> = {};
+      const enabledIds: string[] = [];
 
       for (const e of entries) {
         if (e.manifest == null) {
-          // A folder with neither a manifest nor .soksak.json (install/dev state) is not a plugin at all —
-          // it is a core tool (validation CLI etc.) or a stray folder under the plugin folder. Skip it quietly (not an error).
-          // State present but manifest missing is a genuinely broken install, so surface it as rejected (no silence).
-          if (e.state == null) continue;
-          rejected.push({ id: e.dir_name, dir: e.dir, errors: [e.error ?? tmsg("plugin.manifest.missing")] });
+          rejected.push({ id: e.id, dir: e.installPath, errors: [e.error ?? tmsg("plugin.manifest.missing")] });
           continue;
         }
-        const rt = parseRuntime(e.manifest, e.dir, e.dir_name, "installed", rejected);
-        if (rt) next[rt.manifest.id] = rt;
-      }
-
-      // A declared development source is separate from the install and explicitly overrides the official install of the same id.
-      // config is canonical, so all three environments restore the same way after an app restart.
-      const developmentUnits =
-        (await invoke<UnitDevSource[]>("unit_source_list")) ?? [];
-      reloadStep(`units:${developmentUnits.length}`);
-      for (const unit of developmentUnits) {
-        if (unit.kind !== "plugin") continue;
-        try {
-          const data = await invoke<{ content: string }>("read_text_file", {
-            path: `${unit.source}/plugin.json`,
-          });
-          const rt = parseRuntime(
-            data.content,
-            unit.source,
-            unit.id,
-            "dev",
-            rejected,
-          );
-          // The development source masks the same-named install. On failure, drop the installed candidate for that
-          // id too, so it does not silently fall back to the official install.
-          if (!rt) delete next[unit.id];
-          if (rt) next[rt.manifest.id] = rt;
-        } catch (e2) {
-          delete next[unit.id];
+        const rt = parseRuntime(e.manifest, e.installPath, e.id, e.development ? "dev" : "installed", rejected);
+        if (rt && rt.manifest.version !== e.version) {
           rejected.push({
-            id: unit.id,
-            dir: unit.source,
-            errors: [tmsg("plugin.dev.readFailed", { error: String(e2) })],
+            id: e.id, dir: e.installPath,
+            errors: [`settings version ${e.version} does not match plugin.json version ${rt.manifest.version}`],
           });
+          continue;
         }
+        if (!rt) continue;
+        next[rt.manifest.id] = rt;
+        if (e.enabled) enabledIds.push(rt.manifest.id);
       }
 
-      set({ plugins: next, rejected });
+      set({ plugins: next, rejected, enabledIds });
 
       // Re-activate the enabled list whose consent is valid. Failure shows in status (§0-4 — no silence).
       // Walk the gates (template, consent) first, then raise the activation targets concurrently per dependency
       // level — so IPC reads and in-plugin waits overlap, against 2.4s total for 46 sequential (measured). Levels
       // (activationLevels) guarantee "dependencies first", and failure isolation stays per-plugin try (§0-4).
       const ready: string[] = [];
-      for (const id of get().enabledIds) {
+      for (const id of enabledIds) {
         const p = get().plugins[id];
         if (!p) continue;
         // Templates are never activated (the enable gate keeps them out of enabledIds; this guards the case
@@ -894,74 +849,6 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       return get().enable(id);
     },
 
-    devLoad: async (path, expectedId) => {
-      let selectedPath: string;
-      try {
-        selectedPath =
-          (await invoke<string>("unit_source_validate", { source: path })) ?? path;
-      } catch (e) {
-        return err("INVALID_PARAMS", tmsg("plugin.dev.pathRejected", { error: String(e) }));
-      }
-      let content: string;
-      try {
-        const data = await invoke<{ content: string }>("read_text_file", {
-          path: `${selectedPath}/plugin.json`,
-        });
-        content = data.content;
-      } catch (e) {
-        return err("TARGET_NOT_FOUND", tmsg("plugin.manifest.readFailed", { error: String(e) }));
-      }
-      const rejected: RejectedPlugin[] = [];
-      // An external checkout's folder name may not be the unit id. A development source is an absolute path
-      // declaration and identity comes from plugin.json, so basename is not used as a guessing rule.
-      let declaredId = "";
-      try {
-        const raw = JSON.parse(content) as { id?: unknown };
-        if (typeof raw.id === "string") declaredId = raw.id;
-      } catch {
-        // parseRuntime records the exact parse error for the same raw text in rejected.
-      }
-      const rt = parseRuntime(content, selectedPath, declaredId, "dev", rejected);
-      if (!rt) {
-        return err(
-          "INVALID_PARAMS",
-          tmsg("plugin.manifest.validationFailed", {
-            errors: rejected[0]?.errors.join("; ") ?? "",
-          }),
-        );
-      }
-      const id = rt.manifest.id;
-      if (expectedId !== undefined && id !== expectedId) {
-        return err(
-          "INVALID_PARAMS",
-          tmsg("plugin.dev.idMismatch", { expected: expectedId, actual: id }),
-        );
-      }
-      try {
-        // Selection state comes from the identity home config, not the manifest version or the folder location.
-        await invoke("unit_source_set", { kind: "plugin", id, source: selectedPath });
-      } catch (e) {
-        return err("INVALID_PARAMS", tmsg("plugin.dev.registerFailed", { error: String(e) }));
-      }
-      const wasEnabled = get().enabledIds.includes(id);
-      if (isActive(id)) await deactivateById(id);
-      set((s) => ({ plugins: { ...s.plugins, [id]: rt } }));
-      // Previously enabled means automatic re-activation with fresh code — removes the dev loop (load→enable) gate.
-      // dev sources are consent-exempt (§0-5), so consent standing is the same. Templates are not activation targets (same guard as reload).
-      // A first-seen id (outside enabledIds) stays disabled — the first dev.load behaves as now.
-      if (wasEnabled && !rt.manifest.template) {
-        try {
-          await activateRuntime(rt);
-          setRuntime(id, { status: "enabled", error: undefined });
-        } catch (e) {
-          setRuntime(id, {
-            status: "error",
-            error: e instanceof Error && e.stack ? e.stack : String(e),
-          });
-        }
-      }
-      return ok({ id, dir: selectedPath });
-    },
   };
 }),
 );

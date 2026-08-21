@@ -14,10 +14,8 @@
 // 5. Only a human grants activation consent. plugin.enable from remote (sok/MCP) is rejected with
 //    CONSENT_REQUIRED when no consent is recorded. The plugin API blocks calls to plugin.*
 //    management commands outright (no self-propagation). The one exception = dev source: work the
-//    developer pointed at locally is outside the consent gate (not third-party risk). Both dev
-//    paths are local user acts — (a) the version="dev" marker in ~/.soksak/plugins/<id>/.soksak.json
-//    (single-folder model: the folder records its own state), (b) loading a path outside the folder
-//    through plugin.dev.load (danger:"inject"). Remote can produce neither, so the gate is local.
+//    developer pointed at locally is outside the consent gate (not third-party risk). The path is
+//    declared in identity-home/settings.json through plugin.development.set, which plugins cannot call.
 // 6. Implementation and placement are orthogonal. The manifest declares static contributions and
 //    placement, and the runtime module provider map matches exactly. Only the host owns the actual
 //    slot, visibility, and input-enabled state.

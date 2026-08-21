@@ -821,6 +821,7 @@ export function isBlockedForPlugins(name: string): boolean {
   return (
     BLOCKED_MANAGEMENT.has(name) ||
     name.startsWith("plugin.dev.") ||
+    name.startsWith("plugin.development.") ||
     name.startsWith("registry.") ||
     // Plugins already receive ownership-fixed app.secrets/app.network facades. Exposing the
     // operator commands as a second path would let commands.execute choose an arbitrary vault
@@ -832,7 +833,7 @@ export function isBlockedForPlugins(name: string): boolean {
 
 // Extract the target plugin id from a command name (for the cross-plugin call decision).
 // pluginCommandName = plugin.<id>.<cmd> (no dot in id). null = not cross-plugin: core commands (no
-// plugin. prefix), plugin.view.* (host view ops), plugin.dev.*, and management (plugin.list and such, 2
+// plugin. prefix), plugin.view.* (host view ops), development management, and two-segment management
 // segments). Only plugin.<id>.<cmd> returns <id>.
 export function targetPluginId(name: string): string | null {
   if (!name.startsWith("plugin.")) return null;
@@ -840,7 +841,7 @@ export function targetPluginId(name: string): string | null {
   const dot = rest.indexOf(".");
   if (dot < 0) return null; // management (plugin.list and such) — isBlockedForPlugins blocks it.
   const seg = rest.slice(0, dot);
-  if (seg === "view" || seg === "dev") return null; // view ops / dev.
+  if (seg === "view" || seg === "dev" || seg === "development") return null;
   return seg;
 }
 

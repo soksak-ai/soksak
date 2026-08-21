@@ -39,6 +39,12 @@ func Register(registry *control.Registry, deps Deps) {
 		}
 		return summarize(result), nil
 	}})
+	registry.MustRegister(control.Command{Name: "plugin_manifest_list", Handler: func(control.Args) (any, error) {
+		if deps.Home == "" {
+			return nil, i18n.Errorf("composition.home.required", nil)
+		}
+		return PluginManifests(deps.Home)
+	}})
 	registerDevelopmentCommands(registry, deps)
 }
 func registerDevelopmentCommands(registry *control.Registry, deps Deps) {

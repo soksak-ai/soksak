@@ -1186,34 +1186,6 @@ export function registerPluginCatalog(): void {
   });
 
 
-  register("plugin.dev.load", {
-    description: key("cmd.plugin.dev.load.desc"),
-    triggers: { ko: "플러그인 개발 로드 dev 임시 적재" },
-    params: {
-      path: { type: "string", description: key("cmd.plugin.dev.load.param.path"), required: true },
-    },
-    returns: "{ id, dir }",
-    message: (d) => tmsg("msg.plugin.dev.load", { id: String(d.id) }),
-    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
-    examples: ['plugin.dev.load \'{"path":"/path/to/my-plugin"}\''],
-    danger: "inject",
-    handler: async (p) => {
-      // Home lane enforcement: dev source loading is dev-identity only — debug and release homes
-      // verify published installs.
-      // (The front boundary of the same principle as the core unit_dev gate — the command registry
-      // is the only entry.)
-      const env = (await invoke("app_environment")) as { coreBuild?: string };
-      if (env?.coreBuild !== "dev") {
-        return {
-          ok: false,
-          code: "INVALID_PARAMS",
-          message: tmsg("msg.plugin.dev.load.devOnly", { build: env?.coreBuild ?? "?" }),
-        };
-      }
-      return usePlugins.getState().devLoad(p.path as string);
-    },
-  });
-
   register("plugin.dev.create", {
     description: key("cmd.plugin.dev.create.desc"),
     triggers: { ko: "플러그인 개발 새로 만들기 스캐폴드 scaffold 생성" },

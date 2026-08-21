@@ -300,27 +300,6 @@ func RegisterCore(registry *control.Registry, boot Boot) Wired {
 		},
 	})
 
-	registry.MustRegister(control.Command{
-		Name: "plugin_scan",
-		Handler: func(control.Args) (any, error) {
-			// One unit is one directory holding plugin.json, not one .json
-			// file. Reading files here answered an empty list for every home
-			// that had plugins in it (measured 2026-08-15).
-			return scan.Units(filepath.Join(boot.Identity.Home, "plugins"))
-		},
-	})
-
-	registry.MustRegister(control.Command{
-		Name: "plugin_remove",
-		Handler: func(args control.Args) (any, error) {
-			id, err := control.Arg[string](args, "id")
-			if err != nil {
-				return nil, err
-			}
-			return nil, scan.RemoveUnit(filepath.Join(boot.Identity.Home, "plugins"), id)
-		},
-	})
-
 	return registerGroups(registry, boot)
 }
 

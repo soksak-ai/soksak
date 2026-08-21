@@ -12,10 +12,10 @@ type CompositionSettings = {
 };
 
 const CONFIG = {
-  plugin: { array: "plugins", manifest: "plugin.json", ko: "플러그인" },
-  sidecar: { array: "sidecars", manifest: "sidecar.json", ko: "사이드카" },
-  kit: { array: "kits", manifest: "package.json", ko: "킷" },
-} as const satisfies Record<ComponentKind, { array: keyof Pick<CompositionSettings, "plugins" | "sidecars" | "kits">; manifest: string; ko: string }>;
+  plugin: { array: "plugins", manifest: "plugin.json" },
+  sidecar: { array: "sidecars", manifest: "sidecar.json" },
+  kit: { array: "kits", manifest: "package.json" },
+} as const satisfies Record<ComponentKind, { array: keyof Pick<CompositionSettings, "plugins" | "sidecars" | "kits">; manifest: string }>;
 
 async function settings(): Promise<CompositionSettings> {
   return invoke<CompositionSettings>("composition_settings");
@@ -25,7 +25,6 @@ function registerKind(kind: ComponentKind): void {
   const config = CONFIG[kind];
   register(`${kind}.development.list`, {
     description: key("cmd.component.development.list.desc", { kind }),
-    triggers: { ko: `${config.ko} 개발 목록 상태` },
     params: {},
     windowScoped: false,
     returns: `{ generation, ${config.array}: Array<{id,version,development,...}> }`,
@@ -39,7 +38,6 @@ function registerKind(kind: ComponentKind): void {
 
   register(`${kind}.development.set`, {
     description: key("cmd.component.development.set.desc", { kind }),
-    triggers: { ko: `${config.ko} 개발 경로 상태 변경` },
     params: {
       id: { type: "string", required: true, description: key("cmd.component.development.set.param.id") },
       version: { type: "string", required: true, description: key("cmd.component.development.set.param.version") },

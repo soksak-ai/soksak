@@ -14,7 +14,6 @@ vi.mock("../plugins/loader", () => ({
 }));
 
 const ID = "weather";
-const INSTALLED = "/home/plugins/weather";
 const DEVELOPMENT = "/work/weather";
 let devReadable = true;
 
@@ -25,7 +24,20 @@ function manifest(version: string): string {
     name: "Weather",
     version,
     description: "weather plugin",
-    permissions: [],
+    permissions: ["commands", "sidecar", "service"],
+    entry: null,
+    sidecars: [{ name: "weather-service", interface: { id: "weather-wire", version: "0.0.1" } }],
+    service: {
+      sidecar: "weather-service",
+      interface: { id: "weather", version: "0.0.1" },
+      subscribe: [],
+    },
+    contributes: {
+      commands: [{
+        name: "run", title: { ko: "실행", en: "Run" }, bind: "service",
+        description: "Runs the weather service.", params: {},
+      }],
+    },
   });
 }
 
@@ -42,22 +54,15 @@ beforeEach(() => {
   invoke.mockReset();
   invoke.mockImplementation(async (...input: unknown[]): Promise<unknown> => {
     const cmd = input[0] as string;
-    const args = input[1] as { path?: string } | undefined;
-    if (cmd === "plugin_scan") {
+    if (cmd === "plugin_manifest_list") {
       return [
         {
-          dir: INSTALLED,
-          dir_name: ID,
-          manifest: manifest("1.0.0"),
-          state: '{"version":"1.0.0"}',
-          error: null,
+          id: ID, version: "0.0.1", installPath: DEVELOPMENT, manifestPath: "plugin.json",
+          development: true, enabled: true,
+          manifest: devReadable ? manifest("0.0.1") : null,
+          error: devReadable ? null : "missing workspace",
         },
       ];
-    }
-    if (cmd === "unit_source_list") return [{ kind: "plugin", id: ID, source: DEVELOPMENT }];
-    if (cmd === "read_text_file" && args?.path === `${DEVELOPMENT}/plugin.json`) {
-      if (!devReadable) throw new Error("missing workspace");
-      return { content: manifest("2.0.0") };
     }
     return undefined;
   });
@@ -67,22 +72,26 @@ beforeEach(() => {
     plugins: {},
     rejected: [],
     consents: {},
-    enabledIds: [],
+    enabledIds: ["stale-local-only-id"],
   });
 });
 
 describe("development unit source selection", () => {
-  it("a declared source overrides a separate official install, release core included", async () => {
+  it("loads the exact development record declared by composition settings", async () => {
     await usePlugins.getState().reload();
 
     expect(usePlugins.getState().plugins[ID]).toMatchObject({
       dir: DEVELOPMENT,
       source: "dev",
-      manifest: { version: "2.0.0" },
+      status: "enabled",
+      manifest: { version: "0.0.1" },
     });
+    expect(usePlugins.getState().enabledIds).toEqual([ID]);
+    expect(invoke).not.toHaveBeenCalledWith("plugin_scan");
+    expect(invoke).not.toHaveBeenCalledWith("unit_source_list");
   });
 
-  it("a broken selected source does not fall back to the official install", async () => {
+  it("reports a broken declared record without scanning for a substitute", async () => {
     devReadable = false;
 
     await usePlugins.getState().reload();
@@ -90,8 +99,28 @@ describe("development unit source selection", () => {
     expect(usePlugins.getState().plugins[ID]).toBeUndefined();
     expect(usePlugins.getState().rejected).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ dir: DEVELOPMENT, errors: [expect.stringContaining("missing workspace")] }),
+        expect.objectContaining({ id: ID, dir: DEVELOPMENT, errors: [expect.stringContaining("missing workspace")] }),
       ]),
     );
+  });
+
+  it("rejects a plugin manifest whose version differs from settings", async () => {
+    invoke.mockImplementation(async (...input: unknown[]): Promise<unknown> => {
+      const command = input[0] as string;
+      if (command === "plugin_manifest_list") {
+        return [{
+          id: ID, version: "0.0.1", installPath: DEVELOPMENT, manifestPath: "plugin.json",
+          development: true, enabled: false, manifest: manifest("0.0.2"), error: null,
+        }];
+      }
+      return undefined;
+    });
+
+    await usePlugins.getState().reload();
+
+    expect(usePlugins.getState().plugins[ID]).toBeUndefined();
+    expect(usePlugins.getState().rejected).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: ID, errors: [expect.stringContaining("0.0.1")] }),
+    ]));
   });
 });

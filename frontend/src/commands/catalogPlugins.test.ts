@@ -260,24 +260,7 @@ describe("plugin.dev.create — extension development independent of core build 
     expect(getSpec("plugin.dev.create")?.examples).toEqual([
       'plugin.dev.create \'{"id":"soksak-plugin-<id>"}\'',
     ]);
-    expect(getSpec("plugin.dev.load")?.examples).toEqual([
-      'plugin.dev.load \'{"path":"/path/to/my-plugin"}\'',
-    ]);
     usePlugins.setState({ release: false, reload: previousReload });
-  });
-});
-
-describe("plugin.dev.load — home lane gate (dev identity only)", () => {
-  it("INVALID_PARAMS when coreBuild is not dev", async () => {
-    invoke.mockImplementationOnce(async (cmd: unknown) =>
-      cmd === "app_environment" ? { coreBuild: "debug" } : undefined,
-    );
-    const r = (await execute("plugin.dev.load", { path: "<local-evidence>/x" }, {})) as {
-      ok: boolean;
-      code: string;
-    };
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe("INVALID_PARAMS");
   });
 });
 

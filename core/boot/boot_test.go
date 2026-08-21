@@ -56,7 +56,7 @@ func TestBootCommandsAnswerWithNoWindow(t *testing.T) {
 
 	// These are the calls the frontend makes before the first frame. If any of
 	// them needed a window, headless would be impossible rather than unbuilt.
-	for _, name := range []string{"app_environment", "app_is_release", "themes_scan", "plugin_scan"} {
+	for _, name := range []string{"app_environment", "app_is_release", "themes_scan"} {
 		if _, err := registry.Invoke(name, nil); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
@@ -65,7 +65,7 @@ func TestBootCommandsAnswerWithNoWindow(t *testing.T) {
 
 func TestCompositionCommandsAreHeadlessAndNameMissingSettings(t *testing.T) {
 	registry := booted(t)
-	for _, name := range []string{"composition_settings", "composition_graph", "composition_status"} {
+	for _, name := range []string{"composition_settings", "composition_graph", "composition_status", "plugin_manifest_list"} {
 		if _, err := registry.Invoke(name, nil); err == nil {
 			t.Errorf("%s accepted a home with no settings.json", name)
 		}

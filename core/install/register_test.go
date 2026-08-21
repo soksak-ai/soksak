@@ -104,7 +104,7 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 }
 
 // A command name in this build is snake_case with at least two parts
-// (plugin_scan, artifact_install_commit). An unblocking action is an imperative
+// (plugin_manifest_list, artifact_install_commit). An unblocking action is an imperative
 // the reader can act on.
 var (
 	commandName      = regexp.MustCompile(`\b[a-z][a-z0-9]*(_[a-z0-9]+)+\b`)
