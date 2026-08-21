@@ -54,12 +54,8 @@ type Options struct {
 	//
 	// The application cannot work this out — a window is a window, and an identifier is a name. It is
 	// a fact about the launch, so the launch declares it, the same way it declares the home.
-	Attended bool
-	// UnitRoot is the directory holding installed units. The asset server reads
-	// unit files out of it and refuses every path outside it. Empty means this
-	// build serves no unit files, and the route states that rather than
-	// answering 404.
-	UnitRoot string
+	Attended         bool
+	PluginAssetRoots func() ([]string, error)
 }
 
 // macActivation is how this launch presents itself to the desktop.
@@ -214,7 +210,7 @@ func Run(options Options) error {
 			// the home after this binary was built. The middleware answers that
 			// one route and hands everything else to the embedded handler.
 			Middleware: func(next http.Handler) http.Handler {
-				return UnitFiles(options.UnitRoot, next)
+				return PluginFiles(options.PluginAssetRoots, next)
 			},
 		},
 		Mac: application.MacOptions{

@@ -191,7 +191,9 @@ func main() {
 			// is what a launch with nothing stated about it is. A measurement run declares the
 			// opposite and gets a window that draws without taking the front.
 			Attended: os.Getenv("SOKSAK_UNATTENDED") == "",
-			UnitRoot: filepath.Join(resolved.Home, "plugins"),
+			PluginAssetRoots: func() ([]string, error) {
+				return composition.PluginAssetRoots(resolved.Home)
+			},
 		})
 	})
 	if err != nil {

@@ -65,6 +65,20 @@ func Load(home string) (Result, error) {
 	return Result{Settings: settings, Graph: graph}, nil
 }
 
+func PluginAssetRoots(home string) ([]string, error) {
+	result, err := Load(home)
+	if err != nil {
+		return nil, err
+	}
+	roots := make([]string, 0, len(result.Graph.Plugins))
+	for _, plugin := range result.Graph.Plugins {
+		if plugin.Status == contract.Resolved {
+			roots = append(roots, plugin.Plugin.InstallPath)
+		}
+	}
+	return roots, nil
+}
+
 func validateInstallation(root, manifest string) string {
 	info, err := os.Lstat(root)
 	if err != nil {

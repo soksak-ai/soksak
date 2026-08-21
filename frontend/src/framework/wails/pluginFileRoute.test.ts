@@ -8,17 +8,17 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const HOST = join(__dirname, "../../../../frameworks/wails/unitassets.go");
+const HOST = join(__dirname, "../../../../frameworks/wails/pluginassets.go");
 
-describe("the unit file route", () => {
+describe("the plugin file route", () => {
   it("is the same string on both sides", () => {
     const adapter = readFileSync(join(__dirname, "index.ts"), "utf8");
-    const declared = /const UNIT_FILE_ROUTE = "([^"]+)"/.exec(adapter);
-    expect(declared, "the adapter declares no UNIT_FILE_ROUTE").not.toBeNull();
+    const declared = /const PLUGIN_FILE_ROUTE = "([^"]+)"/.exec(adapter);
+    expect(declared, "the adapter declares no PLUGIN_FILE_ROUTE").not.toBeNull();
 
     const host = readFileSync(HOST, "utf8");
-    const served = /UnitFileRoute\s*=\s*"([^"]+)"/.exec(host);
-    expect(served, "the host declares no UnitFileRoute").not.toBeNull();
+    const served = /PluginFileRoute\s*=\s*"([^"]+)"/.exec(host);
+    expect(served, "the host declares no PluginFileRoute").not.toBeNull();
 
     expect(declared?.[1]).toBe(served?.[1]);
   });
@@ -26,8 +26,8 @@ describe("the unit file route", () => {
   it("asks with the query name the host reads", () => {
     const adapter = readFileSync(join(__dirname, "index.ts"), "utf8");
     const host = readFileSync(HOST, "utf8");
-    const query = /unitFileQuery\s*=\s*"([^"]+)"/.exec(host);
-    expect(query, "the host declares no unitFileQuery").not.toBeNull();
+    const query = /pluginFileQuery\s*=\s*"([^"]+)"/.exec(host);
+    expect(query, "the host declares no pluginFileQuery").not.toBeNull();
     expect(adapter).toContain(`?${query?.[1]}=`);
   });
 });

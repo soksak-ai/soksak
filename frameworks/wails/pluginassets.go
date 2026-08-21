@@ -12,15 +12,15 @@ import (
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
-// The route this host serves unit files on, and the query it reads the path
+// The route this host serves plugin files on, and the query it reads the path
 // from. The frontend states the same route in
 // frontend/src/framework/wails/index.ts.
 const (
-	UnitFileRoute = "/-/unit-file"
-	unitFileQuery = "path"
+	PluginFileRoute = "/-/plugin-file"
+	pluginFileQuery = "path"
 )
 
-// UnitFiles serves one file out of the unit root to the webview.
+// PluginFiles serves one file from the active plugin paths.
 //
 // A plugin bundle is 400KB and larger. Passing it through a command encodes it
 // as a JSON string and decodes it again: measured 2026-08-08, 23.8MB of bundles
@@ -32,13 +32,22 @@ const (
 // refused, including one that starts inside root and climbs out through "..",
 // and one that resolves outside through a symlink. Without that check the route
 // is a read of the whole filesystem, addressable by any page in the webview.
-func UnitFiles(root string, next http.Handler) http.Handler {
+func PluginFiles(roots func() ([]string, error), next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != UnitFileRoute {
+		if request.URL.Path != PluginFileRoute {
 			next.ServeHTTP(writer, request)
 			return
 		}
-		resolved, err := unitFilePath(root, request.URL.Query().Get(unitFileQuery))
+		if roots == nil {
+			http.Error(writer, "plugin asset roots are not configured", http.StatusInternalServerError)
+			return
+		}
+		declared, err := roots()
+		if err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		resolved, err := pluginFilePath(declared, request.URL.Query().Get(pluginFileQuery))
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusForbidden)
 			return
@@ -67,37 +76,44 @@ func UnitFiles(root string, next http.Handler) http.Handler {
 // root can point anywhere. EvalSymlinks also resolves the root itself: on macOS
 // the home is under /var, which is a link to /private/var, so an unresolved
 // root never contains a resolved path.
-func unitFilePath(root, requested string) (string, error) {
-	if root == "" {
-		return "", i18n.Errorf("wails.unitFile.noRoot", nil)
+func pluginFilePath(roots []string, requested string) (string, error) {
+	if len(roots) == 0 {
+		return "", i18n.Errorf("wails.pluginFile.noRoots", nil)
 	}
 	if requested == "" {
-		return "", i18n.Errorf("wails.unitFile.noPath", map[string]string{"field": unitFileQuery})
+		return "", i18n.Errorf("wails.pluginFile.noPath", map[string]string{"field": pluginFileQuery})
 	}
 	if !filepath.IsAbs(requested) {
-		return "", i18n.Errorf("wails.unitFile.relative", map[string]string{"path": requested})
-	}
-	resolvedRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return "", fmt.Errorf("the unit root %s could not be resolved: %w", root, err)
+		return "", i18n.Errorf("wails.pluginFile.relative", map[string]string{"path": requested})
 	}
 	resolved, err := filepath.EvalSymlinks(filepath.Clean(requested))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			// A missing file still has to pass the scope check, or absence
-			// becomes a way to ask about paths outside the root.
 			cleaned := filepath.Clean(requested)
-			if !within(resolvedRoot, cleaned) {
-				return "", outside(cleaned, resolvedRoot)
+			if _, scopeErr := declaredRoot(roots, cleaned); scopeErr != nil {
+				return "", scopeErr
 			}
 			return cleaned, nil
 		}
 		return "", fmt.Errorf("%s could not be resolved: %w", requested, err)
 	}
-	if !within(resolvedRoot, resolved) {
-		return "", outside(resolved, resolvedRoot)
+	if _, err := declaredRoot(roots, resolved); err != nil {
+		return "", err
 	}
 	return resolved, nil
+}
+
+func declaredRoot(roots []string, path string) (string, error) {
+	for _, root := range roots {
+		resolvedRoot, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			return "", fmt.Errorf("plugin root %s could not be resolved: %w", root, err)
+		}
+		if within(resolvedRoot, path) {
+			return resolvedRoot, nil
+		}
+	}
+	return "", i18n.Errorf("wails.pluginFile.undeclared", map[string]string{"path": path})
 }
 
 func within(root, path string) bool {
@@ -105,10 +121,6 @@ func within(root, path string) bool {
 		return true
 	}
 	return strings.HasPrefix(path, root+string(filepath.Separator))
-}
-
-func outside(path, root string) error {
-	return i18n.Errorf("wails.unitFile.outside", map[string]string{"path": path, "root": root})
 }
 
 // contentType is what the engine needs to execute a bundle.

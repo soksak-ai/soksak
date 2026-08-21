@@ -443,22 +443,21 @@ func init() {
 			EN: "these windows were not told what they hold: {windows}",
 			KO: "다음 창들은 자기가 무엇을 가졌는지 통지받지 못했습니다: {windows}",
 		},
-		// What the unit file route refuses, and why.
-		"wails.unitFile.noRoot": {
-			EN: "this build serves no unit root, so no unit file can be read",
-			KO: "이 빌드는 유닛 루트를 서빙하지 않으므로 어떤 유닛 파일도 읽을 수 없습니다",
+		"wails.pluginFile.noRoots": {
+			EN: "settings declares no active plugin path",
+			KO: "설정에 활성 플러그인 경로가 없습니다",
 		},
-		"wails.unitFile.noPath": {
+		"wails.pluginFile.noPath": {
 			EN: `the request carries no "{field}", so there is nothing to read`,
 			KO: `요청에 "{field}" 가 없어 읽을 대상이 없습니다`,
 		},
-		"wails.unitFile.relative": {
-			EN: "{path} is relative; a unit file is addressed by its absolute path",
-			KO: "{path} 이(가) 상대 경로입니다 — 유닛 파일은 절대 경로로 지정합니다",
+		"wails.pluginFile.relative": {
+			EN: "{path} is relative; a plugin file requires an absolute path",
+			KO: "{path} 이(가) 상대 경로입니다. 플러그인 파일은 절대 경로가 필요합니다",
 		},
-		"wails.unitFile.outside": {
-			EN: "{path} is outside {root}; this route reads unit files and nothing else",
-			KO: "{path} 이(가) {root} 밖입니다 — 이 경로는 유닛 파일만 읽습니다",
+		"wails.pluginFile.undeclared": {
+			EN: "{path} is not inside an active plugin path declared by settings",
+			KO: "{path} 이(가) 설정에 선언된 활성 플러그인 경로 안에 없습니다",
 		},
 	})
 

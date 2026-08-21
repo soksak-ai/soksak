@@ -6,7 +6,7 @@
 
 import { moduleState } from "../lib/moduleState";
 import { create } from "zustand";
-import { invoke, unitFileUrl } from "../framework";
+import { invoke, pluginFileUrl } from "../framework";
 import { bootFactPayload } from "../lib/bootFact";
 import { createCoreSync } from "./coreSync";
 import type { CoreStoreDeps } from "./coreStore";
@@ -473,7 +473,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       ? { content: prefetched }
       : {
           content: await (
-            await fetch(await unitFileUrl(`${p.dir}/${p.manifest.entry}`), { cache: "no-store" })
+            await fetch(await pluginFileUrl(`${p.dir}/${p.manifest.entry}`), { cache: "no-store" })
           ).text(),
         };
     if (prefetched === undefined) {
@@ -615,7 +615,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       const fetched: Bundle[] = await Promise.all(
         wanted.map(async (w): Promise<Bundle> => {
           try {
-            const res = await fetch(await unitFileUrl(w.path), { cache: "no-store" });
+            const res = await fetch(await pluginFileUrl(w.path), { cache: "no-store" });
             if (!res.ok) return { id: w.id, why: `HTTP ${res.status}` };
             return { id: w.id, content: await res.text() };
           } catch (error) {

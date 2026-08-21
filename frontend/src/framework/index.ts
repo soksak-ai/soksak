@@ -117,4 +117,4 @@ export const frameworkName: string = framework.name;
 /** Deliver an event straight to this window's subscribers — name and payload match what the framework emits. */
 export const emitLocal: AppFramework["emitLocal"] = (event, payload) =>
   framework.emitLocal(event, payload);
-export const unitFileUrl: AppFramework["unitFileUrl"] = (path) => framework.unitFileUrl(path);
+export const pluginFileUrl: AppFramework["pluginFileUrl"] = (path) => framework.pluginFileUrl(path);

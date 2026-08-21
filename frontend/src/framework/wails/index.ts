@@ -9,13 +9,13 @@
 import { Dialogs, Events, Window as WailsWindow } from "@wailsio/runtime";
 import type { EngineProvision } from "../../plugins/spec";
 
-// The route this host serves unit files on. It is stated in one place on each
+// The route this host serves plugin files on. It is stated in one place on each
 // side; frameworks/wails/unitassets.go holds the other, and unitFileRoute.test
 // compares the two.
 import { createWailsStream } from "./streams";
 import { tmsg } from "../../i18n";
 
-const UNIT_FILE_ROUTE = "/-/unit-file";
+const PLUGIN_FILE_ROUTE = "/-/plugin-file";
 
 import type {
   AppFramework,
@@ -126,11 +126,11 @@ export const wailsFramework: AppFramework = {
 
   emitLocal: (event, payload) => { Events.Emit(event, payload); },
 
-  // The asset server serves unit files on the same origin — no serialization crosses the boundary.
-  // The path goes in the query, and the serving side checks whether it is outside the home
-  // (frameworks/wails/unitassets.go). A webview checking an address the webview built is no check.
-  unitFileUrl: async (path) =>
-    `${window.location.origin}${UNIT_FILE_ROUTE}?path=${encodeURIComponent(path)}`,
+  // The asset server serves plugin files on the same origin — no serialization crosses the boundary.
+  // The path goes in the query, and the serving side checks whether settings declares its root
+// (frameworks/wails/unitassets.go). A webview checking an address the webview built is no check.
+  pluginFileUrl: async (path) =>
+    `${window.location.origin}${PLUGIN_FILE_ROUTE}?path=${encodeURIComponent(path)}`,
 
   resolveWindowLabel,
 

@@ -128,8 +128,7 @@ export interface AppFramework {
   /**
    * Turn one file of an installed unit into **an address the webview can fetch directly**.
    *
-   * The scope is under `<home>/plugins`. The framework rejects any other path — an address that accepts
-   * an arbitrary path opens the entire filesystem to the webview.
+   * The scope is the active plugin paths declared by settings. The framework rejects any other path.
    *
    * Why it is in the contract: the amount moved at boot is the wait, and a value crossing a process
    * boundary is serialized as a string. Measured 2026-08-08 — of a 23.8MB plugin bundle, about 15MB spent
@@ -140,7 +139,7 @@ export interface AppFramework {
    * How the address is built differs per framework, and neither side has the other's method — so it is
    * asked here.
    */
-  unitFileUrl(path: string): Promise<string>;
+  pluginFileUrl(path: string): Promise<string>;
 
   /**
    * The property that marks "dragging this element moves the window" for the framework.

@@ -30,12 +30,12 @@ func rootWithUnit(t *testing.T) (string, string) {
 func get(t *testing.T, roots []string, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	refused := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Error("the route passed a unit-file request to the next handler")
+		t.Error("the route passed a plugin-file request to the next handler")
 		w.WriteHeader(http.StatusNotFound)
 	})
 	request := httptest.NewRequest(http.MethodGet, PluginFileRoute+"?"+pluginFileQuery+"="+url.QueryEscape(path), nil)
 	recorder := httptest.NewRecorder()
-	PluginFiles(roots, refused).ServeHTTP(recorder, request)
+	PluginFiles(func() ([]string, error) { return roots, nil }, refused).ServeHTTP(recorder, request)
 	return recorder
 }
 
@@ -61,7 +61,7 @@ func TestAUnitFileIsServedWithTheTypeAModuleLoaderAccepts(t *testing.T) {
 	}
 }
 
-func TestEverythingOutsideTheUnitRootIsRefused(t *testing.T) {
+func TestEverythingOutsideDeclaredPluginRootsIsRefused(t *testing.T) {
 	root, unit := rootWithUnit(t)
 	elsewhere := filepath.Join(t.TempDir(), "secret.txt")
 	if err := os.WriteFile(elsewhere, []byte("private"), 0o644); err != nil {
@@ -121,7 +121,7 @@ func TestARequestOnAnotherRoutePassesThrough(t *testing.T) {
 	})
 
 	request := httptest.NewRequest(http.MethodGet, "/index.html", nil)
-	PluginFiles([]string{root}, next).ServeHTTP(httptest.NewRecorder(), request)
+	PluginFiles(func() ([]string, error) { return []string{root}, nil }, next).ServeHTTP(httptest.NewRecorder(), request)
 	if !served {
 		t.Error("the application's own assets must still be served")
 	}
