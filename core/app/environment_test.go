@@ -17,7 +17,7 @@ func resolved(t *testing.T, id string) identity.Resolved {
 }
 
 func TestEnvironmentReportsOneResolvedIdentity(t *testing.T) {
-	env := Describe(resolved(t, "com.soksak.dev"), "debug")
+	env := Describe(resolved(t, "com.soksak.dev"), "debug", "/bin/zsh")
 
 	if env.Identity != "com.soksak.dev" {
 		t.Errorf("identity = %q", env.Identity)
@@ -34,20 +34,23 @@ func TestEnvironmentReportsOneResolvedIdentity(t *testing.T) {
 	if env.BuildProfile != "debug" {
 		t.Errorf("build profile = %q", env.BuildProfile)
 	}
+	if env.LoginShell != "/bin/zsh" {
+		t.Errorf("login shell = %q", env.LoginShell)
+	}
 }
 
 func TestUpdaterFollowsTheReleaseAxis(t *testing.T) {
 	// A dev installation must not offer to update itself into the release one.
-	if Describe(resolved(t, "com.soksak.dev"), "debug").UpdaterEnabled {
+	if Describe(resolved(t, "com.soksak.dev"), "debug", "/bin/zsh").UpdaterEnabled {
 		t.Error("a dev identity must not enable the updater")
 	}
-	if !Describe(resolved(t, "com.soksak.app"), "release").UpdaterEnabled {
+	if !Describe(resolved(t, "com.soksak.app"), "release", "/bin/zsh").UpdaterEnabled {
 		t.Error("a release identity must enable the updater")
 	}
 }
 
 func TestUnitModeIsOfficialWithNoDevelopmentUnits(t *testing.T) {
-	env := Describe(resolved(t, "com.soksak.app"), "release")
+	env := Describe(resolved(t, "com.soksak.app"), "release", "/bin/zsh")
 
 	if env.UnitMode != "official" {
 		t.Errorf("unit mode = %q, want official", env.UnitMode)

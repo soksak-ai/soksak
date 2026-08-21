@@ -6,15 +6,18 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/soksak/soksak-contract-contentview v0.0.1
 	github.com/soksak/soksak-contract-control v0.0.1
+	github.com/soksak/soksak-contract-pty v0.0.1
 	github.com/soksak/wails-service-native-compositor v0.0.1
 	github.com/soksak/wails-service-webview-surface v0.0.1
 	github.com/wailsapp/wails/v3 v3.0.0-dev
+	github.com/zalando/go-keyring v0.2.8
 	modernc.org/sqlite v1.56.0
 )
 
 require (
 	github.com/adrg/xdg v0.5.3 // indirect
 	github.com/coder/websocket v1.8.14 // indirect
+	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
@@ -39,5 +42,7 @@ replace github.com/soksak/wails-service-webview-surface => ../wails-services/wai
 replace github.com/soksak/soksak-contract-contentview => ../soksak-contracts/soksak-contract-contentview
 
 replace github.com/soksak/soksak-contract-control => ../soksak-contracts/soksak-contract-control
+
+replace github.com/soksak/soksak-contract-pty => ../soksak-contracts/soksak-contract-pty
 
 replace github.com/soksak/soksak-contract-terminal => ../soksak-contracts/soksak-contract-terminal

@@ -1,6 +1,7 @@
 package secret
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -120,7 +121,7 @@ func TestAHostWithNoKeyStoreRefusesOnlySealing(t *testing.T) {
 		t.Errorf("the refusal %q must name the key store and where to read the backend", reason)
 	}
 	for _, name := range commandNames {
-		if name == commandSet {
+		if name == commandSet || name == commandGenerate {
 			continue
 		}
 		if _, present := served[name]; !present {
@@ -254,6 +255,32 @@ func TestTheKeyStoreIsAskedOnce(t *testing.T) {
 	}
 	if keys.asked != 1 {
 		t.Fatalf("the key store was asked %d times", keys.asked)
+	}
+}
+
+func TestGenerateCreatesOnceWithoutReturningPlaintext(t *testing.T) {
+	vault, _, _ := workingVault(t)
+	first, err := vault.Generate("terminal-plugin", "checkpoint", 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Created {
+		t.Fatal("first generation did not create a value")
+	}
+	second, err := vault.Generate("terminal-plugin", "checkpoint", 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Created {
+		t.Fatal("second generation replaced the existing value")
+	}
+	opened, err := vault.Resolve("terminal-plugin", "checkpoint")
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(opened)
+	if err != nil || len(decoded) != 32 {
+		t.Fatalf("generated secret is not 32 random bytes: %v %d", err, len(decoded))
 	}
 }
 

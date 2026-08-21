@@ -12,18 +12,19 @@ import (
 // that can print an answer would then be able to print a secret.
 
 const (
-	commandSet     = "secret_set"
-	commandHas     = "secret_has"
-	commandKeys    = "secret_keys"
-	commandDelete  = "secret_delete"
-	commandStatus  = "secret_status"
-	commandBackend = "secret_backend"
+	commandSet      = "secret_set"
+	commandGenerate = "secret_generate"
+	commandHas      = "secret_has"
+	commandKeys     = "secret_keys"
+	commandDelete   = "secret_delete"
+	commandStatus   = "secret_status"
+	commandBackend  = "secret_backend"
 )
 
 // commandNames is every name this group answers to, in the order a reader meets
 // them: write, read-about, remove, then the two that describe the vault itself.
 var commandNames = []string{
-	commandSet, commandHas, commandKeys, commandDelete,
+	commandSet, commandGenerate, commandHas, commandKeys, commandDelete,
 	commandStatus, commandBackend,
 }
 
@@ -50,7 +51,7 @@ func Register(registry *control.Registry, deps Deps) *Vault {
 		// still answers: what is stored can be listed, tested for and thrown
 		// away on a host that can no longer open it, and secret_status is how a
 		// caller finds out why writing is refused.
-		declareAll(registry, []string{commandSet},
+		declareAll(registry, []string{commandSet, commandGenerate},
 			"this host was given no key store, so a value cannot be sealed; secret_status names the backend it holds")
 	} else {
 		registry.MustRegister(control.Command{
@@ -70,6 +71,24 @@ func Register(registry *control.Registry, deps Deps) *Vault {
 					return nil, err
 				}
 				return vault.Set(ns, key, value)
+			},
+		})
+		registry.MustRegister(control.Command{
+			Name: commandGenerate, Owner: control.OwnerCore,
+			Handler: func(arguments control.Args) (any, error) {
+				ns, err := control.Arg[string](arguments, "ns")
+				if err != nil {
+					return nil, err
+				}
+				key, err := control.Arg[string](arguments, "key")
+				if err != nil {
+					return nil, err
+				}
+				size, err := control.Arg[int](arguments, "bytes")
+				if err != nil {
+					return nil, err
+				}
+				return vault.Generate(ns, key, size)
 			},
 		})
 	}

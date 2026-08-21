@@ -15,5 +15,9 @@ func init() {
 			EN: "identity: runtime endpoint directory must be absolute: {path}",
 			KO: "identity: 런타임 끝점 디렉터리는 절대 경로여야 합니다: {path}",
 		},
+		"identity.require.persistentNotAbsolute": {
+			EN: "identity: persistent home must be absolute: {path}",
+			KO: "identity: 영구 홈은 절대 경로여야 합니다: {path}",
+		},
 	})
 }

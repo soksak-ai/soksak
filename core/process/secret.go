@@ -16,6 +16,11 @@ type SecretSource interface {
 	Resolve(namespace, key string) (string, error)
 }
 
+// SecretGenerator creates a sealed random value without returning its plaintext.
+type SecretGenerator interface {
+	GenerateSecret(namespace, key string, size int) error
+}
+
 // noVault is the answer of a host that holds no vault. It declares that fact
 // rather than handing back an empty value: an empty token makes the child's
 // authentication failure look like a misconfiguration, and the real reason —
@@ -63,4 +68,8 @@ func resolveSecretEnv(source SecretSource, namespace string, secretEnv map[strin
 		resolved = append(resolved, [2]string{name, plaintext})
 	}
 	return resolved, nil
+}
+
+func ResolveSecretEnvironment(source SecretSource, namespace string, secretEnv map[string]string) ([][2]string, error) {
+	return resolveSecretEnv(source, namespace, secretEnv)
 }

@@ -76,6 +76,7 @@ func main() {
 		Windows:     runtime.GOOS == "windows",
 		Home:        os.Getenv("HOME"),
 		UserProfile: os.Getenv("USERPROFILE"),
+		Persistent:  os.Getenv("SOKSAK_HOME"),
 		Runtime:     os.Getenv("SOKSAK_RUNTIME"),
 	})
 	if err != nil {
@@ -96,6 +97,7 @@ func main() {
 	// is a unit like any other now, and adding the next one edits no line here.
 	units := sidecar.NewHost(sidecar.Deps{
 		Home:        resolved.Home,
+		Runtime:     resolved.Runtime,
 		Spawner:     process.OSSpawner{},
 		Environment: os.Environ(),
 		Dial:        sidecar.DialLocal,
@@ -119,7 +121,7 @@ func main() {
 	// Filled once the home is ours. Nothing this installation owns — least of
 	// all its database — is touched by a process that has not claimed it.
 	fill := func(kv *store.KV) {
-		boot.RegisterCore(registry, boot.Boot{
+		wired := boot.RegisterCore(registry, boot.Boot{
 			Identity:     resolved,
 			BuildProfile: buildProfile,
 			KV:           kv,
@@ -146,20 +148,15 @@ func main() {
 			// refresh dead and three renderer errors in the activity stream saying so.
 			Watch:   watcher,
 			Spawner: process.OSSpawner{},
-			// This host holds no vault. A spawn that requires a secret is refused
-			// by name; handing back an empty value would surface later as the
-			// child's own authentication failure.
 			Secrets: nil,
-			// No operating-system key store is wired into this binary yet, so
-			// the vault refuses by name rather than holding secrets somewhere it
-			// cannot protect them.
-			Keys: nil,
+			Keys:    newSystemKeyStore(resolved.Identifier, keyStoreLabel(runtime.GOOS)),
 			// No process inspector either: a daemon that cannot ask what a pid
 			// is running declares the commands that need it, rather than
 			// assuming a live pid is the child it started.
 			Reaper:      nil,
 			ProcessSink: processEventSink{bridge: bridge},
 		})
+		units.SetSecrets(wired.Secrets)
 	}
 
 	// The home is claimed before anything is drawn — see launch. Everything this

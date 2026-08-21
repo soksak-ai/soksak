@@ -17,10 +17,11 @@ type DevelopmentUnit struct {
 // Environment is what the frontend requests first: which installation is this,
 // where does it live, and what is it allowed to do.
 type Environment struct {
-	Identity  string `json:"identity"`
-	Home      string `json:"home"`
-	CoreBuild string `json:"coreBuild"`
-	CLI       string `json:"cli"`
+	Identity   string `json:"identity"`
+	Home       string `json:"home"`
+	CoreBuild  string `json:"coreBuild"`
+	CLI        string `json:"cli"`
+	LoginShell string `json:"loginShell"`
 	// BuildProfile is how this binary was compiled, which is a different fact
 	// from CoreBuild: a debug build can run the release identity.
 	BuildProfile string `json:"buildProfile"`
@@ -42,7 +43,7 @@ type Environment struct {
 // Taking the whole Resolved rather than an identifier keeps the pair from
 // drifting: there is no path here that could pair one installation's home with
 // another's name.
-func Describe(id identity.Resolved, buildProfile string) Environment {
+func Describe(id identity.Resolved, buildProfile, loginShell string) Environment {
 	units := []DevelopmentUnit{}
 	rejected := []DevelopmentUnit{}
 
@@ -56,6 +57,7 @@ func Describe(id identity.Resolved, buildProfile string) Environment {
 		Home:                     id.Home,
 		CoreBuild:                id.CoreBuild,
 		CLI:                      id.CLI,
+		LoginShell:               loginShell,
 		BuildProfile:             buildProfile,
 		UpdaterEnabled:           id.Release,
 		UnitMode:                 mode,

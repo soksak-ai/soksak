@@ -48,6 +48,22 @@ func init() {
 			EN: `secret: the {backend} key store answered with a {size}-byte device key; {required} bytes are required`,
 			KO: `secret: {backend} 키 저장소가 {size} 바이트 기기 키로 응답했습니다 — {required} 바이트가 필요합니다`,
 		},
+		"secret.deviceKey.notBase64": {
+			EN: `secret: the {backend} key store contains a device key that is not base64`,
+			KO: `secret: {backend} 키 저장소의 기기 키가 base64 형식이 아닙니다`,
+		},
+		"systemKeyStore.writeTimeout": {
+			EN: `keychain: write timed out after {timeout}`,
+			KO: `키체인: 쓰기가 {timeout} 후 시간 초과되었습니다`,
+		},
+		"systemKeyStore.writeFailed": {
+			EN: `keychain: write failed: {reason}`,
+			KO: `키체인: 쓰기에 실패했습니다: {reason}`,
+		},
+		"systemKeyStore.invalidField": {
+			EN: `keychain: {field} is invalid`,
+			KO: `키체인: {field} 값이 유효하지 않습니다`,
+		},
 		"secret.deps.noStore": {
 			EN: `secret: this process holds no store, and a vault with nowhere to write records is not one`,
 			KO: `secret: 이 프로세스에는 스토어가 없습니다 — 레코드를 기록할 곳이 없으면 볼트가 아닙니다`,
@@ -55,6 +71,10 @@ func init() {
 		"secret.get.notFound": {
 			EN: `secret: {ns}/{key} is not in this vault`,
 			KO: `secret: {ns}/{key} 은(는) 이 볼트에 없습니다`,
+		},
+		"secret.generate.size": {
+			EN: `secret: generated values must be 16 to 64 bytes, not {size}`,
+			KO: `secret: 생성 값은 16~64 바이트여야 합니다 — 요청값은 {size} 바이트입니다`,
 		},
 	})
 }

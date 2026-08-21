@@ -14,6 +14,8 @@
 package secret
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"sync"
 
@@ -21,6 +23,38 @@ import (
 	"github.com/soksak/soksak-core/core/process"
 	"github.com/soksak/soksak-core/core/store"
 )
+
+type Generated struct {
+	Ns      string `json:"ns"`
+	Key     string `json:"key"`
+	Created bool   `json:"created"`
+}
+
+func (vault *Vault) Generate(ns, key string, size int) (Generated, error) {
+	if size < 16 || size > 64 {
+		return Generated{}, i18n.Errorf("secret.generate.size", map[string]string{"size": fmt.Sprint(size)})
+	}
+	present, err := vault.Has(ns, key)
+	if err != nil {
+		return Generated{}, err
+	}
+	if present {
+		return Generated{Ns: ns, Key: key, Created: false}, nil
+	}
+	bytes := make([]byte, size)
+	if _, err := rand.Read(bytes); err != nil {
+		return Generated{}, fmt.Errorf("secret: generate random value: %w", err)
+	}
+	if _, err := vault.Set(ns, key, base64.StdEncoding.EncodeToString(bytes)); err != nil {
+		return Generated{}, err
+	}
+	return Generated{Ns: ns, Key: key, Created: true}, nil
+}
+
+func (vault *Vault) GenerateSecret(namespace, key string, size int) error {
+	_, err := vault.Generate(namespace, key, size)
+	return err
+}
 
 // Deps is what the surrounding process supplies. Every field is something this
 // package could have discovered for itself and deliberately does not.

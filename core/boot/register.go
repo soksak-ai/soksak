@@ -125,6 +125,7 @@ type Wired struct {
 	Claims *workspace.Ledger
 	// Processes owns the running children. The host stops them when it quits.
 	Processes *process.Manager
+	Secrets   process.SecretSource
 }
 
 // liveWindows adapts the launcher's function to the interface the claim ledger
@@ -158,8 +159,10 @@ func RegisterCore(registry *control.Registry, boot Boot) Wired {
 		boot.Now = func() int64 { return 0 }
 	}
 	registry.MustRegister(control.Command{
-		Name:    "app_environment",
-		Handler: func(control.Args) (any, error) { return app.Describe(boot.Identity, boot.BuildProfile), nil },
+		Name: "app_environment",
+		Handler: func(control.Args) (any, error) {
+			return app.Describe(boot.Identity, boot.BuildProfile, boot.LoginShell), nil
+		},
 	})
 
 	registry.MustRegister(control.Command{
@@ -359,17 +362,21 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		Changed:  emit,
 	})
 
+	vault := secret.Register(registry, secret.Deps{
+		KV:       boot.KV,
+		KeyStore: boot.Keys,
+	})
+	secretSource := boot.Secrets
+	if secretSource == nil {
+		secretSource = vault
+	}
+
 	processes := process.Register(registry, process.Deps{
 		Home:        boot.Identity.Home,
 		Environment: boot.Environment,
 		Sink:        boot.ProcessSink,
 		Spawner:     boot.Spawner,
-		Secrets:     boot.Secrets,
-	})
-
-	secret.Register(registry, secret.Deps{
-		KV:       boot.KV,
-		KeyStore: boot.Keys,
+		Secrets:     secretSource,
 	})
 
 	install.Register(registry, install.Deps{
@@ -400,5 +407,5 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 	// caller receives "not built" instead of "unknown command".
 	declareUnbuilt(registry)
 
-	return Wired{Claims: claims, Processes: processes}
+	return Wired{Claims: claims, Processes: processes, Secrets: secretSource}
 }

@@ -151,3 +151,7 @@ func (list *environmentList) render() []string {
 func ChildEnvironment(inherited []string, home string, overrides map[string]string) []string {
 	return childEnvironment(environmentRequest{Inherited: inherited, Home: home, Set: overrides})
 }
+
+func ChildEnvironmentWithSecrets(inherited []string, home string, secrets [][2]string) []string {
+	return childEnvironment(environmentRequest{Inherited: inherited, Home: home, Secrets: secrets})
+}

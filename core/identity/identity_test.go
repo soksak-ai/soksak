@@ -92,6 +92,27 @@ func TestRuntimeSocketCanBeSeparatedFromPersistentStateWithoutSplittingIdentity(
 	if resolved.Socket != "<local-evidence>/soksak-gates/123/1/com.soksak.gate.sock" {
 		t.Fatalf("runtime endpoint did not use the declared short runtime root: %s", resolved.Socket)
 	}
+	if resolved.Runtime != "<local-evidence>/soksak-gates/123/1" {
+		t.Fatalf("runtime root = %q", resolved.Runtime)
+	}
+}
+
+func TestExactPersistentHomeDoesNotReceiveAnIdentitySuffix(t *testing.T) {
+	resolved, err := Require("com.soksak.gate", Environment{
+		Home: "/Users/person", Persistent: "/workspace/gate-home", Runtime: "<local-evidence>/gate-runtime",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Home != "/workspace/gate-home" {
+		t.Fatalf("persistent home = %q", resolved.Home)
+	}
+}
+
+func TestExactPersistentHomeMustBeAbsolute(t *testing.T) {
+	if _, err := Require("com.soksak.gate", Environment{Persistent: "relative"}); err == nil {
+		t.Fatal("relative persistent home was accepted")
+	}
 }
 
 func TestReleaseCarriesNoSuffix(t *testing.T) {
