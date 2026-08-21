@@ -2,8 +2,9 @@
 
 #import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>
-#import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <WebKit/WebKit.h>
+#import <dlfcn.h>
+#import <objc/message.h>
 
 // A refusal always carries words. A nil or empty message would reach the caller as a failure with
 // nothing in it, and `strdup(NULL)` is not even that — measured 2026-08-18, a recording stopped with
@@ -56,6 +57,30 @@ static NSData *pngFromCGImage(CGImageRef image) {
 SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
                                   double h, int timeout_ms) {
   if (nsWindow == NULL) return failure(@"capture received a nil window");
+  if (@available(macOS 14.4, *)) {
+  } else {
+    return failure(@"window capture requires macOS 14.4 or newer");
+  }
+
+  static void *screenCaptureKit = NULL;
+  static dispatch_once_t screenCaptureKitOnce;
+  dispatch_once(&screenCaptureKitOnce, ^{
+    screenCaptureKit = dlopen(
+        "/System/Library/Frameworks/ScreenCaptureKit.framework/ScreenCaptureKit",
+        RTLD_LAZY | RTLD_LOCAL);
+  });
+  if (screenCaptureKit == NULL) {
+    return failure(@"ScreenCaptureKit could not be loaded");
+  }
+
+  Class shareableContentClass = NSClassFromString(@"SCShareableContent");
+  Class contentFilterClass = NSClassFromString(@"SCContentFilter");
+  Class streamConfigurationClass = NSClassFromString(@"SCStreamConfiguration");
+  Class screenshotManagerClass = NSClassFromString(@"SCScreenshotManager");
+  if (shareableContentClass == Nil || contentFilterClass == Nil ||
+      streamConfigurationClass == Nil || screenshotManagerClass == Nil) {
+    return failure(@"ScreenCaptureKit is unavailable on this system");
+  }
 
   NSWindow *window = (NSWindow *)nsWindow;
   __block CGWindowID target = 0;
@@ -74,8 +99,9 @@ SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
 
   // getCurrentProcessShareableContent limits the query to this process's own
   // windows, which is what makes the capture work without a TCC grant.
-  [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:^(
-                          SCShareableContent *content, NSError *contentError) {
+  SEL shareableContentSelector =
+      NSSelectorFromString(@"getCurrentProcessShareableContentWithCompletionHandler:");
+  void (^shareableContentCompletion)(id, NSError *) = ^(id content, NSError *contentError) {
     if (content == nil || contentError != nil) {
       error = [NSString stringWithFormat:@"shareable content unavailable: %@",
                                          contentError.localizedDescription ?: @"unknown"];
@@ -83,9 +109,10 @@ SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
       return;
     }
 
-    SCWindow *match = nil;
-    for (SCWindow *candidate in content.windows) {
-      if (candidate.windowID == target) {
+    id match = nil;
+    NSArray *windows = [content valueForKey:@"windows"];
+    for (id candidate in windows) {
+      if ([[candidate valueForKey:@"windowID"] unsignedIntValue] == target) {
         match = candidate;
         break;
       }
@@ -96,10 +123,11 @@ SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
       return;
     }
 
-    SCContentFilter *filter =
-        [[SCContentFilter alloc] initWithDesktopIndependentWindow:match];
-    CGRect contentRect = filter.contentRect;
-    double scale = (double)filter.pointPixelScale;
+    id filter = [[contentFilterClass alloc]
+        performSelector:NSSelectorFromString(@"initWithDesktopIndependentWindow:")
+             withObject:match];
+    CGRect contentRect = [[filter valueForKey:@"contentRect"] rectValue];
+    double scale = [[filter valueForKey:@"pointPixelScale"] doubleValue];
 
     size_t width = 0, height = 0;
     if (!pixelExtent(contentRect.size.width, contentRect.size.height, scale, &width, &height)) {
@@ -110,9 +138,9 @@ SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
       return;
     }
 
-    SCStreamConfiguration *config = [[SCStreamConfiguration alloc] init];
-    config.width = width;
-    config.height = height;
+    id config = [[streamConfigurationClass alloc] init];
+    [config setValue:@(width) forKey:@"width"];
+    [config setValue:@(height) forKey:@"height"];
 
     BOOL wantsCrop = (w > 0 && h > 0);
     CGRect crop = CGRectZero;
@@ -124,10 +152,10 @@ SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
       return;
     }
 
-    [SCScreenshotManager
-        captureImageWithFilter:filter
-                 configuration:config
-             completionHandler:^(CGImageRef image, NSError *captureError) {
+    SEL captureSelector =
+        NSSelectorFromString(@"captureImageWithFilter:configuration:completionHandler:");
+    void (^captureCompletion)(CGImageRef, NSError *) =
+        ^(CGImageRef image, NSError *captureError) {
                if (image == NULL || captureError != nil) {
                  error = [NSString stringWithFormat:@"capture failed: %@",
                                                     captureError.localizedDescription ?: @"unknown"];
@@ -149,11 +177,15 @@ SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
                if (cropped != NULL) CGImageRelease(cropped);
                if (png == nil) error = @"encoding the captured image as PNG failed";
                dispatch_semaphore_signal(done);
-             }];
+             };
+    ((void (*)(id, SEL, id, id, id))objc_msgSend)(
+        screenshotManagerClass, captureSelector, filter, config, captureCompletion);
 
     [config release];
     [filter release];
-  }];
+  };
+  ((void (*)(id, SEL, id))objc_msgSend)(
+      shareableContentClass, shareableContentSelector, shareableContentCompletion);
 
   // A bounded wait: the completion chain is asynchronous, and a capture that
   // never completes must surface as a timeout rather than hold the caller.

@@ -88,6 +88,29 @@ func TestNativeSourceLivesOutsideTheCgoComment(t *testing.T) {
 	}
 }
 
+func TestScreenCaptureKitHasAnExplicitAvailabilityBoundary(t *testing.T) {
+	bridge, err := os.ReadFile("capture_darwin.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	implementation, err := os.ReadFile("capture_darwin.m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(bridge), "framework ScreenCaptureKit") {
+		t.Error("ScreenCaptureKit must be discovered at runtime so older supported macOS releases can start")
+	}
+	if !strings.Contains(string(implementation), "@available(macOS 14.4, *)") {
+		t.Error("the 14.4 current-process capture API must have a runtime availability guard")
+	}
+	if !strings.Contains(string(implementation), `NSClassFromString(@"SCShareableContent")`) {
+		t.Error("the guarded capture path must discover ScreenCaptureKit without a load-time class reference")
+	}
+	if !strings.Contains(string(implementation), "dlopen(") {
+		t.Error("the guarded capture path must load ScreenCaptureKit before discovering its classes")
+	}
+}
+
 // cgoPreamble returns the comment block immediately preceding `import "C"`.
 func cgoPreamble(source string) string {
 	end := strings.Index(source, `import "C"`)

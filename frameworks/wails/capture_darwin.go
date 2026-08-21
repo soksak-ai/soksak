@@ -4,7 +4,7 @@ package wails
 
 /*
 #cgo CFLAGS: -x objective-c -Wno-deprecated-declarations
-#cgo LDFLAGS: -framework AppKit -framework CoreGraphics -framework ScreenCaptureKit -framework WebKit
+#cgo LDFLAGS: -framework AppKit -framework CoreGraphics -framework WebKit
 #include <stdlib.h>
 #include "capture_darwin.h"
 */
