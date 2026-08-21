@@ -22,7 +22,8 @@ import (
 
 const usage = `sok — drive a running soksak backend
 
-  sok <command> [name=value ...]     run one command
+  sok <command> [name=value ...]     run one command with name-value parameters
+  sok <command> '{"name":value}'     run one command with one JSON object
   sok help <command>                 show one command's public schema
   sok commands                       list what this build serves and refuses
   sok hello                          greet the backend and print its identity
@@ -128,6 +129,17 @@ func requestFrom(argv []string) (control.Request, error) {
 	}
 
 	request := control.Request{ID: "1", Command: name, Args: map[string]json.RawMessage{}}
+	if len(argv) == 2 && json.Valid([]byte(argv[1])) {
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(argv[1]), &object); err != nil || object == nil {
+			return control.Request{}, i18n.Errorf("sok.request.objectRequired", nil)
+		}
+		request.Args = object
+		return request, nil
+	}
+	if len(argv) > 2 && json.Valid([]byte(argv[1])) {
+		return control.Request{}, i18n.Errorf("sok.request.mixedForms", nil)
+	}
 	for _, pair := range argv[1:] {
 		key, value, found := strings.Cut(pair, "=")
 		if !found {
