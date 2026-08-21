@@ -121,6 +121,7 @@ type Host struct {
 	// can be ended without ending the unit it is on.
 	streams map[string]io.Closer
 	secrets process.SecretSource
+	ended   map[string][]string
 }
 
 type startAttempt struct {
@@ -155,7 +156,7 @@ func NewHost(deps Deps) *Host {
 	if deps.ReadyWithin == 0 {
 		deps.ReadyWithin = DefaultReadyWithin
 	}
-	return &Host{deps: deps, open: make(map[string]*unit), starting: make(map[string]*startAttempt)}
+	return &Host{deps: deps, open: make(map[string]*unit), starting: make(map[string]*startAttempt), ended: make(map[string][]string)}
 }
 
 // Started reports every unit this host holds open.
@@ -242,6 +243,7 @@ func (host *Host) startResolvedWithSecrets(
 	name, path, namespace string, secretEnv map[string]string, fingerprint string,
 ) (Open, error) {
 	host.mu.Lock()
+	delete(host.ended, name)
 	if held, running := host.open[name]; running {
 		if held.secretNames != fingerprint {
 			host.mu.Unlock()
@@ -501,6 +503,7 @@ func (host *Host) forgetWhenGone(name string, held *unit, ended <-chan struct{})
 	<-ended
 	host.mu.Lock()
 	if host.open[name] == held {
+		host.recordEndedComplaintLocked(name, held)
 		delete(host.open, name)
 	}
 	host.mu.Unlock()
@@ -524,13 +527,28 @@ func (host *Host) Complaint(name string) []string {
 func (host *Host) Complaints() map[string][]string {
 	host.mu.Lock()
 	defer host.mu.Unlock()
-	result := make(map[string][]string, len(host.open))
+	result := make(map[string][]string, len(host.open)+len(host.ended))
+	for name, tail := range host.ended {
+		result[name] = append([]string(nil), tail...)
+	}
 	for name, held := range host.open {
 		if tail := held.stderr.snapshot(); len(tail) > 0 {
 			result[name] = tail
 		}
 	}
 	return result
+}
+
+func (host *Host) recordEndedComplaint(name string, held *unit) {
+	host.mu.Lock()
+	defer host.mu.Unlock()
+	host.recordEndedComplaintLocked(name, held)
+}
+
+func (host *Host) recordEndedComplaintLocked(name string, held *unit) {
+	if tail := held.stderr.snapshot(); len(tail) > 0 {
+		host.ended[name] = tail
+	}
 }
 
 func drain(reader io.ReadCloser, into *ring) {
