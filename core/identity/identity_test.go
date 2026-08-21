@@ -2,6 +2,7 @@ package identity
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -94,6 +95,16 @@ func TestRuntimeSocketCanBeSeparatedFromPersistentStateWithoutSplittingIdentity(
 	}
 	if resolved.Runtime != "<local-evidence>/soksak-gates/123/1" {
 		t.Fatalf("runtime root = %q", resolved.Runtime)
+	}
+}
+
+func TestWindowsControlAddressUsesTheNamedPipeNamespace(t *testing.T) {
+	resolved := Resolve("com.soksak.gate", Environment{Windows: true, UserProfile: `C:\Users\gate`, Runtime: `C:\run\gate`})
+	if !strings.HasPrefix(resolved.Socket, `\\.\pipe\soksak-control-`) {
+		t.Fatalf("Windows control address=%q", resolved.Socket)
+	}
+	if strings.Contains(resolved.Socket, `C:\run`) {
+		t.Fatalf("Windows file path was used as a named pipe: %q", resolved.Socket)
 	}
 }
 
