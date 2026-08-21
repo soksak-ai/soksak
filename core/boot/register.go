@@ -391,7 +391,7 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		Changed:    emit,
 	})
 
-	composition.Register(registry, composition.Deps{Home: boot.Identity.Home})
+	composition.Register(registry, composition.Deps{Home: boot.Identity.Home, Changed: emit})
 
 	daemon.Register(registry, daemon.Deps{
 		Spawner:    boot.Spawner,
