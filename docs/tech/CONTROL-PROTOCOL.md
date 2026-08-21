@@ -79,6 +79,11 @@ A native window creation receipt does not mean its renderer has registered comma
 After it succeeds, renderer commands such as `app.boot.wait` are addressable without polling the
 command table.
 
+For a delegated renderer command with a declared `timeoutMs`, the relay deadline is at least five
+seconds longer than the command deadline. The relay must not replace a domain timeout with a
+transport timeout at the same instant. Commands without a declared timeout retain the fixed relay
+deadline.
+
 ## C5. The address, and who may connect
 
 The socket path is derived once from the identity (`<home>/<identifier>.sock`, IDENTITY.md I4) and
