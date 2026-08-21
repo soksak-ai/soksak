@@ -23,11 +23,11 @@ func NewSidecarSink(bridge *Bridge) *SidecarSink { return &SidecarSink{bridge: b
 // learn its consumer is gone reads forever, and the unit on the other end fills its buffer until it
 // blocks — which is indistinguishable from a unit that stopped.
 func (sink *SidecarSink) EmitSidecarBytes(bytes sidecar.Bytes) sidecar.Delivery {
-	return sink.deliver(bytes.Stream, bytes)
+	return sink.deliver(bytes.Stream, control.StreamBytes{Bytes: bytes.DataBase64})
 }
 
 func (sink *SidecarSink) EmitSidecarEnd(end sidecar.End) sidecar.Delivery {
-	return sink.deliver(end.Stream, end)
+	return sink.deliver(end.Stream, map[string]string{"reason": end.Reason})
 }
 
 func (sink *SidecarSink) deliver(stream string, frame any) sidecar.Delivery {

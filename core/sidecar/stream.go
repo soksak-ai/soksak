@@ -92,14 +92,14 @@ func (host *Host) forgetStream(label string) {
 // The read size is chosen here rather than by the contract: it is how much this process is willing
 // to hold at once, not how much a unit may send. Delivery is what ends it early — a consumer that
 // left is not an error, and treating it as one would report a closed view as a failed unit.
-func pump(from io.ReadCloser, into Sink, stream string, size int) {
+func pump(from io.ReadCloser, into Sink, byteReceiver, endReceiver string, size int) {
 	defer func() { _ = from.Close() }()
 	buffer := make([]byte, size)
 	for {
 		count, err := from.Read(buffer)
 		if count > 0 {
 			delivery := into.EmitSidecarBytes(Bytes{
-				Stream:     stream,
+				Stream:     byteReceiver,
 				DataBase64: base64.StdEncoding.EncodeToString(buffer[:count]),
 			})
 			if delivery == Gone {
@@ -111,7 +111,7 @@ func pump(from io.ReadCloser, into Sink, stream string, size int) {
 			if err != io.EOF {
 				reason = err.Error()
 			}
-			into.EmitSidecarEnd(End{Stream: stream, Reason: reason})
+			into.EmitSidecarEnd(End{Stream: endReceiver, Reason: reason})
 			return
 		}
 	}

@@ -26,9 +26,10 @@ import (
 // unit running.
 func TestWhatAUnitHeldSurvivesTheApplication(t *testing.T) {
 	home := shortHome(t)
+	runtimeRoot := shortHome(t)
 	stageUnit(t, home, "keeper", keeperSource)
 	deps := Deps{
-		Home: home, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second,
 	}
 
@@ -100,9 +101,10 @@ import (
 )
 
 func main() {
-	home := flag.String("home", "", "")
+	flag.String("home", "", "")
+	runtimeRoot := flag.String("runtime", "", "")
 	flag.Parse()
-	run := filepath.Join(*home, "run")
+	run := *runtimeRoot
 	os.MkdirAll(run, 0o700)
 	address := filepath.Join(run, "keeper.sock")
 	os.Remove(address)

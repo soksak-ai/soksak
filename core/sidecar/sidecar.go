@@ -46,6 +46,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -54,12 +56,26 @@ import (
 	"github.com/soksak/soksak-core/core/process"
 )
 
+func secretNameFingerprint(namespace string, values map[string]string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(values))
+	for environment, key := range values {
+		names = append(names, environment+"="+key)
+	}
+	sort.Strings(names)
+	return namespace + "\x00" + strings.Join(names, "\x00")
+}
+
 // Deps is what the surrounding process supplies. Every field is something this package refuses to
 // read for itself.
 type Deps struct {
 	// Home is the identity home. A unit's binary and its sockets both derive from it, and a second
 	// home is a second set of both.
 	Home string
+	// Runtime is the absolute root for unit sockets and tokens.
+	Runtime string
 	// Spawner starts units. Nil means this host starts none, and the commands that would start one
 	// are declared unserved by name rather than answering as if they had.
 	Spawner process.Spawner
@@ -102,6 +118,13 @@ type Host struct {
 	// streams are the live stream connections, under the labels their callers chose. Held so one
 	// can be ended without ending the unit it is on.
 	streams map[string]io.Closer
+	secrets process.SecretSource
+}
+
+func (host *Host) SetSecrets(source process.SecretSource) {
+	host.mu.Lock()
+	host.secrets = source
+	host.mu.Unlock()
 }
 
 type unit struct {
@@ -115,7 +138,8 @@ type unit struct {
 	token string
 	// adopted marks a unit a previous run of this application started. There is no child handle for
 	// one, so nothing here waits on it and ending it is a signal to a pid rather than a reap.
-	adopted bool
+	adopted     bool
+	secretNames string
 }
 
 func NewHost(deps Deps) *Host {
@@ -146,14 +170,60 @@ func (host *Host) Started() []Open {
 // with everything it held. Starting a second one instead would leave the first holding children
 // nobody can reach — and the first is the one with the work in it.
 func (host *Host) Start(name string) (Open, error) {
+	return host.StartWithSecrets(name, "", nil)
+}
+
+func (host *Host) StartWithSecrets(name, namespace string, secretEnv map[string]string) (Open, error) {
+	return host.startWithSecrets(name, namespace, secretEnv, secretNameFingerprint(namespace, secretEnv))
+}
+
+type GeneratedSecret struct {
+	Key   string `json:"key"`
+	Bytes int    `json:"bytes"`
+}
+
+func (host *Host) StartWithGeneratedSecrets(
+	name string, generated map[string]GeneratedSecret,
+) (Open, error) {
+	namespace := "soksak-sidecar-" + name
+	keys := make(map[string]string, len(generated))
+	generator, ok := host.secrets.(process.SecretGenerator)
+	if len(generated) > 0 && !ok {
+		return Open{}, i18n.Errorf("sidecar.noSecretGenerator", map[string]string{"name": name})
+	}
+	for environment, declaration := range generated {
+		if declaration.Key == "" || declaration.Bytes < 16 || declaration.Bytes > 64 {
+			return Open{}, i18n.Errorf("sidecar.invalidGeneratedSecret", map[string]string{"name": name})
+		}
+		if err := generator.GenerateSecret(namespace, declaration.Key, declaration.Bytes); err != nil {
+			return Open{}, err
+		}
+		keys[environment] = declaration.Key
+	}
+	names := make(map[string]string, len(generated))
+	for environment, declaration := range generated {
+		names[environment] = fmt.Sprintf("%s:%d", declaration.Key, declaration.Bytes)
+	}
+	return host.startWithSecrets(name, namespace, keys, secretNameFingerprint(namespace, names))
+}
+
+func (host *Host) startWithSecrets(
+	name, namespace string, secretEnv map[string]string, fingerprint string,
+) (Open, error) {
 	host.mu.Lock()
 	if held, running := host.open[name]; running {
+		if held.secretNames != fingerprint {
+			host.mu.Unlock()
+			return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
+		}
 		host.mu.Unlock()
 		return held.open, nil
 	}
 	host.mu.Unlock()
 
-	if adopted, found := host.adopt(name); found {
+	if adopted, found, err := host.adopt(name, fingerprint); err != nil {
+		return Open{}, err
+	} else if found {
 		return adopted, nil
 	}
 
@@ -165,20 +235,31 @@ func (host *Host) Start(name string) (Open, error) {
 		return Open{}, err
 	}
 
+	host.mu.Lock()
+	source := host.secrets
+	host.mu.Unlock()
+	secrets, err := process.ResolveSecretEnvironment(source, namespace, secretEnv)
+	if err != nil {
+		return Open{}, err
+	}
 	child, err := host.deps.Spawner.Start(process.Spec{
 		Path: path,
 		// The home is passed rather than read. A unit that derived its own would answer for a
 		// different installation than the one that started it.
-		Args:  []string{"-home", host.deps.Home},
-		Env:   host.deps.Environment,
+		Args:  []string{"-home", host.deps.Home, "-runtime", host.deps.Runtime},
+		Env:   process.ChildEnvironmentWithSecrets(host.deps.Environment, host.deps.Home, secrets),
 		Group: true,
 	})
 	if err != nil {
 		return Open{}, err
 	}
 
-	held := &unit{child: child, stderr: newRing(64)}
-	go drain(child.Stderr(), held.stderr)
+	held := &unit{child: child, stderr: newRing(64), secretNames: fingerprint}
+	stderrDone := make(chan struct{})
+	go func() {
+		drain(child.Stderr(), held.stderr)
+		close(stderrDone)
+	}()
 
 	// One watcher per child, started before anything can fail. It is the only caller of Wait for
 	// this child's life, which is what the spawner's contract requires and what keeps two callers
@@ -189,7 +270,7 @@ func (host *Host) Start(name string) (Open, error) {
 		close(ended)
 	}()
 
-	announced, err := host.await(name, child)
+	announced, err := host.await(name, child, held.stderr, stderrDone)
 	if err != nil {
 		_ = child.Signal()
 		return Open{}, err
@@ -199,7 +280,7 @@ func (host *Host) Start(name string) (Open, error) {
 	// The token stays here rather than on Open. Open is what a caller reads, and a caller that could
 	// read the token could greet the unit itself — which is the one thing this relay exists to be.
 	held.token = announced.token
-	host.remember(name, held.open, announced.token)
+	host.remember(name, held.open, announced.token, fingerprint)
 	host.mu.Lock()
 	// Another caller may have started the same unit while this one waited. The first one holds it;
 	// this one ends what it started rather than leaving a second process nobody has a handle to.
@@ -227,7 +308,9 @@ type announcement struct {
 // The first line is the whole evidence. A unit that printed something else has spent its
 // announcement, and no later line changes that: waiting for one would be waiting for a line that
 // will never be about a socket.
-func (host *Host) await(name string, child process.Child) (announcement, error) {
+func (host *Host) await(
+	name string, child process.Child, stderr *ring, stderrDone <-chan struct{},
+) (announcement, error) {
 	type read struct {
 		line string
 		err  error
@@ -243,8 +326,13 @@ func (host *Host) await(name string, child process.Child) (announcement, error) 
 	select {
 	case got := <-lines:
 		if got.err != nil && got.line == "" {
+			<-stderrDone
+			detail := got.err.Error()
+			if tail := stderr.snapshot(); len(tail) > 0 {
+				detail += "; stderr: " + tail[len(tail)-1]
+			}
 			return announcement{}, i18n.Errorf("sidecar.noAnnouncement", map[string]string{
-				"name": name, "reason": got.err.Error(),
+				"name": name, "reason": detail,
 			})
 		}
 		return judge(name, got.line)

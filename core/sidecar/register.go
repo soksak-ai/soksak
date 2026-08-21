@@ -45,8 +45,8 @@ const streamUnserved = "this host carries no stream for a unit's output to arriv
 
 // Requirement is a contract a plugin asked for: an id and one exact version.
 type Requirement struct {
-	ID    string `json:"id"`
-	Range string `json:"range"`
+	ID      string `json:"id"`
+	Version string `json:"version"`
 }
 
 // Provided is a contract an installed unit states it implements.
@@ -99,7 +99,39 @@ func Register(registry *control.Registry, deps Registration) {
 		if err != nil {
 			return nil, err
 		}
-		return deps.openDeclared(name, requirement)
+		namespace, err := control.OptionalArg[string](args, "ns", "")
+		if err != nil {
+			return nil, err
+		}
+		secretEnv, err := control.OptionalArg[map[string]string](args, "secretEnv", nil)
+		if err != nil {
+			return nil, err
+		}
+		generated, err := control.OptionalArg[map[string]GeneratedSecret](args, "generatedSecretEnv", nil)
+		if err != nil {
+			return nil, err
+		}
+		if len(generated) > 0 {
+			if len(secretEnv) > 0 {
+				return nil, i18n.Errorf("sidecar.secretModesConflict", map[string]string{"name": name})
+			}
+			provided, err := deps.Provided(name)
+			if err != nil {
+				return nil, err
+			}
+			if provided.ID != requirement.ID {
+				return nil, i18n.Errorf("sidecar.contractMismatch", map[string]string{
+					"name": name, "wanted": requirement.ID, "found": provided.ID,
+				})
+			}
+			if provided.Version != requirement.Version {
+				return nil, i18n.Errorf("sidecar.versionMismatch", map[string]string{
+					"name": name, "wanted": requirement.ID, "wanted2": requirement.Version, "found": provided.Version,
+				})
+			}
+			return deps.Host.StartWithGeneratedSecrets(name, generated)
+		}
+		return deps.openDeclaredWithSecrets(name, requirement, namespace, secretEnv)
 	})
 
 	serve("sidecar_send", func(args control.Args) (any, error) {
@@ -133,6 +165,14 @@ func Register(registry *control.Registry, deps Registration) {
 			if err != nil {
 				return nil, err
 			}
+			byteReceiver, err := control.StreamArg(args, "onBytes")
+			if err != nil {
+				return nil, err
+			}
+			endReceiver, err := control.StreamArg(args, "onEnd")
+			if err != nil {
+				return nil, err
+			}
 			payload, err := control.Arg[string](args, "payload")
 			if err != nil {
 				return nil, err
@@ -154,7 +194,7 @@ func Register(registry *control.Registry, deps Registration) {
 			}
 			deps.Host.openStream(stream, bytes)
 			go func() {
-				pump(bytes, deps.Sink, stream, DefaultReadSize)
+				pump(bytes, deps.Sink, byteReceiver, endReceiver, DefaultReadSize)
 				deps.Host.forgetStream(stream)
 			}()
 			return answer, nil
@@ -211,6 +251,10 @@ func Register(registry *control.Registry, deps Registration) {
 // unit implementing a different contract answers a plugin's request with something else's semantics
 // — which does not fail, it arrives as a different answer.
 func (deps Registration) openDeclared(name string, requirement Requirement) (Open, error) {
+	return deps.openDeclaredWithSecrets(name, requirement, "", nil)
+}
+
+func (deps Registration) openDeclaredWithSecrets(name string, requirement Requirement, namespace string, secretEnv map[string]string) (Open, error) {
 	provided, err := deps.Provided(name)
 	if err != nil {
 		return Open{}, err
@@ -220,10 +264,10 @@ func (deps Registration) openDeclared(name string, requirement Requirement) (Ope
 			"name": name, "wanted": requirement.ID, "found": provided.ID,
 		})
 	}
-	if provided.Version != requirement.Range {
+	if provided.Version != requirement.Version {
 		return Open{}, i18n.Errorf("sidecar.versionMismatch", map[string]string{
-			"name": name, "wanted": requirement.ID, "wanted2": requirement.Range, "found": provided.Version,
+			"name": name, "wanted": requirement.ID, "wanted2": requirement.Version, "found": provided.Version,
 		})
 	}
-	return deps.Host.Start(name)
+	return deps.Host.StartWithSecrets(name, namespace, secretEnv)
 }

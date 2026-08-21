@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Finding a unit this host did not start.
@@ -26,10 +28,11 @@ import (
 
 // record is what this host writes down about a unit it started.
 type record struct {
-	Address  string `json:"address"`
-	Token    string `json:"token"`
-	Protocol int    `json:"protocol"`
-	PID      int    `json:"pid"`
+	Address     string `json:"address"`
+	Token       string `json:"token"`
+	Protocol    int    `json:"protocol"`
+	PID         int    `json:"pid"`
+	SecretNames string `json:"secretNames,omitempty"`
 }
 
 func (host *Host) recordPath(name string) string {
@@ -41,13 +44,13 @@ func (host *Host) recordPath(name string) string {
 // A failure to write is not a failure to start. The unit is running and reachable now; what is lost
 // is the next run's ability to find it, and reporting that as a start failure would end a unit that
 // works.
-func (host *Host) remember(name string, open Open, token string) {
+func (host *Host) remember(name string, open Open, token, secretNames string) {
 	path := host.recordPath(name)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return
 	}
 	encoded, err := json.Marshal(record{
-		Address: open.Address, Token: token, Protocol: open.Protocol, PID: open.PID,
+		Address: open.Address, Token: token, Protocol: open.Protocol, PID: open.PID, SecretNames: secretNames,
 	})
 	if err != nil {
 		return
@@ -63,39 +66,42 @@ func (host *Host) forget(name string) { _ = os.Remove(host.recordPath(name)) }
 // ownership in the sense that matters here: the unit was started for this home by this application,
 // its address and token are this application's own record, and ending it at shutdown is what keeps
 // the next run from finding two.
-func (host *Host) adopt(name string) (Open, bool) {
+func (host *Host) adopt(name, secretNames string) (Open, bool, error) {
 	raw, err := os.ReadFile(host.recordPath(name))
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			// A record that cannot be read is not a unit that is not there. It is left alone rather
 			// than removed, so whatever wrote it is not silently replaced.
-			return Open{}, false
+			return Open{}, false, nil
 		}
-		return Open{}, false
+		return Open{}, false, nil
 	}
 	var remembered record
 	if err := json.Unmarshal(raw, &remembered); err != nil || remembered.Address == "" {
 		host.forget(name)
-		return Open{}, false
+		return Open{}, false, nil
+	}
+	if remembered.SecretNames != secretNames {
+		return Open{}, false, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
 	}
 	if host.deps.Dial == nil {
-		return Open{}, false
+		return Open{}, false, nil
 	}
 
 	conn, err := host.deps.Dial(remembered.Address)
 	if err != nil {
 		// Nothing is listening there. The record is a unit that has gone.
 		host.forget(name)
-		return Open{}, false
+		return Open{}, false, nil
 	}
 	open := Open{Name: name, Address: remembered.Address, Protocol: remembered.Protocol, PID: remembered.PID}
-	held := &unit{open: open, stderr: newRing(64), token: remembered.Token, adopted: true}
+	held := &unit{open: open, stderr: newRing(64), token: remembered.Token, adopted: true, secretNames: secretNames}
 
 	host.mu.Lock()
 	if existing, running := host.open[name]; running {
 		host.mu.Unlock()
 		_ = conn.Close()
-		return existing.open, true
+		return existing.open, true, nil
 	}
 	host.open[name] = held
 	host.mu.Unlock()
@@ -111,8 +117,8 @@ func (host *Host) adopt(name string) (Open, bool) {
 		}
 		host.mu.Unlock()
 		host.forget(name)
-		return Open{}, false
+		return Open{}, false, nil
 	}
 	_ = conn.Close()
-	return open, true
+	return open, true, nil
 }

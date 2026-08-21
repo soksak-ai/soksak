@@ -25,10 +25,11 @@ import (
 // with nothing bound, and with the child unreaped.
 func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	home := shortHome(t)
+	runtimeRoot := shortHome(t)
 	stageUnit(t, home, "probe", probeSource)
 
 	host := NewHost(Deps{
-		Home: home, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial:        dialUnix,
 		ReadyWithin: 10 * time.Second,
 	})
@@ -46,7 +47,7 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	}
 	// The address is what the unit said, never what this process derived. A unit that binds
 	// somewhere else stays reachable because it said so.
-	if open.Address != filepath.Join(home, "run", "probe.sock") {
+	if open.Address != filepath.Join(runtimeRoot, "probe.sock") {
 		t.Fatalf("the unit announced %q, which is not where it says it bound", open.Address)
 	}
 
@@ -107,7 +108,7 @@ func TestAUnitWhoseFirstLineIsOutputAnnouncesNothing(t *testing.T) {
 	stageUnit(t, home, "chatty", chattySource)
 
 	host := NewHost(Deps{
-		Home: home, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Home: home, Runtime: shortHome(t), Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 5 * time.Second,
 	})
 	t.Cleanup(func() { host.StopAll() })
@@ -137,7 +138,7 @@ func TestAnEnvelopeMismatchIsRefusedAtTheAnnouncement(t *testing.T) {
 	stageUnit(t, home, "future", futureSource)
 
 	host := NewHost(Deps{
-		Home: home, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Home: home, Runtime: shortHome(t), Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 5 * time.Second,
 	})
 	t.Cleanup(func() { host.StopAll() })
@@ -222,9 +223,10 @@ import (
 )
 
 func main() {
-	home := flag.String("home", "", "")
+	flag.String("home", "", "")
+	runtimeRoot := flag.String("runtime", "", "")
 	flag.Parse()
-	run := filepath.Join(*home, "run")
+	run := *runtimeRoot
 	os.MkdirAll(run, 0o700)
 	address := filepath.Join(run, "probe.sock")
 	os.Remove(address)
@@ -279,6 +281,7 @@ import (
 
 func main() {
 	flag.String("home", "", "")
+	flag.String("runtime", "", "")
 	flag.Parse()
 	fmt.Println("starting up")
 	os.Stdout.Sync()
@@ -298,6 +301,7 @@ import (
 
 func main() {
 	flag.String("home", "", "")
+	flag.String("runtime", "", "")
 	flag.Parse()
 	line, _ := json.Marshal(map[string]any{"protocol": 99, "socket": "<local-evidence>/never"})
 	fmt.Println(string(line))

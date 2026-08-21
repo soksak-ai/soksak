@@ -21,10 +21,11 @@ import (
 // what separates two runs: the second has an empty map and whatever the first wrote down.
 func TestASecondRunFindsTheUnitTheFirstStarted(t *testing.T) {
 	home := shortHome(t)
+	runtimeRoot := shortHome(t)
 	stageUnit(t, home, "probe", probeSource)
 	deps := func() Deps {
 		return Deps{
-			Home: home, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+			Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 			Dial: dialUnix, ReadyWithin: 10 * time.Second,
 		}
 	}
@@ -67,9 +68,10 @@ func TestASecondRunFindsTheUnitTheFirstStarted(t *testing.T) {
 // when a dead unit left it behind. A connect settles it, and a connect is an event rather than a look.
 func TestARecordWithNothingBehindItStartsAUnit(t *testing.T) {
 	home := shortHome(t)
+	runtimeRoot := shortHome(t)
 	stageUnit(t, home, "probe", probeSource)
 	deps := Deps{
-		Home: home, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second,
 	}
 

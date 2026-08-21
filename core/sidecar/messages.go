@@ -9,6 +9,22 @@ import "github.com/soksak/soksak-core/core/i18n"
 
 func init() {
 	i18n.Declare(map[string]i18n.Sentence{
+		"sidecar.secretSetMismatch": {
+			EN: "sidecar {name} is already running with a different declared secret set",
+			KO: "sidecar {name} 이(가) 다른 시크릿 선언으로 이미 실행 중입니다",
+		},
+		"sidecar.noSecretGenerator": {
+			EN: "sidecar {name} requires a generated secret and this host has no secret generator",
+			KO: "사이드카 {name} 에 생성된 시크릿이 필요하지만 이 호스트에는 시크릿 생성기가 없습니다",
+		},
+		"sidecar.invalidGeneratedSecret": {
+			EN: "sidecar {name} declares an invalid generated secret",
+			KO: "사이드카 {name} 이(가) 잘못된 생성 시크릿을 선언했습니다",
+		},
+		"sidecar.secretModesConflict": {
+			EN: "sidecar {name} cannot mix plugin-owned and unit-owned secrets in one open",
+			KO: "사이드카 {name} 은(는) 한 번의 열기에서 플러그인 소유 시크릿과 유닛 소유 시크릿을 함께 사용할 수 없습니다",
+		},
 		"sidecar.noSpawner": {
 			EN: "sidecar {name} cannot start: this host was given no spawner",
 			KO: "사이드카 {name} 을(를) 시작할 수 없습니다 — 이 호스트에 spawner 가 없습니다",
@@ -66,8 +82,8 @@ func init() {
 			KO: "사이드카 {name} 은(는) {found} 을(를) 구현하고 매니페스트는 {wanted} 을(를) 요구합니다 — 다른 계약을 답하는 유닛은 실패하지 않고 다른 의미로 응답합니다",
 		},
 		"sidecar.versionMismatch": {
-			EN: "sidecar {name} implements {wanted} at {found} and the manifest requires exactly {wanted2} — an unstable contract is consumed at one version, never across a range",
-			KO: "사이드카 {name} 이(가) 구현하는 판은 {found} 이고 매니페스트는 정확히 {wanted2} 를 요구합니다 — 불안정 계약은 범위가 아니라 한 판으로만 소비합니다",
+			EN: "sidecar {name} implements {wanted} at {found} and the manifest requires exactly {wanted2}",
+			KO: "사이드카 {name} 이(가) 구현하는 버전은 {found} 이고 매니페스트는 정확히 {wanted2} 를 요구합니다",
 		},
 		"sidecar.libraryNotLoadable": {
 			EN: "sidecar {name} ships {artefacts} to be loaded and this build loads nothing — it spawns units and speaks the control envelope to them, so the half of this unit that draws has nowhere to run",
