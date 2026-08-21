@@ -101,13 +101,13 @@ const DefaultReadyWithin = 10 * time.Second
 // Open is one running unit.
 type Open struct {
 	// Name is the <name> in soksak-sidecar-<name>.
-	Name string
+	Name string `json:"name"`
 	// Address is what the unit announced, not what this process derived. A unit that binds
 	// somewhere else is reachable because it said so.
-	Address string
+	Address string `json:"address"`
 	// Protocol is the envelope version the unit announced.
-	Protocol int
-	PID      int
+	Protocol int `json:"protocol"`
+	PID      int `json:"pid"`
 }
 
 // Host starts units and holds them open.
