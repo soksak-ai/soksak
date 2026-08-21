@@ -22,6 +22,7 @@ func SetPluginDevelopment(home string, value contract.Plugin, expected uint64) (
 	if err != nil {
 		return contract.Change{}, err
 	}
+	value.Enabled = pluginEnabled(settings.Plugins, value.PluginRef)
 	next.Plugins = replacePlugin(next.Plugins, value)
 	sort.Slice(next.Plugins, func(i, j int) bool {
 		return pluginKey(next.Plugins[i].PluginRef) < pluginKey(next.Plugins[j].PluginRef)
@@ -41,6 +42,7 @@ func SetSidecarDevelopment(home string, value contract.Sidecar, expected uint64)
 	if err != nil {
 		return contract.Change{}, err
 	}
+	value.Enabled = sidecarEnabled(settings.Sidecars, value.SidecarRef)
 	next.Sidecars = replaceSidecar(next.Sidecars, value)
 	sort.Slice(next.Sidecars, func(i, j int) bool {
 		return sidecarKey(next.Sidecars[i].SidecarRef) < sidecarKey(next.Sidecars[j].SidecarRef)
@@ -60,6 +62,7 @@ func SetKitDevelopment(home string, value contract.Kit, expected uint64) (contra
 	if err != nil {
 		return contract.Change{}, err
 	}
+	value.Enabled = kitEnabled(settings.Kits, value.KitRef)
 	next.Kits = replaceKit(next.Kits, value)
 	sort.Slice(next.Kits, func(i, j int) bool { return kitKey(next.Kits[i].KitRef) < kitKey(next.Kits[j].KitRef) })
 	return writeSettings(home, settings, next, exists, expected)
@@ -166,3 +169,30 @@ func replaceKit(values []contract.Kit, replacement contract.Kit) []contract.Kit 
 func pluginKey(value contract.PluginRef) string   { return value.ID + "@" + value.Version }
 func sidecarKey(value contract.SidecarRef) string { return value.ID + "@" + value.Version }
 func kitKey(value contract.KitRef) string         { return value.ID + "@" + value.Version }
+
+func pluginEnabled(values []contract.Plugin, ref contract.PluginRef) bool {
+	for _, value := range values {
+		if value.PluginRef == ref {
+			return value.Enabled
+		}
+	}
+	return false
+}
+
+func sidecarEnabled(values []contract.Sidecar, ref contract.SidecarRef) bool {
+	for _, value := range values {
+		if value.SidecarRef == ref {
+			return value.Enabled
+		}
+	}
+	return false
+}
+
+func kitEnabled(values []contract.Kit, ref contract.KitRef) bool {
+	for _, value := range values {
+		if value.KitRef == ref {
+			return value.Enabled
+		}
+	}
+	return false
+}

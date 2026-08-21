@@ -49,60 +49,56 @@ func registerDevelopmentCommands(registry *control.Registry, deps Deps) {
 		return change, err
 	}
 	registry.MustRegister(control.Command{Name: "plugin_development_set", Handler: func(args control.Args) (any, error) {
-		id, version, enabled, development, path, manifest, source, expected, err := developmentArgs(args)
+		id, version, development, path, manifest, source, expected, err := developmentArgs(args)
 		if err != nil {
 			return nil, err
 		}
-		change, err := SetPluginDevelopment(deps.Home, contract.Plugin{PluginRef: contract.PluginRef{ID: id, Version: version}, Enabled: enabled, Development: development, InstallPath: path, Manifest: manifest, Source: source}, expected)
+		change, err := SetPluginDevelopment(deps.Home, contract.Plugin{PluginRef: contract.PluginRef{ID: id, Version: version}, Development: development, InstallPath: path, Manifest: manifest, Source: source}, expected)
 		return emit(change, err)
 	}})
 	registry.MustRegister(control.Command{Name: "sidecar_development_set", Handler: func(args control.Args) (any, error) {
-		id, version, enabled, development, path, manifest, source, expected, err := developmentArgs(args)
+		id, version, development, path, manifest, source, expected, err := developmentArgs(args)
 		if err != nil {
 			return nil, err
 		}
-		change, err := SetSidecarDevelopment(deps.Home, contract.Sidecar{SidecarRef: contract.SidecarRef{ID: id, Version: version}, Enabled: enabled, Development: development, InstallPath: path, Manifest: manifest, Source: source}, expected)
+		change, err := SetSidecarDevelopment(deps.Home, contract.Sidecar{SidecarRef: contract.SidecarRef{ID: id, Version: version}, Development: development, InstallPath: path, Manifest: manifest, Source: source}, expected)
 		return emit(change, err)
 	}})
 	registry.MustRegister(control.Command{Name: "kit_development_set", Handler: func(args control.Args) (any, error) {
-		id, version, enabled, development, path, manifest, source, expected, err := developmentArgs(args)
+		id, version, development, path, manifest, source, expected, err := developmentArgs(args)
 		if err != nil {
 			return nil, err
 		}
-		change, err := SetKitDevelopment(deps.Home, contract.Kit{KitRef: contract.KitRef{ID: id, Version: version}, Enabled: enabled, Development: development, InstallPath: path, Manifest: manifest, Source: source}, expected)
+		change, err := SetKitDevelopment(deps.Home, contract.Kit{KitRef: contract.KitRef{ID: id, Version: version}, Development: development, InstallPath: path, Manifest: manifest, Source: source}, expected)
 		return emit(change, err)
 	}})
 }
 
-func developmentArgs(args control.Args) (string, string, bool, bool, string, string, contract.Source, uint64, error) {
+func developmentArgs(args control.Args) (string, string, bool, string, string, contract.Source, uint64, error) {
 	id, err := control.Arg[string](args, "id")
 	if err != nil {
-		return "", "", false, false, "", "", contract.Source{}, 0, err
+		return "", "", false, "", "", contract.Source{}, 0, err
 	}
 	version, err := control.Arg[string](args, "version")
 	if err != nil {
-		return "", "", false, false, "", "", contract.Source{}, 0, err
-	}
-	enabled, err := control.OptionalArg[bool](args, "enabled", true)
-	if err != nil {
-		return "", "", false, false, "", "", contract.Source{}, 0, err
+		return "", "", false, "", "", contract.Source{}, 0, err
 	}
 	development, err := control.Arg[bool](args, "development")
 	if err != nil {
-		return "", "", false, false, "", "", contract.Source{}, 0, err
+		return "", "", false, "", "", contract.Source{}, 0, err
 	}
 	path, err := control.Arg[string](args, "path")
 	if err != nil {
-		return "", "", false, false, "", "", contract.Source{}, 0, err
+		return "", "", false, "", "", contract.Source{}, 0, err
 	}
 	manifest, err := control.Arg[string](args, "manifest")
 	if err != nil {
-		return "", "", false, false, "", "", contract.Source{}, 0, err
+		return "", "", false, "", "", contract.Source{}, 0, err
 	}
 	source, err := control.Arg[contract.Source](args, "source")
 	if err != nil {
-		return "", "", false, false, "", "", contract.Source{}, 0, err
+		return "", "", false, "", "", contract.Source{}, 0, err
 	}
 	expected, err := control.Arg[uint64](args, "expectedGeneration")
-	return id, version, enabled, development, path, manifest, source, expected, err
+	return id, version, development, path, manifest, source, expected, err
 }
