@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	contract "github.com/soksak/soksak-contract-composition"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 type Result struct {
@@ -27,7 +28,7 @@ type Status struct {
 
 func Load(home string) (Result, error) {
 	if !filepath.IsAbs(home) {
-		return Result{}, fmt.Errorf("composition home must be absolute: %s", home)
+		return Result{}, i18n.Errorf("composition.home.absolute", map[string]string{"path": home})
 	}
 	settingsPath := filepath.Join(home, contract.SettingsFile)
 	body, err := os.ReadFile(settingsPath)
@@ -71,10 +72,10 @@ func readManifest(installation contract.Installation) (contract.UnitManifest, er
 		return contract.UnitManifest{}, fmt.Errorf("inspect install path %s: %w", installation.InstallPath, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		return contract.UnitManifest{}, fmt.Errorf("install path is a symbolic link: %s", installation.InstallPath)
+		return contract.UnitManifest{}, i18n.Errorf("composition.installPath.symlink", map[string]string{"path": installation.InstallPath})
 	}
 	if !info.IsDir() {
-		return contract.UnitManifest{}, fmt.Errorf("install path is not a directory: %s", installation.InstallPath)
+		return contract.UnitManifest{}, i18n.Errorf("composition.installPath.notDirectory", map[string]string{"path": installation.InstallPath})
 	}
 	path := filepath.Join(installation.InstallPath, installation.Manifest)
 	manifestInfo, err := os.Lstat(path)
@@ -82,7 +83,7 @@ func readManifest(installation contract.Installation) (contract.UnitManifest, er
 		return contract.UnitManifest{}, fmt.Errorf("inspect unit manifest %s: %w", path, err)
 	}
 	if !manifestInfo.Mode().IsRegular() {
-		return contract.UnitManifest{}, fmt.Errorf("unit manifest is not a regular file: %s", path)
+		return contract.UnitManifest{}, i18n.Errorf("composition.manifest.notRegular", map[string]string{"path": path})
 	}
 	body, err := os.ReadFile(path)
 	if err != nil {
