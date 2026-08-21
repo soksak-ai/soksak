@@ -6,7 +6,7 @@ import (
 )
 
 // TestEachHostNamesItsOwnTriple is the whole table. The value selects which
-// archive a unit's release hands over, so a wrong one does not fail at
+// archive a native artifact release provides, so a wrong one does not fail at
 // selection — it downloads, installs, and fails when the binary is executed.
 func TestEachHostNamesItsOwnTriple(t *testing.T) {
 	for _, want := range []struct{ goos, goarch, triple string }{
@@ -17,7 +17,7 @@ func TestEachHostNamesItsOwnTriple(t *testing.T) {
 		{"windows", "arm64", "aarch64-pc-windows-msvc"},
 		{"windows", "amd64", "x86_64-pc-windows-msvc"},
 	} {
-		got, err := hostUnitTarget(want.goos, want.goarch)
+		got, err := hostArtifactTarget(want.goos, want.goarch)
 		if err != nil {
 			t.Errorf("%s/%s: %v", want.goos, want.goarch, err)
 			continue
@@ -38,7 +38,7 @@ func TestTheAnswerFollowsTheArgumentNotThisBuild(t *testing.T) {
 		{"linux", "arm64"}, {"linux", "amd64"},
 		{"windows", "arm64"}, {"windows", "amd64"},
 	} {
-		triple, err := hostUnitTarget(pair[0], pair[1])
+		triple, err := hostArtifactTarget(pair[0], pair[1])
 		if err != nil {
 			t.Fatalf("%v: %v", pair, err)
 		}
@@ -59,7 +59,7 @@ func TestAnUnknownHostGetsNoInventedTriple(t *testing.T) {
 		{"freebsd", "amd64"},
 		{"darwin", "386"},
 	} {
-		triple, err := hostUnitTarget(pair[0], pair[1])
+		triple, err := hostArtifactTarget(pair[0], pair[1])
 		if err == nil {
 			t.Errorf("%v was given the invented triple %q", pair, triple)
 			continue
@@ -75,7 +75,7 @@ func TestAnUnknownHostGetsNoInventedTriple(t *testing.T) {
 // build install one host's binaries.
 func TestAMissingPlatformIsRefusedByName(t *testing.T) {
 	for _, pair := range [][2]string{{"", "arm64"}, {"darwin", ""}, {"", ""}} {
-		_, err := hostUnitTarget(pair[0], pair[1])
+		_, err := hostArtifactTarget(pair[0], pair[1])
 		if err == nil {
 			t.Errorf("%v was accepted", pair)
 			continue

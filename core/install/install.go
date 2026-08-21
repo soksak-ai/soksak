@@ -1,14 +1,4 @@
-// Package install answers what is installed on this machine, where, and what
-// this build is — and refuses, by name, the parts of installation that have no
-// owner here.
-//
-// The split is not arbitrary. Observation (is this launcher there, does it run,
-// where does npm put things, which artifact triple names this host) is pure disk
-// and pure process, and every input arrives as an argument. Acquisition (fetch a
-// release archive, extract it, publish a generation, scaffold a unit and declare
-// it) needs two things this build does not have: a loader that reads a unit
-// directory, and a served unit_source_set. Those refusals live in unbuilt.go with
-// the fact that blocks each one.
+// Package install provides host inspection and atomic artifact installation.
 //
 // Nothing here reads the environment. The home, the platform, the login shell,
 // and the runner all arrive as values, so the same command answers the same way
@@ -38,7 +28,7 @@ type Deps struct {
 	// "darwin"/"linux"/"windows" and "arm64"/"amd64". Reading runtime.GOOS
 	// here would answer what this binary is rather than what the caller asked,
 	// and would make the same source unable to show two hosts at once. Either
-	// one empty refuses host_unit_target by name.
+	// one empty refuses host_artifact_target by name.
 	OS   string
 	Arch string
 
@@ -122,9 +112,9 @@ func Register(registry *control.Registry, deps Deps) {
 	})
 
 	registry.MustRegister(control.Command{
-		Name: "host_unit_target",
+		Name: "host_artifact_target",
 		Handler: func(control.Args) (any, error) {
-			return hostUnitTarget(deps.OS, deps.Arch)
+			return hostArtifactTarget(deps.OS, deps.Arch)
 		},
 	})
 
@@ -136,43 +126,6 @@ func Register(registry *control.Registry, deps Deps) {
 				return nil, err
 			}
 			return installTheme(deps.Home, path)
-		},
-	})
-
-	registry.MustRegister(control.Command{
-		Name: "unit_source_list",
-		Handler: func(control.Args) (any, error) {
-			return readDevSources(deps.Home)
-		},
-	})
-
-	registry.MustRegister(control.Command{
-		Name: "unit_source_set",
-		Handler: func(args control.Args) (any, error) {
-			kind, err := control.Arg[string](args, "kind")
-			if err != nil {
-				return nil, err
-			}
-			id, err := control.Arg[string](args, "id")
-			if err != nil {
-				return nil, err
-			}
-			source, err := control.Arg[string](args, "source")
-			if err != nil {
-				return nil, err
-			}
-			return writeDevSource(deps.Home, DevSource{Kind: kind, ID: id, Source: source})
-		},
-	})
-
-	registry.MustRegister(control.Command{
-		Name: "unit_source_validate",
-		Handler: func(args control.Args) (any, error) {
-			source, err := control.Arg[string](args, "source")
-			if err != nil {
-				return nil, err
-			}
-			return validateDevSource(source)
 		},
 	})
 
@@ -189,22 +142,22 @@ func Register(registry *control.Registry, deps Deps) {
 }
 
 func isInstallTransactionCommand(name string) bool {
-	return len(name) > len("unit_install_") && name[:len("unit_install_")] == "unit_install_"
+	return len(name) > len("artifact_install_") && name[:len("artifact_install_")] == "artifact_install_"
 }
 
 func registerInstallTransactions(registry *control.Registry, manager *TransactionManager, deps Deps) {
-	registry.MustRegister(control.Command{Name: "unit_install_begin", Handler: func(args control.Args) (any, error) {
+	registry.MustRegister(control.Command{Name: "artifact_install_begin", Handler: func(args control.Args) (any, error) {
 		registryID, err := control.Arg[string](args, "registryId")
 		if err != nil {
 			return nil, err
 		}
-		root, err := control.Arg[UnitIdentity](args, "root")
+		root, err := control.Arg[ArtifactIdentity](args, "root")
 		if err != nil {
 			return nil, err
 		}
 		return manager.Begin(registryID, root)
 	}})
-	registry.MustRegister(control.Command{Name: "unit_install_stage", Handler: func(args control.Args) (any, error) {
+	registry.MustRegister(control.Command{Name: "artifact_install_stage", Handler: func(args control.Args) (any, error) {
 		transactionID, err := control.Arg[string](args, "transactionId")
 		if err != nil {
 			return nil, err
@@ -213,7 +166,7 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		if err != nil {
 			return nil, err
 		}
-		unit, err := control.Arg[UnitIdentity](args, "unit")
+		identity, err := control.Arg[ArtifactIdentity](args, "identity")
 		if err != nil {
 			return nil, err
 		}
@@ -221,9 +174,9 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		if err != nil {
 			return nil, err
 		}
-		return manager.Stage(context.Background(), StageRequest{TransactionID: transactionID, RegistryID: registryID, Unit: unit, Artifact: artifact})
+		return manager.Stage(context.Background(), StageRequest{TransactionID: transactionID, RegistryID: registryID, Identity: identity, Artifact: artifact})
 	}})
-	registry.MustRegister(control.Command{Name: "unit_install_read_utf8", Handler: func(args control.Args) (any, error) {
+	registry.MustRegister(control.Command{Name: "artifact_install_read_utf8", Handler: func(args control.Args) (any, error) {
 		transactionID, err := control.Arg[string](args, "transactionId")
 		if err != nil {
 			return nil, err
@@ -238,7 +191,7 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		}
 		return manager.ReadUTF8(transactionID, handle, path)
 	}})
-	registry.MustRegister(control.Command{Name: "unit_install_commit", Handler: func(args control.Args) (any, error) {
+	registry.MustRegister(control.Command{Name: "artifact_install_commit", Handler: func(args control.Args) (any, error) {
 		transactionID, err := control.Arg[string](args, "transactionId")
 		if err != nil {
 			return nil, err
@@ -247,7 +200,15 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		if err != nil {
 			return nil, err
 		}
-		units, err := control.Arg[[]VerifiedUnit](args, "units")
+		plugins, err := control.OptionalArg[[]VerifiedPlugin](args, "plugins", []VerifiedPlugin{})
+		if err != nil {
+			return nil, err
+		}
+		sidecars, err := control.OptionalArg[[]VerifiedSidecar](args, "sidecars", []VerifiedSidecar{})
+		if err != nil {
+			return nil, err
+		}
+		kits, err := control.OptionalArg[[]VerifiedKit](args, "kits", []VerifiedKit{})
 		if err != nil {
 			return nil, err
 		}
@@ -255,13 +216,13 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		if err != nil {
 			return nil, err
 		}
-		result, err := manager.Commit(CommitRequest{TransactionID: transactionID, ExpectedGeneration: expected, Units: units, Bindings: bindings, Home: deps.Home})
+		result, err := manager.Commit(CommitRequest{TransactionID: transactionID, ExpectedGeneration: expected, Plugins: plugins, Sidecars: sidecars, Kits: kits, Bindings: bindings, Home: deps.Home})
 		if err == nil && deps.Changed != nil {
 			deps.Changed(composition.ChangeEvent, composition.Change{PreviousGeneration: expected, Generation: result.Generation})
 		}
 		return result, err
 	}})
-	registry.MustRegister(control.Command{Name: "unit_install_rollback", Handler: func(args control.Args) (any, error) {
+	registry.MustRegister(control.Command{Name: "artifact_install_rollback", Handler: func(args control.Args) (any, error) {
 		transactionID, err := control.Arg[string](args, "transactionId")
 		if err != nil {
 			return nil, err

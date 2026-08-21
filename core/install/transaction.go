@@ -32,25 +32,28 @@ type Fetcher interface {
 	Fetch(context.Context, string) ([]byte, error)
 }
 
-type UnitIdentity struct {
+type ArtifactIdentity struct {
 	Kind    string `json:"kind"`
 	ID      string `json:"id"`
 	Version string `json:"version"`
 }
 
-func (unit UnitIdentity) key() string { return unit.Kind + ":" + unit.ID + "@" + unit.Version }
+func (artifact ArtifactIdentity) key() string {
+	return artifact.Kind + ":" + artifact.ID + "@" + artifact.Version
+}
 
 type Artifact struct {
 	URL         string   `json:"url"`
 	SHA256      string   `json:"sha256"`
 	Format      string   `json:"format"`
 	Entrypoints []string `json:"entrypoints"`
+	Manifest    string   `json:"manifest"`
 }
 
 type StageRequest struct {
 	TransactionID string
 	RegistryID    string
-	Unit          UnitIdentity
+	Identity      ArtifactIdentity
 	Artifact      Artifact
 }
 
@@ -67,14 +70,15 @@ type StagedArtifact struct {
 
 type transactionState struct {
 	registryID string
-	root       UnitIdentity
+	root       ArtifactIdentity
 	handles    map[string]stagedState
 }
 
 type stagedState struct {
-	path   string
-	unit   UnitIdentity
-	sha256 string
+	path     string
+	identity ArtifactIdentity
+	sha256   string
+	manifest string
 }
 
 type TransactionManager struct {
@@ -88,7 +92,7 @@ func NewTransactionManager(root string, fetcher Fetcher) *TransactionManager {
 	return &TransactionManager{root: root, fetcher: fetcher, transactions: map[string]*transactionState{}}
 }
 
-func (manager *TransactionManager) Begin(registryID string, root UnitIdentity) (Transaction, error) {
+func (manager *TransactionManager) Begin(registryID string, root ArtifactIdentity) (Transaction, error) {
 	if manager.fetcher == nil {
 		return Transaction{}, i18n.Errorf("install.transaction.noFetcher", nil)
 	}
@@ -161,7 +165,7 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 		_ = os.RemoveAll(destination)
 		return StagedArtifact{}, i18n.Errorf("install.transaction.ended", nil)
 	}
-	transaction.handles[handle] = stagedState{path: destination, unit: request.Unit, sha256: digest}
+	transaction.handles[handle] = stagedState{path: destination, identity: request.Identity, sha256: digest, manifest: request.Artifact.Manifest}
 	manager.mu.Unlock()
 	return StagedArtifact{Handle: handle, SHA256: digest, Extraction: "regular-files-only", VerifiedEntrypoints: verified}, nil
 }

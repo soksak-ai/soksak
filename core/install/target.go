@@ -2,9 +2,9 @@ package install
 
 import "github.com/soksak-ai/soksak-core/core/i18n"
 
-// hostUnitTarget names the artifact triple for this host.
+// hostArtifactTarget names the artifact triple for this host.
 //
-// A unit's release holds one archive per target, and this is the key that
+// A native artifact release holds one archive per target, and this is the key that
 // selects among them. An invented key does not fail at selection — it succeeds,
 // downloads, and fails when the binary is executed, which reads as a broken
 // plugin rather than as an unsupported host. So an unknown pair is refused
@@ -20,9 +20,9 @@ import "github.com/soksak-ai/soksak-core/core/i18n"
 // links neither. -gnu is named because glibc is what mainstream distributions
 // run. The day a musl distribution exists, the triple stops being derivable
 // from the pair at all and has to arrive as a value on Deps.
-func hostUnitTarget(goos string, goarch string) (string, error) {
+func hostArtifactTarget(goos string, goarch string) (string, error) {
 	if goos == "" || goarch == "" {
-		return "", i18n.Errorf("install.hostUnitTarget.noPlatform", nil)
+		return "", i18n.Errorf("install.hostArtifactTarget.noPlatform", nil)
 	}
 	// The vocabulary is the plugin spec's UNIT_TARGETS; every value below is in
 	// it. A triple that is not in that list would be rejected by the caller
@@ -49,5 +49,5 @@ func hostUnitTarget(goos string, goarch string) (string, error) {
 	case "windows/amd64":
 		return "x86_64-pc-windows-msvc", nil
 	}
-	return "", i18n.Errorf("install.hostUnitTarget.noTriple", map[string]string{"os": goos, "arch": goarch})
+	return "", i18n.Errorf("install.hostArtifactTarget.noTriple", map[string]string{"os": goos, "arch": goarch})
 }

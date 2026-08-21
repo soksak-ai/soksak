@@ -19,41 +19,36 @@ type recordingChange struct {
 	payload any
 }
 
-func TestInstallCommandsCommitAndPublishOneCompositionChange(t *testing.T) {
+func TestArtifactInstallCommandsCommitAndPublishOneCompositionChange(t *testing.T) {
 	home := t.TempDir()
-	plugin := composition.UnitRef{Kind: composition.Plugin, ID: "view", Version: "0.0.1"}
-	archive := unitArchive(t, plugin, "plugin.json")
+	archive := tgz(t, archiveEntry{name: "plugin.json", body: "{}"})
 	var changes []recordingChange
 	registry := control.NewRegistry()
 	Register(registry, Deps{Home: home, Fetcher: memoryFetcher{body: archive}, Changed: func(event string, payload any) { changes = append(changes, recordingChange{event, payload}) }})
-	beginValue, err := registry.Invoke("unit_install_begin", arguments(t, map[string]any{"registryId": "official", "root": identityOf(plugin)}))
+	identity := ArtifactIdentity{Kind: "plugin", ID: "view", Version: "0.0.1"}
+	beginValue, err := registry.Invoke("artifact_install_begin", arguments(t, map[string]any{"registryId": "official", "root": identity}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	transaction := beginValue.(Transaction)
-	stageValue, err := registry.Invoke("unit_install_stage", arguments(t, map[string]any{
-		"transactionId": transaction.TransactionID, "registryId": "official", "unit": identityOf(plugin),
-		"artifact": Artifact{URL: "https://example.invalid/view.tgz", SHA256: sha256Hex(archive), Format: "tgz", Entrypoints: []string{composition.UnitManifestFile, "plugin.json"}},
-	}))
+	stageValue, err := registry.Invoke("artifact_install_stage", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "registryId": "official", "identity": identity, "artifact": Artifact{URL: "https://example.invalid/view.tgz", SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	staged := stageValue.(StagedArtifact)
-	if _, err := registry.Invoke("unit_install_read_utf8", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "handle": staged.Handle, "path": composition.UnitManifestFile})); err != nil {
+	if _, err := registry.Invoke("artifact_install_read_utf8", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "handle": staged.Handle, "path": "plugin.json"})); err != nil {
 		t.Fatal(err)
 	}
-	commitValue, err := registry.Invoke("unit_install_commit", arguments(t, map[string]any{
-		"transactionId": transaction.TransactionID, "expectedGeneration": uint64(0),
-		"units": []VerifiedUnit{verified(plugin, staged, "https://github.com/example/view", "https://example.invalid/view.tgz")}, "bindings": []composition.Binding{},
-	}))
+	verified := VerifiedPlugin{Plugin: composition.PluginRef{ID: "view", Version: "0.0.1"}, RegistryID: "official", SourceRepository: "https://github.com/example/view", SourceCommit: "0123456789abcdef0123456789abcdef01234567", ArtifactURL: "https://example.invalid/view.tgz", ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle}
+	commitValue, err := registry.Invoke("artifact_install_commit", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "expectedGeneration": uint64(0), "plugins": []VerifiedPlugin{verified}, "sidecars": []VerifiedSidecar{}, "kits": []VerifiedKit{}, "bindings": []composition.Binding{}}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if commitValue.(CommitResult).Generation != 1 {
-		t.Fatalf("commit = %+v", commitValue)
+		t.Fatalf("commit=%+v", commitValue)
 	}
 	if len(changes) != 1 || changes[0].event != composition.ChangeEvent {
-		t.Fatalf("changes = %+v", changes)
+		t.Fatalf("changes=%+v", changes)
 	}
 }
 
@@ -89,10 +84,9 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 	sort.Strings(served)
 
 	want := []string{
-		"binary_integrity", "host_unit_target", "npm_global_dirs",
-		"probe_binary", "theme_install", "unit_install_begin", "unit_install_commit",
-		"unit_install_read_utf8", "unit_install_rollback", "unit_install_stage",
-		"unit_source_list", "unit_source_set", "unit_source_validate",
+		"artifact_install_begin", "artifact_install_commit", "artifact_install_read_utf8",
+		"artifact_install_rollback", "artifact_install_stage", "binary_integrity",
+		"host_artifact_target", "npm_global_dirs", "probe_binary", "theme_install",
 	}
 	if strings.Join(served, ",") != strings.Join(want, ",") {
 		t.Errorf("served = %v, want %v", served, want)
@@ -110,7 +104,7 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 }
 
 // A command name in this build is snake_case with at least two parts
-// (plugin_scan, unit_install_commit). An unblocking action is an imperative
+// (plugin_scan, artifact_install_commit). An unblocking action is an imperative
 // the reader can act on.
 var (
 	commandName      = regexp.MustCompile(`\b[a-z][a-z0-9]*(_[a-z0-9]+)+\b`)
@@ -147,11 +141,11 @@ func TestEveryRefusalNamesWhatBlocksIt(t *testing.T) {
 
 // TestARefusedCommandCarriesItsReasonToTheCaller. The reason has to travel: it
 // arrives at a caller as the text of an error, with no file to look in.
-func TestARefusedCommandCarriesItsReasonToTheCaller(t *testing.T) {
+func TestARefusedArtifactCommandCarriesItsReasonToTheCaller(t *testing.T) {
 	registry := control.NewRegistry()
 	Register(registry, Deps{})
 
-	_, err := registry.Invoke("unit_install_commit", nil)
+	_, err := registry.Invoke("artifact_install_commit", nil)
 	if err == nil {
 		t.Fatal("a refused command answered")
 	}
@@ -172,11 +166,6 @@ func TestTheHandlersReadTheArgumentNamesTheFrontendSends(t *testing.T) {
 	if err := os.WriteFile(source, []byte(`{"name":"midnight"}`), 0o644); err != nil {
 		t.Fatalf("writing the theme: %v", err)
 	}
-	checkout, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatalf("resolving the checkout: %v", err)
-	}
-
 	registry := control.NewRegistry()
 	Register(registry, Deps{
 		Home: home, OS: "darwin", Arch: "arm64", LoginShell: "/bin/zsh",
@@ -191,9 +180,8 @@ func TestTheHandlersReadTheArgumentNamesTheFrontendSends(t *testing.T) {
 		{"binary_integrity", map[string]any{"binPath": filepath.Join(home, "bin"), "libPath": filepath.Join(home, "lib")}, Integrity{}},
 		{"probe_binary", map[string]any{"bin": "/opt/bin/node", "args": []string{"--version"}}, Probe{OK: true, Stdout: "/opt/homebrew\n"}},
 		{"npm_global_dirs", map[string]any{}, NpmDirs{BinDir: "/opt/homebrew/bin", LibDir: "/opt/homebrew/lib"}},
-		{"host_unit_target", map[string]any{}, "aarch64-apple-darwin"},
+		{"host_artifact_target", map[string]any{}, "aarch64-apple-darwin"},
 		{"theme_install", map[string]any{"path": source}, filepath.Join(home, "themes", "midnight.json")},
-		{"unit_source_validate", map[string]any{"source": checkout}, checkout},
 	} {
 		got, err := registry.Invoke(call.name, arguments(t, call.args))
 		if err != nil {
@@ -217,7 +205,7 @@ func TestAGroupWithNoDependenciesRefusesByNameRatherThanAnswering(t *testing.T) 
 	for _, call := range []struct{ name, names string }{
 		{"probe_binary", "install.Deps.Run"},
 		{"npm_global_dirs", "install.Deps.OS"},
-		{"host_unit_target", "install.Deps.OS"},
+		{"host_artifact_target", "install.Deps.OS"},
 		{"theme_install", "install.Deps.Home"},
 	} {
 		args := arguments(t, map[string]any{"bin": "/opt/bin/node", "path": "/somewhere/x.json"})

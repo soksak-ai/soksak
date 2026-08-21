@@ -1,4 +1,4 @@
-// Package composition resolves the exact installation graph declared by settings.json.
+// Package composition resolves plugins, sidecars and kits declared by settings.json.
 package composition
 
 import (
@@ -14,104 +14,102 @@ type Result struct {
 	Settings contract.Settings `json:"settings"`
 	Graph    contract.Graph    `json:"graph"`
 }
-
 type Status struct {
-	Generation  uint64 `json:"generation"`
-	Units       int    `json:"units"`
-	Active      int    `json:"active"`
-	Development int    `json:"development"`
-	Resolved    int    `json:"resolved"`
-	Disabled    int    `json:"disabled"`
-	Rejected    int    `json:"rejected"`
-	Issues      int    `json:"issues"`
+	Generation          uint64 `json:"generation"`
+	Plugins             int    `json:"plugins"`
+	Sidecars            int    `json:"sidecars"`
+	Kits                int    `json:"kits"`
+	DevelopmentPlugins  int    `json:"developmentPlugins"`
+	DevelopmentSidecars int    `json:"developmentSidecars"`
+	DevelopmentKits     int    `json:"developmentKits"`
+	RejectedPlugins     int    `json:"rejectedPlugins"`
+	RejectedSidecars    int    `json:"rejectedSidecars"`
+	RejectedKits        int    `json:"rejectedKits"`
 }
 
 func Load(home string) (Result, error) {
 	if !filepath.IsAbs(home) {
 		return Result{}, i18n.Errorf("composition.home.absolute", map[string]string{"path": home})
 	}
-	settingsPath := filepath.Join(home, contract.SettingsFile)
-	body, err := os.ReadFile(settingsPath)
+	path := filepath.Join(home, contract.SettingsFile)
+	body, err := os.ReadFile(path)
 	if err != nil {
-		return Result{}, fmt.Errorf("read composition settings %s: %w", settingsPath, err)
+		return Result{}, fmt.Errorf("read composition settings %s: %w", path, err)
 	}
 	settings, err := contract.ParseSettings(body)
 	if err != nil {
 		return Result{}, err
 	}
-	manifests := make(map[string]contract.UnitManifest, len(settings.Installations))
-	invalid := make(map[string]string)
-	for _, installation := range settings.Installations {
-		manifest, readErr := readManifest(installation)
-		if readErr != nil {
-			invalid[installation.UnitRef.Key()] = readErr.Error()
-			continue
-		}
-		manifests[installation.UnitRef.Key()] = manifest
-	}
-	graph, err := contract.Resolve(settings, manifests)
+	graph, err := contract.Resolve(settings)
 	if err != nil {
 		return Result{}, err
 	}
-	for index := range graph.Nodes {
-		message, rejected := invalid[graph.Nodes[index].UnitRef.Key()]
-		if !rejected {
-			continue
+	for index, value := range settings.Plugins {
+		if issue := validateInstallation(value.InstallPath, value.Manifest); issue != "" {
+			graph.Plugins[index].Status = contract.Rejected
+			graph.Plugins[index].Issues = append(graph.Plugins[index].Issues, issue)
 		}
-		graph.Nodes[index].Status = contract.Rejected
-		graph.Issues = append(graph.Issues, contract.GraphIssue{
-			Unit: graph.Nodes[index].UnitRef, Code: "manifest-unreadable", Message: message,
-		})
+	}
+	for index, value := range settings.Sidecars {
+		if issue := validateInstallation(value.InstallPath, value.Manifest); issue != "" {
+			graph.Sidecars[index].Status = contract.Rejected
+			graph.Sidecars[index].Issues = append(graph.Sidecars[index].Issues, issue)
+		}
+	}
+	for index, value := range settings.Kits {
+		if issue := validateInstallation(value.InstallPath, value.Manifest); issue != "" {
+			graph.Kits[index].Status = contract.Rejected
+			graph.Kits[index].Issues = append(graph.Kits[index].Issues, issue)
+		}
 	}
 	return Result{Settings: settings, Graph: graph}, nil
 }
 
-func readManifest(installation contract.Installation) (contract.UnitManifest, error) {
-	info, err := os.Lstat(installation.InstallPath)
+func validateInstallation(root, manifest string) string {
+	info, err := os.Lstat(root)
 	if err != nil {
-		return contract.UnitManifest{}, fmt.Errorf("inspect install path %s: %w", installation.InstallPath, err)
+		return err.Error()
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		return contract.UnitManifest{}, i18n.Errorf("composition.installPath.symlink", map[string]string{"path": installation.InstallPath})
+		return "install path is a symbolic link"
 	}
 	if !info.IsDir() {
-		return contract.UnitManifest{}, i18n.Errorf("composition.installPath.notDirectory", map[string]string{"path": installation.InstallPath})
+		return "install path is not a directory"
 	}
-	path := filepath.Join(installation.InstallPath, installation.Manifest)
-	manifestInfo, err := os.Lstat(path)
+	info, err = os.Lstat(filepath.Join(root, filepath.FromSlash(manifest)))
 	if err != nil {
-		return contract.UnitManifest{}, fmt.Errorf("inspect unit manifest %s: %w", path, err)
+		return err.Error()
 	}
-	if !manifestInfo.Mode().IsRegular() {
-		return contract.UnitManifest{}, i18n.Errorf("composition.manifest.notRegular", map[string]string{"path": path})
+	if !info.Mode().IsRegular() {
+		return "manifest is not a regular file"
 	}
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return contract.UnitManifest{}, fmt.Errorf("read unit manifest %s: %w", path, err)
-	}
-	manifest, err := contract.ParseUnitManifest(body)
-	if err != nil {
-		return contract.UnitManifest{}, err
-	}
-	return manifest, nil
+	return ""
 }
 
 func summarize(result Result) Status {
-	status := Status{Generation: result.Settings.Generation, Units: len(result.Graph.Nodes), Issues: len(result.Graph.Issues)}
-	for _, node := range result.Graph.Nodes {
-		if node.Active {
-			status.Active++
+	status := Status{Generation: result.Settings.Generation, Plugins: len(result.Graph.Plugins), Sidecars: len(result.Graph.Sidecars), Kits: len(result.Graph.Kits)}
+	for _, value := range result.Graph.Plugins {
+		if value.Plugin.Development {
+			status.DevelopmentPlugins++
 		}
-		if node.Mode == contract.Development {
-			status.Development++
+		if value.Status == contract.Rejected {
+			status.RejectedPlugins++
 		}
-		switch node.Status {
-		case contract.Resolved:
-			status.Resolved++
-		case contract.Disabled:
-			status.Disabled++
-		case contract.Rejected:
-			status.Rejected++
+	}
+	for _, value := range result.Graph.Sidecars {
+		if value.Sidecar.Development {
+			status.DevelopmentSidecars++
+		}
+		if value.Status == contract.Rejected {
+			status.RejectedSidecars++
+		}
+	}
+	for _, value := range result.Graph.Kits {
+		if value.Kit.Development {
+			status.DevelopmentKits++
+		}
+		if value.Status == contract.Rejected {
+			status.RejectedKits++
 		}
 	}
 	return status
