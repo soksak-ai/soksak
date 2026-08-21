@@ -24,10 +24,10 @@ import { useProgramRegistry } from "../plugins/programRegistry";
 function manifestOf(id: string, overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-spec-plugin@0.0.1",
       id,
       name: "Demo",
       version: "1.0.0",
+      appVersionRequirement: "0.0.1",
       description: "Test",
       permissions: ["ui", "commands"],
       ...overrides,
@@ -316,7 +316,7 @@ describe("plugin.list — contract discovery", () => {
       implements: [{ id: "terminal-renderer", version: "0.0.1" }],
     });
     const consumer = manifestOf("consumer", {
-      consumes: [{ id: "terminal-renderer", version: "0.0.1" }],
+      consumes: [{ id: "terminal-renderer", requirement: "0.0.1" }],
     });
     usePlugins.setState({
       plugins: {
@@ -332,7 +332,7 @@ describe("plugin.list — contract discovery", () => {
       { id: "terminal-renderer", version: "0.0.1" },
     ]);
     expect(plugins.find((plugin) => plugin.id === "consumer")?.consumes).toEqual([
-      { id: "terminal-renderer", version: "0.0.1" },
+      { id: "terminal-renderer", requirement: "0.0.1" },
     ]);
   });
 });

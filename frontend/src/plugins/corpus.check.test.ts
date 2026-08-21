@@ -34,7 +34,7 @@ const KNOWN_UNPARSED: Record<string, string> = {
  *  declaration and the `sidecar` permission. */
 const DELETED_VOCABULARY = /"(placements|defaultPlacement|pty)"/;
 
-type Sample = { dir: string; source: string; parses: boolean };
+type Sample = { dir: string; source: string; obsolete: boolean; parses: boolean };
 
 function corpus(): Sample[] {
   const out: Sample[] = [];
@@ -42,7 +42,9 @@ function corpus(): Sample[] {
     const f = join(HOME, dir, "plugin.json");
     if (!existsSync(f)) continue;
     const source = readFileSync(f, "utf8");
-    out.push({ dir, source, parses: parseManifest(JSON.parse(source), dir).manifest !== null });
+    const raw = JSON.parse(source) as Record<string, unknown>;
+    const obsolete = DELETED_VOCABULARY.test(source) || "spec" in raw || !("appVersionRequirement" in raw);
+    out.push({ dir, source, obsolete, parses: parseManifest(raw, dir).manifest !== null });
   }
   return out;
 }
@@ -52,7 +54,7 @@ describe("the sample corpus parses", () => {
     const samples = corpus();
     expect(samples.length).toBeGreaterThan(40);
     const unexplained = samples
-      .filter((s) => !s.parses && !DELETED_VOCABULARY.test(s.source) && !(s.dir in KNOWN_UNPARSED))
+      .filter((s) => !s.parses && !s.obsolete && !(s.dir in KNOWN_UNPARSED))
       .map((s) => s.dir);
     expect(unexplained).toEqual([]);
   });
@@ -61,7 +63,7 @@ describe("the sample corpus parses", () => {
     // The oracle for the rule above: were the old keys accepted and dropped, this list would be
     // empty and the test above would pass while every one of these views stood somewhere its author
     // never chose, and every one of those plugins asked for a capability nothing serves.
-    const carried = corpus().filter((s) => DELETED_VOCABULARY.test(s.source));
+    const carried = corpus().filter((s) => s.obsolete);
     expect(carried.length).toBeGreaterThan(0);
     expect(carried.filter((s) => s.parses).map((s) => s.dir)).toEqual([]);
   });

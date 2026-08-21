@@ -1905,7 +1905,7 @@ export const en: Record<MsgKey, string> = {
   "plugin.iconSet.notObject": "icon set data is not an object",
   "plugin.implements.c3Violation": "C3 violation ({id}): {violations}",
   "plugin.library.installDone": "{bin} install finished",
-  "plugin.manifest.appVersionTooLow": "App version too low: requires {required} > current {current}",
+  "plugin.manifest.appVersionUnsupported": "App version unsupported: requires {required}, current {current}",
   "plugin.manifest.command.bind": "{label}.bind: only \"service\" is allowed",
   "plugin.manifest.command.description": "{label}.description: bind:\"service\" declares the whole spec as manifest data (PS3) — an English base is required",
   "plugin.manifest.command.params": "{label}.params: must be an object (name → ParamSpec)",

@@ -13,7 +13,7 @@ import type { CoreStoreDeps } from "./coreStore";
 import {
   parseManifest,
   scanHostChromeViolations,
-  semverGte,
+  semverSatisfies,
   type LibraryDep,
   type PluginManifest,
   type PluginPermission,
@@ -427,24 +427,18 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       return null;
     }
     const appVersion = get().appVersion;
-    if (manifest.minAppVersion) {
-      if (appVersion === "0.0.0") {
-        console.warn(
-          `app version unverified — skipping the minAppVersion(${manifest.minAppVersion}) check for ${manifest.id}`,
-        );
-      } else if (semverGte(appVersion, manifest.minAppVersion) === false) {
-        rejected.push({
-          id: dirName,
-          dir,
-          errors: [
-            tmsg("plugin.manifest.appVersionTooLow", {
-              required: manifest.minAppVersion,
-              current: appVersion,
-            }),
-          ],
-        });
-        return null;
-      }
+    if (semverSatisfies(appVersion, manifest.appVersionRequirement) !== true) {
+      rejected.push({
+        id: dirName,
+        dir,
+        errors: [
+          tmsg("plugin.manifest.appVersionUnsupported", {
+            required: manifest.appVersionRequirement,
+            current: appVersion,
+          }),
+        ],
+      });
+      return null;
     }
     return { manifest, dir, source, status: "disabled" };
   };

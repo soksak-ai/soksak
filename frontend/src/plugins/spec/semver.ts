@@ -33,7 +33,7 @@ export function isDependencyRange(value: unknown): value is string {
   ) {
     return false;
   }
-  if (value === "*") return true;
+  if (value === "*") return false;
   const clauses = value.split(" ");
   if (
     clauses.length === 0 ||

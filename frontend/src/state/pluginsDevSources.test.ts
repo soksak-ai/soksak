@@ -19,17 +19,17 @@ let devReadable = true;
 
 function manifest(version: string): string {
   return JSON.stringify({
-    spec: "soksak-spec-plugin@0.0.1",
     id: ID,
     name: "Weather",
     version,
+    appVersionRequirement: "0.0.1",
     description: "weather plugin",
     permissions: ["commands", "sidecar", "service"],
     entry: null,
-    sidecars: [{ name: "weather-service", interface: { id: "weather-wire", version: "0.0.1" } }],
+    sidecars: [{ name: "weather-service", interface: { id: "weather-wire", requirement: "0.0.1" } }],
     service: {
       sidecar: "weather-service",
-      interface: { id: "weather", version: "0.0.1" },
+      interface: { id: "weather", requirement: "0.0.1" },
       subscribe: [],
     },
     contributes: {
@@ -68,7 +68,7 @@ beforeEach(() => {
   });
   usePlugins.setState({
     release: true,
-    appVersion: "1.0.0",
+    appVersion: "0.0.1",
     plugins: {},
     rejected: [],
     consents: {},

@@ -9,16 +9,15 @@ import {
   scanHostChromeViolations,
   semverGte,
   semverSatisfies,
-  SPEC_VERSION,
 } from "./spec";
 
 // Minimal valid manifest — each test mutates it to break one rule.
 function base(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    spec: SPEC_VERSION,
     id: "demo",
     name: "Demo",
     version: "1.0.0",
+    appVersionRequirement: "0.0.1",
     description: "Test fixture",
     permissions: [],
     ...overrides,
@@ -93,7 +92,6 @@ describe("parseManifest — accept", () => {
       base({
         author: "max",
         entry: "dist/main.js",
-        minAppVersion: "0.1.0",
         permissions: ["ui", "commands"],
         contributes: {
           views: [{ id: "v", title: "View", icon: "V", surfaces: ["side"] }],
@@ -242,7 +240,7 @@ describe("parseManifest — reject(required fields)", () => {
   });
 
   it.each([
-    ["spec mismatch", base({ spec: "soksak-spec-plugin@2" }), "spec"],
+    ["obsolete schema discriminator", base({ spec: "soksak-spec-plugin@2" }), "manifest"],
     ["id format violation(uppercase)", base({ id: "Demo" }), "id"],
     ["id format violation(leading hyphen)", base({ id: "-demo" }), "id"],
     ["name missing", { ...base(), name: undefined }, "name"],
@@ -250,7 +248,7 @@ describe("parseManifest — reject(required fields)", () => {
     ["description missing", { ...base(), description: undefined }, "description"],
     ["author not a string", base({ author: 3 }), "author"],
     ["repo is an unknown manifest key", base({ repo: "soksak-ai/shark" }), "manifest"],
-    ["minAppVersion not semver", base({ minAppVersion: "v1" }), "minAppVersion"],
+    ["obsolete minimum app version", base({ minAppVersion: "0.0.1" }), "manifest"],
     ["template is an unknown manifest key", base({ template: true }), "manifest"],
   ])("%s → rejected", (_label, raw, field) => {
     const errors = errorsOf(raw);
@@ -453,8 +451,8 @@ describe("naming rules and semver helpers", () => {
     expect(semverGte("abc", "1.0.0")).toBeNull();
   });
 
-  it("semverSatisfies — * / exact", () => {
-    expect(semverSatisfies("9.9.9", "*")).toBe(true);
+  it("semverSatisfies — wildcard rejected / exact", () => {
+    expect(semverSatisfies("9.9.9", "*")).toBeNull();
     expect(semverSatisfies("1.2.3", "1.2.3")).toBe(true);
     expect(semverSatisfies("1.2.4", "1.2.3")).toBe(false);
   });
@@ -510,13 +508,13 @@ describe("parseManifest — optional shared contracts", () => {
     const { manifest, validation } = parseManifest(
       base({
         implements: [{ id: "terminal-renderer", version: "0.0.1" }],
-        consumes: [{ id: "terminal-session", version: "0.0.1" }],
+        consumes: [{ id: "terminal-session", requirement: "0.0.1" }],
       }),
       "demo",
     );
     expect(validation.ok).toBe(true);
     expect(manifest?.implements).toEqual([{ id: "terminal-renderer", version: "0.0.1" }]);
-    expect(manifest?.consumes).toEqual([{ id: "terminal-session", version: "0.0.1" }]);
+    expect(manifest?.consumes).toEqual([{ id: "terminal-session", requirement: "0.0.1" }]);
   });
 
   it("keeps an independent plugin free of contract declarations", () => {
@@ -533,8 +531,8 @@ describe("parseManifest — optional shared contracts", () => {
     expect(
       errorsOf(base({
         consumes: [
-          { id: "terminal-session", version: "0.0.1" },
-          { id: "terminal-session", version: "0.0.1" },
+          { id: "terminal-session", requirement: "0.0.1" },
+          { id: "terminal-session", requirement: "0.0.1" },
         ],
       })),
     ).toContain('consumes: duplicate contract id "terminal-session"');
@@ -924,7 +922,7 @@ describe("scanHostChromeViolations — host chrome standard static gate", () => 
 });
 
 describe("parseManifest — sidecars(engine module dependency declaration)", () => {
-  const sc = { name: "browser-chromium", interface: { id: "soksak-spec-sidecar-browser", version: "0.0.1" } };
+  const sc = { name: "browser-chromium", interface: { id: "soksak-spec-sidecar-browser", requirement: "0.0.1" } };
   it("accepts valid sidecars(with the sidecar permission)", () => {
     const { manifest, validation } = parseManifest(
       base({ permissions: ["sidecar"], sidecars: [sc] }),
@@ -942,7 +940,7 @@ describe("parseManifest — sidecars(engine module dependency declaration)", () 
     expect(validation.errors.join()).toContain("sidecars:");
   });
   it('a service-model sidecar declares sidecars with the "process" permission(a separate process, not the engine)', () => {
-    const svc = { name: "terminal-alacritty", interface: { id: "soksak-spec-sidecar-terminal", version: "0.0.1" } };
+    const svc = { name: "terminal-alacritty", interface: { id: "soksak-spec-sidecar-terminal", requirement: "0.0.1" } };
     const { manifest, validation } = parseManifest(
       base({ permissions: ["process"], sidecars: [svc] }),
       "demo",

@@ -1911,7 +1911,7 @@ export const ko = {
   "plugin.iconSet.notObject": "셋 데이터가 객체가 아님",
   "plugin.implements.c3Violation": "C3 위반({id}): {violations}",
   "plugin.library.installDone": "{bin} 설치 종료",
-  "plugin.manifest.appVersionTooLow": "앱 버전 미달: 요구 {required} > 현재 {current}",
+  "plugin.manifest.appVersionUnsupported": "앱 버전 비호환: 요구 {required}, 현재 {current}",
   "plugin.manifest.command.bind": "{label}.bind: \"service\" 만 허용",
   "plugin.manifest.command.description": "{label}.description: bind:\"service\" 는 스펙 전문이 매니페스트 데이터(PS3) — 영어 base 필수",
   "plugin.manifest.command.params": "{label}.params: 객체(이름 → ParamSpec)여야 함",

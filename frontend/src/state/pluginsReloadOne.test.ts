@@ -64,10 +64,10 @@ import { parseManifest } from "../plugins/spec";
 
 function manifestJson(commands: string[]): Record<string, unknown> {
   return {
-    spec: "soksak-spec-plugin@0.0.1",
     id: ID,
     name: "Demo",
     version: "0.0.1",
+    appVersionRequirement: "0.0.1",
     description: "plugin for tests",
     permissions: ["commands"],
     entry: "main.js",
@@ -94,6 +94,7 @@ beforeEach(() => {
   onDisk = manifestJson(["thing.run"]);
   usePlugins.setState({
     release: false,
+    appVersion: "0.0.1",
     plugins: { [ID]: runtimeOf(manifestJson(["thing.run"]), "enabled") },
     rejected: [],
     consents: {},
@@ -129,7 +130,7 @@ describe("reloadOne — a reload by id reads the manifest from disk again", () =
   });
 
   it("a malformed file answers with the refusal reason instead of silently starting on the old manifest", async () => {
-    onDisk = { spec: "soksak-spec-plugin@0.0.1", id: ID }; // required fields missing
+    onDisk = { id: ID }; // required fields missing
 
     const r = await usePlugins.getState().reloadOne(ID);
     expect(r.ok).toBe(false);

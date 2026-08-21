@@ -16,7 +16,7 @@ describe("a plugin that lives in a sidebar and nowhere else", () => {
         id: "soksak-plugin-file-tree",
         name: "File tree",
         version: "0.0.1",
-        spec: "soksak-spec-plugin@0.0.1",
+        appVersionRequirement: "0.0.1",
         description: { en: "A file tree", ko: "A file tree" },
         entry: "main.js",
         permissions: ["ui", "commands"],

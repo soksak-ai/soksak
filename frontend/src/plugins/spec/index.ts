@@ -360,7 +360,6 @@ export interface ConfigSetting {
 export const CONFIG_KEY_RE = /^[a-zA-Z][a-zA-Z0-9]*$/;
 
 export interface PluginManifest {
-  spec: typeof SPEC_VERSION; // required — a mismatch is rejected
   id: string; // ^[a-z0-9][a-z0-9-]*$ + must equal the install directory name
   name: LocalizedText;
   version: string; // semver(major.minor.patch)
@@ -380,7 +379,7 @@ export interface PluginManifest {
   // smell. Local srcdoc/data/blob iframes are allowed by default; only remote iframe, navigation,
   // and WebRTC are opened by this policy.
   runtime: PluginRuntimePolicy;
-  minAppVersion?: string;
+  appVersionRequirement: string;
   // Plugin↔plugin dependency (library plugin). pluginId → semver range (e.g. "^0.1.0"). Install
   // pulls missing dependencies in transitively (consent gate); delete cascades to dependents
   // (prevents dangling references). A separate axis from core permissions — this is dependency on
@@ -653,7 +652,6 @@ export function parseManifest(
   checkKnownKeys(
     raw,
     [
-      "spec",
       "id",
       "name",
       "version",
@@ -662,7 +660,7 @@ export function parseManifest(
       "renamedFrom",
       "entry",
       "runtime",
-      "minAppVersion",
+      "appVersionRequirement",
       "dependencies",
       "libraries",
       "sidecars",
@@ -680,9 +678,6 @@ export function parseManifest(
     errors,
   );
 
-  if (raw.spec !== SPEC_VERSION) {
-    errors.push(`spec: "${SPEC_VERSION}" required (the only spec this app version accepts)`);
-  }
   if (!isNonEmptyString(raw.id) || !PLUGIN_ID_RE.test(raw.id)) {
     errors.push("id: ^[a-z0-9][a-z0-9-]*$ required");
   } else if (raw.id !== dirName) {
@@ -704,11 +699,8 @@ export function parseManifest(
       errors.push("renamedFrom: must differ from id (not a rename)");
     }
   }
-  if (
-    raw.minAppVersion !== undefined &&
-    (!isNonEmptyString(raw.minAppVersion) || !SEMVER_RE.test(raw.minAppVersion))
-  ) {
-    errors.push("minAppVersion: semver format required");
+  if (raw.appVersionRequirement !== "0.0.1") {
+    errors.push("appVersionRequirement: exact 0.0.1 required");
   }
 
   // dependencies: runtime plugin relation/call permission (pluginId → semver range). Not a locator
@@ -1506,7 +1498,6 @@ export function parseManifest(
   if (errors.length > 0) return reject();
   return {
     manifest: {
-      spec: raw.spec as typeof SPEC_VERSION,
       id: (raw.id as string).trim(),
       name: normalizeText(raw.name as LocalizedText),
       version: (raw.version as string).trim(),
@@ -1515,10 +1506,7 @@ export function parseManifest(
       ...(raw.renamedFrom !== undefined ? { renamedFrom: (raw.renamedFrom as string).trim() } : {}),
       entry,
       runtime,
-      minAppVersion:
-        raw.minAppVersion !== undefined
-          ? (raw.minAppVersion as string).trim()
-          : undefined,
+      appVersionRequirement: raw.appVersionRequirement as string,
       ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
       ...(libraries.length > 0 ? { libraries } : {}),
       ...(sidecars.length > 0 ? { sidecars } : {}),
