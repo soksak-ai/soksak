@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,6 +87,12 @@ func TestAShippedBundleIsNotOlderThanItsSource(t *testing.T) {
 			continue
 		}
 		source, edited := newestSourceUnder(t, filepath.Join(root, "frontend"))
+		for _, dependency := range localPluginDependencies(t, root) {
+			dependencySource, dependencyEdited := newestSourceUnder(t, dependency)
+			if dependencyEdited.After(edited) {
+				source, edited = dependencySource, dependencyEdited
+			}
+		}
 		if source == "" {
 			continue
 		}
@@ -100,4 +107,34 @@ func TestAShippedBundleIsNotOlderThanItsSource(t *testing.T) {
 				root)
 		}
 	}
+}
+
+func localPluginDependencies(t *testing.T, root string) []string {
+	t.Helper()
+	frontend := filepath.Join(root, "frontend")
+	body, err := os.ReadFile(filepath.Join(frontend, "package.json"))
+	if err != nil {
+		return nil
+	}
+	var manifest struct {
+		Dependencies map[string]string `json:"dependencies"`
+	}
+	if err := json.Unmarshal(body, &manifest); err != nil {
+		t.Fatalf("reading %s dependencies: %v", root, err)
+	}
+	var found []string
+	for _, declaration := range manifest.Dependencies {
+		if !strings.HasPrefix(declaration, "file:") {
+			continue
+		}
+		dependency, err := filepath.Abs(filepath.Join(frontend, strings.TrimPrefix(declaration, "file:")))
+		if err != nil {
+			t.Fatalf("resolving %s dependency %s: %v", root, declaration, err)
+		}
+		if info, err := os.Lstat(dependency); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			t.Fatalf("%s local dependency is not a regular directory: %s", root, dependency)
+		}
+		found = append(found, dependency)
+	}
+	return found
 }

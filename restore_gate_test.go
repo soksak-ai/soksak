@@ -297,7 +297,10 @@ func (gate *restoreGate) installPlugins() []string {
 func (gate *restoreGate) consentAndEnable(window string, plugins []string) {
 	gate.t.Helper()
 	for _, id := range plugins {
-		gate.run("plugin.consent.grant", "window="+window, "id="+id)
+		if out, err := gate.try("plugin.consent.grant", "window="+window, "id="+id); err != nil {
+			catalog, _ := gate.try("plugin.list", "window="+window)
+			gate.t.Fatalf("granting consent for %s: %v\n%s\nplugin.list:\n%s", id, err, out, catalog)
+		}
 		if out, err := gate.try("plugin.enable", "window="+window, "id="+id); err != nil {
 			gate.t.Fatalf("enabling %s: %v\n%s\nWhat the refusal says is the reason; an exit status is not one.", id, err, out)
 		}
@@ -327,7 +330,7 @@ func (gate *restoreGate) start() {
 	gate.t.Helper()
 	cmd := exec.Command("./" + gate.app)
 	cmd.Env = append(os.Environ(),
-		"HOME="+gate.home,
+		"SOKSAK_HOME="+gate.installationHome(),
 		"SOKSAK_IDENTIFIER="+gate.identifier,
 		"SOKSAK_RUNTIME="+gate.runtime,
 		// Nobody is watching this one. Nine of these start over a verify run, and each took the
