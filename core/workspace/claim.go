@@ -4,7 +4,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // ChangeEvent is what a claim mutation is announced as.

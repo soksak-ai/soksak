@@ -51,9 +51,9 @@ import (
 	"sync"
 	"time"
 
-	controlwire "github.com/soksak/soksak-contract-control"
-	"github.com/soksak/soksak-core/core/i18n"
-	"github.com/soksak/soksak-core/core/process"
+	controlwire "github.com/soksak-ai/soksak-contract-control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/process"
 )
 
 func secretNameFingerprint(namespace string, values map[string]string) string {

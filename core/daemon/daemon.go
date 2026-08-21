@@ -24,8 +24,8 @@ package daemon
 import (
 	"time"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/process"
 )
 
 // Deps is what the surrounding process supplies. Every field is something this

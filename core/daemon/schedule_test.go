@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // stubFirer stands in for the registry a schedule fires into.

@@ -13,13 +13,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test" }));
 
 const commits: Array<{ window: string; sequence: number; interactive: boolean; surfaces: unknown[] }> = [];
-vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/service", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/wails-service-native-compositor/service", () => ({
   Commit: vi.fn(async (snapshot: { window: string; sequence: number; interactive: boolean; surfaces: unknown[] }) => {
     commits.push({ window: snapshot.window, sequence: snapshot.sequence, interactive: snapshot.interactive, surfaces: snapshot.surfaces });
     return { sequence: snapshot.sequence, accepted: true, surfaces: snapshot.surfaces };
   }),
 }));
-vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/models", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/wails-service-native-compositor/models", () => ({
   Snapshot: { createFrom: (value: unknown) => value },
 }));
 vi.stubGlobal("ResizeObserver", class {

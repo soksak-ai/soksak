@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	composition "github.com/soksak/soksak-contract-composition"
+	composition "github.com/soksak-ai/soksak-contract-composition"
 )
 
 func TestRecoveryRollsBackPublishedUnitsBeforeSettingsCommit(t *testing.T) {

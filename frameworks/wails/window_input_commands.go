@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // WindowInputState identifies the native object that currently owns keyboard

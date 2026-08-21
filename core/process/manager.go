@@ -10,7 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // readBuffer is 64 KB, matching a pipe's capacity so one read empties it.

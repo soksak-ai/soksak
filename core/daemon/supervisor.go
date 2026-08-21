@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/soksak/soksak-core/core/i18n"
-	"github.com/soksak/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/process"
 )
 
 // Daemon is one daemon, as the status table reports it.

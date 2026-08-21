@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/identity"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/identity"
 )
 
 // claimHome takes this installation's socket, or fails saying who already has it.

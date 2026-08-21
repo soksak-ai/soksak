@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/contentview"
+	"github.com/soksak-ai/soksak-core/core/contentview"
 )
 
 // The page and the core agree on what a content view event is called.

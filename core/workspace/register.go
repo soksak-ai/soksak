@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Deps is what the process supplies. Every one of these is injected because

@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Integrity is what one installed binary looks like on disk.

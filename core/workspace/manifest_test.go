@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	// Aliased: this package's own fake is named store.
-	corestore "github.com/soksak/soksak-core/core/store"
+	corestore "github.com/soksak-ai/soksak-core/core/store"
 )
 
 // The real store is the one this ledger merges into, and every case in this

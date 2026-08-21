@@ -4,7 +4,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // The rules that decide what a window is called, where it goes, and which

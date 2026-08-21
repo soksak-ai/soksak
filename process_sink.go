@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/soksak/soksak-core/core/process"
-	"github.com/soksak/soksak-core/frameworks/wails"
+	"github.com/soksak-ai/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/frameworks/wails"
 )
 
 // processEventSink delivers a child's output and exit to the windows.

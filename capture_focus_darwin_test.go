@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/soksak/soksak-core/frameworks/wails"
+	"github.com/soksak-ai/soksak-core/frameworks/wails"
 )
 
 func activeInputOwner(t *testing.T) string {

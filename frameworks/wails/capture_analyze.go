@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // fraction writes a region bound the way %g did: the shortest form that reads

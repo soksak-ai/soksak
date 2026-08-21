@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const delivered: Array<{ id: string; message: Record<string, unknown> }> = [];
 let refuse: Error | null = null;
-vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/service", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/wails-service-native-compositor/service", () => ({
   Commit: vi.fn(async (snapshot: { sequence: number }) => ({ sequence: snapshot.sequence, accepted: true, surfaces: [] })),
   Deliver: vi.fn(async (id: string, message: Record<string, unknown>) => {
     if (refuse) throw refuse;
@@ -19,7 +19,7 @@ vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/ser
     return { id, verb: message.verb };
   }),
 }));
-vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/models", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/wails-service-native-compositor/models", () => ({
   Snapshot: { createFrom: (value: unknown) => value },
 }));
 

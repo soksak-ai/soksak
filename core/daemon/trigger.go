@@ -3,7 +3,7 @@ package daemon
 import (
 	"strconv"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // The trigger rules: when a job is next due, in epoch milliseconds.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // A region of a window is captured under the contract its callers use.

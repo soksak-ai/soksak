@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/identity"
+	"github.com/soksak-ai/soksak-core/core/identity"
 )
 
 func resolved(t *testing.T, id string) identity.Resolved {

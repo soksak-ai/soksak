@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	contract "github.com/soksak/soksak-contract-composition"
-	"github.com/soksak/soksak-core/core/control"
+	contract "github.com/soksak-ai/soksak-contract-composition"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 func writeJSON(t *testing.T, path string, value any) {

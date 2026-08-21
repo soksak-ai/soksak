@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/files"
+	"github.com/soksak-ai/soksak-core/core/files"
 )
 
 // TestTheShellItIsGivenIsTheShellItAsks proves the shell is an argument. If the

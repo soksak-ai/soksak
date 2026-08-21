@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // A caller's language is put in front of the handler that answers them.

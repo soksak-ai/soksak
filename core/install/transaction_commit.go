@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	composition "github.com/soksak/soksak-contract-composition"
-	"github.com/soksak/soksak-core/core/i18n"
+	composition "github.com/soksak-ai/soksak-contract-composition"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 type VerifiedUnit struct {

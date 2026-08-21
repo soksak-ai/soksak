@@ -1,6 +1,6 @@
 package store
 
-import "github.com/soksak/soksak-core/core/control"
+import "github.com/soksak-ai/soksak-core/core/control"
 
 // Register wires the storage group into the registry.
 //

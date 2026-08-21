@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // The renderer command bridge: the transport that puts a page's commands on the

@@ -1,6 +1,6 @@
 package boot
 
-import "github.com/soksak/soksak-core/core/i18n"
+import "github.com/soksak-ai/soksak-core/core/i18n"
 
 // The refusals this composition root answers a caller with. These handlers
 // decode a raw argument themselves rather than going through control.Arg, so

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Raw UDP, which a webview cannot do at all.

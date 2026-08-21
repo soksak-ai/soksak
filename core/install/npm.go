@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/soksak/soksak-core/core/files"
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/files"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // NpmDirs is where npm puts globally installed packages.

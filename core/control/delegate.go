@@ -1,6 +1,6 @@
 package control
 
-import "github.com/soksak/soksak-core/core/i18n"
+import "github.com/soksak-ai/soksak-core/core/i18n"
 
 // A delegated command is answered somewhere this process can reach but does not
 // run: a renderer, a sidecar, a window.

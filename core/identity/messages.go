@@ -1,6 +1,6 @@
 package identity
 
-import "github.com/soksak/soksak-core/core/i18n"
+import "github.com/soksak-ai/soksak-core/core/i18n"
 
 // The refusal this package answers a caller with. The identifier is an input,
 // never a guess, so the missing input is named rather than filled in.

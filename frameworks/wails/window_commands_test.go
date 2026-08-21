@@ -11,7 +11,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // fakeWindow is one window a fake host holds. `live` is what separates a name

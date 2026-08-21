@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 
-	"github.com/soksak/soksak-core/core/identity"
-	"github.com/soksak/soksak-core/core/store"
+	"github.com/soksak-ai/soksak-core/core/identity"
+	"github.com/soksak-ai/soksak-core/core/store"
 )
 
 // booted builds the same registry the application builds, with no window

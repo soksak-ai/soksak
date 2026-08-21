@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/store"
+	"github.com/soksak-ai/soksak-core/core/store"
 )
 
 // What every test in this package needs: a real store and a key store whose

@@ -3,9 +3,9 @@ package sidecar
 import (
 	"encoding/json"
 
-	controlwire "github.com/soksak/soksak-contract-control"
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/i18n"
+	controlwire "github.com/soksak-ai/soksak-contract-control"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // The surface a declared unit is received through.

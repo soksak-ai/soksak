@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // defaultFoldWindow is how long changes are collected before a directory is

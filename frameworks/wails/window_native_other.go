@@ -5,7 +5,7 @@ package wails
 import (
 	"unsafe"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // ErrRevealWithoutKeyUnsupported is returned where no focus-free reveal exists.

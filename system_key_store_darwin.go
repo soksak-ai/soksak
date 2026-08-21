@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 const keychainWriteTimeout = 10 * time.Second

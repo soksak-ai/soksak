@@ -1,6 +1,6 @@
 package composition
 
-import "github.com/soksak/soksak-core/core/i18n"
+import "github.com/soksak-ai/soksak-core/core/i18n"
 
 func init() {
 	i18n.Declare(map[string]i18n.Sentence{

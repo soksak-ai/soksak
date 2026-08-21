@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // page is a stand-in for one window's document: it records what was delivered

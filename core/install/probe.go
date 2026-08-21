@@ -1,8 +1,8 @@
 package install
 
 import (
-	"github.com/soksak/soksak-core/core/files"
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/files"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Probe is what running a binary answered.

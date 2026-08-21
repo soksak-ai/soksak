@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // This build has a prepare phase, and answers a receipt for it.

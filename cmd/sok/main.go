@@ -15,9 +15,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/i18n"
-	"github.com/soksak/soksak-core/core/identity"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/identity"
 )
 
 const usage = `sok — drive a running soksak backend

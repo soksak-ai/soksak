@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/soksak/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/core/process"
 )
 
 // What a unit held before the application went is still there when it comes back.

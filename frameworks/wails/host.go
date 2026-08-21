@@ -13,11 +13,11 @@ import (
 	"time"
 	"unsafe"
 
-	compositor "github.com/soksak/wails-service-native-compositor"
-	webviewsurface "github.com/soksak/wails-service-webview-surface"
+	compositor "github.com/soksak-ai/wails-service-native-compositor"
+	webviewsurface "github.com/soksak-ai/wails-service-webview-surface"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )

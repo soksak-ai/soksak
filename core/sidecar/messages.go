@@ -1,6 +1,6 @@
 package sidecar
 
-import "github.com/soksak/soksak-core/core/i18n"
+import "github.com/soksak-ai/soksak-core/core/i18n"
 
 // The refusals this package answers a caller with.
 //

@@ -30,7 +30,7 @@ import * as $models from "./models.js";
  * caller can tell "not written yet" from "impossible here" without guessing.
  */
 export function Commands(): $CancellablePromise<control$0.Table> {
-    return $Call.ByID(2697978628).then(($result: any) => {
+    return $Call.ByID(1177719295).then(($result: any) => {
         return $$createType0($result);
     });
 }
@@ -48,7 +48,7 @@ export function Commands(): $CancellablePromise<control$0.Table> {
  * on what the renderer claimed rather than on where it ran.
  */
 export function Invoke(name: string, args: { [_ in string]?: any }): $CancellablePromise<$models.Reply> {
-    return $Call.ByID(806562942, name, args).then(($result: any) => {
+    return $Call.ByID(1218673521, name, args).then(($result: any) => {
         return $$createType1($result);
     });
 }

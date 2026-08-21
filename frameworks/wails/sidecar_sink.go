@@ -1,8 +1,8 @@
 package wails
 
 import (
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/sidecar"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/sidecar"
 )
 
 // Where a unit's stream bytes reach the document.

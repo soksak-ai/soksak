@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	controlwire "github.com/soksak/soksak-contract-control"
-	"github.com/soksak/soksak-core/core/i18n"
+	controlwire "github.com/soksak-ai/soksak-contract-control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Protocol is the wire version this build speaks.

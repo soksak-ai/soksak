@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Spec is one child to start. Everything in it is already resolved: the path

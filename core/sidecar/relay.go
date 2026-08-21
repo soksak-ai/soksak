@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"io"
 
-	controlwire "github.com/soksak/soksak-contract-control"
-	"github.com/soksak/soksak-core/core/i18n"
+	controlwire "github.com/soksak-ai/soksak-contract-control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // The relay. What crosses it is opaque.

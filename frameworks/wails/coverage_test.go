@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/boot"
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/files"
-	"github.com/soksak/soksak-core/core/identity"
-	"github.com/soksak/soksak-core/core/process"
-	"github.com/soksak/soksak-core/core/sidecar"
-	"github.com/soksak/soksak-core/core/store"
+	"github.com/soksak-ai/soksak-core/core/boot"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/files"
+	"github.com/soksak-ai/soksak-core/core/identity"
+	"github.com/soksak-ai/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/core/sidecar"
+	"github.com/soksak-ai/soksak-core/core/store"
 )
 
 // invokeCall finds the backend commands the frontend calls by name.

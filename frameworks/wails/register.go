@@ -1,7 +1,7 @@
 package wails
 
 import (
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // HostDeps is everything this framework's command groups need.

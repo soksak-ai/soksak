@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // The window group: create, close, focus, activate, place, reload, list,

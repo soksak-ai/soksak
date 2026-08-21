@@ -3,7 +3,7 @@ package daemon
 import (
 	"strings"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // daemonArgv assembles the command line one daemon runs as.

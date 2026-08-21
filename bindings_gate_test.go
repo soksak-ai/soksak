@@ -52,7 +52,7 @@ func bindingsModules(t *testing.T) map[string]string {
 		if _, found := modules[relative]; found {
 			return nil
 		}
-		importPath := "github.com/soksak/" + relative
+		importPath := "github.com/soksak-ai/" + relative
 		output, err := exec.Command("go", "list", "-f", "{{.Dir}}", importPath).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("go list %s: %w: %s", importPath, err, output)

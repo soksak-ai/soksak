@@ -1,6 +1,6 @@
 package boot
 
-import "github.com/soksak/soksak-core/core/control"
+import "github.com/soksak-ai/soksak-core/core/control"
 
 // The commands the frontend calls that this build does not answer yet.
 //

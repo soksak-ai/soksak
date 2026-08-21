@@ -1,6 +1,6 @@
 package install
 
-import "github.com/soksak/soksak-core/core/i18n"
+import "github.com/soksak-ai/soksak-core/core/i18n"
 
 // hostUnitTarget names the artifact triple for this host.
 //

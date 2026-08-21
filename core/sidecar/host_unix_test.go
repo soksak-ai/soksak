@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	controlwire "github.com/soksak/soksak-contract-control"
-	"github.com/soksak/soksak-core/core/process"
+	controlwire "github.com/soksak-ai/soksak-contract-control"
+	"github.com/soksak-ai/soksak-core/core/process"
 )
 
 // A real unit is started, announces itself, answers a request, and streams bytes.

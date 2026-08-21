@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	contract "github.com/soksak/soksak-contract-composition"
-	"github.com/soksak/soksak-core/core/i18n"
+	contract "github.com/soksak-ai/soksak-contract-composition"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 type Result struct {

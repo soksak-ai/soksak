@@ -1,6 +1,6 @@
 package wails
 
-import "github.com/soksak/soksak-core/core/i18n"
+import "github.com/soksak-ai/soksak-core/core/i18n"
 
 // Rect is a window-relative region in CSS points with a top-left origin, the
 // same coordinate contract the DOM and the compositor already share. A zero

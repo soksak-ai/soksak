@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/files"
+	"github.com/soksak-ai/soksak-core/core/files"
 )
 
 // scriptedRunner answers what it was told to answer, and records what it was

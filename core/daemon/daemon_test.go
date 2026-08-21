@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // sent builds the arguments exactly as the frontend encodes them, so a shape

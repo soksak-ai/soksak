@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/soksak/soksak-core/core/i18n"
-	"github.com/soksak/soksak-core/core/process"
-	"github.com/soksak/soksak-core/core/store"
+	"github.com/soksak-ai/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/core/store"
 )
 
 type Generated struct {

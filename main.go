@@ -15,15 +15,15 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/soksak/soksak-core/core/activity"
-	"github.com/soksak/soksak-core/core/boot"
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/files"
-	"github.com/soksak/soksak-core/core/identity"
-	"github.com/soksak/soksak-core/core/process"
-	"github.com/soksak/soksak-core/core/sidecar"
-	"github.com/soksak/soksak-core/core/store"
-	"github.com/soksak/soksak-core/frameworks/wails"
+	"github.com/soksak-ai/soksak-core/core/activity"
+	"github.com/soksak-ai/soksak-core/core/boot"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/files"
+	"github.com/soksak-ai/soksak-core/core/identity"
+	"github.com/soksak-ai/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/core/sidecar"
+	"github.com/soksak-ai/soksak-core/core/store"
+	"github.com/soksak-ai/soksak-core/frameworks/wails"
 )
 
 // The frontend build is embedded here because embed paths cannot climb out of

@@ -13,8 +13,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Deps is what the surrounding process supplies. Everything in it is injected;

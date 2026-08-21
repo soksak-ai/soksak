@@ -14,7 +14,7 @@
 // call site in this repository changed spelling.
 package contentview
 
-import contentviewwire "github.com/soksak/soksak-contract-contentview"
+import contentviewwire "github.com/soksak-ai/soksak-contract-contentview"
 
 const (
 	Navigated       = contentviewwire.Navigated

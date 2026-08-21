@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Unit is one installed unit directory and the two files inside it.

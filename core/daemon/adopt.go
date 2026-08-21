@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // The adoption rule: a pid written down by a previous run names a process only

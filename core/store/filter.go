@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // The one where-clause builder, shared by data_query and data_count.

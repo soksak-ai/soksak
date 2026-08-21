@@ -10,11 +10,11 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as $models from "./models.js";
 
 export function Navigate(id: string, generation: number, url: string): $CancellablePromise<void> {
-    return $Call.ByID(1836333157, id, generation, url);
+    return $Call.ByID(3015721782, id, generation, url);
 }
 
 export function Status(): $CancellablePromise<$models.SurfaceStatus[]> {
-    return $Call.ByID(3335042232).then(($result: any) => {
+    return $Call.ByID(3151179263).then(($result: any) => {
         return $$createType1($result);
     });
 }

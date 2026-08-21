@@ -16,7 +16,7 @@ package files
 import (
 	"time"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // Deps is what the process supplies. Every field is something this package

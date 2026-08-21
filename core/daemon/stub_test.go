@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/soksak/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/core/process"
 )
 
 // The stubs every test in this package drives its daemons through.

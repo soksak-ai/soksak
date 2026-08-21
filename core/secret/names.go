@@ -3,7 +3,7 @@ package secret
 import (
 	"strconv"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // One rule for the two names a secret is addressed by.

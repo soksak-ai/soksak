@@ -1,15 +1,15 @@
-module github.com/soksak/soksak-core
+module github.com/soksak-ai/soksak-core
 
 go 1.25.0
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/soksak/soksak-contract-composition v0.0.1
-	github.com/soksak/soksak-contract-contentview v0.0.1
-	github.com/soksak/soksak-contract-control v0.0.1
-	github.com/soksak/soksak-contract-pty v0.0.1
-	github.com/soksak/wails-service-native-compositor v0.0.1
-	github.com/soksak/wails-service-webview-surface v0.0.1
+	github.com/soksak-ai/soksak-contract-composition v0.0.1
+	github.com/soksak-ai/soksak-contract-contentview v0.0.1
+	github.com/soksak-ai/soksak-contract-control v0.0.1
+	github.com/soksak-ai/soksak-contract-pty v0.0.1
+	github.com/soksak-ai/wails-service-native-compositor v0.0.1
+	github.com/soksak-ai/wails-service-webview-surface v0.0.1
 	github.com/wailsapp/wails/v3 v3.0.0-dev
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/sys v0.47.0
@@ -36,16 +36,16 @@ require (
 
 replace github.com/wailsapp/wails/v3 => ../frameworks/wails3/v3
 
-replace github.com/soksak/wails-service-native-compositor => ../wails-services/wails-service-native-compositor
+replace github.com/soksak-ai/wails-service-native-compositor => ../wails-services/wails-service-native-compositor
 
-replace github.com/soksak/wails-service-webview-surface => ../wails-services/wails-service-webview-surface
+replace github.com/soksak-ai/wails-service-webview-surface => ../wails-services/wails-service-webview-surface
 
-replace github.com/soksak/soksak-contract-contentview => ../soksak-contracts/soksak-contract-contentview
+replace github.com/soksak-ai/soksak-contract-contentview => ../soksak-contracts/soksak-contract-contentview
 
-replace github.com/soksak/soksak-contract-composition => ../soksak-contracts/soksak-contract-composition
+replace github.com/soksak-ai/soksak-contract-composition => ../soksak-contracts/soksak-contract-composition
 
-replace github.com/soksak/soksak-contract-control => ../soksak-contracts/soksak-contract-control
+replace github.com/soksak-ai/soksak-contract-control => ../soksak-contracts/soksak-contract-control
 
-replace github.com/soksak/soksak-contract-pty => ../soksak-contracts/soksak-contract-pty
+replace github.com/soksak-ai/soksak-contract-pty => ../soksak-contracts/soksak-contract-pty
 
-replace github.com/soksak/soksak-contract-terminal => ../soksak-contracts/soksak-contract-terminal
+replace github.com/soksak-ai/soksak-contract-terminal => ../soksak-contracts/soksak-contract-terminal

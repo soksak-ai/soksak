@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // maxReadBytes caps one base64 read.

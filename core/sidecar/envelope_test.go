@@ -3,7 +3,7 @@ package sidecar
 import (
 	"encoding/json"
 
-	controlwire "github.com/soksak/soksak-contract-control"
+	controlwire "github.com/soksak-ai/soksak-contract-control"
 )
 
 // Building a request and reading an answer, for the tests in this package.

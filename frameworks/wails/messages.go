@@ -1,6 +1,6 @@
 package wails
 
-import "github.com/soksak/soksak-core/core/i18n"
+import "github.com/soksak-ai/soksak-core/core/i18n"
 
 // The refusals this framework answers a caller with. A caller reads these over
 // the command registry, so they are declared here rather than formatted at the

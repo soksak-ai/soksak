@@ -8,7 +8,7 @@ import { layoutTrace, startLayoutTrace, whenLayoutTraceEnds } from "../lib/layou
 import { presentationNowUnixMs } from "../lib/presentationClock";
 import { nativeTimelineVerdict, type TimelineNativeSample } from "../lib/nativeTimelineVerdict";
 import { invoke } from "../framework";
-import * as CompositorService from "../../bindings/github.com/soksak/wails-service-native-compositor/service";
+import * as CompositorService from "../../bindings/github.com/soksak-ai/wails-service-native-compositor/service";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { register } from "./registry";
 

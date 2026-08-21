@@ -1,6 +1,6 @@
 package main
 
-import "github.com/soksak/soksak-core/core/i18n"
+import "github.com/soksak-ai/soksak-core/core/i18n"
 
 // The refusals this command answers its caller with. A person at a shell reads
 // these, so they are declared here rather than formatted at the call site.

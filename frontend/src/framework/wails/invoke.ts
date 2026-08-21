@@ -3,7 +3,7 @@
 // One name, one registry. Frontend calls and socket calls resolve through the same table, so neither can
 // take a path that answers differently from the other.
 
-import * as Control from "../../../bindings/github.com/soksak/soksak-core/frameworks/wails/controlservice";
+import * as Control from "../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/controlservice";
 
 /** Commands refused in this boot — in order, preserving the time of the first call. */
 const refused: string[] = [];

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // Every window serves the same catalogue, so the table holds one entry per name

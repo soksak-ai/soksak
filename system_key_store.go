@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/soksak/soksak-core/core/i18n"
-	"github.com/soksak/soksak-core/core/secret"
+	"github.com/soksak-ai/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/secret"
 	keyring "github.com/zalando/go-keyring"
 )
 

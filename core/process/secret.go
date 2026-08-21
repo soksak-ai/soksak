@@ -3,7 +3,7 @@ package process
 import (
 	"sort"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // SecretSource resolves one namespaced key to plaintext. The implementation

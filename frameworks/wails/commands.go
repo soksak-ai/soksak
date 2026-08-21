@@ -3,7 +3,7 @@ package wails
 import (
 	"fmt"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 

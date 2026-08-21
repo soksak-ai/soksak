@@ -5,7 +5,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/identity"
+	"github.com/soksak-ai/soksak-core/core/identity"
 )
 
 // A second process on one home must die while it is still invisible.

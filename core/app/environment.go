@@ -5,7 +5,7 @@
 // same answer from the same input.
 package app
 
-import "github.com/soksak/soksak-core/core/identity"
+import "github.com/soksak-ai/soksak-core/core/identity"
 
 // DevelopmentUnit is a locally sourced plugin or sidecar.
 type DevelopmentUnit struct {

@@ -1,7 +1,7 @@
 package secret
 
 import (
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // The command boundary for the vault.

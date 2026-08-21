@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 
 	// A pure-Go driver, so Windows stays cgo-free and cross-compiles from any
 	// host. The framework already depends on it.

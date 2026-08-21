@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/soksak/soksak-core/core/i18n"
-	"github.com/soksak/soksak-core/core/scan"
+	"github.com/soksak-ai/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/scan"
 )
 
 // A development source points a unit id at a working tree.

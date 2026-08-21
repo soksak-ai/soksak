@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // The scheduler: a registry command fired at a time, on an interval, or on an

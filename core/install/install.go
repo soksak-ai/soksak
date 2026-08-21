@@ -19,9 +19,9 @@ import (
 	"context"
 	"path/filepath"
 
-	composition "github.com/soksak/soksak-contract-composition"
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/files"
+	composition "github.com/soksak-ai/soksak-contract-composition"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/files"
 )
 
 // Deps is what the process supplies. Every field is something this package

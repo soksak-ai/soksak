@@ -3,7 +3,7 @@ package files
 import (
 	"fmt"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Outcome is what one run answered. Stdout is carried because `command -v`

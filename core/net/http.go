@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Request is what a caller asked for.

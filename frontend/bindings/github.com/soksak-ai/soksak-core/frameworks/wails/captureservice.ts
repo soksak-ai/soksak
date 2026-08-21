@@ -22,7 +22,7 @@ import * as $models from "./models.js";
  * that only want to look.
  */
 export function Pixels(rect: $models.Rect): $CancellablePromise<$models.CapturePixels> {
-    return $Call.ByID(970833820, rect).then(($result: any) => {
+    return $Call.ByID(2535502479, rect).then(($result: any) => {
         return $$createType0($result);
     });
 }
@@ -36,7 +36,7 @@ export function Pixels(rect: $models.Rect): $CancellablePromise<$models.CaptureP
  * is required.
  */
 export function PixelsAt(path: string, rect: $models.Rect): $CancellablePromise<$models.CapturePixels> {
-    return $Call.ByID(1662812009, path, rect).then(($result: any) => {
+    return $Call.ByID(2134601626, path, rect).then(($result: any) => {
         return $$createType0($result);
     });
 }
@@ -48,7 +48,7 @@ export function PixelsAt(path: string, rect: $models.Rect): $CancellablePromise<
  * pixels, with nothing drawn into them.
  */
 export function Record(request: $models.RecordRequest): $CancellablePromise<$models.RecordReport> {
-    return $Call.ByID(83833308, request).then(($result: any) => {
+    return $Call.ByID(1275283255, request).then(($result: any) => {
         return $$createType1($result);
     });
 }
@@ -60,7 +60,7 @@ export function Record(request: $models.RecordRequest): $CancellablePromise<$mod
  * response instead of guessing where the file went.
  */
 export function Snapshot(path: string): $CancellablePromise<$models.CaptureNote> {
-    return $Call.ByID(3039522845, path).then(($result: any) => {
+    return $Call.ByID(2881053662, path).then(($result: any) => {
         return $$createType2($result);
     });
 }
@@ -69,7 +69,7 @@ export function Snapshot(path: string): $CancellablePromise<$models.CaptureNote>
  * SnapshotRegion writes a PNG cropped to a window-relative rect in CSS points.
  */
 export function SnapshotRegion(path: string, rect: $models.Rect): $CancellablePromise<$models.CaptureNote> {
-    return $Call.ByID(3826199269, path, rect).then(($result: any) => {
+    return $Call.ByID(608921066, path, rect).then(($result: any) => {
         return $$createType2($result);
     });
 }

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	composition "github.com/soksak/soksak-contract-composition"
-	"github.com/soksak/soksak-core/core/control"
-	"github.com/soksak/soksak-core/core/files"
+	composition "github.com/soksak-ai/soksak-contract-composition"
+	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/files"
 )
 
 type recordingChange struct {

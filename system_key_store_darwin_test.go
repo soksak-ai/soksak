@@ -5,7 +5,7 @@ package main
 import (
 	"testing"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 func TestKeychainWriteConfirmsThePasswordThroughStdin(t *testing.T) {

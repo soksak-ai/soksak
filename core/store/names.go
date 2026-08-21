@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/soksak/soksak-core/core/i18n"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Name rules for everything that arrives in SQL as an identifier or a path.

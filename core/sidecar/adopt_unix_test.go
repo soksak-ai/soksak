@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	controlwire "github.com/soksak/soksak-contract-control"
-	"github.com/soksak/soksak-core/core/process"
+	controlwire "github.com/soksak-ai/soksak-contract-control"
+	"github.com/soksak-ai/soksak-core/core/process"
 )
 
 // A second host finds the unit the first one started, and starts nothing.

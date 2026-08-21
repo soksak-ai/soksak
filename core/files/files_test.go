@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 func args(t *testing.T, pairs map[string]any) control.Args {
