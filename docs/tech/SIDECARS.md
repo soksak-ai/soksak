@@ -60,6 +60,8 @@ use its declared app.sidecar capability.
 
 Readiness is the first valid announcement from the process. A file appearing on disk is not
 readiness. The core waits on the announcement with a finite deadline and never polls for a socket.
+Concurrent opens for the same provider share one start operation and receive the same success or
+failure result. A different secret declaration is rejected before waiting.
 
 ## S5. Lifetime
 
