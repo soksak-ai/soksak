@@ -61,13 +61,8 @@ const artifactStager: RegistryArtifactStager = {
   readUtf8: (transactionId, handle, path) =>
     invoke<string>("artifact_install_read_utf8", { transactionId, handle, path }),
   commit: async (transactionId, units) => {
-    let expectedGeneration = 0;
-    try {
-      const settings = await invoke<{ generation: number }>("composition_settings");
-      expectedGeneration = settings.generation;
-    } catch {
-      expectedGeneration = 0;
-    }
+    const settings = await invoke<{ generation: number }>("composition_settings");
+    const expectedGeneration = settings.generation;
     const plugins = units.filter((value) => value.kind === "plugin").map((value) => ({
       plugin: { id: value.id, version: value.version },
       registryId: value.registryId,

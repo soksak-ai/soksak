@@ -150,4 +150,30 @@ describe("native registry install wiring", () => {
       bindings: [],
     });
   });
+
+  it("does not replace an unreadable composition generation with zero", async () => {
+    invoke.mockImplementation(async (command: string) => {
+      if (command === "host_artifact_target") return "aarch64-apple-darwin";
+      if (command === "composition_settings") throw new Error("settings unreadable");
+      return undefined;
+    });
+    closure.mockImplementation(async (req: any) => {
+      try {
+        await req.artifacts.commit("t1", []);
+        return { ok: true, registryId: "fixture", generation: 1, units: [] };
+      } catch (cause) {
+        return { ok: false, code: "ATOMIC_INSTALL_FAILED", errors: [String(cause)] };
+      }
+    });
+    restore = wireNativeRegistryInstall();
+    const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
+    expect(result).toMatchObject({
+      ok: false,
+      code: "ATOMIC_INSTALL_FAILED",
+      message: expect.stringContaining("settings unreadable"),
+    });
+    expect(invoke).not.toHaveBeenCalledWith("artifact_install_commit", expect.objectContaining({
+      expectedGeneration: 0,
+    }));
+  });
 });
