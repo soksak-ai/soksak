@@ -64,12 +64,12 @@ func TestTransactionStagesAndReadsARegularFileArchive(t *testing.T) {
 	staged, err := manager.Stage(context.Background(), StageRequest{
 		TransactionID: transaction.TransactionID, RegistryID: "official",
 		Identity: ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"},
-		Artifact: Artifact{URL: "https://example.invalid/demo.tgz", SHA256: sha256Hex(archive), Format: "tgz", Entrypoints: []string{"plugin.json"}},
+		Artifact: Artifact{URL: "https://example.invalid/demo.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if staged.Extraction != "regular-files-only" || len(staged.VerifiedEntrypoints) != 1 {
+	if staged.Extraction != "regular-files-only" || staged.Size != uint64(len(archive)) || staged.ManifestSHA256 != sha256Hex([]byte("{\"id\":\"demo\"}")) || len(staged.VerifiedEntrypoints) != 1 {
 		t.Fatalf("staged = %+v", staged)
 	}
 	text, err := manager.ReadUTF8(transaction.TransactionID, staged.Handle, "plugin.json")
@@ -88,7 +88,7 @@ func TestStageRejectsDigestMismatch(t *testing.T) {
 	archive := tgz(t, archiveEntry{name: "plugin.json", body: "{}"})
 	manager := NewTransactionManager(t.TempDir(), memoryFetcher{body: archive})
 	transaction, _ := manager.Begin("official", ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"})
-	_, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"}, Artifact: Artifact{URL: "https://example.invalid/a.tgz", SHA256: strings.Repeat("0", 64), Format: "tgz", Entrypoints: []string{"plugin.json"}}})
+	_, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"}, Artifact: Artifact{URL: "https://example.invalid/a.tgz", Size: uint64(len(archive)), SHA256: strings.Repeat("0", 64), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}})
 	if err == nil || !strings.Contains(err.Error(), "SHA-256") {
 		t.Fatalf("error = %v", err)
 	}
@@ -102,7 +102,7 @@ func TestStageRejectsLinksAndPathEscape(t *testing.T) {
 	for _, archive := range archives {
 		manager := NewTransactionManager(t.TempDir(), memoryFetcher{body: archive})
 		transaction, _ := manager.Begin("official", ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"})
-		_, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"}, Artifact: Artifact{URL: "https://example.invalid/a.tgz", SHA256: sha256Hex(archive), Format: "tgz", Entrypoints: []string{"plugin.json"}}})
+		_, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"}, Artifact: Artifact{URL: "https://example.invalid/a.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}})
 		if err == nil {
 			t.Fatal("unsafe archive was accepted")
 		}
@@ -113,7 +113,7 @@ func TestStageRequiresEveryDeclaredEntrypointAsARegularFile(t *testing.T) {
 	archive := tgz(t, archiveEntry{name: "main.js", body: "x"})
 	manager := NewTransactionManager(t.TempDir(), memoryFetcher{body: archive})
 	transaction, _ := manager.Begin("official", ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"})
-	_, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"}, Artifact: Artifact{URL: "https://example.invalid/a.tgz", SHA256: sha256Hex(archive), Format: "tgz", Entrypoints: []string{"plugin.json"}}})
+	_, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"}, Artifact: Artifact{URL: "https://example.invalid/a.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}})
 	if err == nil || !strings.Contains(err.Error(), "entrypoint") {
 		t.Fatalf("error = %v", err)
 	}
@@ -124,7 +124,7 @@ func TestStagedHandleRetainsExactArtifactAndDigest(t *testing.T) {
 	manager := NewTransactionManager(t.TempDir(), memoryFetcher{body: archive})
 	artifact := ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"}
 	transaction, _ := manager.Begin("official", artifact)
-	staged, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: artifact, Artifact: Artifact{URL: "https://example.invalid/a.tgz", SHA256: sha256Hex(archive), Format: "tgz", Entrypoints: []string{"plugin.json"}}})
+	staged, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: artifact, Artifact: Artifact{URL: "https://example.invalid/a.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestStagedHandleRetainsExactArtifactAndDigest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.identity != artifact || state.sha256 != staged.SHA256 {
+	if state.identity != artifact || state.sha256 != staged.SHA256 || state.size != staged.Size || state.manifestSHA256 != staged.ManifestSHA256 {
 		t.Fatalf("state = %+v", state)
 	}
 }

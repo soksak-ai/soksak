@@ -43,6 +43,7 @@ func init() {
 		"install.transaction.registryMismatch":         {EN: "registry does not match the install transaction", KO: "registry 가 설치 트랜잭션과 일치하지 않습니다"},
 		"install.transaction.unsupportedFormat":        {EN: "unsupported artifact format: {format}", KO: "지원하지 않는 아티팩트 형식입니다: {format}"},
 		"install.transaction.digestMismatch":           {EN: "artifact SHA-256 mismatch: {digest}", KO: "아티팩트 SHA-256 이 일치하지 않습니다: {digest}"},
+		"install.transaction.sizeMismatch":             {EN: "artifact byte size mismatch", KO: "아티팩트 바이트 크기가 일치하지 않습니다"},
 		"install.transaction.entrypointUnsafe":         {EN: "unsafe entrypoint path: {path}", KO: "안전하지 않은 entrypoint 경로입니다: {path}"},
 		"install.transaction.entrypointNotRegular":     {EN: "entrypoint is not a regular file: {path}", KO: "entrypoint 가 일반 파일이 아닙니다: {path}"},
 		"install.transaction.ended":                    {EN: "install transaction ended during artifact staging", KO: "아티팩트 스테이징 중 설치 트랜잭션이 종료되었습니다"},

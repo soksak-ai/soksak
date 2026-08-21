@@ -44,6 +44,7 @@ func (artifact ArtifactIdentity) key() string {
 
 type Artifact struct {
 	URL         string   `json:"url"`
+	Size        uint64   `json:"size"`
 	SHA256      string   `json:"sha256"`
 	Format      string   `json:"format"`
 	Entrypoints []string `json:"entrypoints"`
@@ -64,6 +65,8 @@ type Transaction struct {
 type StagedArtifact struct {
 	Handle              string   `json:"handle"`
 	SHA256              string   `json:"sha256"`
+	Size                uint64   `json:"size"`
+	ManifestSHA256      string   `json:"manifestSha256"`
 	Extraction          string   `json:"extraction"`
 	VerifiedEntrypoints []string `json:"verifiedEntrypoints"`
 }
@@ -75,10 +78,12 @@ type transactionState struct {
 }
 
 type stagedState struct {
-	path     string
-	identity ArtifactIdentity
-	sha256   string
-	manifest string
+	path           string
+	identity       ArtifactIdentity
+	sha256         string
+	size           uint64
+	manifestSHA256 string
+	manifest       string
 }
 
 type TransactionManager struct {
@@ -131,6 +136,9 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 		return StagedArtifact{}, fmt.Errorf("fetch artifact: %w", err)
 	}
 	digest := sha256Hex(body)
+	if request.Artifact.Size == 0 || uint64(len(body)) != request.Artifact.Size {
+		return StagedArtifact{}, i18n.Errorf("install.transaction.sizeMismatch", nil)
+	}
 	if digest != request.Artifact.SHA256 {
 		return StagedArtifact{}, i18n.Errorf("install.transaction.digestMismatch", map[string]string{"digest": digest})
 	}
@@ -159,15 +167,21 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 		}
 		verified = append(verified, entrypoint)
 	}
+	manifestBody, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(request.Artifact.Manifest)))
+	if err != nil {
+		_ = os.RemoveAll(destination)
+		return StagedArtifact{}, i18n.Errorf("install.transaction.manifestArtifactMismatch", map[string]string{"artifact": request.Identity.key()})
+	}
+	manifestDigest := sha256Hex(manifestBody)
 	manager.mu.Lock()
 	if manager.transactions[request.TransactionID] == nil {
 		manager.mu.Unlock()
 		_ = os.RemoveAll(destination)
 		return StagedArtifact{}, i18n.Errorf("install.transaction.ended", nil)
 	}
-	transaction.handles[handle] = stagedState{path: destination, identity: request.Identity, sha256: digest, manifest: request.Artifact.Manifest}
+	transaction.handles[handle] = stagedState{path: destination, identity: request.Identity, sha256: digest, size: uint64(len(body)), manifestSHA256: manifestDigest, manifest: request.Artifact.Manifest}
 	manager.mu.Unlock()
-	return StagedArtifact{Handle: handle, SHA256: digest, Extraction: "regular-files-only", VerifiedEntrypoints: verified}, nil
+	return StagedArtifact{Handle: handle, SHA256: digest, Size: uint64(len(body)), ManifestSHA256: manifestDigest, Extraction: "regular-files-only", VerifiedEntrypoints: verified}, nil
 }
 
 func (manager *TransactionManager) ReadUTF8(transactionID, handle, path string) (string, error) {

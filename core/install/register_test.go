@@ -31,7 +31,7 @@ func TestArtifactInstallCommandsCommitAndPublishOneCompositionChange(t *testing.
 		t.Fatal(err)
 	}
 	transaction := beginValue.(Transaction)
-	stageValue, err := registry.Invoke("artifact_install_stage", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "registryId": "official", "identity": identity, "artifact": Artifact{URL: "https://example.invalid/view.tgz", SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}}))
+	stageValue, err := registry.Invoke("artifact_install_stage", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "registryId": "official", "identity": identity, "artifact": Artifact{URL: "https://example.invalid/view.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
