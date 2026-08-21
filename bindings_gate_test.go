@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -26,24 +28,46 @@ import (
 // bindingsRoot is where the generator writes.
 const bindingsRoot = "frontend/bindings/github.com/soksak"
 
-// bindingsModule maps a directory under bindingsRoot to the Go package that produced it. Named,
-// not derived: a sibling module is outside this repository and its path here comes from a replace
-// directive, which a walk of this tree cannot find.
-var bindingsModule = map[string]string{
-	"soksak-core/frameworks/wails":    "frameworks/wails",
-	"soksak-contract-control":         "../soksak-contracts/soksak-contract-control",
-	"wails-service-native-compositor": "../wails-services/wails-service-native-compositor",
-	"wails-service-webview-surface":   "../wails-services/wails-service-webview-surface",
+// Binding directories mirror their Go import paths. go list resolves module replacements, so this
+// gate reads the declared module graph instead of naming another repository or workspace path.
+func bindingsModules(t *testing.T) map[string]string {
+	t.Helper()
+	modules := map[string]string{}
+	err := filepath.Walk(bindingsRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(info.Name(), ".ts") || tsIgnore.MatchString(info.Name()) {
+			return nil
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if !tsExport.Match(body) {
+			return nil
+		}
+		directory := filepath.ToSlash(filepath.Dir(path))
+		relative := strings.TrimPrefix(directory, bindingsRoot+"/")
+		if _, found := modules[relative]; found {
+			return nil
+		}
+		importPath := "github.com/soksak/" + relative
+		output, err := exec.Command("go", "list", "-f", "{{.Dir}}", importPath).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("go list %s: %w: %s", importPath, err, output)
+		}
+		modules[relative] = strings.TrimSpace(string(output))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(modules) == 0 {
+		t.Fatal("generated bindings contain no callable Go package")
+	}
+	return modules
 }
-
-// The table above was one entry longer until 2026-08-20. The terminal's shells moved to a daemon
-// and what the host registers for it forwards the two lifecycle methods and nothing else, so the
-// generator emits no directory for it and that is correct.
-//
-// An entry removed and left at that would stop watching. What watches instead is the other
-// direction: every directory the generator writes must be claimed below. A service that becomes
-// bindable again produces a directory no entry claims, and that is the failure — without this file
-// naming which plugin it was, which is not the core's to know (C1).
 
 // bindingsLifecycle is what Wails calls rather than binds. A service declares these for the host
 // and no page ever calls them, so their absence from the bindings is correct.
@@ -59,7 +83,8 @@ var (
 func TestTheBindingsSayWhatTheGoSays(t *testing.T) {
 	var wrong []string
 
-	for dir, pkg := range bindingsModule {
+	modules := bindingsModules(t)
+	for dir, pkg := range modules {
 		entries, err := os.ReadDir(filepath.Join(bindingsRoot, dir))
 		if err != nil {
 			t.Fatalf("reading %s: %v", dir, err)
@@ -121,10 +146,27 @@ func TestTheBindingsSayWhatTheGoSays(t *testing.T) {
 		if !entry.IsDir() {
 			continue
 		}
+		callable := false
+		_ = filepath.Walk(filepath.Join(bindingsRoot, entry.Name()), func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() || !strings.HasSuffix(info.Name(), ".ts") {
+				return err
+			}
+			body, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			if tsExport.Match(body) {
+				callable = true
+			}
+			return nil
+		})
+		if !callable {
+			continue
+		}
 		// An entry may name a directory further in — this module's own bindings sit under the package
 		// path that produced them — so a directory is claimed by an entry equal to it or below it.
 		claimed := false
-		for dir := range bindingsModule {
+		for dir := range modules {
 			if dir == entry.Name() || strings.HasPrefix(dir, entry.Name()+"/") {
 				claimed = true
 				break
@@ -143,7 +185,6 @@ func TestTheBindingsSayWhatTheGoSays(t *testing.T) {
 			len(wrong), strings.Join(wrong, "\n"))
 	}
 }
-
 
 // tsArity counts the parameters in a generated signature. The generator writes one `name: Type`
 // per parameter and never a default or a rest, so commas at the top level are the count — and a
