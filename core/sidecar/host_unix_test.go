@@ -153,6 +153,19 @@ func TestStatusComplaintsExposeSidecarStderr(t *testing.T) {
 	}
 }
 
+func TestStatusComplaintsRetainTheLastEndedSidecarStderr(t *testing.T) {
+	host := NewHost(Deps{})
+	held := &unit{open: Open{Name: "provider"}, stderr: newRing(4)}
+	held.stderr.add("provider crashed")
+	host.open["provider"] = held
+	host.recordEndedComplaint("provider", held)
+	delete(host.open, "provider")
+	complaints := host.Complaints()
+	if len(complaints["provider"]) != 1 || complaints["provider"][0] != "provider crashed" {
+		t.Fatalf("complaints=%+v", complaints)
+	}
+}
+
 // A unit that prints ordinary output announces nothing, and this build reports that rather than waiting.
 //
 // The first line is spent. Waiting for a later one would be waiting for a line that will never be
