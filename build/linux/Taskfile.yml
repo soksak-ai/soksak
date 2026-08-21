@@ -90,15 +90,32 @@ tasks:
         sh: |
           grep -E '^replace .* => ' go.mod 2>/dev/null | while read -r line; do
             path=$(echo "$line" | sed -E 's/^replace .* => //' | tr -d '\r')
-            # Convert relative paths to absolute
             if [ "${path#/}" = "$path" ]; then
-              path="$(cd "$(dirname "$path")" 2>/dev/null && pwd)/$(basename "$path")"
+              host="$(cd "$(dirname "$path")" 2>/dev/null && pwd)/$(basename "$path")"
+              container="/app/$path"
+              while echo "$container" | grep -q '/[^/]*/\.\./'; do
+                container=$(echo "$container" | sed -E 's#/[^/]*/\.\./#/#')
+              done
+            else
+              host="$path"
+              container="$path"
             fi
-            # Only mount if directory exists
-            if [ -d "$path" ]; then
-              echo "-v $path:$path:ro"
+            if [ -d "$host" ]; then
+              echo "-v $host:$container:ro"
             fi
           done | tr '\n' ' '
+
+  visual-smoke:
+    summary: Runs the Linux application in Xvfb and captures its real GTK/WebKit window
+    deps:
+      - task: build
+        vars:
+          ARCH: arm64
+    cmds:
+      - GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o .task/linux-visual/sok ./cmd/sok
+      - docker build -t soksak-linux-smoke -f build/linux/Dockerfile.smoke build/linux
+      - mkdir -p .task/linux-visual
+      - docker run --rm -v "{{.ROOT_DIR}}/bin/soksak:/app/soksak:ro" -v "{{.ROOT_DIR}}/.task/linux-visual/sok:/app/sok:ro" -v "{{.ROOT_DIR}}/.task/linux-visual:/evidence" soksak-linux-smoke
 
   package:
     summary: Packages the application for Linux
