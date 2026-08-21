@@ -75,7 +75,6 @@ export interface UnitReleaseArtifact {
   url: string;
   sha256: string;
   format: ArtifactFormat;
-  unitManifest: string;
   entrypoint: UnitEntrypoint;
 }
 
@@ -251,8 +250,8 @@ function parseArtifacts(
     const before = errors.length;
     const value = strictObject(
       item,
-      ["entrypoint", "format", "sha256", "target", "unitManifest", "url"],
-      ["entrypoint", "format", "sha256", "target", "unitManifest", "url"],
+      ["entrypoint", "format", "sha256", "target", "url"],
+      ["entrypoint", "format", "sha256", "target", "url"],
       label,
       errors,
     );
@@ -273,9 +272,6 @@ function parseArtifacts(
       errors.push(`${label}.sha256: exact lowercase SHA-256 required`);
     }
     if (!isArtifactFormat(value.format)) errors.push(`${label}.format: tar.gz|tgz required`);
-    if (value.unitManifest !== "soksak-unit.json") {
-      errors.push(`${label}.unitManifest: exact soksak-unit.json required`);
-    }
     if (isArtifactFormat(value.format) && typeof value.url === "string" && !formatMatchesUrl(value.format, value.url)) {
       errors.push(`${label}.format: must match release asset suffix`);
     }
@@ -286,7 +282,6 @@ function parseArtifacts(
         url: value.url as string,
         sha256: value.sha256 as string,
         format: value.format as ArtifactFormat,
-        unitManifest: value.unitManifest as string,
         entrypoint,
       });
     }

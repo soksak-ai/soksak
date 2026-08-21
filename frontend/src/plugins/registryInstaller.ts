@@ -176,9 +176,9 @@ function selectArtifact(
 
 export function declaredEntrypoints(artifact: UnitReleaseArtifact): string[] {
   const entrypoint = artifact.entrypoint;
-  if (entrypoint.kind === "plugin") return [artifact.unitManifest, entrypoint.manifest].sort();
-  if (entrypoint.kind === "kit") return [artifact.unitManifest, entrypoint.packageManifest].sort();
-  return [artifact.unitManifest,
+  if (entrypoint.kind === "plugin") return [entrypoint.manifest];
+  if (entrypoint.kind === "kit") return [entrypoint.packageManifest];
+  return [
     ...(entrypoint.process ?? []).map((value) => value.path),
     ...(entrypoint.library ?? []).map((value) => value.path),
   ].sort();
