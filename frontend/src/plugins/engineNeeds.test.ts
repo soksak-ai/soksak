@@ -82,7 +82,7 @@ describe("a need is declared, never inferred from a permission", () => {
   const spawnedUnits = {
     id: "demo",
     permissions: ["sidecar"],
-    sidecars: [{ name: "pty", interface: { id: "soksak-spec-sidecar-pty", range: "0.0.1" } }],
+    sidecars: [{ name: "pty", interface: { id: "soksak-spec-sidecar-pty", version: "0.0.1" } }],
   };
 
   it("declaring units to spawn raises no loader need anywhere", async () => {

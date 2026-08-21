@@ -150,7 +150,7 @@ export const VIEW_SURFACES: readonly ViewSurface[] = ["tab", "side"];
 
 // ── §2.5 Sidebar projection contract ─────────────────────────────────────────
 // Sidebar declaration of content views and file viewers (plans/sidebar-projection-spec.md §3.1).
-// Only two reference forms exist: "self.<viewId>" (own rail view) | {contract, range} (contract address).
+// Only two reference forms exist: "self.<viewId>" or an exact public contract address.
 // The `<pluginId>.<viewId>` name-pin is forbidden (C3 L1) — cross-plugin references use the contract
 // address only, and the core resolves it to the active implementation. instance is the instance
 
@@ -310,7 +310,7 @@ export type ReachStrategy =
 // accept (acceptance predicate) + reach (supply). observe/accept/reach are optional — unset gives
 // legacy behavior (presence = acceptance, install = supply). The reconcile engine (M3) runs it.
 // A sidecar this plugin drives. `name` is the <name> in soksak-sidecar-<name>, and `interface` is
-// the contract requirement `{ id, range }` its release must satisfy. Checked at load against what
+// the exact contract reference `{ id, version }` its release must satisfy. Checked at load against what
 // the unit reports about itself — declaration ≡ reality, and a mismatch is refused.
 //
 // This declaration states no runtime shape and no manifest field does. Whether an artefact is
@@ -405,8 +405,8 @@ export interface PluginManifest {
   // references a resident binary in sidecars[], interface is the wire contract id (PS5, PS6).
   // Requires the "service" permission.
   service?: ServiceDecl;
-  // Optional common contracts. Independent plugins omit both. A provider declares an exact version;
-  // a consumer declares a compatible range and remains independent of a provider plugin id.
+  // Optional common contracts. Independent plugins omit both. Providers and consumers declare the
+  // exact contract version they were tested against and remain independent of a provider plugin id.
   implements?: ContractProviderRef[];
   consumes?: ContractRequirement[];
   // User configuration schema (optional). Global + per-workspace override. Harmless (declarative) →
@@ -531,7 +531,7 @@ const VIEW_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const STATUS_CODE_RE = /^[a-z0-9][a-z0-9-]*$/;
 // Sidecar name (the <name> in soksak-sidecar-<name>) — used in path assembly, so traversal-safe form.
 const SIDECAR_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
-// A sidecar interface is a contract requirement `{ id, range }` as well — validated with
+// A sidecar interface is an exact contract reference `{ id, version }` as well — validated with
 // CONTRACT_ID_RE, no separate regex. The wire axis collapses to one contract id grammar (NAMING §8).
 const COMMAND_NAME_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 // SEMVER_RE, semverGte, semverSatisfies moved to semver.ts (re-exported above) — single source moved.

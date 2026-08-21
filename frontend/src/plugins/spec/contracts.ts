@@ -1,7 +1,4 @@
-// Public domain-contract references have two deliberately different shapes:
-//
-//   provider/evidence: { id, version }  — exact bytes were tested against one version
-//   consumer:          { id, range }    — discovery accepts compatible providers
+// Public domain-contract references name the exact version that was tested.
 //
 // The base id never embeds a version. `name@version` discovery is forbidden because it
 // collapses identity and compatibility into exact string equality. Platform schema ids
@@ -15,12 +12,7 @@
 //
 // The kind is not in the name either. Whether a plugin or a sidecar provides a thing is the
 // provider's business, and a consumer that had to know would be coupled to the implementation (C3).
-import {
-  initialDevelopmentRangeIsExact,
-  isStrictSemver,
-  isUnitDependencyRange,
-  semverSatisfies,
-} from "./semver";
+import { isStrictSemver } from "./semver";
 import { checkKnownKeys, isRecord } from "./util";
 
 export const CONTRACT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -31,46 +23,32 @@ export const SIDECAR_CONTRACT_ID_RE = CONTRACT_ID_RE;
 // one is the plugin's declaration, not a string the core spells out.
 export const SERVICE_CONTRACT_ID_RE = CONTRACT_ID_RE;
 
-export interface ContractProviderRef {
+export interface ContractRef {
   id: string;
   version: string;
 }
 
-export interface ContractRequirement {
-  id: string;
-  range: string;
-}
+export type ContractProviderRef = ContractRef;
+export type ContractRequirement = ContractRef;
 
 function parseContractObject(
   raw: unknown,
-  valueKey: "version" | "range",
   label: string,
   errors: string[],
   idPattern: RegExp = CONTRACT_ID_RE,
-): ContractProviderRef | ContractRequirement | null {
+): ContractRef | null {
   if (!isRecord(raw)) {
-    errors.push(`${label}: { id, ${valueKey} } object required`);
+    errors.push(`${label}: { id, version } object required`);
     return null;
   }
   const before = errors.length;
-  checkKnownKeys(raw, ["id", valueKey], label, errors);
+  checkKnownKeys(raw, ["id", "version"], label, errors);
   if (typeof raw.id !== "string" || !idPattern.test(raw.id)) {
     errors.push(`${label}.id: version-free public contract id required`);
   }
-  if (valueKey === "version") {
-    if (!isStrictSemver(raw.version)) errors.push(`${label}.version: strict SemVer required`);
-  } else if (!isUnitDependencyRange(raw.range)) {
-    errors.push(`${label}.range: supported SemVer range required`);
-  } else if (!initialDevelopmentRangeIsExact(raw.range)) {
-    errors.push(
-      `${label}.range: a contract still in initial development (0.0.x) is consumed at one exact ` +
-        `version, never across a range — SemVer promises nothing about 0.0.x`,
-    );
-  }
+  if (!isStrictSemver(raw.version)) errors.push(`${label}.version: strict SemVer required`);
   if (errors.length !== before) return null;
-  return valueKey === "version"
-    ? { id: raw.id as string, version: raw.version as string }
-    : { id: raw.id as string, range: raw.range as string };
+  return { id: raw.id as string, version: raw.version as string };
 }
 
 export function parseContractProviderRef(
@@ -79,7 +57,7 @@ export function parseContractProviderRef(
   errors: string[],
   idPattern: RegExp = CONTRACT_ID_RE,
 ): ContractProviderRef | null {
-  return parseContractObject(raw, "version", label, errors, idPattern) as ContractProviderRef | null;
+  return parseContractObject(raw, label, errors, idPattern);
 }
 
 export function parseContractRequirement(
@@ -88,14 +66,14 @@ export function parseContractRequirement(
   errors: string[],
   idPattern: RegExp = CONTRACT_ID_RE,
 ): ContractRequirement | null {
-  return parseContractObject(raw, "range", label, errors, idPattern) as ContractRequirement | null;
+  return parseContractObject(raw, label, errors, idPattern);
 }
 
 export function contractRequirementSatisfiedBy(
   requirement: ContractRequirement,
   provider: ContractProviderRef,
 ): boolean {
-  return requirement.id === provider.id && semverSatisfies(provider.version, requirement.range) === true;
+  return requirement.id === provider.id && requirement.version === provider.version;
 }
 
 export function contractProviderKey(provider: ContractProviderRef): string {
@@ -103,7 +81,7 @@ export function contractProviderKey(provider: ContractProviderRef): string {
 }
 
 export function contractRequirementKey(requirement: ContractRequirement): string {
-  return `${requirement.id}\u0000${requirement.range}`;
+  return `${requirement.id}\u0000${requirement.version}`;
 }
 
 export function validateImplements(raw: unknown, errors: string[]): ContractProviderRef[] {

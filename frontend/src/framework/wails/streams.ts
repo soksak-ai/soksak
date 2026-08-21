@@ -84,14 +84,28 @@ function subscribe(): void {
 export function createWailsStream<T>(): Stream<T> & { close(): void } {
   subscribe();
   const id = mintId();
+  let handler: ((message: T) => void) | null = null;
+  const pending: T[] = [];
   const stream = {
-    onmessage: (() => {}) as (message: T) => void,
+    get onmessage(): (message: T) => void {
+      return handler ?? (() => {});
+    },
+    set onmessage(next: (message: T) => void) {
+      handler = next;
+      for (const frame of pending.splice(0)) next(frame);
+    },
     toJSON: () => ({ __stream: id }),
     close: () => {
+      pending.length = 0;
+      handler = null;
       receivers.delete(id);
     },
   };
-  receivers.set(id, (frame) => stream.onmessage(frame as T));
+  receivers.set(id, (frame) => {
+    const value = frame as T;
+    if (handler) handler(value);
+    else pending.push(value);
+  });
   return stream;
 }
 

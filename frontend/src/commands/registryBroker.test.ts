@@ -84,14 +84,14 @@ function principal() {
 
 function pluginContext(overrides: {
   permissions?: readonly ("commands" | "network")[];
-  requiredContracts?: readonly { id: string; range: string }[];
+  requiredContracts?: readonly { id: string; version: string }[];
   providedContracts?: readonly { id: string; version: string }[];
 } = {}): PluginCommandContext {
   return issuePluginCommandContext({
     principal: principal(),
     grants: {
       permissions: overrides.permissions ?? ["commands", "network"],
-      requiredContracts: overrides.requiredContracts ?? [{ id: HOST_CONTRACT, range: "=0.0.1" }],
+      requiredContracts: overrides.requiredContracts ?? [{ id: HOST_CONTRACT, version: "0.0.1" }],
       providedContracts: overrides.providedContracts ?? [{ id: CALLER_CONTRACT, version: "0.0.1" }],
     },
     authority: {
@@ -234,7 +234,7 @@ describe("Command Registry plugin broker — fail closed", () => {
     reg("broker.contract", {
       broker: basicBroker({
         contracts: {
-          requires: [{ id: CALLER_CONTRACT, range: "=0.0.1" }],
+          requires: [{ id: CALLER_CONTRACT, version: "0.0.1" }],
           provides: [{ id: HOST_CONTRACT, version: "0.0.1" }],
         },
       }),
@@ -363,7 +363,7 @@ describe("Command Registry plugin broker — fail closed", () => {
       principal: principal(),
       grants: {
         permissions: ["commands"] as ("commands" | "network")[],
-        requiredContracts: [{ id: HOST_CONTRACT, range: "=0.0.1" }],
+        requiredContracts: [{ id: HOST_CONTRACT, version: "0.0.1" }],
         providedContracts: [{ id: CALLER_CONTRACT, version: "0.0.1" }],
       },
       authority: {

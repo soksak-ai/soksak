@@ -956,6 +956,10 @@ export function registerDomCatalog(): void {
           // tree dropped it, a consumer would call ui.measure per discovered address or go back to
           // guessing private DOM.
           dataset: Object.fromEntries(Object.entries(n.el.dataset)),
+          role: n.el.getAttribute("role"),
+          ariaLabel: n.el.getAttribute("aria-label"),
+          ariaLive: n.el.getAttribute("aria-live"),
+          tabIndex: n.el.tabIndex,
         };
         if (!withRects) return exposed;
         const r = n.el.getBoundingClientRect();

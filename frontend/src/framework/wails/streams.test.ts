@@ -57,6 +57,15 @@ describe("a stream receiver", () => {
     expect(received).toEqual([{ value: 1 }]);
   });
 
+  it("delivers frames that arrive before the handler is installed", () => {
+    const stream = createWailsStream<unknown>();
+    deliver(idOf(stream), { sequence: 1 });
+    deliver(idOf(stream), { sequence: 2 });
+    const received: unknown[] = [];
+    stream.onmessage = (frame) => received.push(frame);
+    expect(received).toEqual([{ sequence: 1 }, { sequence: 2 }]);
+  });
+
   it("decodes a binary frame to an ArrayBuffer", () => {
     // Bytes travel base64 under a field named for it. A bare string would make
     // this side guess whether a text frame is text or base64, and it guesses

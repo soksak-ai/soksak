@@ -23,6 +23,7 @@ export interface ScannedNode {
 function collectDataNodes(root: ParentNode): HTMLElement[] {
   const out: HTMLElement[] = [];
   const walk = (node: ParentNode) => {
+    if (node instanceof HTMLElement && node.dataset.node !== undefined) out.push(node);
     for (const el of node.querySelectorAll<HTMLElement>("[data-node]")) {
       out.push(el);
     }

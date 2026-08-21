@@ -116,7 +116,7 @@ export function registerSystemCatalog(): void {
     // The owner defines the answer — identical from any window (registry.ts windowScoped).
     windowScoped: false,
     returns:
-      "{ coreBuild, identity, cli, home, buildProfile, updaterEnabled, unitMode, developmentUnits[] }",
+      "{ coreBuild, identity, cli, home, loginShell, buildProfile, updaterEnabled, unitMode, developmentUnits[] }",
     message: (d) =>
       tmsg("msg.app.environment", {
         core: String(d.coreBuild),

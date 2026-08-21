@@ -378,6 +378,8 @@ export interface SoksakPluginApi {
    *  plaintext readback is blocked (injection only). While the vault is locked, calls reject("vault
    *  locked"). "secrets" permission only. */
   secrets?: {
+    /** Create a sealed random value when absent. Plaintext is never returned. */
+    generate: (key: string, bytes: number) => Promise<{ created: boolean }>;
     /** Store a sealed value (envelope: a per-item DEK wrapped by the KEK). Same key replaces. */
     set: (key: string, value: string) => Promise<void>;
     /** Whether the key exists (the value is not exposed). */
@@ -696,7 +698,10 @@ export interface SoksakPluginApi {
   sidecar?: {
     /** Open a declared sidecar → channel handle. An undeclared name is rejected (declaration ≡ reality).
      *  The first open loads, validates, and inits. */
-    open: (name: string) => Promise<SidecarHandle>;
+    open: (name: string, opts?: {
+      secretEnv?: Record<string, string>;
+      generatedSecretEnv?: Record<string, { key: string; bytes: number }>;
+    }) => Promise<SidecarHandle>;
   };
   /** WebSocket client (plain ws://). "network" permission. Unlike the browser WebSocket it sends no
    *  Origin header, so it connects to servers that check Origin (webOS TV SSAP and such). Event-driven
@@ -846,7 +851,7 @@ export function targetPluginId(name: string): string | null {
 // Versions are install-time business.
 // Call boundary — another plugin's command cannot be called without a declaration. There are two
 // declaration axes, and either one passes:
-//   L2 contract pin (consumes): the caller declares a contract and the target implements it → pass.
+//   L2 contract pin (consumes): the caller and target declare the same exact contract → pass.
 //   L1 name pin (dependencies): the caller declares the target plugin id directly → pass.
 // Neither one = denied. The boundary itself is unchanged; what changes is what gets declared (name →
 // contract).
@@ -913,11 +918,8 @@ function createProcessApi(
     // spawn the old unit silently (declared ≠ actual). With no declaration or more than one, fail loudly
     // instead of picking quietly.
     sidecarName(contractId: string): string {
-      // Runtime contract identification uses the contract id (string) alone — a contract id has no
-      // version (rule), and this looks up the name of the sidecar unit declared as implementing this
-      // contract, not a version pin. range is the compatibility constraint held by the manifest
-      // declaration (reach.fetch picks the concrete version from that range at install time), so it is
-      // not a key for this lookup. One sidecar per contract, so the id resolves uniquely.
+      // Runtime lookup uses the version-free contract id because one manifest may declare only one
+      // unit for that contract. The exact version is checked when the unit opens.
       const hits = declared().filter((sidecar) => sidecar.interface.id === contractId);
       if (hits.length === 0) {
         throw new Error(
@@ -1060,7 +1062,10 @@ function createSidecarApi(
   manifest: PluginManifest,
 ) {
   return {
-    open: async (name: string): Promise<SidecarHandle> => {
+    open: async (name: string, opts?: {
+      secretEnv?: Record<string, string>;
+      generatedSecretEnv?: Record<string, { key: string; bytes: number }>;
+    }): Promise<SidecarHandle> => {
       const decl = (manifest.sidecars ?? []).find((s) => s.name === name);
       if (!decl) {
         throw new Error(tmsg("plugin.sidecar.undeclared", { name }));
@@ -1077,6 +1082,9 @@ function createSidecarApi(
       await deps.invoke("sidecar_open", {
         name,
         requirement: decl.interface,
+        ns: manifest.id,
+        secretEnv: opts?.secretEnv ?? null,
+        generatedSecretEnv: opts?.generatedSecretEnv ?? null,
         onEvent,
       });
       let released = false;
@@ -1703,6 +1711,8 @@ export function buildPluginApi(
     // blocked (injection only, 2b).
     secrets: has("secrets")
       ? {
+          generate: async (key, bytes) =>
+            deps.invoke("secret_generate", { ns: id, key, bytes }) as Promise<{ created: boolean }>,
           set: async (key, value) => {
             await deps.invoke("secret_set", { ns: id, key, value });
           },

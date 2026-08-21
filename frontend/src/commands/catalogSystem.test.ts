@@ -106,6 +106,7 @@ describe("app.environment — core identity and unit source mode are separate fi
       identity: "com.soksak.app",
       cli: "sok",
       home: "/Users/test/.soksak",
+      loginShell: "/bin/zsh",
       buildProfile: "release",
       updaterEnabled: true,
       unitMode: "mixed",
@@ -120,7 +121,7 @@ describe("app.environment — core identity and unit source mode are separate fi
     expect(invoke).toHaveBeenCalledWith("app_environment");
     expect(r).toMatchObject({
       ok: true,
-      data: { coreBuild: "release", cli: "sok", unitMode: "mixed" },
+      data: { coreBuild: "release", cli: "sok", loginShell: "/bin/zsh", unitMode: "mixed" },
     });
   });
 });

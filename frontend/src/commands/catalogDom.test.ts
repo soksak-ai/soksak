@@ -273,6 +273,16 @@ describe("ui.tree/ui.measure — public DOM node instance identity", () => {
     expect(getSpec("ui.tree")?.returns).toContain("dataset");
   });
 
+  it("ui.tree returns public accessibility semantics", async () => {
+    mountNode(`<textarea data-node="btn" role="textbox" aria-label="Terminal input" aria-live="polite" tabindex="0"></textarea>`);
+    const result = await execute("ui.tree", {}, {});
+    const node = (result.data as { nodes: Array<Record<string, unknown>> }).nodes
+      .find((value) => value.address === ADDR);
+    expect(node).toMatchObject({
+      role: "textbox", ariaLabel: "Terminal input", ariaLive: "polite", tabIndex: 0,
+    });
+  });
+
   it("one live Element keeps the same opaque identity across both commands and repeated queries", async () => {
     mountNode(`<button data-node="btn">x</button>`);
 

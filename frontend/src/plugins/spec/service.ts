@@ -22,7 +22,7 @@ import { normalizeText, validateLocalizedText, type LocalizedText } from "./loca
 // The service interface a sidecar declares. The core requires the declaration and reads the name
 // from it — it held "soksak-spec-service" here until 2026-08-16, which is the core naming an
 // interface (C3, C4).
-export const SERVICE_CONTRACT_REQUIREMENT_RANGE = "0.0.1";
+export const SERVICE_CONTRACT_VERSION = "0.0.1";
 
 // Command parameter spec — isomorphic to the core registry ParamSpec (src/commands/registry.ts).
 // A bind:"service" command declares the full spec as manifest data (PS3) — the proxy registration

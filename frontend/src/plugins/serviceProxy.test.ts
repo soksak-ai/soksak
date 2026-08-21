@@ -3,7 +3,7 @@
 // (no mock registry).
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { execute, register, unregister } from "../commands/registry";
-import { parseManifest, SERVICE_CONTRACT_REQUIREMENT_RANGE, type PluginManifest } from "./spec";
+import { parseManifest, SERVICE_CONTRACT_VERSION, type PluginManifest } from "./spec";
 import {
   buildBindLedger,
   registerBusBridge,
@@ -22,10 +22,10 @@ function demoManifest(): PluginManifest {
       description: "Test fixture",
       entry: null,
       permissions: ["commands", "sidecar", "service"],
-      sidecars: [{ name: "demo-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: "0.0.1" } }],
+      sidecars: [{ name: "demo-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", version: "0.0.1" } }],
       service: {
         sidecar: "demo-svc",
-        interface: { id: "vault", range: SERVICE_CONTRACT_REQUIREMENT_RANGE },
+        interface: { id: "vault", version: SERVICE_CONTRACT_VERSION },
         subscribe: ["bus:kanban:changed"],
       },
       contributes: {
@@ -132,7 +132,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
         {
           plugin: "demo",
           sidecar: "demo-svc",
-          interface: { id: "vault", range: SERVICE_CONTRACT_REQUIREMENT_RANGE },
+          interface: { id: "vault", version: SERVICE_CONTRACT_VERSION },
           ops: ["run"],
           subscribe: ["bus:kanban:changed"],
           schedules: [
@@ -156,8 +156,8 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
         description: "Test fixture",
         entry: null,
         permissions: ["commands", "sidecar", "service", "secrets"],
-        sidecars: [{ name: "vaulted-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: "0.0.1" } }],
-        service: { sidecar: "vaulted-svc", interface: { id: "vault", range: SERVICE_CONTRACT_REQUIREMENT_RANGE }, subscribe: [] },
+        sidecars: [{ name: "vaulted-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", version: "0.0.1" } }],
+        service: { sidecar: "vaulted-svc", interface: { id: "vault", version: SERVICE_CONTRACT_VERSION }, subscribe: [] },
         contributes: {
           commands: [
             { name: "run", title: { en: "Run", ko: "Run (ko)" }, bind: "service", description: "Run." },
@@ -189,7 +189,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
     expect(buildBindLedger([manifest]).services).toEqual([]);
   });
 
-  it("the Tauri ledger boundary sends only the consumer {id,range} object", async () => {
+  it("the service ledger sends only the exact consumer contract reference", async () => {
     const invoke = vi.fn<ServiceProxyDeps["invoke"]>(async () => undefined);
     await syncServiceLedger([demoManifest()], invoke);
     expect(invoke).toHaveBeenCalledTimes(1);
@@ -199,7 +199,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
       ledger: expect.objectContaining({
         services: [
           expect.objectContaining({
-            interface: { id: "vault", range: SERVICE_CONTRACT_REQUIREMENT_RANGE },
+            interface: { id: "vault", version: SERVICE_CONTRACT_VERSION },
           }),
         ],
       }),

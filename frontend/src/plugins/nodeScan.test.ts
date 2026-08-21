@@ -13,6 +13,11 @@ function container(html: string): HTMLElement {
 const BASE = "center/view/soksak-plugin-x.main";
 
 describe("scanNodes — collecting exposed nodes", () => {
+  it("includes an exposed view container itself", () => {
+    const c = container(`<button data-node="child">child</button>`);
+    c.dataset.node = "root";
+    expect(scanNodes(c, BASE).map((node) => node.nodePath)).toEqual(["root", "child"]);
+  });
   it("gives every data-node element an absolute address", () => {
     const c = container(`<button data-node="submit">send</button><div data-node="msg/3">row</div>`);
     const r = scanNodes(c, BASE);

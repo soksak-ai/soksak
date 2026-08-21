@@ -28,6 +28,7 @@ export interface FrameworkEvent<T> {
  * argument differs per framework, so it is **opaque** — the app uses onmessage and nothing else.
  */
 export interface Stream<T> {
+  /** Frames received before assignment are delivered in order when the handler is installed. */
   onmessage: (msg: T) => void;
 }
 
