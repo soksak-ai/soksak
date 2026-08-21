@@ -68,6 +68,26 @@ func TestLoadRefusesMissingSettings(t *testing.T) {
 		t.Fatal("missing settings answered empty composition")
 	}
 }
+func TestPluginAssetRootsContainOnlyResolvedEnabledPlugins(t *testing.T) {
+	home, plugin := fixture(t)
+	disabled := plugin
+	disabled.ID = "disabled"
+	disabled.Enabled = false
+	disabled.InstallPath = t.TempDir()
+	disabled.Source.Path = disabled.InstallPath
+	if err := os.WriteFile(filepath.Join(disabled.InstallPath, "plugin.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	settings := contract.Settings{Spec: contract.SettingsSpec, Generation: 7, Plugins: []contract.Plugin{plugin, disabled}, Sidecars: []contract.Sidecar{}, Kits: []contract.Kit{}, Bindings: []contract.Binding{}}
+	writeJSON(t, filepath.Join(home, contract.SettingsFile), settings)
+	roots, err := PluginAssetRoots(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(roots) != 1 || roots[0] != plugin.InstallPath {
+		t.Fatalf("roots=%v", roots)
+	}
+}
 func TestCommandsExposeOneCompositionResult(t *testing.T) {
 	home, _ := fixture(t)
 	registry := control.NewRegistry()
