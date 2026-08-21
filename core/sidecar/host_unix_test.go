@@ -60,6 +60,13 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	if again.PID != open.PID {
 		t.Fatalf("a second start made a second process: %d then %d", open.PID, again.PID)
 	}
+	if err := host.Release("probe"); err != nil {
+		t.Fatalf("releasing a channel: %v", err)
+	}
+	started := host.Started()
+	if len(started) != 1 || started[0].PID != open.PID {
+		t.Fatalf("channel release removed the process from the host: %+v", started)
+	}
 	answer, err := host.Send("probe", controlwire.Request{ID: "1", Command: "probe.echo"})
 	if err != nil {
 		t.Fatalf("sending to the unit: %v", err)
