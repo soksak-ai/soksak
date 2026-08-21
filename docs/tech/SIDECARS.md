@@ -69,6 +69,8 @@ Releasing a channel closes that caller's connection and does not stop the sideca
 shutdown also releases connections without ending sidecars that own restorable work. A later
 application generation reads the saved process announcement, reconnects, performs the greeting and
 uses the same process.
+Channel release does not remove the process from host status or prevent an explicit
+`sidecar_stop`; those operations address process lifetime, not channel lifetime.
 
 sidecar.stop is the explicit operation that ends a sidecar. A plugin disable, view unmount or app
 restart is not a stop request. Streams have their own ids and can close independently.
