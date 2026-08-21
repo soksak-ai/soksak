@@ -14,6 +14,7 @@ import (
 // report the frames that resulted". A new entry here needs a stated reason.
 var cgoFiles = map[string]string{
 	"capture_darwin.go": "the ScreenCaptureKit bridge; the capture itself lives in capture_darwin.m",
+	"capture_linux.go":  "the GTK render-node capture bridge; the capture itself lives in capture_linux.c",
 	// The rendering throttle is a private AppKit selector on WKWebView, looked
 	// up by name because it is private. There is no Go equivalent and no public
 	// one either. The walk of the window's web views is in
@@ -80,6 +81,7 @@ func TestNativeSourceLivesOutsideTheCgoComment(t *testing.T) {
 	// rule is satisfied by having no native code rather than by separating it.
 	for _, name := range []string{
 		"capture_darwin.h", "capture_darwin.m",
+		"capture_linux.h", "capture_linux.c",
 		"window_native_darwin.h", "window_native_darwin.m",
 	} {
 		if _, err := os.Stat(filepath.Clean(name)); err != nil {

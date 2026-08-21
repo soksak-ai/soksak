@@ -63,26 +63,25 @@ A known cost that N2 can pay down beats an unknown one.
 
 ## Capture
 
-Window capture reads this process's own shareable content through
-ScreenCaptureKit. That specific path is required, and every part of the reason
-must stay true:
+Window capture uses a platform compositor path. Every backend must preserve these properties:
 
 - it needs no screen-recording permission, because it only sees our own windows;
 - it needs no focus, and an occluded window still captures;
 - it captures the compositor's result, so the main webview and every native
   child arrive in one image with no holes. A per-webview snapshot cannot do that.
 
-`CGWindowListCreateImage` is obsolete on macOS 15 and blocks during rendering.
-It is not used.
+macOS reads this process's own shareable content through ScreenCaptureKit.
+`CGWindowListCreateImage` is obsolete on macOS 15 and blocks during rendering. It is not used.
+Linux snapshots the GTK4 render node on the GTK main thread and encodes the resulting texture. It
+does not read the X11 root window, so an occluded window remains capturable without focus changes.
 
 Output dimensions come from **one** filter snapshot: `contentRect` multiplied by
 `pointPixelScale`. Mixing a window frame read earlier with pixels captured later
 resamples a later moment to an earlier size, which during a live resize produces
 a frame that was never on screen.
 
-Platforms without a backend fail by name. Returning empty bytes would make "this
-platform cannot capture" and "the window was blank" one answer, and nothing
-downstream could tell them apart.
+Platforms without a backend fail by name. Returning empty bytes would make "this platform cannot
+capture" and "the window was blank" one answer, and nothing downstream could tell them apart.
 
 ## Native surfaces
 

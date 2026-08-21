@@ -4,6 +4,7 @@ set -eu
 binary=${1:-/app/soksak}
 client=${2:-/app/sok}
 output=${3:-/evidence/soksak-linux.png}
+native_output=${output%.png}-native.png
 runtime=<local-evidence>/soksak-linux-smoke-runtime
 persistent=<local-evidence>/soksak-linux-smoke-home
 user_home=<local-evidence>/soksak-linux-smoke-user
@@ -19,6 +20,7 @@ dbus-run-session -- xvfb-run -a -s "-screen 0 1400x900x24" sh -eu -c '
   runtime=$4
   persistent=$5
   user_home=$6
+  native_output=$7
   HOME=$user_home GDK_BACKEND=x11 GSK_RENDERER=cairo GTK_A11Y=none LIBGL_ALWAYS_SOFTWARE=1 \
     WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 \
     WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
@@ -48,15 +50,22 @@ dbus-run-session -- xvfb-run -a -s "-screen 0 1400x900x24" sh -eu -c '
   tree=$("$client" --socket "$socket" ui.tree window=main)
   echo "$tree" | grep -Eq '"'"'"count"[[:space:]]*:[[:space:]]*[1-9]'"'"'
   xdotool windowsize "$window" 1400 900
+  before=$(xdotool getwindowfocus)
+  "$client" --socket "$socket" window.snapshot window=main path="$native_output" >/dev/null
+  after=$(xdotool getwindowfocus)
+  test "$before" = "$after"
+  test -s "$native_output"
   import -window "$window" "$output"
   kill -0 "$pid"
-' sh "$binary" "$client" "$output" "$runtime" "$persistent" "$user_home"
+' sh "$binary" "$client" "$output" "$runtime" "$persistent" "$user_home" "$native_output"
 
-dimensions=$(identify -format '%wx%h' "$output")
-colors=$(identify -format '%k' "$output")
-width=${dimensions%x*}
-height=${dimensions#*x}
-test "$width" -ge 800
-test "$height" -ge 600
-test "$colors" -gt 16
-printf 'linux visual smoke: %s, %s colors\n' "$dimensions" "$colors"
+for capture in "$output" "$native_output"; do
+  dimensions=$(identify -format '%wx%h' "$capture")
+  colors=$(identify -format '%k' "$capture")
+  width=${dimensions%x*}
+  height=${dimensions#*x}
+  test "$width" -ge 800
+  test "$height" -ge 600
+  test "$colors" -gt 16
+  printf 'linux visual smoke: %s, %s, %s colors\n' "$(basename "$capture")" "$dimensions" "$colors"
+done
