@@ -52,11 +52,9 @@ export function enforceEngineNeeds(
       requiresNativeChildWebview: manifest.requiresNativeChildWebview,
       // What is written, and nothing derived from the permission list.
       //
-      // It was derived until 2026-08-20: a manifest holding the `sidecar` permission with any
-      // `sidecars[]` entry was read as needing a loader. That grades a unit by a label on the
-      // consumer, and under SIDECARS.md S3 no manifest states which shape a unit is — the unit's
-      // release does, in `process[]` and `library[]`. So the reading moved to where that fact is,
-      // and `ProvidedFromRelease` refuses a unit shipping a library, naming the artefact.
+      // A manifest holding the `sidecar` permission does not imply an in-process engine.
+      // sidecar.json declares process and library entrypoints, and the installation resolver
+      // refuses a library this host cannot load.
       //
       // Measured 2026-08-20: with the derivation here, the terminal plugin was refused for
       // requiring a loader it has no use for — every one of its units is spawned.

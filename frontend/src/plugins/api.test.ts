@@ -1047,7 +1047,8 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
     await expect(api.sidecar!.open("undeclared")).rejects.toThrow(/undeclared/);
   });
   it("delegates open of a declared name to the sidecar_open invoke with the consumer requirement", async () => {
-    const invoke = vi.fn<PluginApiDeps["invoke"]>(async () => 7);
+    const invoke = vi.fn<PluginApiDeps["invoke"]>(async (command) =>
+      command === "sidecar_open" ? { name: "soksak-sidecar-chromium" } : { ok: true });
     const m = manifestOf({
       permissions: ["sidecar"],
       sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", version: "0.0.1" } }],
@@ -1057,22 +1058,17 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
     expect(invoke).toHaveBeenCalledWith(
       "sidecar_open",
       expect.objectContaining({
-        name: "chromium",
+        consumer: { id: m.id, version: m.version },
+        requirementName: "chromium",
         requirement: { id: "soksak-spec-sidecar-chromium", version: "0.0.1" },
       }),
     );
     const openArgs = invoke.mock.calls.find((call) => call[0] === "sidecar_open")?.[1];
     expect(openArgs).not.toHaveProperty("interface");
-    // The name is the identity, and there is no handle beside it.
-    //
-    // A handle would be a way to hold one unit open twice, and the host refuses that on purpose:
-    // two processes behind one name is a process nothing can reach and nothing ends. The assertion
-    // held a handle until 2026-08-20, which is the shape from when open answered with one.
-    invoke.mockResolvedValueOnce({ ok: true });
     await h.send({ type: "ping" });
     expect(invoke).toHaveBeenCalledWith(
       "sidecar_send",
-      expect.objectContaining({ name: "chromium", payload: '{"type":"ping"}' }),
+      expect.objectContaining({ name: "soksak-sidecar-chromium", payload: '{"type":"ping"}' }),
     );
     const sendArgs = invoke.mock.calls.find((call) => call[0] === "sidecar_send")?.[1];
     expect(sendArgs).not.toHaveProperty("handle");
@@ -1088,49 +1084,6 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
     const calls = (invoke as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.filter((c) => c[0] === "sidecar_release").length).toBe(1);
     expect(calls.filter((c) => c[0] === "sidecar_stop").length).toBe(0);
-  });
-});
-
-describe("single truth for unit selection — manifest sidecars[]", () => {
-  const withSidecar = (name: string) =>
-    manifestOf({
-      permissions: ["process"],
-      sidecars: [{ name, interface: { id: "soksak-spec-sidecar-terminal", version: "0.0.1" } }],
-    });
-
-  it("gives the unit name declared as implementing the contract", () => {
-    const { api } = buildPluginApi(withSidecar("terminal-wezterm"), "/d", fakeDeps());
-    expect(api.process?.sidecarName("soksak-spec-sidecar-terminal")).toBe("terminal-wezterm");
-  });
-
-  it("fails loudly instead of picking silently when the contract has no declaration", () => {
-    const { api } = buildPluginApi(withSidecar("terminal-alacritty"), "/d", fakeDeps());
-    expect(() => api.process?.sidecarName("soksak-spec-sidecar-browser")).toThrow(/soksak-spec-sidecar-browser/);
-  });
-
-  it("cannot spawn a unit missing from the manifest (declaration equals reality)", async () => {
-    // If the bundle freezes the unit name as a constant, changing the manifest lands on this path
-    // — it fails loudly instead of silently starting the old unit.
-    const { api } = buildPluginApi(withSidecar("terminal-wezterm"), "/d", fakeDeps());
-    await expect(
-      api.process?.spawn("sidecar:terminal-alacritty", []),
-    ).rejects.toThrow(/sidecars/);
-  });
-
-  it("spawns a declared unit as a child of the ordinary process generation", async () => {
-    const invoke = vi.fn(async (cmd: string) => cmd === "process_spawn" ? 44 : null);
-    const { api, tracker } = buildPluginApi(
-      withSidecar("terminal-wezterm"),
-      "/d",
-      fakeDeps({ invoke }),
-    );
-    await expect(
-      api.process?.spawn("sidecar:terminal-wezterm", []),
-    ).resolves.toBeDefined();
-    tracker.disposeAll();
-    await vi.waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith("process_kill", { id: 44 }),
-    );
   });
 });
 

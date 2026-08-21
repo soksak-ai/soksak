@@ -32,6 +32,7 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial:        dialUnix,
 		ReadyWithin: 10 * time.Second,
+		ResolvePath: testSidecarResolver(home),
 	})
 	t.Cleanup(func() { host.StopAll() })
 
@@ -109,7 +110,7 @@ func TestAUnitWhoseFirstLineIsOutputAnnouncesNothing(t *testing.T) {
 
 	host := NewHost(Deps{
 		Home: home, Runtime: shortHome(t), Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 5 * time.Second,
+		Dial: dialUnix, ReadyWithin: 5 * time.Second, ResolvePath: testSidecarResolver(home),
 	})
 	t.Cleanup(func() { host.StopAll() })
 
@@ -139,7 +140,7 @@ func TestAnEnvelopeMismatchIsRefusedAtTheAnnouncement(t *testing.T) {
 
 	host := NewHost(Deps{
 		Home: home, Runtime: shortHome(t), Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 5 * time.Second,
+		Dial: dialUnix, ReadyWithin: 5 * time.Second, ResolvePath: testSidecarResolver(home),
 	})
 	t.Cleanup(func() { host.StopAll() })
 
@@ -191,8 +192,19 @@ func stageUnit(t *testing.T, home, name, source string) {
 	}
 	// And then it is asked, so a staged unit this host could not find fails here rather than as a
 	// refusal three calls later.
-	if found, err := process.SidecarPath(home, name); err != nil || found != target {
-		t.Fatalf("the staged unit is not where the layout says: %q %v", found, err)
+}
+
+func testSidecarResolver(home string) func(string) (string, error) {
+	return func(name string) (string, error) {
+		path := filepath.Join(home, "sidecars", "soksak-sidecar-"+name, "dist", "soksak-sidecar-"+name)
+		info, err := os.Lstat(path)
+		if err != nil {
+			return "", err
+		}
+		if !info.Mode().IsRegular() {
+			return "", fmt.Errorf("test sidecar is not a regular file: %s", path)
+		}
+		return path, nil
 	}
 }
 

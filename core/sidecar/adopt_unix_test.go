@@ -26,7 +26,7 @@ func TestASecondRunFindsTheUnitTheFirstStarted(t *testing.T) {
 	deps := func() Deps {
 		return Deps{
 			Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-			Dial: dialUnix, ReadyWithin: 10 * time.Second,
+			Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 		}
 	}
 
@@ -72,7 +72,7 @@ func TestARecordWithNothingBehindItStartsAUnit(t *testing.T) {
 	stageUnit(t, home, "probe", probeSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second,
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 	}
 
 	first := NewHost(deps)

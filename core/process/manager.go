@@ -122,11 +122,7 @@ func (manager *Manager) Spawn(request Request) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	path, err := resolveCommand(manager.deps.Home, request.Cmd)
-	if err != nil {
-		return 0, err
-	}
-
+	path := request.Cmd
 	child, err := manager.deps.Spawner.Start(Spec{
 		Path: path,
 		Args: request.Args,

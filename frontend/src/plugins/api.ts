@@ -653,18 +653,11 @@ export interface SoksakPluginApi {
    *  "process" permission. Pure pipes rather than a PTY, so JSON-RPC framing stays intact. Event-driven
    *  (zero polling). */
   process?: {
-    /** Name of the unit declared in manifest sidecars[] as implementing this contract (interface). The
-     *  manifest fixes which engine unit is used — freezing it as a bundle constant makes a manifest-only
-     *  change spawn the old unit silently. A missing or duplicate declaration throws loudly (no silent
-     *  pick). */
-    sidecarName: (contractId: string) => string;
     /** Spawn a program → handle (id). cwd/env optional. envRemove = keys to strip from the parent env
      *  (removing a nesting guard, for example). secretEnv = envVar → secretKey (a secret in this plugin
      *  ns). JS never touches plaintext — pass key names only and the core boundary resolves them from
      *  the vault into the child env (no exposure through shell args, ps, or history, R2). Locked or
-     *  missing keys fail the spawn. cmd "sidecar:{name}" references a service sidecar by name — the core
-     *  resolves it to the dist entry point in the identity home (the plugin does not assemble paths,
-     *  A17/SIDECARS.md). Not installed = an explicit error before spawn. */
+     *  missing keys fail the spawn. Sidecars are opened through app.sidecar, not this process API. */
     spawn: (
       cmd: string,
       args: string[],
@@ -892,9 +885,7 @@ function createProcessApi(
   deps: PluginApiDeps,
   tracker: DisposableTracker,
   ns: string,
-  manifest: PluginManifest,
 ) {
-  const declared = () => manifest.sidecars ?? [];
   type Bytes = (d: Uint8Array) => void;
   interface ProcState {
     stdout: Set<Bytes>;
@@ -915,26 +906,6 @@ function createProcessApi(
     return tracker.wrap(() => set.delete(cb));
   };
   return {
-    // Name of the sidecar unit the manifest declared as implementing this contract. The manifest fixes
-    // which engine unit is used — freezing the name as a bundle constant makes a manifest-only change
-    // spawn the old unit silently (declared ≠ actual). With no declaration or more than one, fail loudly
-    // instead of picking quietly.
-    sidecarName(contractId: string): string {
-      // Runtime lookup uses the version-free contract id because one manifest may declare only one
-      // unit for that contract. The exact version is checked when the unit opens.
-      const hits = declared().filter((sidecar) => sidecar.interface.id === contractId);
-      if (hits.length === 0) {
-        throw new Error(
-          tmsg("plugin.sidecar.contractNoUnit", { contract: contractId }),
-        );
-      }
-      if (hits.length > 1) {
-        throw new Error(
-          tmsg("plugin.sidecar.contractManyUnits", { contract: contractId, n: hits.length }),
-        );
-      }
-      return hits[0].name;
-    },
     async spawn(
       cmd: string,
       args: string[],
@@ -945,13 +916,6 @@ function createProcessApi(
         secretEnv?: Record<string, string>;
       },
     ): Promise<number> {
-      // Declaration ≡ reality — the rule app.sidecar (engine module) follows applies to service sidecar
-      // spawns too. Spawning a unit absent from the manifest makes the manifest's claim to be the single
-      // truth for unit selection false.
-      const unit = cmd.startsWith("sidecar:") ? cmd.slice("sidecar:".length) : null;
-      if (unit !== null && !declared().some((s) => s.name === unit)) {
-        throw new Error(tmsg("plugin.sidecar.spawnUndeclared", { unit }));
-      }
       const st: ProcState = {
         stdout: new Set(),
         stderr: new Set(),
@@ -1081,14 +1045,17 @@ function createSidecarApi(
       // The requirement travels with the open, because the manifest is this side's. The core reads
       // what the installed unit states it implements and refuses the two if they differ — declared
       // against actual, and neither taken on the other's word.
-      await deps.invoke("sidecar_open", {
-        name,
+      const opened = await deps.invoke("sidecar_open", {
+        consumer: { id: manifest.id, version: manifest.version },
+        requirementName: name,
         requirement: decl.interface,
         ns: manifest.id,
         secretEnv: opts?.secretEnv ?? null,
         generatedSecretEnv: opts?.generatedSecretEnv ?? null,
         onEvent,
-      });
+      }) as { name?: unknown };
+      const provider = typeof opened?.name === "string" && opened.name !== "" ? opened.name : "";
+      if (!provider) throw new Error(tmsg("plugin.sidecar.openNoProvider", { name }));
       let released = false;
       // Releasing the channel, never ending the unit.
       //
@@ -1100,13 +1067,13 @@ function createSidecarApi(
       const close = async () => {
         if (released) return;
         released = true;
-        await deps.invoke("sidecar_release", { name }).catch(() => {});
+        await deps.invoke("sidecar_release", { name: provider }).catch(() => {});
       };
       tracker.wrap(() => void close());
       return {
         send: async (msg) =>
           (await deps.invoke("sidecar_send", {
-            name,
+            name: provider,
             payload: JSON.stringify(msg),
           })) as Record<string, unknown>,
         on: (event, cb) => {
@@ -1122,14 +1089,14 @@ function createSidecarApi(
           // A name of this caller's own, so two streams on one unit stay apart. The core never
           // reads it: it stamps arrivals with it and nothing else.
           streamSeq += 1;
-          const label = `${name}#${streamSeq}`;
+          const label = `${provider}#${streamSeq}`;
           const onBytes = createStream<ArrayBuffer>();
           onBytes.onmessage = (m) => handlers.onBytes(new Uint8Array(m));
           const onEnd = createStream<Record<string, unknown>>();
           onEnd.onmessage = (m) =>
             handlers.onEnd?.(typeof m?.reason === "string" ? (m.reason as string) : "");
           const answer = (await deps.invoke("sidecar_stream", {
-            name,
+            name: provider,
             stream: label,
             payload: JSON.stringify(request),
             onBytes,
@@ -1138,7 +1105,7 @@ function createSidecarApi(
           // Disposing ends this stream and nothing else. A unit outlives any one connection to it,
           // and closing the unit because a view unmounted would end every other view's stream too.
           const stop = tracker.wrap(() => {
-            void deps.invoke("sidecar_stream_close", { name, stream: label }).catch(() => {});
+            void deps.invoke("sidecar_stream_close", { name: provider, stream: label }).catch(() => {});
           });
           return { answer, close: stop };
         },
@@ -2079,7 +2046,7 @@ export function buildPluginApi(
             contentViewHost().close(label),
         }
       : undefined,
-    process: has("process") ? createProcessApi(deps, tracker, id, manifest) : undefined,
+    process: has("process") ? createProcessApi(deps, tracker, id) : undefined,
     sidecar: has("sidecar") ? createSidecarApi(deps, tracker, manifest) : undefined,
     network: has("network") ? createNetworkApi(deps, id) : undefined,
     ws: has("network") ? createWsApi(deps, tracker) : undefined,

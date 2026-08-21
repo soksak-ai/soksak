@@ -381,7 +381,6 @@ export interface PluginManifest {
   // and WebRTC are opened by this policy.
   runtime: PluginRuntimePolicy;
   minAppVersion?: string;
-  template?: boolean; // true = development template (read-only). Not an activation target — listed and detailed only, with no toggle.
   // Plugin↔plugin dependency (library plugin). pluginId → semver range (e.g. "^0.1.0"). Install
   // pulls missing dependencies in transitively (consent gate); delete cascades to dependents
   // (prevents dangling references). A separate axis from core permissions — this is dependency on
@@ -664,7 +663,6 @@ export function parseManifest(
       "entry",
       "runtime",
       "minAppVersion",
-      "template",
       "dependencies",
       "libraries",
       "sidecars",
@@ -711,9 +709,6 @@ export function parseManifest(
     (!isNonEmptyString(raw.minAppVersion) || !SEMVER_RE.test(raw.minAppVersion))
   ) {
     errors.push("minAppVersion: semver format required");
-  }
-  if (raw.template !== undefined && typeof raw.template !== "boolean") {
-    errors.push("template: true/false required");
   }
 
   // dependencies: runtime plugin relation/call permission (pluginId → semver range). Not a locator
@@ -1524,7 +1519,6 @@ export function parseManifest(
         raw.minAppVersion !== undefined
           ? (raw.minAppVersion as string).trim()
           : undefined,
-      ...(raw.template === true ? { template: true } : {}),
       ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
       ...(libraries.length > 0 ? { libraries } : {}),
       ...(sidecars.length > 0 ? { sidecars } : {}),

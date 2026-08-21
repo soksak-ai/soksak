@@ -47,12 +47,13 @@ migration.
 No common `soksak-unit.json` exists. Each type keeps its existing manifest:
 
 - a plugin uses `plugin.json`;
-- a sidecar uses its release or interface manifest;
+- a sidecar uses `sidecar.json`;
 - a kit uses its package manifest.
 
 The settings entry records that manifest's relative path. The owner repository validates its own
 manifest and artifact. Installation provenance and dependency resolution remain in signed release
 documents and settings rather than being copied into another manifest.
+For a process sidecar, `sidecar.json` declares the process path inside the selected target archive.
 
 A named consumer requirement is connected to one provider id and version by `settings.json.bindings`. No
 provider is selected by folder order, install order, name convention or fallback.

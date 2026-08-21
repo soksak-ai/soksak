@@ -8,26 +8,6 @@ import "github.com/soksak-ai/soksak-core/core/i18n"
 
 func init() {
 	i18n.Declare(map[string]i18n.Sentence{
-		"process.sidecar.noHome": {
-			EN: "sidecar {name} cannot be resolved: this process was given no home",
-			KO: "사이드카 {name} 을(를) 해석할 수 없습니다 — 이 프로세스에 home 이 없습니다",
-		},
-		"process.sidecar.notInstalled": {
-			EN: "sidecar {name} is not installed at {target}: {path} is missing — the home needs a staged dist",
-			KO: "사이드카 {name} 이(가) {target} 에 설치되어 있지 않습니다 — {path} 이(가) 없습니다. home 에 staged dist 가 필요합니다",
-		},
-		"process.sidecar.symlink": {
-			EN: "sidecar {name}: {path} is a symlink — a named path answers for itself or not at all",
-			KO: "사이드카 {name}: {path} 이(가) 심볼릭 링크입니다 — 지정된 경로는 그 자신으로만 응답합니다",
-		},
-		"process.sidecar.notRegularFile": {
-			EN: "sidecar {name}: {path} is not a regular file",
-			KO: "사이드카 {name}: {path} 이(가) 일반 파일이 아닙니다",
-		},
-		"process.sidecar.illegalName": {
-			EN: `sidecar name "{name}" is illegal — it must match ^[a-z0-9][a-z0-9-]*$`,
-			KO: `사이드카 이름 "{name}" 은(는) 허용되지 않습니다 — ^[a-z0-9][a-z0-9-]*$ 를 만족해야 합니다`,
-		},
 		"process.spawn.noSpawner": {
 			EN: "process_spawn: this host was given no spawner and starts no children",
 			KO: "process_spawn: 이 호스트에는 spawner 가 없어 자식 프로세스를 시작하지 않습니다",

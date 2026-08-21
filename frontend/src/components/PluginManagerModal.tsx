@@ -299,21 +299,17 @@ function PluginManager() {
             <span className="plugin-row-name">{localize(p.manifest.name)}</span>
             <span className="plugin-row-ver">v{p.manifest.version}</span>
             {p.source === "dev" && <span className="plugin-badge dev">dev</span>}
-            {/* Source: listed in the official registry vs manual/third party (unlisted). dev and template have their own badge, so they are excluded. */}
-            {p.source !== "dev" && !p.manifest.template && (
+            {/* Source: listed in the official registry vs manual/third party (unlisted). */}
+            {p.source !== "dev" && (
               <span
                 className={`plugin-badge ${officialIds.has(p.manifest.id) ? "official" : "manual"}`}
               >
                 {t(officialIds.has(p.manifest.id) ? "plugin.source.official" : "plugin.source.manual")}
               </span>
             )}
-            {p.manifest.template ? (
-              <span className="plugin-badge template">{t("plugin.template")}</span>
-            ) : (
-              <span className={`plugin-badge ${statusKey(p)}`}>
-                {t(`plugin.status.${statusKey(p)}`)}
-              </span>
-            )}
+            <span className={`plugin-badge ${statusKey(p)}`}>
+              {t(`plugin.status.${statusKey(p)}`)}
+            </span>
           </div>
           <div className="plugin-row-desc">{localize(p.manifest.description)}</div>
           {/* Role chips — derived mechanically from the verified declaration (contributes); prose
@@ -362,10 +358,7 @@ function PluginManager() {
           {p.error && <div className="plugin-row-err">{p.error}</div>}
           {/* Action buttons are separate from the card click (detail modal) — bubbling is stopped. */}
           <div className="plugin-row-actions" onClick={(e) => e.stopPropagation()}>
-            {p.manifest.template ? (
-              // Template (read-only) — no enable toggle. The detail (description, contribution chips) stays exposed above.
-              <span className="plugin-row-note">{t("plugin.template.note")}</span>
-            ) : p.status === "enabled" ? (
+            {p.status === "enabled" ? (
               <button
                 type="button"
                 className="dbtn"

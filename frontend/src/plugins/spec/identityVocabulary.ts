@@ -1,4 +1,4 @@
-// Identity vocabulary rule (single truth) — the banned-word judgment for every name exposed to the
+// Identity vocabulary rule — the authoritative banned-word judgment for every name exposed to the
 // DOM (CSS classes, data-* attributes).
 //
 // Rule (docs/IDENTITY.md §3·§5): one entity, one name. A banned word cannot appear as a morpheme

@@ -75,9 +75,8 @@ describe("the load boundary actually applies that comparison", () => {
 // requirement it does not have. Measured the same day: the terminal plugin, whose units are all
 // spawned, could not be enabled at all.
 //
-// The 2026-07-31 case is still caught, one layer down and by the declaring side:
-// `ProvidedFromRelease` refuses a unit shipping a library on a host that loads none, and names the
-// artefact (`core/sidecar/library_test.go`).
+// A sidecar.json declaring a library is refused by the installation resolver when this host cannot
+// load one.
 describe("a need is declared, never inferred from a permission", () => {
   const spawnedUnits = {
     id: "demo",

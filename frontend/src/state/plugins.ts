@@ -1,5 +1,5 @@
 // Plugin store — the single store for scan/install/consent/activation state (symmetric with the theme store).
-//   - Validation: parseManifest (single truth for the spec) is all-or-nothing — bad entries surface as rejected.
+//   - Validation: parseManifest is the authoritative all-or-nothing validator; bad entries surface as rejected.
 //   - Consent (§0-5): a human consent record is required before activation. A version/permission change requires re-consent.
 //   - Active instances (module/Disposable — not serializable) are kept in loader's Map; this file holds only
 //     serializable runtime state (the shape plugin.list returns unchanged).
@@ -577,19 +577,13 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       set({ plugins: next, rejected, enabledIds });
 
       // Re-activate the enabled list whose consent is valid. Failure shows in status (§0-4 — no silence).
-      // Walk the gates (template, consent) first, then raise the activation targets concurrently per dependency
+      // Check consent first, then raise the activation targets concurrently per dependency
       // level — so IPC reads and in-plugin waits overlap, against 2.4s total for 46 sequential (measured). Levels
       // (activationLevels) guarantee "dependencies first", and failure isolation stays per-plugin try (§0-4).
       const ready: string[] = [];
       for (const id of enabledIds) {
         const p = get().plugins[id];
         if (!p) continue;
-        // Templates are never activated (the enable gate keeps them out of enabledIds; this guards the case
-        // where an install turned into a template).
-        if (p.manifest.template) {
-          setRuntime(id, { status: "disabled", error: undefined });
-          continue;
-        }
         // Consent gate — covers transitive dependencies too (a dependency's terms change makes dependents re-consent).
         // dev sources are exempt (§0-5 exception — same rule as enable).
         const pending = pendingConsentChain(id, get().plugins, get().consents);
@@ -712,11 +706,6 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     enable: async (id) => {
       const p = get().plugins[id];
       if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
-      // Templates (read-only) are not activation targets — the UI hides the toggle, and the command path
-      // (sok/MCP) is blocked too (a single gate).
-      if (p.manifest.template) {
-        return err("INVALID_PARAMS", tmsg("plugin.template.notEnableable", { id }));
-      }
       if (p.status === "enabled" && isActive(id)) {
         return ok({ id, status: "enabled" }); // idempotent
       }

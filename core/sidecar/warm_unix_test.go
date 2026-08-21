@@ -30,7 +30,7 @@ func TestWhatAUnitHeldSurvivesTheApplication(t *testing.T) {
 	stageUnit(t, home, "keeper", keeperSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second,
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 	}
 
 	// The first run puts something in and lets go.

@@ -21,15 +21,8 @@ import (
 
 // Deps for registration. Each field is something this package refuses to derive.
 type Registration struct {
-	Host *Host
-	// Provided answers what the installed unit states it implements. Nil means this build cannot
-	// check declared against actual, and the commands say so rather than checking nothing quietly.
-	//
-	// What was *declared* arrives with the open request instead of being read here. The manifest is
-	// the caller's, and the caller's API object was built from that manifest and no other — so a
-	// plugin can only ask about a unit its own manifest names. Reading manifests here as well would
-	// be a second source for one fact.
-	Provided func(unit string) (Provided, error)
+	Host    *Host
+	Resolve func(consumer Consumer, requirement string) (Resolved, error)
 	// Sink is where a unit's stream bytes arrive for the caller. Nil means this host has no stream,
 	// and `sidecar_stream` is declared unserved rather than opening a connection whose output has
 	// nowhere to go — a unit writing into nothing blocks, and what that looks like is a unit that
@@ -49,11 +42,11 @@ type Requirement struct {
 	Version string `json:"version"`
 }
 
-// Provided is a contract an installed unit states it implements.
-type Provided struct {
+type Consumer struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
 }
+type Resolved struct{ Name, Path, InterfaceID, InterfaceVersion string }
 
 // Names is every command this group owns, served or not.
 //
@@ -81,7 +74,7 @@ func Register(registry *control.Registry, deps Registration) {
 	}
 
 	// One reason, and it names what is missing rather than that something is.
-	if deps.Host == nil || deps.Provided == nil {
+	if deps.Host == nil || deps.Resolve == nil {
 		reason := "this build was given no way to start a unit, or no way to read what an " +
 			"installed unit provides"
 		for _, name := range Names() {
@@ -91,7 +84,11 @@ func Register(registry *control.Registry, deps Registration) {
 	}
 
 	serve("sidecar_open", func(args control.Args) (any, error) {
-		name, err := control.Arg[string](args, "name")
+		consumer, err := control.Arg[Consumer](args, "consumer")
+		if err != nil {
+			return nil, err
+		}
+		requirementName, err := control.Arg[string](args, "requirementName")
 		if err != nil {
 			return nil, err
 		}
@@ -113,25 +110,25 @@ func Register(registry *control.Registry, deps Registration) {
 		}
 		if len(generated) > 0 {
 			if len(secretEnv) > 0 {
-				return nil, i18n.Errorf("sidecar.secretModesConflict", map[string]string{"name": name})
+				return nil, i18n.Errorf("sidecar.secretModesConflict", map[string]string{"name": requirementName})
 			}
-			provided, err := deps.Provided(name)
+			resolved, err := deps.Resolve(consumer, requirementName)
 			if err != nil {
 				return nil, err
 			}
-			if provided.ID != requirement.ID {
+			if resolved.InterfaceID != requirement.ID {
 				return nil, i18n.Errorf("sidecar.contractMismatch", map[string]string{
-					"name": name, "wanted": requirement.ID, "found": provided.ID,
+					"name": requirementName, "wanted": requirement.ID, "found": resolved.InterfaceID,
 				})
 			}
-			if provided.Version != requirement.Version {
+			if resolved.InterfaceVersion != requirement.Version {
 				return nil, i18n.Errorf("sidecar.versionMismatch", map[string]string{
-					"name": name, "wanted": requirement.ID, "wanted2": requirement.Version, "found": provided.Version,
+					"name": requirementName, "wanted": requirement.ID, "wanted2": requirement.Version, "found": resolved.InterfaceVersion,
 				})
 			}
-			return deps.Host.StartWithGeneratedSecrets(name, generated)
+			return deps.Host.StartResolvedWithGeneratedSecrets(resolved.Name, resolved.Path, generated)
 		}
-		return deps.openDeclaredWithSecrets(name, requirement, namespace, secretEnv)
+		return deps.openBoundWithSecrets(consumer, requirementName, requirement, namespace, secretEnv)
 	})
 
 	serve("sidecar_send", func(args control.Args) (any, error) {
@@ -244,30 +241,20 @@ func Register(registry *control.Registry, deps Registration) {
 	})
 }
 
-// openDeclared starts a unit only when the manifest declared it and the unit implements what was
-// declared.
-//
-// Both halves are checked. A name nobody declared is a process a person never consented to, and a
-// unit implementing a different contract answers a plugin's request with something else's semantics
-// — which does not fail, it arrives as a different answer.
-func (deps Registration) openDeclared(name string, requirement Requirement) (Open, error) {
-	return deps.openDeclaredWithSecrets(name, requirement, "", nil)
-}
-
-func (deps Registration) openDeclaredWithSecrets(name string, requirement Requirement, namespace string, secretEnv map[string]string) (Open, error) {
-	provided, err := deps.Provided(name)
+func (deps Registration) openBoundWithSecrets(consumer Consumer, name string, requirement Requirement, namespace string, secretEnv map[string]string) (Open, error) {
+	resolved, err := deps.Resolve(consumer, name)
 	if err != nil {
 		return Open{}, err
 	}
-	if provided.ID != requirement.ID {
+	if resolved.InterfaceID != requirement.ID {
 		return Open{}, i18n.Errorf("sidecar.contractMismatch", map[string]string{
-			"name": name, "wanted": requirement.ID, "found": provided.ID,
+			"name": name, "wanted": requirement.ID, "found": resolved.InterfaceID,
 		})
 	}
-	if provided.Version != requirement.Version {
+	if resolved.InterfaceVersion != requirement.Version {
 		return Open{}, i18n.Errorf("sidecar.versionMismatch", map[string]string{
-			"name": name, "wanted": requirement.ID, "wanted2": requirement.Version, "found": provided.Version,
+			"name": name, "wanted": requirement.ID, "wanted2": requirement.Version, "found": resolved.InterfaceVersion,
 		})
 	}
-	return deps.Host.StartWithSecrets(name, namespace, secretEnv)
+	return deps.Host.StartResolvedWithSecrets(resolved.Name, resolved.Path, namespace, secretEnv)
 }

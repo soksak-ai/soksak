@@ -169,41 +169,6 @@ export function nodeConformance(
   };
 }
 
-// ── Single truth of unit selection — did the bundle harden the unit name (publish boundary) ────────
-// Which engine unit to spawn is decided by the manifest sidecars[]. Hardening "sidecar:<name>" into the
-// bundle as a constant makes declared ≠ actual the moment the manifest alone changes. The runtime spawn
-// gate catches that mismatch loudly (app.process.spawn), but only on execution — catch it statically
-// before publishing too.
-//
-// Even a declared name is a violation when it is baked in as a literal: the moment the manifest changes,
-// that literal becomes false, and the only sign is the app dying. The name comes from
-// app.process.sidecarName (the contract).
-
-export interface SidecarSpawnViolation {
-  /** Unit name hardened into the bundle. */
-  unit: string;
-  /** Whether the manifest declares that name (a literal is a violation even when declared — see the comment above). */
-  declared: boolean;
-}
-
-/** Finds `sidecar:<name>` literals in the bundle source. Even one means unit selection is in the bundle
- *  instead of the manifest. */
-export function sidecarSpawnViolations(
-  bundle: string,
-  declared: ReadonlyArray<{ name: string }>,
-): SidecarSpawnViolation[] {
-  const names = new Set(declared.map((d) => d.name));
-  const out: SidecarSpawnViolation[] = [];
-  const seen = new Set<string>();
-  for (const m of bundle.matchAll(/["'`]sidecar:([a-z0-9][a-z0-9-]*)["'`]/g)) {
-    const unit = m[1];
-    if (seen.has(unit)) continue;
-    seen.add(unit);
-    out.push({ unit, declared: names.has(unit) });
-  }
-  return out;
-}
-
 // ── Do the called names actually resolve ────────────────────────────────────────────
 // Nobody checked the names a plugin calls through `app.commands.execute("<name>")`. So when the core
 // renames or evicts a command, the plugin calling that name dies silently — a dead call leaves neither

@@ -88,6 +88,7 @@ type Deps struct {
 	Dial func(address string) (io.ReadWriteCloser, error)
 	// ReadyWithin bounds the wait for a unit's first line. Zero takes the default below.
 	ReadyWithin time.Duration
+	ResolvePath func(name string) (string, error)
 }
 
 // DefaultReadyWithin is how long a unit has to print its first line.
@@ -174,7 +175,18 @@ func (host *Host) Start(name string) (Open, error) {
 }
 
 func (host *Host) StartWithSecrets(name, namespace string, secretEnv map[string]string) (Open, error) {
-	return host.startWithSecrets(name, namespace, secretEnv, secretNameFingerprint(namespace, secretEnv))
+	if host.deps.ResolvePath == nil {
+		return Open{}, i18n.Errorf("sidecar.noResolver", map[string]string{"name": name})
+	}
+	path, err := host.deps.ResolvePath(name)
+	if err != nil {
+		return Open{}, err
+	}
+	return host.StartResolvedWithSecrets(name, path, namespace, secretEnv)
+}
+
+func (host *Host) StartResolvedWithSecrets(name, path, namespace string, secretEnv map[string]string) (Open, error) {
+	return host.startResolvedWithSecrets(name, path, namespace, secretEnv, secretNameFingerprint(namespace, secretEnv))
 }
 
 type GeneratedSecret struct {
@@ -185,7 +197,18 @@ type GeneratedSecret struct {
 func (host *Host) StartWithGeneratedSecrets(
 	name string, generated map[string]GeneratedSecret,
 ) (Open, error) {
-	namespace := "soksak-sidecar-" + name
+	if host.deps.ResolvePath == nil {
+		return Open{}, i18n.Errorf("sidecar.noResolver", map[string]string{"name": name})
+	}
+	path, err := host.deps.ResolvePath(name)
+	if err != nil {
+		return Open{}, err
+	}
+	return host.StartResolvedWithGeneratedSecrets(name, path, generated)
+}
+
+func (host *Host) StartResolvedWithGeneratedSecrets(name, path string, generated map[string]GeneratedSecret) (Open, error) {
+	namespace := name
 	keys := make(map[string]string, len(generated))
 	generator, ok := host.secrets.(process.SecretGenerator)
 	if len(generated) > 0 && !ok {
@@ -204,11 +227,11 @@ func (host *Host) StartWithGeneratedSecrets(
 	for environment, declaration := range generated {
 		names[environment] = fmt.Sprintf("%s:%d", declaration.Key, declaration.Bytes)
 	}
-	return host.startWithSecrets(name, namespace, keys, secretNameFingerprint(namespace, names))
+	return host.startResolvedWithSecrets(name, path, namespace, keys, secretNameFingerprint(namespace, names))
 }
 
-func (host *Host) startWithSecrets(
-	name, namespace string, secretEnv map[string]string, fingerprint string,
+func (host *Host) startResolvedWithSecrets(
+	name, path, namespace string, secretEnv map[string]string, fingerprint string,
 ) (Open, error) {
 	host.mu.Lock()
 	if held, running := host.open[name]; running {
@@ -230,11 +253,6 @@ func (host *Host) startWithSecrets(
 	if host.deps.Spawner == nil {
 		return Open{}, i18n.Errorf("sidecar.noSpawner", map[string]string{"name": name})
 	}
-	path, err := process.SidecarPath(host.deps.Home, name)
-	if err != nil {
-		return Open{}, err
-	}
-
 	host.mu.Lock()
 	source := host.secrets
 	host.mu.Unlock()

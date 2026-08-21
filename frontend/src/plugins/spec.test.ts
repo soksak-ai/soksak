@@ -224,16 +224,6 @@ describe("parseManifest — accept", () => {
     ).toBe(true);
   });
 
-  it("keeps template:true; omitted and false are not included", () => {
-    expect(parseManifest(base({ template: true }), "demo").manifest).toMatchObject(
-      { template: true },
-    );
-    expect(parseManifest(base(), "demo").manifest).not.toHaveProperty("template");
-    expect(
-      parseManifest(base({ template: false }), "demo").manifest,
-    ).not.toHaveProperty("template");
-  });
-
   it("repo is owned by the owner release alone — rejected in plugin.json", () => {
     const { manifest } = parseManifest(
       base({ repo: "https://github.com/soksak-ai/soksak-plugin-shark.git" }),
@@ -261,7 +251,7 @@ describe("parseManifest — reject(required fields)", () => {
     ["author not a string", base({ author: 3 }), "author"],
     ["repo is an unknown manifest key", base({ repo: "soksak-ai/shark" }), "manifest"],
     ["minAppVersion not semver", base({ minAppVersion: "v1" }), "minAppVersion"],
-    ["template not boolean", base({ template: "yes" }), "template"],
+    ["template is an unknown manifest key", base({ template: true }), "manifest"],
   ])("%s → rejected", (_label, raw, field) => {
     const errors = errorsOf(raw);
     expect(errors.some((e) => e.startsWith(field))).toBe(true);

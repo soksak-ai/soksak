@@ -6,7 +6,6 @@ import {
   partitionEnforcement,
   partitionTransparency,
   viewStatusConformance,
-  sidecarSpawnViolations,
   executedCommandNames,
   unresolvedCommandCalls,
 } from "./conformance";
@@ -238,31 +237,6 @@ describe("partitionTransparency — enforcement-mode classification", () => {
         "implements-duplicate": "warn",
       }),
     ).toEqual({ blocking: [v[0]], warn: [v[1]] });
-  });
-});
-
-describe("single truth for unit selection — whether the bundle hardcodes the unit name", () => {
-  const declared = [{ name: "terminal-alacritty" }];
-
-  it("a bundle that reads the name from the manifest has no violation", () => {
-    // No unit name as a literal — it spawns the value app.process.sidecarName (the contract) returned.
-    const bundle = 'const u = app.process.sidecarName(C); proc.spawn(`sidecar:${u}`, [], {});';
-    expect(sidecarSpawnViolations(bundle, declared)).toEqual([]);
-  });
-
-  it("a hardcoded name is a violation even when it is declared", () => {
-    // Even when it matches the declaration, this literal turns false the moment the manifest changes — and only a crash surfaces it.
-    const bundle = 'proc.spawn("sidecar:terminal-alacritty", [], {});';
-    expect(sidecarSpawnViolations(bundle, declared)).toEqual([
-      { unit: "terminal-alacritty", declared: true },
-    ]);
-  });
-
-  it("an undeclared name is caught with declared=false", () => {
-    const bundle = 'proc.spawn("sidecar:terminal-wezterm", [], {});';
-    expect(sidecarSpawnViolations(bundle, declared)).toEqual([
-      { unit: "terminal-wezterm", declared: false },
-    ]);
   });
 });
 

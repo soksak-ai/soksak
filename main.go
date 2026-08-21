@@ -15,8 +15,10 @@ import (
 	"runtime"
 	"time"
 
+	compositioncontract "github.com/soksak-ai/soksak-contract-composition"
 	"github.com/soksak-ai/soksak-core/core/activity"
 	"github.com/soksak-ai/soksak-core/core/boot"
+	"github.com/soksak-ai/soksak-core/core/composition"
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/files"
 	"github.com/soksak-ai/soksak-core/core/identity"
@@ -114,9 +116,15 @@ func main() {
 
 	registry := control.NewRegistry()
 	sidecar.Register(registry, sidecar.Registration{
-		Host:     units,
-		Provided: sidecar.ProvidedFromRelease(resolved.Home),
-		Sink:     wails.NewSidecarSink(bridge),
+		Host: units,
+		Resolve: func(consumer sidecar.Consumer, requirement string) (sidecar.Resolved, error) {
+			runtime, err := composition.ResolveBoundSidecar(resolved.Home, compositioncontract.PluginRef{ID: consumer.ID, Version: consumer.Version}, requirement)
+			if err != nil {
+				return sidecar.Resolved{}, err
+			}
+			return sidecar.Resolved{Name: runtime.ID, Path: runtime.Process, InterfaceID: runtime.InterfaceID, InterfaceVersion: runtime.InterfaceVersion}, nil
+		},
+		Sink: wails.NewSidecarSink(bridge),
 	})
 	// Filled once the home is ours. Nothing this installation owns — least of
 	// all its database — is touched by a process that has not claimed it.

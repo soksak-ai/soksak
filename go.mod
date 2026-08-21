@@ -7,7 +7,6 @@ require (
 	github.com/soksak-ai/soksak-contract-composition v0.0.1
 	github.com/soksak-ai/soksak-contract-contentview v0.0.1
 	github.com/soksak-ai/soksak-contract-control v0.0.1
-	github.com/soksak-ai/soksak-contract-pty v0.0.1
 	github.com/soksak-ai/wails-service-native-compositor v0.0.1
 	github.com/soksak-ai/wails-service-webview-surface v0.0.1
 	github.com/wailsapp/wails/v3 v3.0.0-dev

@@ -69,9 +69,11 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	// names unserved rather than leaving them off the table, and this gate is what would catch the
 	// difference between the two lists.
 	sidecar.Register(registry, sidecar.Registration{
-		Host:     sidecar.NewHost(sidecar.Deps{Home: home, Spawner: process.OSSpawner{}}),
-		Provided: sidecar.ProvidedFromRelease(home),
-		Sink:     discardSidecarOutput{},
+		Host: sidecar.NewHost(sidecar.Deps{Home: home, Spawner: process.OSSpawner{}}),
+		Resolve: func(sidecar.Consumer, string) (sidecar.Resolved, error) {
+			return sidecar.Resolved{Name: "fixture", Path: "/fixture", InterfaceID: "fixture", InterfaceVersion: "0.0.1"}, nil
+		},
+		Sink: discardSidecarOutput{},
 	})
 	// The same call Run makes. A second list here drifts from that one in both
 	// directions at once and neither side reports it: measured 2026-08-15, this

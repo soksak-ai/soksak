@@ -1,6 +1,6 @@
 // C2 static transparency judgment — the manifest-only rules of composition law C2 (three
 // transparencies: command·status·DOM).
-// This file is the single truth of the judgment (pure functions — manifest data in, no runtime
+// This file owns the judgment (pure functions — manifest data in, no runtime
 // evidence). Enforcement is the consumer boundary's job: the core loader (activation refusal or
 // warning), plugin.conformance (diagnostics), scripts/gates/c2-transparency-scan.mjs (installed-unit
 // gate) and bin/validate.mjs (author gate) all import this judgment — do not mirror it (no second

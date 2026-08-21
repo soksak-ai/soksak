@@ -6,163 +6,83 @@ canonical: self
 
 # Sidecars
 
+A sidecar is an independently released process used by a plugin. The core starts the process and
+relays the control protocol without interpreting domain payloads. A Wails service is compiled into
+the host and extends the host itself, so it is not a sidecar.
 
-A sidecar is a plugin that runs in its own process. This document is the contract; this round
-builds no sidecar.
+## S1. Identity and selection
 
-## S1. Classification is by consumer
+Plugins declare named sidecar requirements. Each requirement has a public contract id and version.
+settings.json bindings connect the named plugin requirement to one sidecar id and version. Provider
+selection never uses folder order, install order, an id prefix or a fallback.
 
-- **Sidecar** — a separate process a plugin drives. The core spawns and relays; it does not
-  interpret the messages.
-- **Wails service** — extends the host itself (native surfaces, capture). Registered in
-  `frameworks/wails/host.go`'s service list, cannot be switched off, and is not a sidecar.
+When a plugin opens a requirement, the core sends the plugin id, plugin version and requirement
+name to the installation resolver. The resolver returns the bound sidecar. The open response
+contains the actual sidecar id, and later send, stream and release operations use that id.
 
-The two differ in what depends on them, so they are different folders (REPO-LAYOUT.md L1).
+The older process spawn shortcut for sidecars is removed. It had no consumer identity or
+requirement name and therefore could not resolve a settings binding.
 
-## S2. A sidecar registers no command
+## S2. Manifest
 
-The plugin that declared a sidecar registers every command, and every request and every answer
-passes through that plugin. A sidecar with commands of its own would put its own name on the public
-surface, so replacing it would change what the application answers; two plugins driving one sidecar
-would collide on the same names; and the permission that admitted a call would have been granted to
-a unit no manifest declared.
+Every sidecar artifact contains sidecar.json using soksak-spec-sidecar@0.0.1. It declares the
+sidecar id and version, the implemented interface, and a process path relative to the installed
+artifact. The composition contract owns this document format.
 
-How a sidecar is spoken to follows from how it is opened, and the release declares which:
+The process path must resolve through regular directories to a regular file. Symbolic links, path
+escape, missing files and undeclared paths are rejected. release/unit.json does not exist and is
+not read as a fallback.
 
-| Artefact | Opened by | Spoken to through |
-| --- | --- | --- |
-| `process[]` | spawning it | the control envelope of CONTROL-PROTOCOL.md, over its own socket |
-| `library[]` | loading it | a C ABI — a library cannot be opened over an envelope |
+The current host starts process sidecars. A manifest declaring a library is rejected until the host
+implements the separately tested in-process library loader.
 
-The rule this replaces stated that there is no separate ABI at all. Applied to a loaded library, it
-forbids the only way to open one. What stays forbidden is the case it was written for: a second
-envelope beside the control plane, for work the control plane already does. Two wires diverge, and a
-divergence does not fail — it arrives as a different answer.
+## S3. Distribution
 
-## S3. A unit ships artefacts, and in-process is not linked
+Each sidecar repository owns its build, tests and GitHub Release. A release publishes one immutable
+archive per supported target. The archive contains sidecar.json, dist/<sidecar-id> and any runtime
+files required by that process. The source binary may use a platform extension while the archive
+entry remains the path declared by sidecar.json.
 
-A release declares its artefacts and how each one is opened: `process[]` for an artefact that is
-spawned, `library[]` for one that is loaded. Both are optional and neither excludes the other — one
-unit ships a loaded library together with the helper processes that library spawns.
+The registry records target, archive URL, SHA-256, format and sidecar.json. The installer selects
+the current host target, verifies the digest, extracts regular files in a transaction and records
+the absolute install path in settings. A managed installation never clones a repository or builds a
+sidecar locally.
 
-| | spawned — `process[]` | loaded — `library[]` |
-| --- | --- | --- |
-| Runs in | its own process | this process |
-| Draws | nothing | into a pane's surface |
-| Channel | the control-plane envelope over its socket | opaque bytes across the loading ABI |
-| Described by | its manifest | the symbols it exports — the binary is the truth |
-| The core understands | the envelope, not the payload | nothing; it relays |
+Development mode is different: the owner repository builds and stages its own dist directory, and
+settings records that absolute path with development:true. The updater does not replace it.
 
-`service` and `engine` are shorthand for the two columns and appear in prose only. Neither is a
-field, and no manifest states which one a unit is. A unit graded by a label can be labelled wrong
-and nothing catches it, while a declared path is opened and read: measured 2026-08-20, one installed
-browser unit holds a `.dylib` **and** five helper application bundles, which no single label
-describes.
+## S4. Runtime and protocol
 
-That is also why this section was wrong before. It presented the two columns as exclusive shapes a
-unit takes, and a unit takes neither — its artefacts do.
+A sidecar registers no application command. Its plugin owns public commands. Sidecar traffic uses
+the versioned control envelope; the core checks correlation and framing but treats request and
+response data as opaque. Operator and system tests may use sidecar.request, while plugin code must
+use its declared app.sidecar capability.
 
-A loaded artefact is in this process because a view does not cross a process boundary. Measured 2026-08-20
-across the three targets this build ships to:
+Readiness is the first valid announcement from the process. A file appearing on disk is not
+readiness. The core waits on the announcement with a finite deadline and never polls for a socket.
 
-| Attaching another process's view to this window | |
-| --- | --- |
-| macOS | no public API |
-| Windows | `SetParent` accepts it, and forces a DPI-awareness reset of the child's process |
-| Linux, GTK4 — the default this framework builds against | the API is gone; `GtkSocket` was X11-only and GTK4 removed it |
+## S5. Lifetime
 
-One of three, with a cost, is not a shape a cross-platform plugin can take. So an engine that draws
-into a view runs in this process, and that is a fact about the process.
+Releasing a channel closes that caller's connection and does not stop the sidecar. Application
+shutdown also releases connections without ending sidecars that own restorable work. A later
+application generation reads the saved process announcement, reconnects, performs the greeting and
+uses the same process.
 
-It was read as a fact about the build until 2026-08-20 — this section said such a plugin is "linked
-into the application as a Wails service, not spawned", and the browser's and compositor's Go halves
-were linked accordingly.
+sidecar.stop is the explicit operation that ends a sidecar. A plugin disable, view unmount or app
+restart is not a stop request. Streams have their own ids and can close independently.
 
-**In-process is not linked.** An engine module is installed like any other artefact and loaded
-because the manifest declared it. Wails' own service concept cannot carry it: `RegisterService`
-takes a Go value and refuses anything after `Run`, so a service is a compile-time fact — which is
-the right shape for the *host* that loads engines, and the wrong one for the engines.
+## S6. Secrets and permissions
 
-What a module is written in is not constrained. It exports a C ABI, and a runtime of its own is not
-in the way: measured 2026-08-20, a host built in this language loaded a module built in the same one
-and both ran at once — the module's own goroutines, timer, allocation and garbage collection beside
-the host's, its panic recovered inside itself, the host's scheduler and goroutines untouched.
+The plugin manifest discloses the sidecar permission and named requirements. Secret values do not
+cross into JavaScript. A plugin passes secret names or generated-secret declarations; the core
+resolves values at the process boundary. Reopening a running sidecar with a different declared
+secret set is rejected.
 
-That was written here as impossible the same day, before it was measured. It is the reverse: the
-native half a plugin already has can be built as a module and loaded, without being rewritten in
-another language.
+## S7. Tests
 
-Four things about a loaded module are unmeasured and are named in `GATES.md`: what two runtimes do
-to each other's signal handlers, whether the load holds on the other two targets, whether unloading
-is safe, and what a long-lived module does that a short-lived one does not.
-
-Loading costs Windows nothing, which is the constraint that decides whether this shape is available
-at all. `NATIVE-LAYER.md` N3 holds Windows at cgo 0 because that is the one target whose cross
-compilation a cgo dependency would break. Measured 2026-08-20 by compiling both halves of a loader:
-
-| Target | How a module is opened, its symbols found, and host callbacks handed back | cgo |
-| --- | --- | --- |
-| Windows (amd64, arm64) | `syscall.LoadDLL`, `(*DLL).FindProc`, `(*Proc).Call`, `syscall.NewCallback` | 0 |
-| macOS, Linux | `dlopen`, `dlsym` | already required by the framework |
-
-A Go function reaches a module as a C function pointer on every target, so the host half of the ABI
-needs no platform of its own. The framework itself calls Win32 this way in its own Windows layer, so
-this is the path it already takes rather than a new one.
-
-Until that host exists, `wails-services/wails-service-native-compositor` and
-`soksak-plugins/soksak-plugin-browser-native` are linked Go, and `ARCHITECTURE.md` C1a is red for
-them. The state is written down rather than described as a design.
-
-## S4. Lifetime
-
-- Only the process that spawned a child reaps it. Adopting an orphan is not ownership: the adopter
-  did not choose its arguments and cannot know what it was doing.
-- Readiness is the child's first stdout line, and that line names its socket. A file appearing on
-  disk is not a bind, and polling for one reports ready before the listener exists.
-- No polling anywhere else either. An event boundary or a receipt says when something happened.
-
-## S5. Distribution
-
-Two cases, and they are not alike.
-
-| Case | How |
-| --- | --- |
-| Written here | A subcommand of the one binary. The process splits; the binary does not. |
-| A third-party binary (ffmpeg, an agent CLI) | A bundled file, found by the discovery rule below. |
-
-Discovery: a declared path wins. With none, the search fails carrying every location it looked in.
-A guessed path leaves only `ENOENT`, which says nothing about where anyone looked.
-
-## S6. Declaration and permission
-
-A plugin declares a named sidecar contract requirement. The installation binding selects one
-installed sidecar provider by id and version (COMPOSITION C3). `app.sidecar.open(name)` is limited to the
-resolved binding, and the declared interface is checked against the provider manifest: declared
-equals actual, on both sides.
-
-The `sidecar` permission is disclosed with the declared names, because a sidecar runs code this
-application did not write.
-
-## S7. What is built, and what is not
-
-| Artefact | State |
-| --- | --- |
-| `process[]` — spawned | Built, and wired past its own rule. The PTY daemon owns the shells so they outlive an application generation, which is the whole reason a process is split. No manifest declares it: measured 2026-08-20, `main.go` names `<home>/bin/soksak-ptyd-p1` directly, a path neither the release layout nor `core/process` produces, and a plugin package stages and supervises it in Go that duplicates `core/daemon`. |
-| `library[]` — loaded | Not built. Nothing loads a library, so a plugin that must draw into a pane has nowhere to be except the core binary. |
-
-The second row is why `ARCHITECTURE.md` C1a is red. The browser's native half is not linked because
-a dylib could not do the work — it is linked because there is no host to load one.
-
-That host is what makes a drawing plugin possible at all, and the implementation this one succeeds
-shipped three browsers on it: the platform's own webview with no engine declared, and two that
-declared the same engine and differed only by hosting mode. Three implementations of one thing,
-installed separately, with no rebuild between them — that is the whole of what a plugin system is,
-and the host is the part that carries it.
-
-Nothing in the framework offers it. A sidecar there is a process spawned and spoken to over its
-standard streams; it draws nothing. What worked before was not the framework's — it was a host
-written for it, and this one has to be written too.
-
-A boundary defined after the code is a boundary the code has already crossed, and this one was: the
-paragraph above replaced a rule that had turned the absence of a host into a law that plugins must
-be compiled in.
+- each sidecar repository validates sidecar.json, stages the declared process and tests its own
+  protocol and conformance;
+- the composition contract tests the closed manifest format;
+- core tests settings binding resolution, path safety, process lifetime, adoption and opaque relay;
+- externals/soksak-terminal-tests tests installed multi-provider behavior and never builds owner
+  source trees.

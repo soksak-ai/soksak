@@ -9,6 +9,7 @@ import "github.com/soksak-ai/soksak-core/core/i18n"
 
 func init() {
 	i18n.Declare(map[string]i18n.Sentence{
+		"sidecar.noResolver": {EN: "sidecar {name} has no installation settings resolver", KO: "사이드카 {name}의 설치 설정 경로를 해석할 수 없습니다"},
 		"sidecar.secretSetMismatch": {
 			EN: "sidecar {name} is already running with a different declared secret set",
 			KO: "sidecar {name} 이(가) 다른 시크릿 선언으로 이미 실행 중입니다",
@@ -69,41 +70,17 @@ func init() {
 			EN: "sidecar {name} announced {address} and nothing is listening there: {reason}",
 			KO: "사이드카 {name} 이(가) {address} 를 알렸는데 그곳에서 아무도 듣고 있지 않습니다: {reason}",
 		},
-		"sidecar.undeclared": {
-			EN: "sidecar {name} is not declared by this plugin's manifest — a unit nobody declared is a process nobody consented to",
-			KO: "사이드카 {name} 은(는) 이 플러그인의 매니페스트가 선언하지 않았습니다 — 아무도 선언하지 않은 유닛은 아무도 동의하지 않은 프로세스입니다",
-		},
 		"sidecar.payloadNotARequest": {
-			EN: "the payload for sidecar {name} is not a request envelope: {reason}",
-			KO: "사이드카 {name} 에 보낼 payload 가 요청 봉투가 아닙니다: {reason}",
+			EN: "sidecar {name} request is invalid: {reason}",
+			KO: "사이드카 {name} 요청이 올바르지 않습니다: {reason}",
 		},
 		"sidecar.contractMismatch": {
-			EN: "sidecar {name} implements {found} and the manifest requires {wanted} — a unit answering another contract does not fail, it answers with something else's meaning",
-			KO: "사이드카 {name} 은(는) {found} 을(를) 구현하고 매니페스트는 {wanted} 을(를) 요구합니다 — 다른 계약을 답하는 유닛은 실패하지 않고 다른 의미로 응답합니다",
+			EN: "sidecar {name} implements {found}; the plugin requires {wanted}",
+			KO: "사이드카 {name}은(는) {found}을(를) 구현하지만 플러그인은 {wanted}을(를) 요구합니다",
 		},
 		"sidecar.versionMismatch": {
 			EN: "sidecar {name} implements {wanted} at {found} and the manifest requires exactly {wanted2}",
 			KO: "사이드카 {name} 이(가) 구현하는 버전은 {found} 이고 매니페스트는 정확히 {wanted2} 를 요구합니다",
-		},
-		"sidecar.libraryNotLoadable": {
-			EN: "sidecar {name} ships {artefacts} to be loaded and this build loads nothing — it spawns units and speaks the control envelope to them, so the half of this unit that draws has nowhere to run",
-			KO: "사이드카 {name} 은(는) 적재되어야 할 {artefacts} 을(를) 담고 있고 이 빌드는 아무것도 적재하지 않습니다 — 유닛을 띄우고 제어 봉투로 말할 뿐이므로, 이 유닛에서 그리는 쪽이 돌 자리가 없습니다",
-		},
-		"sidecar.noRelease": {
-			EN: "sidecar {name} states no contract: {path} is missing — an installed unit declares what it implements beside its binary, and without it nothing can be checked against what was asked for",
-			KO: "사이드카 {name} 이(가) 어떤 계약도 밝히지 않습니다 — {path} 이(가) 없습니다. 설치된 유닛은 무엇을 구현하는지를 바이너리 옆에 선언하며, 그것이 없으면 요구한 것과 대조할 수 없습니다",
-		},
-		"sidecar.releaseUnreadable": {
-			EN: "sidecar {name}: {path} is not a release manifest: {reason}",
-			KO: "사이드카 {name}: {path} 이(가) 릴리스 매니페스트가 아닙니다: {reason}",
-		},
-		"sidecar.releaseDeclaresNoInterface": {
-			EN: "sidecar {name}: {path} names no interface — a unit that states no contract cannot be matched to one",
-			KO: "사이드카 {name}: {path} 이(가) 인터페이스를 밝히지 않습니다 — 계약을 밝히지 않는 유닛은 어떤 계약과도 대조할 수 없습니다",
-		},
-		"sidecar.releaseNamesAnotherUnit": {
-			EN: "sidecar {name}: {path} names unit {found} — the install put one unit's release under another's name, and opening it would run something nobody asked for",
-			KO: "사이드카 {name}: {path} 이(가) 유닛 {found} 을(를) 가리킵니다 — 설치가 한 유닛의 릴리스를 다른 이름 아래 두었고, 여는 것은 아무도 요청하지 않은 것을 실행하는 일입니다",
 		},
 		"sidecar.greetingRefused": {
 			EN: "sidecar {name} refused the greeting: {reason} — nothing was sent on this connection, so no command ran against a protocol neither side agreed",
