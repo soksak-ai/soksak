@@ -135,8 +135,8 @@ A guessed path leaves only `ENOENT`, which says nothing about where anyone looke
 
 ## S6. Declaration and permission
 
-A plugin unit manifest consumes a named exact sidecar contract. The composition binding selects one
-exact installed sidecar provider (COMPOSITION C3). `app.sidecar.open(name)` is limited to the
+A plugin declares a named sidecar contract requirement. The installation binding selects one
+installed sidecar provider by id and version (COMPOSITION C3). `app.sidecar.open(name)` is limited to the
 resolved binding, and the declared interface is checked against the provider manifest: declared
 equals actual, on both sides.
 

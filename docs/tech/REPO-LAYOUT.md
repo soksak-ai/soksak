@@ -29,15 +29,16 @@ Four rules produce this:
 1. Ours and not-ours are separate. `frameworks/` and `externals/` hold code from elsewhere;
    everything else is written here.
 2. A plugin adds a feature and can be switched off (A8). Shared plugin code, public contracts and
-   plugin processes remain independently versioned units. A Wails service extends the host and
+   plugin processes remain independently versioned repositories. A Wails service extends the host and
    cannot be switched off as a plugin. These are different kinds, so they are different folders.
 3. A checkout is pinned. `frameworks/wails3` is at one commit, and moving it is legislation with its
    own commit, not a side effect (see NATIVE-LAYER.md).
 4. `backup/` is invisible to every build and gate. Anything the build needs is not in it.
 
-The workspace layout is an authoring layout, not runtime discovery. The application resolves units
-from the identity composition (COMPOSITION.md) and never scans these sibling folders. A repository
-runs its own tests; cross-unit product tests use installed artifacts declared in settings.json.
+The workspace layout is an authoring layout, not runtime discovery. The application resolves
+plugins, sidecars and kits from installation settings (COMPOSITION.md) and never scans these sibling
+folders. A repository runs its own tests; cross-repository product tests use installed artifacts
+declared in settings.json.
 
 `go.mod` `replace` directives and `frontend/package.json` `file:` dependencies both address these
 paths, so a move here is a two-line change in the application.
@@ -45,14 +46,14 @@ paths, so a move here is a two-line change in the application.
 ## L1b. A message is owned by whatever it is about
 
 One registry per owner, not one for everything. The application's sentences are in the application,
-a unit's are in the unit, and nothing outside a tree declares into that tree's registry.
+a plugin's or sidecar's are in its repository, and nothing outside a tree declares into that tree's registry.
 
-The reason is not tidiness. A unit that declared into an application's registry can only be used by
+The reason is not tidiness. A component that declared into an application's registry can only be used by
 that application: its sentences are absent everywhere else, and what a person sees is a refusal with
 no words in it. It also puts the wording in one place and the fact in another, so the two part the
-day the application rewords something the unit meant precisely.
+day the application rewords something the component meant precisely.
 
-So a unit states the fact — which target, which operation, what was missing — and whoever embeds it
+So a component states the fact — which target, which operation, what was missing — and whoever embeds it
 does the wording. Measured 2026-08-20: one host service's entire dependency on this application was
 a single sentence declared into its registry.
 
@@ -61,7 +62,7 @@ purpose: this repository importing its own registry is what the registry is for.
 
 ## L1a. Material from another tree is copied in, and the copy decides where
 
-A unit that came from somewhere else is copied into this workspace and the original is never
+A repository that came from somewhere else is copied into this workspace and the original is never
 written to. Two reasons, and the second is the one that governs:
 
 - A source tree that another application is running is not still while it is read. What a reading
@@ -70,7 +71,7 @@ written to. Two reasons, and the second is the one that governs:
   write entirely, which no amount of care does.
 
 Where the copy lands is decided by one question — **does a build in this workspace reference it.**
-A unit that will be built, released or installed here goes in the folder for its kind, and from that
+A repository that will be built, released or installed here goes in the folder for its kind, and from that
 moment every rule here applies to it. Material that is only read goes in `backup/`, which no build
 and no gate sees.
 

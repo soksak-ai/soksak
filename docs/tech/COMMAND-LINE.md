@@ -15,6 +15,15 @@ Public commands use dotted domain names such as plugin.enable, window.snapshot a
 plugin.development.set. Native backend command names may use snake case internally and are not
 public CLI vocabulary.
 
+Commands name the resource they change. There is no public generic resource type:
+
+- `plugin.development.list` and `plugin.development.set`;
+- `sidecar.development.list` and `sidecar.development.set`;
+- `kit.development.list` and `kit.development.set`.
+
+The set commands take `id`, `version`, `development` and an absolute `path`. Development mode
+disables updates. It does not change plugin enabled state.
+
 ## Parameter forms
 
 Two forms produce the same parameter map.
@@ -33,6 +42,9 @@ arguments is rejected. A JSON array, scalar or null is rejected.
 In name-value form each value that parses as JSON keeps its JSON type. development=true is a
 boolean and generation=3 is a number. Other values are strings. Quote a string that itself looks
 like JSON by passing JSON string syntax.
+
+The two forms are syntax alternatives for the same command schema. A command must not interpret
+them differently.
 
 Name-value form is preferred in Windows cmd because single quotes do not quote there. PowerShell
 and POSIX shells may use either form. Paths with spaces are quoted as one complete name-value

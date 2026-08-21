@@ -63,9 +63,10 @@ The verb comes from the set already in use: `list`, `get`, `set`, `read`, `write
 A second word for the same action splits the vocabulary — `new` alongside `create` was the case
 measured on 2026-08-15.
 
-A mode is not part of a name. `plugin_dev_new` named a development mode in the command, which puts
-a caller's context into the wire; the mode belongs to an argument or a permission. The name is
-`plugin_scaffold`, and `unit_dev_*` became `unit_source_*` for the same reason.
+A command names its resource and action. Public commands use dotted names such as
+`plugin.development.set`; backend commands use snake case such as `plugin_development_set`. A
+generic resource name is not used when the resource is a plugin, sidecar or kit. Development mode
+is a boolean parameter, not a separate resource type.
 
 ## N2. Natural keys
 

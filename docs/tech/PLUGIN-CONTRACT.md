@@ -86,15 +86,15 @@ A document the core reads and does not publish is stamped by its publisher — a
 `soksak-spec-plugin@0.0.1`, and so are the release, index and conformance formats it travels with. A
 manifest arrives alone, so its `spec` is the only thing in it that names the format.
 
-A plugin participates in installation composition through its installed unit manifest
+A plugin participates in installation through its release declaration and `plugin.json`
 (COMPOSITION C3):
 
-- unit dependencies: an exact plugin, sidecar or kit identity;
+- implementation dependencies: a plugin, sidecar or kit id and version;
 - `consumes`: a public contract id and exact version, matched against a provider's exact
   `implements` version.
 
 Both are optional. A shared contract is created only for behavior with multiple real providers or
-consumers. The contract is independently versioned outside the core but is not an installed unit. The core validates and
+consumers. The contract is independently versioned outside the core and is not installed software. The core validates and
 matches ids and versions but does not define domain behavior.
 The plugin manifest declares runtime contributions and permissions; it is not the installation
 record and does not select providers.

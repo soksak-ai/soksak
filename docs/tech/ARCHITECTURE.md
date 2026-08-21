@@ -171,7 +171,7 @@ All of these are hard.
 
   Two dependency forms exist and represent different requirements:
 
-  - a unit dependency names one exact plugin, sidecar or kit. Use it when that
+  - an implementation dependency names a plugin, sidecar or kit id and version. Use it when that
     implementation is required. Plugin is the only user-facing activation root.
   - `consumes` names one exact public contract version. A provider declares the
     same exact contract version in `implements`. Use it when any implementation
@@ -197,13 +197,13 @@ All of these are hard.
 
   A document the core reads and does not publish is stamped by its publisher, and
   the core reads that stamp: the registry index, a release manifest, a conformance
-  report, and a unit manifest of each kind. Four formats, declared in
-  `plugins/spec/unit.ts` and nowhere else.
+  report, and a plugin, sidecar or kit manifest. Each document format has one
+  declared version.
 
   The four were folded into `CORE_SPEC` on 2026-08-16, on the reasoning that a
   field's place already identifies its document. On the wire it does not — a
   release manifest is fetched alone by URL and `spec` is its only identification —
-  and the fold made every published unit unreadable at four layers. A format is
+  and the fold made every published entry unreadable at four layers. A format is
   per document kind: `soksak-spec-plugin@` is the manifest format every plugin
   shares. A format per plugin, `soksak-spec-plugin-terminal@`, is a second name
   for what the plugin id already names (C1), and that stays deleted.

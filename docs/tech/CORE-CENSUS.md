@@ -85,7 +85,7 @@ than a domain named.
 `app.pty` was kept here on the reading that the kernel object cannot cross the boundary. Measured
 2026-08-20, it already does: this application holds no PTY master, a daemon in another process holds
 it, and bytes cross a socket. The verdict is reopened in `ARCHITECTURE.md` C6 — the capability is
-common enough to keep a declared name, and its implementation is an installed unit rather than a
+common enough to keep a declared name, and its implementation is an installed sidecar rather than a
 device layer in the core.
 
 `terminal/ptyObservation.ts` stays: the OSC 7/133/633 byte-stream parser decodes a protocol and
@@ -133,7 +133,7 @@ host-owned or something every plugin would write again.
 | Surface | Why it is the core's |
 | --- | --- |
 | `ui.*` (32) — tree, addresses, input, measure, trace | The address space of the frame the core draws. Named after no content. |
-| `plugin.*` (26), `registry.*`, `program.*`, `unit.dev.*` | The loader and its registries. |
+| `plugin.*`, `sidecar.*`, `kit.*`, `registry.*`, `program.*` | Type-specific installation, development and loader commands. |
 | `data.*` (23), `secret.*` (6) | Storage keyed by namespace. Serves a browser and a mail client alike. |
 | `window.*` (19), `pane.*` (8), `layout.*` (7), `space.*` (5), `sidebar.*` (5), `tab.*` (10) | The frame itself — the one thing the core is. |
 | `workspace.*` (11), `state.*` (5) | A workspace is a root path and a tree, not a content kind. |
@@ -239,13 +239,13 @@ and `consumes` matched against a provider's exact `implements` version. `plugin.
 The core validates ids and versions and contains no terminal contract constant.
 
 **Seven names for the core's own format — and six of them were not the core's.** `soksak-spec-release
-@0.0.1`, `-registry@`, one per unit kind: all defined in one file, all moving together at `0.0.1`.
+@0.0.1`, `-registry@`, and one per document kind: all defined in one file, all moving together at `0.0.1`.
 They were folded into one `CORE_SPEC` on the reasoning that a field's place already identifies its
 document.
 
 Reversed the same day. On the wire the place identifies nothing: a release manifest is fetched alone
 by URL and `spec` is the only thing in it that names the format. Measured against what is served —
-the index at `soksak-plugin-registry` (sequence 7, 54 units), a release manifest, its two conformance
+the index at `soksak-plugin-registry` (sequence 7, 54 entries), a release manifest, its two conformance
 reports, and the manifest packaged inside the artifact — all four carry those names, and the running
 build answered `official -> INVALID_INDEX: registry.spec: 0.0.1 required` with an empty catalogue.
 
@@ -260,7 +260,7 @@ A provider-selection mechanism is built against the terminal matrix. Contract de
 version matching are complete; provider choice remains part of that investigation.
 
 Gate: `TestTheCoreHoldsNoSecondIdentityNamespace` reads three things — a spec stamp written outside
-`plugins/spec/unit.ts`, a stamp that names a plugin rather than a document kind, and a declared stamp
+the registry specification files, a stamp that names a plugin rather than a document kind, and a declared stamp
 gone missing. Proven to bite on all three.
 
 Measured on a running build: both plugins enable with no error, `ui.validate` passes, a terminal
