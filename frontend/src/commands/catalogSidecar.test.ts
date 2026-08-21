@@ -16,7 +16,7 @@ describe("sidecar.request", () => {
   it("relays one opaque control request without interpreting its command", async () => {
     registerSidecarCatalog();
     invoke.mockResolvedValueOnce({ ok: true, result: { data: { session: 7 } } });
-    const request = { id: "inspect", command: "pty.pane", args: { request: { paneId: "p1" } } };
+    const request = { id: "inspect", command: "pty.pane", args: { request: { paneId: "pan-abc234" } } };
     const result = await execute("sidecar.request", { name: "pty", request }, {});
     expect(invoke).toHaveBeenCalledWith("sidecar_send", { name: "pty", payload: JSON.stringify(request) });
     expect(result).toMatchObject({ ok: true, data: { sidecar: "pty", response: { ok: true } } });
