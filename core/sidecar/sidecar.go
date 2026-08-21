@@ -435,7 +435,6 @@ func judge(name, line string) (announcement, error) {
 func (host *Host) Release(name string) error {
 	host.mu.Lock()
 	held := host.open[name]
-	delete(host.open, name)
 	host.mu.Unlock()
 	if held == nil {
 		return i18n.Errorf("sidecar.notOpen", map[string]string{"name": name})
