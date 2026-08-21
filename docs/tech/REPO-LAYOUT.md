@@ -35,6 +35,10 @@ Four rules produce this:
    own commit, not a side effect (see NATIVE-LAYER.md).
 4. `backup/` is invisible to every build and gate. Anything the build needs is not in it.
 
+The workspace layout is an authoring layout, not runtime discovery. The application resolves units
+from the identity composition (COMPOSITION.md) and never scans these sibling folders. A repository
+runs its own tests; cross-unit product tests use installed artifacts declared in settings.json.
+
 `go.mod` `replace` directives and `frontend/package.json` `file:` dependencies both address these
 paths, so a move here is a two-line change in the application.
 
