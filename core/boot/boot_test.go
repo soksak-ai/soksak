@@ -63,6 +63,15 @@ func TestBootCommandsAnswerWithNoWindow(t *testing.T) {
 	}
 }
 
+func TestCompositionCommandsAreHeadlessAndNameMissingSettings(t *testing.T) {
+	registry := booted(t)
+	for _, name := range []string{"composition_settings", "composition_graph", "composition_status"} {
+		if _, err := registry.Invoke(name, nil); err == nil {
+			t.Errorf("%s accepted a home with no settings.json", name)
+		}
+	}
+}
+
 func TestEnvironmentCarriesTheResolvedIdentity(t *testing.T) {
 	got, err := booted(t).Invoke("app_environment", nil)
 	if err != nil {

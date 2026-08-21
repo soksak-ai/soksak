@@ -15,6 +15,7 @@ import (
 
 	"github.com/soksak/soksak-core/core/activity"
 	"github.com/soksak/soksak-core/core/app"
+	"github.com/soksak/soksak-core/core/composition"
 	"github.com/soksak/soksak-core/core/control"
 	"github.com/soksak/soksak-core/core/daemon"
 	"github.com/soksak/soksak-core/core/files"
@@ -386,6 +387,8 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		LoginShell: boot.LoginShell,
 		Run:        boot.Run,
 	})
+
+	composition.Register(registry, composition.Deps{Home: boot.Identity.Home})
 
 	daemon.Register(registry, daemon.Deps{
 		Spawner:    boot.Spawner,

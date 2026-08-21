@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/soksak/soksak-contract-composition v0.0.1
 	github.com/soksak/soksak-contract-contentview v0.0.1
 	github.com/soksak/soksak-contract-control v0.0.1
 	github.com/soksak/soksak-contract-pty v0.0.1
@@ -11,6 +12,7 @@ require (
 	github.com/soksak/wails-service-webview-surface v0.0.1
 	github.com/wailsapp/wails/v3 v3.0.0-dev
 	github.com/zalando/go-keyring v0.2.8
+	golang.org/x/sys v0.47.0
 	modernc.org/sqlite v1.56.0
 )
 
@@ -27,7 +29,6 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	modernc.org/libc v1.74.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
@@ -40,6 +41,8 @@ replace github.com/soksak/wails-service-native-compositor => ../wails-services/w
 replace github.com/soksak/wails-service-webview-surface => ../wails-services/wails-service-webview-surface
 
 replace github.com/soksak/soksak-contract-contentview => ../soksak-contracts/soksak-contract-contentview
+
+replace github.com/soksak/soksak-contract-composition => ../soksak-contracts/soksak-contract-composition
 
 replace github.com/soksak/soksak-contract-control => ../soksak-contracts/soksak-contract-control
 
