@@ -96,7 +96,7 @@ import {
   layoutTransitionJournal,
   waitForLayoutTransaction,
 } from "../lib/layoutTransitionJournal";
-import { registerUnitDevCatalog } from "./catalogUnitDev";
+import { registerDevelopmentCatalog } from "./catalogDevelopment";
 import { registerLayoutAlignmentCatalog, registerLayoutTraceCatalog } from "./catalogLayoutAlignment";
 import { registerWebviewCatalog } from "./catalogWebview";
 import { registerPresentationClockCatalog } from "./catalogPresentationClock";
@@ -2564,7 +2564,7 @@ export function registerCatalog(): void {
   registerServiceCatalog();
   registerRuntimeCatalog();
   registerSystemCatalog();
-  registerUnitDevCatalog();
+  registerDevelopmentCatalog();
   registerWebviewCatalog();
   registerLayoutAlignmentCatalog();
   registerLayoutTraceCatalog();
