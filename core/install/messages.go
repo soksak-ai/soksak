@@ -53,6 +53,15 @@ func init() {
 		"install.transaction.archivePathUnsafe":    {EN: "unsafe archive path: {path}", KO: "안전하지 않은 아카이브 경로입니다: {path}"},
 		"install.transaction.archiveEntryType":     {EN: "archive entry is not a regular file or directory: {path}", KO: "아카이브 항목이 일반 파일 또는 디렉터리가 아닙니다: {path}"},
 		"install.transaction.archiveLimit":         {EN: "archive extraction limit exceeded", KO: "아카이브 추출 한도를 초과했습니다"},
+		"install.transaction.homeAbsolute":         {EN: "installer home must be absolute", KO: "인스톨러 home 은 절대 경로여야 합니다"},
+		"install.transaction.commitUnitsRequired":  {EN: "installer commit requires units", KO: "인스톨러 commit 에 units 가 필요합니다"},
+		"install.transaction.duplicateUnit":        {EN: "duplicate verified unit: {unit}", KO: "검증된 유닛이 중복되었습니다: {unit}"},
+		"install.transaction.stagedUnitMismatch":   {EN: "staged artifact does not match verified unit: {unit}", KO: "스테이징된 아티팩트가 검증된 유닛과 일치하지 않습니다: {unit}"},
+		"install.transaction.manifestUnitMismatch": {EN: "staged manifest identity does not match verified unit: {unit}", KO: "스테이징된 매니페스트 identity 가 검증된 유닛과 일치하지 않습니다: {unit}"},
+		"install.transaction.destinationExists":    {EN: "install destination already exists: {path}", KO: "설치 대상 경로가 이미 존재합니다: {path}"},
+		"install.transaction.closureUnresolved":    {EN: "installed closure unit is not resolved: {unit}", KO: "설치 closure 유닛이 resolved 상태가 아닙니다: {unit}"},
+		"install.transaction.journalIdentity":      {EN: "installer commit journal identity mismatch", KO: "인스톨러 commit journal identity 가 일치하지 않습니다"},
+		"install.transaction.journalGeneration":    {EN: "installer journal generation is not current", KO: "인스톨러 journal generation 이 현재 값이 아닙니다"},
 	})
 }
 
