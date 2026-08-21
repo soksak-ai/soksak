@@ -141,12 +141,32 @@ export function registerWindowCatalog(): void {
       w: { type: "number", description: key("cmd.window.resize.param.w"), required: true },
       h: { type: "number", description: key("cmd.window.resize.param.h"), required: true },
     },
-    returns: "{ w, h }",
+    returns: "{ w, h, observed:true }",
     message: (d) => tmsg("msg.window.resize", { w: Number(d.w), h: Number(d.h) }),
     examples: ['window.resize \'{"w":1200,"h":800}\''],
     handler: async (p) => {
-      await currentWindow().setPhysicalSize(p.w as number, p.h as number);
-      return { w: p.w, h: p.h };
+      const w = p.w as number;
+      const h = p.h as number;
+      const win = currentWindow();
+      let finish!: () => void;
+      const observed = new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`window resize timed out: ${w}x${h}`)), 8_000);
+        finish = () => { clearTimeout(timer); resolve(); };
+      });
+      const unsubscribe = await win.onResized((size) => {
+        if (size.width === w && size.height === h) finish();
+      });
+      try {
+        const before = await win.outerSize();
+        if (before.width === w && before.height === h) finish();
+        await win.setPhysicalSize(w, h);
+        const after = await win.outerSize();
+        if (after.width === w && after.height === h) finish();
+        await observed;
+        return { w, h, observed: true };
+      } finally {
+        unsubscribe();
+      }
     },
   });
 
