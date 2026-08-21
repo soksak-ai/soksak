@@ -90,6 +90,11 @@ func activateApplication() error {
 	return nil
 }
 
+// ForegroundProcessID returns the application that receives input without using Apple Events.
+func ForegroundProcessID() int {
+	return int(C.soksakFrontmostProcessID())
+}
+
 // nativeWindowTitle copies a window's title. The caller is on the main thread.
 //
 // The frontend writes its boot progress here, and that channel survives a dead

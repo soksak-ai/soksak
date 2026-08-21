@@ -28,6 +28,10 @@ void soksakOrderFrontRegardless(void *nsWindow);
 // Must be called on the main thread.
 bool soksakActivateApplication(void);
 
+// Return the process that currently receives application-level input. This is
+// a read-only NSWorkspace query and requires no Apple Events permission.
+int soksakFrontmostProcessID(void);
+
 // Copy this window's title. The frontend writes its boot progress into
 // document.title, and that is the one channel that keeps working when the
 // binding path is dead — so a window that answers nothing else still says how

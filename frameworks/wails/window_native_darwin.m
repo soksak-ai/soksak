@@ -25,6 +25,11 @@ bool soksakActivateApplication(void) {
   return false;
 }
 
+int soksakFrontmostProcessID(void) {
+  NSRunningApplication *application = [[NSWorkspace sharedWorkspace] frontmostApplication];
+  return application == nil ? 0 : application.processIdentifier;
+}
+
 char *soksakCopyWindowTitle(void *nsWindow) {
   NSString *title = [(NSWindow *)nsWindow title];
   if (title == nil) {

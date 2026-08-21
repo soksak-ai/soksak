@@ -305,16 +305,6 @@ func TestEveryTerminalPluginRunsItsDeclaredProvider(t *testing.T) {
 	}
 }
 
-func frontmostProcessID(t *testing.T) string {
-	t.Helper()
-	out, err := exec.Command("/usr/bin/osascript", "-e",
-		"tell application \"System Events\" to get unix id of first application process whose frontmost is true").CombinedOutput()
-	if err != nil {
-		t.Fatalf("reading the frontmost process: %v: %s", err, out)
-	}
-	return strings.TrimSpace(string(out))
-}
-
 func (gate *restoreGate) captureTerminalWithoutFocus(window, plugin string) {
 	gate.t.Helper()
 	directory, err := filepath.Abs(filepath.Join(".task", "terminal-visual"))
@@ -329,10 +319,10 @@ func (gate *restoreGate) captureTerminalWithoutFocus(window, plugin string) {
 	if err := os.RemoveAll(recording); err != nil {
 		gate.t.Fatalf("clearing %s recording: %v", plugin, err)
 	}
-	before := frontmostProcessID(gate.t)
+	before := activeInputOwner(gate.t)
 	gate.run("window.snapshot", "window="+window, "path="+path)
 	gate.run("window.record", "window="+window, "dir="+recording, "frames=6", "intervalMs=16")
-	after := frontmostProcessID(gate.t)
+	after := activeInputOwner(gate.t)
 	if before != after {
 		gate.t.Fatalf("%s capture changed the frontmost process: %s -> %s", plugin, before, after)
 	}
