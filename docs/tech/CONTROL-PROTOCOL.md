@@ -74,6 +74,11 @@ only the second tells them to stop looking.
 frontend calls a name that is neither served nor refused, when a refusal has no caller, or when a
 refusal carries no reason.
 
+A native window creation receipt does not mean its renderer has registered commands.
+`window_renderer_wait` waits for the declaration event for one exact window with a finite deadline.
+After it succeeds, renderer commands such as `app.boot.wait` are addressable without polling the
+command table.
+
 ## C5. The address, and who may connect
 
 The socket path is derived once from the identity (`<home>/<identifier>.sock`, IDENTITY.md I4) and
@@ -93,5 +98,7 @@ paths.
 
 ## C6. Windows
 
-A named pipe carries the same envelope. `core/control/listen_windows.go` is the only file that
-differs, and nothing above it knows which transport it is on.
+Windows requires a named pipe carrying the same envelope. `core/control/listen_windows.go` currently
+refuses startup because that transport has not been implemented. Windows system verification cannot
+be declared complete until the application and `sok` both use the named pipe and the same protocol
+tests pass on Windows.
