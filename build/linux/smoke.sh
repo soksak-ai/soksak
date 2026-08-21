@@ -24,7 +24,7 @@ dbus-run-session -- xvfb-run -a -s "-screen 0 1400x900x24" sh -eu -c '
   printf '\n' | gnome-keyring-daemon --unlock ><local-evidence>/soksak-keyring.env
   wm_ready=<local-evidence>/soksak-openbox-ready.$$
   mkfifo "$wm_ready"
-  openbox --startup "sh -c \"printf ready\\\\n > $wm_ready\"" ><local-evidence>/soksak-openbox.log 2>&1 &
+  openbox --startup "echo ready > $wm_ready" ><local-evidence>/soksak-openbox.log 2>&1 &
   read -r wm_status <"$wm_ready"
   rm -f "$wm_ready"
   test "$wm_status" = ready
