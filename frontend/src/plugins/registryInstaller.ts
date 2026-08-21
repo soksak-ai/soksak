@@ -1,20 +1,20 @@
 import {
   ANY_TARGET,
   githubReleaseAssetBelongsTo,
-  isSafeRelativeUnitPath,
+  isSafeRelativeArtifactPath,
   parseManifest,
   parseReleaseManifest,
   resolveRegistryDependency,
   semverCompare,
   semverSatisfies,
   verifyPluginRuntimeDependencyProjection,
-  verifyRegistryUnitRelease,
+  verifyRegistryRelease,
   type CertifiedRegistryIndex,
-  type RegistryUnitIdentity,
-  type RegistryUnitIndexEntry,
-  type UnitReleaseArtifact,
-  type UnitReleaseManifest,
-  type UnitTarget,
+  type RegistryReleaseIdentity,
+  type RegistryReleaseEntry,
+  type ReleaseArtifact,
+  type ReleaseManifest,
+  type ArtifactTarget,
 } from "./spec";
 
 export interface RegistryDocumentLoader {
@@ -36,23 +36,23 @@ export interface StagedRegistryArtifact {
 export interface RegistryArtifactStager {
   begin(input: {
     registryId: string;
-    root: RegistryUnitIdentity;
+    root: RegistryReleaseIdentity;
   }): Promise<RegistryInstallTransaction>;
   stage(input: {
     transactionId: string;
     registryId: string;
-    unit: RegistryUnitIdentity;
-    artifact: UnitReleaseArtifact;
+    release: RegistryReleaseIdentity;
+    artifact: ReleaseArtifact;
   }): Promise<StagedRegistryArtifact>;
   readUtf8(transactionId: string, handle: string, path: string): Promise<string>;
   commit(
     transactionId: string,
-    units: readonly VerifiedInstallUnit[],
+    releases: readonly VerifiedInstallRelease[],
   ): Promise<{ generation: number }>;
   rollback(transactionId: string): Promise<void>;
 }
 
-export interface VerifiedInstallUnit extends RegistryUnitIdentity {
+export interface VerifiedInstallRelease extends RegistryReleaseIdentity {
   registryId: string;
   sourceRepository: string;
   sourceCommit: string;
@@ -77,7 +77,7 @@ export type RegistryInstallResult =
       ok: true;
       registryId: string;
       generation: number;
-      units: readonly VerifiedInstallUnit[];
+      releases: readonly VerifiedInstallRelease[];
     }
   | {
       ok: false;
@@ -87,8 +87,8 @@ export type RegistryInstallResult =
 
 export interface RegistryInstallRequest {
   certified: CertifiedRegistryIndex;
-  root: RegistryUnitIdentity;
-  target: UnitTarget;
+  root: RegistryReleaseIdentity;
+  target: ArtifactTarget;
   documents: RegistryDocumentLoader;
   artifacts: RegistryArtifactStager;
 }
@@ -103,20 +103,20 @@ class InstallFailure extends Error {
 }
 
 interface LoadedRelease {
-  entry: RegistryUnitIndexEntry;
+  entry: RegistryReleaseEntry;
   manifestBytes: Uint8Array;
-  release: UnitReleaseManifest;
+  release: ReleaseManifest;
 }
 
-function unitKey(unit: Pick<RegistryUnitIdentity, "kind" | "id">): string {
+function releaseKey(unit: Pick<RegistryReleaseIdentity, "kind" | "id">): string {
   return `${unit.kind}\u0000${unit.id}`;
 }
 
-function exactKey(unit: RegistryUnitIdentity): string {
-  return `${unitKey(unit)}\u0000${unit.version}`;
+function exactKey(release: RegistryReleaseIdentity): string {
+  return `${releaseKey(release)}\u0000${release.version}`;
 }
 
-function identity(entry: RegistryUnitIndexEntry): RegistryUnitIdentity {
+function identity(entry: RegistryReleaseEntry): RegistryReleaseIdentity {
   return { kind: entry.kind, id: entry.id, version: entry.version };
 }
 
@@ -139,8 +139,8 @@ function parseJson(bytes: Uint8Array, label: string): unknown {
 }
 
 function sameSelection(
-  left: ReadonlyMap<string, RegistryUnitIndexEntry>,
-  right: ReadonlyMap<string, RegistryUnitIndexEntry>,
+  left: ReadonlyMap<string, RegistryReleaseEntry>,
+  right: ReadonlyMap<string, RegistryReleaseEntry>,
 ): boolean {
   if (left.size !== right.size) return false;
   for (const [key, value] of left) {
@@ -159,9 +159,9 @@ function sameSelection(
 //
 // The host's own triple wins over `any`, so a unit that ships both is served the specific build.
 function selectArtifact(
-  release: UnitReleaseManifest,
-  target: UnitTarget,
-): UnitReleaseArtifact {
+  release: ReleaseManifest,
+  target: ArtifactTarget,
+): ReleaseArtifact {
   const artifact =
     release.artifacts.find((candidate) => candidate.target === target) ??
     release.artifacts.find((candidate) => candidate.target === ANY_TARGET);
@@ -174,7 +174,7 @@ function selectArtifact(
   return artifact;
 }
 
-export function declaredEntrypoints(artifact: UnitReleaseArtifact): string[] {
+export function declaredEntrypoints(artifact: ReleaseArtifact): string[] {
   const entrypoint = artifact.entrypoint;
   if (entrypoint.kind === "plugin") return [entrypoint.manifest];
   if (entrypoint.kind === "kit") return [entrypoint.packageManifest];
@@ -186,7 +186,7 @@ export function declaredEntrypoints(artifact: UnitReleaseArtifact): string[] {
 
 function verifyStagingEvidence(
   staged: StagedRegistryArtifact,
-  artifact: UnitReleaseArtifact,
+  artifact: ReleaseArtifact,
 ): void {
   const errors: string[] = [];
   if (staged.extraction !== "regular-files-only") {
@@ -197,7 +197,7 @@ function verifyStagingEvidence(
   }
   if (!staged.handle) errors.push("native staging handle is empty");
   const declared = declaredEntrypoints(artifact);
-  if (declared.some((path) => !isSafeRelativeUnitPath(path))) {
+  if (declared.some((path) => !isSafeRelativeArtifactPath(path))) {
     errors.push("owner release contains an unsafe entrypoint path");
   }
   if (staged.verifiedEntrypoints !== undefined) {
@@ -219,8 +219,8 @@ async function verifyStagedPluginManifest(
   stager: RegistryArtifactStager,
   transactionId: string,
   staged: StagedRegistryArtifact,
-  release: UnitReleaseManifest,
-  artifact: UnitReleaseArtifact,
+  release: ReleaseManifest,
+  artifact: ReleaseArtifact,
 ): Promise<void> {
   if (release.kind !== "plugin" || artifact.entrypoint.kind !== "plugin") return;
   let raw: unknown;
@@ -254,16 +254,16 @@ async function verifyStagedPluginManifest(
 }
 
 function topologicalOrder(
-  selected: ReadonlyMap<string, RegistryUnitIndexEntry>,
+  selected: ReadonlyMap<string, RegistryReleaseEntry>,
   loaded: ReadonlyMap<string, LoadedRelease>,
-  root: RegistryUnitIdentity,
-): RegistryUnitIndexEntry[] {
-  const result: RegistryUnitIndexEntry[] = [];
+  root: RegistryReleaseIdentity,
+): RegistryReleaseEntry[] {
+  const result: RegistryReleaseEntry[] = [];
   const visiting = new Set<string>();
   const visited = new Set<string>();
 
-  const visit = (entry: RegistryUnitIndexEntry): void => {
-    const key = unitKey(entry);
+  const visit = (entry: RegistryReleaseEntry): void => {
+    const key = releaseKey(entry);
     if (visited.has(key)) return;
     if (visiting.has(key)) {
       throw new InstallFailure("DEPENDENCY_CYCLE", [
@@ -278,7 +278,7 @@ function topologicalOrder(
       ]);
     }
     for (const dependency of envelope.release.dependencies) {
-      const child = selected.get(unitKey(dependency));
+      const child = selected.get(releaseKey(dependency));
       if (!child) {
         throw new InstallFailure("DEPENDENCY_RESOLUTION_FAILED", [
           `resolved closure omitted ${dependency.kind}:${dependency.id}`,
@@ -291,7 +291,7 @@ function topologicalOrder(
     result.push(entry);
   };
 
-  const rootEntry = selected.get(unitKey(root));
+  const rootEntry = selected.get(releaseKey(root));
   if (!rootEntry) throw new InstallFailure("ROOT_NOT_FOUND", ["root unit disappeared from closure"]);
   visit(rootEntry);
   return result;
@@ -299,9 +299,9 @@ function topologicalOrder(
 
 async function solveClosure(
   certified: CertifiedRegistryIndex,
-  root: RegistryUnitIdentity,
+  root: RegistryReleaseIdentity,
   documents: RegistryDocumentLoader,
-): Promise<{ order: RegistryUnitIndexEntry[]; loaded: Map<string, LoadedRelease> }> {
+): Promise<{ order: RegistryReleaseEntry[]; loaded: Map<string, LoadedRelease> }> {
   const rootEntry = certified.index.units.find((candidate) =>
     candidate.kind === root.kind && candidate.id === root.id && candidate.version === root.version
   );
@@ -311,7 +311,7 @@ async function solveClosure(
     ]);
   }
   const cache = new Map<string, LoadedRelease>();
-  const load = async (entry: RegistryUnitIndexEntry): Promise<LoadedRelease> => {
+  const load = async (entry: RegistryReleaseEntry): Promise<LoadedRelease> => {
     const key = exactKey(identity(entry));
     const cached = cache.get(key);
     if (cached) return cached;
@@ -339,7 +339,7 @@ async function solveClosure(
     return value;
   };
 
-  let selected = new Map<string, RegistryUnitIndexEntry>([[unitKey(rootEntry), rootEntry]]);
+  let selected = new Map<string, RegistryReleaseEntry>([[releaseKey(rootEntry), rootEntry]]);
   const seen = new Set<string>();
   const limit = Math.max(4, certified.index.units.length * 2 + 2);
   for (let iteration = 0; iteration < limit; iteration += 1) {
@@ -354,10 +354,10 @@ async function solveClosure(
     }
     seen.add(signature);
 
-    const constraints = new Map<string, { kind: RegistryUnitIdentity["kind"]; id: string; ranges: string[] }>();
-    constraints.set(unitKey(root), { kind: root.kind, id: root.id, ranges: [root.version] });
+    const constraints = new Map<string, { kind: RegistryReleaseIdentity["kind"]; id: string; ranges: string[] }>();
+    constraints.set(releaseKey(root), { kind: root.kind, id: root.id, ranges: [root.version] });
     const queue = [...selected.values()];
-    const queued = new Set(queue.map(unitKey));
+    const queued = new Set(queue.map(releaseKey));
     for (let cursor = 0; cursor < queue.length; cursor += 1) {
       const current = queue[cursor];
       const envelope = await load(current);
@@ -366,7 +366,7 @@ async function solveClosure(
         if (!publicResolution.ok) {
           throw new InstallFailure("DEPENDENCY_RESOLUTION_FAILED", publicResolution.errors);
         }
-        const key = unitKey(dependency);
+        const key = releaseKey(dependency);
         const constraint = constraints.get(key) ?? {
           kind: dependency.kind,
           id: dependency.id,
@@ -383,7 +383,7 @@ async function solveClosure(
       }
     }
 
-    const next = new Map<string, RegistryUnitIndexEntry>();
+    const next = new Map<string, RegistryReleaseEntry>();
     for (const [key, constraint] of constraints) {
       const candidates = certified.index.units
         .filter((entry) =>
@@ -411,7 +411,7 @@ async function solveClosure(
 }
 
 async function downloadedReports(
-  entry: RegistryUnitIndexEntry,
+  entry: RegistryReleaseEntry,
   documents: RegistryDocumentLoader,
 ): Promise<{ url: string; bytes: Uint8Array }[]> {
   return await Promise.all(entry.reports.map(async (reference) => ({
@@ -433,7 +433,7 @@ export async function installRegistryClosure(
     if (!transactionId) {
       throw new InstallFailure("ATOMIC_INSTALL_FAILED", ["native installer returned an empty transaction id"]);
     }
-    const verifiedUnits: VerifiedInstallUnit[] = [];
+    const verifiedReleases: VerifiedInstallRelease[] = [];
     for (const entry of closure.order) {
       const envelope = closure.loaded.get(exactKey(identity(entry)));
       if (!envelope) {
@@ -445,7 +445,7 @@ export async function installRegistryClosure(
       const staged = await request.artifacts.stage({
         transactionId,
         registryId,
-        unit: identity(entry),
+        release: identity(entry),
         artifact,
       });
       verifyStagingEvidence(staged, artifact);
@@ -457,7 +457,7 @@ export async function installRegistryClosure(
         artifact,
       );
       const reports = await downloadedReports(entry, request.documents);
-      const certifiedRelease = await verifyRegistryUnitRelease(
+      const certifiedRelease = await verifyRegistryRelease(
         request.certified,
         identity(entry),
         envelope.manifestBytes,
@@ -466,7 +466,7 @@ export async function installRegistryClosure(
       if (!certifiedRelease.ok) {
         throw new InstallFailure("RELEASE_VERIFICATION_FAILED", certifiedRelease.errors);
       }
-      verifiedUnits.push(Object.freeze({
+      verifiedReleases.push(Object.freeze({
         ...identity(entry),
         registryId,
         sourceRepository: certifiedRelease.value.release.source.repository,
@@ -477,13 +477,13 @@ export async function installRegistryClosure(
         stagedHandle: staged.handle,
       }));
     }
-    const committed = await request.artifacts.commit(transactionId, verifiedUnits);
+    const committed = await request.artifacts.commit(transactionId, verifiedReleases);
     transactionId = null;
     return {
       ok: true,
       registryId,
       generation: committed.generation,
-      units: Object.freeze(verifiedUnits),
+      releases: Object.freeze(verifiedReleases),
     };
   } catch (cause) {
     if (transactionId !== null) {

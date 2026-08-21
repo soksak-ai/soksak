@@ -1,11 +1,11 @@
 import { usePlugins } from "../state/plugins";
 import { useRegistry } from "../state/registry";
 import {
-  resolveRegistryUnit,
+  resolveRegistryRelease,
   type QualifiedRegistryEntry,
 } from "./registry";
 import {
-  installCertifiedRegistryUnit,
+  installCertifiedRegistryRelease,
   type RegistryInstallRuntimeResult,
 } from "./registryInstallRuntime";
 
@@ -20,7 +20,7 @@ export async function installQualifiedRegistryEntry(
       message: `registry is not certified: ${entry.registryId}`,
     };
   }
-  const result = await installCertifiedRegistryUnit({
+  const result = await installCertifiedRegistryRelease({
     certified: source.certified,
     root: { kind: entry.kind, id: entry.id, version: entry.version },
   });
@@ -47,8 +47,8 @@ export async function updateCertifiedRegistryPlugin(
       message: "a development source is not a release update target",
     };
   }
-  const resolved = resolveRegistryUnit(useRegistry.getState().units, {
-    unitId: id,
+  const resolved = resolveRegistryRelease(useRegistry.getState().releases, {
+    id,
     kind: "plugin",
     ...(registryId ? { registryId } : {}),
   });
@@ -58,7 +58,7 @@ export async function updateCertifiedRegistryPlugin(
       code: resolved.reason === "not_found" ? "TARGET_NOT_FOUND" : "INVALID_PARAMS",
       message: `authenticated update release cannot be resolved: ${id}`,
       errors: resolved.candidates.map((candidate) =>
-        `${candidate.registryId}/${candidate.unitId}@${candidate.version}`
+        `${candidate.registryId}/${candidate.id}@${candidate.version}`
       ),
     };
   }

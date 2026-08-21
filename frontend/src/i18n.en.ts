@@ -1216,7 +1216,7 @@ export const en: Record<MsgKey, string> = {
   "cmd.command.docs.desc": "The whole executable command surface in one call: core command specs, installed plugin command specs, and authenticated release references for units that are not installed. A registry never supplies unit command declarations.",
   "cmd.plugin.install.desc": "Install one authenticated plugin release and its complete plugin/sidecar/kit dependency closure from one registry. Git URLs, branches, package registries, and local paths are not installation sources.",
   "cmd.plugin.install.param.registryId": "Registry id for a qualified catalog install",
-  "cmd.plugin.install.param.unitId": "Unit id for a qualified catalog install",
+  "cmd.plugin.install.param.pluginId": "Plugin ID for a qualified catalog install",
   "cmd.plugin.update.desc": "Replace an installed plugin and its complete dependency closure with the greatest authenticated release from its registry. Re-consent is required when the verified manifest changes permissions.",
   "cmd.plugin.update.param.id": "Plugin id",
   "cmd.plugin.update.param.registryId": "Origin registry id when the unit id exists in multiple registries",

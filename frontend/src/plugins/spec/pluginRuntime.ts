@@ -8,7 +8,7 @@
  */
 
 // The core's own spec version — one value, stamped into every envelope the core defines.
-import { CORE_SPEC } from "./unit";
+import { CORE_SPEC } from "./release-primitives";
 
 export const PLUGIN_RUNTIME_WIRE_SPEC = CORE_SPEC;
 export const PLUGIN_RUNTIME_BOOTSTRAP_SPEC = PLUGIN_RUNTIME_WIRE_SPEC;

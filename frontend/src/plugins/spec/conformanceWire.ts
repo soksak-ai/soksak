@@ -5,31 +5,31 @@ import {
   contractProviderKey,
   parseContractProviderRef,
 } from "./contracts";
-import { type PlatformParseResult, type UnitReleaseManifest } from "./release";
+import { type PlatformParseResult, type ReleaseManifest } from "./release";
 import {
   CONFORMANCE_REPORT_SPEC,
   RELEASE_SPEC,
-  UNIT_SPEC_BY_KIND,
+  MANIFEST_SPEC_BY_RELEASE_KIND,
   SHA256_RE,
   STRICT_SEMVER_RE,
-  UNIT_ID_RE,
+  RELEASE_ID_RE,
   isStrictSemver,
-  isUnitKind,
-  isUnitTarget,
-  type UnitKind,
-  type UnitTarget,
-} from "./unit";
+  isReleaseKind,
+  isArtifactTarget,
+  type ReleaseKind,
+  type ArtifactTarget,
+} from "./release-primitives";
 import { checkKnownKeys, isRecord } from "./util";
 
 export interface ConformanceSubject {
-  kind: UnitKind;
+  kind: ReleaseKind;
   id: string;
   version: string;
   manifestSha256: string;
 }
 
 export interface ConformanceArtifactSubject {
-  target: UnitTarget;
+  target: ArtifactTarget;
   sha256: string;
 }
 
@@ -65,14 +65,14 @@ function strictObject(
 
 export type PlatformConformanceContract =
   | typeof RELEASE_SPEC
-  | (typeof UNIT_SPEC_BY_KIND)[UnitKind];
+  | (typeof MANIFEST_SPEC_BY_RELEASE_KIND)[ReleaseKind];
 
 function isPlatformConformanceContract(value: unknown): value is PlatformConformanceContract {
   return typeof value === "string" && (
     value === RELEASE_SPEC ||
-    value === UNIT_SPEC_BY_KIND.kit ||
-    value === UNIT_SPEC_BY_KIND.plugin ||
-    value === UNIT_SPEC_BY_KIND.sidecar
+    value === MANIFEST_SPEC_BY_RELEASE_KIND.kit ||
+    value === MANIFEST_SPEC_BY_RELEASE_KIND.plugin ||
+    value === MANIFEST_SPEC_BY_RELEASE_KIND.sidecar
   );
 }
 
@@ -84,10 +84,9 @@ export function conformanceContractKey(
     : `domain\u0000${contractProviderKey(contract)}`;
 }
 
-// What a unit answers for: the release format it ships in, and the manifest format of its kind.
-// Measured against what is published — every unit in the index has exactly these two reports.
-export function requiredConformanceContracts(kind: UnitKind): PlatformConformanceContract[] {
-  return [RELEASE_SPEC, UNIT_SPEC_BY_KIND[kind]].sort();
+// Each plugin, sidecar, or kit proves its release format and its kind-specific manifest format.
+export function requiredConformanceContracts(kind: ReleaseKind): PlatformConformanceContract[] {
+  return [RELEASE_SPEC, MANIFEST_SPEC_BY_RELEASE_KIND[kind]].sort();
 }
 
 export function parseConformanceReport(raw: unknown): PlatformParseResult<ConformanceReport> {
@@ -121,9 +120,9 @@ export function parseConformanceReport(raw: unknown): PlatformParseResult<Confor
   let subject: ConformanceSubject | null = null;
   if (subjectRaw) {
     const before = errors.length;
-    if (!isUnitKind(subjectRaw.kind)) errors.push("conformance.subject.kind: kit|plugin|sidecar required");
-    if (typeof subjectRaw.id !== "string" || !UNIT_ID_RE.test(subjectRaw.id)) {
-      errors.push("conformance.subject.id: flat unit id required");
+    if (!isReleaseKind(subjectRaw.kind)) errors.push("conformance.subject.kind: kit|plugin|sidecar required");
+    if (typeof subjectRaw.id !== "string" || !RELEASE_ID_RE.test(subjectRaw.id)) {
+      errors.push("conformance.subject.id: release id required");
     }
     if (!isStrictSemver(subjectRaw.version)) errors.push("conformance.subject.version: strict SemVer required");
     if (!SHA256_RE.test(typeof subjectRaw.manifestSha256 === "string" ? subjectRaw.manifestSha256 : "")) {
@@ -131,7 +130,7 @@ export function parseConformanceReport(raw: unknown): PlatformParseResult<Confor
     }
     if (errors.length === before) {
       subject = {
-        kind: subjectRaw.kind as UnitKind,
+        kind: subjectRaw.kind as ReleaseKind,
         id: subjectRaw.id as string,
         version: subjectRaw.version as string,
         manifestSha256: subjectRaw.manifestSha256 as string,
@@ -149,7 +148,7 @@ export function parseConformanceReport(raw: unknown): PlatformParseResult<Confor
   let validator: ConformanceValidator | null = null;
   if (validatorRaw) {
     const before = errors.length;
-    if (typeof validatorRaw.name !== "string" || !UNIT_ID_RE.test(validatorRaw.name)) {
+    if (typeof validatorRaw.name !== "string" || !RELEASE_ID_RE.test(validatorRaw.name)) {
       errors.push("conformance.validator.name: flat tool id required");
     }
     if (typeof validatorRaw.version !== "string" || !STRICT_SEMVER_RE.test(validatorRaw.version)) {
@@ -169,12 +168,12 @@ export function parseConformanceReport(raw: unknown): PlatformParseResult<Confor
       const before = errors.length;
       const artifact = strictObject(item, ["sha256", "target"], ["sha256", "target"], label, errors);
       if (!artifact) return;
-      if (!isUnitTarget(artifact.target)) errors.push(`${label}.target: canonical unit target required`);
+      if (!isArtifactTarget(artifact.target)) errors.push(`${label}.target: canonical artifact target required`);
       if (!SHA256_RE.test(typeof artifact.sha256 === "string" ? artifact.sha256 : "")) {
         errors.push(`${label}.sha256: exact lowercase SHA-256 required`);
       }
       if (errors.length === before) {
-        artifacts.push({ target: artifact.target as UnitTarget, sha256: artifact.sha256 as string });
+        artifacts.push({ target: artifact.target as ArtifactTarget, sha256: artifact.sha256 as string });
       }
     });
     const keys = artifacts.map((artifact) => artifact.target);
@@ -201,7 +200,7 @@ export type ConformanceVerificationResult = { ok: true } | { ok: false; errors: 
 
 export function verifyConformanceReport(
   report: ConformanceReport,
-  release: UnitReleaseManifest,
+  release: ReleaseManifest,
   manifestSha256: string,
   ownerProviders: readonly ContractProviderRef[] = [],
 ): ConformanceVerificationResult {

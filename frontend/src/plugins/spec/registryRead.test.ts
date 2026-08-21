@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseRegistryPayload } from "./registry";
-import { CORE_SPEC } from "./unit";
+import { CORE_SPEC } from "./release-primitives";
 
 // The published index reads.
 //

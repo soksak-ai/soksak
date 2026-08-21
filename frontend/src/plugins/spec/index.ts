@@ -26,13 +26,13 @@
 // 8. Standards do not move. When a test/validation standard is not met, fix the code. When the
 //    standard itself is wrong, record it as an open question and correct it instead of lowering it.
 //
-// ── Distribution model — unit ownership, release, registry separation (P1-P5, invariant) ────
+// Distribution model: plugin, sidecar, and kit ownership remain explicit.
 // A plugin = one independent repo. The repo owns plugin.json, the implementation, docs, tests, and
 // the owner release manifest. entry is declared by plugin.json inside the release artifact; the
 // installer does not substitute a checkout/branch/guessed path.
 //
-// P1. The core has no per-unit data. No unit list, no source, no publishing tool — only the public wire.
-// P2. A registry is a signed discovery/trust index, and there can be several. It does not copy unit
+// P1. The core has no owner-specific release data or publishing tool.
+// P2. A registry is a signed discovery and trust index. It does not copy owner
 //     content; it points at the GitHub Release URL + SHA-256 of the owner release manifest and of
 //     the conformance report.
 // P3. The repo of a plugin/sidecar/kit is finally responsible for its own identity/source/
@@ -71,8 +71,8 @@ export * from "./service";
 // semver comparison utilities. Single source: semver.ts (public API re-exported here).
 import { SEMVER_RE } from "./semver";
 export * from "./semver";
-import { UNIT_ID_RE, UNIT_SPEC_BY_KIND, isUnitDependencyRange } from "./unit";
-export * from "./unit";
+import { RELEASE_ID_RE, MANIFEST_SPEC_BY_RELEASE_KIND, isDependencyRange } from "./release-primitives";
+export * from "./release-primitives";
 export * from "./release";
 export * from "./conformanceWire";
 export * from "./identityVocabulary";
@@ -107,7 +107,7 @@ export * from "./transparency";
 // §1 Permissions — permissions.ts is the single source of the permission vocabulary and the consent notice.
 import { PERMISSIONS, type PluginPermission } from "./permissions";
 export * from "./permissions";
-// Signed multi-registry install index — a public wire contract that does not copy unit-owned manifest/docs.
+// Signed multi-registry install index. Owner manifests and documentation remain in owner releases.
 export * from "./registry";
 // Chrome standard gate (host chrome tokens, entry static scan). Single source: hostChrome.ts.
 export * from "./hostChrome";
@@ -285,7 +285,7 @@ export function programPathSegments(path: string): string[] {
 
 // ── §3 Manifest ──────────────────────────────────────────────────────────────
 
-export const SPEC_VERSION = UNIT_SPEC_BY_KIND.plugin;
+export const SPEC_VERSION = MANIFEST_SPEC_BY_RELEASE_KIND.plugin;
 export const DEFAULT_ENTRY = "main.js";
 
 // External CLI/library dependency — an external tool the plugin runs as a process (npm global CLI
@@ -309,10 +309,10 @@ export type ReachStrategy =
 // legacy behavior (presence = acceptance, install = supply). The reconcile engine (M3) runs it.
 // A sidecar this plugin drives. `name` is the <name> in soksak-sidecar-<name>, and `interface` is
 // the exact contract reference `{ id, version }` its release must satisfy. Checked at load against what
-// the unit reports about itself — declaration ≡ reality, and a mismatch is refused.
+// the plugin reports about itself. A mismatch is refused.
 //
 // This declaration states no runtime shape and no manifest field does. Whether an artefact is
-// spawned or loaded is what the release declares, in `process[]` and `library[]`, and one unit may
+// spawned or loaded is what the release declares in `process[]` and `library[]`, and one release may
 // declare both (SIDECARS.md S3). The comment here read "engine model" for every entry, which is
 // wrong for every sidecar that is a process.
 export interface SidecarDep {
@@ -522,7 +522,7 @@ export function validateSettingValue(
   }
 }
 
-export const PLUGIN_ID_RE = UNIT_ID_RE;
+export const PLUGIN_ID_RE = RELEASE_ID_RE;
 const VIEW_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 // View status code (ViewStatus.code — machine identifier) — same lexical family as id.
 const STATUS_CODE_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -725,9 +725,9 @@ export function parseManifest(
           errors.push(`dependencies: key "${depId}" must be plugin id format (^[a-z0-9][a-z0-9-]*$)`);
         } else if (isNonEmptyString(raw.id) && depId === raw.id) {
           errors.push(`dependencies: self-dependency ("${depId}") forbidden`);
-        } else if (typeof range !== "string" || !isUnitDependencyRange(range)) {
+        } else if (typeof range !== "string" || !isDependencyRange(range)) {
           errors.push(
-            `dependencies["${depId}"]: common unit semver range required (e.g. ^0.1.0, >=1.0.0 <2.0.0, 1.2.3, *)`,
+            `dependencies["${depId}"]: semantic version range required (e.g. ^0.1.0, >=1.0.0 <2.0.0, 1.2.3, *)`,
           );
         } else {
           dependencies[depId] = range;

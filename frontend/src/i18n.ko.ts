@@ -1221,7 +1221,7 @@ export const ko = {
   "cmd.command.docs.desc": "실행 가능한 명령 표면 전체를 한 번의 호출로 반환합니다: 코어 명령 스펙, 설치된 플러그인 명령 스펙, 그리고 설치되지 않은 유닛의 인증된 릴리스 참조. 레지스트리는 유닛 명령 선언을 결코 제공하지 않습니다.",
   "cmd.plugin.install.desc": "인증된 플러그인 릴리스 하나와 그 플러그인·사이드카·킷 의존 폐포 전체를 레지스트리 하나에서 설치합니다. Git URL, 브랜치, 패키지 레지스트리, 지역 경로는 설치 출처가 아닙니다.",
   "cmd.plugin.install.param.registryId": "정규화된 카탈로그 설치를 위한 레지스트리 id",
-  "cmd.plugin.install.param.unitId": "정규화된 카탈로그 설치를 위한 유닛 id",
+  "cmd.plugin.install.param.pluginId": "정규화된 카탈로그 설치를 위한 플러그인 ID",
   "cmd.plugin.update.desc": "설치된 플러그인과 그 의존 폐포 전체를 그 레지스트리의 가장 높은 인증 릴리스로 바꿉니다. 검증된 매니페스트가 권한을 바꾸면 다시 동의를 받아야 합니다.",
   "cmd.plugin.update.param.id": "플러그인 id",
   "cmd.plugin.update.param.registryId": "유닛 id 가 여러 레지스트리에 있을 때의 출처 레지스트리 id",

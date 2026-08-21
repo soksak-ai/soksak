@@ -10,21 +10,21 @@ import {
 import {
   parseReleaseManifest,
   type PlatformParseResult,
-  type UnitDependency,
-  type UnitReleaseManifest,
+  type ReleaseDependency,
+  type ReleaseManifest,
 } from "./release";
 import { semverCompare, semverSatisfies } from "./semver";
 import {
   REGISTRY_SPEC,
   SHA256_RE,
-  UNIT_ID_RE,
+  RELEASE_ID_RE,
   githubReleaseAssetBelongsTo,
   isStrictSemver,
-  isUnitDependencyRange,
-  isUnitKind,
+  isDependencyRange,
+  isReleaseKind,
   parseCanonicalGithubReleaseAssetUrl,
-  type UnitKind,
-} from "./unit";
+  type ReleaseKind,
+} from "./release-primitives";
 import { checkKnownKeys, isRecord } from "./util";
 import type { ContractProviderRef } from "./contracts";
 
@@ -43,8 +43,8 @@ export interface RegistryIntegrityReference {
   sha256: string;
 }
 
-export interface RegistryUnitIndexEntry {
-  kind: UnitKind;
+export interface RegistryReleaseEntry {
+  kind: ReleaseKind;
   id: string;
   version: string;
   manifest: RegistryIntegrityReference;
@@ -57,7 +57,7 @@ export interface RegistryPayload {
   sequence: number;
   issuedAt: string;
   expiresAt: string;
-  units: RegistryUnitIndexEntry[];
+  units: RegistryReleaseEntry[];
 }
 
 export interface RegistrySignature {
@@ -141,7 +141,7 @@ function parseIntegrityReference(
     : null;
 }
 
-function parseUnit(raw: unknown, index: number, errors: string[]): RegistryUnitIndexEntry | null {
+function parseUnit(raw: unknown, index: number, errors: string[]): RegistryReleaseEntry | null {
   const label = `registry.units[${index}]`;
   const before = errors.length;
   const value = strictObject(
@@ -152,8 +152,8 @@ function parseUnit(raw: unknown, index: number, errors: string[]): RegistryUnitI
     errors,
   );
   if (!value) return null;
-  if (!isUnitKind(value.kind)) errors.push(`${label}.kind: kit|plugin|sidecar required`);
-  if (typeof value.id !== "string" || !UNIT_ID_RE.test(value.id)) errors.push(`${label}.id: flat unit id required`);
+  if (!isReleaseKind(value.kind)) errors.push(`${label}.kind: kit|plugin|sidecar required`);
+  if (typeof value.id !== "string" || !RELEASE_ID_RE.test(value.id)) errors.push(`${label}.id: flat unit id required`);
   if (!isStrictSemver(value.version)) errors.push(`${label}.version: strict semantic version required`);
   const manifest = parseIntegrityReference(value.manifest, `${label}.manifest`, errors);
   const reports: RegistryIntegrityReference[] = [];
@@ -168,7 +168,7 @@ function parseUnit(raw: unknown, index: number, errors: string[]): RegistryUnitI
   }
   if (errors.length !== before || !manifest) return null;
   return {
-    kind: value.kind as UnitKind,
+    kind: value.kind as ReleaseKind,
     id: value.id as string,
     version: value.version as string,
     manifest,
@@ -202,7 +202,7 @@ export function parseRegistryPayload(raw: unknown): PlatformParseResult<Registry
   ) {
     errors.push("registry.expiresAt: must be later than issuedAt");
   }
-  const units: RegistryUnitIndexEntry[] = [];
+  const units: RegistryReleaseEntry[] = [];
   if (!Array.isArray(value.units)) {
     errors.push("registry.units: array required");
   } else {
@@ -497,21 +497,21 @@ export async function certifyRegistryIndex(
   return { ok: true, value: certified };
 }
 
-export interface RegistryUnitIdentity {
-  kind: UnitKind;
+export interface RegistryReleaseIdentity {
+  kind: ReleaseKind;
   id: string;
   version: string;
 }
 
 export type RegistryDependencyResolutionResult =
-  | { ok: true; value: RegistryUnitIndexEntry }
+  | { ok: true; value: RegistryReleaseEntry }
   | { ok: false; errors: string[] };
 
 // A dependency is resolved against exactly the CertifiedRegistryIndex that supplied
 // its parent. Calling code must never retry another registry after this returns false.
 export function resolveRegistryDependency(
   certified: CertifiedRegistryIndex,
-  dependency: UnitDependency,
+  dependency: ReleaseDependency,
 ): RegistryDependencyResolutionResult {
   if (!certifiedRegistryIndexes.has(certified as object)) {
     return { ok: false, errors: ["uncertified registry index"] };
@@ -520,10 +520,10 @@ export function resolveRegistryDependency(
   // the index determines the version and the interface contract pin determines compatibility —
   // do not invent a version constraint here.
   if (
-    !isUnitKind(dependency.kind) ||
+    !isReleaseKind(dependency.kind) ||
     typeof dependency.id !== "string" ||
-    !UNIT_ID_RE.test(dependency.id) ||
-    (dependency.range !== undefined && !isUnitDependencyRange(dependency.range))
+    !RELEASE_ID_RE.test(dependency.id) ||
+    (dependency.range !== undefined && !isDependencyRange(dependency.range))
   ) {
     return { ok: false, errors: ["invalid unit dependency"] };
   }
@@ -550,23 +550,23 @@ export interface DownloadedRegistryDocument {
   bytes: Uint8Array;
 }
 
-declare const CERTIFIED_UNIT_RELEASE: unique symbol;
-export interface CertifiedRegistryUnitRelease {
+declare const CERTIFIED_REGISTRY_RELEASE: unique symbol;
+export interface CertifiedRegistryRelease {
   readonly registryId: string;
-  readonly entry: RegistryUnitIndexEntry;
-  readonly release: UnitReleaseManifest;
+  readonly entry: RegistryReleaseEntry;
+  readonly release: ReleaseManifest;
   readonly reports: readonly ConformanceReport[];
-  readonly [CERTIFIED_UNIT_RELEASE]: true;
+  readonly [CERTIFIED_REGISTRY_RELEASE]: true;
 }
 
-export type RegistryUnitVerificationResult =
-  | { ok: true; value: CertifiedRegistryUnitRelease }
+export type RegistryReleaseVerificationResult =
+  | { ok: true; value: CertifiedRegistryRelease }
   | { ok: false; errors: string[] };
 
-const certifiedRegistryUnitReleases = new WeakSet<object>();
+const certifiedRegistryReleases = new WeakSet<object>();
 
-export function isCertifiedRegistryUnitRelease(value: unknown): value is CertifiedRegistryUnitRelease {
-  return typeof value === "object" && value !== null && certifiedRegistryUnitReleases.has(value);
+export function isCertifiedRegistryRelease(value: unknown): value is CertifiedRegistryRelease {
+  return typeof value === "object" && value !== null && certifiedRegistryReleases.has(value);
 }
 
 function parseJsonBytes(bytes: Uint8Array, label: string, errors: string[]): unknown {
@@ -578,13 +578,13 @@ function parseJsonBytes(bytes: Uint8Array, label: string, errors: string[]): unk
   }
 }
 
-export async function verifyRegistryUnitRelease(
+export async function verifyRegistryRelease(
   certified: CertifiedRegistryIndex,
-  identity: RegistryUnitIdentity,
+  identity: RegistryReleaseIdentity,
   manifestBytes: Uint8Array,
   downloadedReports: readonly DownloadedRegistryDocument[],
   ownerProviders: readonly ContractProviderRef[] = [],
-): Promise<RegistryUnitVerificationResult> {
+): Promise<RegistryReleaseVerificationResult> {
   if (!certifiedRegistryIndexes.has(certified as object)) {
     return { ok: false, errors: ["uncertified registry index"] };
   }
@@ -669,7 +669,7 @@ export async function verifyRegistryUnitRelease(
     entry,
     release,
     reports,
-  }) as unknown as CertifiedRegistryUnitRelease;
-  certifiedRegistryUnitReleases.add(verified as object);
+  }) as unknown as CertifiedRegistryRelease;
+  certifiedRegistryReleases.add(verified as object);
   return { ok: true, value: verified };
 }

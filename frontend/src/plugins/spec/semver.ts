@@ -1,5 +1,5 @@
 // SemVer grammar, deterministic dependency-range subset, and precedence.
-// This module has no product or package baseline: each unit owns its version,
+// This module has no product or package baseline: each release owner sets its version,
 // while repository policy/CI fixes which version is current.
 
 export const MAX_SEMVER_LENGTH = 256;
@@ -20,14 +20,14 @@ export function isStrictSemver(value: unknown): value is string {
   return typeof value === "string" && value.length <= MAX_SEMVER_LENGTH && STRICT_SEMVER_RE.test(value);
 }
 
-export const MAX_UNIT_DEPENDENCY_RANGE_LENGTH = 512;
-export const MAX_UNIT_DEPENDENCY_CLAUSES = 16;
+export const MAX_DEPENDENCY_RANGE_LENGTH = 512;
+export const MAX_DEPENDENCY_CLAUSES = 16;
 
-export function isUnitDependencyRange(value: unknown): value is string {
+export function isDependencyRange(value: unknown): value is string {
   if (
     typeof value !== "string" ||
     value.length === 0 ||
-    value.length > MAX_UNIT_DEPENDENCY_RANGE_LENGTH ||
+    value.length > MAX_DEPENDENCY_RANGE_LENGTH ||
     value !== value.trim() ||
     value.includes("||")
   ) {
@@ -37,7 +37,7 @@ export function isUnitDependencyRange(value: unknown): value is string {
   const clauses = value.split(" ");
   if (
     clauses.length === 0 ||
-    clauses.length > MAX_UNIT_DEPENDENCY_CLAUSES ||
+    clauses.length > MAX_DEPENDENCY_CLAUSES ||
     clauses.some((clause) => clause.length === 0 || clause === "*")
   ) return false;
   return clauses.every((clause) => {
@@ -58,7 +58,7 @@ export function isUnitDependencyRange(value: unknown): value is string {
 // something, so ranges are left alone. Nothing here is written against a particular version, so the
 // rule outlives the version the repository happens to be at.
 export function initialDevelopmentRangeIsExact(range: string): boolean {
-  if (!isUnitDependencyRange(range)) return false;
+  if (!isDependencyRange(range)) return false;
   if (range === "*") return true;
   const clauses = range.split(" ");
   const touchesInitialDevelopment = clauses.some((clause) => {
@@ -177,7 +177,7 @@ function clauseNamesSameCorePrerelease(version: ParsedSemver, clause: string): b
 // whitespace-separated AND clauses. `||`, partial versions and tags are rejected.
 export function semverSatisfies(version: string, range: string): boolean | null {
   const parsedVersion = parseSemver(version);
-  if (!parsedVersion || !isUnitDependencyRange(range)) return null;
+  if (!parsedVersion || !isDependencyRange(range)) return null;
   const clauses = range.split(" ");
   let result = true;
   for (const clause of clauses) {

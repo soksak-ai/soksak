@@ -5,8 +5,8 @@ import {
   type CertifiedRegistryIndex,
   type LocalizedText,
   type RegistryPublicKey,
-  type RegistryUnitIndexEntry,
-  type UnitKind,
+  type RegistryReleaseEntry,
+  type ReleaseKind,
 } from "./spec";
 
 export const OFFICIAL_REGISTRY_ID = "official";
@@ -27,9 +27,8 @@ export interface RegistryCredentialSlot {
   ref: string;
 }
 
-export interface QualifiedRegistryEntry extends RegistryUnitIndexEntry {
+export interface QualifiedRegistryEntry extends RegistryReleaseEntry {
   registryId: string;
-  unitId: string;
 }
 
 /** Catalog entries are authenticated release references, never repository locators. */
@@ -126,35 +125,34 @@ export function qualifyRegistry(
   return certified.index.units.map((entry) => ({
     ...entry,
     registryId: certified.index.registryId,
-    unitId: entry.id,
   }));
 }
 
-export type RegistryUnitResolution =
+export type RegistryReleaseResolution =
   | { ok: true; entry: QualifiedRegistryEntry }
   | {
       ok: false;
       reason: "not_found" | "qualification_required" | "ambiguous";
-      candidates: { registryId: string; unitId: string; version: string }[];
+      candidates: { registryId: string; id: string; version: string }[];
     };
 
-export function resolveRegistryUnit(
+export function resolveRegistryRelease(
   entries: readonly QualifiedRegistryEntry[],
   target: {
     registryId?: string;
-    unitId: string;
-    kind?: UnitKind;
+    id: string;
+    kind?: ReleaseKind;
     range?: string;
   },
-): RegistryUnitResolution {
+): RegistryReleaseResolution {
   const matches = entries.filter((entry) =>
-    entry.unitId === target.unitId &&
+    entry.id === target.id &&
     (target.registryId === undefined || entry.registryId === target.registryId) &&
     (target.kind === undefined || entry.kind === target.kind) &&
     (target.range === undefined || semverSatisfies(entry.version, target.range) === true)
   );
   const candidates = matches
-    .map(({ registryId, unitId, version }) => ({ registryId, unitId, version }))
+    .map(({ registryId, id, version }) => ({ registryId, id, version }))
     .sort((left, right) =>
       left.registryId.localeCompare(right.registryId) ||
       -(semverCompare(left.version, right.version) ?? 0)
@@ -175,7 +173,7 @@ export function resolveRegistryUnit(
 export type InstallState = "available" | "installed" | "update";
 
 export function installState(
-  entry: Pick<RegistryUnitIndexEntry, "version">,
+  entry: Pick<RegistryReleaseEntry, "version">,
   installedVersion?: string,
   installedSource?: "installed" | "dev",
 ): InstallState {
@@ -195,11 +193,11 @@ export function isOfficial(
   return entries.some((entry) =>
     entry.registryId === OFFICIAL_REGISTRY_ID &&
     entry.kind === "plugin" &&
-    entry.unitId === id
+    entry.id === id
   );
 }
 
 /** A catalog has no authority to supply display metadata before its owner release is verified. */
-export function catalogLabel(entry: Pick<QualifiedRegistryEntry, "unitId">): LocalizedText {
-  return entry.unitId;
+export function catalogLabel(entry: Pick<QualifiedRegistryEntry, "id">): LocalizedText {
+  return entry.id;
 }

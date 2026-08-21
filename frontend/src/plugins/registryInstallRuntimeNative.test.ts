@@ -14,7 +14,7 @@ vi.mock("./registryInstaller", async (orig) => {
   return { ...actual, installRegistryClosure: (req: unknown) => closure(req) };
 });
 
-import { installCertifiedRegistryUnit } from "./registryInstallRuntime";
+import { installCertifiedRegistryRelease } from "./registryInstallRuntime";
 import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 
 const CERTIFIED = { index: { registryId: "fixture" } } as any;
@@ -36,14 +36,14 @@ describe("native registry install wiring", () => {
   });
 
   it("the default runtime is unavailable until wired (RED baseline)", async () => {
-    const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
     expect(result).toMatchObject({ ok: false, code: "INSTALL_RUNTIME_UNAVAILABLE" });
   });
 
   it("runs the closure and maps a committed generation to the root identity", async () => {
-    closure.mockResolvedValue({ ok: true, registryId: "fixture", generation: 7, units: [] });
+    closure.mockResolvedValue({ ok: true, registryId: "fixture", generation: 7, releases: [] });
     restore = wireNativeRegistryInstall();
-    const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
     expect(result).toEqual({ ok: true, id: "weather-plugin", version: "0.0.1", generation: 7 });
     const req = closure.mock.calls[0]![0] as any;
     expect(req.certified).toBe(CERTIFIED);
@@ -56,7 +56,7 @@ describe("native registry install wiring", () => {
   it("maps a fail-closed closure error to a runtime error result", async () => {
     closure.mockResolvedValue({ ok: false, code: "RELEASE_VERIFICATION_FAILED", errors: ["bad sha", "x"] });
     restore = wireNativeRegistryInstall();
-    const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
     expect(result).toMatchObject({
       ok: false,
       code: "RELEASE_VERIFICATION_FAILED",
@@ -68,7 +68,7 @@ describe("native registry install wiring", () => {
   it("refuses installation when the host artifact target is unavailable", async () => {
     invoke.mockRejectedValueOnce(new Error("host target unavailable"));
     restore = wireNativeRegistryInstall();
-    const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
     expect(result).toEqual({
       ok: false,
       code: "HOST_TARGET_UNAVAILABLE",
@@ -91,7 +91,7 @@ describe("native registry install wiring", () => {
       await req.artifacts.stage({
         transactionId: "t1",
         registryId: "fixture",
-        unit: ROOT,
+        release: ROOT,
         artifact: {
           target: "any",
           url: "https://x/a.tgz",
@@ -100,10 +100,10 @@ describe("native registry install wiring", () => {
           entrypoint: { kind: "plugin", manifest: "plugin.json" },
         },
       });
-      return { ok: true, registryId: "fixture", generation: 1, units: [] };
+      return { ok: true, registryId: "fixture", generation: 1, releases: [] };
     });
     restore = wireNativeRegistryInstall();
-    await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
+    await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
     expect(invoke).toHaveBeenCalledWith("artifact_install_begin", { registryId: "fixture", root: ROOT });
     expect(invoke).toHaveBeenCalledWith("artifact_install_stage", {
       transactionId: "t1",
@@ -123,10 +123,10 @@ describe("native registry install wiring", () => {
       invoke.mockResolvedValueOnce({ generation: 4 });
       invoke.mockResolvedValueOnce({ generation: 5 });
       const committed = await req.artifacts.commit("t1", verified);
-      return { ok: true, registryId: "fixture", generation: committed.generation, units: [] };
+      return { ok: true, registryId: "fixture", generation: committed.generation, releases: [] };
     });
     restore = wireNativeRegistryInstall();
-    const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
     expect(result).toEqual({ ok: true, id: "weather-plugin", version: "0.0.1", generation: 5 });
     expect(invoke).toHaveBeenCalledWith("composition_settings");
     expect(invoke).toHaveBeenCalledWith("artifact_install_commit", {
@@ -160,13 +160,13 @@ describe("native registry install wiring", () => {
     closure.mockImplementation(async (req: any) => {
       try {
         await req.artifacts.commit("t1", []);
-        return { ok: true, registryId: "fixture", generation: 1, units: [] };
+        return { ok: true, registryId: "fixture", generation: 1, releases: [] };
       } catch (cause) {
         return { ok: false, code: "ATOMIC_INSTALL_FAILED", errors: [String(cause)] };
       }
     });
     restore = wireNativeRegistryInstall();
-    const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
     expect(result).toMatchObject({
       ok: false,
       code: "ATOMIC_INSTALL_FAILED",

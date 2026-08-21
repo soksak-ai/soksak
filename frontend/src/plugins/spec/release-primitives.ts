@@ -1,22 +1,22 @@
-// Public platform-unit primitives. Plugin, sidecar, kit, release, conformance and
+// Public release primitives. Plugin, sidecar, and kit kinds remain explicit.
 // registry contracts import these exact values; no boundary may restate their grammar.
 
 export {
   MAX_SEMVER_LENGTH,
-  MAX_UNIT_DEPENDENCY_CLAUSES,
-  MAX_UNIT_DEPENDENCY_RANGE_LENGTH,
+  MAX_DEPENDENCY_CLAUSES,
+  MAX_DEPENDENCY_RANGE_LENGTH,
   STRICT_SEMVER_PATTERN,
   STRICT_SEMVER_RE,
   isStrictSemver,
-  isUnitDependencyRange,
+  isDependencyRange,
 } from "./semver";
 
-export const UNIT_KINDS = ["kit", "plugin", "sidecar"] as const;
-export type UnitKind = (typeof UNIT_KINDS)[number];
+export const RELEASE_KINDS = ["kit", "plugin", "sidecar"] as const;
+export type ReleaseKind = (typeof RELEASE_KINDS)[number];
 
-// Unit identity is flat because registry identity is already qualified separately.
+// Release identity is flat because registry identity is qualified separately.
 // A third-party author does not need a soksak prefix.
-export const UNIT_ID_RE = /^[a-z0-9][a-z0-9-]{0,127}$/;
+export const RELEASE_ID_RE = /^[a-z0-9][a-z0-9-]{0,127}$/;
 
 export const SHA256_RE = /^[a-f0-9]{64}$/;
 export const GIT_COMMIT_RE = /^[a-f0-9]{40}$/;
@@ -32,9 +32,9 @@ export const NATIVE_TARGETS = [
   "x86_64-unknown-linux-gnu",
   "x86_64-unknown-linux-musl",
 ] as const;
-export const UNIT_TARGETS = [ANY_TARGET, ...NATIVE_TARGETS] as const;
+export const ARTIFACT_TARGETS = [ANY_TARGET, ...NATIVE_TARGETS] as const;
 export type NativeTarget = (typeof NATIVE_TARGETS)[number];
-export type UnitTarget = (typeof UNIT_TARGETS)[number];
+export type ArtifactTarget = (typeof ARTIFACT_TARGETS)[number];
 
 // The 0.0.1 baseline enacts one archive format (gzip-compressed POSIX tar) with two conventional
 // filename suffixes. ZIP remains invalid until its extractor enforces the same
@@ -53,25 +53,25 @@ export type CoreSpec = typeof CORE_SPEC;
 // identifies its document. On the wire it does not: a release manifest is fetched alone by URL, and
 // `spec` is its only identification. Measured the same day against what is served — the index, a
 // release manifest, both conformance reports and a packaged plugin manifest all stamped with the
-// names below — so the fold made 54 published units unreadable at four layers at once.
+// names below — so the fold made every published release unreadable at four layers at once.
 //
 // A per-plugin format — `soksak-spec-plugin-terminal` — was an invention and stays deleted. These
 // four are formats, one per document kind, and the publisher owns each.
 export const RELEASE_SPEC = "soksak-spec-release@0.0.1" as const;
 export const REGISTRY_SPEC = "soksak-spec-registry@0.0.1" as const;
 export const CONFORMANCE_REPORT_SPEC = "soksak-spec-conformance@0.0.1" as const;
-export const UNIT_SPEC_BY_KIND = {
+export const MANIFEST_SPEC_BY_RELEASE_KIND = {
   kit: "soksak-spec-kit@0.0.1",
   plugin: "soksak-spec-plugin@0.0.1",
   sidecar: "soksak-spec-sidecar@0.0.1",
-} as const satisfies Record<UnitKind, string>;
+} as const satisfies Record<ReleaseKind, string>;
 
-export function isUnitKind(value: unknown): value is UnitKind {
-  return typeof value === "string" && (UNIT_KINDS as readonly string[]).includes(value);
+export function isReleaseKind(value: unknown): value is ReleaseKind {
+  return typeof value === "string" && (RELEASE_KINDS as readonly string[]).includes(value);
 }
 
-export function isUnitTarget(value: unknown): value is UnitTarget {
-  return typeof value === "string" && (UNIT_TARGETS as readonly string[]).includes(value);
+export function isArtifactTarget(value: unknown): value is ArtifactTarget {
+  return typeof value === "string" && (ARTIFACT_TARGETS as readonly string[]).includes(value);
 }
 
 export function isNativeTarget(value: unknown): value is NativeTarget {
@@ -90,7 +90,7 @@ function isWindowsReservedPathSegment(segment: string): boolean {
   return ["CON", "PRN", "AUX", "NUL"].includes(stem) || /^(?:COM|LPT)[1-9]$/.test(stem);
 }
 
-export function isSafeRelativeUnitPath(value: unknown): value is string {
+export function isSafeRelativeArtifactPath(value: unknown): value is string {
   if (
     typeof value !== "string" ||
     value.length === 0 ||
@@ -201,7 +201,7 @@ export function parseCanonicalGithubReleaseAssetUrl(value: unknown): GithubRelea
   }
 }
 
-export function releaseTagForUnit(id: string, version: string, tag: unknown): tag is string {
+export function releaseTagMatches(id: string, version: string, tag: unknown): tag is string {
   return typeof tag === "string" && (tag === `v${version}` || tag === `${id}-v${version}`);
 }
 

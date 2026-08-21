@@ -98,7 +98,7 @@ function RegistrySection({
   // install one needs to know that; the URL the bytes arrive from is not
   // something they can act on.
   const official = useMemo(
-    () => new Set(entries.filter((e) => isOfficial(entries, e.unitId)).map((e) => e.unitId)),
+    () => new Set(entries.filter((e) => isOfficial(entries, e.id)).map((e) => e.id)),
     [entries],
   );
 
@@ -107,7 +107,7 @@ function RegistrySection({
   const doInstall = (e: RegistryEntry) =>
     run(() => execute("plugin.install", {
       registryId: e.registryId,
-      unitId: e.unitId,
+      pluginId: e.id,
     }, {}));
   const doUpdate = (e: RegistryEntry) =>
     doInstall(e);
@@ -148,7 +148,7 @@ function RegistrySection({
                   not user information — it is where the bytes are fetched from,
                   it cannot be acted on, and it overflowed the panel. */}
               <div className="plugin-row-desc">
-                {official.has(e.unitId)
+                {official.has(e.id)
                   ? t("plugin.registry.official")
                   : t("plugin.registry.thirdParty", { registry: e.registryId })}
               </div>

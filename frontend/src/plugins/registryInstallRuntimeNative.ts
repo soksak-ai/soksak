@@ -1,7 +1,7 @@
 // Production wiring for the certified archive-extraction installer.
 //
 // The install chain (plugin.install → installQualifiedRegistryEntry →
-// installCertifiedRegistryUnit → handler) already exists; only the handler was
+// installCertifiedRegistryRelease → handler) already exists; only the handler was
 // the unavailable stub. This module supplies the real handler: it runs the
 // dependency-closure installer against a native atomic stager and the registry
 // document loader. No git clone — the native stager downloads the owner release
@@ -21,11 +21,11 @@ import {
   setRegistryInstallRuntime,
   type RegistryInstallRuntimeHandler,
 } from "./registryInstallRuntime";
-import { isUnitTarget, type UnitTarget } from "./spec";
+import { isArtifactTarget, type ArtifactTarget } from "./spec";
 
-async function hostTarget(): Promise<UnitTarget> {
+async function hostTarget(): Promise<ArtifactTarget> {
   const value = await invoke<string>("host_artifact_target");
-  if (!isUnitTarget(value)) throw new Error(`invalid host artifact target: ${String(value)}`);
+  if (!isArtifactTarget(value)) throw new Error(`invalid host artifact target: ${String(value)}`);
   return value;
 }
 
@@ -49,7 +49,7 @@ const artifactStager: RegistryArtifactStager = {
     invoke<StagedRegistryArtifact>("artifact_install_stage", {
       transactionId: input.transactionId,
       registryId: input.registryId,
-      identity: input.unit,
+      identity: input.release,
       artifact: {
         url: input.artifact.url,
         sha256: input.artifact.sha256,
@@ -60,10 +60,10 @@ const artifactStager: RegistryArtifactStager = {
     }),
   readUtf8: (transactionId, handle, path) =>
     invoke<string>("artifact_install_read_utf8", { transactionId, handle, path }),
-  commit: async (transactionId, units) => {
+  commit: async (transactionId, releases) => {
     const settings = await invoke<{ generation: number }>("composition_settings");
     const expectedGeneration = settings.generation;
-    const plugins = units.filter((value) => value.kind === "plugin").map((value) => ({
+    const plugins = releases.filter((value) => value.kind === "plugin").map((value) => ({
       plugin: { id: value.id, version: value.version },
       registryId: value.registryId,
       sourceRepository: value.sourceRepository,
@@ -72,7 +72,7 @@ const artifactStager: RegistryArtifactStager = {
       artifactSha256: value.artifactSha256,
       stagedHandle: value.stagedHandle,
     }));
-    const sidecars = units.filter((value) => value.kind === "sidecar").map((value) => ({
+    const sidecars = releases.filter((value) => value.kind === "sidecar").map((value) => ({
       sidecar: { id: value.id, version: value.version },
       registryId: value.registryId,
       sourceRepository: value.sourceRepository,
@@ -81,7 +81,7 @@ const artifactStager: RegistryArtifactStager = {
       artifactSha256: value.artifactSha256,
       stagedHandle: value.stagedHandle,
     }));
-    const kits = units.filter((value) => value.kind === "kit").map((value) => ({
+    const kits = releases.filter((value) => value.kind === "kit").map((value) => ({
       kit: { id: value.id, version: value.version },
       registryId: value.registryId,
       sourceRepository: value.sourceRepository,
@@ -105,7 +105,7 @@ const artifactStager: RegistryArtifactStager = {
 
 const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root }) => {
   const registryId = certified.index.registryId;
-  let target: UnitTarget;
+  let target: ArtifactTarget;
   try {
     target = await hostTarget();
   } catch (cause) {

@@ -43,7 +43,7 @@ import { consentSummary } from "../plugins/consentSummary";
 import {
   OFFICIAL_REGISTRY_ID,
   parseRegistryDescriptor,
-  resolveRegistryUnit,
+  resolveRegistryRelease,
   type QualifiedRegistryEntry,
 } from "../plugins/registry";
 import {
@@ -216,30 +216,30 @@ export function registerPluginCatalog(): void {
     return null;
   };
   const shortName = (id: string): string => id.replace(/^soksak-plugin-/, "");
-  const qualifiedInstallCommand = (entry: Pick<QualifiedRegistryEntry, "registryId" | "unitId">): string =>
-    `plugin.install '${JSON.stringify({ registryId: entry.registryId, unitId: entry.unitId })}'`;
+  const qualifiedInstallCommand = (entry: Pick<QualifiedRegistryEntry, "registryId" | "id">): string =>
+    `plugin.install '${JSON.stringify({ registryId: entry.registryId, pluginId: entry.id })}'`;
 
   const installResolution = (raw: string, registryId?: string) => {
-    const unitIds = raw.startsWith("soksak-plugin-") ? [raw] : [`soksak-plugin-${raw}`, raw];
-    for (const unitId of unitIds) {
-      const resolved = resolveRegistryUnit(useRegistry.getState().units, {
+    const pluginIds = raw.startsWith("soksak-plugin-") ? [raw] : [`soksak-plugin-${raw}`, raw];
+    for (const pluginId of pluginIds) {
+      const resolved = resolveRegistryRelease(useRegistry.getState().releases, {
         registryId,
-        unitId,
+        id: pluginId,
         kind: "plugin",
       });
       if (resolved.ok || resolved.reason !== "not_found") return resolved;
     }
-    return resolveRegistryUnit(useRegistry.getState().units, {
+    return resolveRegistryRelease(useRegistry.getState().releases, {
       registryId,
-      unitId: unitIds[0],
+      id: pluginIds[0],
       kind: "plugin",
     });
   };
 
-  // Qualified plugin command names expose the owning unit id. The registry may suggest
-  // installing that unit, but it cannot copy or claim the owner's command declarations.
+  // Qualified plugin command names expose the owning plugin id. The registry may suggest
+  // installing that plugin, but it cannot copy or claim the owner's command declarations.
   setUnknownCommandResolver((name): CommandHint[] => {
-    const entries = useRegistry.getState().units.filter((entry) => entry.kind === "plugin");
+    const entries = useRegistry.getState().releases.filter((entry) => entry.kind === "plugin");
     const installed = usePlugins.getState().plugins;
     // The control plane (main) loads no plugins — an unknown plugin command here is a window problem,
     // not an install problem. Install guidance is a misdiagnosis (measured: an external agent
@@ -252,7 +252,7 @@ export function registerPluginCatalog(): void {
     const m = /^plugin\.(soksak-plugin-[a-z0-9-]+)\.(.+)$/.exec(name);
     if (m) {
       const [, pid, sub] = m;
-      const matching = entries.filter((e) => e.unitId === pid);
+      const matching = entries.filter((e) => e.id === pid);
       const runtime = installed[pid];
       if (runtime && runtime.status !== "enabled") {
         return [{ cmd: `plugin.enable ${shortName(pid)}`, why: tmsg("hint.error.pluginDisabled", { plugin: pid }) }];
@@ -466,7 +466,7 @@ export function registerPluginCatalog(): void {
       },
     },
     returns:
-      "{ status, registries, plugins: [{registryId,unitId,id,kind,version,manifest,reports,installed,runtimeStatus?}] }",
+      "{ status, registries, plugins: [{registryId,pluginId,id,kind,version,manifest,reports,installed,runtimeStatus?}] }",
     message: (d) =>
       tmsg("msg.plugin.catalog", { n: ((d.plugins as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
@@ -493,7 +493,7 @@ export function registerPluginCatalog(): void {
       await reg.refresh(p.refresh === true, registryId).catch(() => {});
       const st = useRegistry.getState();
       const installed = usePlugins.getState().plugins;
-      const units = st.units.filter((entry) =>
+      const pluginReleases = st.releases.filter((entry) =>
         entry.kind === "plugin" && (!registryId || entry.registryId === registryId)
       );
       return {
@@ -501,9 +501,9 @@ export function registerPluginCatalog(): void {
         registries: st.descriptors
           .filter((descriptor) => !registryId || descriptor.id === registryId)
           .map((descriptor) => serializeRegistrySource(descriptor.id)),
-        plugins: units.map((e) => ({
+        plugins: pluginReleases.map((e) => ({
           registryId: e.registryId,
-          unitId: e.unitId,
+          pluginId: e.id,
           id: e.id,
           kind: e.kind,
           version: e.version,
@@ -570,9 +570,9 @@ export function registerPluginCatalog(): void {
       return {
         core,
         plugins,
-        registry: st.units.map((e) => ({
+        registry: st.releases.map((e) => ({
           registryId: e.registryId,
-          unitId: e.unitId,
+          pluginId: e.id,
           id: e.id,
           kind: e.kind,
           version: e.version,
@@ -593,7 +593,7 @@ export function registerPluginCatalog(): void {
         description: key("cmd.plugin.install.param.source"),
       },
       registryId: { type: "string", description: key("cmd.plugin.install.param.registryId") },
-      unitId: { type: "string", description: key("cmd.plugin.install.param.unitId") },
+      pluginId: { type: "string", description: key("cmd.plugin.install.param.pluginId") },
     },
     primary: "source",
     returns: "{ id, generation }",
@@ -601,7 +601,7 @@ export function registerPluginCatalog(): void {
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "AMBIGUOUS_TARGET", "INTERNAL"],
     examples: [
       "plugin.install activity",
-      'plugin.install \'{"registryId":"community","unitId":"soksak-plugin-<id>"}\'',
+      'plugin.install \'{"registryId":"community","pluginId":"soksak-plugin-<id>"}\'',
     ],
     danger: "destructive",
     hint: (d) => {
@@ -615,30 +615,30 @@ export function registerPluginCatalog(): void {
     },
     handler: async (p) => {
       const registryId = typeof p.registryId === "string" ? p.registryId : undefined;
-      const explicitUnitId = typeof p.unitId === "string" ? p.unitId : undefined;
-      if ((registryId && !explicitUnitId) || (explicitUnitId && !registryId)) {
+      const explicitPluginId = typeof p.pluginId === "string" ? p.pluginId : undefined;
+      if ((registryId && !explicitPluginId) || (explicitPluginId && !registryId)) {
         return {
           ok: false,
           code: "INVALID_PARAMS",
-          message: "registryId and unitId must be provided together",
+          message: "registryId and pluginId must be provided together",
         };
       }
-      if (explicitUnitId && p.source !== undefined) {
+      if (explicitPluginId && p.source !== undefined) {
         return {
           ok: false,
           code: "INVALID_PARAMS",
-          message: "source cannot be combined with registryId/unitId",
+          message: "source cannot be combined with registryId/pluginId",
         };
       }
-      const raw = explicitUnitId ?? (typeof p.source === "string" ? p.source : "");
+      const raw = explicitPluginId ?? (typeof p.source === "string" ? p.source : "");
       if (!raw) {
-        return { ok: false, code: "INVALID_PARAMS", message: "source or registryId/unitId is required" };
+        return { ok: false, code: "INVALID_PARAMS", message: "source or registryId/pluginId is required" };
       }
-      if (explicitUnitId || /^[a-z0-9][a-z0-9-]*$/.test(raw)) {
-        const resolved = explicitUnitId
-          ? resolveRegistryUnit(useRegistry.getState().units, {
+      if (explicitPluginId || /^[a-z0-9][a-z0-9-]*$/.test(raw)) {
+        const resolved = explicitPluginId
+          ? resolveRegistryRelease(useRegistry.getState().releases, {
               registryId,
-              unitId: explicitUnitId,
+              id: explicitPluginId,
               kind: "plugin",
             })
           : installResolution(raw, registryId);
@@ -647,7 +647,7 @@ export function registerPluginCatalog(): void {
             return {
               ok: false,
               code: "AMBIGUOUS_TARGET",
-              message: `unit exists in multiple registries: ${raw}`,
+              message: `plugin exists in multiple registries: ${raw}`,
               candidates: resolved.candidates,
             };
           }
@@ -655,7 +655,7 @@ export function registerPluginCatalog(): void {
             return {
               ok: false,
               code: "INVALID_PARAMS",
-              message: `registryId is required for non-official unit: ${raw}`,
+              message: `registryId is required for non-official plugin: ${raw}`,
               candidates: resolved.candidates,
             };
           }
@@ -670,7 +670,7 @@ export function registerPluginCatalog(): void {
       return {
         ok: false,
         code: "INVALID_PARAMS",
-        message: "plugin installation accepts only a registry unit identity",
+        message: "plugin installation accepts only a registry plugin identity",
       };
     },
   });

@@ -1,12 +1,12 @@
 import { moduleState } from "../lib/moduleState";
 import type {
   CertifiedRegistryIndex,
-  RegistryUnitIdentity,
+  RegistryReleaseIdentity,
 } from "./spec";
 
 export interface RegistryInstallRuntimeInput {
   certified: CertifiedRegistryIndex;
-  root: RegistryUnitIdentity;
+  root: RegistryReleaseIdentity;
 }
 
 export type RegistryInstallRuntimeResult =
@@ -36,7 +36,7 @@ export function setRegistryInstallRuntime(
   };
 }
 
-export function installCertifiedRegistryUnit(
+export function installCertifiedRegistryRelease(
   input: RegistryInstallRuntimeInput,
 ): Promise<RegistryInstallRuntimeResult> {
   return handlerSlot.v(input);

@@ -84,7 +84,7 @@ export interface RegistryState {
   /** Authenticated official plugin releases. */
   entries: QualifiedRegistryEntry[];
   /** Authenticated plugin, sidecar, and kit releases from every configured registry. */
-  units: QualifiedRegistryEntry[];
+  releases: QualifiedRegistryEntry[];
   descriptors: RegistryDescriptor[];
   registries: Record<string, RegistrySourceState>;
   trustRecords: Record<string, RegistryTrustRecord>;
@@ -196,12 +196,12 @@ function sourcesFor(
 function projections(
   descriptors: readonly RegistryDescriptor[],
   registries: Readonly<Record<string, RegistrySourceState>>,
-): Pick<RegistryState, "entries" | "units" | "status" | "fetchedOnce"> {
-  const units = descriptors.flatMap((descriptor) => registries[descriptor.id]?.entries ?? []);
+): Pick<RegistryState, "entries" | "releases" | "status" | "fetchedOnce"> {
+  const releases = descriptors.flatMap((descriptor) => registries[descriptor.id]?.entries ?? []);
   const official = registries[OFFICIAL_REGISTRY_ID] ?? initialSource(OFFICIAL_REGISTRY_DESCRIPTOR);
   return {
     entries: official.entries.filter((entry) => entry.kind === "plugin"),
-    units,
+    releases,
     status: official.status,
     fetchedOnce: official.fetchedOnce,
   };
