@@ -25,6 +25,10 @@ describe("native registry install wiring", () => {
   beforeEach(() => {
     invoke.mockReset();
     closure.mockReset();
+    invoke.mockImplementation(async (command: string) => {
+      if (command === "host_artifact_target") return "aarch64-apple-darwin";
+      return undefined;
+    });
   });
   afterEach(() => {
     restore();
@@ -61,6 +65,19 @@ describe("native registry install wiring", () => {
     });
   });
 
+  it("refuses installation when the host artifact target is unavailable", async () => {
+    invoke.mockRejectedValueOnce(new Error("host target unavailable"));
+    restore = wireNativeRegistryInstall();
+    const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
+    expect(result).toEqual({
+      ok: false,
+      code: "HOST_TARGET_UNAVAILABLE",
+      message: "host target unavailable",
+      errors: ["host target unavailable"],
+    });
+    expect(closure).not.toHaveBeenCalled();
+  });
+
   it("stages a plugin artifact through the native command with computed entrypoints", async () => {
     closure.mockImplementation(async (req: any) => {
       invoke.mockResolvedValueOnce({ transactionId: "t1" });
@@ -87,30 +104,49 @@ describe("native registry install wiring", () => {
     });
     restore = wireNativeRegistryInstall();
     await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
-    expect(invoke).toHaveBeenCalledWith("unit_install_begin", { registryId: "fixture", root: ROOT });
-    expect(invoke).toHaveBeenCalledWith("unit_install_stage", {
+    expect(invoke).toHaveBeenCalledWith("artifact_install_begin", { registryId: "fixture", root: ROOT });
+    expect(invoke).toHaveBeenCalledWith("artifact_install_stage", {
       transactionId: "t1",
       registryId: "fixture",
-      unit: ROOT,
-      artifact: { url: "https://x/a.tgz", sha256: "abc", format: "tgz", entrypoints: ["plugin.json"] },
+      identity: ROOT,
+      artifact: { url: "https://x/a.tgz", sha256: "abc", format: "tgz", manifest: "plugin.json", entrypoints: ["plugin.json"] },
     });
   });
 
   it("commits against the current composition generation with explicit bindings", async () => {
+    const verified = [
+      { ...ROOT, registryId: "fixture", sourceRepository: "https://github.com/example/plugin", sourceCommit: "p", releaseTag: "v0.0.1", artifactUrl: "https://x/p.tgz", artifactSha256: "p-sha", stagedHandle: "p-handle" },
+      { kind: "sidecar", id: "state", version: "0.0.1", registryId: "fixture", sourceRepository: "https://github.com/example/sidecar", sourceCommit: "s", releaseTag: "v0.0.1", artifactUrl: "https://x/s.tgz", artifactSha256: "s-sha", stagedHandle: "s-handle" },
+      { kind: "kit", id: "terminal-kit", version: "0.0.1", registryId: "fixture", sourceRepository: "https://github.com/example/kit", sourceCommit: "k", releaseTag: "v0.0.1", artifactUrl: "https://x/k.tgz", artifactSha256: "k-sha", stagedHandle: "k-handle" },
+    ];
     closure.mockImplementation(async (req: any) => {
       invoke.mockResolvedValueOnce({ generation: 4 });
       invoke.mockResolvedValueOnce({ generation: 5 });
-      const committed = await req.artifacts.commit("t1", []);
+      const committed = await req.artifacts.commit("t1", verified);
       return { ok: true, registryId: "fixture", generation: committed.generation, units: [] };
     });
     restore = wireNativeRegistryInstall();
     const result = await installCertifiedRegistryUnit({ certified: CERTIFIED, root: ROOT });
     expect(result).toEqual({ ok: true, id: "weather-plugin", version: "0.0.1", generation: 5 });
     expect(invoke).toHaveBeenCalledWith("composition_settings");
-    expect(invoke).toHaveBeenCalledWith("unit_install_commit", {
+    expect(invoke).toHaveBeenCalledWith("artifact_install_commit", {
       transactionId: "t1",
       expectedGeneration: 4,
-      units: [],
+      plugins: [{
+        plugin: { id: "weather-plugin", version: "0.0.1" },
+        registryId: "fixture", sourceRepository: "https://github.com/example/plugin", sourceCommit: "p",
+        artifactUrl: "https://x/p.tgz", artifactSha256: "p-sha", stagedHandle: "p-handle",
+      }],
+      sidecars: [{
+        sidecar: { id: "state", version: "0.0.1" },
+        registryId: "fixture", sourceRepository: "https://github.com/example/sidecar", sourceCommit: "s",
+        artifactUrl: "https://x/s.tgz", artifactSha256: "s-sha", stagedHandle: "s-handle",
+      }],
+      kits: [{
+        kit: { id: "terminal-kit", version: "0.0.1" },
+        registryId: "fixture", sourceRepository: "https://github.com/example/kit", sourceCommit: "k",
+        artifactUrl: "https://x/k.tgz", artifactSha256: "k-sha", stagedHandle: "k-handle",
+      }],
       bindings: [],
     });
   });

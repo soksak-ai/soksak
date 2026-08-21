@@ -21,21 +21,18 @@ import {
   setRegistryInstallRuntime,
   type RegistryInstallRuntimeHandler,
 } from "./registryInstallRuntime";
-import { ANY_TARGET, isUnitTarget, type UnitTarget } from "./spec";
+import { isUnitTarget, type UnitTarget } from "./spec";
 
-// The frontend cannot recompile a sidecar; a plugin selects the ANY_TARGET artifact
-// and never reads this. Only a sidecar in the closure needs the real host triple,
-// which the native side reports from its own build target. If that command is absent
-// (an older core), a plugin-only install still resolves and a sidecar install fails
-// closed at artifact selection rather than fetching the wrong binary.
 async function hostTarget(): Promise<UnitTarget> {
-  try {
-    const value = await invoke<string>("host_unit_target");
-    if (isUnitTarget(value)) return value;
-  } catch {
-    // fall through to the portable target
-  }
-  return ANY_TARGET;
+  const value = await invoke<string>("host_artifact_target");
+  if (!isUnitTarget(value)) throw new Error(`invalid host artifact target: ${String(value)}`);
+  return value;
+}
+
+function artifactManifest(artifact: Parameters<typeof declaredEntrypoints>[0]): string {
+  if (artifact.entrypoint.kind === "plugin") return artifact.entrypoint.manifest;
+  if (artifact.entrypoint.kind === "kit") return artifact.entrypoint.packageManifest;
+  return "sidecar.json";
 }
 
 function documentLoader(registryId: string): RegistryDocumentLoader {
@@ -44,24 +41,25 @@ function documentLoader(registryId: string): RegistryDocumentLoader {
 
 const artifactStager: RegistryArtifactStager = {
   begin: (input) =>
-    invoke<RegistryInstallTransaction>("unit_install_begin", {
+    invoke<RegistryInstallTransaction>("artifact_install_begin", {
       registryId: input.registryId,
       root: input.root,
     }),
   stage: (input) =>
-    invoke<StagedRegistryArtifact>("unit_install_stage", {
+    invoke<StagedRegistryArtifact>("artifact_install_stage", {
       transactionId: input.transactionId,
       registryId: input.registryId,
-      unit: input.unit,
+      identity: input.unit,
       artifact: {
         url: input.artifact.url,
         sha256: input.artifact.sha256,
         format: input.artifact.format,
+        manifest: artifactManifest(input.artifact),
         entrypoints: declaredEntrypoints(input.artifact),
       },
     }),
   readUtf8: (transactionId, handle, path) =>
-    invoke<string>("unit_install_read_utf8", { transactionId, handle, path }),
+    invoke<string>("artifact_install_read_utf8", { transactionId, handle, path }),
   commit: async (transactionId, units) => {
     let expectedGeneration = 0;
     try {
@@ -70,23 +68,59 @@ const artifactStager: RegistryArtifactStager = {
     } catch {
       expectedGeneration = 0;
     }
-    return invoke<{ generation: number }>("unit_install_commit", {
+    const plugins = units.filter((value) => value.kind === "plugin").map((value) => ({
+      plugin: { id: value.id, version: value.version },
+      registryId: value.registryId,
+      sourceRepository: value.sourceRepository,
+      sourceCommit: value.sourceCommit,
+      artifactUrl: value.artifactUrl,
+      artifactSha256: value.artifactSha256,
+      stagedHandle: value.stagedHandle,
+    }));
+    const sidecars = units.filter((value) => value.kind === "sidecar").map((value) => ({
+      sidecar: { id: value.id, version: value.version },
+      registryId: value.registryId,
+      sourceRepository: value.sourceRepository,
+      sourceCommit: value.sourceCommit,
+      artifactUrl: value.artifactUrl,
+      artifactSha256: value.artifactSha256,
+      stagedHandle: value.stagedHandle,
+    }));
+    const kits = units.filter((value) => value.kind === "kit").map((value) => ({
+      kit: { id: value.id, version: value.version },
+      registryId: value.registryId,
+      sourceRepository: value.sourceRepository,
+      sourceCommit: value.sourceCommit,
+      artifactUrl: value.artifactUrl,
+      artifactSha256: value.artifactSha256,
+      stagedHandle: value.stagedHandle,
+    }));
+    return invoke<{ generation: number }>("artifact_install_commit", {
       transactionId,
       expectedGeneration,
-      units,
+      plugins,
+      sidecars,
+      kits,
       bindings: [],
     });
   },
   rollback: (transactionId) =>
-    invoke<void>("unit_install_rollback", { transactionId }),
+    invoke<void>("artifact_install_rollback", { transactionId }),
 };
 
 const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root }) => {
   const registryId = certified.index.registryId;
+  let target: UnitTarget;
+  try {
+    target = await hostTarget();
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    return { ok: false, code: "HOST_TARGET_UNAVAILABLE", message, errors: [message] };
+  }
   const result = await installRegistryClosure({
     certified,
     root,
-    target: await hostTarget(),
+    target,
     documents: documentLoader(registryId),
     artifacts: artifactStager,
   });
