@@ -101,6 +101,11 @@ only the declared absolute path and manifest, and rejects an id or version misma
 is restored from settings. A `composition.changed` subscription reloads each window; events received
 during a reload are combined by generation rather than polled.
 
+The webview plugin-file route reads only files below currently resolved and enabled plugin paths
+declared by settings. The Wails host receives those paths through an injected provider and does not
+read the composition schema or assume an installation directory. Path changes apply on the next
+request, and symbolic-link escapes and undeclared paths are refused.
+
 Each repository still owns its tests:
 
 - core tests generic installer, resolver, loader, command, status and DOM interfaces;
