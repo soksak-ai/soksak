@@ -2,8 +2,10 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { currentWindow, recordWindowFrames, sampleWindowResizeProbe, setPhysicalSize } = vi.hoisted(() => ({
+const { currentWindow, onResized, outerSize, recordWindowFrames, sampleWindowResizeProbe, setPhysicalSize } = vi.hoisted(() => ({
   currentWindow: vi.fn(),
+  onResized: vi.fn(),
+  outerSize: vi.fn(),
   recordWindowFrames: vi.fn(),
   sampleWindowResizeProbe: vi.fn(),
   setPhysicalSize: vi.fn(),
@@ -50,10 +52,35 @@ afterAll(() => {
 
 beforeEach(() => {
   setPhysicalSize.mockReset().mockResolvedValue(undefined);
-  currentWindow.mockReset().mockReturnValue({ setPhysicalSize });
+  outerSize.mockReset().mockResolvedValue({ width: 1200, height: 800 });
+  onResized.mockReset().mockResolvedValue(() => {});
+  currentWindow.mockReset().mockReturnValue({ setPhysicalSize, onResized, outerSize });
   sampleWindowResizeProbe.mockReset().mockResolvedValue({ sample: true });
   recordWindowFrames.mockReset().mockImplementation(({ frames }: { frames: number }) =>
     Object.assign(Promise.resolve(frames), { ready: Promise.resolve() }));
+});
+
+describe("window.resize completion contract", () => {
+  it("answers only after the native resize event reports the requested size", async () => {
+    let callback: ((size: { width: number; height: number }) => void) | undefined;
+    const unsubscribe = vi.fn();
+    outerSize.mockResolvedValueOnce({ width: 1200, height: 800 });
+    onResized.mockImplementation(async (listener) => { callback = listener; return unsubscribe; });
+
+    const pending = execute("window.resize", { w: 900, h: 650 }, {});
+    await vi.waitFor(() => expect(setPhysicalSize).toHaveBeenCalledWith(900, 650));
+    let settled = false;
+    void pending.then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    callback?.({ width: 900, height: 650 });
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      data: { w: 900, h: 650, observed: true },
+    });
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
 });
 
 describe("window.resizeSequence recording contract", () => {
