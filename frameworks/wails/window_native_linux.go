@@ -3,11 +3,11 @@
 package wails
 
 /*
-#cgo pkg-config: gtk+-3.0
+#cgo pkg-config: gtk4
 #include <gtk/gtk.h>
 
 static void soksakShowWithoutPresent(GtkWindow *window) {
-    gtk_widget_show(GTK_WIDGET(window));
+    gtk_widget_set_visible(GTK_WIDGET(window), TRUE);
 }
 */
 import "C"
