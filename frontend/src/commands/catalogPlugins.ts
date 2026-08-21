@@ -186,9 +186,9 @@ export function registerPluginCatalog(): void {
         default: 20_000,
       },
     },
-    returns: "{ tab, mounted:true }",
+    returns: "{ tabId, mounted:true }",
     errors: ["INVALID_PARAMS", "TIMEOUT"],
-    message: (data) => tmsg("msg.tab.mount.wait", { tab: String(data.tab) }),
+    message: (data) => tmsg("msg.tab.mount.wait", { tab: String(data.tabId) }),
     examples: [`tab.mount.wait '{"tab":"tab-abc123","timeoutMs":20000}'`],
     handler: async (params) => {
       const tab = String(params.tab ?? "");
@@ -199,7 +199,7 @@ export function registerPluginCatalog(): void {
       if (!await awaitViewMounted(tab, timeoutMs)) {
         return { ok: false as const, code: "TIMEOUT" as const, message: tmsg("msg.tab.mount.wait.timeout", { tab }) };
       }
-      return { tab, mounted: true };
+      return { tabId: tab, mounted: true };
     },
   });
 
