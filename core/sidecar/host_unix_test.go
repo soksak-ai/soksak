@@ -60,7 +60,6 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	if again.PID != open.PID {
 		t.Fatalf("a second start made a second process: %d then %d", open.PID, again.PID)
 	}
-
 	answer, err := host.Send("probe", controlwire.Request{ID: "1", Command: "probe.echo"})
 	if err != nil {
 		t.Fatalf("sending to the unit: %v", err)
@@ -97,6 +96,43 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	}
 	if err := waitUntilUnreachable(open.Address, 5*time.Second); err != nil {
 		t.Fatalf("unit process %d is still answering after the host stopped it: %v", pid, err)
+	}
+}
+
+func TestConcurrentStartsShareOneProcess(t *testing.T) {
+	home := shortHome(t)
+	runtimeRoot := shortHome(t)
+	stageUnit(t, home, "probe", probeSource)
+	host := NewHost(Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+	})
+	t.Cleanup(func() { host.StopAll() })
+	type result struct {
+		open Open
+		err  error
+	}
+	start := make(chan struct{})
+	results := make(chan result, 7)
+	for range 7 {
+		go func() {
+			<-start
+			open, err := host.Start("probe")
+			results <- result{open: open, err: err}
+		}()
+	}
+	close(start)
+	pid := 0
+	for range 7 {
+		got := <-results
+		if got.err != nil {
+			t.Fatalf("concurrent start failed: %v", got.err)
+		}
+		if pid == 0 {
+			pid = got.open.PID
+		} else if got.open.PID != pid {
+			t.Fatalf("concurrent starts returned different processes: %d and %d", pid, got.open.PID)
+		}
 	}
 }
 
