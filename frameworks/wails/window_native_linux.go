@@ -33,8 +33,14 @@ var ErrWebviewFrameUnsupported = i18n.Errorf("wails.window.webviewFrameUnsupport
 var ErrFitUnsupported = i18n.Errorf("wails.window.fitUnsupported", nil)
 var ErrWindowInputUnsupported = i18n.Errorf("wails.window.inputUnsupported", nil)
 
-func nativeWindowTitle(unsafe.Pointer) (string, error)     { return "", ErrTitleUnsupported }
-func contentSize(unsafe.Pointer) (float64, float64, error) { return 0, 0, ErrContentSizeUnsupported }
+func nativeWindowTitle(unsafe.Pointer) (string, error) { return "", ErrTitleUnsupported }
+func contentSize(window unsafe.Pointer) (float64, float64, error) {
+	var width, height C.double
+	if !bool(C.soksakWindowContentSize(window, &width, &height)) {
+		return 0, 0, i18n.Errorf("wails.window.noNativeLifetimeContent", nil)
+	}
+	return float64(width), float64(height), nil
+}
 func webviewFrame(unsafe.Pointer) (float64, float64, float64, float64, error) {
 	return 0, 0, 0, 0, ErrWebviewFrameUnsupported
 }

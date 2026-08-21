@@ -16,3 +16,9 @@ func TestFocusFreeRevealRejectsANilGTKWindow(t *testing.T) {
 		t.Fatal("Linux focus-free reveal is not implemented")
 	}
 }
+
+func TestContentSizeRejectsANilGTKWindow(t *testing.T) {
+	if _, _, err := contentSize(unsafe.Pointer(nil)); err == nil {
+		t.Fatal("nil GTK window reported a content size")
+	}
+}
