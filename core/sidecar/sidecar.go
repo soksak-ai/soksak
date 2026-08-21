@@ -114,12 +114,20 @@ type Open struct {
 type Host struct {
 	deps Deps
 
-	mu   sync.Mutex
-	open map[string]*unit
+	mu       sync.Mutex
+	open     map[string]*unit
+	starting map[string]*startAttempt
 	// streams are the live stream connections, under the labels their callers chose. Held so one
 	// can be ended without ending the unit it is on.
 	streams map[string]io.Closer
 	secrets process.SecretSource
+}
+
+type startAttempt struct {
+	done        chan struct{}
+	open        Open
+	err         error
+	secretNames string
 }
 
 func (host *Host) SetSecrets(source process.SecretSource) {
@@ -147,7 +155,7 @@ func NewHost(deps Deps) *Host {
 	if deps.ReadyWithin == 0 {
 		deps.ReadyWithin = DefaultReadyWithin
 	}
-	return &Host{deps: deps, open: make(map[string]*unit)}
+	return &Host{deps: deps, open: make(map[string]*unit), starting: make(map[string]*startAttempt)}
 }
 
 // Started reports every unit this host holds open.
@@ -242,8 +250,32 @@ func (host *Host) startResolvedWithSecrets(
 		host.mu.Unlock()
 		return held.open, nil
 	}
+	if pending, starting := host.starting[name]; starting {
+		if pending.secretNames != fingerprint {
+			host.mu.Unlock()
+			return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
+		}
+		done := pending.done
+		host.mu.Unlock()
+		<-done
+		return pending.open, pending.err
+	}
+	pending := &startAttempt{done: make(chan struct{}), secretNames: fingerprint}
+	host.starting[name] = pending
 	host.mu.Unlock()
 
+	opened, err := host.startResolved(name, path, namespace, secretEnv, fingerprint)
+	host.mu.Lock()
+	pending.open, pending.err = opened, err
+	delete(host.starting, name)
+	close(pending.done)
+	host.mu.Unlock()
+	return opened, err
+}
+
+func (host *Host) startResolved(
+	name, path, namespace string, secretEnv map[string]string, fingerprint string,
+) (Open, error) {
 	if adopted, found, err := host.adopt(name, fingerprint); err != nil {
 		return Open{}, err
 	} else if found {
