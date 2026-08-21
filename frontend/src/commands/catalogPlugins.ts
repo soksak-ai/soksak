@@ -51,6 +51,7 @@ import {
   updateCertifiedRegistryPlugin,
 } from "../plugins/registryInstallService";
 import { publishActivity } from "../state/activityFeed";
+import { awaitViewMounted } from "../plugins/viewFocus";
 
 // Installed/dev runtime → dependency graph node (based on manifest dependencies).
 function depNodes(): DepNode[] {
@@ -171,6 +172,34 @@ export function registerPluginCatalog(): void {
         const raced = getRegisteredProgram(id);
         if (raced) finish(result(raced));
       });
+    },
+  });
+
+  register("tab.mount.wait", {
+    description: key("cmd.tab.mount.wait.desc"),
+    triggers: { ko: "탭 마운트 준비 대기 복원 탭 준비" },
+    params: {
+      tab: { type: "string", description: key("cmd.tab.mount.wait.param.tab"), required: true },
+      timeoutMs: {
+        type: "number",
+        description: key("cmd.tab.mount.wait.param.timeoutMs"),
+        default: 20_000,
+      },
+    },
+    returns: "{ tab, mounted:true }",
+    errors: ["INVALID_PARAMS", "TIMEOUT"],
+    message: (data) => tmsg("msg.tab.mount.wait", { tab: String(data.tab) }),
+    examples: [`tab.mount.wait '{"tab":"tab-abc123","timeoutMs":20000}'`],
+    handler: async (params) => {
+      const tab = String(params.tab ?? "");
+      const timeoutMs = params.timeoutMs === undefined ? 20_000 : Number(params.timeoutMs);
+      if (!tab || !Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) {
+        return invalid(tmsg("msg.tab.mount.wait.paramsInvalid"));
+      }
+      if (!await awaitViewMounted(tab, timeoutMs)) {
+        return { ok: false as const, code: "TIMEOUT" as const, message: tmsg("msg.tab.mount.wait.timeout", { tab }) };
+      }
+      return { tab, mounted: true };
     },
   });
 
