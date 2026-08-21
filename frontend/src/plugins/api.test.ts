@@ -40,10 +40,10 @@ import {
 function manifestOf(overrides: Record<string, unknown>): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-spec-plugin@0.0.1",
       id: "demo",
       name: "Demo",
       version: "1.0.0",
+      appVersionRequirement: "0.0.1",
       description: "Test",
       permissions: [],
       ...overrides,
@@ -933,7 +933,7 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register)", (
     const { api } = buildPluginApi(
       manifestOf({
         permissions: ["commands"],
-        consumes: [{ id: "terminal-session", version: "0.2.0" }],
+        consumes: [{ id: "terminal-session", requirement: "0.2.0" }],
       }),
       "/d",
       d,
@@ -950,7 +950,7 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register)", (
     const { api } = buildPluginApi(
       manifestOf({
         permissions: ["commands"],
-        consumes: [{ id: "terminal-session", version: "0.2.0" }],
+        consumes: [{ id: "terminal-session", requirement: "0.2.0" }],
       }),
       "/d",
       d,
@@ -1041,7 +1041,7 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
   it("opens only a declared sidecar and rejects an undeclared name", async () => {
     const m = manifestOf({
       permissions: ["sidecar"],
-      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", version: "0.0.1" } }],
+      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", requirement: "0.0.1" } }],
     });
     const { api } = buildPluginApi(m, "/d", fakeDeps());
     await expect(api.sidecar!.open("undeclared")).rejects.toThrow(/undeclared/);
@@ -1051,7 +1051,7 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
       command === "sidecar_open" ? { name: "soksak-sidecar-chromium" } : { ok: true });
     const m = manifestOf({
       permissions: ["sidecar"],
-      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", version: "0.0.1" } }],
+      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", requirement: "0.0.1" } }],
     });
     const { api } = buildPluginApi(m, "/d", fakeDeps({ invoke }));
     const h = await api.sidecar!.open("chromium");
@@ -1060,7 +1060,7 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
       expect.objectContaining({
         consumer: { id: m.id, version: m.version },
         requirementName: "chromium",
-        requirement: { id: "soksak-spec-sidecar-chromium", version: "0.0.1" },
+        requirement: { id: "soksak-spec-sidecar-chromium", requirement: "0.0.1" },
       }),
     );
     const openArgs = invoke.mock.calls.find((call) => call[0] === "sidecar_open")?.[1];
