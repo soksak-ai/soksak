@@ -25,6 +25,7 @@ var cgoFiles = map[string]string{
 	// are two AppKit lines with no Go equivalent, and both live in
 	// window_native_darwin.m.
 	"window_native_darwin.go": "the two window operations this framework has no API for; they live in window_native_darwin.m",
+	"window_native_linux.go":  "the GTK4 visibility operation that reveals a window without requesting focus; it lives in window_native_linux.c",
 }
 
 func TestCgoSurfaceIsFixed(t *testing.T) {
@@ -83,6 +84,7 @@ func TestNativeSourceLivesOutsideTheCgoComment(t *testing.T) {
 		"capture_darwin.h", "capture_darwin.m",
 		"capture_linux.h", "capture_linux.c",
 		"window_native_darwin.h", "window_native_darwin.m",
+		"window_native_linux.h", "window_native_linux.c",
 	} {
 		if _, err := os.Stat(filepath.Clean(name)); err != nil {
 			t.Errorf("%s is missing: %v", name, err)

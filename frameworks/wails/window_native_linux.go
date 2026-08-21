@@ -4,11 +4,7 @@ package wails
 
 /*
 #cgo pkg-config: gtk4
-#include <gtk/gtk.h>
-
-static void soksakShowWithoutPresent(GtkWindow *window) {
-    gtk_widget_set_visible(GTK_WIDGET(window), TRUE);
-}
+#include "window_native_linux.h"
 */
 import "C"
 
@@ -24,7 +20,7 @@ func orderWindowFrontWithoutKey(window unsafe.Pointer) error {
 	if window == nil {
 		return i18n.Errorf("wails.window.noNativeLifetimeFront", nil)
 	}
-	C.soksakShowWithoutPresent((*C.GtkWindow)(window))
+	C.soksakShowWithoutPresent(window)
 	return nil
 }
 
