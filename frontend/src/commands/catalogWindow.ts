@@ -149,18 +149,25 @@ export function registerWindowCatalog(): void {
       const h = p.h as number;
       const win = currentWindow();
       let finish!: () => void;
+      let last: { width: number; height: number } | null = null;
+      let before: { width: number; height: number } | null = null;
+      let after: { width: number; height: number } | null = null;
       const observed = new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error(`window resize timed out: ${w}x${h}`)), 8_000);
+        const timer = setTimeout(() => reject(new Error(
+          `window resize timed out: requested=${w}x${h} before=${JSON.stringify(before)}`
+            + ` after=${JSON.stringify(after)} event=${JSON.stringify(last)}`,
+        )), 8_000);
         finish = () => { clearTimeout(timer); resolve(); };
       });
       const unsubscribe = await win.onResized((size) => {
+        last = size;
         if (size.width === w && size.height === h) finish();
       });
       try {
-        const before = await win.outerSize();
+        before = await win.outerSize();
         if (before.width === w && before.height === h) finish();
         await win.setPhysicalSize(w, h);
-        const after = await win.outerSize();
+        after = await win.outerSize();
         if (after.width === w && after.height === h) finish();
         await observed;
         return { w, h, observed: true };
