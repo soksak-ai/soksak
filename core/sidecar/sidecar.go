@@ -521,6 +521,18 @@ func (host *Host) Complaint(name string) []string {
 	return held.stderr.snapshot()
 }
 
+func (host *Host) Complaints() map[string][]string {
+	host.mu.Lock()
+	defer host.mu.Unlock()
+	result := make(map[string][]string, len(host.open))
+	for name, held := range host.open {
+		if tail := held.stderr.snapshot(); len(tail) > 0 {
+			result[name] = tail
+		}
+	}
+	return result
+}
+
 func drain(reader io.ReadCloser, into *ring) {
 	defer func() { _ = reader.Close() }()
 	scanner := bufio.NewScanner(reader)
