@@ -4,9 +4,8 @@
 // The word "browser" is not here. A content view is what the core owns; browser
 // is a plugin's word for one kind of them (C1).
 //
-// The event names are the contract's. They moved to
-// `soksak-contracts/soksak-contract-contentview` on 2026-08-20 because more than
-// one thing speaks them: this application emits them, a host service that drives
+// The event names are the public contract's because more than one thing speaks
+// them: this application emits them, a host service that drives
 // a native view produces them, and the document consumes them. A service left to
 // import this package would make a unit depend on the application it plugs into,
 // and one that copied the names instead would diverge from them without failing.
