@@ -63,6 +63,7 @@ const (
 // of an 11.7s boot (measured 2026-08-08). At twice that, a timeout means the
 // page is not answering rather than that it is busy.
 const rendererDeadline = 20 * time.Second
+const rendererDeadlineMargin = 5 * time.Second
 
 // RendererDelivery hands one payload to one window's page, or fails naming the
 // window. It is a function rather than the vendor's window handle so every rule
@@ -548,7 +549,7 @@ func (r *RendererCommands) call(window, command string, args control.Args) (any,
 	id := r.nextID
 	call := &rendererCall{window: window, command: command, answer: make(chan rendererAnswer, 1)}
 	r.pending[id] = call
-	deadline := r.deadline
+	deadline := rendererCallDeadline(r.deadline, args)
 	r.mu.Unlock()
 
 	request := rendererRequest{ID: id, Method: command, Params: args, Window: window}
@@ -570,6 +571,22 @@ func (r *RendererCommands) call(window, command string, args control.Args) (any,
 		return nil, i18n.Errorf("wails.renderer.timedOut", map[string]string{
 			"window": window, "command": command, "deadline": deadline.String()})
 	}
+}
+
+func rendererCallDeadline(base time.Duration, args control.Args) time.Duration {
+	raw, exists := args["timeoutMs"]
+	if !exists {
+		return base
+	}
+	var timeoutMs float64
+	if json.Unmarshal(raw, &timeoutMs) != nil || timeoutMs <= 0 || timeoutMs > 60000 {
+		return base
+	}
+	requested := time.Duration(timeoutMs*float64(time.Millisecond)) + rendererDeadlineMargin
+	if requested > base {
+		return requested
+	}
+	return base
 }
 
 func (r *RendererCommands) forget(id uint64) {
