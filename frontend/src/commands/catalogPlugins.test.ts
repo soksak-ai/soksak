@@ -106,6 +106,14 @@ describe("program.wait — poll-free program readiness boundary", () => {
   });
 });
 
+describe("tab.mount.wait — restored tab readiness", () => {
+  it("is a public command with an exact tab id and finite timeout", () => {
+    const spec = getSpec("tab.mount.wait");
+    expect(spec?.params.tab).toMatchObject({ type: "string", required: true });
+    expect(spec?.params.timeoutMs).toMatchObject({ type: "number" });
+  });
+});
+
 // Contract shape of the response c2.viewStatus (declared≡reported: unreported = declared but not reported, undeclared = reported outside the declaration).
 interface C2Result {
   violations: { rule: string; detail: string }[];
