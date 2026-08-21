@@ -104,6 +104,9 @@ All of these are hard.
   source is not installed, it is compiled: removing it breaks the build, adding
   the next one edits the core, and A9 is false for both.
 
+  The installation declaration is the resolved composition graph (COMPOSITION.md), not directory
+  presence. Core tests and tasks do not scan sibling plugin or sidecar repositories.
+
   Measured 2026-08-20: `go list -deps ./...` named three plugin packages, and
   `main.go` and `frameworks/wails/host.go` imported them. The composition root
   was the stated reason, and a composition root that requires a rebuild to
@@ -168,13 +171,13 @@ All of these are hard.
 
   Two dependency forms exist and represent different requirements:
 
-  - `dependencies` names a specific plugin and version range. Use it when that
-    implementation is required.
-  - `consumes` names a public contract and compatible range. A provider declares
-    the exact contract version in `implements`. Use it when any compatible
-    implementation is valid.
+  - a unit dependency names one exact plugin, sidecar or kit. Use it when that
+    implementation is required. Plugin is the only user-facing activation root.
+  - `consumes` names one exact public contract version. A provider declares the
+    same exact contract version in `implements`. Use it when any implementation
+    of that exact contract is valid.
 
-  Both fields are optional. An independent plugin declares neither. A contract is
+  Both are optional. An independent plugin declares neither. A contract is
   introduced only after multiple implementations or consumers require the same
   public behavior.
 - **C3a.** A shared contract covers common behavior only. Implementation-specific
