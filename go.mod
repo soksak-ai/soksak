@@ -3,6 +3,7 @@ module github.com/soksak-ai/soksak-core
 go 1.25.0
 
 require (
+	github.com/Microsoft/go-winio v0.6.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/soksak-ai/soksak-contract-composition v0.0.1
 	github.com/soksak-ai/soksak-contract-contentview v0.0.1

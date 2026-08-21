@@ -3,8 +3,9 @@
 package sidecar
 
 import (
-	"fmt"
 	"io"
+
+	"github.com/soksak-ai/soksak-core/core/control"
 )
 
 // DialLocal has no implementation on this target yet, and fails by name.
@@ -16,7 +17,5 @@ import (
 // `core/control`'s listener is unwritten on this target for the same reason, and the two are the two
 // halves of one gap.
 func DialLocal(address string) (io.ReadWriteCloser, error) {
-	return nil, fmt.Errorf(
-		"this build cannot reach %s on this target: a unit's address here is a named pipe and no "+
-			"dialer for one is written", address)
+	return control.Dial(address)
 }

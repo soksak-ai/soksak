@@ -10,7 +10,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"runtime"
 	"strings"
@@ -159,7 +158,7 @@ func requestFrom(argv []string) (control.Request, error) {
 }
 
 func ask(socket string, request control.Request) error {
-	connection, err := net.Dial("unix", socket)
+	connection, err := control.Dial(socket)
 	if err != nil {
 		return fmt.Errorf("no backend is answering at %s: %w", socket, err)
 	}

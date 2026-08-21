@@ -51,6 +51,8 @@ func Listen(path string) (net.Listener, error) {
 	return listener, nil
 }
 
+func Dial(path string) (net.Conn, error) { return net.Dial("unix", path) }
+
 // removeDeadSocket clears a socket file whose owner is gone.
 //
 // Liveness is asked by connecting, not by looking: the file exists for as long
