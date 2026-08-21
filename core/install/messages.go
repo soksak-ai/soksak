@@ -35,6 +35,27 @@ func init() {
 	})
 }
 
+func init() {
+	i18n.Declare(map[string]i18n.Sentence{
+		"install.transaction.noFetcher":            {EN: "unit installer requires a fetcher", KO: "유닛 설치기에 fetcher 가 필요합니다"},
+		"install.transaction.identityRequired":     {EN: "unit installer requires registry and root identity", KO: "유닛 설치기에 registry 와 root identity 가 필요합니다"},
+		"install.transaction.notFound":             {EN: "install transaction not found: {id}", KO: "설치 트랜잭션이 없습니다: {id}"},
+		"install.transaction.registryMismatch":     {EN: "registry does not match the install transaction", KO: "registry 가 설치 트랜잭션과 일치하지 않습니다"},
+		"install.transaction.unsupportedFormat":    {EN: "unsupported artifact format: {format}", KO: "지원하지 않는 아티팩트 형식입니다: {format}"},
+		"install.transaction.digestMismatch":       {EN: "artifact SHA-256 mismatch: {digest}", KO: "아티팩트 SHA-256 이 일치하지 않습니다: {digest}"},
+		"install.transaction.entrypointUnsafe":     {EN: "unsafe entrypoint path: {path}", KO: "안전하지 않은 entrypoint 경로입니다: {path}"},
+		"install.transaction.entrypointNotRegular": {EN: "entrypoint is not a regular file: {path}", KO: "entrypoint 가 일반 파일이 아닙니다: {path}"},
+		"install.transaction.ended":                {EN: "install transaction ended during artifact staging", KO: "아티팩트 스테이징 중 설치 트랜잭션이 종료되었습니다"},
+		"install.transaction.stagedPathUnsafe":     {EN: "unsafe staged path: {path}", KO: "안전하지 않은 스테이징 경로입니다: {path}"},
+		"install.transaction.stagedNotFound":       {EN: "staged artifact not found", KO: "스테이징된 아티팩트가 없습니다"},
+		"install.transaction.stagedNotRegular":     {EN: "staged path is not a regular file: {path}", KO: "스테이징 경로가 일반 파일이 아닙니다: {path}"},
+		"install.transaction.stagedNotUTF8":        {EN: "staged path is not UTF-8: {path}", KO: "스테이징 경로가 UTF-8 이 아닙니다: {path}"},
+		"install.transaction.archivePathUnsafe":    {EN: "unsafe archive path: {path}", KO: "안전하지 않은 아카이브 경로입니다: {path}"},
+		"install.transaction.archiveEntryType":     {EN: "archive entry is not a regular file or directory: {path}", KO: "아카이브 항목이 일반 파일 또는 디렉터리가 아닙니다: {path}"},
+		"install.transaction.archiveLimit":         {EN: "archive extraction limit exceeded", KO: "아카이브 추출 한도를 초과했습니다"},
+	})
+}
+
 // The refusals binary_integrity answers a caller with.
 
 func init() {

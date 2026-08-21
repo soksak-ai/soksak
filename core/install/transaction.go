@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 const (
@@ -82,10 +84,10 @@ func NewTransactionManager(root string, fetcher Fetcher) *TransactionManager {
 
 func (manager *TransactionManager) Begin(registryID string, root UnitIdentity) (Transaction, error) {
 	if manager.fetcher == nil {
-		return Transaction{}, fmt.Errorf("installer fetcher is required")
+		return Transaction{}, i18n.Errorf("install.transaction.noFetcher", nil)
 	}
 	if registryID == "" || root.Kind == "" || root.ID == "" || root.Version == "" {
-		return Transaction{}, fmt.Errorf("registry and root identity are required")
+		return Transaction{}, i18n.Errorf("install.transaction.identityRequired", nil)
 	}
 	id, err := randomID()
 	if err != nil {
@@ -106,13 +108,13 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 	transaction := manager.transactions[request.TransactionID]
 	manager.mu.Unlock()
 	if transaction == nil {
-		return StagedArtifact{}, fmt.Errorf("install transaction not found: %s", request.TransactionID)
+		return StagedArtifact{}, i18n.Errorf("install.transaction.notFound", map[string]string{"id": request.TransactionID})
 	}
 	if request.RegistryID != transaction.registryID {
-		return StagedArtifact{}, fmt.Errorf("registry does not match transaction")
+		return StagedArtifact{}, i18n.Errorf("install.transaction.registryMismatch", nil)
 	}
 	if request.Artifact.Format != "tgz" && request.Artifact.Format != "tar.gz" {
-		return StagedArtifact{}, fmt.Errorf("unsupported artifact format: %s", request.Artifact.Format)
+		return StagedArtifact{}, i18n.Errorf("install.transaction.unsupportedFormat", map[string]string{"format": request.Artifact.Format})
 	}
 	body, err := manager.fetcher.Fetch(ctx, request.Artifact.URL)
 	if err != nil {
@@ -120,7 +122,7 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 	}
 	digest := sha256Hex(body)
 	if digest != request.Artifact.SHA256 {
-		return StagedArtifact{}, fmt.Errorf("artifact SHA-256 mismatch: got %s", digest)
+		return StagedArtifact{}, i18n.Errorf("install.transaction.digestMismatch", map[string]string{"digest": digest})
 	}
 	handle, err := randomID()
 	if err != nil {
@@ -138,12 +140,12 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 	for _, entrypoint := range request.Artifact.Entrypoints {
 		if !safeArchivePath(entrypoint) {
 			_ = os.RemoveAll(destination)
-			return StagedArtifact{}, fmt.Errorf("unsafe entrypoint path: %s", entrypoint)
+			return StagedArtifact{}, i18n.Errorf("install.transaction.entrypointUnsafe", map[string]string{"path": entrypoint})
 		}
 		info, err := os.Lstat(filepath.Join(destination, filepath.FromSlash(entrypoint)))
 		if err != nil || !info.Mode().IsRegular() {
 			_ = os.RemoveAll(destination)
-			return StagedArtifact{}, fmt.Errorf("entrypoint is not a regular file: %s", entrypoint)
+			return StagedArtifact{}, i18n.Errorf("install.transaction.entrypointNotRegular", map[string]string{"path": entrypoint})
 		}
 		verified = append(verified, entrypoint)
 	}
@@ -151,7 +153,7 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 	if manager.transactions[request.TransactionID] == nil {
 		manager.mu.Unlock()
 		_ = os.RemoveAll(destination)
-		return StagedArtifact{}, fmt.Errorf("install transaction ended during stage")
+		return StagedArtifact{}, i18n.Errorf("install.transaction.ended", nil)
 	}
 	transaction.handles[handle] = destination
 	manager.mu.Unlock()
@@ -160,7 +162,7 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 
 func (manager *TransactionManager) ReadUTF8(transactionID, handle, path string) (string, error) {
 	if !safeArchivePath(path) {
-		return "", fmt.Errorf("unsafe staged path: %s", path)
+		return "", i18n.Errorf("install.transaction.stagedPathUnsafe", map[string]string{"path": path})
 	}
 	manager.mu.Lock()
 	transaction := manager.transactions[transactionID]
@@ -170,18 +172,18 @@ func (manager *TransactionManager) ReadUTF8(transactionID, handle, path string) 
 	}
 	manager.mu.Unlock()
 	if root == "" {
-		return "", fmt.Errorf("staged artifact not found")
+		return "", i18n.Errorf("install.transaction.stagedNotFound", nil)
 	}
 	info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(path)))
 	if err != nil || !info.Mode().IsRegular() {
-		return "", fmt.Errorf("staged path is not a regular file: %s", path)
+		return "", i18n.Errorf("install.transaction.stagedNotRegular", map[string]string{"path": path})
 	}
 	body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 	if err != nil {
 		return "", err
 	}
 	if !utf8.Valid(body) {
-		return "", fmt.Errorf("staged path is not UTF-8: %s", path)
+		return "", i18n.Errorf("install.transaction.stagedNotUTF8", map[string]string{"path": path})
 	}
 	return string(body), nil
 }
@@ -190,7 +192,7 @@ func (manager *TransactionManager) Rollback(transactionID string) error {
 	manager.mu.Lock()
 	if manager.transactions[transactionID] == nil {
 		manager.mu.Unlock()
-		return fmt.Errorf("install transaction not found: %s", transactionID)
+		return i18n.Errorf("install.transaction.notFound", map[string]string{"id": transactionID})
 	}
 	delete(manager.transactions, transactionID)
 	manager.mu.Unlock()
@@ -215,10 +217,10 @@ func extractTGZ(body []byte, destination string) error {
 			return fmt.Errorf("read tgz: %w", err)
 		}
 		if !safeArchivePath(header.Name) {
-			return fmt.Errorf("unsafe archive path: %s", header.Name)
+			return i18n.Errorf("install.transaction.archivePathUnsafe", map[string]string{"path": header.Name})
 		}
 		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeDir {
-			return fmt.Errorf("archive entry is not a regular file or directory: %s", header.Name)
+			return i18n.Errorf("install.transaction.archiveEntryType", map[string]string{"path": header.Name})
 		}
 		path := filepath.Join(destination, filepath.FromSlash(header.Name))
 		if header.Typeflag == tar.TypeDir {
@@ -230,7 +232,7 @@ func extractTGZ(body []byte, destination string) error {
 		files++
 		total += header.Size
 		if files > archiveMaxFiles || header.Size < 0 || header.Size > archiveMaxFileBytes || total > archiveMaxTotalBytes {
-			return fmt.Errorf("archive extraction limit exceeded")
+			return i18n.Errorf("install.transaction.archiveLimit", nil)
 		}
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
