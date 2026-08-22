@@ -12,6 +12,24 @@ vars:
   WAILS3: '{{.WAILS3 | default (joinPath .ROOT_DIR ".." "bin" (ternary "wails3.exe" "wails3" (eq OS "windows")))}}'
 
 tasks:
+  prepare:wails:runtime:
+    summary: Builds the pinned Wails frontend runtime package
+    dir: ../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime
+    sources:
+      - package.json
+      - package-lock.json
+      - src/**/*
+      - tsconfig.json
+    generates:
+      - dist/**/*
+      - types/**/*
+      - '{{.ROOT_DIR}}/.task/wails-runtime/wailsio-runtime-3.0.0-beta.2.tgz'
+    cmds:
+      - npm ci
+      - npm run build:code
+      - 'node -e "require(''node:fs'').mkdirSync(process.argv[1], { recursive: true })" "{{.ROOT_DIR}}/.task/wails-runtime"'
+      - npm pack --ignore-scripts --pack-destination "{{.ROOT_DIR}}/.task/wails-runtime"
+
   go:mod:tidy:
     summary: Runs `go mod tidy`
     internal: true
@@ -26,11 +44,13 @@ tasks:
       - pnpm-lock.yaml
     generates:
       - node_modules
+    deps:
+      - task: prepare:wails:runtime
     preconditions:
       - sh: npm version
         msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
     cmds:
-      - pnpm install
+      - pnpm --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile
 
   build:frontend:
     label: build:frontend (DEV={{.DEV}})

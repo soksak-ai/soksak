@@ -48,6 +48,33 @@ func TestPinnedWailsCLIUsesTheHostExecutableName(t *testing.T) {
 	}
 }
 
+func TestFrontendInstallBuildsAndCopiesThePinnedWailsRuntime(t *testing.T) {
+	body, err := os.ReadFile("build/Taskfile.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	for _, required := range []string{
+		"prepare:wails:runtime:",
+		"npm ci",
+		"npm run build:code",
+		"npm pack --ignore-scripts",
+		"task: prepare:wails:runtime",
+		"pnpm --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile",
+	} {
+		if !strings.Contains(source, required) {
+			t.Errorf("frontend dependency preparation is missing %s", required)
+		}
+	}
+	manifest, err := os.ReadFile("frontend/package.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifest), `"@wailsio/runtime": "file:../.task/wails-runtime/wailsio-runtime-3.0.0-beta.2.tgz"`) {
+		t.Fatal("frontend does not consume the packed exact Wails runtime")
+	}
+}
+
 func taskBlock(t *testing.T, source, name string) string {
 	t.Helper()
 	lines := strings.Split(source, "\n")

@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: { path: soksak-core, persist-credentials: false }
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with: { repository: soksak-ai/wails, ref: 07377dc4b307f685f310caf8e62698a81847b5e0, path: frameworks/wails3, persist-credentials: false }
+        with: { repository: soksak-ai/wails, ref: 245331aa500541d44f52d78c9d2dc9beb405d526, path: frameworks/wails3, persist-credentials: false }
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: { repository: soksak-ai/soksak-contract-contentview, ref: 5af66117202f6934ecd2909199bf9b84a541e523, path: soksak-contracts/soksak-contract-contentview }
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
