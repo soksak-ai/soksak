@@ -31,6 +31,11 @@
   Silicon macOS는 arm64와 amd64를 모두 실행할 수 있다. 다른 architecture 조합은 명시적 지원이 없으면 거부한다.
 - 제품 빌드와 native test는 같은 최소 deployment target을 사용한다.
 - local contract test, cross-compilation 검사, release-byte 검증이 통과한 뒤에만 release 또는 system-test를 실행한다.
+- macOS Docker 사전 검증은 Windows build input, PE binary, release byte, manifest, 설치 상태를
+  검증한다. Windows runtime 성공을 주장하지 않는다. WebView2, ConPTY, named pipe, Windows
+  창 동작은 GitHub `windows-2025` runner에서만 판정한다.
+- 터미널 크기 변경 실패는 DOM pixel, 요청 크기, PTY 관측, 복원 관측, 렌더된 frame 중
+  처음 진행하지 않은 경계를 기록한다. 일반 timeout만으로는 완료 근거가 되지 않는다.
 - toolchain 설치나 multi-target build 전에 디스크 용량을 확인한다. 재생성 가능한 cache와 build
   output만 명시적으로 정리하며 source file과 사용자 데이터는 용량 확보에 사용하지 않는다.
 

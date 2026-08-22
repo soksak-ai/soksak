@@ -32,6 +32,11 @@ and a new patch version is published after the responsible invariant has a RED t
   macOS on Apple Silicon may run both arm64 and amd64 binaries; unsupported architecture pairs are rejected.
 - Product builds and native tests use the same minimum deployment target.
 - A release or system-test run starts only after local contract tests, cross-compilation checks, and release-byte verification pass.
+- The macOS Docker preflight verifies Windows build inputs, PE binaries, release bytes, manifests,
+  and installed state. It does not claim a Windows runtime verdict. WebView2, ConPTY, named pipes,
+  and Windows window behavior are verified only on the GitHub `windows-2025` runner.
+- Terminal resize failures record the first non-advancing boundary: DOM pixels, requested size, PTY
+  observation, recovery observation, or rendered frame. A plain timeout is not sufficient evidence.
 - Disk capacity is checked before toolchain installation or multi-target builds. Only regenerable caches
   and build outputs are cleaned; source files and user data are never used as capacity.
 

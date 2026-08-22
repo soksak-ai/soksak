@@ -156,10 +156,11 @@ has watched fail is a claim, not a gate.
 | `sweep_gate_test.go` | a translation sweep changes no code |
 | `observation_gate_test.go` | what the build claims to observe, it serves |
 | `docs_carried_gate_test.go` | a carried document is not cited as contract before its review |
-| `externals/soksak-terminal-tests/system` inventory | installed settings declare seven terminal plugins and six recovery sidecars at 0.0.1, with absolute paths and regular manifests |
+| `externals/soksak-terminal-tests/system` inventory | installed settings declare the fleet manifest's exact plugin and sidecar versions, with absolute paths and regular manifests |
 | `externals/soksak-terminal-tests/system` command suite | every terminal plugin opens, reads, writes, resizes, handles Unicode and 256 KiB output, exposes DOM/accessibility, and produces capture and recording files |
 | `externals/soksak-terminal-tests/system` lifecycle suite | every terminal preserves its shell PID and detached output across restart, restores a durable archive, and rejects archived input |
 | `externals/soksak-terminal-tests/system` UI suite | plugin rejection count is zero, `ui.verify` passes, surface coverage is zero, and steady-state surface drift is at most 2px |
+| `externals/soksak-terminal-tests/system` resize evidence | every resize records DOM pixels, requested PTY size, PTY observation, recovery observation, rendered frame, and the first boundary that did not advance |
 
 ---
 
