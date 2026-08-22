@@ -162,3 +162,19 @@ func TestWindowsCanRevealWithoutTakingFocus(t *testing.T) {
 		}
 	}
 }
+
+func TestWindowsReportsNativeContentSize(t *testing.T) {
+	body, err := os.ReadFile("frameworks/wails/window_native_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	for _, required := range []string{"GetClientRect", "GetDpiForWindow", "contentSizeFromClientRect"} {
+		if !strings.Contains(source, required) {
+			t.Errorf("Windows content size is missing %s", required)
+		}
+	}
+	if strings.Contains(source, "return 0, 0, ErrContentSizeUnsupported") {
+		t.Fatal("Windows still reports content size as unsupported")
+	}
+}

@@ -26,13 +26,18 @@ var ErrActivationUnsupported = i18n.Errorf("wails.window.activationUnsupported",
 func activateApplication() error { return ErrActivationUnsupported }
 
 var ErrTitleUnsupported = i18n.Errorf("wails.window.titleUnsupported", nil)
-var ErrContentSizeUnsupported = i18n.Errorf("wails.window.contentSizeUnsupported", nil)
 var ErrWebviewFrameUnsupported = i18n.Errorf("wails.window.webviewFrameUnsupported", nil)
 var ErrWindowInputUnsupported = i18n.Errorf("wails.window.inputUnsupported", nil)
 
 func nativeWindowTitle(unsafe.Pointer) (string, error) { return "", ErrTitleUnsupported }
-func contentSize(unsafe.Pointer) (float64, float64, error) {
-	return 0, 0, ErrContentSizeUnsupported
+func contentSize(window unsafe.Pointer) (float64, float64, error) {
+	if window == nil {
+		return 0, 0, i18n.Errorf("wails.host.noContentArea", nil)
+	}
+	handle := w32.HWND(uintptr(window))
+	rect := w32.GetClientRect(handle)
+	dpi := uint32(w32.GetDpiForWindow(handle))
+	return contentSizeFromClientRect(rect.Left, rect.Top, rect.Right, rect.Bottom, dpi)
 }
 func webviewFrame(unsafe.Pointer) (float64, float64, float64, float64, error) {
 	return 0, 0, 0, 0, ErrWebviewFrameUnsupported
