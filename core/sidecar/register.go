@@ -1,11 +1,15 @@
 package sidecar
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
+	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
 )
 
 // The surface a declared unit is received through.
@@ -36,10 +40,31 @@ type Registration struct {
 // buffer is indistinguishable from a unit that stopped.
 const streamUnserved = "this host carries no stream for a unit's output to arrive on"
 
-// Requirement is a contract a plugin asked for: an id and one exact version.
+// Requirement is a contract a plugin asked for: an id and a bounded version condition.
 type Requirement struct {
-	ID      string `json:"id"`
-	Version string `json:"version"`
+	ID          string `json:"id"`
+	Requirement string `json:"requirement"`
+}
+
+func (requirement *Requirement) UnmarshalJSON(body []byte) error {
+	type wire Requirement
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	var value wire
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("requirement has trailing JSON data")
+	}
+	if value.ID == "" {
+		return fmt.Errorf("requirement id is required")
+	}
+	if _, err := platformspec.DependencyRequirementSatisfied("0.0.1", value.Requirement); err != nil {
+		return err
+	}
+	*requirement = Requirement(value)
+	return nil
 }
 
 type Consumer struct {
@@ -116,15 +141,8 @@ func Register(registry *control.Registry, deps Registration) {
 			if err != nil {
 				return nil, err
 			}
-			if resolved.InterfaceID != requirement.ID {
-				return nil, i18n.Errorf("sidecar.contractMismatch", map[string]string{
-					"name": requirementName, "wanted": requirement.ID, "found": resolved.InterfaceID,
-				})
-			}
-			if resolved.InterfaceVersion != requirement.Version {
-				return nil, i18n.Errorf("sidecar.versionMismatch", map[string]string{
-					"name": requirementName, "wanted": requirement.ID, "wanted2": requirement.Version, "found": resolved.InterfaceVersion,
-				})
+			if err := validateResolvedRequirement(resolved, requirementName, requirement); err != nil {
+				return nil, err
 			}
 			return deps.Host.StartResolvedWithGeneratedSecrets(resolved.Name, resolved.Path, generated)
 		}
@@ -246,15 +264,26 @@ func (deps Registration) openBoundWithSecrets(consumer Consumer, name string, re
 	if err != nil {
 		return Open{}, err
 	}
+	if err := validateResolvedRequirement(resolved, name, requirement); err != nil {
+		return Open{}, err
+	}
+	return deps.Host.StartResolvedWithSecrets(resolved.Name, resolved.Path, namespace, secretEnv)
+}
+
+func validateResolvedRequirement(resolved Resolved, name string, requirement Requirement) error {
 	if resolved.InterfaceID != requirement.ID {
-		return Open{}, i18n.Errorf("sidecar.contractMismatch", map[string]string{
+		return i18n.Errorf("sidecar.contractMismatch", map[string]string{
 			"name": name, "wanted": requirement.ID, "found": resolved.InterfaceID,
 		})
 	}
-	if resolved.InterfaceVersion != requirement.Version {
-		return Open{}, i18n.Errorf("sidecar.versionMismatch", map[string]string{
-			"name": name, "wanted": requirement.ID, "wanted2": requirement.Version, "found": resolved.InterfaceVersion,
+	matched, err := platformspec.DependencyRequirementSatisfied(resolved.InterfaceVersion, requirement.Requirement)
+	if err != nil {
+		return err
+	}
+	if !matched {
+		return i18n.Errorf("sidecar.versionMismatch", map[string]string{
+			"name": name, "wanted": requirement.ID, "wanted2": requirement.Requirement, "found": resolved.InterfaceVersion,
 		})
 	}
-	return deps.Host.StartResolvedWithSecrets(resolved.Name, resolved.Path, namespace, secretEnv)
+	return nil
 }

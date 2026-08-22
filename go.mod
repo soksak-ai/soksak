@@ -9,7 +9,7 @@ require (
 	github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063
 	github.com/soksak-ai/soksak-contract-contentview v0.0.1
 	github.com/soksak-ai/soksak-contract-control v0.0.1
-	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822000304-ee3af9deb8ea
+	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822044225-5f938beaa631
 	github.com/wailsapp/wails/v3 v3.0.0-dev
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/sys v0.47.0
@@ -29,6 +29,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	golang.org/x/mod v0.37.0 // indirect
 	modernc.org/libc v1.74.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
