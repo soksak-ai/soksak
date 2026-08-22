@@ -29,7 +29,6 @@ if (typeof window !== "undefined") {
     reportBootError("reject: " + String(e.reason), String((e.reason && e.reason.stack) || "")),
   );
 }
-import App from "./App";
 import { markCommandHostReady, startExecutor } from "./commands/executor";
 import { catalogJson, execute, onRegistryChange } from "./commands/registry";
 import { installControlDoor } from "./framework/wails/controlDoor";
@@ -292,6 +291,7 @@ async function boot(): Promise<void> {
   // user measurement 2026-07-27). Early in boot, hide every child of this window — the restore render re-shows
   // only the active views (commitViewVisibility — a new context means an empty map, which guarantees re-publish).
   await resetNativeSurfaces();
+  const { default: App } = await import("./App");
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <App />,
   );
