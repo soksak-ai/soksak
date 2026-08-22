@@ -1,12 +1,14 @@
 package main
 
 import (
+	"debug/buildinfo"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -188,6 +190,22 @@ func TestGateStartupReclaimsOnlyRunsWhoseOwnerIsDead(t *testing.T) {
 	}
 }
 
+func TestGateRejectsForeignBinaryBeforeStart(t *testing.T) {
+	target := "linux"
+	if runtime.GOOS == "linux" {
+		target = "windows"
+	}
+	path := filepath.Join(t.TempDir(), "sok")
+	command := exec.Command("go", "build", "-o", path, "./cmd/sok")
+	command.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS="+target, "GOARCH=amd64")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("building foreign client: %v\n%s", err, output)
+	}
+	if err := requireHostBinary(path); err == nil || !strings.Contains(err.Error(), "built for "+target+"/amd64") {
+		t.Fatalf("foreign client error = %v", err)
+	}
+}
+
 // socket is the address the identity derives from the home and the identifier:
 // `<home>/.soksak-<axis>/<identifier>.sock`. Derived here rather than asked for,
 // because the application has to be answering before it can be asked anything.
@@ -202,6 +220,9 @@ func newGate(t *testing.T, homePrefix string, identifier string) *restoreGate {
 	for _, binary := range []string{app, client} {
 		if _, err := os.Stat(binary); err != nil {
 			t.Skipf("%s is not built; run `wails3 task build` and `wails3 task build:sok` first", binary)
+		}
+		if err := requireHostBinary(binary); err != nil {
+			t.Fatalf("%s is not executable on this host: %v", binary, err)
 		}
 	}
 	root, err := filepath.Abs(filepath.Join(".task", "gates"))
@@ -241,6 +262,37 @@ func newGate(t *testing.T, homePrefix string, identifier string) *restoreGate {
 		_ = os.RemoveAll(runtimeRoot)
 	})
 	return gate
+}
+
+func requireHostBinary(path string) error {
+	info, err := buildinfo.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	values := map[string]string{}
+	for _, setting := range info.Settings {
+		if setting.Key == "GOOS" || setting.Key == "GOARCH" {
+			values[setting.Key] = setting.Value
+		}
+	}
+	if values["GOOS"] == "" || values["GOARCH"] == "" {
+		return fmt.Errorf("Go build target is absent")
+	}
+	if values["GOOS"] != runtime.GOOS || !hostArchCompatible(values["GOARCH"]) {
+		return fmt.Errorf("built for %s/%s; host is %s/%s", values["GOOS"], values["GOARCH"], runtime.GOOS, runtime.GOARCH)
+	}
+	return nil
+}
+
+func hostArchCompatible(arch string) bool {
+	if arch == runtime.GOARCH {
+		return true
+	}
+	if runtime.GOOS != "darwin" || arch != "arm64" {
+		return false
+	}
+	output, err := exec.Command("sysctl", "-n", "hw.optional.arm64").Output()
+	return err == nil && strings.TrimSpace(string(output)) == "1"
 }
 
 // installationHome is where this identity keeps what it owns — the same derivation the application
@@ -305,13 +357,17 @@ func (gate *restoreGate) start() {
 	// publishes nothing, and the first thing this run can be told is an answer to a command. Every
 	// wait after this one is on an event the window announces.
 	deadline := time.Now().Add(45 * time.Second)
+	lastOutput := ""
+	var lastError error
 	for time.Now().Before(deadline) {
-		if out, err := gate.try("window_list", "window=main"); err == nil && strings.Contains(out, "win-") {
+		out, err := gate.try("window_list", "window=main")
+		lastOutput, lastError = out, err
+		if err == nil && strings.Contains(out, "win-") {
 			return
 		}
 		time.Sleep(startupPollInterval)
 	}
-	gate.t.Fatal("the application did not answer within 45s")
+	gate.t.Fatalf("the application did not answer within 45s: %v\n%s%s", lastError, lastOutput, gate.lastWords())
 }
 
 // quit ends the process through the command, never by killing it. A kill skips
