@@ -1,0 +1,92 @@
+name: wails-release
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Full source commit verified by the Windows system run
+        required: true
+        type: string
+      system_run_id:
+        description: Successful windows-terminal-system run id
+        required: true
+        type: string
+concurrency:
+  group: wails-release-${{ inputs.source_commit }}
+  cancel-in-progress: false
+permissions:
+  actions: read
+  contents: read
+jobs:
+  publish-release:
+    if: github.ref == 'refs/heads/wails3beta-terminal-0.0.1'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: tooling
+          persist-credentials: false
+      - name: Check out the verified source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_commit }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: "1.25.0"
+          cache: false
+      - name: Require one successful native system run for the source commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          SYSTEM_RUN_ID: ${{ inputs.system_run_id }}
+        run: |
+          test "$(printf '%s' "$SOURCE_COMMIT" | wc -c)" -eq 40
+          test "$(gh api "repos/${{ github.repository }}/actions/runs/$SYSTEM_RUN_ID" --jq .head_sha)" = "$SOURCE_COMMIT"
+          test "$(gh api "repos/${{ github.repository }}/actions/runs/$SYSTEM_RUN_ID" --jq .conclusion)" = success
+          test "$(gh api "repos/${{ github.repository }}/actions/runs/$SYSTEM_RUN_ID" --jq .path)" = .github/workflows/windows-terminal-system.yml
+      - name: Download the exact tested Windows binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "${{ inputs.system_run_id }}" --repo "${{ github.repository }}" --name core-windows-artifact --dir tested
+      - name: Package and verify the application release
+        run: |
+          go run ./tooling/cmd/package-release \
+            --root source \
+            --out dist-release \
+            --source-commit "${{ inputs.source_commit }}" \
+            --system-run-id "${{ inputs.system_run_id }}" \
+            --app tested/soksak.exe \
+            --cli tested/sok.exe
+          (cd dist-release && sha256sum --check SHA256SUMS)
+          test "$(jq -r .sourceCommit dist-release/provenance.json)" = "${{ inputs.source_commit }}"
+          test "$(jq -r .authenticode dist-release/provenance.json)" = unsigned
+      - id: release-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.SOKSAK_RELEASE_CLIENT_ID }}
+          private-key: ${{ secrets.SOKSAK_RELEASE_PRIVATE_KEY }}
+          owner: soksak-ai
+          repositories: soksak
+          permission-administration: read
+          permission-contents: write
+      - name: Publish the immutable GitHub Release
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          test "$(gh api "repos/${{ github.repository }}/immutable-releases" --jq '.enabled and .enforced_by_owner')" = true
+          version="$(jq -r .version source/frontend/package.json)"
+          tag="v$version"
+          test "$(jq -r .tag dist-release/provenance.json)" = "$tag"
+          test -z "$(gh release view "$tag" --repo "${{ github.repository }}" --json tagName --jq .tagName 2>/dev/null || true)"
+          gh release create "$tag" \
+            dist-release/soksak-"$version"-windows-x86_64.zip \
+            dist-release/SHA256SUMS \
+            dist-release/provenance.json \
+            dist-release/RELEASE-NOTES.ko.md \
+            --repo "${{ github.repository }}" \
+            --target "$SOURCE_COMMIT" \
+            --title "Soksak $version" \
+            --notes-file dist-release/RELEASE-NOTES.md
