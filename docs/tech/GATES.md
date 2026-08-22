@@ -145,7 +145,7 @@ has watched fail is a claim, not a gate.
 | `history_gate_test.go` | the core does not act on a browser's history, and writes down no surface kind |
 | plugin `manifest_gate_test.go` | a source writing `data-native-surface` has a manifest declaring it, and the reverse |
 | `prose_gate_test.go` | comments and bundle values stay out of the banned register (§6-3) |
-| `korean_gate_test.go` | Hangul stays in the bundles; the floor is 43 lines and every one accounted for |
+| `korean_gate_test.go` | Hangul stays in bundles or paired `.ko.md` translations; unpaired translations fail |
 | `record_language_gate_test.go` | the record is English, commit messages included (6-1) — the floor is zero, no allowlist |
 | `i18n_gate_test.go` | a sentence a person reads comes from a key |
 | `reader_language_gate_test.go` | a refusal from a window is a key, rendered where the caller is known |

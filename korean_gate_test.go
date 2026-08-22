@@ -116,6 +116,13 @@ func TestKoreanStaysInTheBundles(t *testing.T) {
 	}
 	for _, path := range paths {
 		clean := filepath.ToSlash(path)
+		if strings.HasSuffix(clean, ".ko.md") {
+			canonical := strings.TrimSuffix(clean, ".ko.md") + ".md"
+			if _, err := os.Stat(canonical); err != nil {
+				t.Errorf("Korean translation has no English canonical document: %s", clean)
+			}
+			continue
+		}
 		if koreanBundles[clean] {
 			continue
 		}
