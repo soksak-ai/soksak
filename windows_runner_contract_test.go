@@ -23,6 +23,10 @@ func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 	if !strings.Contains(docker, "io.soksak.windows-ci.definition-sha") {
 		t.Fatal("Docker runner rebuilds the CI image without a definition hash")
 	}
+	runner := readText(t, "scripts/ci/windows-build.sh")
+	if !strings.Contains(runner, "Wails binding generation emitted warnings") {
+		t.Fatal("Windows binding generation does not reject warnings")
+	}
 }
 
 func readText(t *testing.T, path string) string {

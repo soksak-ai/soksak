@@ -26,7 +26,17 @@ generate() {
   require_go
   require_wails
   go mod tidy
-  "$wails" generate bindings -f '-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"' -clean=true -ts ./...
+  if bindings_output=$("$wails" generate bindings -f '-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"' -clean=true -ts ./... 2>&1); then
+    printf '%s\n' "$bindings_output"
+  else
+    status=$?
+    printf '%s\n' "$bindings_output" >&2
+    exit "$status"
+  fi
+  if printf '%s\n' "$bindings_output" | grep -Eq 'WARNING|warnings emitted'; then
+    echo "Wails binding generation emitted warnings" >&2
+    exit 1
+  fi
   "$wails" generate syso -arch amd64 -icon build/windows/icon.ico -manifest build/windows/wails.exe.manifest -info build/windows/info.json -out wails_windows_amd64.syso
   git -c safe.directory="$root" diff --exit-code -- go.mod go.sum frontend/bindings
 }
