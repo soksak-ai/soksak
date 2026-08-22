@@ -41,3 +41,6 @@
 - 코어는 installation identity, host binary compatibility, installed settings publication을 검사한다.
 - 외부 terminal test 저장소는 발행된 전체 fleet를 black-box composition으로 검증한다.
 - registry에는 contract를 통과한 immutable release document만 포함한다. 실패한 release 버전은 catalogue entry가 아니다.
+- 플러그인과 사이드카는 runtime 설치 아티팩트다. 킷은 재사용 구현 소스를 배포하며 명시적으로
+  요청한 경우에만 설치한다. 플러그인의 runtime 의존성으로 추론하지 않는다. contract와 spec
+  release는 검증 입력이며 runtime 설치 디렉터리에 복사하지 않는다.

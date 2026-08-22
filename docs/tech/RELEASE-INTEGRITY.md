@@ -42,3 +42,6 @@ and a new patch version is published after the responsible invariant has a RED t
 - Core tests installation identity, host binary compatibility, and installed settings publication.
 - The external terminal test repository verifies complete released fleets as black-box compositions.
 - The registry contains only immutable release documents that pass its contract; failed release versions are not catalogue entries.
+- Plugins and sidecars are runtime installation artifacts. Kits distribute reusable implementation
+  source and are installed only when explicitly requested; they are not inferred as plugin runtime
+  dependencies. Contract and spec releases are validation inputs and are not copied into runtime installation directories.

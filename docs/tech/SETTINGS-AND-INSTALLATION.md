@@ -14,7 +14,18 @@ Release identity, archive validation, and immutable-version handling are defined
 
 ## Installer
 
-The installer reads one certified registry release, selects the current target artifact, downloads the declared byte size, verifies SHA-256, extracts regular files only, validates the manifest, and atomically publishes the directory and installed record. Failure leaves the previous installed state unchanged.
+The installer reads a certified plugin, sidecar, or directly requested kit release, selects the current target artifact,
+downloads the declared byte size, verifies SHA-256, extracts regular files only, validates the
+manifest, and atomically publishes the directory and installed record. A plugin installation also
+installs its exact plugin dependencies and the sidecar IDs selected for its named requirements in
+the same transaction. An already installed exact dependency is shared. Failure leaves the previous
+installed state unchanged.
+
+Kit releases distribute reusable implementation source and are not implicit plugin runtime
+dependencies. A future runtime kit dependency must first be declared by the public plugin spec;
+the installer does not infer one. Contract and spec releases are validation inputs. They are published and registered independently,
+but are not copied into the runtime installation directory. Development paths for contracts and specs
+support authoring and validation; they do not turn those documents into runtime processes.
 
 Release documents contain no dependency scope or provider choice. Installing a plugin does not silently activate it or select a sidecar. Those are explicit settings operations.
 

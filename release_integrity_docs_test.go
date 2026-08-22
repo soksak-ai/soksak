@@ -17,7 +17,7 @@ func TestReleaseIntegrityRulesAreDocumentedInBothLanguages(t *testing.T) {
 			t.Fatal(err)
 		}
 		text := string(body)
-		for _, required := range []string{"sidecar.json", "release.json", "immutable", coreName, "registry"} {
+		for _, required := range []string{"sidecar.json", "release.json", "immutable", coreName, "registry", "runtime"} {
 			if !strings.Contains(text, required) {
 				t.Errorf("%s does not define %s", path, required)
 			}
