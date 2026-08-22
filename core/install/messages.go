@@ -8,6 +8,22 @@ import "github.com/soksak-ai/soksak-core/core/i18n"
 
 func init() {
 	i18n.Declare(map[string]i18n.Sentence{
+		"install.transaction.unsupportedKind": {
+			EN: "artifact kind {kind} is not installable",
+			KO: "{kind} 유형의 아티팩트는 설치할 수 없습니다",
+		},
+		"install.transaction.manifestPathMismatch": {
+			EN: "artifact manifest {manifest} must be {expected}",
+			KO: "아티팩트 매니페스트 {manifest}은(는) {expected}이어야 합니다",
+		},
+		"install.transaction.manifestIdentityInvalid": {
+			EN: "artifact {artifact} has an invalid manifest identity",
+			KO: "아티팩트 {artifact}의 매니페스트 식별자가 올바르지 않습니다",
+		},
+		"install.transaction.manifestIdentityMismatch": {
+			EN: "artifact {artifact} does not match its manifest identity",
+			KO: "아티팩트 {artifact}가 매니페스트 식별자와 일치하지 않습니다",
+		},
 		"install.npm.noRunner": {
 			EN: "npm_global_dirs cannot run anything in this build — set install.Deps.Run",
 			KO: "이 빌드의 npm_global_dirs 는 아무것도 실행할 수 없습니다 — install.Deps.Run 을 넣으십시오",

@@ -20,7 +20,7 @@ type recordingChange struct {
 
 func TestArtifactInstallCommandsCommitAndPublishInstalledChange(t *testing.T) {
 	home := t.TempDir()
-	archive := tgz(t, archiveEntry{name: "plugin.json", body: "{}"})
+	archive := tgz(t, archiveEntry{name: "plugin.json", body: `{"id":"view","version":"0.0.1"}`})
 	var changes []recordingChange
 	registry := control.NewRegistry()
 	Register(registry, Deps{Home: home, Fetcher: memoryFetcher{body: archive}, Changed: func(event string, payload any) { changes = append(changes, recordingChange{event, payload}) }})

@@ -14,14 +14,16 @@ func TestCommitPublishesPluginAndSidecarSeparately(t *testing.T) {
 	manager := NewTransactionManager(filepath.Join(home, ".transactions"), memoryFetcher{})
 	root := ArtifactIdentity{Kind: "plugin", ID: "view", Version: "0.0.1"}
 	transaction, _ := manager.Begin("official", root)
-	archive := tgz(t, archiveEntry{name: "plugin.json", body: "{}"}, archiveEntry{name: "sidecar.json", body: "{}"})
-	manager.fetcher = memoryFetcher{body: archive}
-	pluginStage, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: root, Artifact: Artifact{URL: "https://example.invalid/p.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}})
+	pluginArchive := tgz(t, archiveEntry{name: "plugin.json", body: `{"id":"view","version":"0.0.1"}`})
+	sidecarArchive := tgz(t, archiveEntry{name: "sidecar.json", body: `{"id":"state","version":"0.0.1"}`})
+	manager.fetcher = memoryFetcher{body: pluginArchive}
+	pluginStage, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: root, Artifact: Artifact{URL: "https://example.invalid/p.tgz", Size: uint64(len(pluginArchive)), SHA256: sha256Hex(pluginArchive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	sidecarIdentity := ArtifactIdentity{Kind: "sidecar", ID: "state", Version: "0.0.1"}
-	sidecarStage, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: sidecarIdentity, Artifact: Artifact{URL: "https://example.invalid/s.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "sidecar.json", Entrypoints: []string{"sidecar.json"}}})
+	manager.fetcher = memoryFetcher{body: sidecarArchive}
+	sidecarStage, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: sidecarIdentity, Artifact: Artifact{URL: "https://example.invalid/s.tgz", Size: uint64(len(sidecarArchive)), SHA256: sha256Hex(sidecarArchive), Format: "tgz", Manifest: "sidecar.json", Entrypoints: []string{"sidecar.json"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

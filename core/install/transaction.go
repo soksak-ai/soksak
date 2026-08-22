@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -131,6 +132,13 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 	if request.Artifact.Format != "tgz" && request.Artifact.Format != "tar.gz" {
 		return StagedArtifact{}, i18n.Errorf("install.transaction.unsupportedFormat", map[string]string{"format": request.Artifact.Format})
 	}
+	expectedManifest := request.Identity.Kind + ".json"
+	if request.Identity.Kind != "plugin" && request.Identity.Kind != "sidecar" && request.Identity.Kind != "kit" {
+		return StagedArtifact{}, i18n.Errorf("install.transaction.unsupportedKind", map[string]string{"kind": request.Identity.Kind})
+	}
+	if request.Artifact.Manifest != expectedManifest || !safeArchivePath(request.Artifact.Manifest) {
+		return StagedArtifact{}, i18n.Errorf("install.transaction.manifestPathMismatch", map[string]string{"manifest": request.Artifact.Manifest, "expected": expectedManifest})
+	}
 	body, err := manager.fetcher.Fetch(ctx, request.Artifact.URL)
 	if err != nil {
 		return StagedArtifact{}, fmt.Errorf("fetch artifact: %w", err)
@@ -171,6 +179,19 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 	if err != nil {
 		_ = os.RemoveAll(destination)
 		return StagedArtifact{}, i18n.Errorf("install.transaction.manifestArtifactMismatch", map[string]string{"artifact": request.Identity.key()})
+	}
+	var manifestIdentity struct {
+		ID      string `json:"id"`
+		Version string `json:"version"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(manifestBody))
+	if err := decoder.Decode(&manifestIdentity); err != nil {
+		_ = os.RemoveAll(destination)
+		return StagedArtifact{}, i18n.Errorf("install.transaction.manifestIdentityInvalid", map[string]string{"artifact": request.Identity.key()})
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF || manifestIdentity.ID != request.Identity.ID || manifestIdentity.Version != request.Identity.Version {
+		_ = os.RemoveAll(destination)
+		return StagedArtifact{}, i18n.Errorf("install.transaction.manifestIdentityMismatch", map[string]string{"artifact": request.Identity.key()})
 	}
 	manifestDigest := sha256Hex(manifestBody)
 	manager.mu.Lock()
