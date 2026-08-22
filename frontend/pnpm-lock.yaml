@@ -15,8 +15,8 @@ importers:
         specifier: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.2/soksak-ai-plugin-spec-0.0.2.tgz
         version: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.2/soksak-ai-plugin-spec-0.0.2.tgz
       '@wailsio/runtime':
-        specifier: file:../.task/wails-runtime/wailsio-runtime-3.0.0-beta.2.tgz
-        version: file:../.task/wails-runtime/wailsio-runtime-3.0.0-beta.2.tgz
+        specifier: file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime
+        version: file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime
       pngjs:
         specifier: ^7.0.0
         version: 7.0.0
@@ -598,9 +598,8 @@ packages:
   '@vitest/utils@3.2.7':
     resolution: {integrity: sha512-x6BDOd7dyo3PFLY3I9/HJ25X/6OurhGXk2/B9gOZNPF7XDVjeBK4k01lQE5uvDpbuheErh91qYuE1E2OEjK3Rw==}
 
-  '@wailsio/runtime@file:../.task/wails-runtime/wailsio-runtime-3.0.0-beta.2.tgz':
-    resolution: {integrity: sha512-GA3QUJ9ATKtzNGyfETaz9YN90HJBGyBUYSbElDvv2BIZjies5dH93Ru6RXo4L3wSxbD/YbcafXkcL2Z/F6tMgw==, tarball: file:../.task/wails-runtime/wailsio-runtime-3.0.0-beta.2.tgz}
-    version: 3.0.0-beta.2
+  '@wailsio/runtime@file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime':
+    resolution: {directory: ../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime, type: directory}
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -1426,7 +1425,7 @@ snapshots:
       loupe: 3.2.1
       tinyrainbow: 2.0.0
 
-  '@wailsio/runtime@file:../.task/wails-runtime/wailsio-runtime-3.0.0-beta.2.tgz': {}
+  '@wailsio/runtime@file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime': {}
 
   assertion-error@2.0.1: {}
 

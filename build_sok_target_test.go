@@ -58,7 +58,6 @@ func TestFrontendInstallBuildsAndCopiesThePinnedWailsRuntime(t *testing.T) {
 		"prepare:wails:runtime:",
 		"npm ci",
 		"npm run build:code",
-		"npm pack --ignore-scripts",
 		"task: prepare:wails:runtime",
 		"pnpm --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile",
 	} {
@@ -70,8 +69,8 @@ func TestFrontendInstallBuildsAndCopiesThePinnedWailsRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(manifest), `"@wailsio/runtime": "file:../.task/wails-runtime/wailsio-runtime-3.0.0-beta.2.tgz"`) {
-		t.Fatal("frontend does not consume the packed exact Wails runtime")
+	if !strings.Contains(string(manifest), `"@wailsio/runtime": "file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime"`) {
+		t.Fatal("frontend does not consume the exact Wails runtime source")
 	}
 }
 
