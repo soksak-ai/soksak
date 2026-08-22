@@ -71,6 +71,6 @@ jobs:
   system:
     needs: build-core
     # Cross-owner reusable workflows must be public; the fleet repository contains tests only.
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@6593243e8ea2f1bc6ba701a328139625cf76a540
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@f7e37ea488499f6e3387663ae1d5cca758bd69a0
     with:
-      tests_ref: 6593243e8ea2f1bc6ba701a328139625cf76a540
+      tests_ref: f7e37ea488499f6e3387663ae1d5cca758bd69a0
