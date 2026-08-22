@@ -1,10 +1,7 @@
 # soksak-core
 
-This repository is the plugin-driven Wails desktop core, version `0.0.1`, pinned to the official Wails
-`releases/v3-beta` candidate at commit
-`3ae6893b9c119c4ddbf3cfc890a2f6fd6f9b4967`. The framework is resolved by the
-local `replace` directive in `go.mod`; it does not use the globally installed
-Wails alpha CLI.
+This repository is the plugin-driven Wails desktop core, version `0.0.1`. The Go module, CLI, and
+frontend runtime use the official Wails `v3.0.0-beta.12` release.
 
 ## Current contract
 
@@ -31,19 +28,17 @@ Wails alpha CLI.
 
 ## Reproducible commands
 
-The beta CLI is built outside this repository at `../bin/wails3` from the
-pinned framework checkout.
+Install the exact upstream CLI before running the build tasks.
 
 ```sh
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
 go test ./...
 (cd frontend && pnpm test)
-PATH="$PWD/../bin:$PATH" wails3 dev
+wails3 dev
 ```
 
-The generated beta template omitted its desktop `build/` tree and referenced
-mobile task files that were not generated. This repository vendors the build
-assets from the same pinned Wails commit and keeps only the desktop task
-includes. Package installation and scripts use the checked-in pnpm lockfile.
+This repository owns its desktop build tasks. Package installation and scripts use checked-in
+lockfiles.
 
 ## Verification
 

@@ -10,7 +10,7 @@ require (
 	github.com/soksak-ai/soksak-contract-contentview v0.0.1
 	github.com/soksak-ai/soksak-contract-control v0.0.1
 	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822053448-8308c88bc977
-	github.com/wailsapp/wails/v3 v3.0.0-dev
+	github.com/wailsapp/wails/v3 v3.0.0-beta.12
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/sys v0.47.0
 	modernc.org/sqlite v1.56.0
@@ -34,8 +34,6 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
-
-replace github.com/wailsapp/wails/v3 => ../frameworks/wails3/v3
 
 replace github.com/soksak-ai/soksak-contract-contentview => ../soksak-contracts/soksak-contract-contentview
 

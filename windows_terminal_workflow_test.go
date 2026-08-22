@@ -12,9 +12,8 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 		t.Fatal(e)
 	}
 	s := string(b)
-	const wailsRef = "07377dc4b307f685f310caf8e62698a81847b5e0"
-	if !strings.Contains(s, "repository: soksak-ai/wails, ref: "+wailsRef) {
-		t.Fatal("Windows workflow is not pinned to the Wails CLI source")
+	if !strings.Contains(s, "go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12") {
+		t.Fatal("Windows workflow does not install the exact upstream Wails CLI")
 	}
 	const testsRef = "405d2e4ed3fb0228919aa2138ff9b3386e93199b"
 	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@"+testsRef) {
@@ -29,8 +28,10 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 	if !strings.Contains(s, "$PSNativeCommandUseErrorActionPreference = $true") {
 		t.Fatal("Windows native command failures do not stop artifact publication")
 	}
-	if !strings.Contains(s, "go build -C frameworks/wails3/v3 -trimpath") {
-		t.Fatal("source-built Wails CLI does not retain its embedded release identity")
+	for _, forbidden := range []string{"soksak-ai/wails", "frameworks/wails3"} {
+		if strings.Contains(s, forbidden) {
+			t.Errorf("Windows workflow depends on a Wails source checkout: %s", forbidden)
+		}
 	}
 	if !strings.Contains(s, "Test-Path $artifact") {
 		t.Fatal("Windows workflow does not verify built artifact paths")

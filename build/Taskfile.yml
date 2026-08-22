@@ -9,7 +9,7 @@ env:
   GOWORK: "off"
 
 vars:
-  WAILS3: '{{.WAILS3 | default (joinPath .ROOT_DIR ".." "bin" (ternary "wails3.exe" "wails3" (eq OS "windows")))}}'
+  WAILS3: '{{.WAILS3 | default "wails3"}}'
 
 tasks:
   go:mod:tidy:
@@ -112,8 +112,8 @@ tasks:
       # nothing. ./... discovers the five registered services and their sibling-module models.
       - '"{{.WAILS3}}" generate bindings -f ''{{.BUILD_FLAGS}}'' -clean=true -ts ./...'
     preconditions:
-      - sh: 'test "$("{{.WAILS3}}" version 2>&1)" = "v3.0.0-beta.2"'
-        msg: "This workspace requires its pinned Wails CLI v3.0.0-beta.2 at {{.WAILS3}}"
+      - sh: 'test "$("{{.WAILS3}}" version 2>&1)" = "v3.0.0-beta.12"'
+        msg: "This workspace requires Wails CLI v3.0.0-beta.12 at {{.WAILS3}}"
 
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` from an image; on macOS, `-iconcomposerinput appicon.icon -macassetdir darwin` also produces `Assets.car` from a `.icon` file (skipped on other platforms).

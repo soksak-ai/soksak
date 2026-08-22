@@ -19,19 +19,18 @@ wails3beta/
 ├── soksak-sidecars/    plugin-owned processes, one repository each
 ├── soksak-contracts/   shared public contracts and acceptance suites
 ├── wails-services/     Wails services this project wrote
-├── frameworks/         framework checkouts, pinned
 ├── externals/          third-party libraries
 └── backup/             removed material, referenced by no build
 ```
 
 Four rules produce this:
 
-1. Ours and not-ours are separate. `frameworks/` and `externals/` hold code from elsewhere;
-   everything else is written here.
+1. Ours and not-ours are separate. `externals/` holds source used for comparison or system tests;
+   product dependencies come from exact published releases.
 2. A plugin adds a feature and can be switched off (A8). Shared plugin code, public contracts and
    plugin processes remain independently versioned repositories. A Wails service extends the host and
    cannot be switched off as a plugin. These are different kinds, so they are different folders.
-3. A checkout is pinned. `frameworks/wails3` is at one commit, and moving it is legislation with its
+3. An upstream release is pinned. Wails Go, CLI, and frontend runtime dependencies use exact release versions, and moving them is legislation with its
    own commit, not a side effect (see NATIVE-LAYER.md).
 4. `backup/` is invisible to every build and gate. Anything the build needs is not in it.
 
@@ -40,8 +39,7 @@ plugins, sidecars and kits from installation settings (COMPOSITION.md) and never
 folders. A repository runs its own tests; cross-repository product tests use installed artifacts
 declared in settings.json.
 
-`go.mod` `replace` directives and `frontend/package.json` `file:` dependencies both address these
-paths, so a move here is a two-line change in the application.
+The application does not depend on workspace-relative framework or frontend package paths.
 
 ## L1b. A message is owned by whatever it is about
 

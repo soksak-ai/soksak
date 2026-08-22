@@ -35,15 +35,15 @@ func TestControlClientUsesTheApplicationTarget(t *testing.T) {
 	}
 }
 
-func TestPinnedWailsCLIUsesTheHostExecutableName(t *testing.T) {
-	const executable = `ternary "wails3.exe" "wails3" (eq OS "windows")`
+func TestBuildTasksUseThePublishedWailsCLIFromPath(t *testing.T) {
+	const declaration = `WAILS3: '{{.WAILS3 | default "wails3"}}'`
 	for _, path := range []string{"Taskfile.yml", "build/Taskfile.yml"} {
 		body, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(body), executable) {
-			t.Errorf("%s does not select the pinned CLI executable for the host", path)
+		if !strings.Contains(string(body), declaration) {
+			t.Errorf("%s does not resolve the published Wails CLI from PATH", path)
 		}
 	}
 }

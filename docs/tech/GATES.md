@@ -270,7 +270,7 @@ Written here so it is not rediscovered (L2).
   of the two crashes was a lone run of exactly that gate.
 
   The stack was captured once, in the second of the two, and points into the
-  pinned Wails commit's own request path:
+  pinned upstream Wails release's request path:
   `internal/assetserver/assetserver_webview.go:50`, a goroutine created by
   `AssetServer.ServeWebViewRequest`. That reading also arrived truncated — the
   gate kept the tail of the log and a crash states its reason on the first line

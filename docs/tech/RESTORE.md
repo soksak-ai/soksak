@@ -60,7 +60,7 @@ run forgot 0.
 
 ## R0. `main` is a bootstrap window, not a retained workspace
 
-Wails v3.0.0-beta.2 creates a separate `WKWebView` for every top-level window, and each window
+Wails v3.0.0-beta.12 creates a separate `WKWebView` for every top-level window, and each window
 loads the frontend independently. Keeping the launch-time `main` window after workspace restore
 therefore retains another WebContent heap and graphics backing store.
 

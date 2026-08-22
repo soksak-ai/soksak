@@ -8,14 +8,14 @@ import (
 	"testing"
 )
 
-func TestFrontendUsesThePinnedWailsRuntime(t *testing.T) {
+func TestFrontendUsesThePublishedWailsRuntime(t *testing.T) {
 	body, err := os.ReadFile("frontend/package.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `"@wailsio/runtime": "file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime"`
+	want := `"@wailsio/runtime": "3.0.0-beta.12"`
 	if !strings.Contains(string(body), want) {
-		t.Fatalf("frontend runtime is not pinned to the framework checkout; want %s", want)
+		t.Fatalf("frontend runtime is not pinned to the published package; want %s", want)
 	}
 }
 
