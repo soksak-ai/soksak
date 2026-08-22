@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"crypto/sha256"
 	"debug/pe"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -15,6 +16,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 type packageIdentity struct {
@@ -47,6 +50,12 @@ var (
 	versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 )
 
+//go:embed RELEASE-NOTES.md
+var releaseNotes string
+
+//go:embed RELEASE-NOTES.ko.md
+var releaseNotesKO string
+
 func main() {
 	root := flag.String("root", ".", "application source root")
 	out := flag.String("out", "dist-release", "release output directory")
@@ -63,17 +72,17 @@ func main() {
 
 func packageWindowsRelease(root, out, sourceCommit, systemRunID, appPath, cliPath string) error {
 	if !commitPattern.MatchString(sourceCommit) {
-		return fmt.Errorf("source commit must be a full lowercase SHA-1")
+		return i18n.Errorf("release.sourceCommit", nil)
 	}
 	if systemRunID == "" || strings.IndexFunc(systemRunID, func(value rune) bool { return value < '0' || value > '9' }) >= 0 {
-		return fmt.Errorf("system run id must contain decimal digits")
+		return i18n.Errorf("release.systemRunID", nil)
 	}
 	identity, err := readIdentity(filepath.Join(root, "frontend", "package.json"))
 	if err != nil {
 		return err
 	}
 	if identity.Name != "@soksak/soksak-core" || !versionPattern.MatchString(identity.Version) {
-		return fmt.Errorf("invalid application identity: %s@%s", identity.Name, identity.Version)
+		return i18n.Errorf("release.identity", map[string]string{"identity": identity.Name + "@" + identity.Version})
 	}
 	inputs := []struct{ name, path string }{{"sok.exe", cliPath}, {"soksak.exe", appPath}}
 	assets := make([]releaseAsset, 0, len(inputs))
@@ -110,8 +119,8 @@ func packageWindowsRelease(root, out, sourceCommit, systemRunID, appPath, cliPat
 	if err := os.WriteFile(filepath.Join(out, "provenance.json"), append(encoded, '\n'), 0o644); err != nil {
 		return err
 	}
-	notes := fmt.Sprintf("# Soksak %s\n\nWindows x86_64 development release. The binaries passed Windows-native WebView2, ConPTY, resize, capture, high-output, warm restore, and archived restore verification in run `%s`.\n\nThe binaries are not Authenticode-signed. Windows may show an unknown-publisher warning.\n\nSource commit: `%s`\n", identity.Version, systemRunID, sourceCommit)
-	notesKO := fmt.Sprintf("# Soksak %s\n\nWindows x86_64 개발 릴리스입니다. Windows native WebView2, ConPTY, 크기 변경, 캡처, 대용량 출력, warm restore, archived restore 검증을 run `%s`에서 통과했습니다.\n\n이 바이너리는 Authenticode 서명되지 않았습니다. Windows에서 알 수 없는 게시자 경고가 나타날 수 있습니다.\n\nSource commit: `%s`\n", identity.Version, systemRunID, sourceCommit)
+	notes := fmt.Sprintf(releaseNotes, identity.Version, systemRunID, sourceCommit)
+	notesKO := fmt.Sprintf(releaseNotesKO, identity.Version, systemRunID, sourceCommit)
 	if err := os.WriteFile(filepath.Join(out, "RELEASE-NOTES.md"), []byte(notes), 0o644); err != nil {
 		return err
 	}
@@ -145,11 +154,11 @@ func readIdentity(path string) (packageIdentity, error) {
 func inspectPE(name, path string) (releaseAsset, error) {
 	executable, err := pe.Open(path)
 	if err != nil {
-		return releaseAsset{}, fmt.Errorf("%s is not a Windows PE executable: %w", path, err)
+		return releaseAsset{}, i18n.Errorf("release.notPE", map[string]string{"path": path, "reason": err.Error()})
 	}
 	defer executable.Close()
 	if executable.Machine != pe.IMAGE_FILE_MACHINE_AMD64 {
-		return releaseAsset{}, fmt.Errorf("%s is not an AMD64 Windows PE executable", path)
+		return releaseAsset{}, i18n.Errorf("release.notAMD64", map[string]string{"path": path})
 	}
 	return inspectFile(name, path)
 }
@@ -166,7 +175,7 @@ func inspectFile(name, path string) (releaseAsset, error) {
 		return releaseAsset{}, err
 	}
 	if size == 0 {
-		return releaseAsset{}, fmt.Errorf("%s is empty", path)
+		return releaseAsset{}, i18n.Errorf("release.empty", map[string]string{"path": path})
 	}
 	return releaseAsset{Name: name, SHA256: hex.EncodeToString(digest.Sum(nil)), Size: size}, nil
 }
