@@ -12,10 +12,24 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 		t.Fatal(e)
 	}
 	s := string(b)
+	for _, required := range []string{
+		"actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+		"actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+		"actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+		"actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+		"node-version: \"24.19.0\"",
+	} {
+		if !strings.Contains(s, required) {
+			t.Errorf("Windows workflow does not pin Node 24 toolchain input %s", required)
+		}
+	}
+	if !strings.Contains(s, "cache-dependency-path: soksak-core/go.sum") {
+		t.Fatal("Windows Core Go cache does not follow the checked-out module")
+	}
 	if !strings.Contains(s, "go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12") {
 		t.Fatal("Windows workflow does not install the exact upstream Wails CLI")
 	}
-	const testsRef = "405d2e4ed3fb0228919aa2138ff9b3386e93199b"
+	const testsRef = "d6cb93701604d9cb37e082b27c134bc883605b96"
 	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@"+testsRef) {
 		t.Fatal("Windows fleet workflow is not pinned")
 	}
@@ -69,5 +83,22 @@ func TestWebviewFrameRepairIsNotAPlatformContract(t *testing.T) {
 	}
 	if !strings.Contains(string(darwin), "repairDocumentView") || !strings.Contains(string(darwin), "fitWebviewToWindow") {
 		t.Fatal("macOS frame repair was removed instead of scoped to macOS")
+	}
+}
+
+func TestFrontendPinsNode24(t *testing.T) {
+	manifest, err := os.ReadFile("frontend/package.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifest), `"node": "24.19.0"`) {
+		t.Fatal("frontend does not pin Node 24.19.0")
+	}
+	version, err := os.ReadFile(".nvmrc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(version)) != "24.19.0" {
+		t.Fatalf(".nvmrc = %q", version)
 	}
 }

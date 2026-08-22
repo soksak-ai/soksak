@@ -10,20 +10,22 @@ jobs:
   build-core:
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { path: soksak-core, persist-credentials: false }
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { repository: soksak-ai/soksak-contract-contentview, ref: 5af66117202f6934ecd2909199bf9b84a541e523, path: soksak-contracts/soksak-contract-contentview }
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with: { repository: soksak-ai/soksak-contract-control, ref: 7de80203fa358afe2adc488c9f63993f527f4c81, path: soksak-contracts/soksak-contract-control }
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-control, ref: f12f3a6f579b6dff04622a0138450e75d2afae7c, path: soksak-contracts/soksak-contract-control }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { repository: soksak-ai/soksak-contract-pty, ref: b19af1c4e28a294d18bedbd17405dd5034b0901f, path: soksak-contracts/soksak-contract-pty }
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { repository: soksak-ai/soksak-contract-terminal, ref: cab0691a1a01fca7436ac29f6cc2850245788ea6, path: soksak-contracts/soksak-contract-terminal }
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
-        with: { go-version: "1.25.0" }
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with: { node-version: "22.12.0" }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: "1.25.0"
+          cache-dependency-path: soksak-core/go.sum
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: "24.19.0" }
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
         with: { version: "10.30.3" }
       - shell: pwsh
@@ -39,7 +41,7 @@ jobs:
           foreach ($artifact in 'soksak-core/bin/soksak.exe','soksak-core/bin/sok.exe') {
             if (!(Test-Path $artifact)) { throw "missing Windows artifact: $artifact" }
           }
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-windows-artifact
           path: |
@@ -50,6 +52,6 @@ jobs:
   system:
     needs: build-core
     # Cross-owner reusable workflows must be public; the fleet repository contains tests only.
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@405d2e4ed3fb0228919aa2138ff9b3386e93199b
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@d6cb93701604d9cb37e082b27c134bc883605b96
     with:
-      tests_ref: 405d2e4ed3fb0228919aa2138ff9b3386e93199b
+      tests_ref: d6cb93701604d9cb37e082b27c134bc883605b96

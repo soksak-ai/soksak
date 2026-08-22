@@ -8,11 +8,10 @@
 package identity
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"path/filepath"
 	"strings"
 
+	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
@@ -122,11 +121,7 @@ func Resolve(identifier string, env Environment) Resolved {
 	if env.Runtime != "" {
 		runtimeRoot = env.Runtime
 	}
-	controlAddress := filepath.Join(runtimeRoot, identifier+".sock")
-	if env.Windows {
-		digest := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(runtimeRoot)) + "\x00" + identifier))
-		controlAddress = `\\.\pipe\soksak-control-` + hex.EncodeToString(digest[:16])
-	}
+	controlAddress := controlwire.Address(runtimeRoot, identifier, env.Windows)
 	return Resolved{
 		Identifier: identifier,
 		Home:       home,
