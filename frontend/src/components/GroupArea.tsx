@@ -26,6 +26,7 @@ import { ParkedPicture } from "./ParkedPicture";
 import { railLightingExemption } from "./focusLightingGeometry";
 import { computeSplitLayout, hitTestCells } from "../lib/splitLayout";
 import { layoutGeometrySignature } from "../lib/layoutGeometrySignature";
+import { useLayoutGeometryReflow } from "../lib/layoutGeometryReflow";
 import { gutterAddress, gutterOwnerOf } from "../lib/gutterAddress";
 import { beginGesture } from "../lib/gesture";
 import { commitDomLayout } from "../lib/domLayoutCommit";
@@ -359,6 +360,7 @@ export const GroupArea = memo(function GroupArea({
     cells: displayCells.map((c) => ({ id: c.group.id, rect: c.rect })),
     slotIds: displayCells.flatMap((c) => c.group.tabs.map((v) => v.id)),
   });
+  useLayoutGeometryReflow(geometrySignature, content.id);
   // Once per layout commit, which is the tracker's contract. Running it on every render cancelled
   // every interpolation before it played — measured 2026-08-17, `ui.motion` held 64 journeys and
   // not one finished, so a pane, a tab and the surface under it jumped to their destination.
