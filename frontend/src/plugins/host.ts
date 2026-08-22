@@ -8,7 +8,7 @@ import { startPluginHooks } from "./hooks";
 import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 import { usePlugins } from "../state/plugins";
 import { useRegistry } from "../state/registry";
-import { createPluginCompositionEventHandler, type CompositionChange } from "../state/pluginCompositionEvents";
+import { createSettingsEventHandler, type SettingsChange } from "../state/settingsEvents";
 
 let stopCompositionEvents = () => {};
 
@@ -48,19 +48,19 @@ export async function initPluginHost(): Promise<void> {
   }
   try {
     stopCompositionEvents();
-    const queued: CompositionChange[] = [];
-    let onChange: ReturnType<typeof createPluginCompositionEventHandler> | null = null;
-    stopCompositionEvents = await safeListenReady<CompositionChange>("composition.changed", (event) => {
+    const queued: SettingsChange[] = [];
+    let onChange: ReturnType<typeof createSettingsEventHandler> | null = null;
+    stopCompositionEvents = await safeListenReady<SettingsChange>("settings.changed", (event) => {
       if (onChange === null) queued.push(event.payload);
       else void onChange(event.payload).catch((error) => {
         console.error("plugin settings reload failed:", error);
       });
     });
-    const settings = await invoke<{ generation: number }>("composition_settings");
+    const settings = await invoke<{ revision: number }>("settings_get");
     await usePlugins.getState().reload();
-    onChange = createPluginCompositionEventHandler(
+    onChange = createSettingsEventHandler(
       () => usePlugins.getState().reload(),
-      settings.generation,
+      settings.revision,
     );
     for (const change of queued) await onChange(change);
   } catch (e) {

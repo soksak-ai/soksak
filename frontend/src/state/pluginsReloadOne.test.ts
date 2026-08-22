@@ -39,7 +39,7 @@ const invoke = vi.fn(async (cmd: string, args?: { path?: string }) => {
     if (path.endsWith("/plugin.json")) return { content: JSON.stringify(onDisk) };
     return { content: "export const activate = () => {};" };
   }
-  if (cmd === "composition_settings") return { generation: 1 };
+  if (cmd === "settings_get") return { revision: 1 };
   if (cmd === "plugin_enabled_set") return { previousGeneration: 1, generation: 2 };
   return undefined;
 });
@@ -116,10 +116,10 @@ describe("reloadOne — a reload by id reads the manifest from disk again", () =
     expect(after.status).toBe("enabled");
     expect(activatedIds).toContain(ID); // fresh code was actually activated again
     expect(invoke).toHaveBeenCalledWith("plugin_enabled_set", {
-      plugins: [{ id: ID, version: "0.0.1" }], enabled: false, expectedGeneration: 1,
+      plugins: [{ id: ID, version: "0.0.1" }], enabled: false, expectedRevision: 1,
     });
     expect(invoke).toHaveBeenCalledWith("plugin_enabled_set", {
-      plugins: [{ id: ID, version: "0.0.1" }], enabled: true, expectedGeneration: 1,
+      plugins: [{ id: ID, version: "0.0.1" }], enabled: true, expectedRevision: 1,
     });
   });
 

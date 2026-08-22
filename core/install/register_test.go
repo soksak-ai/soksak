@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	composition "github.com/soksak-ai/soksak-contract-composition"
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/files"
 )
@@ -19,7 +18,7 @@ type recordingChange struct {
 	payload any
 }
 
-func TestArtifactInstallCommandsCommitAndPublishOneCompositionChange(t *testing.T) {
+func TestArtifactInstallCommandsCommitAndPublishInstalledChange(t *testing.T) {
 	home := t.TempDir()
 	archive := tgz(t, archiveEntry{name: "plugin.json", body: "{}"})
 	var changes []recordingChange
@@ -39,15 +38,15 @@ func TestArtifactInstallCommandsCommitAndPublishOneCompositionChange(t *testing.
 	if _, err := registry.Invoke("artifact_install_read_utf8", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "handle": staged.Handle, "path": "plugin.json"})); err != nil {
 		t.Fatal(err)
 	}
-	verified := VerifiedPlugin{Plugin: composition.PluginRef{ID: "view", Version: "0.0.1"}, RegistryID: "official", SourceRepository: "https://github.com/example/view", SourceCommit: "0123456789abcdef0123456789abcdef01234567", ArtifactURL: "https://example.invalid/view.tgz", ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle}
-	commitValue, err := registry.Invoke("artifact_install_commit", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "expectedGeneration": uint64(0), "plugins": []VerifiedPlugin{verified}, "sidecars": []VerifiedSidecar{}, "kits": []VerifiedKit{}, "bindings": []composition.Binding{}}))
+	verified := VerifiedPlugin{Plugin: PluginRef{ID: "view", Version: "0.0.1"}, RegistryID: "official", SourceRepository: "https://github.com/example/view", SourceCommit: "0123456789abcdef0123456789abcdef01234567", ArtifactURL: "https://example.invalid/view.tgz", ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle}
+	commitValue, err := registry.Invoke("artifact_install_commit", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "expectedRevision": uint64(0), "plugins": []VerifiedPlugin{verified}, "sidecars": []VerifiedSidecar{}, "kits": []VerifiedKit{}}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if commitValue.(CommitResult).Generation != 1 {
+	if commitValue.(CommitResult).Revision != 1 {
 		t.Fatalf("commit=%+v", commitValue)
 	}
-	if len(changes) != 1 || changes[0].event != composition.ChangeEvent {
+	if len(changes) != 1 || changes[0].event != "installed.changed" {
 		t.Fatalf("changes=%+v", changes)
 	}
 }

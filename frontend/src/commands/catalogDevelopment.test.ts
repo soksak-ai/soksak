@@ -33,45 +33,42 @@ describe("kind-specific development commands", () => {
     expect(getSpec("unit.dev.set")).toBeUndefined();
   });
 
-  it("lists only the requested component type from composition settings", async () => {
-    invoke.mockResolvedValueOnce({
-      generation: 4,
-      plugins: [{ id: "p", version: "0.0.1", development: true }],
-      sidecars: [{ id: "s", version: "0.0.1", development: true }],
-      kits: [{ id: "k", version: "0.0.1", development: true }],
+  it("lists only the requested component type from settings", async () => {
+	invoke.mockResolvedValueOnce({
+		revision: 4,
+		plugins: { p: { enabled: true, development: { path: "/work/p" } } },
+		sidecars: { s: { development: { path: "/work/s" } } },
+		kits: { k: { development: { path: "/work/k" } } }, contracts: {}, specs: {},
     });
     const result = await execute("sidecar.development.list", {}, {});
     expect(result).toMatchObject({
       ok: true,
-      data: { generation: 4, sidecars: [{ id: "s", development: true }] },
+		data: { revision: 4, sidecars: { s: { development: { path: "/work/s" } } } },
     });
   });
 
-  it("sets one plugin through the typed backend command and current generation", async () => {
-    invoke.mockResolvedValueOnce({ generation: 7, plugins: [], sidecars: [], kits: [] });
-    invoke.mockResolvedValueOnce({ generation: 8 });
+  it("sets one plugin through the typed backend command and current revision", async () => {
+    invoke.mockResolvedValueOnce({ revision: 7, plugins: {}, sidecars: {}, kits: {}, contracts: {}, specs: {} });
+    invoke.mockResolvedValueOnce({ revision: 8 });
     const result = await execute(
       "plugin.development.set",
-      { id: "weather", version: "0.0.1", development: true, path: "/work/weather" },
+      { id: "weather", development: true, path: "/work/weather" },
       {},
     );
     expect(invoke).toHaveBeenNthCalledWith(2, "plugin_development_set", {
       id: "weather",
-      version: "0.0.1",
       development: true,
       path: "/work/weather",
-      manifest: "plugin.json",
-      source: { type: "path", path: "/work/weather" },
-      expectedGeneration: 7,
+      expectedRevision: 7,
     });
-    expect(result).toMatchObject({ ok: true, data: { kind: "plugin", id: "weather", generation: 8 } });
+    expect(result).toMatchObject({ ok: true, data: { kind: "plugin", id: "weather", revision: 8 } });
   });
 
-  it("does not guess generation zero when settings cannot be read", async () => {
+  it("does not guess revision zero when settings cannot be read", async () => {
     invoke.mockRejectedValueOnce(new Error("settings unreadable"));
     const result = await execute(
       "kit.development.set",
-      { id: "terminal-kit", version: "0.0.1", development: true, path: "/work/kit" },
+      { id: "terminal-kit", development: true, path: "/work/kit" },
       {},
     );
     expect(result).toMatchObject({ ok: false, code: "INTERNAL" });

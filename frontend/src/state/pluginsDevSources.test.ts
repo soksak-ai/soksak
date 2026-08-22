@@ -129,7 +129,7 @@ describe("development unit source selection", () => {
     invoke.mockClear();
     invoke.mockImplementation(async (...input: unknown[]): Promise<unknown> => {
       const command = input[0] as string;
-      if (command === "composition_settings") return { generation: 1 };
+      if (command === "settings_get") return { revision: 1 };
       if (command === "plugin_enabled_set") return { previousGeneration: 1, generation: 2 };
       return undefined;
     });
@@ -137,14 +137,14 @@ describe("development unit source selection", () => {
     const disabled = await usePlugins.getState().disable(ID);
     expect(disabled).toMatchObject({ ok: true, status: "disabled" });
     expect(invoke).toHaveBeenCalledWith("plugin_enabled_set", {
-      plugins: [{ id: ID, version: "0.0.1" }], enabled: false, expectedGeneration: 1,
+      plugins: [{ id: ID, version: "0.0.1" }], enabled: false, expectedRevision: 1,
     });
 
     invoke.mockClear();
     const enabled = await usePlugins.getState().enable(ID);
     expect(enabled).toMatchObject({ ok: true, status: "enabled" });
     expect(invoke).toHaveBeenCalledWith("plugin_enabled_set", {
-      plugins: [{ id: ID, version: "0.0.1" }], enabled: true, expectedGeneration: 1,
+      plugins: [{ id: ID, version: "0.0.1" }], enabled: true, expectedRevision: 1,
     });
   });
 
@@ -152,7 +152,7 @@ describe("development unit source selection", () => {
     await usePlugins.getState().reload();
     invoke.mockImplementation(async (...input: unknown[]): Promise<unknown> => {
       const command = input[0] as string;
-      if (command === "composition_settings") return { generation: 1 };
+      if (command === "settings_get") return { revision: 1 };
       if (command === "plugin_enabled_set") throw new Error("generation conflict");
       return undefined;
     });

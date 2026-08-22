@@ -231,7 +231,7 @@ func newGate(t *testing.T, homePrefix string, identifier string) *restoreGate {
 	if err := os.MkdirAll(gate.installationHome(), 0o700); err != nil {
 		t.Fatalf("creating installation home: %v", err)
 	}
-	settings := []byte(`{"spec":"soksak-spec-composition@0.0.1","generation":1,"plugins":[],"sidecars":[],"kits":[],"bindings":[]}`)
+	settings := []byte(`{"revision":1,"plugins":{},"sidecars":{},"kits":{},"contracts":{},"specs":{}}`)
 	if err := os.WriteFile(filepath.Join(gate.installationHome(), "settings.json"), settings, 0o600); err != nil {
 		t.Fatalf("writing installation settings: %v", err)
 	}

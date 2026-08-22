@@ -15,14 +15,13 @@ import (
 	"runtime"
 	"time"
 
-	compositioncontract "github.com/soksak-ai/soksak-contract-composition"
 	"github.com/soksak-ai/soksak-core/core/activity"
 	"github.com/soksak-ai/soksak-core/core/boot"
-	"github.com/soksak-ai/soksak-core/core/composition"
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/files"
 	"github.com/soksak-ai/soksak-core/core/identity"
 	"github.com/soksak-ai/soksak-core/core/process"
+	coresettings "github.com/soksak-ai/soksak-core/core/settings"
 	"github.com/soksak-ai/soksak-core/core/sidecar"
 	"github.com/soksak-ai/soksak-core/core/store"
 	"github.com/soksak-ai/soksak-core/frameworks/wails"
@@ -118,7 +117,7 @@ func main() {
 	sidecar.Register(registry, sidecar.Registration{
 		Host: units,
 		Resolve: func(consumer sidecar.Consumer, requirement string) (sidecar.Resolved, error) {
-			runtime, err := composition.ResolveBoundSidecar(resolved.Home, compositioncontract.PluginRef{ID: consumer.ID, Version: consumer.Version}, requirement)
+			runtime, err := coresettings.ResolveBoundSidecar(resolved.Home, coresettings.PluginRef{ID: consumer.ID, Version: consumer.Version}, requirement)
 			if err != nil {
 				return sidecar.Resolved{}, err
 			}
@@ -192,7 +191,17 @@ func main() {
 			// opposite and gets a window that draws without taking the front.
 			Attended: os.Getenv("SOKSAK_UNATTENDED") == "",
 			PluginAssetRoots: func() ([]string, error) {
-				return composition.PluginAssetRoots(resolved.Home)
+				records, err := coresettings.PluginManifests(resolved.Home)
+				if err != nil {
+					return nil, err
+				}
+				roots := []string{}
+				for _, record := range records {
+					if record.Enabled && record.Error == nil {
+						roots = append(roots, record.InstallPath)
+					}
+				}
+				return roots, nil
 			},
 		})
 	})

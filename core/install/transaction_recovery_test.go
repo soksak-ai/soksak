@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	composition "github.com/soksak-ai/soksak-contract-composition"
+	coresettings "github.com/soksak-ai/soksak-core/core/settings"
 )
 
 func writeJSONFile(t *testing.T, path string, value any) {
@@ -20,7 +20,7 @@ func writeJSONFile(t *testing.T, path string, value any) {
 	}
 }
 
-func TestRecoveryRollsBackPublishedUnitsBeforeSettingsCommit(t *testing.T) {
+func TestRecoveryRollsBackPublishedContentBeforeInstalledCommit(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, ".transactions")
 	transactionID := "tx-before"
@@ -47,7 +47,7 @@ func TestRecoveryRollsBackPublishedUnitsBeforeSettingsCommit(t *testing.T) {
 	}
 }
 
-func TestRecoveryCompletesJournalAfterSettingsCommit(t *testing.T) {
+func TestRecoveryCompletesJournalAfterInstalledCommit(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, ".transactions")
 	transactionID := "tx-after"
@@ -58,8 +58,8 @@ func TestRecoveryCompletesJournalAfterSettingsCommit(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, transactionID), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	settings := composition.Settings{Spec: composition.SettingsSpec, Generation: 1, Plugins: []composition.Plugin{}, Sidecars: []composition.Sidecar{}, Kits: []composition.Kit{}, Bindings: []composition.Binding{}}
-	writeJSONFile(t, filepath.Join(home, composition.SettingsFile), settings)
+	installed := coresettings.EmptyInstalled()
+	writeJSONFile(t, filepath.Join(home, coresettings.InstalledFile), installed)
 	writeJSONFile(t, filepath.Join(root, transactionID, commitJournalFile), commitJournal{TransactionID: transactionID, PreviousGeneration: 0, Generation: 1, Moves: []journalMove{{Staged: filepath.Join(root, transactionID, "handle"), Final: final}}})
 	if err := RecoverTransactions(home, root); err != nil {
 		t.Fatal(err)

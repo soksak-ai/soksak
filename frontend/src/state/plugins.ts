@@ -398,11 +398,11 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     plugins: Array<{ id: string; version: string }>,
     enabled: boolean,
   ): Promise<void> => {
-    const settings = await invoke<{ generation: number }>("composition_settings");
+    const settings = await invoke<{ revision: number }>("settings_get");
     await invoke("plugin_enabled_set", {
       plugins,
       enabled,
-      expectedGeneration: settings.generation,
+      expectedRevision: settings.revision,
     });
   };
 

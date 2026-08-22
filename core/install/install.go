@@ -9,7 +9,6 @@ import (
 	"context"
 	"path/filepath"
 
-	composition "github.com/soksak-ai/soksak-contract-composition"
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/files"
 )
@@ -196,7 +195,7 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		if err != nil {
 			return nil, err
 		}
-		expected, err := control.Arg[uint64](args, "expectedGeneration")
+		expected, err := control.Arg[uint64](args, "expectedRevision")
 		if err != nil {
 			return nil, err
 		}
@@ -212,13 +211,9 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		if err != nil {
 			return nil, err
 		}
-		bindings, err := control.OptionalArg[[]composition.Binding](args, "bindings", []composition.Binding{})
-		if err != nil {
-			return nil, err
-		}
-		result, err := manager.Commit(CommitRequest{TransactionID: transactionID, ExpectedGeneration: expected, Plugins: plugins, Sidecars: sidecars, Kits: kits, Bindings: bindings, Home: deps.Home})
+		result, err := manager.Commit(CommitRequest{TransactionID: transactionID, ExpectedRevision: expected, Plugins: plugins, Sidecars: sidecars, Kits: kits, Home: deps.Home})
 		if err == nil && deps.Changed != nil {
-			deps.Changed(composition.ChangeEvent, composition.Change{PreviousGeneration: expected, Generation: result.Generation})
+			deps.Changed("installed.changed", result)
 		}
 		return result, err
 	}})

@@ -28,7 +28,6 @@ var koreanBundles = map[string]bool{
 	// the name for something else.
 	"cmd/sok/messages.go":          true,
 	"core/boot/messages.go":        true,
-	"core/composition/messages.go": true,
 	"core/control/messages.go":     true,
 	"core/daemon/messages.go":      true,
 	"core/files/messages.go":       true,
@@ -37,6 +36,7 @@ var koreanBundles = map[string]bool{
 	"core/net/messages.go":         true,
 	"core/process/messages.go":     true,
 	"core/secret/messages.go":      true,
+	"core/settings/messages.go":    true,
 	"core/service/messages.go":     true,
 	"core/sidecar/messages.go":     true,
 	"core/store/messages.go":       true,

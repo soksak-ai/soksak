@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
+	coresettings "github.com/soksak-ai/soksak-core/core/settings"
 )
 
 const commitJournalFile = "commit.json"
@@ -30,13 +31,13 @@ func RecoverTransactions(home, root string) error {
 	if err != nil {
 		return err
 	}
-	settings, exists, err := readCompositionSettings(home)
+	installed, exists, err := coresettings.ReadInstalled(home)
 	if err != nil {
 		return err
 	}
 	generation := uint64(0)
 	if exists {
-		generation = settings.Generation
+		generation = installed.Revision
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {

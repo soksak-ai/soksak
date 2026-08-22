@@ -16,9 +16,9 @@ vi.mock("../framework", async (importOriginal) => ({
   invoke: (cmd: string, args?: unknown) => {
     calls.push([cmd, args]);
     if (cmd === "app_is_release") return Promise.resolve(false);
-    if (cmd === "composition_settings") {
+    if (cmd === "settings_get") {
       order.push("settings");
-      return Promise.resolve({ generation: 3 });
+      return Promise.resolve({ revision: 3 });
     }
     return Promise.resolve(undefined);
   },
@@ -79,13 +79,13 @@ describe("reclaiming the previous runtime's children", () => {
     expect(calls.filter(([c]) => c.startsWith("process_reclaim"))).toEqual([]);
   });
 
-  it("reloads plugins after a newer installation settings generation", async () => {
+  it("reloads plugins after a newer settings revision", async () => {
     const { initPluginHost } = await import("./host");
     await initPluginHost();
     expect(order.slice(0, 2)).toEqual(["listen", "settings"]);
     expect(reload).toHaveBeenCalledTimes(1);
-    listeners.get("composition.changed")?.({
-      payload: { previousGeneration: 3, generation: 4 },
+    listeners.get("settings.changed")?.({
+      payload: { previousRevision: 3, revision: 4 },
     });
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
   });

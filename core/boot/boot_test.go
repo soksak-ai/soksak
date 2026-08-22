@@ -63,11 +63,11 @@ func TestBootCommandsAnswerWithNoWindow(t *testing.T) {
 	}
 }
 
-func TestCompositionCommandsAreHeadlessAndNameMissingSettings(t *testing.T) {
+func TestSettingsCommandsAreHeadlessAndReturnEmptyState(t *testing.T) {
 	registry := booted(t)
-	for _, name := range []string{"composition_settings", "composition_graph", "composition_status", "plugin_manifest_list"} {
-		if _, err := registry.Invoke(name, nil); err == nil {
-			t.Errorf("%s accepted a home with no settings.json", name)
+	for _, name := range []string{"settings_get", "plugin_manifest_list"} {
+		if _, err := registry.Invoke(name, nil); err != nil {
+			t.Errorf("%s: %v", name, err)
 		}
 	}
 }

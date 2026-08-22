@@ -28,6 +28,8 @@ export interface RegistryInstallTransaction {
 export interface StagedRegistryArtifact {
   handle: string;
   sha256: string;
+  size: number;
+  manifestSha256: string;
   extraction: "regular-files-only";
   /** Declared entrypoint paths that the native extractor proved are regular files. */
   verifiedEntrypoints?: readonly string[];
@@ -48,7 +50,7 @@ export interface RegistryArtifactStager {
   commit(
     transactionId: string,
     releases: readonly VerifiedInstallRelease[],
-  ): Promise<{ generation: number }>;
+  ): Promise<{ revision: number }>;
   rollback(transactionId: string): Promise<void>;
 }
 
@@ -59,6 +61,8 @@ export interface VerifiedInstallRelease extends RegistryReleaseIdentity {
   releaseTag: string;
   artifactUrl: string;
   artifactSha256: string;
+  target: ArtifactTarget;
+  manifestSha256: string;
   stagedHandle: string;
 }
 
@@ -76,7 +80,7 @@ export type RegistryInstallResult =
   | {
       ok: true;
       registryId: string;
-      generation: number;
+      revision: number;
       releases: readonly VerifiedInstallRelease[];
     }
   | {
@@ -195,6 +199,8 @@ function verifyStagingEvidence(
   if (staged.sha256 !== artifact.sha256) {
     errors.push("staged artifact digest differs from the owner release digest");
   }
+  if (staged.size !== artifact.size) errors.push("staged artifact size differs from the owner release size");
+  if (!/^[a-f0-9]{64}$/.test(staged.manifestSha256)) errors.push("staged manifest digest is missing");
   if (!staged.handle) errors.push("native staging handle is empty");
   const declared = declaredEntrypoints(artifact);
   if (declared.some((path) => !isSafeRelativeArtifactPath(path))) {
@@ -474,6 +480,8 @@ export async function installRegistryClosure(
         releaseTag: certifiedRelease.value.release.releaseTag,
         artifactUrl: artifact.url,
         artifactSha256: artifact.sha256,
+        target: artifact.target,
+        manifestSha256: staged.manifestSha256,
         stagedHandle: staged.handle,
       }));
     }
@@ -482,7 +490,7 @@ export async function installRegistryClosure(
     return {
       ok: true,
       registryId,
-      generation: committed.generation,
+      revision: committed.revision,
       releases: Object.freeze(verifiedReleases),
     };
   } catch (cause) {

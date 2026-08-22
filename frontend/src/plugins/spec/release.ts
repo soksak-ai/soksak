@@ -73,6 +73,7 @@ export type ReleaseEntrypoint = PluginEntrypoint | SidecarEntrypoint | KitEntryp
 export interface ReleaseArtifact {
   target: ArtifactTarget;
   url: string;
+  size: number;
   sha256: string;
   format: ArtifactFormat;
   entrypoint: ReleaseEntrypoint;
@@ -250,8 +251,8 @@ function parseArtifacts(
     const before = errors.length;
     const value = strictObject(
       item,
-      ["entrypoint", "format", "sha256", "target", "url"],
-      ["entrypoint", "format", "sha256", "target", "url"],
+      ["entrypoint", "format", "sha256", "size", "target", "url"],
+      ["entrypoint", "format", "sha256", "size", "target", "url"],
       label,
       errors,
     );
@@ -271,6 +272,7 @@ function parseArtifacts(
     if (!SHA256_RE.test(typeof value.sha256 === "string" ? value.sha256 : "")) {
       errors.push(`${label}.sha256: exact lowercase SHA-256 required`);
     }
+    if (!Number.isSafeInteger(value.size) || (value.size as number) <= 0) errors.push(`${label}.size: positive safe integer required`);
     if (!isArtifactFormat(value.format)) errors.push(`${label}.format: tar.gz|tgz required`);
     if (isArtifactFormat(value.format) && typeof value.url === "string" && !formatMatchesUrl(value.format, value.url)) {
       errors.push(`${label}.format: must match release asset suffix`);
@@ -280,6 +282,7 @@ function parseArtifacts(
       artifacts.push({
         target,
         url: value.url as string,
+        size: value.size as number,
         sha256: value.sha256 as string,
         format: value.format as ArtifactFormat,
         entrypoint,

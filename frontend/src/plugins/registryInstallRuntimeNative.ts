@@ -52,6 +52,7 @@ const artifactStager: RegistryArtifactStager = {
       identity: input.release,
       artifact: {
         url: input.artifact.url,
+        size: input.artifact.size,
         sha256: input.artifact.sha256,
         format: input.artifact.format,
         manifest: artifactManifest(input.artifact),
@@ -61,8 +62,8 @@ const artifactStager: RegistryArtifactStager = {
   readUtf8: (transactionId, handle, path) =>
     invoke<string>("artifact_install_read_utf8", { transactionId, handle, path }),
   commit: async (transactionId, releases) => {
-    const settings = await invoke<{ generation: number }>("composition_settings");
-    const expectedGeneration = settings.generation;
+    const installed = await invoke<{ revision: number }>("installed_get");
+    const expectedRevision = installed.revision;
     const plugins = releases.filter((value) => value.kind === "plugin").map((value) => ({
       plugin: { id: value.id, version: value.version },
       registryId: value.registryId,
@@ -70,6 +71,7 @@ const artifactStager: RegistryArtifactStager = {
       sourceCommit: value.sourceCommit,
       artifactUrl: value.artifactUrl,
       artifactSha256: value.artifactSha256,
+      manifestSha256: value.manifestSha256,
       stagedHandle: value.stagedHandle,
     }));
     const sidecars = releases.filter((value) => value.kind === "sidecar").map((value) => ({
@@ -79,6 +81,8 @@ const artifactStager: RegistryArtifactStager = {
       sourceCommit: value.sourceCommit,
       artifactUrl: value.artifactUrl,
       artifactSha256: value.artifactSha256,
+      target: value.target,
+      manifestSha256: value.manifestSha256,
       stagedHandle: value.stagedHandle,
     }));
     const kits = releases.filter((value) => value.kind === "kit").map((value) => ({
@@ -88,15 +92,15 @@ const artifactStager: RegistryArtifactStager = {
       sourceCommit: value.sourceCommit,
       artifactUrl: value.artifactUrl,
       artifactSha256: value.artifactSha256,
+      manifestSha256: value.manifestSha256,
       stagedHandle: value.stagedHandle,
     }));
-    return invoke<{ generation: number }>("artifact_install_commit", {
+    return invoke<{ revision: number }>("artifact_install_commit", {
       transactionId,
-      expectedGeneration,
+      expectedRevision,
       plugins,
       sidecars,
       kits,
-      bindings: [],
     });
   },
   rollback: (transactionId) =>
@@ -120,7 +124,7 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
     artifacts: artifactStager,
   });
   if (result.ok) {
-    return { ok: true, id: root.id, version: root.version, generation: result.generation };
+    return { ok: true, id: root.id, version: root.version, revision: result.revision };
   }
   return {
     ok: false,

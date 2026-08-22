@@ -10,7 +10,7 @@ export interface RegistryInstallRuntimeInput {
 }
 
 export type RegistryInstallRuntimeResult =
-  | { ok: true; id: string; version: string; generation: number }
+  | { ok: true; id: string; version: string; revision: number }
   | { ok: false; code: string; message: string; errors?: string[] };
 
 export type RegistryInstallRuntimeHandler = (
