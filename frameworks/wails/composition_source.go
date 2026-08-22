@@ -1,7 +1,7 @@
 package wails
 
 import (
-	compositor "github.com/soksak-ai/wails-service-native-compositor"
+	compositor "github.com/min-median-max/wails-service-native-compositor"
 )
 
 // CompositorSource renames the compositor's composition into this package's.

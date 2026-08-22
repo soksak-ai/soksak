@@ -8,12 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@min-median-max/wails-service-native-compositor':
+        specifier: github:min-median-max/wails-service-native-compositor#3530617b540f9d943e0926514c158cf08dee9d80
+        version: https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/3530617b540f9d943e0926514c158cf08dee9d80
       '@soksak-ai/plugin-spec':
         specifier: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.2/soksak-ai-plugin-spec-0.0.2.tgz
         version: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.2/soksak-ai-plugin-spec-0.0.2.tgz
-      '@soksak/wails-service-native-compositor':
-        specifier: file:../../wails-services/wails-service-native-compositor/frontend
-        version: file:../../wails-services/wails-service-native-compositor/frontend
       '@wailsio/runtime':
         specifier: file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime
         version: file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime
@@ -282,6 +282,10 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
+  '@min-median-max/wails-service-native-compositor@https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/3530617b540f9d943e0926514c158cf08dee9d80':
+    resolution: {tarball: https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/3530617b540f9d943e0926514c158cf08dee9d80}
+    version: 0.0.1
+
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     resolution: {integrity: sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ==}
     engines: {node: ^22.20 || ^24.12 || >=25}
@@ -528,9 +532,6 @@ packages:
     version: 0.0.2
     engines: {node: '>=18'}
     hasBin: true
-
-  '@soksak/wails-service-native-compositor@file:../../wails-services/wails-service-native-compositor/frontend':
-    resolution: {directory: ../../wails-services/wails-service-native-compositor/frontend, type: directory}
 
   '@tabler/icons@3.46.0':
     resolution: {integrity: sha512-f2RYFl3fzPwj5WO82x6en0dmkjefxEfOm16D1ByM6cj/McNiwOkL4VaPUoP9VVIrXAD9WnTSVFr70px703b//A==}
@@ -1226,6 +1227,8 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
+  '@min-median-max/wails-service-native-compositor@https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/3530617b540f9d943e0926514c158cf08dee9d80': {}
+
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
@@ -1351,8 +1354,6 @@ snapshots:
     optional: true
 
   '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.2/soksak-ai-plugin-spec-0.0.2.tgz': {}
-
-  '@soksak/wails-service-native-compositor@file:../../wails-services/wails-service-native-compositor/frontend': {}
 
   '@tabler/icons@3.46.0': {}
 

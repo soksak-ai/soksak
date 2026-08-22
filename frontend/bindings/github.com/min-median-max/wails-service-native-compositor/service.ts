@@ -20,7 +20,7 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as $models from "./models.js";
 
 export function Commit(snapshot: $models.Snapshot): $CancellablePromise<$models.Receipt> {
-    return $Call.ByID(3561904034, snapshot).then(($result: any) => {
+    return $Call.ByID(744852931, snapshot).then(($result: any) => {
         return $$createType0($result);
     });
 }
@@ -29,7 +29,7 @@ export function Commit(snapshot: $models.Snapshot): $CancellablePromise<$models.
  * CoverIn answers what lies over every surface of one window, keyed by surface id.
  */
 export function CoverIn(window: string): $CancellablePromise<{ [_ in string]?: $models.Cover }> {
-    return $Call.ByID(2444932157, window).then(($result: any) => {
+    return $Call.ByID(1605265134, window).then(($result: any) => {
         return $$createType2($result);
     });
 }
@@ -43,7 +43,7 @@ export function CoverIn(window: string): $CancellablePromise<{ [_ in string]?: $
  * sees, because the ledger is what it walks.
  */
 export function Deliver(id: string, message: { [_ in string]?: any }): $CancellablePromise<{ [_ in string]?: any }> {
-    return $Call.ByID(1472316168, id, message).then(($result: any) => {
+    return $Call.ByID(58729387, id, message).then(($result: any) => {
         return $$createType3($result);
     });
 }
@@ -68,7 +68,7 @@ export function Deliver(id: string, message: { [_ in string]?: any }): $Cancella
  * leave the windows after it in the map still holding surfaces.
  */
 export function Drain(): $CancellablePromise<[number, number]> {
-    return $Call.ByID(944968555);
+    return $Call.ByID(3902329244);
 }
 
 /**
@@ -81,7 +81,7 @@ export function Drain(): $CancellablePromise<[number, number]> {
  * reconstructing it from frontend responses measures bridge return order instead.
  */
 export function History(window: string, sinceUnixMs: number): $CancellablePromise<$models.Composition[]> {
-    return $Call.ByID(914174453, window, sinceUnixMs).then(($result: any) => {
+    return $Call.ByID(2693366750, window, sinceUnixMs).then(($result: any) => {
         return $$createType5($result);
     });
 }
@@ -90,7 +90,7 @@ export function History(window: string, sinceUnixMs: number): $CancellablePromis
  * Kinds is every surface kind this compositor can place. It answers what is wired, not what exists.
  */
 export function Kinds(): $CancellablePromise<$models.SurfaceKind[]> {
-    return $Call.ByID(1976493910).then(($result: any) => {
+    return $Call.ByID(4128415313).then(($result: any) => {
         return $$createType6($result);
     });
 }
@@ -103,7 +103,7 @@ export function Kinds(): $CancellablePromise<$models.SurfaceKind[]> {
  * same rectangle and zero drift while only one of them holds it.
  */
 export function Latest(window: string): $CancellablePromise<$models.Composition> {
-    return $Call.ByID(3270051624, window).then(($result: any) => {
+    return $Call.ByID(1467758237, window).then(($result: any) => {
         return $$createType4($result);
     });
 }
@@ -112,7 +112,7 @@ export function Latest(window: string): $CancellablePromise<$models.Composition>
  * Status answers one window's applied inventory.
  */
 export function Status(window: string): $CancellablePromise<$models.Receipt> {
-    return $Call.ByID(3262248317, window).then(($result: any) => {
+    return $Call.ByID(2887426296, window).then(($result: any) => {
         return $$createType0($result);
     });
 }
@@ -134,7 +134,7 @@ export function Status(window: string): $CancellablePromise<$models.Receipt> {
  * are composited in. A point inside two overlapping surfaces belongs to the one a person sees.
  */
 export function SurfaceAt(window: string, x: number, y: number): $CancellablePromise<string> {
-    return $Call.ByID(2503556835, window, x, y);
+    return $Call.ByID(2104688408, window, x, y);
 }
 
 /**
@@ -144,7 +144,7 @@ export function SurfaceAt(window: string, x: number, y: number): $CancellablePro
  * surface in a window nobody thought to ask about is the one that goes missing.
  */
 export function Windows(): $CancellablePromise<string[]> {
-    return $Call.ByID(1096166752).then(($result: any) => {
+    return $Call.ByID(110555003).then(($result: any) => {
         return $$createType7($result);
     });
 }

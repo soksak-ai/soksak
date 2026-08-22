@@ -5,11 +5,11 @@ go 1.25.0
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/min-median-max/wails-service-native-compositor v0.0.0-20260822033405-3530617b540f
+	github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063
 	github.com/soksak-ai/soksak-contract-contentview v0.0.1
 	github.com/soksak-ai/soksak-contract-control v0.0.1
 	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822000304-ee3af9deb8ea
-	github.com/soksak-ai/wails-service-native-compositor v0.0.1
-	github.com/soksak-ai/wails-service-webview-surface v0.0.1
 	github.com/wailsapp/wails/v3 v3.0.0-dev
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/sys v0.47.0
@@ -35,10 +35,6 @@ require (
 )
 
 replace github.com/wailsapp/wails/v3 => ../frameworks/wails3/v3
-
-replace github.com/soksak-ai/wails-service-native-compositor => ../wails-services/wails-service-native-compositor
-
-replace github.com/soksak-ai/wails-service-webview-surface => ../wails-services/wails-service-webview-surface
 
 replace github.com/soksak-ai/soksak-contract-contentview => ../soksak-contracts/soksak-contract-contentview
 

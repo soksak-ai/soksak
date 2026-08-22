@@ -8,7 +8,7 @@
 // Of the methods here, the only one this build performs is waiting for settlement. The rest reject
 // with their name. A silent no-op would leave the caller believing it opened something while the
 // screen shows nothing.
-import * as CompositorService from "../../../bindings/github.com/soksak-ai/wails-service-native-compositor/service";
+import * as CompositorService from "../../../bindings/github.com/min-median-max/wails-service-native-compositor/service";
 import { tmsg } from "../../i18n";
 import type { ContentViewHost } from "../../lib/contentViews";
 

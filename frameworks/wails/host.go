@@ -13,8 +13,8 @@ import (
 	"time"
 	"unsafe"
 
-	compositor "github.com/soksak-ai/wails-service-native-compositor"
-	webviewsurface "github.com/soksak-ai/wails-service-webview-surface"
+	compositor "github.com/min-median-max/wails-service-native-compositor"
+	webviewsurface "github.com/min-median-max/wails-service-webview-surface"
 
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
