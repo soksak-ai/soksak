@@ -12,9 +12,9 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 		t.Fatal(e)
 	}
 	s := string(b)
-	const wailsRef = "245331aa500541d44f52d78c9d2dc9beb405d526"
+	const wailsRef = "07377dc4b307f685f310caf8e62698a81847b5e0"
 	if !strings.Contains(s, "repository: soksak-ai/wails, ref: "+wailsRef) {
-		t.Fatal("Windows workflow is not pinned to the version-aligned Wails source")
+		t.Fatal("Windows workflow is not pinned to the Wails CLI source")
 	}
 	const testsRef = "405d2e4ed3fb0228919aa2138ff9b3386e93199b"
 	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@"+testsRef) {

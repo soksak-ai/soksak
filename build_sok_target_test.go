@@ -48,17 +48,13 @@ func TestPinnedWailsCLIUsesTheHostExecutableName(t *testing.T) {
 	}
 }
 
-func TestFrontendInstallBuildsAndCopiesThePinnedWailsRuntime(t *testing.T) {
+func TestFrontendInstallsThePublishedWailsRuntime(t *testing.T) {
 	body, err := os.ReadFile("build/Taskfile.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(body)
 	for _, required := range []string{
-		"prepare:wails:runtime:",
-		"npm ci",
-		"npm run build:code",
-		"task: prepare:wails:runtime",
 		"pnpm --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile",
 	} {
 		if !strings.Contains(source, required) {
@@ -69,8 +65,13 @@ func TestFrontendInstallBuildsAndCopiesThePinnedWailsRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(manifest), `"@wailsio/runtime": "file:../../frameworks/wails3/v3/internal/runtime/desktop/@wailsio/runtime"`) {
-		t.Fatal("frontend does not consume the exact Wails runtime source")
+	if !strings.Contains(string(manifest), `"@wailsio/runtime": "3.0.0-beta.12"`) {
+		t.Fatal("frontend does not pin the published Wails runtime")
+	}
+	for _, forbidden := range []string{`"@wailsio/runtime": "file:`, `"@wailsio/runtime": "github:`} {
+		if strings.Contains(string(manifest), forbidden) {
+			t.Fatalf("frontend runtime uses a source checkout: %s", forbidden)
+		}
 	}
 }
 
