@@ -1,0 +1,26 @@
+FROM wails-cross:latest
+
+ARG TARGETARCH
+ARG NODE_VERSION=24.19.0
+ARG PNPM_VERSION=10.30.3
+ARG NODE_ARM64_SHA256=01443c1e1a29e531ccad5a46fefa6df490d2189c49f7955904aecdbb0fe86fdc
+ARG NODE_AMD64_SHA256=14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647
+ARG CI_DEFINITION_SHA
+LABEL io.soksak.windows-ci.definition-sha="$CI_DEFINITION_SHA"
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && arch=$(case "$TARGETARCH" in arm64) echo arm64 ;; amd64) echo x64 ;; *) exit 1 ;; esac) \
+    && digest=$(case "$TARGETARCH" in arm64) echo "$NODE_ARM64_SHA256" ;; amd64) echo "$NODE_AMD64_SHA256" ;; esac) \
+    && curl -fsSL -o <local-evidence>/node.tar.xz "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-$arch.tar.xz" \
+    && echo "$digest  <local-evidence>/node.tar.xz" | sha256sum -c - \
+    && tar -xJf <local-evidence>/node.tar.xz -C /usr/local --strip-components=1 \
+    && rm <local-evidence>/node.tar.xz \
+    && npm install --global "pnpm@$PNPM_VERSION" \
+    && GOBIN=/usr/local/bin go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12 \
+    && node --version | grep -Fx "v$NODE_VERSION" \
+    && pnpm --version | grep -Fx "$PNPM_VERSION" \
+    && wails3 version 2>&1 | grep -Fx "v3.0.0-beta.12"
+
+ENTRYPOINT ["/bin/sh"]

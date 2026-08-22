@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+image=soksak-windows-ci:node24-wails-beta12
+definition=$(shasum -a 256 "$root/build/docker/Dockerfile.windows-ci" | awk '{print $1}')
+
+docker info >/dev/null
+available=$(df -k "$root" | awk 'NR==2 {print $4}')
+[ "$available" -ge 1048576 ] || { echo "at least 1 GiB host free space is required; Docker build caches use named volumes" >&2; exit 1; }
+
+current=$(docker image inspect "$image" --format '{{index .Config.Labels "io.soksak.windows-ci.definition-sha"}}' 2>/dev/null || true)
+if [ "$current" != "$definition" ]; then
+  docker build --build-arg CI_DEFINITION_SHA="$definition" -t "$image" -f "$root/build/docker/Dockerfile.windows-ci" "$root/build/docker"
+fi
+
+mounts=""
+while IFS= read -r replacement; do
+  case "$replacement" in
+    /*) host=$replacement; container=$replacement ;;
+    *) host=$(CDPATH= cd -- "$root/$(dirname -- "$replacement")" && pwd)/$(basename -- "$replacement"); container=/app/$replacement
+       while echo "$container" | grep -q '/[^/]*/../'; do container=$(echo "$container" | sed -E 's#/[^/]*/../#/#'); done ;;
+  esac
+  mounts="$mounts -v $host:$container:ro"
+done <<EOF
+$(sed -n 's/^replace .* => //p' "$root/go.mod")
+EOF
+
+# shellcheck disable=SC2086
+docker run --rm -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+  -v "$root:/app" -v soksak-windows-ci-go-mod:/go/pkg/mod -v soksak-windows-ci-go-build:<local-evidence>/go-build \
+  -v soksak-windows-ci-node-modules:/app/frontend/node_modules -v soksak-windows-ci-pnpm-store:/app/.pnpm-store \
+  $mounts -e GOCACHE=<local-evidence>/go-build -e WAILS3=/usr/local/bin/wails3 --entrypoint /bin/sh "$image" \
+  -c 'mkdir -p <local-evidence>/home <local-evidence>/go-build /go/pkg/mod && chown -R "$HOST_UID:$HOST_GID" <local-evidence>/home <local-evidence>/go-build /go/pkg/mod && exec setpriv --reuid="$HOST_UID" --regid="$HOST_GID" --clear-groups env HOME=<local-evidence>/home GOCACHE=<local-evidence>/go-build WAILS3=/usr/local/bin/wails3 /bin/sh -c "cd /app && scripts/ci/windows-build.sh all"'
