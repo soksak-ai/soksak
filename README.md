@@ -51,7 +51,7 @@ RED tests live beside their owners:
   ownership without a global text-selection ban.
 - `../wails-service-native-compositor`: snapshot, observer, stale rejection, receipt.
 - `../soksak-plugin-browser-native`: WKWebView inventory and browser commands/status.
-- `../soksak-plugin-terminal-xterm`: raw PTY bytes, terminal capabilities, lifecycle.
+- `../soksak-plugin-terminal-xterm`: Xterm rendering, IME, ordered output queue, and terminal capabilities.
 
 Visual evidence is stored outside the application repository in `../evidence`,
 so generated screenshots do not become source files.
