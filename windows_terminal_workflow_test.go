@@ -19,6 +19,9 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 	if !strings.Contains(s, "tests_ref: "+testsRef) {
 		t.Fatal("Windows fleet execution is not pinned")
 	}
+	if !strings.Contains(s, "$ErrorActionPreference = 'Stop'") {
+		t.Fatal("Windows build failures do not stop artifact publication")
+	}
 	if !strings.Contains(s, "Cross-owner reusable workflows must be public") {
 		t.Fatal("Windows workflow does not state its public fleet-workflow boundary")
 	}

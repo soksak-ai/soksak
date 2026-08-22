@@ -9,7 +9,7 @@ env:
   GOWORK: "off"
 
 vars:
-  WAILS3: '{{.WAILS3 | default (joinPath .ROOT_DIR ".." "bin" "wails3")}}'
+  WAILS3: '{{.WAILS3 | default (joinPath .ROOT_DIR ".." "bin" (ternary "wails3.exe" "wails3" (eq OS "windows")))}}'
 
 tasks:
   go:mod:tidy:
