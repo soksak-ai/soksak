@@ -31,13 +31,23 @@ jobs:
       - shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          go build -C frameworks/wails3/v3 -o ../../../bin/wails3.exe ./cmd/wails3
+          $PSNativeCommandUseErrorActionPreference = $true
+          go build -C frameworks/wails3/v3 -trimpath -o ../../../bin/wails3.exe ./cmd/wails3
           Push-Location soksak-core
           ../bin/wails3.exe task build GOOS=windows ARCH=amd64
           ../bin/wails3.exe task build:sok GOOS=windows ARCH=amd64
           Pop-Location
+          foreach ($artifact in 'soksak-core/bin/soksak.exe','soksak-core/bin/sok.exe') {
+            if (!(Test-Path $artifact)) { throw "missing Windows artifact: $artifact" }
+          }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with: { name: core-windows-artifact, path: soksak-core/bin, if-no-files-found: error, compression-level: 0 }
+        with:
+          name: core-windows-artifact
+          path: |
+            soksak-core/bin/soksak.exe
+            soksak-core/bin/sok.exe
+          if-no-files-found: error
+          compression-level: 0
   system:
     needs: build-core
     # Cross-owner reusable workflows must be public; the fleet repository contains tests only.

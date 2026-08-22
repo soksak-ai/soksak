@@ -22,6 +22,20 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 	if !strings.Contains(s, "$ErrorActionPreference = 'Stop'") {
 		t.Fatal("Windows build failures do not stop artifact publication")
 	}
+	if !strings.Contains(s, "$PSNativeCommandUseErrorActionPreference = $true") {
+		t.Fatal("Windows native command failures do not stop artifact publication")
+	}
+	if !strings.Contains(s, "go build -C frameworks/wails3/v3 -trimpath") {
+		t.Fatal("source-built Wails CLI does not retain its embedded release identity")
+	}
+	if !strings.Contains(s, "Test-Path $artifact") {
+		t.Fatal("Windows workflow does not verify built artifact paths")
+	}
+	for _, artifact := range []string{"soksak-core/bin/soksak.exe", "soksak-core/bin/sok.exe"} {
+		if !strings.Contains(s, artifact) {
+			t.Errorf("Windows workflow does not require artifact %s", artifact)
+		}
+	}
 	if !strings.Contains(s, "Cross-owner reusable workflows must be public") {
 		t.Fatal("Windows workflow does not state its public fleet-workflow boundary")
 	}
