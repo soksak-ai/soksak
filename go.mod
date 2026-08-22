@@ -9,7 +9,7 @@ require (
 	github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063
 	github.com/soksak-ai/soksak-contract-contentview v0.0.1
 	github.com/soksak-ai/soksak-contract-control v0.0.1
-	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822085503-4adfa80cb059
+	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822100936-418d6064fcdc
 	github.com/wailsapp/wails/v3 v3.0.0-beta.12
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/sys v0.47.0

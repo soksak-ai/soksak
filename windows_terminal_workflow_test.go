@@ -134,7 +134,7 @@ func TestCorePinsTheWindowsSidecarSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822085503-4adfa80cb059") {
+	if !strings.Contains(string(body), "github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822100936-418d6064fcdc") {
 		t.Fatal("Core and acceptance do not share the Windows sidecar manifest parser")
 	}
 }
