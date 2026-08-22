@@ -71,6 +71,7 @@ jobs:
             dist-release/soksak-"$version"-windows-x86_64.zip \
             dist-release/SHA256SUMS \
             dist-release/provenance.json \
+            dist-release/RELEASE-NOTES.md \
             dist-release/RELEASE-NOTES.ko.md \
             --repo "${{ github.repository }}" \
             --target "$SOURCE_COMMIT" \
