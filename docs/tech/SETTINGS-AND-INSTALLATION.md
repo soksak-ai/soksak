@@ -1,6 +1,8 @@
 # Settings and installation
 
 Public JSON shapes are owned by `soksak-spec`. This document defines Core behavior.
+Release identity, archive validation, and immutable-version handling are defined in
+[RELEASE-INTEGRITY.md](./RELEASE-INTEGRITY.md).
 
 ## Settings
 

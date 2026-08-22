@@ -1,0 +1,44 @@
+# Release Integrity
+
+This document defines the release and installation invariants for plugins, sidecars, and kits.
+The component repository owns its source manifest. `soksak-spec` owns the canonical release
+validator. The registry stores validated release metadata. Core installs and verifies release
+bytes without knowing provider names.
+
+## One identity source
+
+- `plugin.json`, `sidecar.json`, or `kit.json` is the only source of component id and version.
+- Build scripts may project target-specific fields, such as adding `.exe` to a sidecar process.
+- Build scripts and workflows must not duplicate an id, version, interface, archive version, or tag.
+- Archive names, tags, conformance subjects, and `release.json` identities are derived from the source manifest.
+
+## Verification at both boundaries
+
+Publication and installation enforce the same identity; neither trusts the other boundary.
+
+1. The canonical publisher verifies every archive's manifest id, version, interface, process path,
+   target executable, digest, size, and safe regular-file inventory before creating a tag.
+2. Core verifies the downloaded digest and size, extracts regular files only, requires the canonical
+   manifest name for the component kind, and compares manifest id and version with the registry identity before staging.
+3. Commit verifies that the staged identity and digest still equal the approved installation request.
+
+An immutable release with incorrect bytes is never overwritten or migrated. It remains unregistered,
+and a new patch version is published after the responsible invariant has a RED test and a GREEN fix.
+
+## Execution preconditions
+
+- CI actions, language toolchains, SDK sources, and reusable workflows use exact commits or versions.
+- A native system test verifies that its application and control client target the host OS before startup.
+  macOS on Apple Silicon may run both arm64 and amd64 binaries; unsupported architecture pairs are rejected.
+- Product builds and native tests use the same minimum deployment target.
+- A release or system-test run starts only after local contract tests, cross-compilation checks, and release-byte verification pass.
+- Disk capacity is checked before toolchain installation or multi-target builds. Only regenerable caches
+  and build outputs are cleaned; source files and user data are never used as capacity.
+
+## Repository ownership
+
+- A component repository tests its source manifest, staging projection, target matrix, and release workflow.
+- `soksak-spec` tests archive parsing and release identity for every component kind.
+- Core tests installation identity, host binary compatibility, and installed settings publication.
+- The external terminal test repository verifies complete released fleets as black-box compositions.
+- The registry contains only immutable release documents that pass its contract; failed release versions are not catalogue entries.

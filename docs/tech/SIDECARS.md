@@ -6,6 +6,9 @@ canonical: self
 
 # Sidecars
 
+Sidecar source manifests, target process projection, and release validation follow
+[RELEASE-INTEGRITY.md](./RELEASE-INTEGRITY.md).
+
 A sidecar is an independently released process used by a plugin. The core starts the process and
 relays the control protocol without interpreting domain payloads. A Wails service is compiled into
 the host and extends the host itself, so it is not a sidecar.
