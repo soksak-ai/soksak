@@ -179,6 +179,11 @@ function bootDone(): void {
   }
 }
 
+function setBootPhase(phase: "restoring" | "activating" | "ready"): void {
+  useBootPhase.getState().setPhase(phase);
+  document.documentElement.dataset.bootPhase = phase;
+}
+
 async function boot(): Promise<void> {
   // Moves the time the document started executing into the ledger — before it is the webview coming up, after it
   // is the bundle running. As one lump, which side to fix is unknown.
@@ -281,7 +286,7 @@ async function boot(): Promise<void> {
   // The ordering contract is unchanged: restore (firing workspace.created) still comes after the plugin host —
   // no recurrence of the incident where firing before listener registration lost events (git init never ran).
   beginBootPluginEventBuffer(); // boot-window fires go to a queue — flush at the end of boot (after every subscriber is in place)
-  useBootPhase.getState().setPhase("restoring");
+  setBootPhase("restoring");
   // The previous session's child webviews are backend-owned and survive a renderer reboot (reload) — left alone,
   // the old browser shows over the empty pre-restore screen (real incident: Example Domain over an empty window,
   // user measurement 2026-07-27). Early in boot, hide every child of this window — the restore render re-shows
@@ -338,7 +343,7 @@ async function boot(): Promise<void> {
   // Before, the host (2.3s measured total plugin activation) blocked restore (4ms) and left 3s of empty screen.
   // The event-loss contract that ordering used to cover is now covered by the boot event buffer (hooks.flushBootPluginEvents).
   bootStamp("restore-visible");
-  useBootPhase.getState().setPhase("activating");
+  setBootPhase("activating");
   // First-paint approximation — the frame after the render commit. Lower bound of when a person feels "the screen came up".
   // (rAF is paused for an occluded window, so this stamp may not arrive — measure timing on a foreground window.)
   requestAnimationFrame(() => {
@@ -390,7 +395,7 @@ async function boot(): Promise<void> {
   flushBootPluginEvents();
   // Engine host return — the symmetric half of the load-start hide (which blocks reboot ghosts). With plugin
   // activation and event replay done, this is the first point where surface state is aligned.
-  useBootPhase.getState().setPhase("ready");
+  setBootPhase("ready");
   bootStamp("boot:done");
   bootDone();
 }

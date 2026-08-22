@@ -29,6 +29,33 @@
       [data-boot-screen][data-shown] { display: flex; }
       [data-boot-screen] h1 { margin: 0; font-size: 15px; font-weight: 600; }
       [data-boot-screen] p { margin: 0; max-width: 46ch; color: #9b9ba6; }
+      [data-boot-facts] {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        gap: 6px 12px;
+        width: min(560px, 100%);
+        padding: 14px;
+        border: 1px solid #2a2b33;
+        border-radius: 8px;
+        background: #17181d;
+        text-align: left;
+      }
+      [data-boot-facts] dt { color: #9b9ba6; }
+      [data-boot-facts] dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+      [data-boot-screen] details { width: min(560px, 100%); text-align: left; }
+      [data-boot-screen] summary { color: #9b9ba6; cursor: pointer; }
+      [data-boot-diagnostics] {
+        max-height: 180px;
+        margin: 8px 0 0;
+        overflow: auto;
+        padding: 10px;
+        border-radius: 6px;
+        background: #090a0d;
+        color: #c9c9d2;
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+        user-select: text;
+      }
       [data-boot-screen] code {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         color: #c9c9d2;
@@ -41,7 +68,16 @@
     <div data-boot-screen role="alert">
       <h1 data-boot-title></h1>
       <p data-boot-detail></p>
-      <p><code>sok state.boot</code></p>
+      <dl data-boot-facts>
+        <dt data-boot-code-label></dt><dd><code data-boot-code></code></dd>
+        <dt data-boot-phase-label></dt><dd><code data-boot-phase></code></dd>
+        <dt data-boot-message-label></dt><dd data-boot-message></dd>
+      </dl>
+      <details>
+        <summary data-boot-diagnostics-label></summary>
+        <pre data-boot-diagnostics></pre>
+      </details>
+      <p data-boot-command></p>
     </div>
     <script>
       (() => {
@@ -51,29 +87,51 @@
         const KOREAN = navigator.language.startsWith("ko");
         const TITLE = KOREAN ? "앱을 시작하지 못했습니다" : "The application did not start";
         const DETAIL = KOREAN
-          ? "무엇이 막았는지는 아래 명령으로 확인할 수 있습니다."
-          : "The command below reports what stopped it.";
+          ? "시작을 중단한 오류입니다."
+          : "This error stopped application startup.";
+        const LABELS = KOREAN
+          ? { code: "오류 코드", phase: "실패 단계", message: "오류 내용", diagnostics: "기술 세부 정보" }
+          : { code: "Error code", phase: "Failed phase", message: "Message", diagnostics: "Technical details" };
+        const COMMAND = KOREAN
+          ? "추가 상태: sok state.boot"
+          : "Additional status: sok state.boot";
 
         const publish = (value) => {
           // Message and stack together. Some browsers leave the message out of
           // stack, and the report is then "RuntimeError" alone, which diagnoses
           // nothing (measured 2026-08-15).
-          const message = value instanceof Error
+          const record = value && typeof value === "object" ? value : {};
+          const text = value instanceof Error ? value.message : String(value);
+          const code = typeof record.code === "string" && record.code ? record.code : "BOOT_FAILURE";
+          const phase = typeof record.phase === "string" && record.phase
+            ? record.phase
+            : document.documentElement.dataset.bootPhase || "loading";
+          const diagnostics = value instanceof Error
             ? [value.name + ": " + value.message, value.stack].filter(Boolean).join("\n")
-            : String(value);
+            : text;
           // The diagnosis goes to a data attribute and the console. A stack on
           // screen shows the user what they cannot read and hides what they can.
-          console.error("[boot]", message);
+          console.error("[boot]", diagnostics);
           if (document.documentElement.dataset.bootStatus !== "loading") {
-            document.documentElement.dataset.runtimeError = message;
+            document.documentElement.dataset.runtimeError = diagnostics;
             return;
           }
           document.documentElement.dataset.bootStatus = "failed";
-          document.documentElement.dataset.bootError = message;
+          document.documentElement.dataset.bootError = code + ": " + text;
+          document.documentElement.dataset.bootPhase = phase;
           const screen = document.querySelector("[data-boot-screen]");
           if (!screen) return;
           screen.querySelector("[data-boot-title]").textContent = TITLE;
           screen.querySelector("[data-boot-detail]").textContent = DETAIL;
+          screen.querySelector("[data-boot-code-label]").textContent = LABELS.code;
+          screen.querySelector("[data-boot-phase-label]").textContent = LABELS.phase;
+          screen.querySelector("[data-boot-message-label]").textContent = LABELS.message;
+          screen.querySelector("[data-boot-diagnostics-label]").textContent = LABELS.diagnostics;
+          screen.querySelector("[data-boot-code]").textContent = code;
+          screen.querySelector("[data-boot-phase]").textContent = phase;
+          screen.querySelector("[data-boot-message]").textContent = text;
+          screen.querySelector("[data-boot-diagnostics]").textContent = diagnostics;
+          screen.querySelector("[data-boot-command]").textContent = COMMAND;
           screen.dataset.shown = "";
         };
         window.addEventListener("error", (event) => publish(event.error || event.message));
