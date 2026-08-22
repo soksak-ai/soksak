@@ -41,7 +41,7 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 			t.Errorf("Windows workflow duplicates runner logic: %s", inline)
 		}
 	}
-	const testsRef = "75bbafc5e5071a863d9fd97250dd21d73df5cc96"
+	const testsRef = "2075433450cf20dd0ade3c60cba6058cbeb19dcd"
 	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@"+testsRef) {
 		t.Fatal("Windows fleet workflow is not pinned")
 	}
