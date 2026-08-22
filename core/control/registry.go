@@ -42,7 +42,7 @@ type Command struct {
 
 // Served, Unserved and Table are the greeting's, so they are the wire's. What a
 // build answers and what it refuses is read by every client of the plane, and a
-// unit answering on its own socket reports the same two lists.
+// sidecar answering on its own socket reports the same two lists.
 type (
 	Served   = controlwire.Served
 	Unserved = controlwire.Unserved

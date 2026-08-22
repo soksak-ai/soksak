@@ -126,7 +126,7 @@ export interface AppFramework {
   emitLocal(event: string, payload: unknown): void;
 
   /**
-   * Turn one file of an installed unit into **an address the webview can fetch directly**.
+   * Turn one file of an installed plugin into **an address the webview can fetch directly**.
    *
    * The scope is the active plugin paths declared by settings. The framework rejects any other path.
    *

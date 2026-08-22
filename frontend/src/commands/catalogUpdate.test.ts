@@ -1,5 +1,5 @@
 // Contract test for the update.* orchestrator — verifies disruption-scope ordering, the release
-// identity gate, authenticated plugin closure updates, and event announcements.
+// identity gate, authenticated plugin updates, and event announcements.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const invoke = vi.fn();
@@ -64,8 +64,8 @@ describe("update.apply channel gate (HOME policy: a remote app body update is re
     const r = await execute("update.apply", {}, {});
 
     const called = invoke.mock.calls.map((c) => c[0]);
-    // The daemon axis no longer upgrades anything from here. A shell is a declared unit, and a unit
-    // is upgraded by installing it — the same path every other unit takes. What this asserts is that
+    // The daemon axis no longer upgrades anything from here. A shell belongs to a sidecar, and the
+    // sidecar is upgraded by installing it. What this asserts is that
     // asking for the axis is answered with a refusal rather than with an empty success.
     expect(called).not.toContain("pty_daemon_upgrade");
     expect(called).not.toContain("update_apply");
@@ -118,7 +118,7 @@ describe("update.apply channel gate (HOME policy: a remote app body update is re
 });
 
 describe("update.apply axis order and selection", () => {
-  it("updates the installed plugin closure only and skips a development source", async () => {
+  it("updates installed plugins and skips a development source", async () => {
     pluginState.release = false;
     pluginState.plugins = {
       "soksak-plugin-a": { source: "installed" },
@@ -163,7 +163,7 @@ describe("update.apply axis order and selection", () => {
     const notDone = (r.data as { skipped: { axis: string; reason?: string }[] }).skipped;
     const daemon = notDone.find((entry) => entry.axis === "daemon");
     expect(daemon, "the daemon axis was asked for and is in neither list").toBeDefined();
-    expect(daemon?.reason).toContain("declared unit");
+    expect(daemon?.reason).toContain("declared sidecar");
   });
 });
 
@@ -188,7 +188,7 @@ describe("update.check survey", () => {
     expect(d.app.available).toBe(false);
     expect(d.plugins.installed).toBe(2); // dev excluded
     // The daemon axis reports nothing running, because this application holds no daemon. A shell is
-    // a declared unit, and whether one of them has a newer release is that unit's question, answered
+    // a declared sidecar, and whether one has a newer release is the installer's question, answered
     // by whatever installed it rather than by a survey written here for one of them.
     expect(d.daemon.running).toBe(false);
   });

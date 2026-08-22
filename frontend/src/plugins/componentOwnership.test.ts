@@ -30,9 +30,32 @@ describe("component ownership standard", () => {
     ]) expect(existsSync(join(core, path)), path).toBe(false);
   });
 
+  it("documents canonical sidecar ownership and installed state", () => {
+    const document = read("docs/tech/SIDECARS.md");
+    expect(document).toContain("soksak-spec");
+    expect(document).toContain("installed.json");
+    expect(document).not.toContain("composition contract");
+    expect(document).not.toContain("release/unit.json");
+  });
+
   it("uses direct pluginId on the plugin install command surface", () => {
     const catalog = read("frontend/src/commands/catalogPlugins.ts");
     expect(catalog).toContain("pluginId");
     expect(catalog).not.toContain(["unit", "Id"].join(""));
+  });
+
+  it("names plugins and sidecars directly on public component surfaces", () => {
+    const surfaces = [
+      "frontend/src/plugins/api.ts",
+      "frontend/src/framework/contract.ts",
+      "frontend/src/components/PluginManagerModal.tsx",
+      "frontend/src/commands/catalogUpdate.ts",
+      "frontend/src/commands/catalogDaemon.ts",
+      "core/control/envelope.go",
+      "core/control/registry.go",
+    ];
+    for (const path of surfaces) {
+      expect(read(path), path).not.toMatch(/\bunits?\b/i);
+    }
   });
 });

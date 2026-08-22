@@ -17,8 +17,8 @@ import (
 // The wire is the contract's, and this package answers on it.
 //
 // Protocol, Request, Response, Greeting and the answer shape are declared in
-// the public contract because more than one thing speaks them: this application and every process
-// unit that answers on its own socket. A wire defined here would make each of those copy
+// the public contract because more than one thing speaks them: this application and every sidecar
+// that answers on its own socket. A wire defined here would make each of those copy
 // it, and two copies diverge without failing — they arrive as a different
 // answer.
 //

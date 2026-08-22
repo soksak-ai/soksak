@@ -508,7 +508,7 @@ export interface SoksakPluginApi {
     //
     // They were reached through `app.pty` while the core spawned the shell itself, which put the
     // owner's half inside a device capability it has nothing to do with. Whoever drives a shell now
-    // drives it through a declared unit, and the core sees no bytes unless it is given them.
+    // drives it through a declared sidecar, and the core sees no bytes unless it is given them.
 
     /** Hand the decoder this pane's raw output.
      *
@@ -644,7 +644,7 @@ export interface SoksakPluginApi {
   // `app.pty` stood here until 2026-08-20: spawn, write, resize, close, onData, and the daemon
   // commands behind them.
   //
-  // A shell is a unit's now. A plugin declares the unit its manifest names, drives it through
+  // A shell belongs to a sidecar now. A plugin declares the sidecar requirement, drives it through
   // `app.sidecar`, and hands the bytes to `app.terminal.observe` so the decoder still sees them —
   // which is the only part of this the core ever needed. A second implementation of a shell, on
   // another platform or another machine, installs with no edit here, and that was impossible while
@@ -810,7 +810,7 @@ export const commandsMissingMessage = new Set<string>();
 export function isBlockedForPlugins(name: string): boolean {
   // registry.* is an operator control plane: even a catalog lookup exposes descriptor/trust/credential
   // metadata. Enumerating individual names leaks by default whenever a new management command is added,
-  // so the whole namespace is closed. Plugins read installable units through plugin.catalog only.
+  // so the whole namespace is closed. Plugins read installable plugins through plugin.catalog only.
   return (
     BLOCKED_MANAGEMENT.has(name) ||
     name.startsWith("plugin.dev.") ||
@@ -989,22 +989,22 @@ function createProcessApi(
   };
 }
 
-// app.sidecar channel handle — an opaque channel to a declared unit. Meaning is a private
+// app.sidecar channel handle — an opaque channel to a declared sidecar. Meaning is a private
 // plugin↔sidecar contract (docs/tech/SIDECARS.md); neither the core nor this API reads the content.
 export interface SidecarHandle {
-  /** Opaque request → the unit's synchronous response (JSON). */
+  /** Opaque request → the sidecar's synchronous response (JSON). */
   send: (msg: Record<string, unknown>) => Promise<Record<string, unknown>>;
-  /** Subscribe to unit events — an event has the shape {event, ...payload} and demuxes on the event
+  /** Subscribe to sidecar events — an event has the shape {event, ...payload} and demuxes on the event
    *  field. Returns the unsubscribe. */
   on: (event: string, cb: (payload: Record<string, unknown>) => void) => Disposable;
-  /** Open a byte stream on this unit: one request, then whatever the unit writes after it.
+  /** Open a byte stream on this sidecar: one request, then whatever the sidecar writes after it.
    *
    *  Bytes rather than JSON events because a stream's whole point is volume, and base64 inside an
    *  envelope costs a third more on every byte of it. The request is opaque here exactly as `send`'s
    *  is; what makes this different is that the answer is the connection.
    *
-   *  `onEnd` fires once when the unit closes it, with a reason when there was one. It is separate
-   *  from the bytes because "the unit stopped" is not a byte, and a consumer folding the two would
+   *  `onEnd` fires once when the sidecar closes it, with a reason when there was one. It is separate
+   *  from the bytes because "the sidecar stopped" is not a byte, and a consumer folding the two would
    *  have to decide what an empty read means. Disposing the returned handle ends the stream. */
   stream: (
     request: Record<string, unknown>,
@@ -1014,7 +1014,7 @@ export interface SidecarHandle {
   close: () => Promise<void>;
 }
 
-// app.sidecar implementation — opens only units declared in manifest sidecars[] (declaration ≡
+// app.sidecar implementation — opens only sidecars declared in manifest sidecars[] (declaration ≡
 // reality: an undeclared open throws). Events and bytes are delivered by stream to this caller alone
 // (no global emit — code that never opened the channel receives nothing, and nothing leaks).
 
@@ -1043,7 +1043,7 @@ function createSidecarApi(
         listeners.get(ev)?.forEach((f) => f(m));
       };
       // The requirement travels with the open, because the manifest is this side's. The core reads
-      // what the installed unit states it implements and refuses the two if they differ — declared
+      // what the installed sidecar states it implements and refuses the two if they differ — declared
       // against actual, and neither taken on the other's word.
       const opened = await deps.invoke("sidecar_open", {
         consumer: { id: manifest.id, version: manifest.version },
@@ -1057,12 +1057,12 @@ function createSidecarApi(
       const provider = typeof opened?.name === "string" && opened.name !== "" ? opened.name : "";
       if (!provider) throw new Error(tmsg("plugin.sidecar.openNoProvider", { name }));
       let released = false;
-      // Releasing the channel, never ending the unit.
+      // Releasing the channel never ends the sidecar.
       //
-      // A unit is a separate process so that what it holds outlives this application — shells that
+      // A sidecar is a separate process so that what it holds outlives this application — shells that
       // survive a restart are the whole reason. A plugin being disabled is this application
-      // finishing with the unit, not the unit's work being over, and closing one on deactivation
-      // ended the shells somebody was working in (measured 2026-08-20). Ending a unit is
+      // finishing with the sidecar, not the sidecar's work being over, and closing one on deactivation
+      // ended the shells somebody was working in (measured 2026-08-20). Ending a sidecar is
       // `sidecar_stop`, and nothing here calls it.
       const close = async () => {
         if (released) return;
@@ -1086,7 +1086,7 @@ function createSidecarApi(
           return tracker.wrap(() => void listeners.get(event)?.delete(cb));
         },
         stream: async (request, handlers) => {
-          // A name of this caller's own, so two streams on one unit stay apart. The core never
+          // A name of this caller's own, so two streams on one sidecar stay apart. The core never
           // reads it: it stamps arrivals with it and nothing else.
           streamSeq += 1;
           const label = `${provider}#${streamSeq}`;
@@ -1102,8 +1102,8 @@ function createSidecarApi(
             onBytes,
             onEnd,
           })) as Record<string, unknown>;
-          // Disposing ends this stream and nothing else. A unit outlives any one connection to it,
-          // and closing the unit because a view unmounted would end every other view's stream too.
+          // Disposing ends this stream and nothing else. A sidecar outlives any one connection,
+          // and closing it because a view unmounted would end every other view's stream too.
           const stop = tracker.wrap(() => {
             void deps.invoke("sidecar_stream_close", { name: provider, stream: label }).catch(() => {});
           });

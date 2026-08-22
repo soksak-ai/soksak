@@ -80,10 +80,10 @@ bytes. The terminal is a plugin — the core names no engine, held by
 `coupling_gate_test.go`.
 
 The application has no shell to leave behind: since 2026-08-20 the shell is a
-child of the PTY unit, which is a separate process precisely so a shell survives
+child of the PTY sidecar, which is a separate process precisely so a shell survives
 an application generation. Closing a window therefore ends nothing by itself.
 The window publishes that it is going, the surviving plugin instances hear it,
-and the terminal plugin asks its unit to let that window's sessions go — which
+and the terminal plugin asks its PTY sidecar to let that window's sessions go — which
 is where "no child process" now lives, one process further out.
 
 ## G2 — n-ary recursive split
@@ -188,20 +188,20 @@ Written here so it is not rediscovered (L2).
   inner deadline is not being reached and the cause is unmeasured. Nothing here
   claims the flake is fixed.
 
-- **A unit's stream and a unit's life were one command, and a release ended shells.** Fixed
+- **A sidecar stream and sidecar lifetime were one command, and a release ended shells.** Fixed
   2026-08-20 the day it was written: `sidecar_close` signalled the process, and a plugin being
   disabled called it — so disabling a terminal plugin ended the shells somebody was working in,
-  which is the exact thing a unit being a process exists to prevent. Releasing a channel and ending
-  a unit are `sidecar_release` and `sidecar_stop` now, and nothing on the plugin path calls the
+  which is the exact thing a sidecar process exists to prevent. Releasing a channel and ending
+  a sidecar are `sidecar_release` and `sidecar_stop` now, and nothing on the plugin path calls the
   second.
 
   Found by a review of the tree rather than by a gate. What would have caught it is a reading of
-  whether a shell outlives a disable, and there is none: every test here starts a unit and ends it
+  whether a shell outlives a disable, and there is none: every test here starts a sidecar and ends it
   inside one run.
 
-- **Host and unit are only checked where they share a type.** The contract module they both import
+- **Host and sidecar are only checked where they share a type.** The contract module they both import
   makes a shape mismatch a compile error, and nothing measures the rest: a host that greets wrongly,
-  a unit that answers a command it declared and does nothing for, an address one binds and the other
+  a sidecar that answers a command it declared and does nothing for, an address one binds and the other
   cannot reach.
 
   There was a test that started the real daemon from inside the core and drove a shell through it.
@@ -209,17 +209,14 @@ Written here so it is not rediscovered (L2).
   repository into a sibling tree, which put the workspace's layout inside the application that is
   supposed to know none of it. The reach was the defect; the reading it took was worth having.
 
-  Where such a test goes is not settled. It belongs to neither repository: a unit that tested itself
-  against the host would depend on the host, and a host that tested itself against a unit reaches
-  out of its tree — which is what was just removed. What it needs is a place that owns the pair, and
-  there is none.
+  Such a test belongs in `externals/soksak-terminal-tests`, which owns the installed host and sidecar
+  pair without making either owner repository depend on the other.
 
 - **The i18n ownership rule is stated and unenforced.** `REPO-LAYOUT.md` L1b says a message is owned
   by whatever it is about, and no gate holds it. The one written for it read the sibling trees from
   inside this repository, which is the same reach as above, so it went with it.
 
-  It is a unit's own fact — its go.mod either names an application or does not — so the check that
-  can exist is the unit's, not this one's.
+  It is each plugin or sidecar repository's fact, so its owner test must enforce it.
 
 - **Whether a distributed build may load a third-party module is unmeasured.**
   This build ad-hoc signs and carries no entitlements, so nothing stops a load

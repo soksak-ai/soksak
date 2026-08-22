@@ -27,11 +27,10 @@ requirement name and therefore could not resolve a settings binding.
 
 Every sidecar artifact contains sidecar.json using soksak-spec-sidecar@0.0.1. It declares the
 sidecar id and version, the implemented interface, and a process path relative to the installed
-artifact. The composition contract owns this document format.
+artifact. `soksak-spec` owns this document format and its validator.
 
 The process path must resolve through regular directories to a regular file. Symbolic links, path
-escape, missing files and undeclared paths are rejected. release/unit.json does not exist and is
-not read as a fallback.
+escape, missing files and undeclared paths are rejected. No compatibility manifest is read.
 
 The current host starts process sidecars. A manifest declaring a library is rejected until the host
 implements the separately tested in-process library loader.
@@ -43,10 +42,10 @@ archive per supported target. The archive contains sidecar.json, dist/<sidecar-i
 files required by that process. The source binary may use a platform extension while the archive
 entry remains the path declared by sidecar.json.
 
-The registry records target, archive URL, SHA-256, format and sidecar.json. The installer selects
+The registry records target, archive URL, byte size, SHA-256, format and sidecar.json. The installer selects
 the current host target, verifies the digest, extracts regular files in a transaction and records
-the absolute install path in settings. A managed installation never clones a repository or builds a
-sidecar locally.
+the exact version, target, source commit, digests and absolute install path in `installed.json`. A
+managed installation never clones a repository or builds a sidecar locally.
 
 Development mode is different: the owner repository builds and stages its own dist directory, and
 settings records that absolute path with development:true. The updater does not replace it.
@@ -86,7 +85,7 @@ secret set is rejected.
 
 - each sidecar repository validates sidecar.json, stages the declared process and tests its own
   protocol and conformance;
-- the composition contract tests the closed manifest format;
+- `soksak-spec` tests and publishes the sidecar manifest format;
 - core tests settings binding resolution, path safety, process lifetime, adoption and opaque relay;
 - externals/soksak-terminal-tests tests installed multi-provider behavior and never builds owner
   source trees.

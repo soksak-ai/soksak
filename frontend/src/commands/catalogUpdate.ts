@@ -1,5 +1,5 @@
 // The auto-update orchestrator (update.*) applies axes smallest-disruption first.
-// The plugin axis atomically swaps the authenticated owner release and the whole plugin/sidecar/kit closure.
+// The plugin axis atomically swaps each authenticated plugin release.
 // The PTY daemon preserves sessions with fd-handoff; the app body restarts only in a release identity.
 import { invoke } from "../framework";
 import { register } from "./registry";
@@ -33,9 +33,9 @@ export function registerUpdateCatalog(): void {
       const installed = Object.values(usePlugins.getState().plugins).filter(
         (p) => p.source !== "dev",
       ).length;
-      // The daemon axis was this application's own PTY daemon. A shell is a unit's now, and what
-      // units are open is `sidecar_status` — but whether one of them has a newer release is the
-      // unit's own question, answered by whatever installed it, not by a check written here for one
+      // The daemon axis was this application's own PTY daemon. A shell belongs to a sidecar now, and
+      // open sidecars are reported by `sidecar_status`. Whether one has a newer release is answered
+      // by whatever installed the sidecar, not by a check written here for one
       // of them.
       const daemon: Record<string, unknown> = { running: false };
       if (app.available)
@@ -77,7 +77,7 @@ export function registerUpdateCatalog(): void {
       const skipped: Record<string, unknown>[] = [];
       const want = (k: string) => p[k] !== false; // Omitted = run that axis, false = skip it.
 
-      // ① Plugins — verify the owner release and the full transitive closure, then swap atomically.
+      // ① Plugins — verify and atomically install each owner release.
       if (want("plugins")) {
         const entries = Object.entries(usePlugins.getState().plugins).filter(
           ([, pl]) => pl.source !== "dev",
@@ -94,8 +94,8 @@ export function registerUpdateCatalog(): void {
       }
 
       // ② The daemon axis upgraded this application's own PTY daemon in place, handing its file
-      // descriptors over so live shells survived. A shell is a unit's now, and upgrading a unit is
-      // an install — the same path every other unit takes — rather than a command written here for
+      // descriptors over so live shells survived. A shell belongs to a sidecar now, and upgrading
+      // that sidecar is an install rather than an application command written for one
       // one of them.
       //
       // Named as skipped rather than dropped, so a caller that asked for the axis is told it was
@@ -104,7 +104,7 @@ export function registerUpdateCatalog(): void {
         skipped.push({
           axis: "daemon",
           reason:
-            "a shell is a declared unit now, and a unit is upgraded by installing it — this " +
+            "a shell belongs to a declared sidecar now, and a sidecar is upgraded by installing it — this " +
             "application holds no daemon of its own to hand descriptors over",
         });
       }

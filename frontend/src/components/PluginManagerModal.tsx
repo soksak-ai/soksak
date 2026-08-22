@@ -176,7 +176,7 @@ function PluginManager() {
   const t = useT();
   const plugins = usePlugins((s) => s.plugins);
   const rejected = usePlugins((s) => s.rejected);
-  // Source of an installed unit (official/manual) — the set of registry-listed ids. Recomputed only
+  // Source of an installed plugin (official/manual) — the set of registry-listed ids. Recomputed only
   // when entries change.
   const registryEntries = useRegistry((s) => s.entries);
   const officialIds = useMemo(
