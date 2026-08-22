@@ -36,13 +36,6 @@ var scannedCode = map[string]bool{
 	".go": true, ".ts": true, ".tsx": true,
 }
 
-// skippedTrees are trees this repository does not author, or that are not the
-// first line.
-var skippedTrees = map[string]bool{
-	"node_modules": true, "dist": true, ".git": true, "bin": true,
-	"bindings": true,
-}
-
 func TestDocumentsAreWrittenDry(t *testing.T) {
 	roots := []string{
 		filepath.Join("docs", "tech"),
@@ -98,25 +91,15 @@ func TestDocumentsAreWrittenDry(t *testing.T) {
 func TestCommentsAreWrittenDry(t *testing.T) {
 	var found []string
 	var korean []string
-	scanned := 0
-	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			if skippedTrees[info.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !scannedCode[filepath.Ext(path)] {
-			return nil
-		}
+	files, err := trackedRecordFiles(".", scannedCode, []string{"frontend/bindings/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range files {
 		body, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return readErr
+			t.Fatal(readErr)
 		}
-		scanned++
 		byLine := commentText(string(body))
 		for _, number := range sortedLines(byLine) {
 			text := byLine[number]
@@ -129,13 +112,9 @@ func TestCommentsAreWrittenDry(t *testing.T) {
 				}
 			}
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("scanning the tree: %v", err)
 	}
 
-	if scanned == 0 {
+	if len(files) == 0 {
 		t.Fatal("no source files were scanned; the extensions are wrong")
 	}
 	if len(found) > 0 {

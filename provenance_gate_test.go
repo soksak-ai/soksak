@@ -49,12 +49,6 @@ var scanned = map[string]bool{
 	".go": true, ".ts": true, ".tsx": true, ".md": true, ".css": true,
 }
 
-// skipped are trees this repository does not author.
-var skipped = map[string]bool{
-	"node_modules": true, "dist": true, ".git": true,
-	"frontend/dist": true,
-}
-
 func TestTheRecordKeepsReasonsAndDropsSources(t *testing.T) {
 	root, err := os.Getwd()
 	if err != nil {
@@ -62,33 +56,19 @@ func TestTheRecordKeepsReasonsAndDropsSources(t *testing.T) {
 	}
 
 	var found []string
-	scannedFiles := 0
-	walkErr := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			if skipped[info.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !scanned[filepath.Ext(path)] {
-			return nil
-		}
-		rel, relErr := filepath.Rel(root, path)
-		if relErr != nil {
-			rel = path
-		}
+	files, err := trackedRecordFiles(root, scanned, []string{"frontend/bindings/", "frontend/dist/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range files {
 		// This file names every word it forbids.
 		if rel == "provenance_gate_test.go" {
-			return nil
+			continue
 		}
-		body, readErr := os.ReadFile(path)
+		body, readErr := os.ReadFile(filepath.Join(root, rel))
 		if readErr != nil {
-			return readErr
+			t.Fatal(readErr)
 		}
-		scannedFiles++
 		for index, line := range strings.Split(string(body), "\n") {
 			for _, attribution := range attributions {
 				if attribution.MatchString(line) {
@@ -96,16 +76,12 @@ func TestTheRecordKeepsReasonsAndDropsSources(t *testing.T) {
 				}
 			}
 		}
-		return nil
-	})
-	if walkErr != nil {
-		t.Fatalf("walking the repository: %v", walkErr)
 	}
 
 	// An anchor: a gate that scanned nothing reports the same zero as a clean
 	// repository, and the two are different facts.
-	if scannedFiles < 100 {
-		t.Fatalf("only %d files were scanned; the walk is not reaching the repository", scannedFiles)
+	if len(files) < 100 {
+		t.Fatalf("only %d files were scanned; the index is not reaching the repository", len(files))
 	}
 	if len(found) > 0 {
 		t.Errorf("the record names where a rule came from in %d places:\n%s\nKeep the reason and the measurement; drop the attribution.",
