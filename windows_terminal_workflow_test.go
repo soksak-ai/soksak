@@ -12,6 +12,9 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 		t.Fatal(e)
 	}
 	s := string(b)
+	if !strings.Contains(s, "repository: soksak-ai/soksak-contract-control, ref: f12f3a6f579b6dff04622a0138450e75d2afae7c") {
+		t.Fatal("Windows workflow is not pinned to the shared control address contract")
+	}
 	for _, required := range []string{
 		"actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
 		"actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
@@ -104,6 +107,16 @@ func TestFrontendPinsNode24(t *testing.T) {
 	}
 	if strings.TrimSpace(string(version)) != "24.19.0" {
 		t.Fatalf(".nvmrc = %q", version)
+	}
+}
+
+func TestCorePinsTheWindowsSidecarSpec(t *testing.T) {
+	body, err := os.ReadFile("go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822085503-4adfa80cb059") {
+		t.Fatal("Core and acceptance do not share the Windows sidecar manifest parser")
 	}
 }
 

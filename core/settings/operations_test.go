@@ -75,6 +75,38 @@ func TestProviderSelectionResolvesInstalledSidecar(t *testing.T) {
 	}
 }
 
+func TestProviderSelectionResolvesAWindowsSidecarExecutable(t *testing.T) {
+	home := t.TempDir()
+	root := t.TempDir()
+	process := filepath.Join(root, "dist", "terminal-provider.exe")
+	if err := os.MkdirAll(filepath.Dir(process), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(process, []byte("binary"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{
+		"id": "terminal-provider", "version": "0.0.1",
+		"interface": map[string]string{"id": "terminal-state", "version": "0.0.1"},
+		"process":   "dist/terminal-provider.exe",
+	})
+	preferences := Empty()
+	preferences.Sidecars["terminal-provider"] = Component{}
+	writeJSON(t, filepath.Join(home, File), preferences)
+	state := EmptyInstalled()
+	sidecar := installed("terminal-provider", root)
+	sidecar.Target = "x86_64-pc-windows-msvc"
+	state.Sidecars["terminal-provider"] = sidecar
+	writeJSON(t, filepath.Join(home, InstalledFile), state)
+	runtime, err := ResolveInstalledSidecar(home, "terminal-provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.Process != process {
+		t.Fatalf("process = %s", runtime.Process)
+	}
+}
+
 func TestSettingsChangesAdvanceOneRevision(t *testing.T) {
 	home := t.TempDir()
 	value := Empty()
