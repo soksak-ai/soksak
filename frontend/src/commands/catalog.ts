@@ -11,7 +11,7 @@ import { registerSettingsCatalog } from "./catalogSettings";
 import { registerHealthCatalog } from "./catalogHealth";
 import { registerBootCatalog } from "./catalogBoot";
 import { registerWindowCatalog } from "./catalogWindow";
-import { invoke, frameworkPath } from "../framework";
+import { framework, invoke, frameworkPath } from "../framework";
 import { recordWindowFrames } from "./windowRecorder";
 import { tabIconOf } from "../lib/tabIcon";
 import { tmsg, key} from "../i18n";
@@ -2586,6 +2586,7 @@ export function registerCatalog(): void {
  * dies. Not passed over silently: the fact is recorded.
  */
 function reportOwnerAnswered(): void {
+  if (framework.name === "test") return;
   const names = catalogJson()
     .filter((c) => !c.windowScoped)
     .map((c) => c.name);

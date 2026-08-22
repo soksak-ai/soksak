@@ -162,6 +162,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
   });
 
   it("a missing visibility ACK across two mounted native views is kept as a presentation error, not a registry or boot error", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
     const failure = "Error: visibility ACK receipt missing";
     const presentationMount = vi.fn(() => ({
       ready: Promise.reject(new Error(failure)),
@@ -201,5 +202,8 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
       { viewId: "actual-right", registryPresent: true, bootPhase: "ready",
         overlayReason: "presentation-error", error: `Error: ${failure}` },
     ]);
+    expect(reported).toHaveBeenCalledTimes(2);
+    expect(reported.mock.calls[0]?.[0]).toBe("plugin presentation prepare failed (browser.content):");
+    reported.mockRestore();
   });
 });

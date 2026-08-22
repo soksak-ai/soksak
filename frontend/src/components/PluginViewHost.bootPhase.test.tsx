@@ -6,7 +6,7 @@
 // filled reported as absent.
 // Contract: unregistered before ready = plugin-loading, unregistered after ready = plugin-empty
 // (genuine absence).
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, beforeEach } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { PluginViewHost } from "./PluginViewHost";
@@ -38,9 +38,15 @@ describe("PluginViewHost — the three boot phases of an unregistered view", () 
   beforeEach(() => {
     useViewRegistry.setState({ views: {}, version: 0, badges: {} });
     useBootPhase.setState({ phase: "ready" });
-    root?.unmount();
+    root = null;
     host = document.createElement("div");
     document.body.appendChild(host);
+  });
+
+  afterEach(() => {
+    if (root) act(() => root!.unmount());
+    root = null;
+    host.remove();
   });
 
   it("an unregistered view during boot (restoring/activating) is loading, not absent", () => {
@@ -50,6 +56,7 @@ describe("PluginViewHost — the three boot phases of an unregistered view", () 
       expect(host.querySelector(".plugin-loading"), phase).not.toBeNull();
       expect(host.querySelector(".plugin-empty"), phase).toBeNull();
       act(() => root!.unmount());
+      root = null;
     }
   });
 

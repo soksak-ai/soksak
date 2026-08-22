@@ -120,7 +120,7 @@ describe("a region draws the set standing in it", () => {
     render("left");
     expect(host.textContent).not.toContain("Files");
 
-    useSectionSets.getState().standLeft(set.id);
+    act(() => useSectionSets.getState().standLeft(set.id));
     render("left");
     expect(host.textContent).toContain("Files");
   });

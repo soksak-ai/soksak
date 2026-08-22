@@ -25,7 +25,7 @@ describe("commitDomLayout — the DOM is final before the completion event", () 
     };
     act(() => root!.render(<Fixture />));
 
-    commitDomLayout(() => setWidth(332));
+    act(() => commitDomLayout(() => setWidth(332)));
 
     expect(host.querySelector<HTMLElement>("[data-slot]")?.style.width).toBe("332px");
   });

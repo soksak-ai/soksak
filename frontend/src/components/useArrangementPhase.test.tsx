@@ -278,9 +278,9 @@ describe("useArrangementPhase", () => {
       <Probe arrangement={at} scopeId={scopeOf(at)} prepareTravel={prepareTravel} />,
     ));
 
-    flushSync(() => root.render(
+    act(() => flushSync(() => root.render(
       <Probe arrangement={to} scopeId={scopeOf(to)} prepareTravel={prepareTravel} />,
-    ));
+    )));
 
     expect(layoutTransitionJournal()).toMatchObject([{
       transactionId: "layout-1",

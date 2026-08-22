@@ -135,15 +135,15 @@ describe("RailLinkOverlay — the railRelation three-way switch", () => {
 
   it("with no binding, none/0 keeps only the public root in every mode and draws no path", () => {
     for (const mode of ["tint", "moment", "stroke"] as const) {
-      useSettings.setState({ railRelation: mode });
-      act(() =>
+      act(() => {
+        useSettings.setState({ railRelation: mode });
         root.render(
           <RailLinkOverlay
             {...overlayProps({ targetRect: null })}
             key={mode}
           />,
-        ),
-      );
+        );
+      });
       const relation = host.querySelector<HTMLElement>(".rail-link-overlay");
       expect(relation?.dataset).toMatchObject({
         borderMode: "none",

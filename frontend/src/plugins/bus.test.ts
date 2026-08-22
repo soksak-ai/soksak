@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { busEmit, busOn, busResetForTest } from "./bus";
 
 describe("plugin bus — custom topic pub/sub between plugins", () => {
@@ -27,6 +27,7 @@ describe("plugin bus — custom topic pub/sub between plugins", () => {
   });
 
   it("every subscriber receives, and one listener throwing does not stop the others (isolation)", () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => {});
     const got: number[] = [];
     busOn("t", () => {
       throw new Error("boom");
@@ -34,5 +35,7 @@ describe("plugin bus — custom topic pub/sub between plugins", () => {
     busOn("t", () => got.push(2));
     busEmit("t", 0);
     expect(got).toEqual([2]);
+    expect(reported).toHaveBeenCalledWith("[bus] t listener error:", expect.objectContaining({ message: "boom" }));
+    reported.mockRestore();
   });
 });

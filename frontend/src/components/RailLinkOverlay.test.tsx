@@ -150,19 +150,23 @@ describe("projected-adjacency marking", () => {
     expect(host.querySelector(".rail-link-edge")).not.toBeNull();
     expect(host.querySelector(".rail-link-rest")).not.toBeNull();
     expect(host.querySelector(".rail-link-seam")).toBeNull();
+    act(() => root.unmount());
   });
 
   it("seam option: draws the inner shared edge dashed (a supported choice)", () => {
-    useSettings.setState({ railSeamStyle: "seam" });
+    act(() => useSettings.setState({ railSeamStyle: "seam" }));
+    let root: ReturnType<typeof createRoot> | null = null;
     try {
       const host = document.createElement("div");
       document.body.appendChild(host);
-      const root = createRoot(host);
-      act(() => root.render(renderProps(true)));
+      const mounted = createRoot(host);
+      root = mounted;
+      act(() => mounted.render(renderProps(true)));
       expect(host.querySelector(".rail-link-seam")).not.toBeNull();
       expect(host.querySelector(".rail-link-edge")).toBeNull();
     } finally {
-      useSettings.setState({ railSeamStyle: "edge" });
+      if (root) act(() => root!.unmount());
+      act(() => useSettings.setState({ railSeamStyle: "edge" }));
     }
   });
 
@@ -175,6 +179,7 @@ describe("projected-adjacency marking", () => {
     expect(host.querySelector(".rail-link-edge")).toBeNull();
     const overlay = host.querySelector<HTMLElement>(".rail-link-overlay")!;
     expect(overlay.dataset.projected).toBeUndefined();
+    act(() => root.unmount());
   });
 });
 });

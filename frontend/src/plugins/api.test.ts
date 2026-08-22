@@ -400,6 +400,7 @@ describe("commands.register — the manifest danger is authoritative (U4)", () =
     );
     api.commands!.register("wipe", {
       description: "",
+      message: () => "Wiped",
       handler: async () => ({ ok: true as const }),
     });
     expect(registered[0]).toMatchObject({
@@ -484,6 +485,7 @@ describe("commands.register — undeclared is rejected and the namespace is enfo
     );
     const disp = api.commands!.register("go", {
       description: "x",
+      message: () => "Done",
       handler: () => ({ done: true }),
     });
     expect(d.registerCommand).toHaveBeenCalledWith(
@@ -504,7 +506,7 @@ describe("commands.register — undeclared is rejected and the namespace is enfo
       "/d",
       d,
     );
-    api.commands!.register("go", { description: "x", handler: () => ({}) });
+    api.commands!.register("go", { description: "x", message: () => "Done", handler: () => ({}) });
     tracker.disposeAll();
     expect(d.unregisterCommand).toHaveBeenCalledWith("plugin.demo.go");
   });
