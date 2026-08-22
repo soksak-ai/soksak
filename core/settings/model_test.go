@@ -29,3 +29,11 @@ func TestEmptyDocumentsValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestInstalledAcceptsStrictComponentPatchVersions(t *testing.T) {
+	raw := map[string]any{"revision": 1, "plugins": map[string]any{"terminal-ghostty": map[string]any{"version": "0.0.2", "path": "/installed/ghostty", "registryId": "official", "repository": "https://github.com/example/ghostty", "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "manifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "artifactSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}, "sidecars": map[string]any{}, "kits": map[string]any{}, "contracts": map[string]any{}, "specs": map[string]any{}}
+	body, _ := json.Marshal(raw)
+	if _, err := ParseInstalled(body); err != nil {
+		t.Fatal(err)
+	}
+}
