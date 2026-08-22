@@ -30,7 +30,6 @@ var ErrActivationUnsupported = i18n.Errorf("wails.window.activationUnsupported",
 var ErrTitleUnsupported = i18n.Errorf("wails.window.titleUnsupported", nil)
 var ErrContentSizeUnsupported = i18n.Errorf("wails.window.contentSizeUnsupported", nil)
 var ErrWebviewFrameUnsupported = i18n.Errorf("wails.window.webviewFrameUnsupported", nil)
-var ErrFitUnsupported = i18n.Errorf("wails.window.fitUnsupported", nil)
 var ErrWindowInputUnsupported = i18n.Errorf("wails.window.inputUnsupported", nil)
 
 func nativeWindowTitle(unsafe.Pointer) (string, error) { return "", ErrTitleUnsupported }
@@ -44,7 +43,6 @@ func contentSize(window unsafe.Pointer) (float64, float64, error) {
 func webviewFrame(unsafe.Pointer) (float64, float64, float64, float64, error) {
 	return 0, 0, 0, 0, ErrWebviewFrameUnsupported
 }
-func fitWebviewToWindow(unsafe.Pointer) error      { return ErrFitUnsupported }
 func windowPresence(unsafe.Pointer) WindowPresence { return WindowPresence{} }
 func windowInputState(unsafe.Pointer) (WindowInputState, error) {
 	return WindowInputState{}, ErrWindowInputUnsupported

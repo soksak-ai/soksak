@@ -339,18 +339,8 @@ func Run(options Options) error {
 	// The transparent backdrop cleared this window's colour on the way in. The
 	// same restore wailsHost.Open performs, for the one window it does not open.
 	window.SetBackgroundColour(controlPlane.BackgroundColour)
-	// The same correction wailsHost.Open performs, for the one window it does
-	// not open: the framework's content view is a point smaller than the window,
-	// so the document ends up a point larger than what is visible.
-	//
-	// On this window's own readiness, not the application's. Measured
-	// 2026-08-15: at ApplicationStarted this window still had no native
-	// lifetime, so the correction was applied to nothing and the orchestrator
-	// stayed a point too large while every workspace window fitted.
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
-		if err := windowHost.FitWebview(controlPlaneWindow); err != nil {
-			log.Printf("the orchestrator's view could not be fitted to its window: %v", err)
-		}
+		repairDocumentView(window)
 	})
 
 	// Window-owning commands join the same registry the core filled. One table,

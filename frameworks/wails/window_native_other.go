@@ -51,12 +51,6 @@ func webviewFrame(unsafe.Pointer) (x, y, width, height float64, err error) {
 	return 0, 0, 0, 0, ErrWebviewFrameUnsupported
 }
 
-// ErrFitUnsupported is returned where the view hierarchy cannot be corrected.
-// The overflow is then reported by ui.verify rather than silently tolerated.
-var ErrFitUnsupported = i18n.Errorf("wails.window.fitUnsupported", nil)
-
-func fitWebviewToWindow(unsafe.Pointer) error { return ErrFitUnsupported }
-
 // windowPresence has no portable answer. Known stays false rather than every
 // field answering "not visible", which would report every window on this
 // platform as hidden.

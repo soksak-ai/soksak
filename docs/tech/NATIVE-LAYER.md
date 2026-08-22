@@ -46,6 +46,17 @@ verify`. Anything that pulls cgo into a Windows path turns it red immediately.
 This is what keeps the cross-compilation concern a measured fact rather than a
 preference.
 
+## N4. Document view sizing stays with its platform owner
+
+Wails owns document view sizing on Windows and Linux. Windows updates the WebView2 controller from
+`WM_SIZE`; Linux updates its webview through GTK allocation. Core does not add a second sizing
+contract for either platform.
+
+macOS has one measured framework hierarchy defect: its document view can exceed the visible content
+area by one point. Core repairs that hierarchy only in the Darwin implementation after each window
+gets a native lifetime. The repair is not part of `WindowHost` and cannot block another platform's
+boot.
+
 ## purego is not used
 
 It was considered and rejected for three reasons, and the rejection holds only

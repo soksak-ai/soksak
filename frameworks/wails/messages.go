@@ -101,10 +101,6 @@ func init() {
 			EN: "reading the web view's frame is not implemented on this platform",
 			KO: "이 플랫폼에는 웹 뷰 프레임 읽기가 구현되어 있지 않습니다",
 		},
-		"wails.window.fitUnsupported": {
-			EN: "fitting the web view to its window is not implemented on this platform",
-			KO: "이 플랫폼에는 웹 뷰를 창에 맞추는 기능이 구현되어 있지 않습니다",
-		},
 	})
 }
 
@@ -215,10 +211,6 @@ func init() {
 		"wails.host.noContentArea": {
 			EN: "window {window} has no native lifetime and no content area",
 			KO: "창 {window} 에 네이티브 수명이 없어 콘텐츠 영역도 없습니다",
-		},
-		"wails.host.noViewToFit": {
-			EN: "window {window} has no native lifetime and holds no view to fit",
-			KO: "창 {window} 에 네이티브 수명이 없어 맞출 뷰가 없습니다",
 		},
 		"wails.host.noView": {
 			EN: "window {window} has no native lifetime and holds no view",

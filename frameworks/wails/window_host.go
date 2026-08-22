@@ -114,9 +114,6 @@ type WindowHost interface {
 	// and comparing the two reported a defect that was only two measurements
 	// disagreeing about what they had measured.
 	ContentSize(name string) (width float64, height float64, err error)
-	// FitWebview makes the document's view exactly as large as the area it can
-	// be seen in. Called once, after a window exists.
-	FitWebview(name string) error
 	// WebviewRect is where the document's view is inside the window, in
 	// device-independent points.
 	//

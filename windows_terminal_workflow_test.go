@@ -50,3 +50,24 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 		}
 	}
 }
+
+func TestWebviewFrameRepairIsNotAPlatformContract(t *testing.T) {
+	contract, err := os.ReadFile("frameworks/wails/window_host.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	boot, err := os.ReadFile("frameworks/wails/host.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(contract), "FitWebview(") || strings.Contains(string(boot), "FitWebview(") {
+		t.Fatal("macOS webview frame repair is still a platform-wide boot contract")
+	}
+	darwin, err := os.ReadFile("frameworks/wails/window_fit_darwin.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(darwin), "repairDocumentView") || !strings.Contains(string(darwin), "fitWebviewToWindow") {
+		t.Fatal("macOS frame repair was removed instead of scoped to macOS")
+	}
+}

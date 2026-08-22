@@ -196,19 +196,6 @@ func (h *wailsHost) ContentSize(name string) (float64, float64, error) {
 	return width, height, failure
 }
 
-// FitWebview corrects the view hierarchy the framework built. The main thread
-// owns AppKit, so the change is dispatched there.
-func (h *wailsHost) FitWebview(name string) error {
-	window, addressable := h.live(name)
-	if !addressable {
-		return i18n.Errorf("wails.host.noViewToFit", map[string]string{"window": name})
-	}
-	var failure error
-	native := window.NativeWindow()
-	application.InvokeSync(func() { failure = fitWebviewToWindow(native) })
-	return failure
-}
-
 // WebviewRect reads the document view's frame off the native hierarchy. The
 // main thread owns AppKit, so the read is dispatched there.
 func (h *wailsHost) WebviewRect(name string) (x, y, width, height float64, err error) {
@@ -291,11 +278,7 @@ func (h *wailsHost) Open(spec OpenSpec) error {
 	if window == nil {
 		return i18n.Errorf("wails.host.noWindowReturned", map[string]string{"window": spec.Name})
 	}
-	// The framework builds its content view a point smaller than the window and
-	// lets autoresizing carry that offset, so the document ends up a point
-	// larger than the area it can be seen in. Corrected the moment the window
-	// exists; autoresizing keeps the fit afterwards.
-	_ = h.FitWebview(spec.Name)
+	repairDocumentView(window)
 
 	// A transparent backdrop clears the window's colour on the way in, so the
 	// template's colour is restored the moment the window exists. Without this

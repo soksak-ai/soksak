@@ -110,14 +110,6 @@ func (h *fakeHost) ContentSize(name string) (float64, float64, error) {
 	return float64(window.frame.W), float64(window.frame.H), nil
 }
 
-// FitWebview: nothing to fit without an application.
-func (h *fakeHost) FitWebview(name string) error {
-	if window := h.find(name); window == nil || !window.live {
-		return fmt.Errorf("window %s has no native lifetime and holds no view to fit", name)
-	}
-	return nil
-}
-
 // WebviewRect: this package has no application, so no window holds a view.
 func (h *fakeHost) WebviewRect(name string) (float64, float64, float64, float64, error) {
 	window := h.find(name)
