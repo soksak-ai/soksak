@@ -1,6 +1,8 @@
 name: windows-terminal-system
 on:
   workflow_dispatch:
+  push:
+    branches: [wails3beta-terminal-0.0.1]
 permissions:
   contents: read
   actions: read
