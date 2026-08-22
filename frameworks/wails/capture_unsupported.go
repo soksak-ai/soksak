@@ -1,4 +1,4 @@
-//go:build !darwin && (!linux || !cgo || gtk3 || android || server)
+//go:build !windows && !darwin && (!linux || !cgo || gtk3 || android || server)
 
 package wails
 

@@ -85,6 +85,8 @@ macOS reads this process's own shareable content through ScreenCaptureKit.
 `CGWindowListCreateImage` is obsolete on macOS 15 and blocks during rendering. It is not used.
 Linux snapshots the GTK4 render node on the GTK main thread and encodes the resulting texture. It
 does not read the X11 root window, so an occluded window remains capturable without focus changes.
+Windows uses the HWND backend defined in [CAPTURE.md](CAPTURE.md). The shared pixel pipeline and
+its local cross-build gates are documented there.
 
 Output dimensions come from **one** filter snapshot: `contentRect` multiplied by
 `pointPixelScale`. Mixing a window frame read earlier with pixels captured later
