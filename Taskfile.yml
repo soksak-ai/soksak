@@ -196,7 +196,10 @@ tasks:
       built into a temporary directory is a copy nobody can rebuild the same
       way tomorrow.
     cmds:
-      - go build -o bin/sok ./cmd/sok
+      - task: '{{.GOOS}}:build:sok'
+        vars:
+          TARGET_ARCH: '{{.TARGET_ARCH}}'
+          ARCH: '{{.ARCH}}'
 
   package:
     summary: Packages a production build of the application

@@ -13,6 +13,26 @@ vars:
   CROSS_IMAGE: wails-cross
 
 tasks:
+  build:sok:
+    summary: Builds the control-plane client for macOS
+    cmds:
+      - go build -o {{.BIN_DIR}}/sok ./cmd/sok
+    vars:
+      HOST_ARCH:
+        sh: |
+          if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
+            echo arm64
+          else
+            case "$(uname -m)" in
+              x86_64) echo amd64 ;;
+              *) uname -m ;;
+            esac
+          fi
+      TARGET_ARCH: '{{.TARGET_ARCH | default .HOST_ARCH}}'
+    env:
+      GOOS: darwin
+      GOARCH: '{{.TARGET_ARCH}}'
+
   build:
     summary: Builds the application
     cmds:

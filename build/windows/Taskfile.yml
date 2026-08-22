@@ -15,6 +15,15 @@ vars:
   CROSS_IMAGE: wails-cross
 
 tasks:
+  build:sok:
+    summary: Builds the control-plane client for Windows
+    cmds:
+      - go build -o {{.BIN_DIR}}/sok.exe ./cmd/sok
+    env:
+      GOOS: windows
+      GOARCH: '{{.ARCH | default ARCH}}'
+      CGO_ENABLED: 0
+
   build:
     summary: Builds the application for Windows
     cmds:
