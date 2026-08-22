@@ -3,7 +3,6 @@ package sidecar
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
@@ -55,10 +54,10 @@ func (requirement *Requirement) UnmarshalJSON(body []byte) error {
 		return err
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return fmt.Errorf("requirement has trailing JSON data")
+		return i18n.Errorf("sidecar.requirementTrailingData", nil)
 	}
 	if value.ID == "" {
-		return fmt.Errorf("requirement id is required")
+		return i18n.Errorf("sidecar.requirementIDRequired", nil)
 	}
 	if _, err := platformspec.DependencyRequirementSatisfied("0.0.1", value.Requirement); err != nil {
 		return err
