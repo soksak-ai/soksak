@@ -85,6 +85,10 @@ func init() {
 			EN: "bringing a window forward without taking the keyboard is not implemented on this platform",
 			KO: "이 플랫폼에는 키보드를 가져가지 않고 창을 앞으로 올리는 방법이 구현되어 있지 않습니다",
 		},
+		"wails.window.revealWithoutKeyFailed": {
+			EN: "Windows did not show the window without activation",
+			KO: "Windows가 창을 활성화하지 않고 표시하지 못했습니다",
+		},
 		"wails.window.activationUnsupported": {
 			EN: "application activation is not implemented on this platform",
 			KO: "이 플랫폼에는 애플리케이션 활성화가 구현되어 있지 않습니다",

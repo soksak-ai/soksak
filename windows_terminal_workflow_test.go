@@ -16,6 +16,7 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 		"actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
 		"actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
 		"actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+		"pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86",
 		"actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
 		"node-version: \"24.19.0\"",
 	} {
@@ -94,11 +95,27 @@ func TestFrontendPinsNode24(t *testing.T) {
 	if !strings.Contains(string(manifest), `"node": "24.19.0"`) {
 		t.Fatal("frontend does not pin Node 24.19.0")
 	}
+	if !strings.Contains(string(manifest), `"onlyBuiltDependencies": [`) || !strings.Contains(string(manifest), `"esbuild"`) {
+		t.Fatal("frontend does not explicitly allow the esbuild install script")
+	}
 	version, err := os.ReadFile(".nvmrc")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.TrimSpace(string(version)) != "24.19.0" {
 		t.Fatalf(".nvmrc = %q", version)
+	}
+}
+
+func TestWindowsCanRevealWithoutTakingFocus(t *testing.T) {
+	body, err := os.ReadFile("frameworks/wails/window_native_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	for _, required := range []string{"SetWindowPos", "SWP_NOACTIVATE", "SWP_SHOWWINDOW", "IsWindowVisible"} {
+		if !strings.Contains(source, required) {
+			t.Errorf("Windows focus-free reveal is missing %s", required)
+		}
 	}
 }
