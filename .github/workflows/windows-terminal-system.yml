@@ -3,6 +3,24 @@ on:
   workflow_dispatch:
   push:
     branches: [wails3beta-terminal-0.0.1]
+    paths:
+      - ".github/workflows/windows-terminal-system.yml"
+      - "build/windows/**"
+      - "cmd/sok/**"
+      - "core/**"
+      - "frameworks/**"
+      - "frontend/**"
+      - "scripts/ci/windows-build.sh"
+      - "go.mod"
+      - "go.sum"
+      - "launch.go"
+      - "login_shell_*.go"
+      - "main.go"
+      - "pid_*.go"
+      - "process_sink.go"
+      - "repository_boundary.go"
+      - "system_key_store*.go"
+      - "tracked_record_files.go"
 permissions:
   contents: read
   actions: read

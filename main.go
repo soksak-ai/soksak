@@ -137,7 +137,7 @@ func main() {
 			Now:          func() int64 { return time.Now().UnixMilli() },
 
 			UserHome:    userHome,
-			LoginShell:  os.Getenv("SHELL"),
+			LoginShell:  loginShell(),
 			Windows:     runtime.GOOS == "windows",
 			OS:          runtime.GOOS,
 			Arch:        runtime.GOARCH,

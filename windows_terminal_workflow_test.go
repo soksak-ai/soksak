@@ -70,6 +70,9 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 	if !strings.Contains(s, "Cross-owner reusable workflows must be public") {
 		t.Fatal("Windows workflow does not state its public fleet-workflow boundary")
 	}
+	if !strings.Contains(s, "paths:") || !strings.Contains(s, "scripts/ci/windows-build.sh") {
+		t.Fatal("Windows workflow does not limit push runs to Windows build inputs")
+	}
 	for _, v := range []string{"soksak-plugin-terminal", "soksak-sidecar-terminal"} {
 		if strings.Contains(s, v) {
 			t.Errorf("Core workflow names provider %s", v)
