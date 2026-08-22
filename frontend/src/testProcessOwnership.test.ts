@@ -8,5 +8,7 @@ describe("test process ownership", () => {
     const config = readFileSync(resolve(import.meta.dirname, "../vitest.config.ts"), "utf8");
     expect(config).toContain('pool: "threads"');
     expect(config).not.toContain('pool: "forks"');
+    expect(config).toContain("maxWorkers: 4");
+    expect(config).toContain('setupFiles: ["./src/testEnvironment.ts"]');
   });
 });

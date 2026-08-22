@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 // Which set stands, and what a link costs when its set is gone.
 //
@@ -10,12 +10,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // exists, that removing a set takes its links with it, and that a region draws only the set standing
 // in it — each of those failing shows on screen as a sidebar that is empty, wrong, or reserved for
 // nothing.
-const BAG_KEY = "__soksakModuleState";
-
 describe("section sets — who stands where", () => {
-  beforeEach(() => {
-    delete (globalThis as Record<string, unknown>)[BAG_KEY];
-    vi.resetModules();
+  beforeEach(async () => {
+    const { useSectionSets } = await load();
+    useSectionSets.setState({ sets: [], byPlugin: {}, left: null });
   });
 
   const load = () => import("./sectionSets");

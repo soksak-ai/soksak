@@ -13,9 +13,12 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    setupFiles: ["./src/testEnvironment.ts"],
     // Process workers survive as PID-1 children when an interactive runner is interrupted.
     // Thread workers share the runner lifecycle, so cancellation cannot orphan Node processes.
     pool: "threads",
+    maxWorkers: 4,
+    minWorkers: 1,
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
 });
