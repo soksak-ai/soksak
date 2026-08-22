@@ -391,7 +391,7 @@ export function registerDaemonCatalog(): void {
   // `pty.daemon.*` stood here until 2026-08-20: status, restart and a live upgrade of a daemon the
   // application built into itself.
   //
-  // A shell belongs to a sidecar a plugin declares, so `sidecar_status` reports what is open and
+  // A plugin declares the sidecar that owns each shell, so `sidecar_status` reports what is open and
   // `sidecar_stop` ends one. Keeping sidecar-specific aliases would make the application's command
   // table grow for every provider, which is the lock-in the substrate prevents.
 }

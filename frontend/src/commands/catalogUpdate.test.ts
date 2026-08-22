@@ -64,7 +64,7 @@ describe("update.apply channel gate (HOME policy: a remote app body update is re
     const r = await execute("update.apply", {}, {});
 
     const called = invoke.mock.calls.map((c) => c[0]);
-    // The daemon axis no longer upgrades anything from here. A shell belongs to a sidecar, and the
+    // The daemon axis no longer upgrades anything from here. A sidecar owns each shell, and the
     // sidecar is upgraded by installing it. What this asserts is that
     // asking for the axis is answered with a refusal rather than with an empty success.
     expect(called).not.toContain("pty_daemon_upgrade");

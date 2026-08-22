@@ -33,7 +33,7 @@ export function registerUpdateCatalog(): void {
       const installed = Object.values(usePlugins.getState().plugins).filter(
         (p) => p.source !== "dev",
       ).length;
-      // The daemon axis was this application's own PTY daemon. A shell belongs to a sidecar now, and
+      // The daemon axis was this application's own PTY daemon. A sidecar owns each shell now, and
       // open sidecars are reported by `sidecar_status`. Whether one has a newer release is answered
       // by whatever installed the sidecar, not by a check written here for one
       // of them.
@@ -94,7 +94,7 @@ export function registerUpdateCatalog(): void {
       }
 
       // ② The daemon axis upgraded this application's own PTY daemon in place, handing its file
-      // descriptors over so live shells survived. A shell belongs to a sidecar now, and upgrading
+      // descriptors over so live shells survived. A sidecar owns each shell now, and upgrading
       // that sidecar is an install rather than an application command written for one
       // one of them.
       //
@@ -104,7 +104,7 @@ export function registerUpdateCatalog(): void {
         skipped.push({
           axis: "daemon",
           reason:
-            "a shell belongs to a declared sidecar now, and a sidecar is upgraded by installing it — this " +
+            "a declared sidecar owns each shell now, and a sidecar is upgraded by installing it — this " +
             "application holds no daemon of its own to hand descriptors over",
         });
       }

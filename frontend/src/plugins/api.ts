@@ -644,7 +644,7 @@ export interface SoksakPluginApi {
   // `app.pty` stood here until 2026-08-20: spawn, write, resize, close, onData, and the daemon
   // commands behind them.
   //
-  // A shell belongs to a sidecar now. A plugin declares the sidecar requirement, drives it through
+  // A sidecar owns each shell now. A plugin declares the sidecar requirement, drives it through
   // `app.sidecar`, and hands the bytes to `app.terminal.observe` so the decoder still sees them —
   // which is the only part of this the core ever needed. A second implementation of a shell, on
   // another platform or another machine, installs with no edit here, and that was impossible while
