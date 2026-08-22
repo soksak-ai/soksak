@@ -30,7 +30,7 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 	if !strings.Contains(s, "go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12") {
 		t.Fatal("Windows workflow does not install the exact upstream Wails CLI")
 	}
-	const testsRef = "802e51eecfcc335492114e9c610ca8c5c711aee1"
+	const testsRef = "103422c7ce50df14e2ac117b6cf9087e4c0f35ac"
 	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@"+testsRef) {
 		t.Fatal("Windows fleet workflow is not pinned")
 	}
