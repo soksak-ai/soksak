@@ -3,7 +3,6 @@
 package wails
 
 import (
-	"fmt"
 	"syscall"
 	"unsafe"
 
