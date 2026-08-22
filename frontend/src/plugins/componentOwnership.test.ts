@@ -38,6 +38,24 @@ describe("component ownership standard", () => {
     expect(document).not.toContain("release/unit.json");
   });
 
+  it("keeps the terminal platform plan on direct component names and verified pins", () => {
+    const document = read("docs/tech/TERMINAL-PLATFORM-PLAN.md");
+    for (const phrase of [
+      "## Public components",
+      "{ id, requirement }",
+      "soksak-spec` advanced to `0.0.2",
+      "dd5c0d8c74f37a69a805a24b160472805a97c869",
+      "d5f52872e805aa29837dcfe55d6833ae681805d3",
+    ]) expect(document).toContain(phrase);
+    for (const phrase of [
+      "Public units",
+      "installed unit",
+      "engine units",
+      "unit identity",
+      "upstream unit baseline",
+    ]) expect(document).not.toContain(phrase);
+  });
+
   it("uses direct pluginId on the plugin install command surface", () => {
     const catalog = read("frontend/src/commands/catalogPlugins.ts");
     expect(catalog).toContain("pluginId");
