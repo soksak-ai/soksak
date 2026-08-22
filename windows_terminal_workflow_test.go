@@ -33,7 +33,7 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 	if !strings.Contains(s, "go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12") {
 		t.Fatal("Windows workflow does not install the exact upstream Wails CLI")
 	}
-	const testsRef = "fb21989322c6769402489351135c51edb17e8fbe"
+	const testsRef = "1ad1de4073619d0cf67096589f15692cdbbd1fb1"
 	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@"+testsRef) {
 		t.Fatal("Windows fleet workflow is not pinned")
 	}
@@ -107,6 +107,25 @@ func TestFrontendPinsNode24(t *testing.T) {
 	}
 	if strings.TrimSpace(string(version)) != "24.19.0" {
 		t.Fatalf(".nvmrc = %q", version)
+	}
+}
+
+func TestDarwinVerificationUsesTheProductDeploymentTarget(t *testing.T) {
+	root, err := os.ReadFile("Taskfile.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	darwin, err := os.ReadFile("build/darwin/Taskfile.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"CGO_CFLAGS", "CGO_LDFLAGS", "MACOSX_DEPLOYMENT_TARGET"} {
+		if !strings.Contains(string(root), value) || !strings.Contains(string(darwin), value) {
+			t.Fatalf("Darwin verification and product build do not both declare %s", value)
+		}
+	}
+	if !strings.Contains(string(root), "10.15") || !strings.Contains(string(darwin), "10.15") {
+		t.Fatal("Darwin verification and product build do not share macOS 10.15")
 	}
 }
 

@@ -43,6 +43,10 @@ tasks:
 
   verify:go:
     summary: Go build, vet, and tests for this module
+    env:
+      CGO_CFLAGS: '{{if eq OS "darwin"}}-mmacosx-version-min=10.15{{end}}'
+      CGO_LDFLAGS: '{{if eq OS "darwin"}}-mmacosx-version-min=10.15{{end}}'
+      MACOSX_DEPLOYMENT_TARGET: '{{if eq OS "darwin"}}10.15{{end}}'
     cmds:
       - go build ./...
       - go vet ./...
