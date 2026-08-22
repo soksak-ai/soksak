@@ -13,8 +13,9 @@ frontend runtime use the official Wails `v3.0.0-beta.12` release.
 - Dividers are pointer-captured and draggable. Only a pointer stream that
   begins on the divider is contained, so normal terminal/browser text remains
   selectable and copyable.
-- `soksak-plugin-terminal-xterm` owns PTY generations, raw byte events, xterm mount,
-  input, resize, status, UTF-8/truecolor capability, and process-group reaping.
+- `soksak-kit-plugin-terminal` owns terminal view registration, PTY and recovery lifecycle, resize,
+  status, waits, and the standard command surface. `soksak-plugin-terminal-xterm` supplies only its
+  Xterm renderer adapter, screen buffer, theme, input and IME behavior, and optional commands.
 - `wails-service-native-compositor` is registered through Wails v3's official
   `application.Service` lifecycle, observes public DOM declarations, and serializes one
   complete generation/sequence inventory with an applied receipt.

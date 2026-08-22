@@ -1,5 +1,10 @@
 version: '3'
 
+env:
+  MACOSX_DEPLOYMENT_TARGET: '{{if eq OS "darwin"}}10.15{{end}}'
+  CGO_CFLAGS: '{{if eq OS "darwin"}}-O2 -g -mmacosx-version-min=10.15{{end}}'
+  CGO_LDFLAGS: '{{if eq OS "darwin"}}-O2 -g -mmacosx-version-min=10.15 -Wl,-no_warn_duplicate_libraries{{end}}'
+
 vars:
   # This repository produces two binaries and no others: the application and the
   # client that drives it from outside. A generic "app" left bin/ holding four
@@ -43,14 +48,17 @@ tasks:
 
   verify:go:
     summary: Go build, vet, and tests for this module
-    env:
-      CGO_CFLAGS: '{{if eq OS "darwin"}}-mmacosx-version-min=10.15{{end}}'
-      CGO_LDFLAGS: '{{if eq OS "darwin"}}-mmacosx-version-min=10.15{{end}}'
-      MACOSX_DEPLOYMENT_TARGET: '{{if eq OS "darwin"}}10.15{{end}}'
     cmds:
+      - task: verify:macos-link
       - go build ./...
       - go vet ./...
       - go test ./...
+
+  verify:macos-link:
+    summary: Rejects macOS deployment-target and duplicate-library linker warnings
+    platforms: [darwin]
+    cmds:
+      - scripts/ci/macos-link.sh
 
   verify:restore:
     summary: The digest before a restart equals the digest after (RESTORE V1)
