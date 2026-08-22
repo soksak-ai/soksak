@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/soksak-ai/soksak-core/core/i18n"
 	"github.com/wailsapp/wails/v3/pkg/w32"
 )
 
@@ -53,12 +54,12 @@ func captureWindowsFrame(window unsafe.Pointer) (capturedFrame, float64, error) 
 	width := int(extent.Right - extent.Left)
 	height := int(extent.Bottom - extent.Top)
 	if width < 1 || height < 1 {
-		return nil, 0, fmt.Errorf("Windows capture received an empty window extent")
+		return nil, 0, i18n.Errorf("wails.capture.windowsEmptyExtent", nil)
 	}
 
 	rawDC, _, dcErr := captureCreateCompatibleDC.Call(0)
 	if rawDC == 0 {
-		return nil, 0, fmt.Errorf("Windows capture could not create a device context: %v", dcErr)
+		return nil, 0, i18n.Errorf("wails.capture.windowsDC", map[string]string{"reason": dcErr.Error()})
 	}
 	dc := w32.HDC(rawDC)
 	frame := &windowsCapturedFrame{dc: dc}
@@ -71,17 +72,17 @@ func captureWindowsFrame(window unsafe.Pointer) (capturedFrame, float64, error) 
 	frame.bitmap = w32.CreateDIBSection(dc, &info, w32.DIB_RGB_COLORS, &bits, 0, 0)
 	if frame.bitmap == 0 || bits == nil {
 		frame.Release()
-		return nil, 0, fmt.Errorf("Windows capture could not create a bitmap")
+		return nil, 0, i18n.Errorf("wails.capture.windowsBitmap", nil)
 	}
 	frame.previous = w32.SelectObject(dc, w32.HGDIOBJ(frame.bitmap))
 	if frame.previous == 0 {
 		frame.Release()
-		return nil, 0, fmt.Errorf("Windows capture could not select its bitmap")
+		return nil, 0, i18n.Errorf("wails.capture.windowsSelectBitmap", nil)
 	}
 	rendered, _, callErr := capturePrintWindow.Call(uintptr(hwnd), uintptr(dc), pwRenderFullContent)
 	if rendered == 0 {
 		frame.Release()
-		return nil, 0, fmt.Errorf("Windows PrintWindow failed: %v", callErr)
+		return nil, 0, i18n.Errorf("wails.capture.windowsPrint", map[string]string{"reason": callErr.Error()})
 	}
 
 	byteCount := width * height * 4

@@ -1,8 +1,9 @@
 package wails
 
 import (
-	"fmt"
 	"unsafe"
+
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 type capturedFrame interface {
@@ -14,7 +15,7 @@ type nativeFrameCapture func(unsafe.Pointer) (capturedFrame, float64, error)
 
 func captureNativeFrame(window unsafe.Pointer, rect Rect, capture nativeFrameCapture) ([]byte, error) {
 	if window == nil {
-		return nil, fmt.Errorf("native capture received a nil window")
+		return nil, i18n.Errorf("wails.capture.nilWindow", nil)
 	}
 	frame, scale, err := capture(window)
 	if frame != nil {
@@ -24,7 +25,7 @@ func captureNativeFrame(window unsafe.Pointer, rect Rect, capture nativeFrameCap
 		return nil, err
 	}
 	if frame == nil {
-		return nil, fmt.Errorf("native capture returned no frame")
+		return nil, i18n.Errorf("wails.capture.noFrame", nil)
 	}
 	return encodeNativeFrame(frame.Frame(), scale, rect)
 }

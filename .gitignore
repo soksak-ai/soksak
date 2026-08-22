@@ -4,6 +4,7 @@ frontend/dist
 frontend/node_modules
 # vite writes a cache here when it runs from the module root rather than frontend/.
 node_modules
+.pnpm-store
 build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 .DS_Store

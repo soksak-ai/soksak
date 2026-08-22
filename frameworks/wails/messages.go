@@ -8,6 +8,8 @@ import "github.com/soksak-ai/soksak-core/core/i18n"
 
 func init() {
 	i18n.Declare(map[string]i18n.Sentence{
+		"wails.window.invalidClientRect": {EN: "window client rect has no area: {width}x{height}", KO: "창 client rect에 면적이 없습니다: {width}x{height}"},
+		"wails.window.noClientDPI":       {EN: "window client rect has no DPI", KO: "창 client rect에 DPI가 없습니다"},
 		"wails.input.negativeCoordinates": {
 			EN: "window input coordinates must be non-negative: x={x}, y={y}",
 			KO: "창 입력 좌표는 0 이상이어야 합니다: x={x}, y={y}",
@@ -305,9 +307,20 @@ func init() {
 			KO: "창 {window} 에 네이티브 수명이 없어 픽셀도 없습니다",
 		},
 		"wails.capture.nilWindow": {
-			EN: "window capture received a nil window",
-			KO: "창 캡처가 nil 창을 받았습니다",
+			EN: "native capture received a nil window",
+			KO: "네이티브 캡처에 창이 전달되지 않았습니다",
 		},
+		"wails.capture.noFrame":             {EN: "native capture returned no frame", KO: "네이티브 캡처가 프레임을 반환하지 않았습니다"},
+		"wails.capture.invalidFrame":        {EN: "invalid native capture frame: {width}x{height} stride={stride} bytes={bytes}", KO: "잘못된 네이티브 캡처 프레임입니다: {width}x{height} stride={stride} bytes={bytes}"},
+		"wails.capture.noPNG":               {EN: "native capture encoded no PNG bytes", KO: "네이티브 캡처가 PNG 바이트를 인코딩하지 못했습니다"},
+		"wails.capture.invalidExtent":       {EN: "invalid capture extent or scale", KO: "캡처 범위 또는 배율이 잘못되었습니다"},
+		"wails.capture.invalidRegion":       {EN: "capture region must have positive width and height", KO: "캡처 영역의 너비와 높이는 양수여야 합니다"},
+		"wails.capture.emptyRegion":         {EN: "capture region is empty after clamping", KO: "경계를 적용한 뒤 캡처 영역이 비었습니다"},
+		"wails.capture.windowsEmptyExtent":  {EN: "Windows capture received an empty window extent", KO: "Windows 캡처가 빈 창 범위를 받았습니다"},
+		"wails.capture.windowsDC":           {EN: "Windows capture could not create a device context: {reason}", KO: "Windows 캡처가 device context를 만들지 못했습니다: {reason}"},
+		"wails.capture.windowsBitmap":       {EN: "Windows capture could not create a bitmap", KO: "Windows 캡처가 bitmap을 만들지 못했습니다"},
+		"wails.capture.windowsSelectBitmap": {EN: "Windows capture could not select its bitmap", KO: "Windows 캡처가 bitmap을 선택하지 못했습니다"},
+		"wails.capture.windowsPrint":        {EN: "Windows PrintWindow failed: {reason}", KO: "Windows PrintWindow가 실패했습니다: {reason}"},
 		"wails.capture.wordlessRefusal": {
 			EN: "the capture refused and said nothing; the reason is missing at its source",
 			KO: "캡처가 이유 없이 거절했습니다 — 사유가 그 출처에서 빠져 있습니다",
