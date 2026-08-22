@@ -12,7 +12,7 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 		t.Fatal(e)
 	}
 	s := string(b)
-	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@814743ac3187ac0bdc797a4a1329a7ba39f92207") {
+	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@4521c688ef4a33b732c7cff6ff4ee76e90b9c72c") {
 		t.Fatal("Windows fleet workflow is not pinned")
 	}
 	if !strings.Contains(s, "Cross-owner reusable workflows must be public") {
