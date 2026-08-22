@@ -38,13 +38,13 @@ jobs:
         run: gh run download "${{ steps.system-run.outputs.id }}" --repo "${{ github.repository }}" --name core-windows-artifact --dir tested
       - name: Package and verify the application release
         run: |
-          go run ./source/cmd/package-release \
-            --root source \
-            --out dist-release \
+          go -C source run ./cmd/package-release \
+            --root . \
+            --out ../dist-release \
             --source-commit "${{ github.sha }}" \
             --system-run-id "${{ steps.system-run.outputs.id }}" \
-            --app tested/soksak.exe \
-            --cli tested/sok.exe
+            --app ../tested/soksak.exe \
+            --cli ../tested/sok.exe
           (cd dist-release && sha256sum --check SHA256SUMS)
           test "$(jq -r .sourceCommit dist-release/provenance.json)" = "${{ github.sha }}"
           test "$(jq -r .authenticode dist-release/provenance.json)" = unsigned

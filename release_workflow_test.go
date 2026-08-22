@@ -16,6 +16,7 @@ func TestWailsReleasePublishesTheVerifiedWindowsCommit(t *testing.T) {
 		"tags: [\"v*\"]", "github.sha", "github.ref_name",
 		"actions/workflows/windows-terminal-system.yml/runs?head_sha=$SOURCE_COMMIT", ".head_sha", ".conclusion",
 		"core-windows-artifact", "cmd/package-release",
+		"go -C source run ./cmd/package-release",
 		"SOKSAK_RELEASE_CLIENT_ID", "SOKSAK_RELEASE_PRIVATE_KEY",
 		"immutable-releases", "publish-release",
 	} {
