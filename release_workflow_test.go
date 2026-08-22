@@ -13,8 +13,8 @@ func TestWailsReleasePublishesTheVerifiedWindowsCommit(t *testing.T) {
 	}
 	text := string(body)
 	for _, required := range []string{
-		"workflow_dispatch", "source_commit", "system_run_id",
-		"actions/runs/$SYSTEM_RUN_ID", ".head_sha", ".conclusion",
+		"tags: [\"v*\"]", "github.sha", "github.ref_name",
+		"actions/workflows/windows-terminal-system.yml/runs?head_sha=$SOURCE_COMMIT", ".head_sha", ".conclusion",
 		"core-windows-artifact", "cmd/package-release",
 		"SOKSAK_RELEASE_CLIENT_ID", "SOKSAK_RELEASE_PRIVATE_KEY",
 		"immutable-releases", "publish-release",

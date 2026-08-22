@@ -1,9 +1,10 @@
 # 애플리케이션 릴리스
 
-Core 애플리케이션 버전의 정본은 `frontend/package.json` 하나입니다. Wails release workflow는
-전체 source commit과 그 commit을 성공 판정한 `windows-terminal-system` run을 입력받습니다.
-그 run이 실제로 테스트한 `soksak.exe`와 `sok.exe` 바이트를 다운로드하며 native 검증 뒤에
-다른 바이트를 다시 빌드해 바꾸지 않습니다.
+Core 애플리케이션 버전의 정본은 `frontend/package.json` 하나입니다. 일치하는 `v*` tag를
+push하면 해당 tag commit의 Wails release workflow가 실행됩니다. Workflow는 정확히 같은
+commit을 성공 판정한 `windows-terminal-system` run을 찾고, 그 run이 실제로 테스트한
+`soksak.exe`와 `sok.exe` 바이트를 다운로드합니다. Native 검증 뒤에 다른 바이트를 다시
+빌드해 바꾸지 않습니다.
 
 Packager는 결정적인 Windows x86_64 ZIP, `SHA256SUMS`, source commit, native system run, platform,
 architecture, archive inventory, Authenticode 상태를 기록한 provenance document를 만듭니다.

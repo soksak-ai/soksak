@@ -1,9 +1,10 @@
 # Application release
 
-The Core application version has one source: `frontend/package.json`. The Wails release workflow
-accepts a full source commit and a successful `windows-terminal-system` run for that same commit.
-It downloads the exact `soksak.exe` and `sok.exe` bytes tested by that run; it does not rebuild and
-substitute different bytes after native verification.
+The Core application version has one source: `frontend/package.json`. Pushing its matching `v*` tag
+runs the Wails release workflow from that tagged commit. The workflow finds a successful
+`windows-terminal-system` run for the exact same commit and downloads the `soksak.exe` and
+`sok.exe` bytes tested by that run; it does not rebuild and substitute different bytes after native
+verification.
 
 The packager publishes a deterministic Windows x86_64 ZIP, `SHA256SUMS`, and a provenance document
 that names the source commit, native system run, platform, architecture, archive inventory, and
