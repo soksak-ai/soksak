@@ -10,6 +10,10 @@ import (
 )
 
 func trackedRecordFiles(root string, extensions map[string]bool, excludedPrefixes []string) ([]string, error) {
+	return trackedRecordFilesUnder(root, extensions, nil, excludedPrefixes)
+}
+
+func trackedRecordFilesUnder(root string, extensions map[string]bool, includedPrefixes, excludedPrefixes []string) ([]string, error) {
 	command := exec.Command("git", "-C", root, "ls-files", "-z", "--cached")
 	output, err := command.Output()
 	if err != nil {
@@ -18,7 +22,9 @@ func trackedRecordFiles(root string, extensions map[string]bool, excludedPrefixe
 	var files []string
 	for _, raw := range bytes.Split(output, []byte{0}) {
 		path := string(raw)
-		if path == "" || !extensions[filepath.Ext(path)] || hasAnyPrefix(path, excludedPrefixes) {
+		if path == "" || len(extensions) > 0 && !extensions[filepath.Ext(path)] ||
+			len(includedPrefixes) > 0 && !hasAnyPrefix(path, includedPrefixes) ||
+			hasAnyPrefix(path, excludedPrefixes) {
 			continue
 		}
 		files = append(files, path)

@@ -110,29 +110,21 @@ func TestKoreanStaysInTheBundles(t *testing.T) {
 	total := 0
 	scanned := 0
 
-	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			if skippedTrees[info.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !koreanScanned[filepath.Ext(path)] {
-			return nil
-		}
+	paths, err := trackedRecordFiles(".", koreanScanned, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
 		clean := filepath.ToSlash(path)
 		if koreanBundles[clean] {
-			return nil
+			continue
 		}
 		if _, isData := koreanIsData[clean]; isData {
-			return nil
+			continue
 		}
 		body, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return readErr
+			t.Fatal(readErr)
 		}
 		scanned++
 		lines := 0
@@ -145,10 +137,6 @@ func TestKoreanStaysInTheBundles(t *testing.T) {
 			found = append(found, finding{clean, lines})
 			total += lines
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("scanning the tree: %v", err)
 	}
 	if scanned == 0 {
 		t.Fatal("no files were scanned; the extensions are wrong")

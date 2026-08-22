@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -137,20 +136,18 @@ func TestNoSymbolicLinkStandsInForAPath(t *testing.T) {
 	// A link makes one path answer as another, and every reading after it describes a place the
 	// reader did not name. A path is declared, or it is discovered; it is never redirected.
 	var links []string
-	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() && skippedTrees[info.Name()] {
-			return filepath.SkipDir
+	paths, err := trackedRecordFiles(".", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		info, statErr := os.Lstat(path)
+		if statErr != nil {
+			t.Fatal(statErr)
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
 			links = append(links, path)
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walking the tree: %v", err)
 	}
 	if len(links) > 0 {
 		t.Errorf("these paths are links:\n%s\nDeclare the path, or discover it. A link answers for "+

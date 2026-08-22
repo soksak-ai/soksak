@@ -46,30 +46,21 @@ func TestAShownSentenceComesFromAKey(t *testing.T) {
 	var found []string
 	scanned := 0
 
-	err := filepath.Walk(filepath.Join("frontend", "src"), func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			if skippedTrees[info.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		extension := filepath.Ext(path)
-		if extension != ".ts" && extension != ".tsx" {
-			return nil
-		}
+	paths, err := trackedRecordFilesUnder(".", map[string]bool{".ts": true, ".tsx": true}, []string{"frontend/src/"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
 		clean := filepath.ToSlash(path)
 		// A test's fixture is read by nobody, and the bundles are where the
 		// sentences live.
 		if strings.Contains(clean, ".test.") ||
 			strings.HasSuffix(clean, "i18n.ko.ts") || strings.HasSuffix(clean, "i18n.en.ts") {
-			return nil
+			continue
 		}
 		body, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return readErr
+			t.Fatal(readErr)
 		}
 		scanned++
 		for index, line := range strings.Split(string(body), "\n") {
@@ -87,10 +78,6 @@ func TestAShownSentenceComesFromAKey(t *testing.T) {
 				break
 			}
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("scanning the frontend: %v", err)
 	}
 	if scanned == 0 {
 		t.Fatal("no frontend source was scanned; the path is wrong")
@@ -148,22 +135,17 @@ func TestARefusalThatTravelsComesFromAKey(t *testing.T) {
 	var found []string
 	scanned := 0
 
-	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			if skippedTrees[info.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
-			return nil
+	paths, err := trackedRecordFiles(".", map[string]bool{".go": true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
 		}
 		body, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return readErr
+			t.Fatal(readErr)
 		}
 		scanned++
 		clean := filepath.ToSlash(path)
@@ -177,10 +159,6 @@ func TestARefusalThatTravelsComesFromAKey(t *testing.T) {
 			}
 			found = append(found, clean+":"+itoa(index+1)+" "+match[1])
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("scanning the Go sources: %v", err)
 	}
 	if scanned == 0 {
 		t.Fatal("no Go source was scanned; the path is wrong")

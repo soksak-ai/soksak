@@ -61,50 +61,36 @@ func TestTheCoreNamesNoPluginAndNoEngine(t *testing.T) {
 	var engines []string
 	scanned := 0
 
-	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() {
-				if skippedTrees[info.Name()] {
-					return filepath.SkipDir
+	paths, err := trackedRecordFilesUnder(".", scannedCode, []string{"frontend/src/", "core/", "frameworks/"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		clean := filepath.ToSlash(path)
+		// A test may name a plugin: it is the caller in that moment, and a
+		// fixture that named nothing would prove nothing.
+		if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
+			continue
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		scanned++
+		_, wiring := couplingWiring[clean]
+		for index, line := range strings.Split(string(body), "\n") {
+			for _, name := range pluginName.FindAllString(line, -1) {
+				if _, allowed := couplingAllowed[name]; allowed {
+					continue
 				}
-				return nil
-			}
-			if !scannedCode[filepath.Ext(path)] {
-				return nil
-			}
-			clean := filepath.ToSlash(path)
-			// A test may name a plugin: it is the caller in that moment, and a
-			// fixture that named nothing would prove nothing.
-			if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
-				return nil
-			}
-			body, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			scanned++
-			_, wiring := couplingWiring[clean]
-			for index, line := range strings.Split(string(body), "\n") {
-				for _, name := range pluginName.FindAllString(line, -1) {
-					if _, allowed := couplingAllowed[name]; allowed {
-						continue
-					}
-					if wiring {
-						continue
-					}
-					plugins = append(plugins, clean+":"+itoa(index+1)+" "+name)
+				if wiring {
+					continue
 				}
-				if engine := engineName.FindString(line); engine != "" {
-					engines = append(engines, clean+":"+itoa(index+1)+" "+engine)
-				}
+				plugins = append(plugins, clean+":"+itoa(index+1)+" "+name)
 			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("scanning %s: %v", root, err)
+			if engine := engineName.FindString(line); engine != "" {
+				engines = append(engines, clean+":"+itoa(index+1)+" "+engine)
+			}
 		}
 	}
 	if scanned == 0 {
@@ -252,45 +238,31 @@ func TestTheCoreNamesNoDomainConcept(t *testing.T) {
 	var found []string
 	scanned := 0
 
-	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() {
-				if skippedTrees[info.Name()] {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			ext := filepath.Ext(path)
-			if !scannedCode[ext] && ext != ".css" {
-				return nil
-			}
-			clean := filepath.ToSlash(path)
-			if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
-				return nil
-			}
-			if _, allowed := domainAllowed[clean]; allowed {
-				return nil
-			}
-			body, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			scanned++
-			for index, line := range strings.Split(stripComments(string(body)), "\n") {
-				lower := strings.ToLower(line)
-				for word, owner := range domainWord {
-					if strings.Contains(lower, word) {
-						found = append(found, clean+":"+itoa(index+1)+" "+word+" — "+owner)
-					}
+	extensions := map[string]bool{".go": true, ".ts": true, ".tsx": true, ".css": true}
+	paths, err := trackedRecordFilesUnder(".", extensions, []string{"frontend/src/", "core/", "frameworks/"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		clean := filepath.ToSlash(path)
+		if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
+			continue
+		}
+		if _, allowed := domainAllowed[clean]; allowed {
+			continue
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		scanned++
+		for index, line := range strings.Split(stripComments(string(body)), "\n") {
+			lower := strings.ToLower(line)
+			for word, owner := range domainWord {
+				if strings.Contains(lower, word) {
+					found = append(found, clean+":"+itoa(index+1)+" "+word+" — "+owner)
 				}
 			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("scanning %s: %v", root, err)
 		}
 	}
 	if scanned == 0 {
@@ -352,38 +324,24 @@ func TestTheCoreAnswersNoMediaType(t *testing.T) {
 	var found []string
 	scanned := 0
 
-	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
+	paths, err := trackedRecordFilesUnder(".", scannedCode, []string{"frontend/src/", "core/", "frameworks/"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		clean := filepath.ToSlash(path)
+		if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
+			continue
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		scanned++
+		for index, line := range strings.Split(stripComments(string(body)), "\n") {
+			if extension.MatchString(line) && mediaType.MatchString(line) {
+				found = append(found, clean+":"+itoa(index+1)+" "+strings.TrimSpace(line))
 			}
-			if info.IsDir() {
-				if skippedTrees[info.Name()] {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if !scannedCode[filepath.Ext(path)] {
-				return nil
-			}
-			clean := filepath.ToSlash(path)
-			if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
-				return nil
-			}
-			body, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			scanned++
-			for index, line := range strings.Split(stripComments(string(body)), "\n") {
-				if extension.MatchString(line) && mediaType.MatchString(line) {
-					found = append(found, clean+":"+itoa(index+1)+" "+strings.TrimSpace(line))
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("scanning %s: %v", root, err)
 		}
 	}
 	if scanned == 0 {

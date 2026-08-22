@@ -45,40 +45,26 @@ func TestTheCoreDoesNotKnowWhatBackMeans(t *testing.T) {
 	var found []string
 	scanned := 0
 
-	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
+	paths, err := trackedRecordFilesUnder(".", scannedCode, []string{"frontend/src/", "core/", "frameworks/"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		clean := filepath.ToSlash(path)
+		// A test states the contract by exercising it, so it may name the
+		// fields a plugin sends.
+		if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
+			continue
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		scanned++
+		for index, line := range strings.Split(withoutComments(string(body)), "\n") {
+			if word := historyWords.FindString(line); word != "" {
+				found = append(found, clean+":"+itoa(index+1)+" "+word)
 			}
-			if info.IsDir() {
-				if skippedTrees[info.Name()] {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if !scannedCode[filepath.Ext(path)] {
-				return nil
-			}
-			clean := filepath.ToSlash(path)
-			// A test states the contract by exercising it, so it may name the
-			// fields a plugin sends.
-			if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
-				return nil
-			}
-			body, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			scanned++
-			for index, line := range strings.Split(withoutComments(string(body)), "\n") {
-				if word := historyWords.FindString(line); word != "" {
-					found = append(found, clean+":"+itoa(index+1)+" "+word)
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("scanning %s: %v", root, err)
 		}
 	}
 	if scanned == 0 {
@@ -108,40 +94,26 @@ func TestTheCoreWritesDownNoSurfaceKind(t *testing.T) {
 	var found []string
 	scanned := 0
 
-	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
+	paths, err := trackedRecordFilesUnder(".", scannedCode, []string{"frontend/src/", "core/", "frameworks/"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		clean := filepath.ToSlash(path)
+		// A test may write a kind: it is standing in for a plugin, and a fixture whose label
+		// had no kind would not be a label any plugin produces.
+		if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
+			continue
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		scanned++
+		for index, line := range strings.Split(withoutComments(string(body)), "\n") {
+			if word := surfaceKindWords.FindString(line); word != "" {
+				found = append(found, clean+":"+itoa(index+1)+" "+word)
 			}
-			if info.IsDir() {
-				if skippedTrees[info.Name()] {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if !scannedCode[filepath.Ext(path)] {
-				return nil
-			}
-			clean := filepath.ToSlash(path)
-			// A test may write a kind: it is standing in for a plugin, and a fixture whose label
-			// had no kind would not be a label any plugin produces.
-			if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
-				return nil
-			}
-			body, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			scanned++
-			for index, line := range strings.Split(withoutComments(string(body)), "\n") {
-				if word := surfaceKindWords.FindString(line); word != "" {
-					found = append(found, clean+":"+itoa(index+1)+" "+word)
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("scanning %s: %v", root, err)
 		}
 	}
 	if scanned == 0 {

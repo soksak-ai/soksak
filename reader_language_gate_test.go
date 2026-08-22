@@ -24,33 +24,20 @@ var refusalRendersEarly = regexp.MustCompile(`notFound\(\s*(tmsg|t)\(`)
 func TestARefusalFromAWindowHoldsItsKey(t *testing.T) {
 	var early []string
 
-	err := filepath.Walk("frontend/src", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			if skippedTrees[info.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		ext := filepath.Ext(path)
-		if ext != ".ts" && ext != ".tsx" {
-			return nil
-		}
+	paths, err := trackedRecordFilesUnder(".", map[string]bool{".ts": true, ".tsx": true}, []string{"frontend/src/"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
 		body, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return readErr
+			t.Fatal(readErr)
 		}
 		for index, line := range strings.Split(string(body), "\n") {
 			if refusalRendersEarly.MatchString(line) {
 				early = append(early, filepath.ToSlash(path)+":"+itoa(index+1))
 			}
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("scanning the page: %v", err)
 	}
 
 	if len(early) > 0 {
