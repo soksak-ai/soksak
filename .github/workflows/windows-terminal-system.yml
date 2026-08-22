@@ -1,0 +1,40 @@
+name: windows-terminal-system
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build-core:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { path: soksak-core, persist-credentials: false }
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { repository: soksak-ai/wails, ref: 07377dc4b307f685f310caf8e62698a81847b5e0, path: frameworks/wails3, persist-credentials: false }
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { repository: soksak-ai/soksak-contract-contentview, ref: 5af66117202f6934ecd2909199bf9b84a541e523, path: soksak-contracts/soksak-contract-contentview }
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { repository: soksak-ai/soksak-contract-control, ref: 7de80203fa358afe2adc488c9f63993f527f4c81, path: soksak-contracts/soksak-contract-control }
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { repository: soksak-ai/soksak-contract-pty, ref: b19af1c4e28a294d18bedbd17405dd5034b0901f, path: soksak-contracts/soksak-contract-pty }
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { repository: soksak-ai/soksak-contract-terminal, ref: cab0691a1a01fca7436ac29f6cc2850245788ea6, path: soksak-contracts/soksak-contract-terminal }
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with: { go-version: "1.25.0" }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: "22.12.0" }
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with: { version: "10.30.3" }
+      - shell: pwsh
+        run: |
+          go build -C frameworks/wails3/v3 -o ../../../bin/wails3.exe ./cmd/wails3
+          Push-Location soksak-core
+          ../bin/wails3.exe task build GOOS=windows ARCH=amd64
+          ../bin/wails3.exe task build:sok GOOS=windows ARCH=amd64
+          Pop-Location
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: { name: core-windows-artifact, path: soksak-core/bin, if-no-files-found: error, compression-level: 0 }
+  system:
+    needs: build-core
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@814743ac3187ac0bdc797a4a1329a7ba39f92207
