@@ -19,6 +19,8 @@ import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 
 const CERTIFIED = { index: { id: "fixture" } } as any;
 const ROOT = { kind: "plugin", id: "weather-plugin", version: "0.0.1" } as any;
+const SETTINGS = { revision: 2, plugins: {}, sidecars: {}, kits: {}, contracts: {}, specs: {} };
+const INSTALLED = { revision: 4, plugins: {}, sidecars: {}, kits: {}, contracts: {}, specs: {} };
 
 describe("native registry install wiring", () => {
   let restore = () => {};
@@ -27,6 +29,8 @@ describe("native registry install wiring", () => {
     closure.mockReset();
     invoke.mockImplementation(async (command: string) => {
       if (command === "host_artifact_target") return "aarch64-apple-darwin";
+      if (command === "settings_get") return SETTINGS;
+      if (command === "installed_get") return INSTALLED;
       return undefined;
     });
   });
@@ -48,7 +52,8 @@ describe("native registry install wiring", () => {
     const req = closure.mock.calls[0]![0] as any;
     expect(req.certified).toBe(CERTIFIED);
     expect(req.root).toBe(ROOT);
-    expect(req.documents.load).toBeTypeOf("function");
+    expect(req.settings).toEqual(SETTINGS);
+    expect(req.installed).toEqual(INSTALLED);
     expect(req.artifacts.begin).toBeTypeOf("function");
     expect(req.target).toBeTypeOf("string");
   });
@@ -123,9 +128,8 @@ describe("native registry install wiring", () => {
       { kind: "kit", id: "terminal-kit", version: "0.0.1", registryId: "fixture", sourceRepository: "https://github.com/example/kit", sourceCommit: "k", releaseTag: "v0.0.1", artifactUrl: "https://x/k.tgz", artifactSha256: "k-sha", target: "any", manifestSha256: "c".repeat(64), stagedHandle: "k-handle" },
     ];
     closure.mockImplementation(async (req: any) => {
-      invoke.mockResolvedValueOnce({ revision: 4 });
       invoke.mockResolvedValueOnce({ revision: 5 });
-      const committed = await req.artifacts.commit("t1", verified);
+      const committed = await req.artifacts.commit("t1", 4, verified);
       return { ok: true, registryId: "fixture", revision: committed.revision, releases: [] };
     });
     restore = wireNativeRegistryInstall();
@@ -159,12 +163,13 @@ describe("native registry install wiring", () => {
   it("does not replace an unreadable installed revision with zero", async () => {
     invoke.mockImplementation(async (command: string) => {
       if (command === "host_artifact_target") return "aarch64-apple-darwin";
+      if (command === "settings_get") return SETTINGS;
       if (command === "installed_get") throw new Error("installed state unreadable");
       return undefined;
     });
     closure.mockImplementation(async (req: any) => {
       try {
-        await req.artifacts.commit("t1", []);
+        await req.artifacts.commit("t1", 4, []);
         return { ok: true, registryId: "fixture", revision: 1, releases: [] };
       } catch (cause) {
         return { ok: false, code: "ATOMIC_INSTALL_FAILED", errors: [String(cause)] };
@@ -174,7 +179,7 @@ describe("native registry install wiring", () => {
     const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
     expect(result).toMatchObject({
       ok: false,
-      code: "ATOMIC_INSTALL_FAILED",
+      code: "INSTALL_STATE_UNAVAILABLE",
       message: expect.stringContaining("installed state unreadable"),
     });
     expect(invoke).not.toHaveBeenCalledWith("artifact_install_commit", expect.objectContaining({

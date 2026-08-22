@@ -8,12 +8,10 @@
 // archive by its pinned sha256 and extracts it under regular-files-only policy.
 
 import { invoke } from "../framework";
-import { loadRegistryResourceBytes } from "../state/registry";
 import {
   declaredEntrypoints,
   installRegistryRelease,
   type RegistryArtifactStager,
-  type RegistryDocumentLoader,
   type RegistryInstallTransaction,
   type StagedRegistryArtifact,
 } from "./registryInstallTransaction";
@@ -21,7 +19,7 @@ import {
   setRegistryInstallRuntime,
   type RegistryInstallRuntimeHandler,
 } from "./registryInstallRuntime";
-import { isArtifactTarget, type ArtifactTarget } from "./spec";
+import { isArtifactTarget, parseInstalledDocument, parseSettingsDocument, type ArtifactTarget } from "./spec";
 
 async function hostTarget(): Promise<ArtifactTarget> {
   const value = await invoke<string>("host_artifact_target");
@@ -31,10 +29,6 @@ async function hostTarget(): Promise<ArtifactTarget> {
 
 function artifactManifest(artifact: Parameters<typeof declaredEntrypoints>[0]): string {
   return artifact.manifest;
-}
-
-function documentLoader(registryId: string): RegistryDocumentLoader {
-  return { load: (url) => loadRegistryResourceBytes(registryId, url) };
 }
 
 const artifactStager: RegistryArtifactStager = {
@@ -59,9 +53,7 @@ const artifactStager: RegistryArtifactStager = {
     }),
   readUtf8: (transactionId, handle, path) =>
     invoke<string>("artifact_install_read_utf8", { transactionId, handle, path }),
-  commit: async (transactionId, releases) => {
-    const installed = await invoke<{ revision: number }>("installed_get");
-    const expectedRevision = installed.revision;
+  commit: async (transactionId, expectedRevision, releases) => {
     const plugins = releases.filter((value) => value.kind === "plugin").map((value) => ({
       plugin: { id: value.id, version: value.version },
       registryId: value.registryId,
@@ -106,7 +98,6 @@ const artifactStager: RegistryArtifactStager = {
 };
 
 const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root }) => {
-  const registryId = certified.index.id;
   let target: ArtifactTarget;
   try {
     target = await hostTarget();
@@ -114,11 +105,25 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
     const message = cause instanceof Error ? cause.message : String(cause);
     return { ok: false, code: "HOST_TARGET_UNAVAILABLE", message, errors: [message] };
   }
+  let settingsRaw: unknown;
+  let installedRaw: unknown;
+  try {
+    settingsRaw = await invoke<unknown>("settings_get");
+    installedRaw = await invoke<unknown>("installed_get");
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    return { ok: false, code: "INSTALL_STATE_UNAVAILABLE", message, errors: [message] };
+  }
+  const settings = parseSettingsDocument(settingsRaw);
+  if (!settings.ok) return { ok: false, code: "SETTINGS_INVALID", message: settings.errors.join("; "), errors: settings.errors };
+  const installed = parseInstalledDocument(installedRaw);
+  if (!installed.ok) return { ok: false, code: "INSTALLED_INVALID", message: installed.errors.join("; "), errors: installed.errors };
   const result = await installRegistryRelease({
     certified,
     root,
     target,
-    documents: documentLoader(registryId),
+    settings: settings.value,
+    installed: installed.value,
     artifacts: artifactStager,
   });
   if (result.ok) {
