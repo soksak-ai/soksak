@@ -39,4 +39,5 @@ jobs:
         with: { name: core-windows-artifact, path: soksak-core/bin, if-no-files-found: error, compression-level: 0 }
   system:
     needs: build-core
+    # Cross-owner reusable workflows must be public; the fleet repository contains tests only.
     uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@814743ac3187ac0bdc797a4a1329a7ba39f92207
