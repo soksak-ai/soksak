@@ -16,10 +16,10 @@ import { parseManifest } from "../plugins/spec";
 const PLUGIN = "soksak-plugin-a";
 
 const MANIFEST = {
-  spec: "soksak-spec-plugin@0.0.1",
   id: PLUGIN,
   name: "A",
   version: "0.0.1",
+  appVersionRequirement: "0.0.1",
   description: "plugin for tests",
   permissions: ["commands"],
   entry: "main.js",
@@ -32,7 +32,6 @@ const view = (surfaces: ("side" | "tab")[]) => ({
   surfaces,
   transparent: false,
   nativeSurface: false,
-  decoration: false,
 });
 
 describe("the plugin settings sidebar link", () => {

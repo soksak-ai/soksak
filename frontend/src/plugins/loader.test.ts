@@ -17,10 +17,10 @@ import { useViewRegistry } from "./viewRegistry";
 function manifestOf(overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-spec-plugin@0.0.1",
       id: "demo",
       name: "Demo",
       version: "1.0.0",
+      appVersionRequirement: "0.0.1",
       description: "Test fixture",
       permissions: [],
       ...overrides,
@@ -149,7 +149,7 @@ describe("activatePlugin — transparency rules (manifest static) at the activat
         manifestOf({
           permissions: ["ui", "commands"],
           contributes: {
-            views: [{ id: "canvas", title: "Canvas", icon: "C", surfaces: ["tab"], decoration: true }],
+            views: [{ id: "canvas", title: "Canvas", icon: "C", surfaces: ["tab"] }],
             commands: [{ name: "open", title: "Open" }],
             nodes: [{ id: "send" }],
           },

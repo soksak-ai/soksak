@@ -42,8 +42,6 @@ replace github.com/soksak-ai/wails-service-webview-surface => ../wails-services/
 
 replace github.com/soksak-ai/soksak-contract-contentview => ../soksak-contracts/soksak-contract-contentview
 
-replace github.com/soksak-ai/soksak-spec/go/platformspec => ../soksak-specs/soksak-spec/go/platformspec
-
 replace github.com/soksak-ai/soksak-contract-control => ../soksak-contracts/soksak-contract-control
 
 replace github.com/soksak-ai/soksak-contract-pty => ../soksak-contracts/soksak-contract-pty

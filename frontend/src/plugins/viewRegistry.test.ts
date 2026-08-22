@@ -12,7 +12,7 @@ import type { ContributedView } from "./spec";
 const provider: PluginViewProvider = { mount: () => {} };
 
 function decl(id: string, surfaces: ContributedView["surfaces"]): ContributedView {
-  return { id, title: id, icon: "P", surfaces, transparent: false, nativeSurface: false, decoration: false };
+  return { id, title: id, icon: "P", surfaces, transparent: false, nativeSurface: false };
 }
 
 beforeEach(() => {

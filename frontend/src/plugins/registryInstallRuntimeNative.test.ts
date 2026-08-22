@@ -9,15 +9,15 @@ const { invoke, closure, loadBytes } = vi.hoisted(() => ({
 vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()), invoke: (...args: unknown[]) => invoke(...args) }));
 vi.mock("../state/registry", () => ({ loadRegistryResourceBytes: loadBytes }));
-vi.mock("./registryInstaller", async (orig) => {
-  const actual = await orig<typeof import("./registryInstaller")>();
-  return { ...actual, installRegistryClosure: (req: unknown) => closure(req) };
+vi.mock("./registryInstallTransaction", async (orig) => {
+  const actual = await orig<typeof import("./registryInstallTransaction")>();
+  return { ...actual, installRegistryRelease: (req: unknown) => closure(req) };
 });
 
 import { installCertifiedRegistryRelease } from "./registryInstallRuntime";
 import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 
-const CERTIFIED = { index: { registryId: "fixture" } } as any;
+const CERTIFIED = { index: { id: "fixture" } } as any;
 const ROOT = { kind: "plugin", id: "weather-plugin", version: "0.0.1" } as any;
 
 describe("native registry install wiring", () => {
@@ -100,7 +100,7 @@ describe("native registry install wiring", () => {
           size: 3,
           sha256: "abc",
           format: "tgz",
-          entrypoint: { kind: "plugin", manifest: "plugin.json" },
+          manifest: "plugin.json",
         },
       });
       return { ok: true, registryId: "fixture", generation: 1, releases: [] };

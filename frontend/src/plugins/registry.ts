@@ -1,203 +1,21 @@
-import {
-  parseRegistryPublicKey,
-  semverCompare,
-  semverSatisfies,
-  type CertifiedRegistryIndex,
-  type LocalizedText,
-  type RegistryPublicKey,
-  type RegistryReleaseEntry,
-  type ReleaseKind,
-} from "./spec";
+import { parseRegistryPublicKey, registryReleases, releaseIdentity, semverCompare, semverSatisfies, type CertifiedRegistryIndex, type LocalizedText, type RegistryPublicKey, type ReleaseDocument, type ReleaseKind } from "./spec";
 
 export const OFFICIAL_REGISTRY_ID = "official";
-
-export interface RegistryDescriptor {
-  id: string;
-  name: string;
-  indexUrl: string;
-  visibility: "public" | "private";
-  trustedPublicKey: RegistryPublicKey;
-  /** Core-derived vault location. A descriptor cannot select this value. */
-  credentialRef?: string;
-}
-
-export interface RegistryCredentialSlot {
-  namespace: string;
-  key: "http-authorization";
-  ref: string;
-}
-
-export interface QualifiedRegistryEntry extends RegistryReleaseEntry {
-  registryId: string;
-}
-
-/** Catalog entries are authenticated release references, never repository locators. */
+export interface RegistryDescriptor { id: string; name: string; indexUrl: string; visibility: "public" | "private"; trustedPublicKey: RegistryPublicKey; credentialRef?: string }
+export interface RegistryCredentialSlot { namespace: string; key: "http-authorization"; ref: string }
+export interface QualifiedRegistryEntry { registryId: string; kind: ReleaseKind; id: string; version: string; release: ReleaseDocument }
 export type RegistryEntry = QualifiedRegistryEntry;
-
 const REGISTRY_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-const REGISTRY_CREDENTIAL_KEY = "http-authorization" as const;
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+const hasOnlyKeys = (value: Record<string, unknown>, allowed: readonly string[]): boolean => Object.keys(value).every((key) => allowed.includes(key));
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
-  const keys = new Set(allowed);
-  return Object.keys(value).every((key) => keys.has(key));
-}
-
-export function registryCredentialSlot(registryId: string): RegistryCredentialSlot | null {
-  if (!REGISTRY_ID_RE.test(registryId)) return null;
-  const encodedId = [...registryId].map((character) => {
-    if (character === "-") return "--";
-    if (character === ".") return "-d";
-    if (character === "_") return "-u";
-    return character;
-  }).join("");
-  const namespace = `core_registry-${encodedId}`;
-  return {
-    namespace,
-    key: REGISTRY_CREDENTIAL_KEY,
-    ref: `${namespace}/${REGISTRY_CREDENTIAL_KEY}`,
-  };
-}
-
-export function isRegistryIndexUrl(value: unknown): value is string {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value !== value.trim() ||
-    /[\u0000-\u001f\u007f\\?#]/.test(value)
-  ) return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" &&
-      url.hostname.length > 0 &&
-      url.username === "" &&
-      url.password === "" &&
-      url.search === "" &&
-      url.hash === "" &&
-      url.toString() === value;
-  } catch {
-    return false;
-  }
-}
-
-export function parseRegistryDescriptor(raw: unknown): RegistryDescriptor | null {
-  if (
-    !isRecord(raw) ||
-    !hasOnlyKeys(raw, ["credentialRef", "id", "indexUrl", "name", "trustedPublicKey", "visibility"]) ||
-    typeof raw.id !== "string" ||
-    !REGISTRY_ID_RE.test(raw.id) ||
-    typeof raw.name !== "string" ||
-    raw.name.trim().length === 0 ||
-    raw.name.length > 128 ||
-    !isRegistryIndexUrl(raw.indexUrl) ||
-    (raw.visibility !== "public" && raw.visibility !== "private")
-  ) return null;
-  const key = parseRegistryPublicKey(raw.trustedPublicKey);
-  if (!key.ok) return null;
-  if (raw.visibility === "public") {
-    if (raw.credentialRef !== undefined) return null;
-    return {
-      id: raw.id,
-      name: raw.name,
-      indexUrl: raw.indexUrl,
-      visibility: "public",
-      trustedPublicKey: key.value,
-    };
-  }
-  const credential = registryCredentialSlot(raw.id);
-  if (!credential || (raw.credentialRef !== undefined && raw.credentialRef !== credential.ref)) return null;
-  return {
-    id: raw.id,
-    name: raw.name,
-    indexUrl: raw.indexUrl,
-    visibility: "private",
-    trustedPublicKey: key.value,
-    credentialRef: credential.ref,
-  };
-}
-
-export function qualifyRegistry(
-  certified: CertifiedRegistryIndex,
-): QualifiedRegistryEntry[] {
-  return certified.index.units.map((entry) => ({
-    ...entry,
-    registryId: certified.index.registryId,
-  }));
-}
-
-export type RegistryReleaseResolution =
-  | { ok: true; entry: QualifiedRegistryEntry }
-  | {
-      ok: false;
-      reason: "not_found" | "qualification_required" | "ambiguous";
-      candidates: { registryId: string; id: string; version: string }[];
-    };
-
-export function resolveRegistryRelease(
-  entries: readonly QualifiedRegistryEntry[],
-  target: {
-    registryId?: string;
-    id: string;
-    kind?: ReleaseKind;
-    range?: string;
-  },
-): RegistryReleaseResolution {
-  const matches = entries.filter((entry) =>
-    entry.id === target.id &&
-    (target.registryId === undefined || entry.registryId === target.registryId) &&
-    (target.kind === undefined || entry.kind === target.kind) &&
-    (target.range === undefined || semverSatisfies(entry.version, target.range) === true)
-  );
-  const candidates = matches
-    .map(({ registryId, id, version }) => ({ registryId, id, version }))
-    .sort((left, right) =>
-      left.registryId.localeCompare(right.registryId) ||
-      -(semverCompare(left.version, right.version) ?? 0)
-    );
-  if (matches.length === 0) return { ok: false, reason: "not_found", candidates };
-  const registries = new Set(matches.map((entry) => entry.registryId));
-  if (registries.size > 1) return { ok: false, reason: "ambiguous", candidates };
-  const registryId = matches[0].registryId;
-  if (target.registryId === undefined && registryId !== OFFICIAL_REGISTRY_ID) {
-    return { ok: false, reason: "qualification_required", candidates };
-  }
-  const entry = [...matches].sort(
-    (left, right) => -(semverCompare(left.version, right.version) ?? 0),
-  )[0];
-  return { ok: true, entry };
-}
-
+export function registryCredentialSlot(registryId: string): RegistryCredentialSlot | null { if (!REGISTRY_ID_RE.test(registryId)) return null; const encoded = [...registryId].map((c) => c === "-" ? "--" : c === "." ? "-d" : c === "_" ? "-u" : c).join(""); const namespace = "core_registry-" + encoded; return { namespace, key: "http-authorization", ref: namespace + "/http-authorization" }; }
+export function isRegistryIndexUrl(value: unknown): value is string { if (typeof value !== "string" || value !== value.trim() || /[\u0000-\u001f\u007f\\?#]/.test(value)) return false; try { const url = new URL(value); return url.protocol === "https:" && url.username === "" && url.password === "" && url.search === "" && url.hash === "" && url.toString() === value; } catch { return false; } }
+export function parseRegistryDescriptor(raw: unknown): RegistryDescriptor | null { if (!isRecord(raw) || !hasOnlyKeys(raw, ["credentialRef", "id", "indexUrl", "name", "trustedPublicKey", "visibility"]) || typeof raw.id !== "string" || !REGISTRY_ID_RE.test(raw.id) || typeof raw.name !== "string" || !raw.name.trim() || !isRegistryIndexUrl(raw.indexUrl) || (raw.visibility !== "public" && raw.visibility !== "private")) return null; const key = parseRegistryPublicKey(raw.trustedPublicKey); if (!key.ok) return null; if (raw.visibility === "public") return raw.credentialRef === undefined ? { id: raw.id, name: raw.name, indexUrl: raw.indexUrl, visibility: "public", trustedPublicKey: key.value } : null; const slot = registryCredentialSlot(raw.id); if (!slot || (raw.credentialRef !== undefined && raw.credentialRef !== slot.ref)) return null; return { id: raw.id, name: raw.name, indexUrl: raw.indexUrl, visibility: "private", trustedPublicKey: key.value, credentialRef: slot.ref }; }
+export function qualifyRegistry(certified: CertifiedRegistryIndex): QualifiedRegistryEntry[] { return registryReleases(certified.index).map((release) => ({ registryId: certified.index.id, ...releaseIdentity(release), release })); }
+export type RegistryReleaseResolution = { ok: true; entry: QualifiedRegistryEntry } | { ok: false; reason: "not_found" | "qualification_required" | "ambiguous"; candidates: { registryId: string; id: string; version: string }[] };
+export function resolveRegistryRelease(entries: readonly QualifiedRegistryEntry[], target: { registryId?: string; id: string; kind?: ReleaseKind; requirement?: string }): RegistryReleaseResolution { const matches = entries.filter((entry) => entry.id === target.id && (target.registryId === undefined || entry.registryId === target.registryId) && (target.kind === undefined || entry.kind === target.kind) && (target.requirement === undefined || semverSatisfies(entry.version, target.requirement) === true)); const candidates = matches.map(({registryId,id,version})=>({registryId,id,version})).sort((a,b)=>a.registryId.localeCompare(b.registryId) || -(semverCompare(a.version,b.version) ?? 0)); if (!matches.length) return {ok:false,reason:"not_found",candidates}; if (new Set(matches.map((entry)=>entry.registryId)).size>1) return {ok:false,reason:"ambiguous",candidates}; if (target.registryId === undefined && matches[0].registryId !== OFFICIAL_REGISTRY_ID) return {ok:false,reason:"qualification_required",candidates}; return {ok:true,entry:[...matches].sort((a,b)=>-(semverCompare(a.version,b.version) ?? 0))[0]}; }
 export type InstallState = "available" | "installed" | "update";
-
-export function installState(
-  entry: Pick<RegistryReleaseEntry, "version">,
-  installedVersion?: string,
-  installedSource?: "installed" | "dev",
-): InstallState {
-  if (!installedVersion) return "available";
-  if (installedSource === "dev") return "installed";
-  if (
-    entry.version !== installedVersion &&
-    semverCompare(entry.version, installedVersion) === 1
-  ) return "update";
-  return "installed";
-}
-
-export function isOfficial(
-  entries: readonly QualifiedRegistryEntry[],
-  id: string,
-): boolean {
-  return entries.some((entry) =>
-    entry.registryId === OFFICIAL_REGISTRY_ID &&
-    entry.kind === "plugin" &&
-    entry.id === id
-  );
-}
-
-/** A catalog has no authority to supply display metadata before its owner release is verified. */
-export function catalogLabel(entry: Pick<QualifiedRegistryEntry, "id">): LocalizedText {
-  return entry.id;
-}
+export function installState(entry: Pick<QualifiedRegistryEntry,"version">, installedVersion?: string, installedSource?: "installed"|"dev"): InstallState { if (!installedVersion) return "available"; if (installedSource === "dev") return "installed"; return semverCompare(entry.version,installedVersion)===1 ? "update" : "installed"; }
+export function isOfficial(entries: readonly QualifiedRegistryEntry[], id: string): boolean { return entries.some((entry)=>entry.registryId===OFFICIAL_REGISTRY_ID&&entry.kind==="plugin"&&entry.id===id); }
+export function catalogLabel(entry: Pick<QualifiedRegistryEntry,"id">): LocalizedText { return entry.id; }

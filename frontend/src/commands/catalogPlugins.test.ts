@@ -134,7 +134,7 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
             id: "canvas",
             title: "Canvas",
             icon: "C",
-            surfaces: ["tab"], decoration: true,
+            surfaces: ["tab"],
             ...(status !== undefined ? { status } : {}),
           },
         ],
@@ -284,7 +284,6 @@ describe("plugin.view.open — only a center view opens as a tab", () => {
         surfaces: ["side"],
         transparent: false,
         nativeSurface: false,
-        decoration: false,
       },
       { mount: () => {} },
     );
@@ -313,10 +312,10 @@ describe("plugin.view.open — only a center view opens as a tab", () => {
 describe("plugin.list — contract discovery", () => {
   it("exposes provider versions and consumer ranges from the manifest", async () => {
     const provider = manifestOf("provider", {
-      implements: [{ id: "terminal-renderer", version: "0.0.1" }],
+      implements: [{ id: "soksak-spec-plugin-terminal-renderer", version: "0.0.1" }],
     });
     const consumer = manifestOf("consumer", {
-      consumes: [{ id: "terminal-renderer", requirement: "0.0.1" }],
+      consumes: [{ id: "soksak-spec-plugin-terminal-renderer", requirement: "0.0.1" }],
     });
     usePlugins.setState({
       plugins: {
@@ -329,10 +328,10 @@ describe("plugin.list — contract discovery", () => {
     expect(result.ok).toBe(true);
     const plugins = (result as unknown as { data: { plugins: Record<string, unknown>[] } }).data.plugins;
     expect(plugins.find((plugin) => plugin.id === "provider")?.implements).toEqual([
-      { id: "terminal-renderer", version: "0.0.1" },
+      { id: "soksak-spec-plugin-terminal-renderer", version: "0.0.1" },
     ]);
     expect(plugins.find((plugin) => plugin.id === "consumer")?.consumes).toEqual([
-      { id: "terminal-renderer", requirement: "0.0.1" },
+      { id: "soksak-spec-plugin-terminal-renderer", requirement: "0.0.1" },
     ]);
   });
 });

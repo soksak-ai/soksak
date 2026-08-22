@@ -916,7 +916,7 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register)", (
   it("passes a declared cross-plugin call", async () => {
     const d = fakeDeps();
     const { api } = buildPluginApi(
-      manifestOf({ permissions: ["commands"], dependencies: { "other-plugin": "^1.0.0" } }),
+      manifestOf({ permissions: ["commands"], dependencies: { "other-plugin": "0.0.1" } }),
       "/d",
       d,
     );
@@ -928,12 +928,12 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register)", (
   it("passes a compatible contract call without a plugin id dependency", async () => {
     const d = fakeDeps({
       implementsOf: (id) =>
-        id === "other-plugin" ? [{ id: "terminal-session", version: "0.2.0" }] : [],
+        id === "other-plugin" ? [{ id: "soksak-spec-plugin-terminal-session", version: "0.0.1" }] : [],
     });
     const { api } = buildPluginApi(
       manifestOf({
         permissions: ["commands"],
-        consumes: [{ id: "terminal-session", requirement: "0.2.0" }],
+        consumes: [{ id: "soksak-spec-plugin-terminal-session", requirement: "0.0.1" }],
       }),
       "/d",
       d,
@@ -945,12 +945,12 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register)", (
 
   it("rejects an incompatible contract provider", async () => {
     const d = fakeDeps({
-      implementsOf: () => [{ id: "terminal-session", version: "1.0.0" }],
+      implementsOf: () => [{ id: "soksak-spec-plugin-terminal-session", version: "1.0.0" }],
     });
     const { api } = buildPluginApi(
       manifestOf({
         permissions: ["commands"],
-        consumes: [{ id: "terminal-session", requirement: "0.2.0" }],
+        consumes: [{ id: "soksak-spec-plugin-terminal-session", requirement: "0.0.1" }],
       }),
       "/d",
       d,
@@ -1019,7 +1019,7 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register)", (
   it("scheduler.register — passes declared cross-plugin and core commands", async () => {
     const inv = vi.fn(async () => "sch-1");
     const { api } = buildPluginApi(
-      manifestOf({ permissions: ["schedule"], dependencies: { "other-plugin": "^1.0.0" } }),
+      manifestOf({ permissions: ["schedule"], dependencies: { "other-plugin": "0.0.1" } }),
       "/d",
       fakeDeps({ invoke: inv }),
     );

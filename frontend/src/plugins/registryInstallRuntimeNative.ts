@@ -11,12 +11,12 @@ import { invoke } from "../framework";
 import { loadRegistryResourceBytes } from "../state/registry";
 import {
   declaredEntrypoints,
-  installRegistryClosure,
+  installRegistryRelease,
   type RegistryArtifactStager,
   type RegistryDocumentLoader,
   type RegistryInstallTransaction,
   type StagedRegistryArtifact,
-} from "./registryInstaller";
+} from "./registryInstallTransaction";
 import {
   setRegistryInstallRuntime,
   type RegistryInstallRuntimeHandler,
@@ -30,9 +30,7 @@ async function hostTarget(): Promise<ArtifactTarget> {
 }
 
 function artifactManifest(artifact: Parameters<typeof declaredEntrypoints>[0]): string {
-  if (artifact.entrypoint.kind === "plugin") return artifact.entrypoint.manifest;
-  if (artifact.entrypoint.kind === "kit") return artifact.entrypoint.packageManifest;
-  return "sidecar.json";
+  return artifact.manifest;
 }
 
 function documentLoader(registryId: string): RegistryDocumentLoader {
@@ -108,7 +106,7 @@ const artifactStager: RegistryArtifactStager = {
 };
 
 const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root }) => {
-  const registryId = certified.index.registryId;
+  const registryId = certified.index.id;
   let target: ArtifactTarget;
   try {
     target = await hostTarget();
@@ -116,7 +114,7 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
     const message = cause instanceof Error ? cause.message : String(cause);
     return { ok: false, code: "HOST_TARGET_UNAVAILABLE", message, errors: [message] };
   }
-  const result = await installRegistryClosure({
+  const result = await installRegistryRelease({
     certified,
     root,
     target,

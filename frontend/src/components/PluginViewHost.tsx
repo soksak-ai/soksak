@@ -20,7 +20,6 @@ import { registerMountedViewFocus } from "../plugins/viewFocus";
 import { useSessions } from "../state/sessions";
 import { useBootPhase } from "../state/bootPhase";
 import { usePlugins } from "../state/plugins";
-import { pluginOfViewKey } from "../plugins/spec";
 import { useT } from "../i18n";
 import {
   pluginViewPresentationHost,
@@ -383,7 +382,7 @@ export const PluginViewHost = memo(function PluginViewHost({
   // every pane in the window said that. Nothing was disabled and nothing was removed. The reason
   // was in `plugin.list` the whole time and the screen said something else, which sends a person to
   // look in the wrong place.
-  const pluginId = pluginOfViewKey(viewKey);
+  const pluginId = viewKey.slice(0, viewKey.indexOf("."));
   const refusal = usePlugins((s) => s.rejected.find((r) => r.id === pluginId));
   const installed = usePlugins((s) => !!s.plugins[pluginId]);
   const absence = refusal

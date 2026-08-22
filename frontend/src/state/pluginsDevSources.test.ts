@@ -26,10 +26,10 @@ function manifest(version: string): string {
     description: "weather plugin",
     permissions: ["commands", "sidecar", "service"],
     entry: null,
-    sidecars: [{ name: "weather-service", interface: { id: "weather-wire", requirement: "0.0.1" } }],
+    sidecars: [{ name: "weather-service", interface: { id: "soksak-spec-sidecar-weather-wire", requirement: "0.0.1" } }],
     service: {
       sidecar: "weather-service",
-      interface: { id: "weather", requirement: "0.0.1" },
+      interface: { id: "soksak-spec-service-weather", requirement: "0.0.1" },
       subscribe: [],
     },
     contributes: {

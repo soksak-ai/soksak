@@ -1,12 +1,12 @@
 import { moduleState } from "../lib/moduleState";
 import type {
   CertifiedRegistryIndex,
-  RegistryReleaseIdentity,
+  ReleaseIdentity,
 } from "./spec";
 
 export interface RegistryInstallRuntimeInput {
   certified: CertifiedRegistryIndex;
-  root: RegistryReleaseIdentity;
+  root: ReleaseIdentity;
 }
 
 export type RegistryInstallRuntimeResult =

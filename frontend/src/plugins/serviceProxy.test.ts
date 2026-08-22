@@ -3,7 +3,7 @@
 // (no mock registry).
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { execute, register, unregister } from "../commands/registry";
-import { parseManifest, SERVICE_CONTRACT_VERSION, type PluginManifest } from "./spec";
+import { parseManifest, SERVICE_CONTRACT_REQUIREMENT, type PluginManifest } from "./spec";
 import {
   buildBindLedger,
   registerBusBridge,
@@ -25,7 +25,7 @@ function demoManifest(): PluginManifest {
       sidecars: [{ name: "demo-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", requirement: "0.0.1" } }],
       service: {
         sidecar: "demo-svc",
-        interface: { id: "vault", requirement: SERVICE_CONTRACT_VERSION },
+        interface: { id: "soksak-spec-service-vault", requirement: SERVICE_CONTRACT_REQUIREMENT.requirement },
         subscribe: ["bus:kanban:changed"],
       },
       contributes: {
@@ -132,7 +132,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
         {
           plugin: "demo",
           sidecar: "demo-svc",
-          interface: { id: "vault", requirement: SERVICE_CONTRACT_VERSION },
+          interface: { id: "soksak-spec-service-vault", requirement: SERVICE_CONTRACT_REQUIREMENT.requirement },
           ops: ["run"],
           subscribe: ["bus:kanban:changed"],
           schedules: [
@@ -157,7 +157,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
         entry: null,
         permissions: ["commands", "sidecar", "service", "secrets"],
         sidecars: [{ name: "vaulted-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", requirement: "0.0.1" } }],
-        service: { sidecar: "vaulted-svc", interface: { id: "vault", requirement: SERVICE_CONTRACT_VERSION }, subscribe: [] },
+        service: { sidecar: "vaulted-svc", interface: { id: "soksak-spec-service-vault", requirement: SERVICE_CONTRACT_REQUIREMENT.requirement }, subscribe: [] },
         contributes: {
           commands: [
             { name: "run", title: { en: "Run", ko: "Run (ko)" }, bind: "service", description: "Run." },
@@ -199,7 +199,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
       ledger: expect.objectContaining({
         services: [
           expect.objectContaining({
-            interface: { id: "vault", requirement: SERVICE_CONTRACT_VERSION },
+            interface: { id: "soksak-spec-service-vault", requirement: SERVICE_CONTRACT_REQUIREMENT.requirement },
           }),
         ],
       }),

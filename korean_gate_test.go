@@ -99,7 +99,7 @@ var koreanReading = regexp.MustCompile(`withReaderLanguage\(\s*"ko"`)
 // It is a ratchet: the number may only go down. Anything that raises it is a
 // new sentence in the wrong place. If it falls, lower this and say which
 // category shrank — a floor nobody can explain is not a floor.
-const koreanDebt = 42
+const koreanDebt = 41
 
 func TestKoreanStaysInTheBundles(t *testing.T) {
 	type finding struct {

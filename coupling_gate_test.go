@@ -414,86 +414,17 @@ func TestTheCoreAnswersNoMediaType(t *testing.T) {
 // So the rule is not that the names are gone. It is that they are formats, declared in one file, and
 // none of them names a plugin or a domain: `soksak-spec-plugin@` is the manifest format every plugin
 // shares, and `soksak-spec-plugin-terminal@` would be a format for one of them (C1).
-var specStampHome = filepath.Join("frontend", "src", "plugins", "spec", "unit.ts")
-
-var declaredSpecStamps = map[string]bool{
-	"soksak-spec-release":     true,
-	"soksak-spec-registry":    true,
-	"soksak-spec-conformance": true,
-	"soksak-spec-kit":         true,
-	"soksak-spec-plugin":      true,
-	"soksak-spec-sidecar":     true,
-}
-
 func TestTheCoreHoldsNoSecondIdentityNamespace(t *testing.T) {
-	spec := regexp.MustCompile(`soksak-spec-[a-z0-9-]+`)
-	var scattered []string
-	var invented []string
-	declared := map[string]bool{}
-	scanned := 0
-
-	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() {
-				if skippedTrees[info.Name()] {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if !scannedCode[filepath.Ext(path)] {
-				return nil
-			}
-			clean := filepath.ToSlash(path)
-			if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
-				return nil
-			}
-			body, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			scanned++
-			home := path == specStampHome
-			for index, line := range strings.Split(stripComments(string(body)), "\n") {
-				for _, name := range spec.FindAllString(line, -1) {
-					where := clean + ":" + itoa(index+1) + " " + name
-					if !home {
-						scattered = append(scattered, where)
-						continue
-					}
-					declared[name] = true
-					if !declaredSpecStamps[name] {
-						invented = append(invented, where)
-					}
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("scanning %s: %v", root, err)
-		}
-	}
-	if scanned == 0 {
-		t.Fatal("no core source was scanned; the roots are wrong")
-	}
-	if len(scattered) > 0 {
-		t.Errorf("a spec stamp stands outside %s in %d places:\n%s\n"+
-			"Declare it there and import it. A stamp written twice is two answers about one document.",
-			specStampHome, len(scattered), strings.Join(scattered, "\n"))
-	}
-	if len(invented) > 0 {
-		t.Errorf("%d spec stamps are not formats the core reads:\n%s\n"+
-			"A stamp is the format of a document, one per document kind. A plugin is named by its "+
-			"plugin id, and a format for one plugin is a second name for it (C1).",
-			len(invented), strings.Join(invented, "\n"))
-	}
-	for name := range declaredSpecStamps {
-		if !declared[name] {
-			t.Errorf("%s is declared here but no longer in %s.\n"+
-				"It stamps a document that is published today — deleting it makes that document "+
-				"unreadable. Measure what is served before removing it.", name, specStampHome)
+	for _, path := range []string{
+		filepath.Join("frontend", "src", "plugins", "spec", "unit.ts"),
+		filepath.Join("frontend", "src", "plugins", "spec", "release.ts"),
+		filepath.Join("frontend", "src", "plugins", "spec", "registry.ts"),
+		filepath.Join("frontend", "src", "plugins", "spec", "conformanceWire.ts"),
+	} {
+		if _, err := os.Stat(path); err == nil {
+			t.Errorf("core embeds public platform grammar: %s", path)
+		} else if !os.IsNotExist(err) {
+			t.Fatal(err)
 		}
 	}
 }

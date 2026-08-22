@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseContractRequirement } from "./contracts";
+import { parseContractRequirement } from "./index";
 
 describe("public contract consumer requirements", () => {
   it("accepts the exact 0.0.1 requirement", () => {
