@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@soksak-ai/plugin-spec':
-        specifier: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.1/soksak-ai-plugin-spec-0.0.1.tgz
-        version: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.1/soksak-ai-plugin-spec-0.0.1.tgz
+        specifier: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.2/soksak-ai-plugin-spec-0.0.2.tgz
+        version: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.2/soksak-ai-plugin-spec-0.0.2.tgz
       '@soksak/wails-service-native-compositor':
         specifier: file:../../wails-services/wails-service-native-compositor/frontend
         version: file:../../wails-services/wails-service-native-compositor/frontend
@@ -523,9 +523,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.1/soksak-ai-plugin-spec-0.0.1.tgz':
-    resolution: {integrity: sha512-93sHPGBLBF09Gk0303Y5+zVZ6yJQ/QE+ZWxaPSaNycUz+mfnAC/hyN/Z90TtVqNqH5vMj48m5/MAYVFdYbfOwg==, tarball: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.1/soksak-ai-plugin-spec-0.0.1.tgz}
-    version: 0.0.1
+  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.2/soksak-ai-plugin-spec-0.0.2.tgz':
+    resolution: {integrity: sha512-IwuJVIJcoeSJXMPytOz2uY/M+RWqrfC9/BKpYRUAEB+u3b5EkvpG9LbdXM+T20c/8uB63Ev5ne3aL0fSuWQYeA==, tarball: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.2/soksak-ai-plugin-spec-0.0.2.tgz}
+    version: 0.0.2
     engines: {node: '>=18'}
     hasBin: true
 
@@ -1350,7 +1350,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.4':
     optional: true
 
-  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.1/soksak-ai-plugin-spec-0.0.1.tgz': {}
+  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.2/soksak-ai-plugin-spec-0.0.2.tgz': {}
 
   '@soksak/wails-service-native-compositor@file:../../wails-services/wails-service-native-compositor/frontend': {}
 
