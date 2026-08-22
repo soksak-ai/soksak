@@ -14,6 +14,10 @@ an empty image is never a successful result.
 
 The Windows adapter only owns HWND, DC, bitmap, DPI, and resource lifetime. BGRA conversion, alpha,
 stride validation, CSS-point-to-pixel crop, clamping, and PNG encoding are platform-neutral code.
+The same HWND boundary reports the document content extent: Windows reads the client rect with
+`GetClientRect` and converts device pixels to DIPs with `GetDpiForWindow`. A window frame is not a
+content-size fallback because non-client chrome makes it a different rectangle. `ui.verify` treats
+an unavailable content rect as unanswered rather than silently comparing against that frame.
 
 ## Verification
 

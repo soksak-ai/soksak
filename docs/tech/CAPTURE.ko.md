@@ -14,6 +14,10 @@
 Windows adapter는 HWND, DC, bitmap, DPI, resource lifetime만 소유합니다. BGRA 변환, alpha,
 stride 검증, CSS point에서 pixel로의 crop, 경계 clamp, PNG encoding은 플랫폼 비종속
 코드가 소유합니다.
+같은 HWND 경계가 document content extent도 보고합니다. Windows는 `GetClientRect`로 client
+rect를 읽고 `GetDpiForWindow`로 device pixel을 DIP로 변환합니다. Window frame은 non-client
+chrome이 포함된 다른 사각형이므로 content size fallback으로 사용하지 않습니다.
+`ui.verify`는 content rect를 읽지 못하면 frame과 비교한 척하지 않고 unanswered로 판정합니다.
 
 ## 검증
 
