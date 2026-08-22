@@ -12,8 +12,12 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 		t.Fatal(e)
 	}
 	s := string(b)
-	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@4521c688ef4a33b732c7cff6ff4ee76e90b9c72c") {
+	const testsRef = "405d2e4ed3fb0228919aa2138ff9b3386e93199b"
+	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@"+testsRef) {
 		t.Fatal("Windows fleet workflow is not pinned")
+	}
+	if !strings.Contains(s, "tests_ref: "+testsRef) {
+		t.Fatal("Windows fleet execution is not pinned")
 	}
 	if !strings.Contains(s, "Cross-owner reusable workflows must be public") {
 		t.Fatal("Windows workflow does not state its public fleet-workflow boundary")
