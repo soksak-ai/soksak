@@ -20,11 +20,11 @@ func TestGoModIsTheOnlyToolchainVersionSource(t *testing.T) {
 	}
 	version := string(match[1])
 	checks := map[string][]string{
-		"build/docker/Dockerfile.cross":                 {"ARG GO_VERSION=must-be-provided", "FROM golang:${GO_VERSION}-bookworm AS go-toolchain"},
-		"scripts/ci/cross-image.sh":                     {"go_version=$(awk", "--build-arg \"GO_VERSION=$go_version\"", "--platform \"linux/$architecture\"", "wails-cross-$architecture"},
-		"scripts/ci/windows-build.sh":                   {"required=$(awk", "go env GOVERSION"},
-		".github/workflows/windows-terminal-system.yml": {"go-version-file: soksak-core/go.mod"},
-		".github/workflows/wails-release.yml":           {"go-version-file: source/go.mod"},
+		"build/docker/Dockerfile.cross":              {"ARG GO_VERSION=must-be-provided", "FROM golang:${GO_VERSION}-bookworm AS go-toolchain"},
+		"scripts/ci/cross-image.sh":                  {"go_version=$(awk", "--build-arg \"GO_VERSION=$go_version\"", "--platform \"linux/$architecture\"", "wails-cross-$architecture"},
+		"scripts/ci/windows-build.sh":                {"required=$(awk", "go env GOVERSION"},
+		".github/workflows/multiplatform-system.yml": {"go-version-file: soksak-core/go.mod"},
+		".github/workflows/wails-release.yml":        {"go-version-file: source/go.mod"},
 	}
 	for path, required := range checks {
 		body, err := os.ReadFile(filepath.Join(root, path))

@@ -6,14 +6,14 @@ import (
 	"testing"
 )
 
-func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
-	b, e := os.ReadFile(".github/workflows/windows-terminal-system.yml")
+func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) {
+	b, e := os.ReadFile(".github/workflows/multiplatform-system.yml")
 	if e != nil {
 		t.Fatal(e)
 	}
 	s := string(b)
-	if !strings.Contains(s, "repository: soksak-ai/soksak-contract-control, ref: f12f3a6f579b6dff04622a0138450e75d2afae7c") {
-		t.Fatal("Windows workflow is not pinned to the shared control address contract")
+	if !strings.Contains(s, "repository: soksak-ai/soksak-contract-control, ref: db724f6474eb486d775b6d799b95de8377ba3dc7") {
+		t.Fatal("multiplatform workflow is not pinned to the verified control contract")
 	}
 	for _, required := range []string{
 		"actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -21,10 +21,16 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 		"actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
 		"pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86",
 		"actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-		"node-version: \"24.19.0\"",
+		"jq -r .engines.node soksak-core/frontend/package.json",
+		"node-version: \"${{ steps.frontend-versions.outputs.node }}\"",
+		"package_json_file: soksak-core/frontend/package.json",
+		"windows-build:", "darwin-build:", "linux-build:",
+		"ubuntu-24.04-arm", "architecture: amd64", "architecture: arm64",
+		"scripts/ci/windows-build.sh all", "scripts/ci/darwin-release.sh", "scripts/ci/linux-release.sh ${{ matrix.architecture }}",
+		"core-windows-artifact", "core-darwin-artifact", "core-linux-${{ matrix.architecture }}-artifact",
 	} {
 		if !strings.Contains(s, required) {
-			t.Errorf("Windows workflow does not pin Node 24 toolchain input %s", required)
+			t.Errorf("multiplatform workflow omits %s", required)
 		}
 	}
 	if !strings.Contains(s, "cache-dependency-path: soksak-core/go.sum") {
@@ -41,37 +47,29 @@ func TestWindowsTerminalWorkflowDelegatesFleetOwnership(t *testing.T) {
 			t.Errorf("Windows workflow duplicates runner logic: %s", inline)
 		}
 	}
-	const testsRef = "b8d9f83580ace24aa9692d7d8127e078463cf366"
-	if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@"+testsRef) {
-		t.Fatal("Windows fleet workflow is not pinned")
+	const testsRef = "f4885ba89dc70f655b19520d148b07a45fb3d60b"
+	for _, platform := range []string{"windows", "darwin", "linux"} {
+		if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/"+platform+"-system.yml@"+testsRef) {
+			t.Errorf("%s fleet workflow is not pinned", platform)
+		}
 	}
-	if !strings.Contains(s, "tests_ref: "+testsRef) {
-		t.Fatal("Windows fleet execution is not pinned")
-	}
-	if !strings.Contains(s, "$ErrorActionPreference = 'Stop'") {
-		t.Fatal("Windows build failures do not stop artifact publication")
-	}
-	if !strings.Contains(s, "$PSNativeCommandUseErrorActionPreference = $true") {
-		t.Fatal("Windows native command failures do not stop artifact publication")
+	if strings.Count(s, "tests_ref: "+testsRef) != 3 {
+		t.Fatal("native fleet executions do not share one exact Acceptance commit")
 	}
 	for _, forbidden := range []string{"soksak-ai/wails", "frameworks/wails3"} {
 		if strings.Contains(s, forbidden) {
 			t.Errorf("Windows workflow depends on a Wails source checkout: %s", forbidden)
 		}
 	}
-	if !strings.Contains(s, "Test-Path $artifact") {
-		t.Fatal("Windows workflow does not verify built artifact paths")
-	}
 	for _, artifact := range []string{"soksak-core/bin/soksak.exe", "soksak-core/bin/sok.exe"} {
 		if !strings.Contains(s, artifact) {
 			t.Errorf("Windows workflow does not require artifact %s", artifact)
 		}
 	}
-	if !strings.Contains(s, "Cross-owner reusable workflows must be public") {
-		t.Fatal("Windows workflow does not state its public fleet-workflow boundary")
-	}
-	if !strings.Contains(s, "paths:") || !strings.Contains(s, "scripts/ci/windows-build.sh") {
-		t.Fatal("Windows workflow does not limit push runs to Windows build inputs")
+	for _, job := range []string{"windows-system:", "darwin-system:", "linux-system:"} {
+		if !strings.Contains(s, job) {
+			t.Errorf("missing native system job %s", job)
+		}
 	}
 	for _, v := range []string{"soksak-plugin-terminal", "soksak-sidecar-terminal"} {
 		if strings.Contains(s, v) {

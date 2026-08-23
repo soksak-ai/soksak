@@ -13,6 +13,16 @@ if [ -s "$root/frontend/dist/index.html" ] && [ "$(cat "$marker" 2>/dev/null || 
   exit 0
 fi
 image=soksak-frontend:latest
+build_frontend() {
+  pnpm --dir "$root/frontend" --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile
+  pnpm --dir "$root/frontend" typecheck
+  pnpm --dir "$root/frontend" build
+}
+if [ "$(node --version 2>/dev/null || true)" = "v$node_version" ] && [ "$(pnpm --version 2>/dev/null || true)" = "$pnpm_version" ]; then
+  CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 build_frontend
+  printf '%s\n' "$definition:$input" > "$marker"
+  exit 0
+fi
 current=$(docker image inspect "$image" --format '{{index .Config.Labels "io.soksak.frontend.definition-sha"}}' 2>/dev/null || true)
 if [ "$current" != "$definition" ]; then
   docker build \

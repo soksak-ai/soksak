@@ -7,7 +7,7 @@ import (
 )
 
 func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
-	workflow := readText(t, ".github/workflows/windows-terminal-system.yml")
+	workflow := readText(t, ".github/workflows/multiplatform-system.yml")
 	docker := readText(t, "scripts/ci/windows-docker.sh")
 	if !strings.Contains(workflow, "windows-build.sh all") {
 		t.Error("workflow does not execute the complete Windows build")
@@ -64,7 +64,7 @@ func TestCrossBuilderConsumesOnePinnedFrontendAndBuildsBothBinaries(t *testing.T
 		}
 	}
 	frontend := readText(t, "scripts/ci/frontend-build.sh")
-	for _, required := range []string{"frontend/package.json", "NODE_VERSION=$node_version", "PNPM_VERSION=$pnpm_version", "PNPM_DISABLE_SELF_UPDATE_CHECK=1", ".build-input-sha256"} {
+	for _, required := range []string{"frontend/package.json", "NODE_VERSION=$node_version", "PNPM_VERSION=$pnpm_version", "PNPM_DISABLE_SELF_UPDATE_CHECK=1", ".build-input-sha256", `node --version`, `pnpm --version`, "build_frontend"} {
 		if !strings.Contains(frontend, required) {
 			t.Errorf("frontend runner omits %q", required)
 		}
