@@ -29,6 +29,40 @@ func TestTheSocketIsReachableOnlyByItsOwner(t *testing.T) {
 	}
 }
 
+func TestClosingTheOwnerRemovesTheSocketPath(t *testing.T) {
+	path := filepath.Join(shortDir(t), "s.sock")
+	listener, err := Listen(path)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("released socket path remains: %v", err)
+	}
+}
+
+func TestClosingAnOldOwnerDoesNotRemoveAReplacement(t *testing.T) {
+	path := filepath.Join(shortDir(t), "s.sock")
+	listener, err := Listen(path)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("unlink socket: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("replacement"), 0o600); err != nil {
+		t.Fatalf("replacement: %v", err)
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if body, err := os.ReadFile(path); err != nil || string(body) != "replacement" {
+		t.Fatalf("replacement changed: %q, %v", body, err)
+	}
+}
+
 func TestASocketLeftByADeadProcessIsReplaced(t *testing.T) {
 	// Refusing would make every crash need a manual cleanup before the
 	// application could start again.

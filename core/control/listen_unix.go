@@ -44,11 +44,36 @@ func Listen(path string) (net.Listener, error) {
 	if err != nil {
 		return nil, fmt.Errorf("binding the control socket at %s: %w", path, err)
 	}
+	listener.(*net.UnixListener).SetUnlinkOnClose(false)
 	if err := os.Chmod(path, 0o600); err != nil {
 		_ = listener.Close()
 		return nil, fmt.Errorf("restricting the control socket at %s: %w", path, err)
 	}
-	return listener, nil
+	owner, err := os.Stat(path)
+	if err != nil {
+		_ = listener.Close()
+		return nil, fmt.Errorf("recording the control socket at %s: %w", path, err)
+	}
+	return &ownedSocketListener{Listener: listener, path: path, owner: owner}, nil
+}
+
+type ownedSocketListener struct {
+	net.Listener
+	path  string
+	owner os.FileInfo
+}
+
+func (listener *ownedSocketListener) Close() error {
+	closeErr := listener.Listener.Close()
+	current, statErr := os.Stat(listener.path)
+	if statErr == nil && current.Mode()&os.ModeSocket != 0 && os.SameFile(listener.owner, current) {
+		if removeErr := os.Remove(listener.path); removeErr != nil && closeErr == nil {
+			return fmt.Errorf("removing the released control socket at %s: %w", listener.path, removeErr)
+		}
+	} else if statErr != nil && !os.IsNotExist(statErr) && closeErr == nil {
+		return fmt.Errorf("checking the released control socket at %s: %w", listener.path, statErr)
+	}
+	return closeErr
 }
 
 func Dial(path string) (net.Conn, error) { return net.Dial("unix", path) }
