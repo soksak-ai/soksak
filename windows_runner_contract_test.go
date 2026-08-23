@@ -27,16 +27,15 @@ func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 		t.Fatal("Docker runner rebuilds the CI image without a definition hash")
 	}
 	runner := readText(t, "scripts/ci/windows-build.sh")
-	if !strings.Contains(runner, "Wails binding generation emitted warnings") {
-		t.Fatal("Windows binding generation does not reject warnings")
-	}
-	for _, required := range []string{"generated_source_digest()", "before=$(generated_source_digest)", "after=$(generated_source_digest)", `[ "$before" = "$after" ]`} {
+	for _, required := range []string{"go mod tidy -diff", "frontend/bindings", "generate syso"} {
 		if !strings.Contains(runner, required) {
-			t.Errorf("Windows generation drift gate is missing %q", required)
+			t.Errorf("Windows canonical source gate is missing %q", required)
 		}
 	}
-	if strings.Contains(runner, "git diff") {
-		t.Fatal("Windows generation drift gate depends on Git metadata")
+	for _, forbidden := range []string{"generate bindings", "generated_source_digest", "go mod tidy\n"} {
+		if strings.Contains(runner, forbidden) {
+			t.Errorf("Windows build mutates canonical source through %q", forbidden)
+		}
 	}
 }
 

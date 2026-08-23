@@ -21,29 +21,12 @@ require_wails() {
   fi
 }
 
-generated_source_digest() {
-  find go.mod go.sum frontend/bindings -type f -exec sha256sum {} \; | LC_ALL=C sort | sha256sum | awk '{print $1}'
-}
-
 generate() {
   require_go
   require_wails
-  before=$(generated_source_digest)
-  go mod tidy
-  if bindings_output=$("$wails" generate bindings -f '-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"' -clean=true -ts ./... 2>&1); then
-    printf '%s\n' "$bindings_output"
-  else
-    status=$?
-    printf '%s\n' "$bindings_output" >&2
-    exit "$status"
-  fi
-  if printf '%s\n' "$bindings_output" | grep -Eq 'WARNING|warnings emitted'; then
-    echo "Wails binding generation emitted warnings" >&2
-    exit 1
-  fi
+  go mod tidy -diff
+  test -d frontend/bindings
   "$wails" generate syso -arch amd64 -icon build/windows/icon.ico -manifest build/windows/wails.exe.manifest -info build/windows/info.json -out wails_windows_amd64.syso
-  after=$(generated_source_digest)
-  [ "$before" = "$after" ] || { echo "Go modules or Wails bindings changed during generation" >&2; exit 1; }
 }
 
 frontend() {
