@@ -11,6 +11,9 @@ contract, and spec records its exact selected version, absolute local path, sour
 for managed content, and target where applicable. Plugin entries also record activation and sidecar
 role bindings. One monotonic `revision` covers the whole environment. A change uses compare-and-swap and
 publishes one `environment.changed` event. Polling is not used.
+Core atomically creates revision 1 immediately after it acquires the identity home. Absence is
+therefore a boot failure, not a synthetic empty environment; the first compare-and-swap uses the
+revision returned by `environment_get`, exactly like every later write.
 
 Remote repository, source commit, dependency, URL, size, and digest facts remain in the registry
 release. The environment never copies them. No other persistent local component document or

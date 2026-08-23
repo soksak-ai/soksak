@@ -19,7 +19,7 @@ func Register(registry *control.Registry, deps Deps) {
 			return nil, err
 		}
 		if !exists {
-			value = Empty()
+			return nil, os.ErrNotExist
 		}
 		return value, nil
 	}})

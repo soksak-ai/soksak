@@ -31,3 +31,11 @@ environment stores only what this installation selected and where those verified
 The environment contract gate rejects the retired filenames and command surfaces in active code and
 canonical documents. Transaction tests prove that failed installation cannot publish a partial
 environment.
+
+## Why a virtual first revision failed
+
+The first implementation returned an in-memory revision 1 when `environment.json` did not exist,
+while compare-and-swap correctly observed the stored revision as 0. The first installation could
+therefore only fail with `expected 1, actual 0`. Core now publishes the real revision 1 after it
+owns the identity home; reads and writes share one state instead of assigning two meanings to
+absence.

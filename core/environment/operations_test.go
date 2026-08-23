@@ -39,6 +39,20 @@ func TestPluginManifestsReadOneEnvironmentRecord(t *testing.T) {
 	}
 }
 
+func TestInitializePublishesTheFirstEnvironmentRevision(t *testing.T) {
+	home := t.TempDir()
+	if err := Initialize(home); err != nil {
+		t.Fatal(err)
+	}
+	value, exists, err := Read(home)
+	if err != nil || !exists || value.Revision != 1 {
+		t.Fatalf("environment=%+v exists=%v err=%v", value, exists, err)
+	}
+	if _, err := SetSource(home, "sidecar", "demo", Component{Version: "0.0.1", Path: t.TempDir(), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}, 1); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSidecarSelectionResolvesEnvironmentSidecar(t *testing.T) {
 	home := t.TempDir()
 	root := t.TempDir()

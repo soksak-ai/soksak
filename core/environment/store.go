@@ -35,6 +35,14 @@ func Read(home string) (Environment, bool, error) {
 	value, err := Parse(body)
 	return value, err == nil, err
 }
+func Initialize(home string) error {
+	_, exists, err := Read(home)
+	if err != nil || exists {
+		return err
+	}
+	_, err = Write(home, Environment{}, false, Empty(), 0)
+	return err
+}
 func Write(home string, current Environment, exists bool, next Environment, expected uint64) (Change, error) {
 	change, temporary, err := PrepareWrite(home, current, exists, next, expected, "next")
 	if err != nil {

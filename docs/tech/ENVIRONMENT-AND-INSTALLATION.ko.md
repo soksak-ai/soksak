@@ -17,6 +17,9 @@ contract, spec은 선택된 정확한 version, 절대 로컬 경로, source 종�
 ID, 필요한 경우 target을 기록합니다. Plugin은 활성화 상태와 sidecar 역할 binding도 기록합니다.
 하나의 단조 증가 `revision`이 전체 environment를 포함하며, 변경은 compare-and-swap 후 하나의
 `environment.changed` event를 발행합니다. Polling은 사용하지 않습니다.
+Core는 identity home 소유권을 얻은 직후 revision 1을 원자적으로 생성합니다. 따라서 파일 부재는
+가상의 빈 environment로 대체되지 않고 boot 실패가 됩니다. 첫 compare-and-swap도 이후 write와
+동일하게 `environment_get`이 반환한 revision을 사용합니다.
 
 원격 repository, source commit, dependency, URL, size, digest는 registry release가 소유합니다.
 Environment는 이 정보를 복제하지 않습니다. 다른 영구 component 문서나 dependency lock은 없습니다.

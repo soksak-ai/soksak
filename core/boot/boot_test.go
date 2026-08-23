@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/soksak-ai/soksak-core/core/control"
+	coreenvironment "github.com/soksak-ai/soksak-core/core/environment"
 
 	"github.com/soksak-ai/soksak-core/core/identity"
 	"github.com/soksak-ai/soksak-core/core/store"
@@ -17,6 +18,10 @@ import (
 func booted(t *testing.T) *control.Registry {
 	t.Helper()
 	home := t.TempDir()
+	resolved := identity.Resolve("com.soksak.dev", identity.Environment{Home: home})
+	if err := coreenvironment.Initialize(resolved.Home); err != nil {
+		t.Fatalf("initializing the environment: %v", err)
+	}
 	kv, err := store.OpenKV(filepath.Join(home, "soksak.db"))
 	if err != nil {
 		t.Fatalf("opening the store: %v", err)
@@ -28,7 +33,7 @@ func booted(t *testing.T) *control.Registry {
 	// no host at all, which is the condition the test exists to hold. The
 	// groups that need one declare their refusal rather than failing here.
 	RegisterCore(registry, Boot{
-		Identity:     identity.Resolve("com.soksak.dev", identity.Environment{Home: home}),
+		Identity:     resolved,
 		BuildProfile: "debug",
 		KV:           kv,
 		UserHome:     t.TempDir(),
