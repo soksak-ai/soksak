@@ -53,7 +53,7 @@ import {
 import { publishActivity } from "../state/activityFeed";
 import { awaitViewMounted } from "../plugins/viewFocus";
 import { runtimePluginRequirements } from "../plugins/runtimeDependencies";
-import { pluginInstallProgress } from "../plugins/registryInstallProgress";
+import { pluginInstallProgress, waitForPluginInstallPhase, type PluginInstallPhase } from "../plugins/registryInstallProgress";
 
 // Installed/dev runtime → dependency graph node (based on manifest dependencies).
 function depNodes(): DepNode[] {
@@ -679,6 +679,19 @@ export function registerPluginCatalog(): void {
     message: (d) => tmsg("msg.plugin.install.status", { n: ((d.installs as unknown[]) ?? []).length }),
     examples: ["plugin.install.status", `plugin.install.status '{"pluginId":"soksak-plugin-<id>"}'`],
     handler: (p) => ({ installs: pluginInstallProgress(typeof p.pluginId === "string" ? p.pluginId : undefined) }),
+  });
+
+  register("plugin.install.wait", {
+    description: key("cmd.plugin.install.wait.desc"),
+    triggers: { ko: "플러그인 설치 단계 대기" },
+    params: {
+      pluginId: { type: "string", required: true, description: key("cmd.plugin.install.param.pluginId") },
+      phase: { type: "string", required: true, enum: ["resolving", "staging", "committing", "installed", "failed"], description: key("cmd.plugin.install.wait.param.phase") },
+      timeoutMs: { type: "number", description: key("cmd.plugin.install.param.timeoutMs") },
+    },
+    returns: "{pluginId,phase,completed,total,componentId?,error?}",
+    message: (d) => tmsg("msg.plugin.install.wait", { id: String(d.pluginId), phase: String(d.phase) }),
+    handler: async (p) => waitForPluginInstallPhase(String(p.pluginId), String(p.phase) as PluginInstallPhase, typeof p.timeoutMs === "number" ? p.timeoutMs : 30000),
   });
 
   register("plugin.update", {
