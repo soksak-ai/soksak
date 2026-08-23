@@ -4,7 +4,7 @@ status: active
 canonical: self
 ---
 
-# Terminal platform 0.0.1
+# Terminal platform
 
 ## Product result
 
@@ -23,9 +23,9 @@ and distribution gates.
 | --- | --- | --- |
 | `soksak-spec-sidecar-pty` | `0.0.1` | Shell ownership, ordered source events, renderer and observer streams, absolute acknowledgements and snapshot leases |
 | `soksak-spec-sidecar-terminal` | `0.0.1` | Terminal-state interpretation, complete snapshots, checkpoints and recovery outcomes |
-| `soksak-spec-plugin-terminal` | `0.0.1` | Observable terminal-plugin lifecycle, presentation, input, commands, status and exposed nodes |
-| `soksak-kit-sidecar-terminal` | `0.0.1` | One shared PTY observation, recovery service and checkpoint runtime for all six engine providers |
-| `soksak-kit-plugin-terminal` | `0.0.1` | Shared terminal-plugin implementation that defines no standard and selects no engine |
+| `soksak-spec-plugin-terminal` | `0.0.4` | Observable terminal-plugin lifecycle, presentation, input, commands, output-boundary status and exposed nodes |
+| `soksak-kit-sidecar-terminal` | `0.0.7` | One shared PTY observation, recovery service and checkpoint runtime for all six engine providers |
+| `soksak-kit-plugin-terminal` | `0.0.16` | Shared terminal-plugin implementation that defines no standard and selects no engine |
 
 `soksak-spec-plugin-terminal` is a public behavior contract referenced through `implements`. It is
 not a manifest format. Every plugin manifest continues to use `soksak-spec-plugin@0.0.1`.
@@ -39,8 +39,9 @@ type ContractRef = { id: string; version: string }
 ```
 
 `implements` uses an exact `{ id, version }`. `consumes` and `sidecars[].interface` use
-`{ id, requirement }`. Current component requirements are exact `0.0.1`; a bounded range requires
-cross-version evidence. Package dependencies remain separate and use exact remote commits or
+`{ id, requirement }`. The PTY and terminal Sidecar interfaces remain exact `0.0.1`; the terminal
+plugin behavior contract is exact `0.0.4`. A bounded range requires cross-version evidence.
+Package dependencies remain separate and use exact remote commits or
 immutable release assets in committed source. Local path overrides are development-only and are
 never release inputs. Published bytes are not rewritten: `soksak-spec` advanced to `0.0.2` to
 correct its package while continuing to validate component and interface version `0.0.1`.

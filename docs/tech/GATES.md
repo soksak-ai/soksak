@@ -158,7 +158,8 @@ has watched fail is a claim, not a gate.
 | `min-median-max/soksak-terminal-tests` command suite | every terminal plugin opens, reads, writes, resizes, handles Unicode and 256 KiB output, exposes DOM/accessibility, and produces capture and recording files |
 | `min-median-max/soksak-terminal-tests` lifecycle suite | every terminal preserves its shell PID and detached output across restart, restores a durable archive, and rejects archived input |
 | `min-median-max/soksak-terminal-tests` UI suite | plugin rejection count is zero, `ui.verify` passes, surface coverage is zero, and steady-state surface drift is at most 2px |
-| `min-median-max/soksak-terminal-tests` resize evidence | every resize records DOM pixels, requested PTY size, PTY observation, recovery observation, rendered frame, and the first boundary that did not advance |
+| `min-median-max/soksak-terminal-tests` boundary evidence | every resize and high-output run records DOM/size facts plus PTY, recovery and renderer absolute output sequences, recovery gaps, and the first boundary that did not advance |
+| immutable fleet fingerprint | Registry and every release.json size/SHA plus OS/target form one deterministic identity; changing any input invalidates the prior GREEN |
 
 ---
 
