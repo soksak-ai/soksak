@@ -3286,6 +3286,28 @@ select.dctl {
   padding: 4px 8px;
   font-size: 11.5px;
 }
+.plugin-install-progress {
+  display: grid;
+  gap: 4px;
+}
+.plugin-install-progress-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--bd-soft);
+}
+.plugin-install-progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--acc);
+  transition: width 120ms ease-out;
+}
+.plugin-install-progress-label {
+  color: var(--fg3);
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+}
 /* The toggle slot on a template row — read-only wording; it cannot be enabled. */
 .plugin-row-note {
   color: var(--fg3);

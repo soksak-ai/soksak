@@ -4,11 +4,13 @@ import type {
   RegistryPlugin,
   ReleaseDocument,
 } from "./spec";
+import type { PluginInstallProgress } from "./registryInstallProgress";
 
 export interface RegistryInstallRuntimeInput {
   certified: CertifiedRegistry;
   root: RegistryPlugin;
   releases: ReleaseDocument[];
+  onProgress?: (progress: Pick<PluginInstallProgress, "phase" | "completed" | "total" | "componentId">) => void;
 }
 
 export type RegistryInstallRuntimeResult =

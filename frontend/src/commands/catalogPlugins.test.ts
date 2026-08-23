@@ -85,6 +85,13 @@ describe("plugin.conformance registration (discoverability)", () => {
   });
 });
 
+describe("plugin installation observation", () => {
+  it("publishes a bounded timeout and a separate status command", () => {
+    expect(getSpec("plugin.install")?.params.timeoutMs).toMatchObject({ type: "number" });
+    expect(getSpec("plugin.install.status")?.returns).toContain("completed");
+  });
+});
+
 describe("program.wait — poll-free program readiness boundary", () => {
   afterEach(() => {
     useProgramRegistry.setState({ programs: {}, order: [], version: 0 });

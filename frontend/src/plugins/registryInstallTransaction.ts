@@ -31,6 +31,7 @@ export interface RegistryInstallRequest {
   target: ArtifactTarget;
   environment: EnvironmentDocument;
   artifacts: RegistryArtifactStager;
+  onProgress?: (progress: { phase: "staging" | "committing"; completed: number; total: number; componentId?: string }) => void;
 }
 
 class InstallFailure extends Error {
@@ -72,6 +73,16 @@ function materializedExactly(environment: EnvironmentDocument, identity: Release
   return records[identity.id]?.version === identity.version;
 }
 
+function pendingReleaseCount(request: RegistryInstallRequest): number {
+  const unique = new Set<string>();
+  for (const release of request.releases) {
+    const identity = releaseIdentity(release);
+    if ((identity.kind !== "plugin" && identity.kind !== "sidecar" && identity.kind !== "kit") || materializedExactly(request.environment, identity)) continue;
+    unique.add(identity.kind + ":" + identity.id + "@" + identity.version);
+  }
+  return unique.size;
+}
+
 async function stageRelease(request: RegistryInstallRequest, transactionId: string, release: ReleaseDocument) {
   const identity = releaseIdentity(release);
   const artifact = artifactFor(release, request.target);
@@ -111,6 +122,7 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
     const transaction = await request.artifacts.begin({ registryId: request.certified.registry.id, root: request.root });
     transactionId = transaction.transactionId;
     const verified: VerifiedInstallRelease[] = [];
+    const total = pendingReleaseCount(request);
     const seen = new Set<string>();
     const queue: ReleaseDocument[] = [root];
 
@@ -120,6 +132,7 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
       const key = identity.kind + ":" + identity.id + "@" + identity.version;
       if (seen.has(key) || materializedExactly(request.environment, identity)) continue;
       seen.add(key);
+      request.onProgress?.({ phase: "staging", completed: verified.length, total, componentId: identity.id });
       const staged = await stageRelease(request, transactionId, release);
 
       if (identity.kind === "plugin") {
@@ -134,8 +147,10 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
       for (const dependency of release.runtimeDependencies?.plugins ?? []) { const next = exactRelease(request.releases, { kind: "plugin", id: dependency.id, version: dependency.version }); if (!next) throw new InstallFailure("RELEASE_VERIFICATION_FAILED", ["plugin dependency is absent: " + dependency.id]); queue.push(next); }
       for (const dependency of release.runtimeDependencies?.sidecars ?? []) { const next = exactRelease(request.releases, { kind: "sidecar", id: dependency.id, version: dependency.version }); if (!next) throw new InstallFailure("RELEASE_VERIFICATION_FAILED", ["sidecar dependency is absent: " + dependency.id]); queue.push(next); }
       verified.push(staged.verified);
+      request.onProgress?.({ phase: "staging", completed: verified.length, total, componentId: identity.id });
     }
 
+    request.onProgress?.({ phase: "committing", completed: verified.length, total });
     const committed = await request.artifacts.commit(transactionId, request.environment.revision, verified, request.root);
     transactionId = null;
     return { ok: true, registryId: request.certified.registry.id, revision: committed.revision, releases: verified };

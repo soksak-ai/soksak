@@ -53,6 +53,7 @@ import {
 import { publishActivity } from "../state/activityFeed";
 import { awaitViewMounted } from "../plugins/viewFocus";
 import { runtimePluginRequirements } from "../plugins/runtimeDependencies";
+import { pluginInstallProgress } from "../plugins/registryInstallProgress";
 
 // Installed/dev runtime → dependency graph node (based on manifest dependencies).
 function depNodes(): DepNode[] {
@@ -589,6 +590,7 @@ export function registerPluginCatalog(): void {
       },
       registryId: { type: "string", description: key("cmd.plugin.install.param.registryId") },
       pluginId: { type: "string", description: key("cmd.plugin.install.param.pluginId") },
+      timeoutMs: { type: "number", description: key("cmd.plugin.install.param.timeoutMs") },
     },
     primary: "source",
     returns: "{ id, generation }",
@@ -667,6 +669,16 @@ export function registerPluginCatalog(): void {
         message: "plugin installation accepts only a registry plugin identity",
       };
     },
+  });
+
+  register("plugin.install.status", {
+    description: key("cmd.plugin.install.status.desc"),
+    triggers: { ko: "플러그인 설치 진행 상태 프로그레스" },
+    params: { pluginId: { type: "string", description: key("cmd.plugin.install.param.pluginId") } },
+    returns: "{ installs: [{pluginId,phase,completed,total,componentId?,error?}] }",
+    message: (d) => tmsg("msg.plugin.install.status", { n: ((d.installs as unknown[]) ?? []).length }),
+    examples: ["plugin.install.status", `plugin.install.status '{"pluginId":"soksak-plugin-<id>"}'`],
+    handler: (p) => ({ installs: pluginInstallProgress(typeof p.pluginId === "string" ? p.pluginId : undefined) }),
   });
 
   register("plugin.update", {

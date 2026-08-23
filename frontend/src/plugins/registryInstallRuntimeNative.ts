@@ -64,7 +64,7 @@ const artifactStager: RegistryArtifactStager = {
     invoke<void>("artifact_install_rollback", { transactionId }),
 };
 
-const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root, releases }) => {
+const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root, releases, onProgress }) => {
   let target: ArtifactTarget;
   try {
     target = await hostTarget();
@@ -88,6 +88,7 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
     target,
     environment: environment.value,
     artifacts: artifactStager,
+    onProgress,
   });
   if (result.ok) {
     return { ok: true, id: root.id, version: root.version, revision: result.revision };

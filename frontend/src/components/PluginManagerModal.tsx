@@ -20,6 +20,7 @@ import { useOverlayActive, useUi } from "../state/ui";
 import { PluginConsentModal } from "./PluginConsentModal";
 import { localize, useT } from "../i18n";
 import { execute } from "../commands/registry";
+import { pluginInstallActive, usePluginInstallProgress } from "../plugins/registryInstallProgress";
 
 export function PluginManagerModal() {
   const t = useT();
@@ -78,7 +79,7 @@ function statusKey(p: PluginRuntime): "enabled" | "disabled" | "error" {
 
 // The installable list shows verified release references only. Name, description and commands come
 // from the installed owner manifest; the registry does not duplicate them.
-function RegistrySection({
+export function RegistrySection({
   busy,
   run,
   installed,
@@ -90,6 +91,7 @@ function RegistrySection({
   const t = useT();
   const entries = useRegistry((s) => s.entries);
   const status = useRegistry((s) => s.status);
+  const installs = usePluginInstallProgress((s) => s.installs);
   const sorted = useMemo(
     () => [...entries].sort((a, b) => a.id.localeCompare(b.id)),
     [entries],
@@ -135,8 +137,11 @@ function RegistrySection({
         }
         return actionable.map((e) => {
           const st = stateOf(e);
+          const progress = installs[e.id];
+          const installing = pluginInstallActive(progress);
+          const percent = progress?.total ? Math.round((progress.completed / progress.total) * 100) : 0;
           return (
-            <div key={e.id} className="plugin-row">
+            <div key={e.id} className="plugin-row" aria-busy={installing} data-node={`plugin/${e.id}/registry-row`}>
               <div className="plugin-row-title">
                 <span className="plugin-row-name">{e.id}</span>
                 <span className="plugin-row-ver">v{e.version}</span>
@@ -152,14 +157,26 @@ function RegistrySection({
                   ? t("plugin.registry.official")
                   : t("plugin.registry.thirdParty", { registry: e.registryId })}
               </div>
+              {progress && (installing || progress.phase === "failed") && (
+                <div className="plugin-install-progress" data-node={`plugin/${e.id}/install-progress`}>
+                  <div className="plugin-install-progress-track" role="progressbar" aria-label={t("plugin.install.progress")} aria-valuemin={0} aria-valuemax={progress.total || 1} aria-valuenow={progress.completed}>
+                    <span style={{ width: `${percent}%` }} />
+                  </div>
+                  <div className="plugin-install-progress-label">
+                    {progress.phase === "failed"
+                      ? t("plugin.install.failedAt", { component: progress.componentId ?? e.id })
+                      : t("plugin.install.installing", { completed: progress.completed, total: progress.total, component: progress.componentId ?? e.id })}
+                  </div>
+                </div>
+              )}
               <div className="plugin-row-actions">
                 {st === "available" && (
-                  <button type="button" className="dbtn dbtn-acc" disabled={busy} onClick={() => doInstall(e)}>
-                    {t("plugin.install")}
+                  <button type="button" className="dbtn dbtn-acc" disabled={busy || installing} onClick={() => doInstall(e)}>
+                    {installing ? t("plugin.install.installingShort") : t("plugin.install")}
                   </button>
                 )}
                 {st === "update" && (
-                  <button type="button" className="dbtn" disabled={busy} onClick={() => doUpdate(e)}>
+                  <button type="button" className="dbtn" disabled={busy || installing} onClick={() => doUpdate(e)}>
                     {t("plugin.registry.update")}
                   </button>
                 )}
