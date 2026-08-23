@@ -48,7 +48,8 @@ function pluginDepNodes(plugins: Record<string, PluginRuntime>): DepNode[] {
     dependencies: p.manifest.dependencies ?? {},
   }));
 }
-import { installCommandFor, detectPlatform } from "../plugins/programRegistry";
+import { installCommandFor } from "../plugins/programRegistry";
+import { detectPlatform } from "../lib/runtimePlatform";
 import {
   reconcilePlan,
   parseProbeVersion,

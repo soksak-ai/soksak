@@ -9,6 +9,7 @@ import { moduleState } from "../lib/moduleState";
 import { create } from "zustand";
 import type { ContributedProgram, LibraryDep } from "./spec";
 import { tmsg } from "../i18n";
+import { detectPlatform, type PlatformKey } from "../lib/runtimePlatform";
 
 export interface RegisteredProgram {
   pluginId: string;
@@ -66,17 +67,6 @@ export function getRegisteredProgram(id: string): RegisteredProgram | null {
 export function listPrograms(): RegisteredProgram[] {
   const s = useProgramRegistry.getState();
   return s.order.map((id) => s.programs[id]).filter(Boolean);
-}
-
-export type PlatformKey = "darwin" | "linux" | "win32";
-
-// Detect the running platform (to branch install commands). Where platform is empty (tests), fall
-// back to the UA string.
-export function detectPlatform(): PlatformKey {
-  const s = `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
-  if (s.includes("mac")) return "darwin";
-  if (s.includes("win")) return "win32";
-  return "linux";
 }
 
 // A program's autorun command — run verbatim, no wrapping.

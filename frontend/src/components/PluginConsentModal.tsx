@@ -9,7 +9,8 @@ import {
   pluginCommandName,
   type ContributedProgram,
 } from "../plugins/spec";
-import { detectPlatform, libraryInstallFor } from "../plugins/programRegistry";
+import { libraryInstallFor } from "../plugins/programRegistry";
+import { detectPlatform } from "../lib/runtimePlatform";
 import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { consentSummary } from "../plugins/consentSummary";
 import { useOverlayActive } from "../state/ui";

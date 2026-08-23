@@ -8,6 +8,7 @@
 
 import { Dialogs, Events, Window as WailsWindow } from "@wailsio/runtime";
 import type { EngineProvision } from "../../plugins/spec";
+import { wailsEngineProvision } from "./engineProvision";
 
 // The route this host serves plugin files on. It is stated in one place on each
 // side; frameworks/wails/unitassets.go holds the other, and unitFileRoute.test
@@ -97,14 +98,7 @@ function windowHandle(label: string): FrameworkWindowHandle {
   };
 }
 
-const engineProvision: EngineProvision = {
-  // WKWebView is not Chromium, and the native compositor owns child surfaces.
-  chromium: false,
-  nativeChildWebview: true,
-  engineModules: false,
-  supportsDocumentStart: false,
-  supportsInputInjection: false,
-};
+const engineProvision: EngineProvision = wailsEngineProvision();
 
 const titlebarComposition: TitlebarCompositionProvision = {
   // Wails v3 uses standardWindowButton internally only and does not expose its rect
