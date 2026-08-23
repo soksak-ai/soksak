@@ -8,7 +8,7 @@ canonical: self
 
 ## G1. Local source is canonical
 
-Active source under <workspace-root> defines the current product. Historical GitHub
+The active source in each canonical workspace checkout defines the current product. Historical GitHub
 branches, tags, releases, and framework implementations do not impose compatibility on it. A current
 contract accepts only its canonical shape.
 

@@ -10,7 +10,7 @@ Discovered in the repository, not asked for.
 
 | Variable | Value |
 |---|---|
-| `WORKTREE_ROOT` | `../worktrees/soksak-core/<branch>` |
+| Repository root | the checkout containing this `AGENTS.md` and `go.mod` |
 | Observation interface | `bin/sok` (control plane client), `bin/soksak` (application) |
 | Test runner | `go test` (Go), `vitest run` (TypeScript) |
 | Test location | Core tests in the core, plugin tests in each plugin |
@@ -398,8 +398,9 @@ explicitly requested branches.
 
 ### 7-2. Worktrees
 
-Work happens in a folder under `WORKTREE_ROOT`, with the same lifecycle rules as its branch.
-Never joined by a symlink.
+The canonical checkout is this repository root. A temporary worktree, when a task genuinely requires
+one, must be discovered through Git rather than a fixed sibling path and removed after its branch is
+integrated. Never join checkouts by a symlink or make automation depend on workspace layout.
 
 ### 7-4. No loss
 
