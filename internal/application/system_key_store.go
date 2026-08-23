@@ -20,7 +20,7 @@ type systemKeyStore struct {
 }
 
 func newSystemKeyStore(identifier, label string) secret.KeyStore {
-	return &systemKeyStore{service: identifier + ".vault", label: label, set: setSystemKey}
+	return &systemKeyStore{service: identifier + ".vault", label: label, set: keyring.Set}
 }
 
 func (store *systemKeyStore) Label() string { return store.label }
