@@ -27,16 +27,16 @@ func TestRepositoryGovernanceDefinesSourcePreservation(t *testing.T) {
 	}
 }
 
-func TestCurrentProductAutomationNamesMain(t *testing.T) {
+func TestNativeSystemVerificationRunsOnlyWhenRequested(t *testing.T) {
 	body, err := os.ReadFile(".github/workflows/multiplatform-system.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(body)
-	if !strings.Contains(text, "branches: [main]") {
-		t.Fatal("multiplatform verification must follow the canonical main branch")
+	if !strings.Contains(text, "workflow_dispatch:") {
+		t.Fatal("multiplatform verification has no manual entry point")
 	}
-	if strings.Contains(text, "wails3beta-terminal-0.0.2") {
-		t.Fatal("multiplatform verification names a retired development branch")
+	if strings.Contains(text, "push:") {
+		t.Fatal("multiplatform verification spends native runners on every source push")
 	}
 }
