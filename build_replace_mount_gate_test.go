@@ -34,7 +34,7 @@ func TestCrossImageMatchesTheDeclaredLinuxBaseline(t *testing.T) {
 	}
 	text := string(body)
 	for _, required := range []string{
-		"ARG GO_VERSION",
+		"ARG GO_VERSION=must-be-provided",
 		"FROM golang:${GO_VERSION}-bookworm AS go-toolchain",
 		"FROM ubuntu:24.04",
 		"COPY --from=go-toolchain /usr/local/go /usr/local/go",
