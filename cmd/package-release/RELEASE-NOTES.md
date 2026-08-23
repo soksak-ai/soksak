@@ -1,7 +1,9 @@
 # Soksak %s
 
-Windows x86_64 development release. The binaries passed Windows-native WebView2, ConPTY, resize, capture, high-output, warm restore, and archived restore verification in run `%s`.
+Multi-platform development release for Windows x86_64, macOS universal, Linux x86_64, and Linux arm64. Each archive contains the exact application and client bytes that passed its declared native system run.
 
-The binaries are not Authenticode-signed. Windows may show an unknown-publisher warning.
+Native system runs: `%s`
+
+The archives are unsigned. Windows may show an unknown-publisher warning, and macOS may require explicit local approval.
 
 Source commit: `%s`
