@@ -186,21 +186,23 @@ func Run(assets embed.FS) error {
 			// Declared by whoever started this process. Unset is a person at the application, which
 			// is what a launch with nothing stated about it is. A measurement run declares the
 			// opposite and gets a window that draws without taking the front.
-			Attended: os.Getenv("SOKSAK_UNATTENDED") == "",
-			PluginAssetRoots: func() ([]string, error) {
-				records, err := coreenvironment.PluginManifests(resolved.Home)
-				if err != nil {
-					return nil, err
-				}
-				roots := []string{}
-				for _, record := range records {
-					if record.Enabled && record.Error == nil {
-						roots = append(roots, record.InstallPath)
-					}
-				}
-				return roots, nil
-			},
+			Attended:         os.Getenv("SOKSAK_UNATTENDED") == "",
+			PluginAssetRoots: func() ([]string, error) { return installedPluginRoots(resolved.Home) },
 		})
 	})
 	return err
+}
+
+func installedPluginRoots(home string) ([]string, error) {
+	records, err := coreenvironment.PluginManifests(home)
+	if err != nil {
+		return nil, err
+	}
+	roots := []string{}
+	for _, record := range records {
+		if record.Error == nil {
+			roots = append(roots, record.InstallPath)
+		}
+	}
+	return roots, nil
 }
