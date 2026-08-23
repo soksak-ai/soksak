@@ -275,13 +275,17 @@ func extractTGZ(body []byte, destination string) error {
 		if err != nil {
 			return fmt.Errorf("read tgz: %w", err)
 		}
-		if !safeArchivePath(header.Name) {
+		entryPath := header.Name
+		if header.Typeflag == tar.TypeDir {
+			entryPath = strings.TrimSuffix(entryPath, "/")
+		}
+		if !safeArchivePath(entryPath) {
 			return i18n.Errorf("install.transaction.archivePathUnsafe", map[string]string{"path": header.Name})
 		}
 		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeDir {
 			return i18n.Errorf("install.transaction.archiveEntryType", map[string]string{"path": header.Name})
 		}
-		path := filepath.Join(destination, filepath.FromSlash(header.Name))
+		path := filepath.Join(destination, filepath.FromSlash(entryPath))
 		if header.Typeflag == tar.TypeDir {
 			if err := os.MkdirAll(path, 0o755); err != nil {
 				return err

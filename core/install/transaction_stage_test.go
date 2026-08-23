@@ -84,6 +84,27 @@ func TestTransactionStagesAndReadsARegularFileArchive(t *testing.T) {
 	}
 }
 
+func TestStageAcceptsAConventionalDirectoryEntry(t *testing.T) {
+	archive := tgz(t,
+		archiveEntry{name: "plugin.json", body: `{"id":"demo","version":"0.0.1"}`},
+		archiveEntry{name: "dist/", kind: tar.TypeDir},
+		archiveEntry{name: "dist/main.js", body: "export default {}"},
+	)
+	manager := NewTransactionManager(t.TempDir(), memoryFetcher{body: archive})
+	identity := ArtifactIdentity{Kind: "plugin", ID: "demo", Version: "0.0.1"}
+	transaction, err := manager.Begin("official", identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = manager.Stage(context.Background(), StageRequest{
+		TransactionID: transaction.TransactionID, RegistryID: "official", Identity: identity,
+		Artifact: Artifact{URL: "https://example.invalid/demo.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json", "dist/main.js"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestStageRejectsDigestMismatch(t *testing.T) {
 	archive := tgz(t, archiveEntry{name: "plugin.json", body: `{"id":"demo","version":"0.0.1"}`})
 	manager := NewTransactionManager(t.TempDir(), memoryFetcher{body: archive})
@@ -135,6 +156,7 @@ func TestStageRejectsLinksAndPathEscape(t *testing.T) {
 	archives := [][]byte{
 		tgz(t, archiveEntry{name: "plugin.json", kind: tar.TypeSymlink, link: "elsewhere"}),
 		tgz(t, archiveEntry{name: "../plugin.json", body: "{}"}),
+		tgz(t, archiveEntry{name: "./", kind: tar.TypeDir}, archiveEntry{name: "plugin.json", body: "{}"}),
 	}
 	for _, archive := range archives {
 		manager := NewTransactionManager(t.TempDir(), memoryFetcher{body: archive})
