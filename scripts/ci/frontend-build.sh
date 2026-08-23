@@ -35,6 +35,6 @@ docker run --rm \
   -e CI=1 -e PNPM_DISABLE_SELF_UPDATE_CHECK=1 \
   -v "$root:/app" \
   -v soksak-frontend-node-modules:/app/frontend/node_modules \
-  -v soksak-frontend-pnpm-store:/pnpm/store \
-  "$image" /bin/sh -c 'pnpm config set store-dir /pnpm/store && pnpm install --frozen-lockfile && pnpm typecheck && pnpm build'
+  -v soksak-frontend-pnpm-store:/app/.pnpm-store \
+  "$image" /bin/sh -c 'pnpm install --frozen-lockfile && pnpm typecheck && pnpm build'
 printf '%s\n' "$definition:$input" > "$marker"

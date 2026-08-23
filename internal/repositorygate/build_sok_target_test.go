@@ -61,7 +61,7 @@ func TestFrontendInstallsThePublishedWailsRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{"nodeLinker: hoisted", "symlink: false"} {
+	for _, required := range []string{"nodeLinker: hoisted", "symlink: false", "storeDir: ../.pnpm-store"} {
 		if !strings.Contains(string(workspace), required) {
 			t.Errorf("frontend workspace is missing %s", required)
 		}
@@ -73,6 +73,9 @@ func TestFrontendInstallsThePublishedWailsRuntime(t *testing.T) {
 		}
 		if strings.Contains(string(body), "config.node-linker") || strings.Contains(string(body), "config.symlink") {
 			t.Errorf("%s duplicates the frontend workspace install contract", path)
+		}
+		if strings.Contains(string(body), "pnpm config set store-dir") {
+			t.Errorf("%s overrides the repository-owned pnpm store", path)
 		}
 	}
 	manifest, err := os.ReadFile("frontend/package.json")
