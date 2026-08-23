@@ -18,13 +18,18 @@ func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 		}
 	}
 	dockerfile := readText(t, "build/docker/Dockerfile.windows-ci")
-	for _, required := range []string{"NODE_VERSION=24.19.0", "PNPM_VERSION=10.30.3", "wails3@v3.0.0-beta.12"} {
+	for _, required := range []string{"NODE_IMAGE=node:must-be-provided", "PNPM_VERSION=must-be-provided", "wails3@v3.0.0-beta.12", "COPY --from=node-runtime /usr/local/ /usr/local/"} {
 		if !strings.Contains(dockerfile, required) {
 			t.Errorf("Windows CI image does not pin %s", required)
 		}
 	}
 	if !strings.Contains(docker, "io.soksak.windows-ci.definition-sha") {
 		t.Fatal("Docker runner rebuilds the CI image without a definition hash")
+	}
+	for _, required := range []string{"frontend/package.json", "NODE_IMAGE=node:$node_version-bookworm", "PNPM_VERSION=$pnpm_version"} {
+		if !strings.Contains(docker, required) {
+			t.Errorf("Docker runner does not project the frontend owner file through %q", required)
+		}
 	}
 	runner := readText(t, "scripts/ci/windows-build.sh")
 	for _, required := range []string{"go mod tidy -diff", "frontend/bindings", "generate syso"} {
@@ -61,6 +66,15 @@ func TestCrossBuilderConsumesOnePinnedFrontendAndBuildsBothBinaries(t *testing.T
 		if !strings.Contains(runner, required) {
 			t.Errorf("cross release runner omits %q", required)
 		}
+	}
+	imageBuilder := readText(t, "scripts/ci/cross-image.sh")
+	for _, required := range []string{".zig-version", "ZIG_VERSION=$zig_version"} {
+		if !strings.Contains(imageBuilder, required) {
+			t.Errorf("cross image builder does not project Zig owner file through %q", required)
+		}
+	}
+	if !strings.Contains(dockerfile, "ZIG_VERSION=must-be-provided") || strings.Contains(dockerfile, "ZIG_VERSION=0.") {
+		t.Fatal("cross image hardcodes Zig instead of reading .zig-version")
 	}
 	frontend := readText(t, "scripts/ci/frontend-build.sh")
 	for _, required := range []string{"frontend/package.json", "NODE_VERSION=$node_version", "PNPM_VERSION=$pnpm_version", "PNPM_DISABLE_SELF_UPDATE_CHECK=1", ".build-input-sha256", `node --version`, `pnpm --version`, "build_frontend"} {

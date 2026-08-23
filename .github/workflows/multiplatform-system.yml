@@ -14,11 +14,8 @@ jobs:
         with: { path: soksak-core, persist-credentials: false }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with: { go-version-file: soksak-core/go.mod, cache-dependency-path: soksak-core/go.sum }
-      - id: frontend-versions
-        shell: bash
-        run: echo "node=$(jq -r .engines.node soksak-core/frontend/package.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with: { node-version: "${{ steps.frontend-versions.outputs.node }}" }
+        with: { node-version-file: soksak-core/frontend/package.json }
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
         with: { package_json_file: soksak-core/frontend/package.json }
       - shell: pwsh
@@ -44,10 +41,8 @@ jobs:
         with: { path: soksak-core, persist-credentials: false }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with: { go-version-file: soksak-core/go.mod, cache-dependency-path: soksak-core/go.sum }
-      - id: frontend-versions
-        run: echo "node=$(jq -r .engines.node soksak-core/frontend/package.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with: { node-version: "${{ steps.frontend-versions.outputs.node }}" }
+        with: { node-version-file: soksak-core/frontend/package.json }
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
         with: { package_json_file: soksak-core/frontend/package.json }
       - working-directory: soksak-core
@@ -73,10 +68,8 @@ jobs:
         with: { path: soksak-core, persist-credentials: false }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with: { go-version-file: soksak-core/go.mod, cache-dependency-path: soksak-core/go.sum }
-      - id: frontend-versions
-        run: echo "node=$(jq -r .engines.node soksak-core/frontend/package.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with: { node-version: "${{ steps.frontend-versions.outputs.node }}" }
+        with: { node-version-file: soksak-core/frontend/package.json }
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
         with: { package_json_file: soksak-core/frontend/package.json }
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev binutils

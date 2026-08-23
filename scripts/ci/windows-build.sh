@@ -30,8 +30,10 @@ generate() {
 }
 
 frontend() {
-  [ "$(node --version)" = "v24.19.0" ] || { echo "Node v24.19.0 is required" >&2; exit 1; }
-  [ "$(pnpm --version)" = "10.30.3" ] || { echo "pnpm 10.30.3 is required" >&2; exit 1; }
+  node_version=$(node -p "require('./frontend/package.json').engines.node")
+  pnpm_version=$(node -p "require('./frontend/package.json').packageManager.split('@')[1]")
+  [ "$(node --version)" = "v$node_version" ] || { echo "Node v$node_version is required" >&2; exit 1; }
+  [ "$(pnpm --version)" = "$pnpm_version" ] || { echo "pnpm $pnpm_version is required" >&2; exit 1; }
   pnpm --dir frontend --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile
   pnpm --dir frontend typecheck
   pnpm --dir frontend build

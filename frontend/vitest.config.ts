@@ -17,6 +17,7 @@ export default defineConfig({
     // Process workers survive as PID-1 children when an interactive runner is interrupted.
     // Thread workers share the runner lifecycle, so cancellation cannot orphan Node processes.
     pool: "threads",
+    poolOptions: { threads: { execArgv: ["--no-experimental-webstorage"] } },
     maxWorkers: 4,
     minWorkers: 1,
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],

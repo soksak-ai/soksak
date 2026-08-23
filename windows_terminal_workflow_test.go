@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -29,8 +30,7 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 		"actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
 		"pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86",
 		"actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-		"jq -r .engines.node soksak-core/frontend/package.json",
-		"node-version: \"${{ steps.frontend-versions.outputs.node }}\"",
+		"node-version-file: soksak-core/frontend/package.json",
 		"package_json_file: soksak-core/frontend/package.json",
 		"windows-build:", "darwin-build:", "linux-build:",
 		"ubuntu-24.04-arm", "architecture: amd64", "architecture: arm64",
@@ -119,23 +119,33 @@ func TestWebviewFrameRepairIsNotAPlatformContract(t *testing.T) {
 	}
 }
 
-func TestFrontendPinsNode24(t *testing.T) {
+func TestFrontendOwnsExactToolchainVersions(t *testing.T) {
 	manifest, err := os.ReadFile("frontend/package.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(manifest), `"node": "24.19.0"`) {
-		t.Fatal("frontend does not pin Node 24.19.0")
+	var owner struct {
+		Engines struct {
+			Node string `json:"node"`
+		} `json:"engines"`
+		PackageManager string `json:"packageManager"`
 	}
-	if !strings.Contains(string(manifest), `"onlyBuiltDependencies": [`) || !strings.Contains(string(manifest), `"esbuild"`) {
-		t.Fatal("frontend does not explicitly allow the esbuild install script")
+	if err := json.Unmarshal(manifest, &owner); err != nil {
+		t.Fatal(err)
 	}
-	version, err := os.ReadFile(".nvmrc")
+	exact := regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+	if !exact.MatchString(owner.Engines.Node) || !strings.HasPrefix(owner.PackageManager, "pnpm@") || !exact.MatchString(strings.TrimPrefix(owner.PackageManager, "pnpm@")) {
+		t.Fatal("frontend toolchain owner files are not exact")
+	}
+	workspace, err := os.ReadFile("frontend/pnpm-workspace.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(string(version)) != "24.19.0" {
-		t.Fatalf(".nvmrc = %q", version)
+	if !strings.Contains(string(workspace), "allowBuilds:") || !strings.Contains(string(workspace), "esbuild: true") {
+		t.Fatal("frontend does not explicitly allow the esbuild install script")
+	}
+	if _, err := os.Stat(".nvmrc"); !os.IsNotExist(err) {
+		t.Fatal("frontend Node version is duplicated in .nvmrc")
 	}
 }
 
