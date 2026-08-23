@@ -32,3 +32,12 @@ Tag `v0.0.2`는 source commit `badc426cff97cca1b8dd9b2e67e31e62c11fe40e`를 가�
 system run `32644742653`은 Windows x86_64, macOS, Linux x86_64, Linux arm64에서 installed fleet을
 build하고 통과했습니다. Release run `32645366005`는 이 검증된 artifact만 사용해 네 archive,
 `SHA256SUMS`, provenance, 영어/한글 release note를 immutable release로 발행했습니다.
+
+## 발행된 v0.0.3 증거
+
+Tag `v0.0.3`은 source commit `1d140596d9a0c54f14ecb998ae0cce2c4a156f7e`를 가리킵니다.
+Native system run `32673034161`은 Windows x86_64, macOS, Linux x86_64, Linux arm64에서 인증된
+Registry 14 fleet을 build하고 통과했습니다. Release run `32673381309`는 이 검증된 artifact만
+사용해 네 archive, `SHA256SUMS`, provenance, 영어/한글 release note를 owner-enforced immutable
+release로 발행했습니다. 다운로드한 `SHA256SUMS`는 모든 archive, provenance, 두 note에서
+검증됐고 provenance는 네 target과 위 system run을 정확히 기록합니다.
