@@ -81,12 +81,12 @@ jobs:
           compression-level: 0
   windows-system:
     needs: windows-build
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@f3471c1b6fb74a26843ad6b522664f8cc79fe4f9
-    with: { tests_ref: f3471c1b6fb74a26843ad6b522664f8cc79fe4f9 }
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@777cbd18c5786000e0706234e155f108f21fd310
+    with: { tests_ref: 777cbd18c5786000e0706234e155f108f21fd310 }
   darwin-system:
     needs: darwin-build
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/darwin-system.yml@f3471c1b6fb74a26843ad6b522664f8cc79fe4f9
-    with: { tests_ref: f3471c1b6fb74a26843ad6b522664f8cc79fe4f9 }
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/darwin-system.yml@777cbd18c5786000e0706234e155f108f21fd310
+    with: { tests_ref: 777cbd18c5786000e0706234e155f108f21fd310 }
   linux-system:
     needs: linux-build
     strategy:
@@ -99,9 +99,9 @@ jobs:
           - runner: ubuntu-24.04-arm
             architecture: arm64
             target: aarch64-unknown-linux-gnu
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/linux-system.yml@f3471c1b6fb74a26843ad6b522664f8cc79fe4f9
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/linux-system.yml@777cbd18c5786000e0706234e155f108f21fd310
     with:
-      tests_ref: f3471c1b6fb74a26843ad6b522664f8cc79fe4f9
+      tests_ref: 777cbd18c5786000e0706234e155f108f21fd310
       runner: ${{ matrix.runner }}
       architecture: ${{ matrix.architecture }}
       target: ${{ matrix.target }}
