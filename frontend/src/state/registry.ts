@@ -4,8 +4,9 @@ import { isRateLimited, retryAfterCeilingMs, retryAfterMs } from "./registryRetr
 import { moduleState } from "../lib/moduleState";
 import { create } from "zustand";
 import {
-  certifyRegistryIndex,
+  parseSignedRegistryIndex,
   type CertifiedRegistryIndex,
+  type RegistryCertificationResult,
   type RegistryHighWater,
   type RegistryPublicKey,
 } from "../plugins/spec";
@@ -301,6 +302,43 @@ async function loadRegistryDocument(descriptor: RegistryDescriptor): Promise<unk
   return JSON.parse(response.body) as unknown;
 }
 
+async function certifyRegistryNative(
+  raw: unknown,
+  policy: {
+    expectedRegistryId: string;
+    expectedKeyId: string;
+    publicKey: RegistryPublicKey;
+    now: number;
+    highWater?: RegistryHighWater;
+  },
+): Promise<RegistryCertificationResult> {
+  const parsed = parseSignedRegistryIndex(raw);
+  if (!parsed.ok) return { ok: false, code: "INVALID_INDEX", errors: parsed.errors };
+  if (parsed.value.id !== policy.expectedRegistryId || parsed.value.keyId !== policy.expectedKeyId || policy.publicKey.keyId !== policy.expectedKeyId) {
+    return { ok: false, code: "TRUST_MISMATCH", errors: ["registry identity or key mismatch"] };
+  }
+  try {
+    const receipt = await invoke<{ sequence: number; digest: string; continuity: "initial" | "unchanged" | "advance" }>(
+      "registry_certify",
+      {
+        document: parsed.value,
+        trust: { registryId: policy.expectedRegistryId, keyId: policy.expectedKeyId, publicKey: policy.publicKey.value },
+        highWater: policy.highWater ?? null,
+      },
+    );
+    if (receipt.sequence !== parsed.value.sequence) throw new Error("registry verification sequence mismatch");
+    const certified: CertifiedRegistryIndex = Object.freeze({
+      index: parsed.value,
+      digest: receipt.digest,
+      continuity: receipt.continuity,
+      highWater: { sequence: receipt.sequence, digest: receipt.digest },
+    });
+    return { ok: true, value: certified };
+  } catch (cause) {
+    return { ok: false, code: "VERIFICATION_FAILED", errors: [cause instanceof Error ? cause.message : String(cause)] };
+  }
+}
+
 /**
  * A GET that waits while the registry holds this build off.
  *
@@ -506,9 +544,9 @@ export const useRegistry = moduleState("state/registry#store", () =>
       try {
         const raw = await runtimeDepsSlot.v.load(descriptor);
         let highWater = get().trustRecords[descriptor.id]?.highWater;
-        let certified: Awaited<ReturnType<typeof certifyRegistryIndex>>;
+        let certified: RegistryCertificationResult;
         for (;;) {
-          certified = await certifyRegistryIndex(raw, {
+          certified = await certifyRegistryNative(raw, {
             expectedRegistryId: descriptor.id,
             expectedKeyId: descriptor.trustedPublicKey.keyId,
             publicKey: descriptor.trustedPublicKey,

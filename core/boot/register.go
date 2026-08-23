@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/soksak-ai/soksak-core/core/activity"
 	"github.com/soksak-ai/soksak-core/core/app"
@@ -25,6 +26,7 @@ import (
 	"github.com/soksak-ai/soksak-core/core/install"
 	corenet "github.com/soksak-ai/soksak-core/core/net"
 	"github.com/soksak-ai/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/core/registrytrust"
 	"github.com/soksak-ai/soksak-core/core/scan"
 	"github.com/soksak-ai/soksak-core/core/secret"
 	"github.com/soksak-ai/soksak-core/core/service"
@@ -371,6 +373,7 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 	})
 
 	coreenvironment.Register(registry, coreenvironment.Deps{Home: boot.Identity.Home, Changed: emit})
+	registrytrust.Register(registry, func() time.Time { return time.UnixMilli(boot.Now()) })
 
 	daemon.Register(registry, daemon.Deps{
 		Spawner:    boot.Spawner,
