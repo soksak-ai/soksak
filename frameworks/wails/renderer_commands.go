@@ -56,13 +56,10 @@ const (
 // answers one request at a time, so one silent page would stop the whole
 // control plane rather than one command.
 //
-// Twenty seconds is twice the longest path anyone has measured into this
-// renderer. A command that arrives during boot queues behind the page's own
-// plugin gate (measured 2.46s for 46 plugins, 2026-08-08). A 10s cap on a
-// socket command is not enough: one first command consumed 9.4s
-// of an 11.7s boot (measured 2026-08-08). At twice that, a timeout means the
-// page is not answering rather than that it is busy.
-const rendererDeadline = 20 * time.Second
+// The page may delegate one HTTP request to the native core, whose own bounded
+// deadline is 30 seconds. The outer deadline must contain that operation rather
+// than report a silent renderer while the native request is still running.
+const rendererDeadline = 35 * time.Second
 const rendererDeadlineMargin = 5 * time.Second
 
 // RendererDelivery hands one payload to one window's page, or fails naming the

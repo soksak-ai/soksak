@@ -27,6 +27,10 @@
 ## 실행 전 조건
 
 - CI action, 언어 toolchain, SDK source, 재사용 workflow는 정확한 commit 또는 버전을 사용한다.
+- text source와 module checksum 파일은 모든 host에서 LF로 checkout한다. 플랫폼별 checkout
+  변환 때문에 source-integrity gate가 거짓 module 변경을 보고해서는 안 된다.
+- renderer command가 제한 시간이 있는 native 작업을 위임하면 바깥 제한 시간은 native 제한보다
+  길어야 한다. Native 작업이 살아 있는 동안 transport가 renderer 무응답을 보고하지 않는다.
 - native system test는 시작 전에 application과 control client가 host OS용인지 검증한다. Apple
   Silicon macOS는 arm64와 amd64를 모두 실행할 수 있다. 다른 architecture 조합은 명시적 지원이 없으면 거부한다.
 - 제품 빌드와 native test는 같은 최소 deployment target을 사용한다.

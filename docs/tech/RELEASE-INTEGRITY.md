@@ -28,6 +28,10 @@ and a new patch version is published after the responsible invariant has a RED t
 ## Execution preconditions
 
 - CI actions, language toolchains, SDK sources, and reusable workflows use exact commits or versions.
+- Text source and module checksum files are checked out with LF on every host; platform checkout
+  conversion must not make a source-integrity gate report a false module change.
+- A renderer command that delegates to a bounded native operation has an outer deadline longer than
+  that native deadline. The transport never reports renderer silence while native work is still live.
 - A native system test verifies that its application and control client target the host OS before startup.
   macOS on Apple Silicon may run both arm64 and amd64 binaries; unsupported architecture pairs are rejected.
 - Product builds and native tests use the same minimum deployment target.

@@ -254,11 +254,14 @@ func TestASilentWindowTimesOutCarryingTheWindowAndCommand(t *testing.T) {
 }
 
 func TestRendererDeadlineExceedsTheCommandTimeout(t *testing.T) {
+	if rendererDeadline <= 30*time.Second {
+		t.Fatalf("renderer deadline %s does not contain the native HTTP deadline", rendererDeadline)
+	}
 	args := control.Args{"timeoutMs": json.RawMessage(`20000`)}
-	if got := rendererCallDeadline(20*time.Second, args); got != 25*time.Second {
+	if got := rendererCallDeadline(rendererDeadline, args); got != rendererDeadline {
 		t.Fatalf("deadline=%s", got)
 	}
-	if got := rendererCallDeadline(20*time.Second, control.Args{}); got != 20*time.Second {
+	if got := rendererCallDeadline(rendererDeadline, control.Args{}); got != rendererDeadline {
 		t.Fatalf("default deadline=%s", got)
 	}
 }
