@@ -21,9 +21,14 @@ require_wails() {
   fi
 }
 
+generated_source_digest() {
+  find go.mod go.sum frontend/bindings -type f -exec sha256sum {} \; | LC_ALL=C sort | sha256sum | awk '{print $1}'
+}
+
 generate() {
   require_go
   require_wails
+  before=$(generated_source_digest)
   go mod tidy
   if bindings_output=$("$wails" generate bindings -f '-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"' -clean=true -ts ./... 2>&1); then
     printf '%s\n' "$bindings_output"
@@ -37,7 +42,8 @@ generate() {
     exit 1
   fi
   "$wails" generate syso -arch amd64 -icon build/windows/icon.ico -manifest build/windows/wails.exe.manifest -info build/windows/info.json -out wails_windows_amd64.syso
-  git -c safe.directory="$root" diff --exit-code -- go.mod go.sum frontend/bindings
+  after=$(generated_source_digest)
+  [ "$before" = "$after" ] || { echo "Go modules or Wails bindings changed during generation" >&2; exit 1; }
 }
 
 frontend() {

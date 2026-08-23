@@ -27,6 +27,14 @@ func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 	if !strings.Contains(runner, "Wails binding generation emitted warnings") {
 		t.Fatal("Windows binding generation does not reject warnings")
 	}
+	for _, required := range []string{"generated_source_digest()", "before=$(generated_source_digest)", "after=$(generated_source_digest)", `[ "$before" = "$after" ]`} {
+		if !strings.Contains(runner, required) {
+			t.Errorf("Windows generation drift gate is missing %q", required)
+		}
+	}
+	if strings.Contains(runner, "git diff") {
+		t.Fatal("Windows generation drift gate depends on Git metadata")
+	}
 }
 
 func readText(t *testing.T, path string) string {
