@@ -27,9 +27,8 @@ ARG TARGETARCH
 
 # Install base tools, GCC, and GTK/WebKit dev packages
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ca-certificates curl xz-utils nodejs npm pkg-config gcc libc6-dev \
-    libgtk-3-dev libwebkit2gtk-4.1-dev \
-    libgtk-4-dev libwebkitgtk-6.0-dev \
+    ca-certificates curl xz-utils pkg-config gcc libc6-dev \
+    libgtk-4-dev libwebkitgtk-6.0-dev binutils \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Zig - automatically selects correct binary for host architecture
@@ -66,7 +65,7 @@ for arg in "$@"; do
         *) ARGS="$ARGS $arg" ;;
     esac
 done
-exec zig cc -fno-sanitize=all -target aarch64-macos-none -isysroot /opt/macos-sdk -I/opt/macos-sdk/usr/include -L/opt/macos-sdk/usr/lib -F/opt/macos-sdk/System/Library/Frameworks -w $ARGS
+exec zig cc -fno-sanitize=all -target aarch64-macos.10.15 -isysroot /opt/macos-sdk -I/opt/macos-sdk/usr/include -L/opt/macos-sdk/usr/lib -F/opt/macos-sdk/System/Library/Frameworks $ARGS
 ZIGWRAP
 RUN chmod +x /usr/local/bin/zcc-darwin-arm64
 
@@ -86,7 +85,7 @@ for arg in "$@"; do
         *) ARGS="$ARGS $arg" ;;
     esac
 done
-exec zig cc -fno-sanitize=all -target x86_64-macos-none -isysroot /opt/macos-sdk -I/opt/macos-sdk/usr/include -L/opt/macos-sdk/usr/lib -F/opt/macos-sdk/System/Library/Frameworks -w $ARGS
+exec zig cc -fno-sanitize=all -target x86_64-macos.10.15 -isysroot /opt/macos-sdk -I/opt/macos-sdk/usr/include -L/opt/macos-sdk/usr/lib -F/opt/macos-sdk/System/Library/Frameworks $ARGS
 ZIGWRAP
 RUN chmod +x /usr/local/bin/zcc-darwin-amd64
 
@@ -178,26 +177,29 @@ case "${OS}-${ARCH}" in
 esac
 
 export CGO_ENABLED=1
-export CGO_CFLAGS="-w"
-
-# Build frontend if exists and not already built (host may have built it)
-if [ -d "frontend" ] && [ -f "frontend/package.json" ] && [ ! -d "frontend/dist" ]; then
-    (cd frontend && npm install --silent && npm run build --silent)
-fi
-
-# Build
 APP=${APP_NAME:-$(basename $(pwd))}
-mkdir -p bin
+test -s frontend/dist/index.html || { echo "frontend/dist must be built by the pinned frontend toolchain" >&2; exit 1; }
+OUTPUT=bin/cross/${GOOS}-${GOARCH}
+mkdir -p "$OUTPUT"
 
 EXT=""
-LDFLAGS="-s -w"
+APP_LDFLAGS="-s -w"
 if [ "$GOOS" = "windows" ]; then
     EXT=".exe"
-    LDFLAGS="-s -w -H windowsgui"
+    APP_LDFLAGS="-s -w -H windowsgui"
+fi
+if [ "$GOOS" = "darwin" ]; then
+    export MACOSX_DEPLOYMENT_TARGET=10.15
+    export CGO_CFLAGS="-mmacosx-version-min=10.15"
+    export CGO_LDFLAGS="-mmacosx-version-min=10.15"
 fi
 
-go build -ldflags="$LDFLAGS" -o bin/${APP}-${GOOS}-${GOARCH}${EXT} .
-echo "Built: bin/${APP}-${GOOS}-${GOARCH}${EXT}"
+go build -tags production -trimpath -buildvcs=false -ldflags="$APP_LDFLAGS" -o "$OUTPUT/$APP$EXT" .
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o "$OUTPUT/sok$EXT" ./cmd/sok
+if [ -n "${HOST_UID:-}" ] && [ -n "${HOST_GID:-}" ]; then
+    chown -R "$HOST_UID:$HOST_GID" "$OUTPUT"
+fi
+echo "Built: $OUTPUT/$APP$EXT and $OUTPUT/sok$EXT"
 SCRIPT
 RUN chmod +x /usr/local/bin/build.sh
 

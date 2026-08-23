@@ -1,4 +1,5 @@
-FROM wails-cross:latest
+ARG CROSS_ARCH=must-be-provided
+FROM wails-cross-${CROSS_ARCH}:latest
 
 ARG TARGETARCH
 ARG NODE_VERSION=24.19.0

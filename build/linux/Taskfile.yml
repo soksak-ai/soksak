@@ -11,7 +11,7 @@ vars:
   # Password is stored securely in system keychain. Run: wails3 setup signing
 
   # Docker image for cross-compilation (used when building on non-Linux or no CC available)
-  CROSS_IMAGE: wails-cross
+  CROSS_IMAGE: 'wails-cross-{{.DOCKER_ARCH}}'
 
 tasks:
   build:sok:
@@ -70,22 +70,13 @@ tasks:
   build:docker:
     summary: Builds for Linux using Docker (for non-Linux hosts or when no C compiler available)
     internal: true
-    deps:
-      - task: common:build:frontend
-      - task: common:generate:icons
-      - task: generate:dotdesktop
     preconditions:
       - sh: docker info > /dev/null 2>&1
         msg: "Docker is required for cross-compilation to Linux. Please install Docker."
-      - sh: docker image inspect {{.CROSS_IMAGE}} > /dev/null 2>&1
-        msg: |
-          Docker image '{{.CROSS_IMAGE}}' not found.
-          Build it first: wails3 task setup:docker
     cmds:
-      - docker run --rm -v "{{.ROOT_DIR}}:/app" {{.GO_CACHE_MOUNT}} {{.REPLACE_MOUNTS}} -e APP_NAME="{{.APP_NAME}}" "{{.CROSS_IMAGE}}" linux {{.DOCKER_ARCH}}
-      - docker run --rm -v "{{.ROOT_DIR}}:/app" alpine chown -R $(id -u):$(id -g) /app/bin
+      - scripts/ci/cross-build.sh linux {{.DOCKER_ARCH}}
       - mkdir -p {{.BIN_DIR}}
-      - mv "bin/{{.APP_NAME}}-linux-{{.DOCKER_ARCH}}" "{{.OUTPUT}}"
+      - cp "bin/cross/linux-{{.DOCKER_ARCH}}/{{.APP_NAME}}" "{{.OUTPUT}}"
     vars:
       DOCKER_ARCH: '{{.ARCH | default "amd64"}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'

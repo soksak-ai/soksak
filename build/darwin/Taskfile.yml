@@ -10,7 +10,7 @@ vars:
   # ENTITLEMENTS: "build/darwin/entitlements.plist"
 
   # Docker image for cross-compilation (used when building on non-macOS)
-  CROSS_IMAGE: wails-cross
+  CROSS_IMAGE: 'wails-cross-{{.DOCKER_ARCH}}'
 
 tasks:
   build:sok:
@@ -90,21 +90,13 @@ tasks:
   build:docker:
     summary: Cross-compiles for macOS using Docker (for Linux/Windows hosts)
     internal: true
-    deps:
-      - task: common:build:frontend
-      - task: common:generate:icons
     preconditions:
       - sh: docker info > /dev/null 2>&1
         msg: "Docker is required for cross-compilation. Please install Docker."
-      - sh: docker image inspect {{.CROSS_IMAGE}} > /dev/null 2>&1
-        msg: |
-          Docker image '{{.CROSS_IMAGE}}' not found.
-          Build it first: wails3 task setup:docker
     cmds:
-      - docker run --rm -v "{{.ROOT_DIR}}:/app" {{.GO_CACHE_MOUNT}} {{.REPLACE_MOUNTS}} -e APP_NAME="{{.APP_NAME}}" {{.CROSS_IMAGE}} darwin {{.DOCKER_ARCH}}
-      - docker run --rm -v "{{.ROOT_DIR}}:/app" alpine chown -R $(id -u):$(id -g) /app/bin
+      - scripts/ci/cross-build.sh darwin {{.DOCKER_ARCH}}
       - mkdir -p {{.BIN_DIR}}
-      - mv "bin/{{.APP_NAME}}-darwin-{{.DOCKER_ARCH}}" "{{.OUTPUT}}"
+      - cp "bin/cross/darwin-{{.DOCKER_ARCH}}/{{.APP_NAME}}" "{{.OUTPUT}}"
     vars:
       DOCKER_ARCH: '{{if eq .TARGET_ARCH "arm64"}}arm64{{else if eq .TARGET_ARCH "amd64"}}amd64{{else}}arm64{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'

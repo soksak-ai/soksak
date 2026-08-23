@@ -9,9 +9,12 @@ import (
 func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 	workflow := readText(t, ".github/workflows/windows-terminal-system.yml")
 	docker := readText(t, "scripts/ci/windows-docker.sh")
-	for path, source := range map[string]string{"workflow": workflow, "docker": docker} {
-		if !strings.Contains(source, "windows-build.sh all") {
-			t.Errorf("%s does not use windows-build.sh all", path)
+	if !strings.Contains(workflow, "windows-build.sh all") {
+		t.Error("workflow does not execute the complete Windows build")
+	}
+	for _, required := range []string{"phase=${1:-all}", "windows-build.sh $BUILD_PHASE"} {
+		if !strings.Contains(docker, required) {
+			t.Errorf("Docker runner omits %q", required)
 		}
 	}
 	dockerfile := readText(t, "build/docker/Dockerfile.windows-ci")
@@ -34,6 +37,53 @@ func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 	}
 	if strings.Contains(runner, "git diff") {
 		t.Fatal("Windows generation drift gate depends on Git metadata")
+	}
+}
+
+func TestCrossBuilderConsumesOnePinnedFrontendAndBuildsBothBinaries(t *testing.T) {
+	dockerfile := readText(t, "build/docker/Dockerfile.cross")
+	for _, forbidden := range []string{"npm install", "npm run build"} {
+		if strings.Contains(dockerfile, forbidden) {
+			t.Errorf("cross compiler owns frontend operation %q", forbidden)
+		}
+	}
+	for _, forbidden := range []string{`CGO_CFLAGS="-w"`, "Frameworks -w"} {
+		if strings.Contains(dockerfile, forbidden) {
+			t.Errorf("cross compiler suppresses C diagnostics through %q", forbidden)
+		}
+	}
+	for _, required := range []string{"frontend/dist/index.html", "./cmd/sok", "-tags production", `"$OUTPUT/sok$EXT"`, "CGO_ENABLED=0 go build", `chown -R "$HOST_UID:$HOST_GID"`, "macos.10.15", "MACOSX_DEPLOYMENT_TARGET=10.15"} {
+		if !strings.Contains(dockerfile, required) {
+			t.Errorf("cross compiler omits %q", required)
+		}
+	}
+	runner := readText(t, "scripts/ci/cross-build.sh")
+	for _, required := range []string{"frontend-build.sh", "cross-image.sh", "--platform", "file \"$application\"", "go version -m", "readelf --version-info", "HOST_UID"} {
+		if !strings.Contains(runner, required) {
+			t.Errorf("cross release runner omits %q", required)
+		}
+	}
+	frontend := readText(t, "scripts/ci/frontend-build.sh")
+	for _, required := range []string{"frontend/package.json", "NODE_VERSION=$node_version", "PNPM_VERSION=$pnpm_version", "PNPM_DISABLE_SELF_UPDATE_CHECK=1", ".build-input-sha256"} {
+		if !strings.Contains(frontend, required) {
+			t.Errorf("frontend runner omits %q", required)
+		}
+	}
+	frontendImage := readText(t, "build/docker/Dockerfile.frontend")
+	if !strings.Contains(frontendImage, "NPM_CONFIG_UPDATE_NOTIFIER=false") {
+		t.Fatal("frontend image does not disable the npm update notifier")
+	}
+	universal := readText(t, "scripts/ci/darwin-universal.sh")
+	for _, required := range []string{"cross-build.sh", "lipo -create", "soksak.app", `test "$(lipo -archs`} {
+		if !strings.Contains(universal, required) {
+			t.Errorf("Darwin universal runner omits %q", required)
+		}
+	}
+	native := readText(t, "scripts/ci/darwin-release.sh")
+	for _, required := range []string{"MACOSX_DEPLOYMENT_TARGET=10.15", "minimum=11.0", "GOARCH=$architecture", "clang_arch=x86_64", "cli_minimum", "want 12.0", "vtool -show-build", "lipo -create", "grep -F 'warning:'", "codesign --verify --deep --strict"} {
+		if !strings.Contains(native, required) {
+			t.Errorf("native Darwin release runner omits %q", required)
+		}
 	}
 }
 

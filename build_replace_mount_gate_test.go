@@ -44,8 +44,26 @@ func TestCrossImageMatchesTheDeclaredLinuxBaseline(t *testing.T) {
 			t.Errorf("cross image is missing %q", required)
 		}
 	}
+	for _, forbidden := range []string{"nodejs npm", "libgtk-3-dev", "libwebkit2gtk-4.1-dev"} {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("cross compiler retains frontend or GTK3 dependency %q", forbidden)
+		}
+	}
 	if strings.Contains(text, "FROM golang:bookworm\n") {
 		t.Error("the Linux build stage still uses Debian Bookworm and GTK 4.8")
+	}
+}
+
+func TestCrossTasksUseAnImageBuiltForTheTargetArchitecture(t *testing.T) {
+	for _, path := range []string{"build/darwin/Taskfile.yml", "build/linux/Taskfile.yml"} {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(body)
+		if !strings.Contains(text, `CROSS_IMAGE: 'wails-cross-{{.DOCKER_ARCH}}'`) {
+			t.Errorf("%s does not select the target-architecture cross image", path)
+		}
 	}
 }
 
