@@ -19,22 +19,9 @@ if [ "$current" != "$definition" ]; then
   docker build --build-arg "CROSS_ARCH=$cross_arch" --build-arg CI_DEFINITION_SHA="$definition" -t "$image" -f "$root/build/docker/Dockerfile.windows-ci" "$root/build/docker"
 fi
 
-mounts=""
-while IFS= read -r replacement; do
-  case "$replacement" in
-    /*) host=$replacement; container=$replacement ;;
-    *) host=$(CDPATH= cd -- "$root/$(dirname -- "$replacement")" && pwd)/$(basename -- "$replacement"); container=/app/$replacement
-       while echo "$container" | grep -q '/[^/]*/../'; do container=$(echo "$container" | sed -E 's#/[^/]*/../#/#'); done ;;
-  esac
-  mounts="$mounts -v $host:$container:ro"
-done <<EOF
-$(sed -n 's/^replace .* => //p' "$root/go.mod")
-EOF
-
-# shellcheck disable=SC2086
 docker run --rm -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$root:/app" -v soksak-windows-ci-go-mod:/go/pkg/mod -v soksak-windows-ci-go-build:<local-evidence>/go-build \
   -v soksak-windows-ci-node-modules:/app/frontend/node_modules -v soksak-windows-ci-pnpm-store:/app/.pnpm-store \
-  $mounts -e GOCACHE=<local-evidence>/go-build -e WAILS3=/usr/local/bin/wails3 --entrypoint /bin/sh "$image" \
+  -e GOCACHE=<local-evidence>/go-build -e WAILS3=/usr/local/bin/wails3 --entrypoint /bin/sh "$image" \
   -e BUILD_PHASE="$phase" \
   -c 'mkdir -p <local-evidence>/home <local-evidence>/go-build /go/pkg/mod /app/.pnpm-store /app/frontend/node_modules && chown -R "$HOST_UID:$HOST_GID" <local-evidence>/home <local-evidence>/go-build /go/pkg/mod /app/.pnpm-store /app/frontend/node_modules && exec setpriv --reuid="$HOST_UID" --regid="$HOST_GID" --clear-groups env HOME=<local-evidence>/home GOCACHE=<local-evidence>/go-build WAILS3=/usr/local/bin/wails3 /bin/sh -c "cd /app && scripts/ci/windows-build.sh $BUILD_PHASE"'

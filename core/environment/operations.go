@@ -1,4 +1,4 @@
-package settings
+package environment
 
 import (
 	"os"
@@ -44,8 +44,8 @@ func SetPluginsEnabled(home string, refs []PluginRef, enabled bool, expected uin
 	}
 	return Write(home, current, true, next, expected)
 }
-func SetDevelopment(home, kind, id, path string, enabled bool, expected uint64) (Change, error) {
-	if !filepath.IsAbs(path) {
+func SetSource(home, kind, id string, component Component, expected uint64) (Change, error) {
+	if !filepath.IsAbs(component.Path) {
 		return Change{}, os.ErrInvalid
 	}
 	current, exists, err := Read(home)
@@ -56,29 +56,28 @@ func SetDevelopment(home, kind, id, path string, enabled bool, expected uint64) 
 	if !exists {
 		next = Empty()
 	}
-	var source *Development
-	if enabled {
-		source = &Development{Path: path}
-	}
 	switch kind {
 	case "plugin":
-		value := next.Plugins[id]
-		value.Development = source
+		value, found := next.Plugins[id]
+		if !found {
+			return Change{}, os.ErrNotExist
+		}
+		value.Component = component
 		next.Plugins[id] = value
 	case "sidecar":
-		next.Sidecars[id] = Component{Development: source}
+		next.Sidecars[id] = component
 	case "kit":
-		next.Kits[id] = Component{Development: source}
+		next.Kits[id] = component
 	case "contract":
-		next.Contracts[id] = Component{Development: source}
+		next.Contracts[id] = component
 	case "spec":
-		next.Specs[id] = Component{Development: source}
+		next.Specs[id] = component
 	default:
 		return Change{}, os.ErrInvalid
 	}
 	return Write(home, current, exists, next, expected)
 }
-func SetProvider(home, plugin, requirement, sidecar string, expected uint64) (Change, error) {
+func SetSidecar(home, plugin, role, sidecar string, expected uint64) (Change, error) {
 	current, exists, err := Read(home)
 	if err != nil {
 		return Change{}, err
@@ -91,44 +90,27 @@ func SetProvider(home, plugin, requirement, sidecar string, expected uint64) (Ch
 	if !found {
 		return Change{}, os.ErrNotExist
 	}
-	if value.Providers == nil {
-		value.Providers = map[string]string{}
+	if value.Sidecars == nil {
+		value.Sidecars = map[string]string{}
 	}
-	value.Providers[requirement] = sidecar
+	value.Sidecars[role] = sidecar
 	next.Plugins[plugin] = value
 	return Write(home, current, true, next, expected)
 }
 
 func PluginManifests(home string) ([]ManifestRecord, error) {
-	preferences, settingsExist, err := Read(home)
+	environment, exists, err := Read(home)
 	if err != nil {
 		return nil, err
 	}
-	installed, installedExist, err := ReadInstalled(home)
-	if err != nil {
-		return nil, err
-	}
-	ids := map[string]bool{}
-	if settingsExist {
-		for id := range preferences.Plugins {
-			ids[id] = true
-		}
-	}
-	if installedExist {
-		for id := range installed.Plugins {
-			ids[id] = true
-		}
+	if !exists {
+		return []ManifestRecord{}, nil
 	}
 	records := []ManifestRecord{}
-	for _, id := range sortedKeys(ids) {
-		preference := preferences.Plugins[id]
-		value, managed := installed.Plugins[id]
+	for _, id := range sortedKeys(environment.Plugins) {
+		value := environment.Plugins[id]
 		root := value.Path
-		development := preference.Development != nil
-		if development {
-			root = preference.Development.Path
-		}
-		record := ManifestRecord{ID: id, Version: value.Version, InstallPath: root, ManifestPath: "plugin.json", Development: development, Enabled: preference.Enabled}
+		record := ManifestRecord{ID: id, Version: value.Version, InstallPath: root, ManifestPath: "plugin.json", Development: value.Source == "development", Enabled: value.Enabled}
 		body, readErr := os.ReadFile(filepath.Join(root, "plugin.json"))
 		if readErr != nil {
 			message := readErr.Error()
@@ -136,9 +118,6 @@ func PluginManifests(home string) ([]ManifestRecord, error) {
 		} else {
 			manifest := string(body)
 			record.Manifest = &manifest
-		}
-		if !managed && !development {
-			record.Error = stringPointer("plugin is not installed and has no development path")
 		}
 		records = append(records, record)
 	}

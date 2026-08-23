@@ -9,15 +9,14 @@ const release = {
   reports: [{ url: "https://github.com/example/demo/releases/download/v0.0.1/report.json", sha256: digest("c") }],
 } as const;
 const certified = { index: { id: "official", plugins: [release], sidecars: [], kits: [], contracts: [], specs: [] } } as never;
-const settings = { revision: 1, plugins: { demo: { enabled: false } }, sidecars: {}, kits: {}, contracts: {}, specs: {} } as const;
-const installed = { revision: 1, plugins: {}, sidecars: {}, kits: {}, contracts: {}, specs: {} } as const;
+const environment = { revision: 1, plugins: {}, sidecars: {}, kits: {}, contracts: {}, specs: {} } as const;
 
 describe("direct registry installation", () => {
   it("stages and commits one exact release", async () => {
     const commit = vi.fn(async (_values: unknown) => ({ revision: 2 }));
     const result = await installRegistryRelease({
       certified, root: { kind: "plugin", id: "demo", version: "0.0.1" }, target: "aarch64-apple-darwin",
-      settings, installed,
+      environment,
       artifacts: {
         begin: async () => ({ transactionId: "tx" }),
         stage: async () => ({ handle: "h", sha256: digest("b"), size: 3, manifestSha256: digest("d"), extraction: "regular-files-only", verifiedEntrypoints: ["plugin.json"] }),
@@ -33,7 +32,7 @@ describe("direct registry installation", () => {
     const rollback = vi.fn(async () => {});
     const result = await installRegistryRelease({
       certified, root: { kind: "plugin", id: "demo", version: "0.0.1" }, target: "any",
-      settings, installed,
+      environment,
       artifacts: {
         begin: async () => ({ transactionId: "tx" }),
         stage: async () => ({ handle: "h", sha256: digest("e"), size: 3, manifestSha256: digest("d"), extraction: "regular-files-only", verifiedEntrypoints: ["plugin.json"] }),
@@ -44,7 +43,7 @@ describe("direct registry installation", () => {
     expect(rollback).toHaveBeenCalledWith("tx");
   });
 
-  it("installs selected sidecar providers in the same transaction", async () => {
+  it("installs sidecars selected by plugin role in the same transaction", async () => {
     const sidecarRelease = {
       sidecar: { id: "state", version: "0.0.7" },
       source: { repository: "https://github.com/example/state", commit: "d".repeat(40) },
@@ -58,8 +57,8 @@ describe("direct registry installation", () => {
       certified: index,
       root: { kind: "plugin", id: "demo", version: "0.0.1" },
       target: "aarch64-apple-darwin",
-      settings: { revision: 1, plugins: { demo: { enabled: false, providers: { state: "state" } } }, sidecars: {}, kits: {}, contracts: {}, specs: {} },
-      installed: { revision: 3, plugins: {}, sidecars: {}, kits: {}, contracts: {}, specs: {} },
+      environment: { revision: 3, plugins: {}, sidecars: {}, kits: {}, contracts: {}, specs: {} },
+      sidecars: { state: "state" },
       artifacts: {
         begin: async () => ({ transactionId: "tx" }),
         stage: async ({ release }) => {
@@ -82,7 +81,7 @@ describe("direct registry installation", () => {
     expect(committed[0]).toHaveLength(2);
   });
 
-  it("reuses an exact installed sidecar provider", async () => {
+  it("reuses an exact materialized sidecar provider", async () => {
     const sidecarRelease = {
       sidecar: { id: "state", version: "0.0.7" },
       source: { repository: "https://github.com/example/state", commit: "d".repeat(40) },
@@ -93,8 +92,8 @@ describe("direct registry installation", () => {
     const staged: string[] = [];
     const result = await installRegistryRelease({
       certified: index, root: { kind: "plugin", id: "demo", version: "0.0.1" }, target: "aarch64-apple-darwin",
-      settings: { revision: 1, plugins: { demo: { enabled: false, providers: { state: "state" } } }, sidecars: {}, kits: {}, contracts: {}, specs: {} },
-      installed: { revision: 3, plugins: {}, sidecars: { state: { version: "0.0.7", path: "/state", registryId: "official", repository: "https://github.com/example/state", sourceCommit: "d".repeat(40), manifestSha256: digest("a"), artifactSha256: digest("e"), target: "aarch64-apple-darwin" } }, kits: {}, contracts: {}, specs: {} },
+      environment: { revision: 3, plugins: {}, sidecars: { state: { version: "0.0.7", path: "/state", source: "registry", registry: "official", target: "aarch64-apple-darwin" } }, kits: {}, contracts: {}, specs: {} },
+      sidecars: { state: "state" },
       artifacts: {
         begin: async () => ({ transactionId: "tx" }),
         stage: async ({ release }) => { staged.push(release.kind + ":" + release.id); return { handle: release.id, sha256: digest("b"), size: 3, manifestSha256: digest("d"), extraction: "regular-files-only", verifiedEntrypoints: ["plugin.json"] }; },
@@ -117,8 +116,8 @@ describe("direct registry installation", () => {
     const result = await installRegistryRelease({
       certified: { index: { id: "official", plugins: [release], sidecars: [sidecarRelease], kits: [], contracts: [], specs: [] } } as never,
       root: { kind: "plugin", id: "demo", version: "0.0.1" }, target: "aarch64-apple-darwin",
-      settings: { revision: 1, plugins: { demo: { enabled: false, providers: { state: "state" } } }, sidecars: {}, kits: {}, contracts: {}, specs: {} },
-      installed,
+      environment: { revision: 1, plugins: {}, sidecars: {}, kits: {}, contracts: {}, specs: {} },
+      sidecars: { state: "state" },
       artifacts: {
         begin: async () => ({ transactionId: "tx" }),
         stage: async ({ release }) => ({ handle: release.id, sha256: release.kind === "plugin" ? digest("b") : digest("e"), size: release.kind === "plugin" ? 3 : 4, manifestSha256: digest("d"), extraction: "regular-files-only", verifiedEntrypoints: [release.kind + ".json"] }),
@@ -142,7 +141,7 @@ describe("direct registry installation", () => {
     const staged: string[] = [];
     const result = await installRegistryRelease({
       certified: { index: { id: "official", plugins: [release, dependencyRelease], sidecars: [], kits: [], contracts: [], specs: [] } } as never,
-      root: { kind: "plugin", id: "demo", version: "0.0.1" }, target: "any", settings, installed,
+      root: { kind: "plugin", id: "demo", version: "0.0.1" }, target: "any", environment,
       artifacts: {
         begin: async () => ({ transactionId: "tx" }),
         stage: async ({ release }) => {

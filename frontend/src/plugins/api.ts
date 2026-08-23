@@ -814,7 +814,7 @@ export function isBlockedForPlugins(name: string): boolean {
   return (
     BLOCKED_MANAGEMENT.has(name) ||
     name.startsWith("plugin.dev.") ||
-    name.startsWith("plugin.development.") ||
+    name.startsWith("plugin.source.") ||
     name === "sidecar.request" ||
     name.startsWith("registry.") ||
     // Plugins already receive ownership-fixed app.secrets/app.network facades. Exposing the
@@ -835,7 +835,7 @@ export function targetPluginId(name: string): string | null {
   const dot = rest.indexOf(".");
   if (dot < 0) return null; // management (plugin.list and such) — isBlockedForPlugins blocks it.
   const seg = rest.slice(0, dot);
-  if (seg === "view" || seg === "dev" || seg === "development") return null;
+  if (seg === "view" || seg === "dev" || seg === "source") return null;
   return seg;
 }
 
@@ -1428,10 +1428,8 @@ export function buildPluginApi(
                   origin: ctx?.origin,
                   parent: ctx?.parent,
                   // The pane the call came from. A core command has always had it; without it here a
-                  // plugin cannot answer "the one in front of me" and the core ends up keeping a
-                  // command that resolves the caller's pane on the plugin's behalf — which is how
-                  // term.* stayed in the core (CORE-CENSUS 3). Named after no domain: a browser's
-                  // navigate wants the caller's pane exactly as much as a terminal's read does.
+                  // Pane context is domain-neutral: browser navigation and terminal reads both
+                  // need the caller's pane.
                   pane: ctx?.pane,
                   execute: (n, p) =>
                     executeGated(n, p, { origin: ctx?.origin, parent: ctx?.parent }),

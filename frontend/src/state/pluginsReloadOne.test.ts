@@ -39,7 +39,7 @@ const invoke = vi.fn(async (cmd: string, args?: { path?: string }) => {
     if (path.endsWith("/plugin.json")) return { content: JSON.stringify(onDisk) };
     return { content: "export const activate = () => {};" };
   }
-  if (cmd === "settings_get") return { revision: 1 };
+  if (cmd === "environment_get") return { revision: 1 };
   if (cmd === "plugin_enabled_set") return { previousGeneration: 1, generation: 2 };
   return undefined;
 });

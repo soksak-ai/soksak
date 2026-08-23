@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	coresettings "github.com/soksak-ai/soksak-core/core/settings"
+	coreenvironment "github.com/soksak-ai/soksak-core/core/environment"
 )
 
-func TestCommitPublishesPluginAndSidecarSeparately(t *testing.T) {
+func TestCommitPublishesOneEnvironmentWithSeparateComponentPaths(t *testing.T) {
 	home := t.TempDir()
 	manager := NewTransactionManager(filepath.Join(home, ".transactions"), memoryFetcher{})
 	root := ArtifactIdentity{Kind: "plugin", ID: "view", Version: "0.0.1"}
@@ -40,21 +40,21 @@ func TestCommitPublishesPluginAndSidecarSeparately(t *testing.T) {
 	if result.Revision != 1 {
 		t.Fatalf("result=%+v", result)
 	}
-	body, err := os.ReadFile(filepath.Join(home, coresettings.InstalledFile))
+	body, err := os.ReadFile(filepath.Join(home, coreenvironment.File))
 	if err != nil {
 		t.Fatal(err)
 	}
-	settings, err := coresettings.ParseInstalled(body)
+	environment, err := coreenvironment.Parse(body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(settings.Plugins) != 1 || len(settings.Sidecars) != 1 {
-		t.Fatalf("settings=%+v", settings)
+	if len(environment.Plugins) != 1 || len(environment.Sidecars) != 1 {
+		t.Fatalf("environment=%+v", environment)
 	}
-	if settings.Plugins["view"].Path == settings.Sidecars["state"].Path {
-		t.Fatalf("plugin and sidecar share install path: %s", settings.Plugins["view"].Path)
+	if environment.Plugins["view"].Path == environment.Sidecars["state"].Path {
+		t.Fatalf("plugin and sidecar share install path: %s", environment.Plugins["view"].Path)
 	}
-	for _, path := range []string{settings.Plugins["view"].Path, settings.Sidecars["state"].Path} {
+	for _, path := range []string{environment.Plugins["view"].Path, environment.Sidecars["state"].Path} {
 		if info, err := os.Stat(path); err != nil || !info.IsDir() {
 			t.Fatalf("published path %s: info=%v err=%v", path, info, err)
 		}

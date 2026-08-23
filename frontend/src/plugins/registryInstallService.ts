@@ -11,6 +11,7 @@ import {
 
 export async function installQualifiedRegistryEntry(
   entry: QualifiedRegistryEntry,
+  sidecars?: Record<string, string>,
 ): Promise<RegistryInstallRuntimeResult> {
   const source = useRegistry.getState().registries[entry.registryId];
   if (!source?.certified) {
@@ -23,6 +24,7 @@ export async function installQualifiedRegistryEntry(
   const result = await installCertifiedRegistryRelease({
     certified: source.certified,
     root: { kind: entry.kind, id: entry.id, version: entry.version },
+    sidecars,
   });
   if (result.ok) {
     // The archive is now published at home/plugins/<id>. Rescan the loader so the

@@ -44,8 +44,12 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
-github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822100936-418d6064fcdc h1:ULytTAEIlpw3b6E6Sv8ERXSzozs5KN/XqZMy2x3ghjc=
-github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822100936-418d6064fcdc/go.mod h1:NdDk33RVxSaxz3Ex5x8YNnIkxMLWmuqne3Pevdygj98=
+github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f h1:8N2Q1/QmbjqJ1D+6Xf+WcOXievG9/P3kpGs4e7ZlrkU=
+github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f/go.mod h1:8mZL8RI8c0G/S2VMvBj1t845gWwopw2xrqF96eaXM8U=
+github.com/soksak-ai/soksak-contract-control v0.0.0-20260823042834-6d1a1c8cbad7 h1:cUkkZ6LOn7i7czVL3VP2Zu7yLfKwYDOREwrcNbYGtXM=
+github.com/soksak-ai/soksak-contract-control v0.0.0-20260823042834-6d1a1c8cbad7/go.mod h1:onYfujFaCchwifFz86roX8J7EkpiDEpSgNajcoiuBbw=
+github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260823055958-d3547022e43d h1:ux5kajGQ4ac0W4s855jkfkqfiwR1vIoWxfg6jJXRyFE=
+github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260823055958-d3547022e43d/go.mod h1:NdDk33RVxSaxz3Ex5x8YNnIkxMLWmuqne3Pevdygj98=
 github.com/stretchr/objx v0.5.2 h1:xuMeJ0Sdp5ZMRXx/aWO6RZxdr3beISkG5/G/aIRr3pY=
 github.com/stretchr/objx v0.5.2/go.mod h1:FRsXN1f5AsAjCGJKqEizvkpNtU+EGNCLh3NxZ/8L+MA=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=

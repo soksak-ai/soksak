@@ -8,9 +8,9 @@ import { startPluginHooks } from "./hooks";
 import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 import { usePlugins } from "../state/plugins";
 import { useRegistry } from "../state/registry";
-import { createSettingsEventHandler, type SettingsChange } from "../state/settingsEvents";
+import { createEnvironmentEventHandler, type EnvironmentChange } from "../state/environmentEvents";
 
-let stopCompositionEvents = () => {};
+let stopEnvironmentEvents = () => {};
 
 export async function initPluginHost(): Promise<void> {
   // Point where this window's plugin runtime starts anew. Children spawned by a previous runtime(window still
@@ -47,20 +47,20 @@ export async function initPluginHost(): Promise<void> {
     console.warn("app version read failed:", e);
   }
   try {
-    stopCompositionEvents();
-    const queued: SettingsChange[] = [];
-    let onChange: ReturnType<typeof createSettingsEventHandler> | null = null;
-    stopCompositionEvents = await safeListenReady<SettingsChange>("settings.changed", (event) => {
+    stopEnvironmentEvents();
+    const queued: EnvironmentChange[] = [];
+    let onChange: ReturnType<typeof createEnvironmentEventHandler> | null = null;
+    stopEnvironmentEvents = await safeListenReady<EnvironmentChange>("environment.changed", (event) => {
       if (onChange === null) queued.push(event.payload);
       else void onChange(event.payload).catch((error) => {
-        console.error("plugin settings reload failed:", error);
+        console.error("plugin environment reload failed:", error);
       });
     });
-    const settings = await invoke<{ revision: number }>("settings_get");
+    const environment = await invoke<{ revision: number }>("environment_get");
     await usePlugins.getState().reload();
-    onChange = createSettingsEventHandler(
+    onChange = createEnvironmentEventHandler(
       () => usePlugins.getState().reload(),
-      settings.revision,
+      environment.revision,
     );
     for (const change of queued) await onChange(change);
   } catch (e) {

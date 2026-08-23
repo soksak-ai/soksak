@@ -77,7 +77,7 @@ tasks:
           Build it first: wails3 task setup:docker
     cmds:
       - task: generate:syso
-      - docker run --rm -v "{{.ROOT_DIR}}:/app" {{.GO_CACHE_MOUNT}} {{.REPLACE_MOUNTS}} -e APP_NAME="{{.APP_NAME}}" {{.CROSS_IMAGE}} windows {{.DOCKER_ARCH}}
+      - docker run --rm -v "{{.ROOT_DIR}}:/app" {{.GO_CACHE_MOUNT}} -e APP_NAME="{{.APP_NAME}}" {{.CROSS_IMAGE}} windows {{.DOCKER_ARCH}}
       - docker run --rm -v "{{.ROOT_DIR}}:/app" alpine chown -R $(id -u):$(id -g) /app/bin
       - rm -f *.syso
     vars:
@@ -85,25 +85,6 @@ tasks:
       # Mount Go module cache for faster builds
       GO_CACHE_MOUNT:
         sh: 'echo "-v ${GOPATH:-$HOME/go}/pkg/mod:/go/pkg/mod"'
-      # Extract replace directives from go.mod and create -v mounts for each
-      REPLACE_MOUNTS:
-        sh: |
-          grep -E '^replace .* => ' go.mod 2>/dev/null | while read -r line; do
-            path=$(echo "$line" | sed -E 's/^replace .* => //' | tr -d '\r')
-            if [ "${path#/}" = "$path" ]; then
-              host="$(cd "$(dirname "$path")" 2>/dev/null && pwd)/$(basename "$path")"
-              container="/app/$path"
-              while echo "$container" | grep -q '/[^/]*/\.\./'; do
-                container=$(echo "$container" | sed -E 's#/[^/]*/\.\./#/#')
-              done
-            else
-              host="$path"
-              container="$path"
-            fi
-            if [ -d "$host" ]; then
-              echo "-v $host:$container:ro"
-            fi
-          done | tr '\n' ' '
 
   package:
     summary: Packages the application

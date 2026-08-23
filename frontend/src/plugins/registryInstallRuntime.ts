@@ -7,6 +7,7 @@ import type {
 export interface RegistryInstallRuntimeInput {
   certified: CertifiedRegistryIndex;
   root: ReleaseIdentity;
+  sidecars?: Record<string, string>;
 }
 
 export type RegistryInstallRuntimeResult =

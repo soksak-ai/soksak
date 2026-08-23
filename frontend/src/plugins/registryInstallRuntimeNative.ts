@@ -19,7 +19,7 @@ import {
   setRegistryInstallRuntime,
   type RegistryInstallRuntimeHandler,
 } from "./registryInstallRuntime";
-import { isArtifactTarget, parseInstalledDocument, parseSettingsDocument, type ArtifactTarget } from "./spec";
+import { isArtifactTarget, parseEnvironmentDocument, type ArtifactTarget } from "./spec";
 
 async function hostTarget(): Promise<ArtifactTarget> {
   const value = await invoke<string>("host_artifact_target");
@@ -53,9 +53,10 @@ const artifactStager: RegistryArtifactStager = {
     }),
   readUtf8: (transactionId, handle, path) =>
     invoke<string>("artifact_install_read_utf8", { transactionId, handle, path }),
-  commit: async (transactionId, expectedRevision, releases) => {
+  commit: async (transactionId, expectedRevision, releases, root, sidecars) => {
     const plugins = releases.filter((value) => value.kind === "plugin").map((value) => ({
       plugin: { id: value.id, version: value.version },
+      sidecars: value.id === root.id ? sidecars : undefined,
       registryId: value.registryId,
       sourceRepository: value.sourceRepository,
       sourceCommit: value.sourceCommit,
@@ -64,7 +65,7 @@ const artifactStager: RegistryArtifactStager = {
       manifestSha256: value.manifestSha256,
       stagedHandle: value.stagedHandle,
     }));
-    const sidecars = releases.filter((value) => value.kind === "sidecar").map((value) => ({
+    const sidecarReleases = releases.filter((value) => value.kind === "sidecar").map((value) => ({
       sidecar: { id: value.id, version: value.version },
       registryId: value.registryId,
       sourceRepository: value.sourceRepository,
@@ -89,7 +90,7 @@ const artifactStager: RegistryArtifactStager = {
       transactionId,
       expectedRevision,
       plugins,
-      sidecars,
+      sidecars: sidecarReleases,
       kits,
     });
   },
@@ -97,7 +98,7 @@ const artifactStager: RegistryArtifactStager = {
     invoke<void>("artifact_install_rollback", { transactionId }),
 };
 
-const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root }) => {
+const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root, sidecars }) => {
   let target: ArtifactTarget;
   try {
     target = await hostTarget();
@@ -105,25 +106,21 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
     const message = cause instanceof Error ? cause.message : String(cause);
     return { ok: false, code: "HOST_TARGET_UNAVAILABLE", message, errors: [message] };
   }
-  let settingsRaw: unknown;
-  let installedRaw: unknown;
+  let environmentRaw: unknown;
   try {
-    settingsRaw = await invoke<unknown>("settings_get");
-    installedRaw = await invoke<unknown>("installed_get");
+    environmentRaw = await invoke<unknown>("environment_get");
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    return { ok: false, code: "INSTALL_STATE_UNAVAILABLE", message, errors: [message] };
+    return { ok: false, code: "ENVIRONMENT_UNAVAILABLE", message, errors: [message] };
   }
-  const settings = parseSettingsDocument(settingsRaw);
-  if (!settings.ok) return { ok: false, code: "SETTINGS_INVALID", message: settings.errors.join("; "), errors: settings.errors };
-  const installed = parseInstalledDocument(installedRaw);
-  if (!installed.ok) return { ok: false, code: "INSTALLED_INVALID", message: installed.errors.join("; "), errors: installed.errors };
+  const environment = parseEnvironmentDocument(environmentRaw);
+  if (!environment.ok) return { ok: false, code: "ENVIRONMENT_INVALID", message: environment.errors.join("; "), errors: environment.errors };
   const result = await installRegistryRelease({
     certified,
     root,
     target,
-    settings: settings.value,
-    installed: installed.value,
+    environment: environment.value,
+    sidecars,
     artifacts: artifactStager,
   });
   if (result.ok) {

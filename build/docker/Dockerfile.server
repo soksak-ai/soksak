@@ -12,9 +12,6 @@ RUN apk add --no-cache git
 # Copy source code
 COPY . .
 
-# Remove local replace directive if present (for production builds)
-RUN sed -i '/^replace/d' go.mod || true
-
 # Download dependencies
 RUN go mod tidy
 

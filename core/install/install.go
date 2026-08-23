@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/environment"
 	"github.com/soksak-ai/soksak-core/core/files"
 )
 
@@ -213,7 +214,7 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		}
 		result, err := manager.Commit(CommitRequest{TransactionID: transactionID, ExpectedRevision: expected, Plugins: plugins, Sidecars: sidecars, Kits: kits, Home: deps.Home})
 		if err == nil && deps.Changed != nil {
-			deps.Changed("installed.changed", result)
+			deps.Changed(environment.ChangeEvent, result)
 		}
 		return result, err
 	}})

@@ -592,6 +592,7 @@ export function registerPluginCatalog(): void {
       },
       registryId: { type: "string", description: key("cmd.plugin.install.param.registryId") },
       pluginId: { type: "string", description: key("cmd.plugin.install.param.pluginId") },
+      sidecars: { type: "json", description: key("cmd.plugin.install.param.sidecars") },
     },
     primary: "source",
     returns: "{ id, generation }",
@@ -663,7 +664,8 @@ export function registerPluginCatalog(): void {
             message: tmsg("msg.plugin.install.unknownName", { name: raw }),
           };
         }
-        return await installQualifiedRegistryEntry(resolved.entry);
+        const sidecars = p.sidecars === undefined ? undefined : p.sidecars as Record<string, string>;
+        return await installQualifiedRegistryEntry(resolved.entry, sidecars);
       }
       return {
         ok: false,

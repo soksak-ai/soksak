@@ -63,9 +63,9 @@ func TestBootCommandsAnswerWithNoWindow(t *testing.T) {
 	}
 }
 
-func TestSettingsCommandsAreHeadlessAndReturnEmptyState(t *testing.T) {
+func TestEnvironmentCommandsAreHeadlessAndReturnEmptyState(t *testing.T) {
 	registry := booted(t)
-	for _, name := range []string{"settings_get", "plugin_manifest_list"} {
+	for _, name := range []string{"environment_get", "plugin_manifest_list"} {
 		if _, err := registry.Invoke(name, nil); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}

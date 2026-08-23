@@ -398,7 +398,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     plugins: Array<{ id: string; version: string }>,
     enabled: boolean,
   ): Promise<void> => {
-    const settings = await invoke<{ revision: number }>("settings_get");
+    const settings = await invoke<{ revision: number }>("environment_get");
     await invoke("plugin_enabled_set", {
       plugins,
       enabled,
@@ -505,7 +505,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     const p = get().plugins[id];
     if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
     if (p.source === "dev") {
-      return err("INVALID_PARAMS", tmsg("plugin.development.removeUnavailable", { id }));
+      return err("INVALID_PARAMS", tmsg("plugin.source.removeUnavailable", { id }));
     }
     if (isActive(id)) await get().disable(id);
     await invoke("plugin_remove", { id });

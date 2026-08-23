@@ -129,7 +129,7 @@ describe("development unit source selection", () => {
     invoke.mockClear();
     invoke.mockImplementation(async (...input: unknown[]): Promise<unknown> => {
       const command = input[0] as string;
-      if (command === "settings_get") return { revision: 1 };
+      if (command === "environment_get") return { revision: 1 };
       if (command === "plugin_enabled_set") return { previousGeneration: 1, generation: 2 };
       return undefined;
     });
@@ -152,7 +152,7 @@ describe("development unit source selection", () => {
     await usePlugins.getState().reload();
     invoke.mockImplementation(async (...input: unknown[]): Promise<unknown> => {
       const command = input[0] as string;
-      if (command === "settings_get") return { revision: 1 };
+      if (command === "environment_get") return { revision: 1 };
       if (command === "plugin_enabled_set") throw new Error("generation conflict");
       return undefined;
     });

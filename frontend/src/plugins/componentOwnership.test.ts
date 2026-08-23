@@ -6,7 +6,7 @@ const core = join(import.meta.dirname, "../../..");
 const read = (path: string) => readFileSync(join(core, path), "utf8");
 
 describe("component ownership standard", () => {
-  it("documents direct kinds, the single spec source, settings, and RED discipline", () => {
+  it("documents direct kinds, the single spec source, environment, and RED discipline", () => {
     const document = read("docs/tech/COMPONENT-OWNERSHIP.md").toLowerCase();
     for (const phrase of [
       "plugin, sidecar, kit, contract, and spec",
@@ -14,8 +14,7 @@ describe("component ownership standard", () => {
       "payloads do not repeat",
       "registry documents keep separate plugins",
       "contracts, and specs arrays",
-      "settings.json",
-      "installed.json",
+      "environment.json",
       "no install profiles or dependency closure",
       "tests start red",
     ]) expect(document).toContain(phrase);
@@ -30,10 +29,10 @@ describe("component ownership standard", () => {
     ]) expect(existsSync(join(core, path)), path).toBe(false);
   });
 
-  it("documents canonical sidecar ownership and installed state", () => {
+  it("documents canonical sidecar ownership and environment discovery", () => {
     const document = read("docs/tech/SIDECARS.md");
     expect(document).toContain("soksak-spec");
-    expect(document).toContain("installed.json");
+    expect(document).toContain("environment.json");
     expect(document).not.toContain("composition contract");
     expect(document).not.toContain("release/unit.json");
   });

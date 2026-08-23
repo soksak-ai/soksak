@@ -253,7 +253,7 @@ func newGate(t *testing.T, homePrefix string, identifier string) *restoreGate {
 		t.Fatalf("creating installation home: %v", err)
 	}
 	settings := []byte(`{"revision":1,"plugins":{},"sidecars":{},"kits":{},"contracts":{},"specs":{}}`)
-	if err := os.WriteFile(filepath.Join(gate.installationHome(), "settings.json"), settings, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(gate.installationHome(), "environment.json"), settings, 0o600); err != nil {
 		t.Fatalf("writing installation settings: %v", err)
 	}
 	t.Cleanup(func() {

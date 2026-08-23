@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"strings"
@@ -13,8 +14,14 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 		t.Fatal(e)
 	}
 	s := string(b)
-	if !strings.Contains(s, "repository: soksak-ai/soksak-contract-control, ref: db724f6474eb486d775b6d799b95de8377ba3dc7") {
-		t.Fatal("multiplatform workflow is not pinned to the verified control contract")
+	for _, forbidden := range []string{
+		"soksak-" + "contracts/",
+		"repository: soksak-ai/soksak-" + "contract-",
+		"REPLACE_" + "MOUNTS",
+	} {
+		if strings.Contains(s, forbidden) {
+			t.Fatalf("multiplatform workflow discovers a dependency checkout through %q", forbidden)
+		}
 	}
 	for _, required := range []string{
 		"actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -152,11 +159,19 @@ func TestDarwinVerificationUsesTheProductDeploymentTarget(t *testing.T) {
 }
 
 func TestCorePinsTheWindowsSidecarSpec(t *testing.T) {
+	selectionBody, err := os.ReadFile("build/soksak-spec.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var selection struct{ Commit string }
+	if err := json.Unmarshal(selectionBody, &selection); err != nil {
+		t.Fatal(err)
+	}
 	body, err := os.ReadFile("go.mod")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260822100936-418d6064fcdc") {
+	if !strings.Contains(string(body), selection.Commit[:12]) {
 		t.Fatal("Core and acceptance do not share the Windows sidecar manifest parser")
 	}
 }

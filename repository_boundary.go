@@ -8,7 +8,8 @@ import (
 	"strings"
 )
 
-var boundarySourceExtensions = map[string]bool{".c": true, ".cc": true, ".cpp": true, ".go": true, ".h": true, ".hpp": true, ".js": true, ".mjs": true, ".rs": true, ".sh": true, ".ts": true, ".tsx": true}
+var boundarySourceExtensions = map[string]bool{".c": true, ".cc": true, ".cjs": true, ".cpp": true, ".go": true, ".h": true, ".hpp": true, ".js": true, ".mjs": true, ".py": true, ".rs": true, ".sh": true, ".ts": true, ".tsx": true, ".yaml": true, ".yml": true}
+var boundaryManifestNames = map[string]bool{"Cargo.toml": true, "go.mod": true, "package.json": true}
 var boundarySkippedTrees = map[string]bool{".git": true, ".task": true, "bin": true, "dist": true, "evidence": true, "node_modules": true, "target": true}
 var boundarySiblingTokens = []string{"soksak-contracts", "soksak-kits", "soksak-plugins", "soksak-sidecars", "wails-services"}
 
@@ -32,10 +33,11 @@ func repositoryBoundaryFindings(root string) ([]string, error) {
 			findings = append(findings, filepath.ToSlash(relative)+": symbolic link")
 			return nil
 		}
-		if filepath.ToSlash(relative) == "repository_boundary.go" {
+		relativeSlash := filepath.ToSlash(relative)
+		if relativeSlash == "repository_boundary.go" || relativeSlash == "environment_contract_test.go" || relativeSlash == "build_cross_gate_test.go" || strings.HasPrefix(relativeSlash, "frontend/bindings/") {
 			return nil
 		}
-		if !boundarySourceExtensions[filepath.Ext(info.Name())] && info.Name() != "Dockerfile" && !strings.HasPrefix(info.Name(), "Taskfile") {
+		if !boundarySourceExtensions[filepath.Ext(info.Name())] && !boundaryManifestNames[info.Name()] && info.Name() != "Dockerfile" && !strings.HasPrefix(info.Name(), "Taskfile") {
 			return nil
 		}
 		file, err := os.Open(path)
@@ -51,6 +53,11 @@ func repositoryBoundaryFindings(root string) ([]string, error) {
 			for _, token := range boundarySiblingTokens {
 				if strings.Contains(text, token) {
 					findings = append(findings, fmt.Sprintf("%s:%d sibling source %s", filepath.ToSlash(relative), line, token))
+				}
+			}
+			for _, token := range []string{"../soksak-", "GITHUB_WORKSPACE/soksak-", "REPLACE_MOUNTS", "file:../", "path = \"../"} {
+				if strings.Contains(text, token) {
+					findings = append(findings, fmt.Sprintf("%s:%d local dependency topology %s", filepath.ToSlash(relative), line, token))
 				}
 			}
 		}

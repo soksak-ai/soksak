@@ -6,23 +6,25 @@ import (
 	"testing"
 )
 
-func TestDockerReplaceMountsPreserveTheModuleRelativeAddress(t *testing.T) {
+func TestBuildsDoNotSupportLocalDependencyTopology(t *testing.T) {
 	for _, name := range []string{
+		"go.mod",
+		"scripts/ci/cross-build.sh",
+		"scripts/ci/windows-docker.sh",
 		"build/darwin/Taskfile.yml",
 		"build/linux/Taskfile.yml",
 		"build/windows/Taskfile.yml",
+		"build/docker/Dockerfile.server",
 	} {
 		body, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
 		}
 		text := string(body)
-		if !strings.Contains(text, "container=\"/app/$path\"") ||
-			!strings.Contains(text, "echo \"-v $host:$container:ro\"") {
-			t.Errorf("%s does not mount a replace target at its /app-relative container address", name)
-		}
-		if strings.Contains(text, "echo \"-v $path:$path:ro\"") {
-			t.Errorf("%s repeats the host address inside the container", name)
+		for _, forbidden := range []string{"replace ", "REPLACE_MOUNTS", "^replace", "../soksak-", "GITHUB_WORKSPACE/soksak-"} {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s supports local dependency topology through %q", name, forbidden)
+			}
 		}
 	}
 }

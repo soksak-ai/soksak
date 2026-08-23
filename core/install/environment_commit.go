@@ -4,8 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
+	coreenvironment "github.com/soksak-ai/soksak-core/core/environment"
 	"github.com/soksak-ai/soksak-core/core/i18n"
-	coresettings "github.com/soksak-ai/soksak-core/core/settings"
 )
 
 type PluginRef struct {
@@ -21,13 +21,14 @@ type KitRef struct {
 	Version string `json:"version"`
 }
 type VerifiedPlugin struct {
-	Plugin           PluginRef `json:"plugin"`
-	RegistryID       string    `json:"registryId"`
-	SourceRepository string    `json:"sourceRepository"`
-	SourceCommit     string    `json:"sourceCommit"`
-	ArtifactURL      string    `json:"artifactUrl"`
-	ArtifactSHA256   string    `json:"artifactSha256"`
-	StagedHandle     string    `json:"stagedHandle"`
+	Plugin           PluginRef         `json:"plugin"`
+	Sidecars         map[string]string `json:"sidecars,omitempty"`
+	RegistryID       string            `json:"registryId"`
+	SourceRepository string            `json:"sourceRepository"`
+	SourceCommit     string            `json:"sourceCommit"`
+	ArtifactURL      string            `json:"artifactUrl"`
+	ArtifactSHA256   string            `json:"artifactSha256"`
+	StagedHandle     string            `json:"stagedHandle"`
 }
 type VerifiedSidecar struct {
 	Sidecar          SidecarRef `json:"sidecar"`
@@ -59,7 +60,10 @@ type CommitRequest struct {
 type CommitResult struct {
 	Revision uint64 `json:"revision"`
 }
-type publishArtifact struct{ kind, id, version, target, repository, commit, url, digest, handle string }
+type publishArtifact struct {
+	kind, id, version, target, repository, commit, url, digest, handle string
+	sidecars                                                           map[string]string
+}
 type publishedArtifact struct {
 	final  string
 	staged stagedState
@@ -77,7 +81,7 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 	}
 	artifacts := []publishArtifact{}
 	for _, value := range request.Plugins {
-		artifacts = append(artifacts, publishArtifact{kind: "plugin", id: value.Plugin.ID, version: value.Plugin.Version, repository: value.SourceRepository, commit: value.SourceCommit, url: value.ArtifactURL, digest: value.ArtifactSHA256, handle: value.StagedHandle})
+		artifacts = append(artifacts, publishArtifact{kind: "plugin", id: value.Plugin.ID, version: value.Plugin.Version, repository: value.SourceRepository, commit: value.SourceCommit, url: value.ArtifactURL, digest: value.ArtifactSHA256, handle: value.StagedHandle, sidecars: value.Sidecars})
 	}
 	for _, value := range request.Sidecars {
 		artifacts = append(artifacts, publishArtifact{kind: "sidecar", id: value.Sidecar.ID, version: value.Sidecar.Version, target: value.Target, repository: value.SourceRepository, commit: value.SourceCommit, url: value.ArtifactURL, digest: value.ArtifactSHA256, handle: value.StagedHandle})
@@ -88,13 +92,13 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 	if len(artifacts) == 0 {
 		return CommitResult{}, i18n.Errorf("install.transaction.commitArtifactsRequired", nil)
 	}
-	current, exists, err := coresettings.ReadInstalled(request.Home)
+	current, exists, err := coreenvironment.Read(request.Home)
 	if err != nil {
 		return CommitResult{}, err
 	}
 	next := current
 	if !exists {
-		next = coresettings.EmptyInstalled()
+		next = coreenvironment.Empty()
 	}
 	prepared := []publishedArtifact{}
 	seen := map[string]bool{}
@@ -112,27 +116,36 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		if staged.identity != expected || staged.sha256 != artifact.digest {
 			return CommitResult{}, i18n.Errorf("install.transaction.stagedArtifactMismatch", map[string]string{"artifact": key})
 		}
-		final := filepath.Join(request.Home, "installed", artifact.kind, artifact.id, artifact.version)
+		parts := []string{request.Home, "components", artifact.kind, artifact.id, artifact.version}
+		if artifact.kind == "sidecar" {
+			if artifact.target == "" {
+				return CommitResult{}, i18n.Errorf("install.transaction.targetRequired", map[string]string{"artifact": key})
+			}
+			parts = append(parts, artifact.target)
+		}
+		final := filepath.Join(parts...)
 		if _, err := os.Lstat(final); err == nil {
 			return CommitResult{}, i18n.Errorf("install.transaction.destinationExists", map[string]string{"path": final})
 		} else if !os.IsNotExist(err) {
 			return CommitResult{}, err
 		}
 		prepared = append(prepared, publishedArtifact{final: final, staged: staged})
-		value := coresettings.InstalledComponent{Version: artifact.version, Path: final, RegistryID: transaction.registryID, Repository: artifact.repository, SourceCommit: artifact.commit, ManifestSHA256: staged.manifestSHA256, ArtifactSHA256: artifact.digest, Target: artifact.target}
+		value := coreenvironment.Component{Version: artifact.version, Path: final, Source: "registry", Registry: transaction.registryID, Target: artifact.target}
 		switch artifact.kind {
 		case "plugin":
-			next.Plugins[artifact.id] = value
-		case "sidecar":
-			if artifact.target == "" {
-				return CommitResult{}, i18n.Errorf("install.transaction.targetRequired", map[string]string{"artifact": key})
+			plugin := next.Plugins[artifact.id]
+			plugin.Component = value
+			if artifact.sidecars != nil {
+				plugin.Sidecars = artifact.sidecars
 			}
+			next.Plugins[artifact.id] = plugin
+		case "sidecar":
 			next.Sidecars[artifact.id] = value
 		case "kit":
 			next.Kits[artifact.id] = value
 		}
 	}
-	change, temporary, err := coresettings.WriteInstalled(request.Home, current, exists, next, request.ExpectedRevision, "next-"+request.TransactionID)
+	change, temporary, err := coreenvironment.PrepareWrite(request.Home, current, exists, next, request.ExpectedRevision, "next-"+request.TransactionID)
 	if err != nil {
 		return CommitResult{}, err
 	}
@@ -162,7 +175,7 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		}
 		published = append(published, value)
 	}
-	if err := coresettings.PublishInstalled(request.Home, temporary); err != nil {
+	if err := coreenvironment.Publish(request.Home, temporary); err != nil {
 		rollback()
 		return CommitResult{}, err
 	}

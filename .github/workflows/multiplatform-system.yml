@@ -12,14 +12,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { path: soksak-core, persist-credentials: false }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-contentview, ref: 5af66117202f6934ecd2909199bf9b84a541e523, path: soksak-contracts/soksak-contract-contentview }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-control, ref: db724f6474eb486d775b6d799b95de8377ba3dc7, path: soksak-contracts/soksak-contract-control }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-pty, ref: 78c856f1acc0669d17b9720e27a48600d2e6ad5c, path: soksak-contracts/soksak-contract-pty }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-terminal, ref: cab0691a1a01fca7436ac29f6cc2850245788ea6, path: soksak-contracts/soksak-contract-terminal }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with: { go-version-file: soksak-core/go.mod, cache-dependency-path: soksak-core/go.sum }
       - id: frontend-versions
@@ -50,14 +42,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { path: soksak-core, persist-credentials: false }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-contentview, ref: 5af66117202f6934ecd2909199bf9b84a541e523, path: soksak-contracts/soksak-contract-contentview }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-control, ref: db724f6474eb486d775b6d799b95de8377ba3dc7, path: soksak-contracts/soksak-contract-control }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-pty, ref: 78c856f1acc0669d17b9720e27a48600d2e6ad5c, path: soksak-contracts/soksak-contract-pty }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-terminal, ref: cab0691a1a01fca7436ac29f6cc2850245788ea6, path: soksak-contracts/soksak-contract-terminal }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with: { go-version-file: soksak-core/go.mod, cache-dependency-path: soksak-core/go.sum }
       - id: frontend-versions
@@ -87,14 +71,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { path: soksak-core, persist-credentials: false }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-contentview, ref: 5af66117202f6934ecd2909199bf9b84a541e523, path: soksak-contracts/soksak-contract-contentview }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-control, ref: db724f6474eb486d775b6d799b95de8377ba3dc7, path: soksak-contracts/soksak-contract-control }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-pty, ref: 78c856f1acc0669d17b9720e27a48600d2e6ad5c, path: soksak-contracts/soksak-contract-pty }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { repository: soksak-ai/soksak-contract-terminal, ref: cab0691a1a01fca7436ac29f6cc2850245788ea6, path: soksak-contracts/soksak-contract-terminal }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with: { go-version-file: soksak-core/go.mod, cache-dependency-path: soksak-core/go.sum }
       - id: frontend-versions

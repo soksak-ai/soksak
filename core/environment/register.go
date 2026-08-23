@@ -1,11 +1,11 @@
-package settings
+package environment
 
 import (
 	"github.com/soksak-ai/soksak-core/core/control"
 	"os"
 )
 
-const ChangeEvent = "settings.changed"
+const ChangeEvent = "environment.changed"
 
 type Deps struct {
 	Home    string
@@ -13,23 +13,13 @@ type Deps struct {
 }
 
 func Register(registry *control.Registry, deps Deps) {
-	registry.MustRegister(control.Command{Name: "settings_get", Handler: func(control.Args) (any, error) {
+	registry.MustRegister(control.Command{Name: "environment_get", Handler: func(control.Args) (any, error) {
 		value, exists, err := Read(deps.Home)
 		if err != nil {
 			return nil, err
 		}
 		if !exists {
 			value = Empty()
-		}
-		return value, nil
-	}})
-	registry.MustRegister(control.Command{Name: "installed_get", Handler: func(control.Args) (any, error) {
-		value, exists, err := ReadInstalled(deps.Home)
-		if err != nil {
-			return nil, err
-		}
-		if !exists {
-			value = EmptyInstalled()
 		}
 		return value, nil
 	}})
@@ -51,14 +41,14 @@ func Register(registry *control.Registry, deps Deps) {
 		return emit(deps, change, err)
 	}})
 	for _, kind := range []string{"plugin", "sidecar", "kit", "contract", "spec"} {
-		registerDevelopment(registry, deps, kind)
+		registerSource(registry, deps, kind)
 	}
-	registry.MustRegister(control.Command{Name: "plugin_provider_set", Handler: func(args control.Args) (any, error) {
+	registry.MustRegister(control.Command{Name: "plugin_sidecar_set", Handler: func(args control.Args) (any, error) {
 		plugin, err := control.Arg[string](args, "plugin")
 		if err != nil {
 			return nil, err
 		}
-		requirement, err := control.Arg[string](args, "requirement")
+		role, err := control.Arg[string](args, "role")
 		if err != nil {
 			return nil, err
 		}
@@ -70,17 +60,17 @@ func Register(registry *control.Registry, deps Deps) {
 		if err != nil {
 			return nil, err
 		}
-		change, err := SetProvider(deps.Home, plugin, requirement, sidecar, expected)
+		change, err := SetSidecar(deps.Home, plugin, role, sidecar, expected)
 		return emit(deps, change, err)
 	}})
 }
-func registerDevelopment(registry *control.Registry, deps Deps, kind string) {
-	registry.MustRegister(control.Command{Name: kind + "_development_set", Handler: func(args control.Args) (any, error) {
+func registerSource(registry *control.Registry, deps Deps, kind string) {
+	registry.MustRegister(control.Command{Name: kind + "_source_set", Handler: func(args control.Args) (any, error) {
 		id, err := control.Arg[string](args, "id")
 		if err != nil {
 			return nil, err
 		}
-		enabled, err := control.Arg[bool](args, "development")
+		version, err := control.Arg[string](args, "version")
 		if err != nil {
 			return nil, err
 		}
@@ -88,16 +78,26 @@ func registerDevelopment(registry *control.Registry, deps Deps, kind string) {
 		if err != nil {
 			return nil, err
 		}
+		source, err := control.Arg[string](args, "source")
+		if err != nil {
+			return nil, err
+		}
+		registryID, err := control.OptionalArg[string](args, "registry", "")
+		if err != nil {
+			return nil, err
+		}
+		target, err := control.OptionalArg[string](args, "target", "")
+		if err != nil {
+			return nil, err
+		}
 		expected, err := control.Arg[uint64](args, "expectedRevision")
 		if err != nil {
 			return nil, err
 		}
-		if enabled {
-			if info, statErr := os.Lstat(path); statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-				return nil, os.ErrInvalid
-			}
+		if info, statErr := os.Lstat(path); statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return nil, os.ErrInvalid
 		}
-		change, err := SetDevelopment(deps.Home, kind, id, path, enabled, expected)
+		change, err := SetSource(deps.Home, kind, id, Component{Version: version, Path: path, Source: source, Registry: registryID, Target: target}, expected)
 		return emit(deps, change, err)
 	}})
 }

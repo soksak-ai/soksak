@@ -3,9 +3,7 @@ import {
   parseSidecarManifest,
   semverCompare,
   type CertifiedRegistryIndex,
-  type InstalledDocument,
   type PluginManifest,
-  type SettingsDocument,
   type SidecarDep,
   type SidecarManifest,
   type SidecarRelease,
@@ -19,19 +17,23 @@ export interface SelectedSidecar {
 export function selectedSidecars(
   certified: CertifiedRegistryIndex,
   plugin: PluginManifest,
-  settings: SettingsDocument,
-  installed: InstalledDocument,
+  sidecars: Record<string, string> | undefined,
 ): SelectedSidecar[] {
-  const selected = settings.plugins[plugin.id]?.providers ?? {};
+  const dependencies = plugin.sidecars ?? [];
+  const names = new Set(dependencies.map((dependency) => dependency.name));
+  if (sidecars !== undefined) {
+    for (const name of Object.keys(sidecars)) {
+      if (!names.has(name)) throw new Error("unknown sidecar role: " + plugin.id + "." + name);
+    }
+  }
   const releases: SelectedSidecar[] = [];
-  for (const dependency of plugin.sidecars ?? []) {
-    const id = selected[dependency.name];
-    if (!id) throw new Error(`sidecar provider is not selected: ${plugin.id}.${dependency.name}`);
+  for (const dependency of dependencies) {
+    const id = sidecars?.[dependency.name];
+    if (!id) throw new Error("sidecar role is not connected: " + plugin.id + "." + dependency.name);
     const release = certified.index.sidecars
       .filter((candidate) => candidate.sidecar.id === id)
       .sort((left, right) => -(semverCompare(left.sidecar.version, right.sidecar.version) ?? 0))[0];
     if (!release) throw new Error(`selected sidecar release is absent: ${id}`);
-    if (installed.sidecars[id]?.version === release.sidecar.version) continue;
     releases.push({ dependency, release });
   }
   return releases;

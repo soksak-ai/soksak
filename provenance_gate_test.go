@@ -56,7 +56,7 @@ func TestTheRecordKeepsReasonsAndDropsSources(t *testing.T) {
 	}
 
 	var found []string
-	files, err := trackedRecordFiles(root, scanned, []string{"frontend/bindings/", "frontend/dist/"})
+	files, err := trackedRecordFiles(root, scanned, []string{"frontend/bindings/", "frontend/dist/", "repository_boundary.go"})
 	if err != nil {
 		t.Fatal(err)
 	}

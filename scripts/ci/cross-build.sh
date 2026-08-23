@@ -11,22 +11,8 @@ esac
 "$root/scripts/ci/frontend-build.sh"
 "$root/scripts/ci/cross-image.sh" "$architecture"
 
-mounts=""
-while IFS= read -r replacement; do
-  case "$replacement" in
-    /*) host=$replacement; container=$replacement ;;
-    *) host=$(CDPATH= cd -- "$root/$(dirname -- "$replacement")" && pwd)/$(basename -- "$replacement")
-       container=/app/$replacement
-       while echo "$container" | grep -q '/[^/]*/../'; do container=$(echo "$container" | sed -E 's#/[^/]*/../#/#'); done ;;
-  esac
-  mounts="$mounts -v $host:$container:ro"
-done <<EOF
-$(sed -n 's/^replace .* => //p' "$root/go.mod")
-EOF
-
-# shellcheck disable=SC2086
 docker run --rm --platform "linux/$architecture" \
-  -v "$root:/app" $mounts \
+  -v "$root:/app" \
   -e APP_NAME=soksak -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   "wails-cross-$architecture" "$platform" "$architecture"
 

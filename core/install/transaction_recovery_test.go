@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	coresettings "github.com/soksak-ai/soksak-core/core/settings"
+	coreenvironment "github.com/soksak-ai/soksak-core/core/environment"
 )
 
 func writeJSONFile(t *testing.T, path string, value any) {
@@ -20,12 +20,12 @@ func writeJSONFile(t *testing.T, path string, value any) {
 	}
 }
 
-func TestRecoveryRollsBackPublishedContentBeforeInstalledCommit(t *testing.T) {
+func TestRecoveryRollsBackPublishedContentBeforeEnvironmentCommit(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, ".transactions")
 	transactionID := "tx-before"
 	staged := filepath.Join(root, transactionID, "handle")
-	final := filepath.Join(home, "installed", "plugin", "view", "0.0.1")
+	final := filepath.Join(home, "components", "plugin", "view", "0.0.1")
 	if err := os.MkdirAll(final, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -47,19 +47,19 @@ func TestRecoveryRollsBackPublishedContentBeforeInstalledCommit(t *testing.T) {
 	}
 }
 
-func TestRecoveryCompletesJournalAfterInstalledCommit(t *testing.T) {
+func TestRecoveryCompletesJournalAfterEnvironmentCommit(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, ".transactions")
 	transactionID := "tx-after"
-	final := filepath.Join(home, "installed", "plugin", "view", "0.0.1")
+	final := filepath.Join(home, "components", "plugin", "view", "0.0.1")
 	if err := os.MkdirAll(final, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(root, transactionID), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	installed := coresettings.EmptyInstalled()
-	writeJSONFile(t, filepath.Join(home, coresettings.InstalledFile), installed)
+	environment := coreenvironment.Empty()
+	writeJSONFile(t, filepath.Join(home, coreenvironment.File), environment)
 	writeJSONFile(t, filepath.Join(root, transactionID, commitJournalFile), commitJournal{TransactionID: transactionID, PreviousGeneration: 0, Generation: 1, Moves: []journalMove{{Staged: filepath.Join(root, transactionID, "handle"), Final: final}}})
 	if err := RecoverTransactions(home, root); err != nil {
 		t.Fatal(err)

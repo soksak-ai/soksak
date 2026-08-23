@@ -5,14 +5,13 @@ import {
   releaseIdentity,
   type ArtifactTarget,
   type CertifiedRegistryIndex,
-  type InstalledDocument,
+  type EnvironmentDocument,
   type PluginManifest,
   type ReleaseArtifact,
   type ReleaseDocument,
   type ReleaseIdentity,
-  type SettingsDocument,
 } from "./spec";
-import { selectedSidecars, validateSelectedSidecar } from "./registryInstallProviders";
+import { selectedSidecars, validateSelectedSidecar } from "./registryInstallSidecars";
 
 export interface RegistryInstallTransaction { transactionId: string }
 export interface StagedRegistryArtifact { handle: string; sha256: string; size: number; manifestSha256: string; extraction: "regular-files-only"; verifiedEntrypoints?: readonly string[] }
@@ -21,7 +20,7 @@ export interface RegistryArtifactStager {
   begin(input: { registryId: string; root: ReleaseIdentity }): Promise<RegistryInstallTransaction>;
   stage(input: { transactionId: string; registryId: string; release: ReleaseIdentity; artifact: ReleaseArtifact }): Promise<StagedRegistryArtifact>;
   readUtf8(transactionId: string, handle: string, path: string): Promise<string>;
-  commit(transactionId: string, expectedRevision: number, releases: readonly VerifiedInstallRelease[]): Promise<{ revision: number }>;
+  commit(transactionId: string, expectedRevision: number, releases: readonly VerifiedInstallRelease[], root: ReleaseIdentity, sidecars?: Record<string, string>): Promise<{ revision: number }>;
   rollback(transactionId: string): Promise<void>;
 }
 export type RegistryInstallFailureCode = "ROOT_NOT_FOUND" | "RELEASE_VERIFICATION_FAILED" | "TARGET_NOT_AVAILABLE" | "UNSAFE_EXTRACTION" | "ATOMIC_INSTALL_FAILED";
@@ -30,8 +29,8 @@ export interface RegistryInstallRequest {
   certified: CertifiedRegistryIndex;
   root: ReleaseIdentity;
   target: ArtifactTarget;
-  settings: SettingsDocument;
-  installed: InstalledDocument;
+  environment: EnvironmentDocument;
+  sidecars?: Record<string, string>;
   artifacts: RegistryArtifactStager;
 }
 
@@ -75,10 +74,10 @@ function verifyEvidence(staged: StagedRegistryArtifact, artifact: ReleaseArtifac
   if (errors.length) throw new InstallFailure("UNSAFE_EXTRACTION", errors);
 }
 
-function installedExactly(installed: InstalledDocument, identity: ReleaseIdentity): boolean {
-  const records = identity.kind === "plugin" ? installed.plugins
-    : identity.kind === "sidecar" ? installed.sidecars
-      : identity.kind === "kit" ? installed.kits : {};
+function materializedExactly(environment: EnvironmentDocument, identity: ReleaseIdentity): boolean {
+  const records = identity.kind === "plugin" ? environment.plugins
+    : identity.kind === "sidecar" ? environment.sidecars
+      : identity.kind === "kit" ? environment.kits : {};
   return records[identity.id]?.version === identity.version;
 }
 
@@ -113,8 +112,8 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
     if (request.root.kind === "contract" || request.root.kind === "spec") {
       throw new InstallFailure("RELEASE_VERIFICATION_FAILED", [request.root.kind + " releases are validation inputs, not runtime installations"]);
     }
-    if (installedExactly(request.installed, request.root)) {
-      return { ok: true, registryId: request.certified.index.id, revision: request.installed.revision, releases: [] };
+    if (materializedExactly(request.environment, request.root)) {
+      return { ok: true, registryId: request.certified.index.id, revision: request.environment.revision, releases: [] };
     }
 
     const transaction = await request.artifacts.begin({ registryId: request.certified.index.id, root: request.root });
@@ -127,7 +126,7 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
       const release = queue.shift()!;
       const identity = releaseIdentity(release);
       const key = identity.kind + ":" + identity.id + "@" + identity.version;
-      if (seen.has(key) || installedExactly(request.installed, identity)) continue;
+      if (seen.has(key) || materializedExactly(request.environment, identity)) continue;
       seen.add(key);
       const staged = await stageRelease(request, transactionId, release);
 
@@ -138,15 +137,15 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
           if (!dependency) throw new InstallFailure("RELEASE_VERIFICATION_FAILED", ["plugin dependency is absent: " + id + "@" + requirement]);
           queue.push(dependency);
         }
-        for (const selected of selectedSidecars(request.certified, manifest, request.settings, request.installed)) {
-          const providerIdentity = releaseIdentity(selected.release);
-          const providerKey = providerIdentity.kind + ":" + providerIdentity.id + "@" + providerIdentity.version;
-          if (seen.has(providerKey) || installedExactly(request.installed, providerIdentity)) continue;
-          const provider = await stageRelease(request, transactionId, selected.release);
-          try { validateSelectedSidecar(selected, provider.raw); }
+        for (const selected of selectedSidecars(request.certified, manifest, request.sidecars)) {
+          const sidecarIdentity = releaseIdentity(selected.release);
+          const sidecarKey = sidecarIdentity.kind + ":" + sidecarIdentity.id + "@" + sidecarIdentity.version;
+          if (seen.has(sidecarKey) || materializedExactly(request.environment, sidecarIdentity)) continue;
+          const sidecar = await stageRelease(request, transactionId, selected.release);
+          try { validateSelectedSidecar(selected, sidecar.raw); }
           catch (cause) { throw new InstallFailure("RELEASE_VERIFICATION_FAILED", [String(cause)]); }
-          seen.add(providerKey);
-          verified.push(provider.verified);
+          seen.add(sidecarKey);
+          verified.push(sidecar.verified);
         }
       } else if (identity.kind === "sidecar") {
         const parsed = parseSidecarManifest(staged.raw);
@@ -157,7 +156,7 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
       verified.push(staged.verified);
     }
 
-    const committed = await request.artifacts.commit(transactionId, request.installed.revision, verified);
+    const committed = await request.artifacts.commit(transactionId, request.environment.revision, verified, request.root, request.sidecars);
     transactionId = null;
     return { ok: true, registryId: request.certified.index.id, revision: committed.revision, releases: verified };
   } catch (cause) {

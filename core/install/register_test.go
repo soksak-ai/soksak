@@ -18,7 +18,7 @@ type recordingChange struct {
 	payload any
 }
 
-func TestArtifactInstallCommandsCommitAndPublishInstalledChange(t *testing.T) {
+func TestArtifactInstallCommandsCommitAndPublishEnvironmentChange(t *testing.T) {
 	home := t.TempDir()
 	archive := tgz(t, archiveEntry{name: "plugin.json", body: `{"id":"view","version":"0.0.1"}`})
 	var changes []recordingChange
@@ -46,7 +46,7 @@ func TestArtifactInstallCommandsCommitAndPublishInstalledChange(t *testing.T) {
 	if commitValue.(CommitResult).Revision != 1 {
 		t.Fatalf("commit=%+v", commitValue)
 	}
-	if len(changes) != 1 || changes[0].event != "installed.changed" {
+	if len(changes) != 1 || changes[0].event != "environment.changed" {
 		t.Fatalf("changes=%+v", changes)
 	}
 }

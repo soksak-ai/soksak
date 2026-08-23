@@ -1,4 +1,4 @@
-package settings
+package environment
 
 import (
 	"os"
@@ -17,43 +17,36 @@ type SidecarRuntime struct {
 }
 
 func ResolveBoundSidecar(home string, consumer PluginRef, requirement string) (SidecarRuntime, error) {
-	preferences, exists, err := Read(home)
+	environment, exists, err := Read(home)
 	if err != nil {
 		return SidecarRuntime{}, err
 	}
 	if !exists {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
-	plugin, found := preferences.Plugins[consumer.ID]
+	plugin, found := environment.Plugins[consumer.ID]
 	if !found {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
-	provider, found := plugin.Providers[requirement]
+	sidecar, found := plugin.Sidecars[requirement]
 	if !found {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
-	return ResolveInstalledSidecar(home, provider)
+	return ResolveSidecar(home, sidecar)
 }
-func ResolveInstalledSidecar(home, id string) (SidecarRuntime, error) {
-	preferences, _, err := Read(home)
-	if err != nil {
-		return SidecarRuntime{}, err
-	}
-	installed, exists, err := ReadInstalled(home)
+func ResolveSidecar(home, id string) (SidecarRuntime, error) {
+	environment, exists, err := Read(home)
 	if err != nil {
 		return SidecarRuntime{}, err
 	}
 	if !exists {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
-	value, found := installed.Sidecars[id]
+	value, found := environment.Sidecars[id]
 	if !found {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
 	root := value.Path
-	if preference, ok := preferences.Sidecars[id]; ok && preference.Development != nil {
-		root = preference.Development.Path
-	}
 	body, err := os.ReadFile(filepath.Join(root, "sidecar.json"))
 	if err != nil {
 		return SidecarRuntime{}, err

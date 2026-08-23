@@ -18,6 +18,7 @@ import (
 	"github.com/soksak-ai/soksak-core/core/app"
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/daemon"
+	coreenvironment "github.com/soksak-ai/soksak-core/core/environment"
 	"github.com/soksak-ai/soksak-core/core/files"
 	"github.com/soksak-ai/soksak-core/core/i18n"
 	"github.com/soksak-ai/soksak-core/core/identity"
@@ -27,7 +28,6 @@ import (
 	"github.com/soksak-ai/soksak-core/core/scan"
 	"github.com/soksak-ai/soksak-core/core/secret"
 	"github.com/soksak-ai/soksak-core/core/service"
-	coresettings "github.com/soksak-ai/soksak-core/core/settings"
 	"github.com/soksak-ai/soksak-core/core/store"
 	"github.com/soksak-ai/soksak-core/core/workspace"
 )
@@ -370,7 +370,7 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		Changed:    emit,
 	})
 
-	coresettings.Register(registry, coresettings.Deps{Home: boot.Identity.Home, Changed: emit})
+	coreenvironment.Register(registry, coreenvironment.Deps{Home: boot.Identity.Home, Changed: emit})
 
 	daemon.Register(registry, daemon.Deps{
 		Spawner:    boot.Spawner,

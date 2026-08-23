@@ -16,7 +16,7 @@ vi.mock("../framework", async (importOriginal) => ({
   invoke: (cmd: string, args?: unknown) => {
     calls.push([cmd, args]);
     if (cmd === "app_is_release") return Promise.resolve(false);
-    if (cmd === "settings_get") {
+    if (cmd === "environment_get") {
       order.push("settings");
       return Promise.resolve({ revision: 3 });
     }
@@ -84,7 +84,7 @@ describe("reclaiming the previous runtime's children", () => {
     await initPluginHost();
     expect(order.slice(0, 2)).toEqual(["listen", "settings"]);
     expect(reload).toHaveBeenCalledTimes(1);
-    listeners.get("settings.changed")?.({
+    listeners.get("environment.changed")?.({
       payload: { previousRevision: 3, revision: 4 },
     });
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
