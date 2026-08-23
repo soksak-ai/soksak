@@ -17,6 +17,9 @@ contract is never weakened or wrapped in a fallback to accept a retired shape.
 An independently owned product repository has one development line, main. Every change branch is
 audited patch by patch, verified against its owner's gate, and then either fast-forwarded to main
 or rejected with its reason. A merged branch is deleted only after its tip is reachable from main.
+An independently released library may retain a version maintenance branch when that branch is a
+supported source line rather than a completed change branch. Its name carries the library version,
+and its tip remains reachable from a permanent local and remote ref.
 
 ## G3. Forks
 

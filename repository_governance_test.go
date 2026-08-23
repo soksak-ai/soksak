@@ -15,6 +15,7 @@ func TestRepositoryGovernanceDefinesSourcePreservation(t *testing.T) {
 	for _, rule := range []string{
 		"Local source is canonical",
 		"Independent repositories",
+		"version maintenance branch",
 		"Forks",
 		"Historical repositories",
 		"No source loss",
