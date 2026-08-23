@@ -74,36 +74,13 @@ Both are events. There is no timer or polling loop. With no workspace renderer, 
 the application still has a usable window. An explicit `window.open mode=orchestrator` recreates
 `main` under the same reserved name and the one-shot bootstrap state does not close it.
 
-Measured 2026-08-19 on macOS 15.6.1 with Wails beta.2 (`3ae6893b`): three retained shell webviews
-used 312 MB physical footprint. Retiring bootstrap `main` reduced the total to 277 MB immediately;
-the closed WebContent process remained in WebKit's process cache at 12 MB. The application does not
-use private WebKit APIs to force process reuse or cache eviction.
+The application does not use private WebKit APIs to force process reuse or cache eviction.
 
-## R1. A record this build cannot read costs that record only
+## R1. An unreadable record costs that record only
 
-Measured 2026-08-16, a cold restart brought nothing back. The ledger held 23
-restorable slots and the boot facts read
-
-```
-respawn:slots:23:live:1:restorable:23
-respawn:error:TypeError: undefined is not an object (evaluating 'a.workspaces.length')
-```
-
-Two snapshots predated the project → workspace rename and carried `projects`
-where this build reads `workspaces`. The throw left the loop and all
-twenty-three windows stayed closed — including the twenty-one this build had
-written itself.
-
-Every snapshot now goes through a shape check that names what is wrong with it,
-and the loop continues. **The record is left where it is**, not rewritten: this
-build keeps no old paths (L11c), and one it cannot read is not one it may
-reshape on its author's behalf.
-
-Refusing is what AGENTS 4-3 requires here, not an exception to it. The no-migrations
-rule governs code paths; a record on disk is data. Filling in what an old record
-lacks — `snap.id ?? mint()` — is the second code path 4-3 forbids, kept alive by
-every old record and hiding a renamed id behind an expression that reads as
-caution. One reader, one shape, and a record outside it is named and skipped.
+Every snapshot goes through a shape check that names what is wrong with it. An
+invalid record is reported and skipped without ending the restore loop or being
+rewritten. One reader accepts one current shape; it never fills in missing state.
 
 ## R2. Unread is not empty
 
@@ -130,13 +107,9 @@ measured 2026-08-16, nor in `state.tree` or `ui.tree`. That left one kind of id
 whose name a restore changed, so a reader had to know which kind it was holding
 before it could tell whether the name would still be there.
 
-A record written before that field is refused rather than mended. No fallback
-mints the name and no migration rewrites the record: this build carries no old
-paths, and a fallback there would make a restore rename part of itself in
-silence, which is the shape that cost a day that same date. The refusal names
-what is missing, the record is left where it is, and it costs that record only
-(R1). The generator the deserializer took for this is gone with it — there is
-nothing left for it to do.
+Every record must contain that field. The refusal names what is missing, leaves
+the record unchanged, and costs that record only (R1). The deserializer never
+generates durable identity.
 
 Uniqueness and durability are not in tension here. They were only in tension
 while an id was a counter — `t1` was the workspace id of three separate window
@@ -196,24 +169,17 @@ disagree the day one of them was edited — the reason `digest` exists at all (V
 
 Quitting through the command rather than killing the process is the whole reason this gate can
 exist. A kill skips the drain and the save, and what came back would be the measurement of a crash.
-Until 2026-08-16 quitting was not a command this build served, so this verdict was read by hand and
-written here: true on the day someone looked, and unowned every day after.
 
 ## V2. One cold restart is not the measurement
 
-Measured 2026-08-16, six cold restarts of a three-pane layout with a browser tab
-and a pinned rail: digest `54f43f70` every time, the ledger steady at 3 slots,
-and the sweep idempotent — 21 forgotten on the run after it landed, 0 on the
-next.
+The gate runs six cold restarts of a three-pane layout with a browser tab and a
+pinned rail. Every digest must match, the ledger must remain at three slots, and
+the final sweep must forget zero records.
 
 ---
 
 # K. Known, and not fixed
 
-- **K1. Records from before the rename are still in this developer's store.**
-  They are skipped by name and left alone. No migration is written: L11c says
-  old paths are deleted rather than bridged, and a personal store is not a
-  reason to add one. A fresh install has none of them.
 - **Native surfaces are not part of the fingerprint.** `surface.composition` is
   judged on its own (NATIVE-SURFACES V1) and a surface is rebuilt from its
   declaration after the panes come back, so it is a consequence of the layout

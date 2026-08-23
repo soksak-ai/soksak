@@ -116,10 +116,7 @@ export interface TabStatus {
 
 // Content view: one kind, and it is a plugin's.
 //
-// There were two until 2026-08-16 — a "file" arm carrying a path and a code/preview mode, branched
-// on in eighteen places. No plugin ever declared a viewer for it, so it opened a tab that resolved
-// to nothing, and it was a second code path for one kind of content (CORE-CENSUS 1). A file is drawn
-// the way a page and a shell are: by a plugin view.
+// Every content kind is drawn by a plugin view; Core stores no domain-specific tab arm.
 // title is the content fact (file name, page <title> — kept current by setViewTitle), customLabel is
 // user intent (view.rename). Display prefers customLabel — the same rule as sidebar viewLabels
 // (default = fact, override = user intent only). An empty override is not stored.

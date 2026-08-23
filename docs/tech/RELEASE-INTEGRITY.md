@@ -33,7 +33,7 @@ and a new patch version is published after the responsible invariant has a RED t
 - Product builds and native tests use the same minimum deployment target.
 - A release or system-test run starts only after local contract tests, cross-compilation checks, and release-byte verification pass.
 - The macOS Docker preflight verifies Windows build inputs, PE binaries, release bytes, manifests,
-  and installed state. It does not claim a Windows runtime verdict. WebView2, ConPTY, named pipes,
+  and the staged environment. It does not claim a Windows runtime verdict. WebView2, ConPTY, named pipes,
   and Windows window behavior are verified only on the GitHub `windows-2025` runner.
 - Terminal resize failures record the first non-advancing boundary: DOM pixels, requested size, PTY
   observation, recovery observation, or rendered frame. A plain timeout is not sufficient evidence.
@@ -44,7 +44,7 @@ and a new patch version is published after the responsible invariant has a RED t
 
 - A component repository tests its source manifest, staging projection, target matrix, and release workflow.
 - `soksak-spec` tests archive parsing and release identity for every component kind.
-- Core tests installation identity, host binary compatibility, and installed settings publication.
+- Core tests installation identity, host binary compatibility, and atomic environment publication.
 - The external terminal test repository verifies complete released fleets as black-box compositions.
 - The registry contains only immutable release documents that pass its contract; failed release versions are not catalogue entries.
 - Plugins and sidecars are runtime installation artifacts. Kits distribute reusable implementation

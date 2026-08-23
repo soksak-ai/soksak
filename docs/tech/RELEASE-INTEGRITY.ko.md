@@ -43,7 +43,7 @@
 
 - 컴포넌트 저장소는 source manifest, staging projection, target matrix, release workflow를 검사한다.
 - `soksak-spec`은 모든 component kind의 archive parsing과 release identity를 검사한다.
-- 코어는 installation identity, host binary compatibility, installed settings publication을 검사한다.
+- 코어는 installation identity, host binary compatibility, atomic environment publication을 검사한다.
 - 외부 terminal test 저장소는 발행된 전체 fleet를 black-box composition으로 검증한다.
 - registry에는 contract를 통과한 immutable release document만 포함한다. 실패한 release 버전은 catalogue entry가 아니다.
 - 플러그인과 사이드카는 runtime 설치 아티팩트다. 킷은 재사용 구현 소스를 배포하며 명시적으로

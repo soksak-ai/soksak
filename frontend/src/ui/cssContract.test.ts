@@ -223,10 +223,7 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     // Feature top bars each invented their own dimensions and the grid drifted (measured: browser,
     // editor, and kanban rows all differed). Contract: a toolbar is optional, but where one exists
     // it consumes var(--toolbar-h)/var(--toolbar-pad-x).
-    //
-    // The conformer used to be the core's own file viewer toolbar. The core draws no content
-    // toolbar now (CORE-CENSUS 1), so what is checked is the contract itself: the tokens are
-    // defined for a plugin to consume, and anything in this sheet calling itself a toolbar obeys.
+    // The tokens are defined for plugins, and every toolbar in this sheet obeys the contract.
     expect(css).toMatch(/--toolbar-h\s*:/);
     expect(css).toMatch(/--toolbar-pad-x\s*:/);
     const toolbars = rules().filter((r) =>

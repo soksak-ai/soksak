@@ -37,12 +37,13 @@ source commit, artifact byte size and digest, and conformance reports. Release d
 dependency scope or provider selection. Registry documents keep separate plugins, sidecars, kits,
 contracts, and specs arrays and contain no install profiles or dependency closure.
 
-## Settings and development
+## Environment
 
-`settings.json` contains user choices: plugin activation, development paths, and provider selection.
-`installed.json` contains installed versions, paths, targets, source commits, and manifest and
-artifact digests. Neither document copies the other's facts. Development stops managed updates for
-only that plugin, sidecar, kit, contract, or spec and does not disable validation.
+`environment.json` is the only local component state. It records exact selected versions, absolute
+local paths, source kinds, registry IDs, sidecar targets, plugin activation, and sidecar role
+bindings. Registry releases own repositories, source commits, dependency declarations, artifact
+URLs, sizes, and digests. A development source stops managed updates for only that plugin, sidecar,
+kit, contract, or spec and does not disable validation.
 
 There is no public unit, dependency scope, install profile, dependency closure, composition graph,
 execution graph, or deployment graph. Validation may use temporary local data structures but never

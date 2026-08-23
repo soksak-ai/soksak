@@ -48,10 +48,6 @@ What cannot be expressed through these four is what a plugin must not do. **If a
 real plugin cannot be built within them, the core is missing a general
 capability** — add the capability. Never add a private path.
 
-The census that applied C6 to every surface is [`CORE-CENSUS.md`](CORE-CENSUS.md): 242 commands, 17
-Go packages, 32 components, 43 stores, each with a verdict and a reason. Six were features and all
-six left on 2026-08-16.
-
 ## Principles
 
 All of these are hard.
@@ -59,10 +55,7 @@ All of these are hard.
 - **A1.** The core renders no concrete content. A slot is an empty container.
   A window has three regions — `left`, `center`, `right` — and a plugin declares
   which of them its view is placed in, one or several. The region is a place, not
-  a role: the core neither knows nor asks what a view is for. Until 2026-08-16
-  the vocabulary read `content` / `rail` / `rail-footer`, and a content view also
-  declared what belonged in the sidebar beside it — a view about content, which
-  is the one thing A1 forbids.
+  a role: the core neither knows nor asks what a view is for.
 - **A2.** View context is the only channel into a view. No core store, no layout tree.
 - **A2a.** A section is a plugin. A file tree, a daemon list, bookmarks, a
   terminal — each is its own plugin declaring the region it is placed in, and no
@@ -106,11 +99,6 @@ All of these are hard.
 
   The installation declaration is the resolved composition graph (COMPOSITION.md), not directory
   presence. Core tests and tasks do not scan sibling plugin or sidecar repositories.
-
-  Measured 2026-08-20: `go list -deps ./...` named three plugin packages, and
-  `main.go` and `frameworks/wails/host.go` imported them. The composition root
-  was the stated reason, and a composition root that requires a rebuild to
-  compose is a build step wearing the name.
 
   In-process is not the same as linked, and reading it that way is what put them
   there. A native half that must run in this process — a parent view is
@@ -200,13 +188,9 @@ All of these are hard.
   report, and a plugin, sidecar or kit manifest. Each document format has one
   declared version.
 
-  The four were folded into `CORE_SPEC` on 2026-08-16, on the reasoning that a
-  field's place already identifies its document. On the wire it does not — a
-  release manifest is fetched alone by URL and `spec` is its only identification —
-  and the fold made every published entry unreadable at four layers. A format is
-  per document kind: `soksak-spec-plugin@` is the manifest format every plugin
-  shares. A format per plugin, `soksak-spec-plugin-terminal@`, is a second name
-  for what the plugin id already names (C1), and that stays deleted.
+  A format is per document kind: `soksak-spec-plugin@` is the manifest format
+  every plugin shares. A format per plugin would duplicate the identity already
+  carried by the plugin id (C1).
 
 - **C5.** Standards do not weaken silently. A red test against a correct standard
   means fixing the implementation, the fixture, or the exposed interface. A
@@ -235,27 +219,12 @@ All of these are hard.
      it decodes a protocol and decides nothing, and three plugins reading a
      terminal byte stream would each write it again.
 
-     A PTY's kernel object was the first example here and it was the wrong one.
-     Measured 2026-08-20: this application never holds a PTY master. A daemon in
-     another process holds it, and what crosses to this one is bytes over a
-     socket — which is what the whole first clause is about. The clause survives
-     on the cases that do not cross: a child view is process-local, and the
-     window's pixels are this process's.
-
-     What that leaves for a PTY is the second clause alone, and the second
-     clause is about a **capability**, never about where the code runs. The
-     capability's implementation is declared and installed like any other:
+     A PTY is a shared **capability**, never a reason to put terminal semantics
+     in the core. The capability's implementation is declared and installed:
      `soksak-sidecars/soksak-sidecar-pty` against `soksak-spec-pty`. Then a
      second implementation — a console API on another platform, a shell on
      another machine — installs with no core edit, which is the test C1c
      applies, and the core holds no device layer for one kind of content.
-
-  Question three was stated as necessary until it was applied, on the same day.
-  Read that way it ejects every pure computation the core is made of — the
-  layout solver, the address parser, the digest — because each of them *could*
-  sit in a plugin. It is a sufficient reason, not a required one, and the
-  corrected form gives the same verdict on all six entries of the census while
-  keeping the utilities where they belong.
 
   The line between the two is the opinion. Parsing OSC 133 is decoding.
   "An output gap of 800ms means the turn ended" is an opinion. "A saved page is

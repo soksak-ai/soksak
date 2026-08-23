@@ -40,7 +40,7 @@ framework axis — the `soksak` segment names the product. `com.soksak.wails.dev
 | Derived | Release | Other axis (e.g. `dev`) |
 | --- | --- | --- |
 | home | `~/.soksak` | `~/.soksak-dev` |
-| composition | `<home>/settings.json` | same rule |
+| environment | `<home>/environment.json` | same rule |
 | socket | `<home>/<identifier>.sock` | same rule |
 | CLI name | `sok` | `sok-dev` |
 

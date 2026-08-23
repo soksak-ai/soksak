@@ -4,7 +4,7 @@
 
 `soksak-spec` owns the public plugin manifest, release, registry, conformance, settings, and installed-state grammars. The Core consumes the exact `@soksak-ai/plugin-spec` package and Go `platformspec` module. It keeps no parser copies.
 
-The normative version rules and examples are in [VERSIONING.md](../../../soksak-specs/soksak-spec/packages/plugin-spec/docs/VERSIONING.md) and [VERSIONING.ko.md](../../../soksak-specs/soksak-spec/packages/plugin-spec/docs/VERSIONING.ko.md).
+The normative version rules and examples belong to the `soksak-ai/soksak-spec` release.
 
 ## Manifest
 
@@ -20,7 +20,7 @@ Every plugin declares its exact release version and application requirement:
 
 Providers declare exact `{id, version}` interfaces. Consumers declare `{id, requirement}`. The manifest repeats no schema discriminator and selects no provider repository.
 
-Views declare `surfaces: ["tab"]`, `surfaces: ["side"]`, or both. The host owns placement. Removed `placements` and `defaultPlacement` fields are rejected rather than mapped.
+Views declare `surfaces: ["tab"]`, `surfaces: ["side"]`, or both. The host owns placement. Unknown fields are rejected rather than mapped.
 
 ## Core-owned contract
 
@@ -36,6 +36,6 @@ Views declare `surfaces: ["tab"]`, `surfaces: ["side"]`, or both. The host owns 
 ## Verification
 
 - `soksak-spec` tests the complete manifest and wire grammar.
-- Core facade tests prove the exact package is used and obsolete fields are rejected.
+- Core facade tests prove the exact package is used and unknown fields are rejected.
 - `permissionBacking.test.ts` requires every public permission to gate an actual capability.
 - Plugin repositories test their own manifest, implementation, translations, and release artifact.

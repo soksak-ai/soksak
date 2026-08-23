@@ -15,16 +15,13 @@ the host and extends the host itself, so it is not a sidecar.
 
 ## S1. Identity and selection
 
-Plugins declare named sidecar requirements. Each requirement has a public contract id and version.
-settings.json bindings connect the named plugin requirement to one sidecar id and version. Provider
-selection never uses folder order, install order, an id prefix or a fallback.
+Plugins declare named sidecar roles. Each role has a public contract id and version requirement.
+`environment.json` connects each plugin role to one sidecar ID. Selection never uses folder order,
+install order, an id prefix, or a fallback.
 
 When a plugin opens a requirement, the core sends the plugin id, plugin version and requirement
 name to the installation resolver. The resolver returns the bound sidecar. The open response
 contains the actual sidecar id, and later send, stream and release operations use that id.
-
-The older process spawn shortcut for sidecars is removed. It had no consumer identity or
-requirement name and therefore could not resolve a settings binding.
 
 ## S2. Manifest
 
@@ -45,13 +42,15 @@ archive per supported target. The archive contains sidecar.json, dist/<sidecar-i
 files required by that process. The source binary may use a platform extension while the archive
 entry remains the path declared by sidecar.json.
 
-The registry records target, archive URL, byte size, SHA-256, format and sidecar.json. The installer selects
-the current host target, verifies the digest, extracts regular files in a transaction and records
-the exact version, target, source commit, digests and absolute install path in `installed.json`. A
+The registry records target, archive URL, byte size, SHA-256, format, source commit, and sidecar.json.
+The installer selects the current host target, verifies the digest, extracts regular files in a
+transaction, and records the exact version, target, registry ID, source kind, and absolute local path
+in `environment.json`. A
 managed installation never clones a repository or builds a sidecar locally.
 
-Development mode is different: the owner repository builds and stages its own dist directory, and
-settings records that absolute path with development:true. The updater does not replace it.
+A development source is different: the owner repository builds and stages its own dist directory,
+and the environment records that exact version, absolute path, and source kind. The updater does not
+replace it.
 
 ## S4. Runtime and protocol
 
@@ -89,6 +88,6 @@ secret set is rejected.
 - each sidecar repository validates sidecar.json, stages the declared process and tests its own
   protocol and conformance;
 - `soksak-spec` tests and publishes the sidecar manifest format;
-- core tests settings binding resolution, path safety, process lifetime, adoption and opaque relay;
-- externals/soksak-terminal-tests tests installed multi-provider behavior and never builds owner
+- core tests environment binding resolution, path safety, process lifetime, adoption and opaque relay;
+- min-median-max/soksak-terminal-tests tests installed multi-provider behavior and never builds owner
   source trees.

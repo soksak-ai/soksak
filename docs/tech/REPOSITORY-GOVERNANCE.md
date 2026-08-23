@@ -10,7 +10,7 @@ canonical: self
 
 Active source under <workspace-root> defines the current product. Historical GitHub
 branches, tags, releases, and framework implementations do not impose compatibility on it. A current
-contract is never weakened or wrapped in a fallback to accept a retired shape.
+contract accepts only its canonical shape.
 
 ## G2. Independent repositories
 

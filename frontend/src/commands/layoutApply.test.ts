@@ -81,9 +81,7 @@ function firstWorkspace() {
 }
 
 describe("layout.apply", () => {
-  // A pane whose program is registered is built; one whose program is not is skipped by name. The
-  // caller names the programs — a `dev` preset naming a terminal and a browser stood here until
-  // 2026-08-16, and what a working layout looks like is not the core's view (CORE-CENSUS 9).
+  // The caller names programs because Core does not define what a working layout contains.
   it("builds a pane for each program the caller named", async () => {
     unregBrowser = registerBrowser();
     const r = await execute(

@@ -40,12 +40,6 @@ behave the same way, and then there is no reason for there to be two. Which
 place a set stands in is settled by the link — or, for the left edge, by
 `sections.left` — and by nothing else.
 
-`left` meant the rail until 2026-08-18. The stored key is versioned rather than
-migrated (L11c): a value that reads correct and means somewhere else is worse
-than no value. `railPlacement` was `leftRailPlacement` for the same reason, and
-a window stored under the old name comes back with the rail where it stands by
-default (RESTORE R1).
-
 ## P2. A view declares a surface, never a place
 
 `contributes.views[].surfaces` is `tab`, `side`, or both. `tab` is a content tab
@@ -53,13 +47,8 @@ a person opens and closes; `side` stands beside the work. A view that named a
 place would be arranging the window from inside the plugin, and the same `side`
 view stands in all three places without knowing which one it is in.
 
-`placements` and `defaultPlacement` are deleted, not mapped. A manifest carrying
-either is **refused by name** — read and dropped, the view would stand somewhere
-its author never chose.
-
-Measured before the change: no consumer told `left` from `right`, and of the 46
-manifests in the sample corpus 26 name a place. Those are refused, and the check
-tells that kind of refusal from any other by reading the manifest rather than a
+Unknown view fields are **refused by name**. The check tells that kind of refusal
+from any other by reading the manifest rather than a
 list somebody keeps up to date.
 
 ## P3. A set names no place, and a link names no set twice
@@ -160,12 +149,10 @@ transition and nothing is missing from the screen; a rail holds a strip of the
 window, and taking it away leaves that strip to nobody while the panes are still
 travelling into it.
 
-Its surface used to be removed for the phase, so a pane could pass behind it: a
-native surface is composited above the document, so a page crossing the rail
-would be drawn over it. What travels during a glide is a stand-in — the phase
-does not start unless every moving surface can be covered by one — so nothing
-native crosses the rail, and `layout.alignment` answers `over` for the case where
-one does.
+A native surface is composited above the document, so the rail remains present
+throughout a glide and every moving surface travels as a stand-in. The phase does
+not start unless every moving surface can be covered by one. `layout.alignment`
+answers `over` if a native surface crosses the rail.
 
 Measured 2026-08-17 in a window with a terminal top left, a browser under it and
 a browser on the right, over all six ways focus can move: with the rail removed,

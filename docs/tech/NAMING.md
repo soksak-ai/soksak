@@ -64,9 +64,9 @@ A second word for the same action splits the vocabulary — `new` alongside `cre
 measured on 2026-08-15.
 
 A command names its resource and action. Public commands use dotted names such as
-`plugin.development.set`; backend commands use snake case such as `plugin_development_set`. A
-generic resource name is not used when the resource is a plugin, sidecar or kit. Development mode
-is a boolean parameter, not a separate resource type.
+`plugin.source.set`; backend commands use snake case such as `plugin_source_set`. A generic
+resource name is not used when the resource is a plugin, sidecar, kit, contract, or spec. Source is
+one closed field in the environment, not a second development flag.
 
 ## N2. Natural keys
 
@@ -168,7 +168,7 @@ else, the window field is dropped, two windows produce one value, and the second
 the first window's surface.
 
 The first field is not `brw-`. It is the word of the plugin that declared the surface — `browser`,
-from `soksak-plugin-browser-native`, the same word the declaration puts in `data-native-surface`
+from `soksak-plugin-browser-wails3`, the same word the declaration puts in `data-native-surface`
 (measured 2026-08-16). The core writes no kind down: `brw-` was the core's own name for one
 plugin's surface, so that plugin could not have been replaced without an edit to the core, and a
 second kind of surface had nowhere to obtain a label. N1's three-letter prefix governs the

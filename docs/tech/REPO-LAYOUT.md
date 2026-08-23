@@ -35,9 +35,9 @@ Four rules produce this:
 4. `backup/` is invisible to every build and gate. Anything the build needs is not in it.
 
 The workspace layout is an authoring layout, not runtime discovery. The application resolves
-plugins, sidecars and kits from installation settings (COMPOSITION.md) and never scans these sibling
-folders. A repository runs its own tests; cross-repository product tests use installed artifacts
-declared in settings.json.
+plugins, sidecars, kits, contracts, and specs from `environment.json` and never scans these sibling
+folders. A repository runs its own tests; cross-repository product tests use Core installation and
+the same environment discovery path as the product.
 
 The application does not depend on workspace-relative framework or frontend package paths.
 
@@ -115,5 +115,6 @@ root.
 `docs/tech/` holds contracts. `docs/manual/` holds procedures. `docs/investigations/<topic>/` holds
 hypotheses, and its conclusion moves into a contract when it settles.
 
-Every one of them is English. Korean lives only in the `ko` values of the resource bundles (AGENTS 6-1).
+Every canonical document is English. Korean exists only in `ko` resource values and paired `.ko.md`
+translations that identify their English canonical (AGENTS 6-1).
 `docs/README.md` is the register, and a document that is not in it does not exist.

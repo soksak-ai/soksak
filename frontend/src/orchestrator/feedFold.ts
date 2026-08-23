@@ -5,10 +5,7 @@ import { moduleState } from "../lib/moduleState";
 //     closing entry) are joined in. The set is anchored to the opening seq — card visibility uses
 //     the parent, not the child window.
 //
-//     Which entries those are is not written down here. Until 2026-08-16 the opener was
-//     `chat.prompt` and the closer `chat.answer` — the two kinds one console in the core published,
-//     so a plugin publishing its own set got no card (CORE-CENSUS 2). The shape is the rule now:
-//     `turnId` opens, `parentId` joins, `closesTurn` ends. MESSAGE-PROTOCOL §2 already defines the
+//     `turnId` opens, `parentId` joins, `closesTurn` ends. MESSAGE-PROTOCOL §2 defines the
 //     correlation; this reads it rather than naming a domain.
 // (2) heuristic (legacy): command.progress without parentId is joined to a command.executed turn
 //     by same window + command name + execution time window (plugin events.progress emission — a world with no correlation id).

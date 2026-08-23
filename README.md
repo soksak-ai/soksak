@@ -19,7 +19,7 @@ frontend runtime use the official Wails `v3.0.0-beta.12` release.
 - `wails-service-native-compositor` is registered through Wails v3's official
   `application.Service` lifecycle, observes public DOM declarations, and serializes one
   complete generation/sequence inventory with an applied receipt.
-- `soksak-plugin-browser-native` implements that public backend interface and owns the
+- `soksak-plugin-browser-wails3` implements that public backend interface and owns the
   WKWebView lifecycle, navigation, status, AppKit frame, visibility, alpha, and
   layer order in one main-thread batch.
 - The core registers these plugins and declares DOM/layout only. It contains no
@@ -50,8 +50,8 @@ RED tests live beside their owners:
 - `frontend/src/splitDrag.test.ts`: divider geometry and contained pointer
   ownership without a global text-selection ban.
 - `../wails-service-native-compositor`: snapshot, observer, stale rejection, receipt.
-- `../soksak-plugin-browser-native`: WKWebView inventory and browser commands/status.
-- `../soksak-plugin-terminal-xterm`: Xterm rendering, IME, ordered output queue, and terminal capabilities.
+- `soksak-plugin-browser-wails3`: browser surface declarations and commands/status.
+- `soksak-plugin-terminal-xterm`: Xterm rendering, IME, ordered output queue, and terminal capabilities.
 
 Visual evidence is stored outside the application repository in `../evidence`,
 so generated screenshots do not become source files.

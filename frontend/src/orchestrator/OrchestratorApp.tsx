@@ -54,8 +54,7 @@ function commandLabel(cmd: string, t: TFn, carried?: unknown): string {
 // the consumer never guesses keys). base64 becomes a data URI immediately; path is lazily read.
 //
 // The type comes from the envelope's own `kind`, which the producer declared and which the image
-// test above already reads. The read used to answer one, from a table the core kept — so a format
-// outside that table drew nothing here while the envelope had said what it was (CORE-CENSUS 8).
+// test above already reads.
 function MediaView({ media, seq, onZoom }: { media: unknown; seq: number; onZoom: (src: string) => void }) {
   const t = useT();
   const m = media as { kind?: string; base64?: string; path?: string } | undefined;
@@ -430,10 +429,8 @@ export function OrchestratorApp() {
       }
     }
     if (!getSpec(name)) {
-      // Refused by name, with where the list is. A line that is not a command used to be handed to
-      // an agent CLI the core spawned — 617 lines about what a turn is and which product performs
-      // one (CORE-CENSUS 2). A plugin that reads a sentence registers a command, and this console
-      // runs it.
+      // Refused by name, with where the list is. A plugin that reads a sentence registers a
+      // command, and this console runs it.
       setResult(t("orch.notACommand", { name }));
       return;
     }

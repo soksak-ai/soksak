@@ -97,7 +97,7 @@ import {
   layoutTransitionJournal,
   waitForLayoutTransaction,
 } from "../lib/layoutTransitionJournal";
-import { registerDevelopmentCatalog } from "./catalogDevelopment";
+import { registerSourceCatalog } from "./catalogSource";
 import { registerLayoutAlignmentCatalog, registerLayoutTraceCatalog } from "./catalogLayoutAlignment";
 import { registerWebviewCatalog } from "./catalogWebview";
 import { registerPresentationClockCatalog } from "./catalogPresentationClock";
@@ -2234,10 +2234,7 @@ export function registerCatalog(): void {
         // The spaces the caller named, as they were named.
         //
         // A `dev` preset stood beside this until 2026-08-16: a terminal and a browser side by side,
-        // resolved through a contract id the core spelled out and a conventional program id it
-        // matched by hand. What a working layout looks like is a view about content, and the two
-        // names were the core privileging two kinds of it (CORE-CENSUS 9). A caller that wants that
-        // layout passes those two programs.
+        // The caller defines a working layout by passing each program.
         const raw = p.spaces;
         if (!Array.isArray(raw) || raw.length === 0) {
           return {
@@ -2566,7 +2563,7 @@ export function registerCatalog(): void {
   registerRuntimeCatalog();
   registerSystemCatalog();
   registerSidecarCatalog();
-  registerDevelopmentCatalog();
+  registerSourceCatalog();
   registerWebviewCatalog();
   registerLayoutAlignmentCatalog();
   registerLayoutTraceCatalog();

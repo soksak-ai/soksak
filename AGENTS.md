@@ -310,7 +310,9 @@ These are exposed commands run in CI, not throwaway scripts.
 **Natural language inside code is English, without exception**: comments, commit messages,
 identifiers, logs, error codes, test names, API field names.
 
-The only place Korean remains is the `ko` values of the resource bundle. Nowhere else.
+In code, Korean exists only in `ko` resource values. Reader-facing documents use one English
+canonical and may provide a Korean translation at the matching `.ko.md` path. A translation
+defines no independent rule and identifies its English canonical in front matter.
 
 Two gates hold it: `korean_gate_test.go` reads the files, `record_language_gate_test.go` reads
 `git log`. Messages were the half nobody checked, and that is the half that was broken — measured
@@ -348,8 +350,8 @@ into the rail, and **낸다** is what a command does with its answer. Measured 2
 them flagged 22 lines across the contract documents and 9 resource bundle values, every one of
 them stating a fact. A word that names a thing this product has is not rhetoric.
 
-Where Korean is left, the register still holds: the bundle values are the only Korean this
-repository keeps (6-1), and a `ko` value sets a mood as easily as a comment did.
+Where Korean is left, the register still holds: bundle values and `.ko.md` translations follow
+the same exact prose standard as their English sources.
 
 ### 6-4. Corrected examples
 
@@ -448,7 +450,7 @@ repository, so generated screenshots never become source files.
 - [ ] No temporary fallback, compatibility path or workaround left?
 - [ ] No failed hypothesis accumulated in commits? If there is, was a removal commit stacked?
 - [ ] Commits split per feature, messages matching the real reason?
-- [ ] All natural language in code English? No Korean outside the resource bundle?
+- [ ] All natural language in code English? Korean confined to resource values and paired `.ko.md` translations?
 - [ ] Every user-visible string referenced by key? Dates, numbers, currency and sorting through
       the locale API?
 - [ ] Key and placeholder parity checks passing across locales?

@@ -508,9 +508,7 @@ export function startPluginHooks(): void {
     });
   });
 
-  // A plugin's "turn ended" on the open bus is mirrored into the hooks channel, so a subscriber
-  // reads one place: app.events.on("turn.ended"). What a turn is has no definition here — the core
-  // held an output-gap heuristic until 2026-08-16, and that opinion is a plugin's (CORE-CENSUS 3).
+  // A plugin's "turn ended" event is mirrored into the hooks channel. Core does not define a turn.
   busOn("turn.ended", (payload) => {
     if (payload && typeof payload === "object") {
       emitPluginEvent("turn.ended", payload as PluginEventMap["turn.ended"]);

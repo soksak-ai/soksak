@@ -14,7 +14,7 @@ docs/
 ├── README.md              this manifest
 ├── tech/                  technical contracts        (kind: canonical)
 ├── manual/                procedures                 (kind: guide)
-└── investigations/<topic>/ hypotheses and experiments (kind: investigation)
+└── design-flow documents  human-readable decisions   (kind: changelog)
 ```
 
 ## Front matter
@@ -23,21 +23,22 @@ Every document carries three fields.
 
 | Field | Values |
 | --- | --- |
-| `kind` | `canonical` · `guide` · `reference` · `investigation` · `decision` · `snapshot` |
-| `status` | `active` · `historical` · `superseded` |
+| `kind` | `canonical` · `guide` · `reference` · `changelog` · `translation` |
+| `status` | `active` · `historical` |
 | `canonical` | path to the authoritative document, or `self` |
 
-Detail documents link up to their canonical. When an investigation settles into a contract,
-the conclusion moves into the canonical document and the investigation flips to `superseded`.
+Detail documents link up to their canonical. A canonical document must explain the current product
+without requiring history. When a major contract transition needs a readable explanation, a
+`kind: changelog` document explains the problem, decision, result, and evidence. It is design flow
+for people, not a file-by-file development log and not a source of current rules. Git remains the
+exact record of commits and diffs.
 
 ## Language
 
-Every document here is English, and so is everything else in this repository: comments, commit
-messages, identifiers, logs, error codes, test names, API field names (AGENTS 6-1). The one
-exception is the `ko` values of the resource bundles.
-
-The rule used to be an English canon with a Korean edition beside it (`X_KO.md`). It contradicted
-6-1 and it is gone: a reader who opens this repository reads all of it in one language.
+English is canonical. A reader-facing document may have a Korean translation at the matching
+`.ko.md` path. The translation identifies its English canonical in front matter and defines no
+independent rule. Comments, commit messages, identifiers, logs, error codes, test names, and API
+field names remain English (AGENTS 6-1). Korean inside code remains confined to `ko` resource values.
 
 ## What belongs here
 
@@ -69,18 +70,22 @@ that on the same date and the gate landed against it.
 | Document | Contents |
 | --- | --- |
 | [`tech/GATES.md`](tech/GATES.md) | Which of G0–G5 stand, the command that judges each, and what it answered |
-| [`tech/CORE-CENSUS.md`](tech/CORE-CENSUS.md) | Every core surface counted and judged by C6 — what stays, what is a feature and where it goes |
 | [`tech/ARCHITECTURE.md`](tech/ARCHITECTURE.md) | What the core owns, the four seams a plugin attaches through, principles A1–A9, coupling law C1–C6, one registry with several transports, identity |
+| [`tech/ARCHITECTURE.CHANGELOG.md`](tech/ARCHITECTURE.CHANGELOG.md) | Why domain features left Core and runtime implementations became installed components |
 | [`tech/NAMING.md`](tech/NAMING.md) | Identifier format and prefixes, natural-key axes, labels, fixtures, public vocabulary, folder names — each with its gate |
 | [`tech/NATIVE-LAYER.md`](tech/NATIVE-LAYER.md) | Why cgo is present, N1–N3, why purego is not used, capture, native surfaces |
 | [`tech/NATIVE-SURFACES.md`](tech/NATIVE-SURFACES.md) | Content outside the document — the seven-attribute declaration, the label shape, one inventory per window per delivery, and the declared-versus-applied numbers the seam is judged by |
 | [`tech/RESTORE.md`](tech/RESTORE.md) | What is stored, what comes back after a restart, and the one digest the two are compared by |
+| [`tech/RESTORE.CHANGELOG.md`](tech/RESTORE.CHANGELOG.md) | Why restore rejects invalid records instead of repairing them |
 | [`tech/SIDEBAR.md`](tech/SIDEBAR.md) | The three places a sidebar stands in and the two surfaces a view is drawn on, where the rail stands and what moves when focus does — FLOW and PIN, the travel journal, and the focus lighting read as addresses |
+| [`tech/SIDEBAR.CHANGELOG.md`](tech/SIDEBAR.CHANGELOG.md) | Why plugins declare surfaces while workspaces own placement |
 | [`tech/REPO-LAYOUT.md`](tech/REPO-LAYOUT.md) | Which folder declares what, the workspace and the application tree, two binaries, where a document goes |
 | [`tech/REPOSITORY-GOVERNANCE.md`](tech/REPOSITORY-GOVERNANCE.md) | Canonical branches, fork improvement lines, historical archives, and the no-source-loss rule |
 | [`tech/IDENTITY.md`](tech/IDENTITY.md) | One derivation for home, socket, CLI name and axis; the core reads no ambient; one backend per home |
-| [`tech/SETTINGS-AND-INSTALLATION.md`](tech/SETTINGS-AND-INSTALLATION.md) | User settings, installed state, development paths and installer ownership |
+| [`tech/ENVIRONMENT-AND-INSTALLATION.md`](tech/ENVIRONMENT-AND-INSTALLATION.md) | Component environment, development sources and installer ownership |
+| [`tech/ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md`](tech/ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md) | Why local component state became one atomic environment |
 | [`tech/CONTROL-PROTOCOL.md`](tech/CONTROL-PROTOCOL.md) | One line of JSON, the envelope, the greeting that negotiates, the command table, the socket address |
+| [`tech/CONTROL-PROTOCOL.CHANGELOG.md`](tech/CONTROL-PROTOCOL.CHANGELOG.md) | Why the control plane requires one self-describing response shape |
 | [`tech/COMMAND-LINE.md`](tech/COMMAND-LINE.md) | Public dotted command names, name-value and JSON object parameter forms, discovery, output and quoting |
 | [`tech/MESSAGE-PROTOCOL.md`](tech/MESSAGE-PROTOCOL.md) | Request and response shape, progress deltas, correlation by parent id |
 | [`tech/SIDECARS.md`](tech/SIDECARS.md) | A plugin in its own process: one envelope, lifetime, distribution, declaration |

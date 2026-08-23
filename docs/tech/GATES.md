@@ -62,7 +62,7 @@ move between its three panes is a test of its own, run by name. What it refuses:
 | the evidence | a picture per case, kept from the recording of that case |
 
 Each of those was added the day a person saw what the gate did not ask. Installed-product checks
-belong to `externals/soksak-terminal-tests/system`, not this core repository.
+belong to `min-median-max/soksak-terminal-tests`, not this core repository.
 
 It waits on the window's own events, not on a clock. Each click stamps a `causeTraceId` and
 `layout.transaction.wait` waits for that one transaction after the journal sequence the click was
@@ -127,7 +127,7 @@ Contract: [`SIDEBAR.md`](SIDEBAR.md).
 | Judged by | Answered 2026-08-16 |
 | --- | --- |
 | `sok state.fingerprint` across six cold restarts | digest `54f43f70` every time — a three-pane layout with a browser tab and a pinned rail |
-| the ledger | steady at 3 slots; the snapshot sweep forgot 21 records on the run after it landed and 0 on the next |
+| the ledger | steady at 3 slots; the snapshot sweep forgets 0 records on the final run |
 
 Contract: [`RESTORE.md`](RESTORE.md).
 
@@ -141,7 +141,6 @@ has watched fail is a claim, not a gate.
 | Gate | What it holds |
 | --- | --- |
 | `coupling_gate_test.go` | the core names no plugin and no rendering engine (C1) — `frameworks/` is scanned too, with a per-file allowlist that states a reason for each; and no **domain concept** (C6), comments stripped, exemptions empty |
-| `docs/tech/CORE-CENSUS.md` | every core surface counted and judged by C6 — the register the next addition is measured against |
 | `history_gate_test.go` | the core does not act on a browser's history, and writes down no surface kind |
 | plugin `manifest_gate_test.go` | a source writing `data-native-surface` has a manifest declaring it, and the reverse |
 | `prose_gate_test.go` | comments and bundle values stay out of the banned register (§6-3) |
@@ -156,11 +155,11 @@ has watched fail is a claim, not a gate.
 | `sweep_gate_test.go` | a translation sweep changes no code |
 | `observation_gate_test.go` | what the build claims to observe, it serves |
 | `docs_carried_gate_test.go` | a carried document is not cited as contract before its review |
-| `externals/soksak-terminal-tests/system` inventory | installed settings declare the fleet manifest's exact plugin and sidecar versions, with absolute paths and regular manifests |
-| `externals/soksak-terminal-tests/system` command suite | every terminal plugin opens, reads, writes, resizes, handles Unicode and 256 KiB output, exposes DOM/accessibility, and produces capture and recording files |
-| `externals/soksak-terminal-tests/system` lifecycle suite | every terminal preserves its shell PID and detached output across restart, restores a durable archive, and rejects archived input |
-| `externals/soksak-terminal-tests/system` UI suite | plugin rejection count is zero, `ui.verify` passes, surface coverage is zero, and steady-state surface drift is at most 2px |
-| `externals/soksak-terminal-tests/system` resize evidence | every resize records DOM pixels, requested PTY size, PTY observation, recovery observation, rendered frame, and the first boundary that did not advance |
+| `min-median-max/soksak-terminal-tests` inventory | the environment declares the fleet manifest's exact plugin and sidecar versions, with absolute paths and regular manifests |
+| `min-median-max/soksak-terminal-tests` command suite | every terminal plugin opens, reads, writes, resizes, handles Unicode and 256 KiB output, exposes DOM/accessibility, and produces capture and recording files |
+| `min-median-max/soksak-terminal-tests` lifecycle suite | every terminal preserves its shell PID and detached output across restart, restores a durable archive, and rejects archived input |
+| `min-median-max/soksak-terminal-tests` UI suite | plugin rejection count is zero, `ui.verify` passes, surface coverage is zero, and steady-state surface drift is at most 2px |
+| `min-median-max/soksak-terminal-tests` resize evidence | every resize records DOM pixels, requested PTY size, PTY observation, recovery observation, rendered frame, and the first boundary that did not advance |
 
 ---
 
@@ -205,19 +204,11 @@ Written here so it is not rediscovered (L2).
   a sidecar that answers a command it declared and does nothing for, an address one binds and the other
   cannot reach.
 
-  There was a test that started the real daemon from inside the core and drove a shell through it.
-  It was removed 2026-08-20 because of how it found the daemon — a hardcoded walk out of this
-  repository into a sibling tree, which put the workspace's layout inside the application that is
-  supposed to know none of it. The reach was the defect; the reading it took was worth having.
-
-  Such a test belongs in `externals/soksak-terminal-tests`, which owns the installed host and sidecar
+  Such a test belongs in `min-median-max/soksak-terminal-tests`, which owns the installed host and sidecar
   pair without making either owner repository depend on the other.
 
 - **The i18n ownership rule is stated and unenforced.** `REPO-LAYOUT.md` L1b says a message is owned
-  by whatever it is about, and no gate holds it. The one written for it read the sibling trees from
-  inside this repository, which is the same reach as above, so it went with it.
-
-  It is each plugin or sidecar repository's fact, so its owner test must enforce it.
+  by whatever it is about, and no gate holds it. Each plugin or sidecar owner test must enforce it.
 
 - **Whether a distributed build may load a third-party module is unmeasured.**
   This build ad-hoc signs and carries no entitlements, so nothing stops a load
@@ -249,8 +240,8 @@ Written here so it is not rediscovered (L2).
 - **Windows and Linux are compile-only.** Every driver fails by name. Their
   runtime and visual behaviour is unverified, and no green is recorded for them.
 - **Windows terminal needs ConPTY.** `creack/pty` does not cover it.
-- **Four things the core used to do, nobody does yet.** Each left as a feature
-  under C6 (`CORE-CENSUS.md`), and no plugin has written its replacement:
+- **Four product capabilities have no owner.** Each remains a feature under C6
+  (`ARCHITECTURE.md`):
   bookmarks, opening a file in a tab, a natural-language console, and a media
   proxy. The seams they need are all in place — a plugin view, a registered
   command, `app.data`, the activity stream.
@@ -265,10 +256,7 @@ Written here so it is not rediscovered (L2).
   else has produced it.
 
   Counted against everything that ran after: more than a dozen full suites and
-  a dozen runs of that gate alone, none of them crashed. An earlier note here
-  said one full-suite run in four and that it did not happen when the gate ran
-  alone — the first was a four-run sample and the second was wrong, because one
-  of the two crashes was a lone run of exactly that gate.
+  a dozen runs of that gate alone, none of them crashed.
 
   The stack was captured once, in the second of the two, and points into the
   pinned upstream Wails release's request path:
@@ -329,13 +317,6 @@ Written here so it is not rediscovered (L2).
   build and the same six moves, it never stopped at all. What was reported here
   first as a stall was the environment. `task verify:motion` asks it only of a
   window someone is looking at (`SOKSAK_GATE_FRONT=1`).
-
-  Older text, kept because the numbers in it are still the ones to beat: a focus
-  change stopped it for 68 to 217ms. Nothing on the screen
-  moves in that time — the pane, the rail, and the page composited above them all
-  wait together — and every other motion number is downstream of it. The page is
-  drawn 160 points over the rail for about 105ms on one of the six moves, which
-  is this stall seen from the surface's side.
 
   Where it goes is half answered. The paths this build owns are timed and cost 1
   to 4ms of it (`panes.flush`, `rail.flush`, and the plugin reflow, which does not

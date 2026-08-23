@@ -41,11 +41,6 @@ command that failed with an empty message would otherwise be the same three byte
 given the same shape at the socket edge, from the registry's own record of who serves it rather than
 from looking at the value.
 
-Two shapes reached this socket until 2026-08-17: a window's envelope and a bare value, with nothing
-in the answer to tell them apart, so a client had to know who owned each command before it could
-parse the answer. Two readings taken in one session were parsed against the wrong shape and reported
-the opposite of what was on screen — one of them said a sidebar was not drawn while it was.
-
 The in-process caller is a different audience and keeps the value. A window calling `invoke` names
 the command and has its type at the call site; this shape is for the plane whose caller is generic.
 

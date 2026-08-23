@@ -1202,10 +1202,8 @@ function App() {
 
   // Paths dropped on this window are published. What a drop means is not settled here.
   //
-  // The core typed them into the active terminal, shell-escaped — which is a decision about what a
-  // drop is for, and it belonged to whichever plugin was drawing that pane (CORE-CENSUS 3). A
-  // subscriber that wants the old behaviour writes it; one that wants to open an editor writes
-  // that instead, and both can be installed at once.
+  // The plugin drawing the pane owns what a drop means. Multiple subscribers can implement
+  // different domain behaviors without a Core branch.
   useEffect(() => {
     const unlisten = currentWindow().onDragDrop((e) => {
       const event = e as { payload: { type: string; paths?: string[] } };

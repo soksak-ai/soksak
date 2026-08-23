@@ -4,9 +4,7 @@
 // into any of it.
 //
 // Everything in the bar arrives this way. Until 2026-08-16 the core drew two of them itself: a
-// terminal's working directory on the left, a file's path with its code/preview mode on the right,
-// each behind its own branch on the content kind. A third kind of content had no way in, and the
-// two that were there could not be changed by the plugins that owned them (CORE-CENSUS 3).
+// Status items are registered by their owners; the frame does not branch on content kinds.
 
 import { moduleState } from "../lib/moduleState";
 
