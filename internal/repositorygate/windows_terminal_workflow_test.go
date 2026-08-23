@@ -72,7 +72,7 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 			t.Errorf("Windows workflow duplicates runner logic: %s", inline)
 		}
 	}
-	const testsRef = "5c75a7fe40903632a8673eca8c035891d4c84752"
+	const testsRef = "a46578b2895fd85932451085f236c4ccbfca94c0"
 	for _, platform := range []string{"windows", "darwin", "linux"} {
 		if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/"+platform+"-system.yml@"+testsRef) {
 			t.Errorf("%s fleet workflow is not pinned", platform)
