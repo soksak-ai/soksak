@@ -3,26 +3,26 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "mac-window-tabs"
+name: "soksak"
 arch: ${GOARCH}
 platform: "linux"
-version: "0.1.0"
+version: "0.0.2"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "A mac-window-tabs application"
-vendor: "My Company"
-homepage: "https://wails.io"
+description: "Plugin-driven recursive terminal and browser workspace"
+vendor: "soksak"
+homepage: "https://github.com/soksak-ai/soksak"
 license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/mac-window-tabs"
-    dst: "/usr/local/bin/mac-window-tabs"
+  - src: "./bin/soksak"
+    dst: "/usr/local/bin/soksak"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/mac-window-tabs.png"
-  - src: "./build/linux/mac-window-tabs.desktop"
-    dst: "/usr/share/applications/mac-window-tabs.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/soksak.png"
+  - src: "./build/linux/soksak.desktop"
+    dst: "/usr/share/applications/soksak.desktop"
 
 # Default dependencies for Debian 12/Ubuntu 22.04+ with WebKit 4.1
 depends:

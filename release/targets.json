@@ -1,0 +1,8 @@
+{
+  "targets": [
+    { "platform": "windows", "architecture": "x86_64", "archiveFormat": "zip" },
+    { "platform": "darwin", "architecture": "universal", "archiveFormat": "tar.gz" },
+    { "platform": "linux", "architecture": "x86_64", "archiveFormat": "tar.gz" },
+    { "platform": "linux", "architecture": "arm64", "archiveFormat": "tar.gz" }
+  ]
+}

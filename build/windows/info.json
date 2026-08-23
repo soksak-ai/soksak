@@ -1,15 +1,15 @@
 {
 	"fixed": {
-		"file_version": "0.1.0"
+		"file_version": "0.0.2"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A mac-window-tabs application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
-			"Comments": "This is a comment"
+			"ProductVersion": "0.0.2",
+			"CompanyName": "soksak",
+			"FileDescription": "Plugin-driven recursive terminal and browser workspace",
+			"LegalCopyright": "© 2026, soksak",
+			"ProductName": "soksak",
+			"Comments": "Wails desktop core"
 		}
 	}
 }
