@@ -363,11 +363,24 @@ func (gate *restoreGate) start() {
 		out, err := gate.try("window_list", "window=main")
 		lastOutput, lastError = out, err
 		if err == nil && strings.Contains(out, "win-") {
+			if window := firstWindow(out); window != "" {
+				gate.opened = append(gate.opened, window)
+			}
 			return
 		}
 		time.Sleep(startupPollInterval)
 	}
 	gate.t.Fatalf("the application did not answer within 45s: %v\n%s%s", lastError, lastOutput, gate.lastWords())
+}
+
+func firstWindow(out string) string {
+	var response struct {
+		Data []string `json:"data"`
+	}
+	if json.Unmarshal([]byte(out), &response) != nil || len(response.Data) == 0 {
+		return ""
+	}
+	return response.Data[0]
 }
 
 // quit ends the process through the command, never by killing it. A kill skips
@@ -599,19 +612,10 @@ func (gate *restoreGate) open(window string, program string) string {
 // half of the retirement rule: `main` closes only once a workspace renderer is ready, so before
 // there is one it is the only window there is.
 func (gate *restoreGate) answeringWindow() string {
-	if len(gate.opened) == 0 {
-		out, err := gate.try("window_list", "window=main")
-		if err == nil {
-			var response struct {
-				Data []string `json:"data"`
-			}
-			if json.Unmarshal([]byte(out), &response) == nil && len(response.Data) > 0 {
-				return response.Data[0]
-			}
-		}
-		return "main"
+	if len(gate.opened) > 0 {
+		return gate.opened[len(gate.opened)-1]
 	}
-	return gate.opened[len(gate.opened)-1]
+	return "main"
 }
 
 func (gate *restoreGate) openWorkspace() string {

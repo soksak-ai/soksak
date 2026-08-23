@@ -1,12 +1,19 @@
 package application
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
+	for run := 0; run < 2; run++ {
+		t.Run(fmt.Sprintf("run-%d", run+1), testWindowCaptureDoesNotChangeTheInputOwner)
+	}
+}
+
+func testWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 	gate := newGate(t, "<local-evidence>/soksak-capture-focus-gate", "com.soksak.capturefocusgate")
 	gate.start()
 	window := gate.openWorkspace()

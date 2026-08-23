@@ -10,7 +10,7 @@ import (
 
 var boundarySourceExtensions = map[string]bool{".c": true, ".cc": true, ".cjs": true, ".cpp": true, ".go": true, ".h": true, ".hpp": true, ".js": true, ".mjs": true, ".py": true, ".rs": true, ".sh": true, ".ts": true, ".tsx": true, ".yaml": true, ".yml": true}
 var boundaryManifestNames = map[string]bool{"Cargo.toml": true, "go.mod": true, "package.json": true}
-var boundarySkippedTrees = map[string]bool{".git": true, ".task": true, "bin": true, "dist": true, "evidence": true, "node_modules": true, "target": true}
+var boundarySkippedTrees = map[string]bool{".git": true, ".pnpm-store": true, ".task": true, "bin": true, "dist": true, "evidence": true, "node_modules": true, "target": true}
 var boundarySiblingTokens = []string{"soksak-contracts", "soksak-kits", "soksak-plugins", "soksak-sidecars", "wails-services"}
 
 func repositoryBoundaryFindings(root string) ([]string, error) {
