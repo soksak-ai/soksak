@@ -77,6 +77,7 @@ that on the same date and the gate landed against it.
 | [`tech/RESTORE.md`](tech/RESTORE.md) | What is stored, what comes back after a restart, and the one digest the two are compared by |
 | [`tech/SIDEBAR.md`](tech/SIDEBAR.md) | The three places a sidebar stands in and the two surfaces a view is drawn on, where the rail stands and what moves when focus does — FLOW and PIN, the travel journal, and the focus lighting read as addresses |
 | [`tech/REPO-LAYOUT.md`](tech/REPO-LAYOUT.md) | Which folder declares what, the workspace and the application tree, two binaries, where a document goes |
+| [`tech/REPOSITORY-GOVERNANCE.md`](tech/REPOSITORY-GOVERNANCE.md) | Canonical branches, fork improvement lines, historical archives, and the no-source-loss rule |
 | [`tech/IDENTITY.md`](tech/IDENTITY.md) | One derivation for home, socket, CLI name and axis; the core reads no ambient; one backend per home |
 | [`tech/SETTINGS-AND-INSTALLATION.md`](tech/SETTINGS-AND-INSTALLATION.md) | User settings, installed state, development paths and installer ownership |
 | [`tech/CONTROL-PROTOCOL.md`](tech/CONTROL-PROTOCOL.md) | One line of JSON, the envelope, the greeting that negotiates, the command table, the socket address |
@@ -96,4 +97,3 @@ that on the same date and the gate landed against it.
 | Document | Contents |
 | --- | --- |
 | [`../AGENTS.md`](../AGENTS.md) | The development discipline. Read before any of these |
-

@@ -21,6 +21,8 @@ Discovered in the repository, not asked for.
 Paths are resolved by declaration and discovery. Symlinks are never used. Modules are never
 joined by a guessed relative path.
 
+Repository and branch changes follow [`docs/tech/REPOSITORY-GOVERNANCE.md`](docs/tech/REPOSITORY-GOVERNANCE.md).
+
 ## 2. The accumulation gate
 
 G0 to G5 are not implementation steps but a graph of completion criteria. Dozens of hypotheses

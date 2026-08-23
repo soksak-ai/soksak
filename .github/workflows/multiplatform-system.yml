@@ -2,7 +2,7 @@ name: multiplatform-system
 on:
   workflow_dispatch:
   push:
-    branches: [wails3beta-terminal-0.0.2]
+    branches: [main]
 permissions:
   contents: read
   actions: read
