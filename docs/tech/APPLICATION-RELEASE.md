@@ -24,3 +24,10 @@ Linux are unsigned; macOS is ad-hoc signed, not Developer ID signed or notarized
 The macOS link gate starts with an empty Go cache and rejects linker warnings. Apple's linker may
 receive the Objective-C runtime through more than one framework-backed cgo package; the build
 disables only that duplicate-library diagnostic while keeping each slice on its declared target.
+
+## Published v0.0.2 evidence
+
+Tag `v0.0.2` names source commit `badc426cff97cca1b8dd9b2e67e31e62c11fe40e`. Native system run
+`32644742653` built and passed the installed fleet on Windows x86_64, macOS, Linux x86_64, and
+Linux arm64. Release run `32645366005` consumed only those tested artifacts and published the four
+archives, `SHA256SUMS`, provenance, and English/Korean release notes as an immutable release.

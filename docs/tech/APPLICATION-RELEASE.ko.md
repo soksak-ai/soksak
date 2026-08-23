@@ -25,3 +25,10 @@ macOS는 ad-hoc signed이며 Developer ID signed 또는 notarized 상태가 아�
 macOS link gate는 빈 Go cache에서 시작하고 linker warning을 거부합니다. 여러 framework 기반
 cgo package가 Objective-C runtime을 함께 전달할 수 있으므로 각 slice를 선언된 target으로 유지한
 상태에서 해당 duplicate-library 진단만 비활성화합니다.
+
+## 발행된 v0.0.2 증거
+
+Tag `v0.0.2`는 source commit `badc426cff97cca1b8dd9b2e67e31e62c11fe40e`를 가리킵니다. Native
+system run `32644742653`은 Windows x86_64, macOS, Linux x86_64, Linux arm64에서 installed fleet을
+build하고 통과했습니다. Release run `32645366005`는 이 검증된 artifact만 사용해 네 archive,
+`SHA256SUMS`, provenance, 영어/한글 release note를 immutable release로 발행했습니다.

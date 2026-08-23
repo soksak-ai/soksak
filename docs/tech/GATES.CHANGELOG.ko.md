@@ -35,3 +35,15 @@ Commit `fde267ac5860b4e9ed7dc4e2abd16bdcc576610f`는 installed-product 검증을
 측정은 `declared 22, committed 21, still dirty`를 보고했고 이후 실패는 pending presentation timeout만
 노출했습니다. 현재 계약은 installed suite가 delivery, compositor commit, presentation receipt를 구분하는
 scenario와 native trace를 소유할 때까지 이를 명시적으로 미완료로 둡니다.
+
+## Installed native fleet 완료
+
+2026-08-23 외부 suite는 빈 environment에서 immutable terminal release를 설치하고 run
+`32644742653`에서 Windows x86_64, macOS, Linux x86_64, Linux arm64의 command, resize, high output,
+warm restore, archived restore, UI invariant, app-owned capture를 모두 통과했습니다.
+
+같은 Core build는 signed registry sequence 10에서 `soksak-plugin-browser-wails3@0.0.5`를 fresh
+install했습니다. `https://example.com` navigation은 정확한 title `Example Domain`에 도달했고 plugin
+conformance violation은 0, plugin host overlay reason은 `none`, `ui.verify`는 6개 check 모두 통과,
+`state.health` degraded axis는 0, surface composition은 clean이었습니다. App-owned PNG에서도 native
+page가 빈 화면이나 error overlay 없이 보였습니다.
