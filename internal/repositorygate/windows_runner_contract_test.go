@@ -7,6 +7,12 @@ import (
 )
 
 func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
+	attributes := readText(t, ".gitattributes")
+	for _, path := range []string{"*.go", "go.mod", "go.sum", "*.sh"} {
+		if !strings.Contains(attributes, path+" text eol=lf") {
+			t.Errorf("repository does not preserve LF for %s", path)
+		}
+	}
 	workflow := readText(t, ".github/workflows/multiplatform-system.yml")
 	docker := readText(t, "scripts/ci/windows-docker.sh")
 	if !strings.Contains(workflow, "windows-build.sh all") {
