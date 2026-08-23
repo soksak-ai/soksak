@@ -25,7 +25,7 @@ and distribution gates.
 | `soksak-spec-sidecar-terminal` | `0.0.1` | Terminal-state interpretation, complete snapshots, checkpoints and recovery outcomes |
 | `soksak-spec-plugin-terminal` | `0.0.4` | Observable terminal-plugin lifecycle, presentation, input, commands, output-boundary status and exposed nodes |
 | `soksak-kit-sidecar-terminal` | `0.0.7` | One shared PTY observation, recovery service and checkpoint runtime for all six engine providers |
-| `soksak-kit-plugin-terminal` | `0.0.16` | Shared terminal-plugin implementation that defines no standard and selects no engine |
+| `soksak-kit-plugin-terminal` | `0.0.17` | Shared terminal-plugin implementation that serializes one renderer generation per pane and selects no engine |
 
 `soksak-spec-plugin-terminal` is a public behavior contract referenced through `implements`. It is
 not a manifest format. Every plugin manifest continues to use `soksak-spec-plugin@0.0.1`.
