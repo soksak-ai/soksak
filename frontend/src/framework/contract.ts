@@ -249,6 +249,12 @@ export interface AppFramework {
   /** Backend command call. Whether the framework uses an in-process call or a socket is not exposed to the app. */
   invoke<T = unknown>(cmd: string, args?: Record<string, unknown>): Promise<T>;
 
+  /** Complete backend command table. Detailed frontend schemas remain owned by the command catalog. */
+  commands(): Promise<{
+    commands: Array<{ name: string; owner: string }>;
+    unserved: Array<{ name: string; blockedBy: string }>;
+  }>;
+
   /** Create a stream sink — pass it through as an invoke argument unchanged. */
   createStream<T>(): Stream<T>;
 

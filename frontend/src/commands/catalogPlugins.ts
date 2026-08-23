@@ -3,7 +3,7 @@
 // CONSENT_REQUIRED, and no consent-granting command exists (UI consent modal only).
 // plugin.view.* placement commands are registered in M_P5 (right sidebar).
 
-import { invoke } from "../framework";
+import { commandTable, invoke } from "../framework";
 import { pendingConsentChain, usePlugins, type PluginRuntime } from "../state/plugins";
 import { allGroups, useSessions } from "../state/sessions";
 import { hasSidebarView as hasSidebarViewKey } from "../state/sidebarLayout";
@@ -548,13 +548,16 @@ export function registerPluginCatalog(): void {
       const st = useRegistry.getState();
       const installed = usePlugins.getState().plugins;
       const all = catalogJson() as { name: string }[];
+      const backend = await commandTable();
       const requested = typeof p.name === "string" ? p.name.trim() : "";
       if (requested) {
         const command = all.find((entry) => entry.name === requested);
-        if (!command) {
-          return { ok: false as const, code: "UNKNOWN_COMMAND", message: tmsg("msg.command.unknown", { name: requested }) };
-        }
-        return { command };
+        if (command) return { command };
+        const served = backend.commands.find((entry) => entry.name === requested);
+        if (served) return { command: { ...served, documentation: "unavailable" } };
+        const unserved = backend.unserved.find((entry) => entry.name === requested);
+        if (unserved) return { command: { ...unserved, documentation: "unavailable" } };
+        return { ok: false as const, code: "UNKNOWN_COMMAND", message: tmsg("msg.command.unknown", { name: requested }) };
       }
       const core: unknown[] = [];
       const plugins: Record<string, unknown[]> = {};
@@ -564,6 +567,10 @@ export function registerPluginCatalog(): void {
         if (pid) (plugins[pid] ??= []).push(c);
         else core.push(c);
       }
+      const detailed = new Set(all.map((entry) => entry.name));
+      core.push(...backend.commands
+        .filter((entry) => !detailed.has(entry.name))
+        .map((entry) => ({ ...entry, documentation: "unavailable" })));
       return {
         core,
         plugins,

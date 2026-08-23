@@ -65,6 +65,7 @@ export function clearNativeSurfaces(): Promise<void> {
 
 // ── Named re-exports — call sites use these without naming a framework ─────────────
 export const invoke: AppFramework["invoke"] = (cmd, args) => framework.invoke(cmd, args);
+export const commandTable: AppFramework["commands"] = () => framework.commands();
 export const createStream: AppFramework["createStream"] = () => framework.createStream();
 export const listen: AppFramework["listen"] = (event, cb) => framework.listen(event, cb);
 export const currentWindow: AppFramework["currentWindow"] = () => framework.currentWindow();

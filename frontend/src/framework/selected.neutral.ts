@@ -59,6 +59,7 @@ export const selectedFramework: AppFramework = {
   // The neutral adapter has no screen — there is nowhere to apply a zoom factor, so this does nothing.
   setWindowZoom: async () => {},
   invoke: unsupported,
+  commands: async () => ({ commands: [], unserved: [] }),
   createStream: () => ({ onmessage: () => {} }),
   listen: unsupported,
   currentWindow: () => testWindow,

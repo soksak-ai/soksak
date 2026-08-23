@@ -7,6 +7,7 @@
 // caller treat the feature as present and render as if it were.
 
 import { Dialogs, Events, Window as WailsWindow } from "@wailsio/runtime";
+import { ControlService } from "../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails";
 import type { EngineProvision } from "../../plugins/spec";
 import { wailsEngineProvision } from "./engineProvision";
 
@@ -153,6 +154,8 @@ export const wailsFramework: AppFramework = {
     const { invokeCommand } = await import("./invoke");
     return invokeCommand<T>(cmd, args);
   },
+
+  commands: async () => ControlService.Commands(),
 
   createStream: <T,>(): Stream<T> => createWailsStream<T>(),
 

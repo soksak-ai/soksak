@@ -1,7 +1,15 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { startExecutor } from "./executor";
 import { execute, getSpec } from "./registry";
+
+vi.mock("../framework", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../framework")>()),
+  commandTable: async () => ({
+    commands: [{ name: "sidecar_stop", owner: "core" }],
+    unserved: [],
+  }),
+}));
 
 describe("command.docs — one discoverable command", () => {
   beforeAll(() => startExecutor());
@@ -28,5 +36,13 @@ describe("command.docs — one discoverable command", () => {
   it("refuses an absent name as UNKNOWN_COMMAND", async () => {
     const result = await execute("command.docs", { name: "no.such.command" }, {});
     expect(result).toMatchObject({ ok: false, code: "UNKNOWN_COMMAND" });
+  });
+
+  it("reports an executable Core command without inventing a detailed schema", async () => {
+    const result = await execute("command.docs", { name: "sidecar_stop" }, {});
+    expect(result).toMatchObject({
+      ok: true,
+      data: { command: { name: "sidecar_stop", owner: "core", documentation: "unavailable" } },
+    });
   });
 });
