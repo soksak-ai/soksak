@@ -152,6 +152,11 @@ type unit struct {
 	secretNames string
 }
 
+type childExit struct {
+	code int
+	err  error
+}
+
 func NewHost(deps Deps) *Host {
 	if deps.ReadyWithin == 0 {
 		deps.ReadyWithin = DefaultReadyWithin
@@ -316,13 +321,13 @@ func (host *Host) startResolved(
 	// One watcher per child, started before anything can fail. It is the only caller of Wait for
 	// this child's life, which is what the spawner's contract requires and what keeps two callers
 	// off one wait status.
-	ended := make(chan struct{})
+	ended := make(chan childExit, 1)
 	go func() {
-		_, _ = child.Wait()
-		close(ended)
+		code, waitErr := child.Wait()
+		ended <- childExit{code: code, err: waitErr}
 	}()
 
-	announced, err := host.await(name, child, held.stderr, stderrDone)
+	announced, err := host.await(name, child, held.stderr, stderrDone, ended)
 	if err != nil {
 		_ = child.Signal()
 		return Open{}, err
@@ -361,7 +366,7 @@ type announcement struct {
 // announcement, and no later line changes that: waiting for one would be waiting for a line that
 // will never be about a socket.
 func (host *Host) await(
-	name string, child process.Child, stderr *ring, stderrDone <-chan struct{},
+	name string, child process.Child, stderr *ring, stderrDone <-chan struct{}, ended <-chan childExit,
 ) (announcement, error) {
 	type read struct {
 		line string
@@ -378,8 +383,9 @@ func (host *Host) await(
 	select {
 	case got := <-lines:
 		if got.err != nil && got.line == "" {
+			exit := <-ended
 			<-stderrDone
-			detail := got.err.Error()
+			detail := childExitReason(exit)
 			if tail := stderr.snapshot(); len(tail) > 0 {
 				detail += "; stderr: " + tail[len(tail)-1]
 			}
@@ -393,6 +399,13 @@ func (host *Host) await(
 			"name": name, "seconds": fmt.Sprintf("%.0f", host.deps.ReadyWithin.Seconds()),
 		})
 	}
+}
+
+func childExitReason(exit childExit) string {
+	if exit.err != nil {
+		return exit.err.Error()
+	}
+	return fmt.Sprintf("exit code %d", exit.code)
 }
 
 // judge reads what a unit's first line stated about itself. It performs no I/O.
@@ -499,7 +512,7 @@ func (host *Host) end(held *unit) error {
 //
 // It waits on the watcher's channel rather than calling Wait itself. Two callers of Wait race on one
 // wait status, and the spawner's contract states there is exactly one.
-func (host *Host) forgetWhenGone(name string, held *unit, ended <-chan struct{}) {
+func (host *Host) forgetWhenGone(name string, held *unit, ended <-chan childExit) {
 	<-ended
 	host.mu.Lock()
 	if host.open[name] == held {

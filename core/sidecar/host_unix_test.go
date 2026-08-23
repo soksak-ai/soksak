@@ -200,6 +200,19 @@ func TestAUnitWhoseFirstLineIsOutputAnnouncesNothing(t *testing.T) {
 	}
 }
 
+func TestAChildExitBeforeAnnouncementReportsItsExitCode(t *testing.T) {
+	home := shortHome(t)
+	stageUnit(t, home, "exits", exitSource)
+	host := NewHost(Deps{
+		Home: home, Runtime: shortHome(t), Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 5 * time.Second, ResolvePath: testSidecarResolver(home),
+	})
+	_, err := host.Start("exits")
+	if err == nil || !strings.Contains(err.Error(), "exit code 37") {
+		t.Fatalf("sidecar exit lost its status: %v", err)
+	}
+}
+
 // An announced protocol this build does not speak is refused at the greeting, not later.
 func TestAnEnvelopeMismatchIsRefusedAtTheAnnouncement(t *testing.T) {
 	home := shortHome(t)
@@ -374,6 +387,13 @@ func main() {
 	os.Stdout.Sync()
 	time.Sleep(30 * time.Second)
 }
+`
+
+const exitSource = `package main
+
+import "os"
+
+func main() { os.Exit(37) }
 `
 
 const futureSource = `package main
