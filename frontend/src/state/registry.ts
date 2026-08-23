@@ -22,7 +22,7 @@ import { createCoreSync } from "./coreSync";
 import type { CoreStoreDeps } from "./coreStore";
 
 const OFFICIAL_REMOTE_URL =
-  "https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry-signed.json";
+  "https://api.github.com/repos/soksak-ai/soksak-plugin-registry/contents/registry-signed.json";
 
 export const OFFICIAL_REGISTRY_DESCRIPTOR: RegistryDescriptor = {
   id: OFFICIAL_REGISTRY_ID,
@@ -247,6 +247,12 @@ export const initRegistryPersistence = (deps: CoreStoreDeps): (() => void) => re
 
 const CREDENTIAL_PLACEHOLDER = "\u0000soksak-registry-authorization\u0000";
 
+export function registryRequestHeaders(descriptor: RegistryDescriptor): Record<string, string> | null {
+  return descriptor.id === OFFICIAL_REGISTRY_ID
+    ? { accept: "application/vnd.github.raw+json" }
+    : null;
+}
+
 // Registry egress is the core boundary's, never the webview's. The webview is
 // CSP-isolated from external hosts, so a public index fetched with the webview
 // `fetch` fails closed as "Load failed"; the host transport opens the same URL
@@ -262,7 +268,7 @@ async function registryHttpGet(
       {
         method: "GET",
         url,
-        headers: null,
+        headers: registryRequestHeaders(descriptor),
         query: null,
         body: null,
         contentType: null,
