@@ -22,6 +22,7 @@ dbus-run-session -- xvfb-run -a -s "-screen 0 1400x900x24" sh -eu -c '
   user_home=$6
   native_output=$7
   printf '\n' | gnome-keyring-daemon --unlock ><local-evidence>/soksak-keyring.env
+  . <local-evidence>/soksak-keyring.env
   wm_ready=<local-evidence>/soksak-openbox-ready.$$
   rm -f "$wm_ready"
   openbox --startup "touch $wm_ready" ><local-evidence>/soksak-openbox.log 2>&1 &
@@ -53,6 +54,7 @@ dbus-run-session -- xvfb-run -a -s "-screen 0 1400x900x24" sh -eu -c '
     sleep 0.25
   done
   "$client" --socket "$socket" plugin.boot.wait window=main timeoutMs=20000 >/dev/null
+  "$client" --socket "$socket" plugin.catalog window=main refresh=true >/dev/null
   tree=$("$client" --socket "$socket" ui.tree window=main)
   echo "$tree" | grep -Eq '"'"'"count"[[:space:]]*:[[:space:]]*[1-9]'"'"'
   xdotool windowsize "$window" 1400 900

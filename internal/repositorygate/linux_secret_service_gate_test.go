@@ -21,6 +21,12 @@ func TestLinuxSmokeProvidesSecretService(t *testing.T) {
 	if !strings.Contains(string(smoke), "gnome-keyring-daemon --unlock") {
 		t.Fatal("Linux smoke run does not start Secret Service")
 	}
+	if !strings.Contains(string(smoke), ". <local-evidence>/soksak-keyring.env") {
+		t.Fatal("Linux smoke discards the Secret Service session environment")
+	}
+	if !strings.Contains(string(smoke), "plugin.catalog") || !strings.Contains(string(smoke), "refresh=true") {
+		t.Fatal("Linux smoke does not verify authenticated registry refresh")
+	}
 	if !strings.Contains(string(dockerfile), "openbox") || !strings.Contains(string(smoke), "openbox") {
 		t.Fatal("Linux smoke does not provide a window manager for resize and focus contracts")
 	}
