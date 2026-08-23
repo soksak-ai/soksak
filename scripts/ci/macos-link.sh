@@ -10,7 +10,7 @@ if ! GOCACHE=$cache \
   MACOSX_DEPLOYMENT_TARGET=10.15 \
   CGO_CFLAGS='-O2 -g -mmacosx-version-min=10.15' \
   CGO_LDFLAGS='-O2 -g -mmacosx-version-min=10.15 -Wl,-no_warn_duplicate_libraries' \
-  go test "$root" -run TestWailsReleasePublishesTheVerifiedWindowsCommit -count=1 >"$output" 2>&1; then
+  go test "$root/internal/repositorygate" -run '^TestWailsReleasePublishesTheCompleteVerifiedMatrix$' -count=1 >"$output" 2>&1; then
   cat "$output"
   exit 1
 fi

@@ -86,9 +86,12 @@ answer is indistinguishable from the file actually being there.
 
 ```
 soksak-core/
-├── main.go             the composition root: identity, home claim, registry, host
-├── launch.go           claims the home before anything is drawn
+├── main.go             embeds the frontend and enters the application composition
 ├── core/               framework-independent Go: no window, no vendor
+├── internal/
+│   ├── application/    bootstrap, home claim, process wiring, and lifecycle system gates
+│   ├── repositorygate/ repository-wide source, document, build, and policy gates
+│   └── repositoryroot/ checkout discovery from the go.mod marker
 ├── frameworks/wails/   this host: windows, capture, native surfaces, the service list
 ├── cmd/sok             the control-plane CLI
 ├── frontend/           the renderer
@@ -100,9 +103,11 @@ soksak-core/
 `core/` never names a framework or a plugin, and `go test ./core/...` answers commands with no
 window. `frameworks/wails/` may name both — it is the only package that can.
 
-Root-level Go files are the composition root and its gates: `main.go`, `launch.go`,
-`process_sink.go`, `pid_*.go`, plus `observation_gate_test.go` and `provenance_gate_test.go`, which
-scan the whole repository and therefore have to sit at its root.
+`main.go` is the only Go file at the repository root. Embed paths cannot climb above their source
+directory, so it owns the frontend embed and passes the resulting filesystem to
+`internal/application`. Application bootstrap and lifecycle gates live together; repository-wide
+gates run from their own package and discover the checkout by walking up to `go.mod`. A gate never
+depends on being placed beside the files it inspects.
 
 ## L3. Two binaries, no more
 

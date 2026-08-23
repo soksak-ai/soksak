@@ -31,8 +31,7 @@ contract is in its own canonical document, linked below.
 | `go test ./core/...` | the core answers commands with no window |
 | `sok ui.tree` | every reachable node carries `data-node` |
 | `sok window.snapshot` | writes a PNG without taking focus |
-| `task verify:drawn` | what a link names is what the window draws — in each of the three places and in all three at once — and an open modal leaves no surface above it |
-| `task verify:arrangement` | each of the nine ways focus moves between three panes leaves the window it is meant to |
+| `min-median-max/soksak-terminal-tests` installed UI suite | released plugins are installed through Core; steady-state alignment, coverage, capture, and recording are verified |
 
 Contracts: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`CONTROL-PROTOCOL.md`](CONTROL-PROTOCOL.md),
 [`MESSAGE-PROTOCOL.md`](MESSAGE-PROTOCOL.md), [`NAMING.md`](NAMING.md),
@@ -77,7 +76,7 @@ away; the gate keeps it now and reports the last of it when the process stops an
 
 A real login shell in a pane, driven from outside. `sok term.exec` round-trips
 bytes. The terminal is a plugin — the core names no engine, held by
-`coupling_gate_test.go`.
+`internal/repositorygate/coupling_gate_test.go`.
 
 The application has no shell to leave behind: since 2026-08-20 the shell is a
 child of the PTY sidecar, which is a separate process precisely so a shell survives
@@ -140,20 +139,20 @@ has watched fail is a claim, not a gate.
 
 | Gate | What it holds |
 | --- | --- |
-| `coupling_gate_test.go` | the core names no plugin and no rendering engine (C1) — `frameworks/` is scanned too, with a per-file allowlist that states a reason for each; and no **domain concept** (C6), comments stripped, exemptions empty |
-| `history_gate_test.go` | the core does not act on a browser's history, and writes down no surface kind |
+| `internal/repositorygate/coupling_gate_test.go` | the core names no plugin and no rendering engine (C1) — `frameworks/` is scanned too, with a per-file allowlist that states a reason for each; and no **domain concept** (C6), comments stripped, exemptions empty |
+| `internal/repositorygate/history_gate_test.go` | the core does not act on a browser's history, and writes down no surface kind |
 | plugin `manifest_gate_test.go` | a source writing `data-native-surface` has a manifest declaring it, and the reverse |
 | `prose_gate_test.go` | comments and bundle values stay out of the banned register (§6-3) |
 | `korean_gate_test.go` | Hangul stays in bundles or paired `.ko.md` translations; unpaired translations fail |
 | `record_language_gate_test.go` | the record is English, commit messages included (6-1) — the floor is zero, no allowlist |
-| `i18n_gate_test.go` | a sentence a person reads comes from a key |
+| `internal/repositorygate/i18n_gate_test.go` | a sentence a person reads comes from a key |
 | `reader_language_gate_test.go` | a refusal from a window is a key, rendered where the caller is known |
 | `plural_gate_test.go` | an English sentence that counts declares both forms; a Korean one declares none |
 | `contentview_gate_test.go` | the core and the page name content view events identically |
 | `bindings_gate_test.go` | the generated bindings say what the Go says |
-| `provenance_gate_test.go` | the record names no preceding implementation |
+| `internal/repositorygate/provenance_gate_test.go` | the record names no preceding implementation |
 | `sweep_gate_test.go` | a translation sweep changes no code |
-| `observation_gate_test.go` | what the build claims to observe, it serves |
+| `internal/repositorygate/observation_gate_test.go` | what the build claims to observe, it serves |
 | `docs_carried_gate_test.go` | a carried document is not cited as contract before its review |
 | `min-median-max/soksak-terminal-tests` inventory | the environment declares the fleet manifest's exact plugin and sidecar versions, with absolute paths and regular manifests |
 | `min-median-max/soksak-terminal-tests` command suite | every terminal plugin opens, reads, writes, resizes, handles Unicode and 256 KiB output, exposes DOM/accessibility, and produces capture and recording files |
@@ -172,21 +171,10 @@ Written here so it is not rediscovered (L2).
   motion stimulus and `layout.trace.native` verdict must be added there before claiming those
   interaction cases are restored.
 
-- **A commit the compositor never answers stalls `ui.layout.wait-settled`.**
-  `TestWhatTheLinkSaysIsWhatIsDrawn` fails in a full suite run and passes alone —
-  measured five times on 2026-08-19. Once, with the barrier's own deadline made
-  shorter than the caller's, it stated itself: `native surfaces did not reach a
-  frame in 3750ms: declared 22, committed 21, still dirty`, with `running` true
-  and no error. So one delivery is in flight and the round trip does not return,
-  and while it is in flight the observer takes no other.
-
-  What is done: the barrier's deadline is the caller's less a margin, so the side
-  holding the reason expires first; and a commit that goes unanswered for
-  `NATIVE_COMMIT_LIMIT_MS` fails by name and releases the observer. What is not:
-  the runs after those changes still ended in the caller's plain `TIMEOUT` with
-  `presentationPending [{owner:"content", labels:[], elapsedMs:4101}]`, so the
-  inner deadline is not being reached and the cause is unmeasured. Nothing here
-  claims the flake is fixed.
+- **A commit the compositor never answers stalls `ui.layout.wait-settled`.** The deadline releases
+  the observer and names an unanswered commit, but the installed interaction suite does not yet
+  reproduce and classify the pending presentation boundary. Completion requires a released fleet
+  scenario whose native trace distinguishes delivery, compositor commit, and presentation receipt.
 
 - **A sidecar stream and sidecar lifetime were one command, and a release ended shells.** Fixed
   2026-08-20 the day it was written: `sidecar_close` signalled the process, and a plugin being
@@ -315,8 +303,8 @@ Written here so it is not rediscovered (L2).
   covered: a focus change stopped it drawing for 68 to 234ms while JS ran
   throughout — the timer readings never missed a beat — and in front, on the same
   build and the same six moves, it never stopped at all. What was reported here
-  first as a stall was the environment. `task verify:motion` asks it only of a
-  window someone is looking at (`SOKSAK_GATE_FRONT=1`).
+  first as a stall was the environment. A future installed motion gate must ask it only of a
+  window someone is looking at.
 
   Where it goes is half answered. The paths this build owns are timed and cost 1
   to 4ms of it (`panes.flush`, `rail.flush`, and the plugin reflow, which does not
@@ -324,6 +312,5 @@ Written here so it is not rediscovered (L2).
   nothing here measures yet — a focus change re-renders a workspace whose panes,
   rail, tab strips and plugin hosts all read the workspace object.
 
-  `task verify:motion` is where it fails, on a machine that is doing nothing else.
-  `task verify` runs its gates beside each other, so a stalled window and a loaded
-  machine give the same number there; it measures and writes it down instead.
+  The external suite does not yet reproduce this frame-by-frame scenario, so this remains not
+  done. Completion requires that suite to own the stimulus and native trace verdict.

@@ -49,6 +49,7 @@ changelog에 기록합니다.
 | 문서 | 내용 |
 | --- | --- |
 | `GATES.md` | G0–G5 완료 기준과 판정 명령 |
+| `GATES.CHANGELOG.md` | Installed-product gate 소유권과 stale no-op target 제거 흐름 |
 | `ARCHITECTURE.md` | Core 소유권, plugin 경계, C1–C6 |
 | `ARCHITECTURE.CHANGELOG.md` | Domain 기능이 Core에서 분리된 이유 |
 | `NAMING.md` | 공개 식별자와 vocabulary |

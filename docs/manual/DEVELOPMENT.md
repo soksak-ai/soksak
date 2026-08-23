@@ -70,4 +70,4 @@ Comments are English; only text shown to a person is Korean.
 A comment says why a rule exists and what was measured. It does not say which other codebase the
 measurement came from.
 
-**Gate.** `provenance_gate_test.go`.
+**Gate.** `internal/repositorygate/provenance_gate_test.go`.

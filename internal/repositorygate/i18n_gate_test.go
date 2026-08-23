@@ -1,0 +1,175 @@
+package repositorygate
+
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+// A sentence a person reads comes from a key, and this holds that after the fact
+// is true rather than while it is being made true.
+//
+// The sweep that emptied this surface proves nothing about the next commit. A
+// hardcoded label reads correctly in the default language, so nobody sees it
+// until the product runs in another one and a screen comes back half
+// translated. That is what this refuses.
+//
+// It reads the surfaces where the reader is not in question: a rendered
+// attribute, and the description a command palette and `sok` help both show.
+// Everything subtler — a refusal that may or may not travel to a caller — is a
+// judgement this cannot make, and it does not pretend to.
+var (
+	renderedAttribute = regexp.MustCompile(`\b(?:title|placeholder|aria-label|alt)\s*=\s*"([^"]{4,})"`)
+	shownField        = regexp.MustCompile(`^\s*(?:description|title|label|hint|detail|caution|summary|placeholder)\s*:\s*"([^"]{5,})"`)
+	throughAKey       = regexp.MustCompile(`\bt(?:msg)?\s*\(|\blocalize\s*\(`)
+)
+
+// prose is a value a person would read as a sentence rather than as a name: two
+// or more words, at least two of them letters. A class, a path, an event name
+// and a URL are not sentences and are not this gate's business.
+func prose(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) < 5 || !strings.Contains(value, " ") {
+		return false
+	}
+	for _, start := range []string{"http://", "https://", "/", "./", "data:", "#", "--"} {
+		if strings.HasPrefix(value, start) {
+			return false
+		}
+	}
+	return len(regexp.MustCompile(`[A-Za-z\p{Hangul}]{2,}`).FindAllString(value, -1)) >= 2
+}
+
+func TestAShownSentenceComesFromAKey(t *testing.T) {
+	var found []string
+	scanned := 0
+
+	paths, err := trackedRecordFilesUnder(".", map[string]bool{".ts": true, ".tsx": true}, []string{"frontend/src/"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		clean := filepath.ToSlash(path)
+		// A test's fixture is read by nobody, and the bundles are where the
+		// sentences live.
+		if strings.Contains(clean, ".test.") ||
+			strings.HasSuffix(clean, "i18n.ko.ts") || strings.HasSuffix(clean, "i18n.en.ts") {
+			continue
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		scanned++
+		for index, line := range strings.Split(string(body), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") ||
+				strings.HasPrefix(trimmed, "/*") || throughAKey.MatchString(line) {
+				continue
+			}
+			for _, pattern := range []*regexp.Regexp{renderedAttribute, shownField} {
+				match := pattern.FindStringSubmatch(line)
+				if match == nil || !prose(match[1]) {
+					continue
+				}
+				found = append(found, clean+":"+itoa(index+1)+" "+match[1])
+				break
+			}
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("no frontend source was scanned; the path is wrong")
+	}
+
+	if len(found) > 0 {
+		t.Errorf("these sentences are shown to a person without a key, in %d places:\n%s\n"+
+			"Add the key to i18n.ko.ts and i18n.en.ts and read it with t() or tmsg().",
+			len(found), strings.Join(found, "\n"))
+	}
+}
+
+// A refusal that travels back to a caller comes from a key, and this holds the
+// Go half of that.
+//
+// `control.Answer` renders a refusal at the edge, in the language of whoever
+// asked (I18N I4). A refusal built with fmt.Errorf has no key to render and
+// arrives in English no matter who is reading — and it reads correct to the
+// author, because the author reads English.
+//
+// The discriminator is the canon's own: a wrap that hands a cause to a log
+// (`fmt.Errorf("reading %s: %w", path, err)`) is not read by a person and is a
+// plain English literal under 6-1. Everything else with a sentence in it is
+// either keyed or listed below with the reason no caller ever reads it.
+var (
+	goRefusal = regexp.MustCompile(`(?:fmt\.Errorf|errors\.New)\(\s*"([^"]{6,})"`)
+	handsOn   = regexp.MustCompile(`%w`)
+)
+
+// refusalsThatNeverTravel are the sentences outside this rule, each with
+// the reason it is outside. A sentence rather than a line, so moving code around
+// does not silently widen the exception, and a new refusal in one of these files
+// is still caught.
+var refusalsThatNeverTravel = map[string]string{
+	"%s": "cmd/sok re-emits the sentence the backend already rendered, and core/files " +
+		"hands over a constant; neither writes a sentence of its own here",
+	"%s exists and is not a socket": "listen_unix refuses at startup, before any caller " +
+		"exists to be answered — this goes to the console of whoever started the process",
+	"another backend is already answering at %s": "the same startup console; a second " +
+		"backend never gets far enough to hold a command registry",
+	"this build has no sentences in %q; it serves %s": "the one refusal that cannot hold a " +
+		"key: it answers a caller whose language this build does not have, so rendering it " +
+		"would need the very table the tag was just refused against",
+	"repository root not found above %s":                  "test bootstrap only; TestMain panics before a product registry or reader exists",
+	"control: a command needs a name":                     registrationTime,
+	"control: command %s has no handler":                  registrationTime,
+	"control: command %s is already registered":           registrationTime,
+	"control: command %s is delegated to %s":              registrationTime,
+	"control: command %s must declare why it is unserved": registrationTime,
+}
+
+const registrationTime = "a registration-time refusal: it fires while the process is wiring " +
+	"its own commands, so the reader is the developer who wired them wrong, not a caller"
+
+func TestARefusalThatTravelsComesFromAKey(t *testing.T) {
+	var found []string
+	scanned := 0
+
+	paths, err := trackedRecordFiles(".", map[string]bool{".go": true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") || strings.HasPrefix(filepath.ToSlash(path), "internal/repositorygate/") {
+			continue
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		scanned++
+		clean := filepath.ToSlash(path)
+		for index, line := range strings.Split(string(body), "\n") {
+			match := goRefusal.FindStringSubmatch(line)
+			if match == nil || handsOn.MatchString(match[1]) || !prose(match[1]) {
+				continue
+			}
+			if _, excused := refusalsThatNeverTravel[match[1]]; excused {
+				continue
+			}
+			found = append(found, clean+":"+itoa(index+1)+" "+match[1])
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("no Go source was scanned; the path is wrong")
+	}
+
+	if len(found) > 0 {
+		t.Errorf("these refusals reach a caller without a key, in %d places:\n%s\n"+
+			"Declare the sentence in the package's messages.go and build the refusal with "+
+			"i18n.Errorf(key, params). A refusal that genuinely never leaves this process goes "+
+			"in refusalsThatNeverTravel with the reason it does not.",
+			len(found), strings.Join(found, "\n"))
+	}
+}

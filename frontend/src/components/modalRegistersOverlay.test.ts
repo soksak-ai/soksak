@@ -21,7 +21,8 @@ const drawsAModal = files.filter((file) => file.body.includes('className="dmodal
 
 // Whether the registration is released is not readable from the shape of the source: a modal its
 // parent renders conditionally may register for its whole life, and one App mounts always may not.
-// `TestARunningBuildReportsNothingWrong` reads the count itself — with nothing open it is 0.
+// The installed-product UI suite reads the rejection and surface-coverage verdict with no modal
+// open. Source inspection cannot prove release timing, so this test owns only registration.
 describe("a component that draws a modal", () => {
   it("there is at least one, so this rule is measured", () => {
     expect(drawsAModal.map((f) => f.name).length).toBeGreaterThan(0);

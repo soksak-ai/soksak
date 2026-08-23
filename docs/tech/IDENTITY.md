@@ -59,7 +59,8 @@ silently.
 
 ## I6. One backend per home
 
-The home is claimed before the store is opened or a window is drawn (`launch.go`). A second process
+The home is claimed before the store is opened or a window is drawn
+(`internal/application/launch.go`). A second process
 for the same home exits before it can draw anything, so the failure is one refused start rather than
 two backends writing one database.
 
