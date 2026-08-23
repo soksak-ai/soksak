@@ -289,8 +289,8 @@ describe("plugin.view.open — only a center view opens as a tab", () => {
       { mount: () => {} },
     );
     try {
-      const result = await execute("plugin.view.open", { viewKey: "demo.panel" }, {});
-      expect(result.message).toBe("demo.panel 를 열었습니다");
+      const result = await execute("plugin.view.open", { viewKey: "demo.panel", callerLanguage: "en" }, {});
+      expect(result.message).toBe("Opened demo.panel");
     } finally {
       off();
     }
