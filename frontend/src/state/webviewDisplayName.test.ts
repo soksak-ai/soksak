@@ -21,7 +21,7 @@ const browser = (viewId: string, title: string, customLabel?: string): Tab => ({
   kind: "plugin",
   title,
   customLabel,
-  pluginId: "soksak-plugin-browser-native",
+  pluginId: "soksak-plugin-browser-fixture",
   view: "content",
 });
 

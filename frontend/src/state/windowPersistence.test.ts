@@ -16,7 +16,7 @@ const leafGroup = (gid: string, vid: string): PaneNode => ({
     id: gid,
     activeTabId: vid,
     tabs: [
-      { id: vid, kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
+      { id: vid, kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-fixture", view: "content" },
     ],
   },
 });

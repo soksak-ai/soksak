@@ -55,7 +55,7 @@ const workspace: Workspace = {
               activeTabId: "tab-cccccc",
               tabs: [
                 { id: "tab-bbbbbb", kind: "plugin", title: "a.ts", pluginId: "plg-editor", view: "content" },
-                { id: "tab-cccccc", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
+                { id: "tab-cccccc", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-fixture", view: "content" },
                 { id: "tab-dddddd", kind: "plugin", title: "ERD", pluginId: "soksak-plugin-erd", view: "studio" },
               ],
             },
@@ -109,7 +109,7 @@ describe("windowSnapshot round trip", () => {
     expect(file.pluginId).toBe("plg-editor");
     expect(file.view).toBe("content");
     const webview = g2.tabs[1] as Extract<Tab, { kind: "plugin" }>;
-    expect(webview.pluginId).toBe("soksak-plugin-browser-native");
+    expect(webview.pluginId).toBe("soksak-plugin-browser-fixture");
     expect(webview.view).toBe("content");
     const plug = g2.tabs[2] as Extract<Tab, { kind: "plugin" }>;
     expect(plug.pluginId).toBe("soksak-plugin-erd");
@@ -224,7 +224,7 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
                   cwd: "<local-evidence>/somewhere",
                   lastActivity: 1234567890,
                 },
-                { id: "tab-bbbbbb", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
+                { id: "tab-bbbbbb", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-fixture", view: "content" },
               ],
             },
           },
@@ -262,11 +262,11 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
                   title: "NAVER",
                   customLabel: "My browser",
                   icon: "https://naver.com/favicon.ico",
-                  pluginId: "soksak-plugin-browser-native",
+                  pluginId: "soksak-plugin-browser-fixture",
                   view: "content",
                   state: { url: "https://naver.com/" },
                 },
-                { id: "tab-bbbbbb", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
+                { id: "tab-bbbbbb", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-fixture", view: "content" },
               ],
             },
           },
@@ -352,4 +352,3 @@ describe("restore normalization — one migration per snapshot (the no-vertical-
     expect(xs[1]).toBeCloseTo(39.5, 10); // a separate line the user made — not rewritten
   });
 });
-

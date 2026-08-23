@@ -1,4 +1,4 @@
-// webviewGc — unit verification of the pure core of the webview reclaim invariant
+// webviewGc — verification of the pure webview reclaim invariant
 // (collectWebviewLabels).
 // Invariant: the live label set = the set of plugin content views that "declare native surface
 // ownership in the manifest" (contributes.views[].nativeSurface=true). Ownership comes from the
@@ -17,11 +17,12 @@ import { surfaceLabelIn } from "./surfaceLabels";
 // for b-<id>. Built by string concatenation, not an inline template (the single-truth guard blocks
 // only inline templates — this is an injected test double, not a redefinition of the real label scheme).
 const labelOf = (viewId: string) => surfaceLabelIn("browser", "win-main", viewId);
+const owningPlugin = "soksak-plugin-browser-fixture";
 
 // Declaration double — the exact shape of manifest contributes.views[].nativeSurface:
 // pluginId → (view id within the plugin → nativeSurface). The real runtime predicate derives from the usePlugins manifest.
 const decls: Record<string, Record<string, boolean>> = {
-  "soksak-plugin-browser-native": { content: true },
+  [owningPlugin]: { content: true },
   // Frame-streaming engines: a view exists but creates no native child surface (DOM canvas) — declared non-owning.
   "soksak-plugin-browser-canvas": { content: false },
   "soksak-plugin-terminal-xterm": { content: false },
@@ -60,7 +61,7 @@ const pluginView = (id: string, pluginId: string, view = "content"): Tab => ({
 describe("collectWebviewLabels — label set of webview-owning views, keyed on the nativeSurface declaration", () => {
   it("counts the label of a nativeSurface-declaring view (a miss reclaims it as a false orphan — regression guard)", () => {
     const live = collectWebviewLabels(
-      [tab([pluginView("tab-bbbbbb", "soksak-plugin-browser-native")])],
+      [tab([pluginView("tab-bbbbbb", owningPlugin)])],
       ownsSurface,
       labelOf,
     );
@@ -80,7 +81,7 @@ describe("collectWebviewLabels — label set of webview-owning views, keyed on t
     const live = collectWebviewLabels(
       [
         tab([
-          pluginView("tab-aaaaaa", "soksak-plugin-browser-native"),
+          pluginView("tab-aaaaaa", owningPlugin),
           pluginView("tab-bbbbbb", "soksak-plugin-browser-canvas"),
         ]),
       ],
@@ -101,7 +102,7 @@ describe("collectWebviewLabels — label set of webview-owning views, keyed on t
 
   it("does not count an undeclared view id even from the same plugin (declaration is per view)", () => {
     const live = collectWebviewLabels(
-      [tab([pluginView("tab-ffffff", "soksak-plugin-browser-native", "settings")])],
+      [tab([pluginView("tab-ffffff", owningPlugin, "settings")])],
       ownsSurface,
       labelOf,
     );
@@ -110,10 +111,10 @@ describe("collectWebviewLabels — label set of webview-owning views, keyed on t
 
   it("collects every owning view spread across spaces and groups", () => {
     const t: Workspace = {
-      ...tab([pluginView("tab-aaaaaa", "soksak-plugin-browser-native")]),
+      ...tab([pluginView("tab-aaaaaa", owningPlugin)]),
       spaces: [
-        content([pluginView("tab-aaaaaa", "soksak-plugin-browser-native")]),
-        content([pluginView("tab-bbbbbb", "soksak-plugin-browser-native")]),
+        content([pluginView("tab-aaaaaa", owningPlugin)]),
+        content([pluginView("tab-bbbbbb", owningPlugin)]),
       ],
     };
     // Avoid an id collision on the second content
