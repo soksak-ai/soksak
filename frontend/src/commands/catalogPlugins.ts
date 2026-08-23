@@ -1123,7 +1123,6 @@ export function registerPluginCatalog(): void {
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
       'plugin.view.open \'{"viewKey":"soksak-plugin-<id>.<view>"}\'',
-      'plugin.view.open \'{"viewKey":"soksak-plugin-<id>.<view>","placement":"center"}\'',
     ],
     handler: (p) => {
       const s = useSessions.getState();

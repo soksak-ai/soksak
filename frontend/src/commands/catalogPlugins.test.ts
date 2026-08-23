@@ -20,6 +20,7 @@ import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { useSessions, type Workspace, type Tab } from "../state/sessions";
 import { parseManifest, type PluginManifest } from "../plugins/spec";
 import { useProgramRegistry } from "../plugins/programRegistry";
+import { text, withReaderLanguage } from "../i18n";
 
 function manifestOf(id: string, overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
@@ -273,6 +274,28 @@ describe("plugin.dev.create — extension development independent of core build 
 });
 
 describe("plugin.view.open — only a center view opens as a tab", () => {
+  it("documents and reports only the current viewKey/workspace contract", async () => {
+    const spec = getSpec("plugin.view.open")!;
+    expect(Object.keys(spec.params)).toEqual(["viewKey", "workspace"]);
+    expect(spec.examples).toEqual([
+      `plugin.view.open '{"viewKey":"soksak-plugin-<id>.<view>"}'`,
+    ]);
+    expect(withReaderLanguage("en", () => text(spec.description))).not.toContain("placement");
+    useSessions.setState({ workspaces: [tabWith([])], activeId: "wsp-aaaaaa" } as never);
+    const { useViewRegistry } = await import("../plugins/viewRegistry");
+    const off = useViewRegistry.getState().register(
+      "demo",
+      { id: "panel", title: "Panel", icon: "P", surfaces: ["tab"], transparent: false, nativeSurface: false },
+      { mount: () => {} },
+    );
+    try {
+      const result = await execute("plugin.view.open", { viewKey: "demo.panel" }, {});
+      expect(result.message).toBe("demo.panel 를 열었습니다");
+    } finally {
+      off();
+    }
+  });
+
   it("a view that lives beside the work is refused a tab, and the refusal names its surface", async () => {
     const { useViewRegistry } = await import("../plugins/viewRegistry");
     useViewRegistry.getState().register(
