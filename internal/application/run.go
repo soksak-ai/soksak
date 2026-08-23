@@ -113,12 +113,12 @@ func Run(assets embed.FS) error {
 	registry := control.NewRegistry()
 	sidecar.Register(registry, sidecar.Registration{
 		Host: units,
-		Resolve: func(consumer sidecar.Consumer, requirement string) (sidecar.Resolved, error) {
-			runtime, err := coreenvironment.ResolveBoundSidecar(resolved.Home, coreenvironment.PluginRef{ID: consumer.ID, Version: consumer.Version}, requirement)
+		Resolve: func(consumer sidecar.Consumer, reference sidecar.ReleaseReference) (sidecar.Resolved, error) {
+			runtime, err := coreenvironment.ResolveSidecarForPlugin(resolved.Home, coreenvironment.PluginRef{ID: consumer.ID, Version: consumer.Version}, coreenvironment.PluginRef{ID: reference.ID, Version: reference.Version})
 			if err != nil {
 				return sidecar.Resolved{}, err
 			}
-			return sidecar.Resolved{Name: runtime.ID, Path: runtime.Process, InterfaceID: runtime.InterfaceID, InterfaceVersion: runtime.InterfaceVersion}, nil
+			return sidecar.Resolved{Name: runtime.ID, Version: runtime.Version, Path: runtime.Process}, nil
 		},
 		Sink: wails.NewSidecarSink(bridge),
 	})

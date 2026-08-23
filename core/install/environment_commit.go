@@ -8,40 +8,11 @@ import (
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
-type PluginRef struct {
-	ID      string `json:"id"`
-	Version string `json:"version"`
-}
-type SidecarRef struct {
-	ID      string `json:"id"`
-	Version string `json:"version"`
-}
-type KitRef struct {
-	ID      string `json:"id"`
-	Version string `json:"version"`
-}
-type VerifiedPlugin struct {
-	Plugin           PluginRef         `json:"plugin"`
-	Sidecars         map[string]string `json:"sidecars,omitempty"`
-	RegistryID       string            `json:"registryId"`
-	SourceRepository string            `json:"sourceRepository"`
-	SourceCommit     string            `json:"sourceCommit"`
-	ArtifactURL      string            `json:"artifactUrl"`
-	ArtifactSHA256   string            `json:"artifactSha256"`
-	StagedHandle     string            `json:"stagedHandle"`
-}
-type VerifiedSidecar struct {
-	Sidecar          SidecarRef `json:"sidecar"`
-	Target           string     `json:"target"`
-	RegistryID       string     `json:"registryId"`
-	SourceRepository string     `json:"sourceRepository"`
-	SourceCommit     string     `json:"sourceCommit"`
-	ArtifactURL      string     `json:"artifactUrl"`
-	ArtifactSHA256   string     `json:"artifactSha256"`
-	StagedHandle     string     `json:"stagedHandle"`
-}
-type VerifiedKit struct {
-	Kit              KitRef `json:"kit"`
+type VerifiedComponent struct {
+	Kind             string `json:"kind"`
+	ID               string `json:"id"`
+	Version          string `json:"version"`
+	Target           string `json:"target,omitempty"`
 	RegistryID       string `json:"registryId"`
 	SourceRepository string `json:"sourceRepository"`
 	SourceCommit     string `json:"sourceCommit"`
@@ -52,9 +23,7 @@ type VerifiedKit struct {
 type CommitRequest struct {
 	TransactionID    string
 	ExpectedRevision uint64
-	Plugins          []VerifiedPlugin
-	Sidecars         []VerifiedSidecar
-	Kits             []VerifiedKit
+	Components       []VerifiedComponent
 	Home             string
 }
 type CommitResult struct {
@@ -62,7 +31,6 @@ type CommitResult struct {
 }
 type publishArtifact struct {
 	kind, id, version, target, repository, commit, url, digest, handle string
-	sidecars                                                           map[string]string
 }
 type publishedArtifact struct {
 	final  string
@@ -80,14 +48,8 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		return CommitResult{}, i18n.Errorf("install.transaction.notFound", map[string]string{"id": request.TransactionID})
 	}
 	artifacts := []publishArtifact{}
-	for _, value := range request.Plugins {
-		artifacts = append(artifacts, publishArtifact{kind: "plugin", id: value.Plugin.ID, version: value.Plugin.Version, repository: value.SourceRepository, commit: value.SourceCommit, url: value.ArtifactURL, digest: value.ArtifactSHA256, handle: value.StagedHandle, sidecars: value.Sidecars})
-	}
-	for _, value := range request.Sidecars {
-		artifacts = append(artifacts, publishArtifact{kind: "sidecar", id: value.Sidecar.ID, version: value.Sidecar.Version, target: value.Target, repository: value.SourceRepository, commit: value.SourceCommit, url: value.ArtifactURL, digest: value.ArtifactSHA256, handle: value.StagedHandle})
-	}
-	for _, value := range request.Kits {
-		artifacts = append(artifacts, publishArtifact{kind: "kit", id: value.Kit.ID, version: value.Kit.Version, repository: value.SourceRepository, commit: value.SourceCommit, url: value.ArtifactURL, digest: value.ArtifactSHA256, handle: value.StagedHandle})
+	for _, value := range request.Components {
+		artifacts = append(artifacts, publishArtifact{kind: value.Kind, id: value.ID, version: value.Version, target: value.Target, repository: value.SourceRepository, commit: value.SourceCommit, url: value.ArtifactURL, digest: value.ArtifactSHA256, handle: value.StagedHandle})
 	}
 	if len(artifacts) == 0 {
 		return CommitResult{}, i18n.Errorf("install.transaction.commitArtifactsRequired", nil)
@@ -135,9 +97,6 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		case "plugin":
 			plugin := next.Plugins[artifact.id]
 			plugin.Component = value
-			if artifact.sidecars != nil {
-				plugin.Sidecars = artifact.sidecars
-			}
 			next.Plugins[artifact.id] = plugin
 		case "sidecar":
 			next.Sidecars[artifact.id] = value

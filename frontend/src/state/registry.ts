@@ -4,8 +4,8 @@ import { isRateLimited, retryAfterCeilingMs, retryAfterMs } from "./registryRetr
 import { moduleState } from "../lib/moduleState";
 import { create } from "zustand";
 import {
-  parseSignedRegistryIndex,
-  type CertifiedRegistryIndex,
+  parseRegistry,
+  type CertifiedRegistry,
   type RegistryCertificationResult,
   type RegistryHighWater,
   type RegistryPublicKey,
@@ -23,7 +23,7 @@ import { createCoreSync } from "./coreSync";
 import type { CoreStoreDeps } from "./coreStore";
 
 const OFFICIAL_REMOTE_URL =
-  "https://api.github.com/repos/soksak-ai/soksak-plugin-registry/contents/registry-signed.json";
+  "https://github.com/soksak-ai/soksak-plugin-registry/releases/latest/download/registry.json";
 
 export const OFFICIAL_REGISTRY_DESCRIPTOR: RegistryDescriptor = {
   id: OFFICIAL_REGISTRY_ID,
@@ -45,7 +45,7 @@ export interface RegistrySourceState {
   status: RegistryStatus;
   fetchedOnce: boolean;
   entries: QualifiedRegistryEntry[];
-  certified?: CertifiedRegistryIndex;
+  certified?: CertifiedRegistry;
   error?: string;
   lastFetchedAt?: number;
 }
@@ -82,10 +82,8 @@ export interface RegistryRefreshResult {
 }
 
 export interface RegistryState {
-  /** Authenticated official plugin releases. */
+  /** Authenticated plugin releases from every configured registry. */
   entries: QualifiedRegistryEntry[];
-  /** Authenticated plugin, sidecar, and kit releases from every configured registry. */
-  releases: QualifiedRegistryEntry[];
   descriptors: RegistryDescriptor[];
   registries: Record<string, RegistrySourceState>;
   trustRecords: Record<string, RegistryTrustRecord>;
@@ -197,12 +195,11 @@ function sourcesFor(
 function projections(
   descriptors: readonly RegistryDescriptor[],
   registries: Readonly<Record<string, RegistrySourceState>>,
-): Pick<RegistryState, "entries" | "releases" | "status" | "fetchedOnce"> {
-  const releases = descriptors.flatMap((descriptor) => registries[descriptor.id]?.entries ?? []);
+): Pick<RegistryState, "entries" | "status" | "fetchedOnce"> {
+  const entries = descriptors.flatMap((descriptor) => registries[descriptor.id]?.entries ?? []);
   const official = registries[OFFICIAL_REGISTRY_ID] ?? initialSource(OFFICIAL_REGISTRY_DESCRIPTOR);
   return {
-    entries: official.entries.filter((entry) => entry.kind === "plugin"),
-    releases,
+    entries,
     status: official.status,
     fetchedOnce: official.fetchedOnce,
   };
@@ -249,9 +246,7 @@ export const initRegistryPersistence = (deps: CoreStoreDeps): (() => void) => re
 const CREDENTIAL_PLACEHOLDER = "\u0000soksak-registry-authorization\u0000";
 
 export function registryRequestHeaders(descriptor: RegistryDescriptor): Record<string, string> | null {
-  return descriptor.id === OFFICIAL_REGISTRY_ID
-    ? { accept: "application/vnd.github.raw+json" }
-    : null;
+  return descriptor.visibility === "public" ? { accept: "application/json" } : null;
 }
 
 // Registry egress is the core boundary's, never the webview's. The webview is
@@ -297,6 +292,11 @@ async function registryHttpGet(
   );
 }
 
+export async function publicReleaseMetadataGet(url: string): Promise<{ status: number; body: string }> {
+  const response = await invoke<{ status: number; body: string }>("net_http_request", { method: "GET", url, headers: { accept: "application/json" }, query: null, body: null, contentType: null, ns: null, secretSubst: null, impersonate: null });
+  return { status: response.status, body: response.body };
+}
+
 async function loadRegistryDocument(descriptor: RegistryDescriptor): Promise<unknown> {
   const response = await registryGetHonouringLimit(descriptor, descriptor.indexUrl);
   return JSON.parse(response.body) as unknown;
@@ -312,9 +312,9 @@ async function certifyRegistryNative(
     highWater?: RegistryHighWater;
   },
 ): Promise<RegistryCertificationResult> {
-  const parsed = parseSignedRegistryIndex(raw);
-  if (!parsed.ok) return { ok: false, code: "INVALID_INDEX", errors: parsed.errors };
-  if (parsed.value.id !== policy.expectedRegistryId || parsed.value.keyId !== policy.expectedKeyId || policy.publicKey.keyId !== policy.expectedKeyId) {
+  const parsed = parseRegistry(raw);
+  if (!parsed.ok) return { ok: false, code: "INVALID_REGISTRY", errors: parsed.errors };
+  if (parsed.value.id !== policy.expectedRegistryId || parsed.value.signature.keyId !== policy.expectedKeyId || policy.publicKey.keyId !== policy.expectedKeyId) {
     return { ok: false, code: "TRUST_MISMATCH", errors: ["registry identity or key mismatch"] };
   }
   try {
@@ -327,8 +327,8 @@ async function certifyRegistryNative(
       },
     );
     if (receipt.sequence !== parsed.value.sequence) throw new Error("registry verification sequence mismatch");
-    const certified: CertifiedRegistryIndex = Object.freeze({
-      index: parsed.value,
+    const certified: CertifiedRegistry = Object.freeze({
+      registry: parsed.value,
       digest: receipt.digest,
       continuity: receipt.continuity,
       highWater: { sequence: receipt.sequence, digest: receipt.digest },

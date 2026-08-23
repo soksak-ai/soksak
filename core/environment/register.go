@@ -43,26 +43,6 @@ func Register(registry *control.Registry, deps Deps) {
 	for _, kind := range []string{"plugin", "sidecar", "kit", "contract", "spec"} {
 		registerSource(registry, deps, kind)
 	}
-	registry.MustRegister(control.Command{Name: "plugin_sidecar_set", Handler: func(args control.Args) (any, error) {
-		plugin, err := control.Arg[string](args, "plugin")
-		if err != nil {
-			return nil, err
-		}
-		role, err := control.Arg[string](args, "role")
-		if err != nil {
-			return nil, err
-		}
-		sidecar, err := control.Arg[string](args, "sidecar")
-		if err != nil {
-			return nil, err
-		}
-		expected, err := control.Arg[uint64](args, "expectedRevision")
-		if err != nil {
-			return nil, err
-		}
-		change, err := SetSidecar(deps.Home, plugin, role, sidecar, expected)
-		return emit(deps, change, err)
-	}})
 }
 func registerSource(registry *control.Registry, deps Deps, kind string) {
 	registry.MustRegister(control.Command{Name: kind + "_source_set", Handler: func(args control.Args) (any, error) {

@@ -25,8 +25,8 @@ import { unmetNeeds, type EngineProvision, type PluginManifest } from "./spec";
  * engine while declaring no requirement loaded as-is on Electron and left only "engine surface
  * creation failed").
  *
- * The **consumption model** is what separates them. Both models share the same `sidecars[]`, so
- * that array alone cannot separate them.
+ * The service declaration separates a resident service from ordinary Sidecar use. Both use exact
+ * runtime dependency releases; the service declaration adds the service interface and lifecycle.
  *
  * Permissions do not separate them either. A permission is **a door left open**, not a trace of
  * passage — measured (2026-07-31): one plugin over-declared the `sidecar` permission while
@@ -34,8 +34,8 @@ import { unmetNeeds, type EngineProvision, type PluginManifest } from "./spec";
  * permissions dropped that headless plugin entirely on Electron.
  *
  * The evidence of a service model is the `service` declaration — the spec already reserves that
- * field for exactly this meaning (`service: { sidecar, interface }`). When it is present, this
- * plugin's sidecar consumption is a process spawn and requires no surface.
+ * field for exactly this meaning (`service: { interface }`). When it is present, the plugin's sole
+ * Sidecar runtime dependency is a process service and requires no surface.
  */
 /**
  * Refuse, with the name, when this framework cannot meet a requirement.

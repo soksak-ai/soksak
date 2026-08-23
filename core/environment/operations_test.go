@@ -53,7 +53,7 @@ func TestInitializePublishesTheFirstEnvironmentRevision(t *testing.T) {
 	}
 }
 
-func TestSidecarSelectionResolvesEnvironmentSidecar(t *testing.T) {
+func TestExactSidecarReferenceResolvesEnvironmentSidecar(t *testing.T) {
 	home := t.TempDir()
 	root := t.TempDir()
 	process := filepath.Join(root, "dist", "terminal-sidecar")
@@ -66,10 +66,10 @@ func TestSidecarSelectionResolvesEnvironmentSidecar(t *testing.T) {
 	manifest := map[string]any{"id": "terminal-sidecar", "version": "0.0.1", "interface": map[string]string{"id": "terminal-state", "version": "0.0.1"}, "process": "dist/terminal-sidecar"}
 	writeJSON(t, filepath.Join(root, "sidecar.json"), manifest)
 	environment := Empty()
-	environment.Plugins["terminal-view"] = Plugin{Component: Component{Version: "0.0.1", Path: t.TempDir(), Source: "registry", Registry: "official"}, Enabled: true, Sidecars: map[string]string{"terminal": "terminal-sidecar"}}
+	environment.Plugins["terminal-view"] = Plugin{Component: Component{Version: "0.0.1", Path: t.TempDir(), Source: "registry", Registry: "official"}, Enabled: true}
 	environment.Sidecars["terminal-sidecar"] = Component{Version: "0.0.1", Path: root, Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}
 	writeJSON(t, filepath.Join(home, File), environment)
-	runtime, err := ResolveBoundSidecar(home, PluginRef{ID: "terminal-view", Version: "0.0.1"}, "terminal")
+	runtime, err := ResolveSidecarForPlugin(home, PluginRef{ID: "terminal-view", Version: "0.0.1"}, PluginRef{ID: "terminal-sidecar", Version: "0.0.1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestSidecarSelectionResolvesAWindowsSidecarExecutable(t *testing.T) {
 	environment := Empty()
 	environment.Sidecars["terminal-sidecar"] = Component{Version: "0.0.1", Path: root, Source: "registry", Registry: "official", Target: "x86_64-pc-windows-msvc"}
 	writeJSON(t, filepath.Join(home, File), environment)
-	runtime, err := ResolveSidecar(home, "terminal-sidecar")
+	runtime, err := ResolveSidecarVersion(home, "terminal-sidecar", "0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,13 +115,6 @@ func TestEnvironmentChangesAdvanceOneRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	if change != (Change{PreviousRevision: 1, Revision: 2}) {
-		t.Fatalf("change=%+v", change)
-	}
-	change, err = SetSidecar(home, "demo", "terminal", "terminal-sidecar", 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if change.Revision != 3 {
 		t.Fatalf("change=%+v", change)
 	}
 }

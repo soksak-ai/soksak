@@ -1,5 +1,5 @@
 import { usePlugins } from "../state/plugins";
-import { useRegistry } from "../state/registry";
+import { publicReleaseMetadataGet, useRegistry } from "../state/registry";
 import { reconcileEnvironmentRevision } from "../state/environmentEvents";
 import {
   resolveRegistryRelease,
@@ -9,10 +9,10 @@ import {
   installCertifiedRegistryRelease,
   type RegistryInstallRuntimeResult,
 } from "./registryInstallRuntime";
+import { loadReleaseClosure } from "./registryReleaseClosure";
 
 export async function installQualifiedRegistryEntry(
   entry: QualifiedRegistryEntry,
-  sidecars?: Record<string, string>,
 ): Promise<RegistryInstallRuntimeResult> {
   const source = useRegistry.getState().registries[entry.registryId];
   if (!source?.certified) {
@@ -22,11 +22,10 @@ export async function installQualifiedRegistryEntry(
       message: `registry is not certified: ${entry.registryId}`,
     };
   }
-  const result = await installCertifiedRegistryRelease({
-    certified: source.certified,
-    root: { kind: entry.kind, id: entry.id, version: entry.version },
-    sidecars,
-  });
+  let releases;
+  try { releases = await loadReleaseClosure(entry, publicReleaseMetadataGet); }
+  catch (cause) { const message = cause instanceof Error ? cause.message : String(cause); return { ok: false, code: "RELEASE_VERIFICATION_FAILED", message, errors: [message] }; }
+  const result = await installCertifiedRegistryRelease({ certified: source.certified, root: entry, releases });
   if (result.ok) {
     await reconcileEnvironmentRevision(result.revision);
   }
@@ -48,9 +47,8 @@ export async function updateCertifiedRegistryPlugin(
       message: "a development source is not a release update target",
     };
   }
-  const resolved = resolveRegistryRelease(useRegistry.getState().releases, {
+  const resolved = resolveRegistryRelease(useRegistry.getState().entries, {
     id,
-    kind: "plugin",
     ...(registryId ? { registryId } : {}),
   });
   if (!resolved.ok) {

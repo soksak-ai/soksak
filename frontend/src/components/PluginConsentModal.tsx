@@ -282,7 +282,7 @@ export function PluginConsentModal({
                     <span className="plugin-consent-detail">
                       {t("plugin.consent.dep.plugin")} —{" "}
                       {dep.name ? `${localize(dep.name)} ` : ""}
-                      {dep.id} ({dep.range ?? t("plugin.consent.dep.transitive")})
+                      {dep.id} ({dep.requiredVersion ?? t("plugin.consent.dep.transitive")})
                     </span>
                     {/* The dependency's permissions are disclosed too (no half consent) — consent
                         itself is taken in the per-dependency popup, but what it can use is shown

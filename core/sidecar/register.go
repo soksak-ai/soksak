@@ -1,14 +1,11 @@
 package sidecar
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
-	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
 )
 
 // The surface a declared unit is received through.
@@ -25,7 +22,7 @@ import (
 // Deps for registration. Each field is something this package refuses to derive.
 type Registration struct {
 	Host    *Host
-	Resolve func(consumer Consumer, requirement string) (Resolved, error)
+	Resolve func(consumer Consumer, sidecar ReleaseReference) (Resolved, error)
 	// Sink is where a unit's stream bytes arrive for the caller. Nil means this host has no stream,
 	// and `sidecar_stream` is declared unserved rather than opening a connection whose output has
 	// nowhere to go — a unit writing into nothing blocks, and what that looks like is a unit that
@@ -39,38 +36,18 @@ type Registration struct {
 // buffer is indistinguishable from a unit that stopped.
 const streamUnserved = "this host carries no stream for a unit's output to arrive on"
 
-// Requirement is a contract a plugin asked for: an id and a bounded version condition.
-type Requirement struct {
-	ID          string `json:"id"`
-	Requirement string `json:"requirement"`
-}
-
-func (requirement *Requirement) UnmarshalJSON(body []byte) error {
-	type wire Requirement
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	var value wire
-	if err := decoder.Decode(&value); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return i18n.Errorf("sidecar.requirementTrailingData", nil)
-	}
-	if value.ID == "" {
-		return i18n.Errorf("sidecar.requirementIDRequired", nil)
-	}
-	if _, err := platformspec.DependencyRequirementSatisfied("0.0.1", value.Requirement); err != nil {
-		return err
-	}
-	*requirement = Requirement(value)
-	return nil
-}
-
 type Consumer struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
 }
-type Resolved struct{ Name, Path, InterfaceID, InterfaceVersion string }
+type ReleaseReference struct {
+	ID      string `json:"id"`
+	Version string `json:"version"`
+	URL     string `json:"url"`
+	Size    uint64 `json:"size"`
+	SHA256  string `json:"sha256"`
+}
+type Resolved struct{ Name, Version, Path string }
 
 // Names is every command this group owns, served or not.
 //
@@ -112,11 +89,7 @@ func Register(registry *control.Registry, deps Registration) {
 		if err != nil {
 			return nil, err
 		}
-		requirementName, err := control.Arg[string](args, "requirementName")
-		if err != nil {
-			return nil, err
-		}
-		requirement, err := control.Arg[Requirement](args, "requirement")
+		sidecar, err := control.Arg[ReleaseReference](args, "sidecar")
 		if err != nil {
 			return nil, err
 		}
@@ -134,18 +107,15 @@ func Register(registry *control.Registry, deps Registration) {
 		}
 		if len(generated) > 0 {
 			if len(secretEnv) > 0 {
-				return nil, i18n.Errorf("sidecar.secretModesConflict", map[string]string{"name": requirementName})
+				return nil, i18n.Errorf("sidecar.secretModesConflict", map[string]string{"name": sidecar.ID})
 			}
-			resolved, err := deps.Resolve(consumer, requirementName)
+			resolved, err := deps.Resolve(consumer, sidecar)
 			if err != nil {
-				return nil, err
-			}
-			if err := validateResolvedRequirement(resolved, requirementName, requirement); err != nil {
 				return nil, err
 			}
 			return deps.Host.StartResolvedWithGeneratedSecrets(resolved.Name, resolved.Path, generated)
 		}
-		return deps.openBoundWithSecrets(consumer, requirementName, requirement, namespace, secretEnv)
+		return deps.openWithSecrets(consumer, sidecar, namespace, secretEnv)
 	})
 
 	serve("sidecar_send", func(args control.Args) (any, error) {
@@ -258,31 +228,10 @@ func Register(registry *control.Registry, deps Registration) {
 	})
 }
 
-func (deps Registration) openBoundWithSecrets(consumer Consumer, name string, requirement Requirement, namespace string, secretEnv map[string]string) (Open, error) {
-	resolved, err := deps.Resolve(consumer, name)
+func (deps Registration) openWithSecrets(consumer Consumer, sidecar ReleaseReference, namespace string, secretEnv map[string]string) (Open, error) {
+	resolved, err := deps.Resolve(consumer, sidecar)
 	if err != nil {
-		return Open{}, err
-	}
-	if err := validateResolvedRequirement(resolved, name, requirement); err != nil {
 		return Open{}, err
 	}
 	return deps.Host.StartResolvedWithSecrets(resolved.Name, resolved.Path, namespace, secretEnv)
-}
-
-func validateResolvedRequirement(resolved Resolved, name string, requirement Requirement) error {
-	if resolved.InterfaceID != requirement.ID {
-		return i18n.Errorf("sidecar.contractMismatch", map[string]string{
-			"name": name, "wanted": requirement.ID, "found": resolved.InterfaceID,
-		})
-	}
-	matched, err := platformspec.DependencyRequirementSatisfied(resolved.InterfaceVersion, requirement.Requirement)
-	if err != nil {
-		return err
-	}
-	if !matched {
-		return i18n.Errorf("sidecar.versionMismatch", map[string]string{
-			"name": name, "wanted": requirement.ID, "wanted2": requirement.Requirement, "found": resolved.InterfaceVersion,
-		})
-	}
-	return nil
 }

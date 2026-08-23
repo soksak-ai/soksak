@@ -30,9 +30,10 @@ func TestCommitPublishesOneEnvironmentWithSeparateComponentPaths(t *testing.T) {
 	commit := "0123456789abcdef0123456789abcdef01234567"
 	result, err := manager.Commit(CommitRequest{
 		TransactionID: transaction.TransactionID, ExpectedRevision: 0,
-		Plugins:  []VerifiedPlugin{{Plugin: PluginRef{ID: "view", Version: "0.0.1"}, RegistryID: "official", SourceRepository: "https://github.com/example/view", SourceCommit: commit, ArtifactURL: "https://example.invalid/p.tgz", ArtifactSHA256: pluginStage.SHA256, StagedHandle: pluginStage.Handle}},
-		Sidecars: []VerifiedSidecar{{Sidecar: SidecarRef{ID: "state", Version: "0.0.1"}, Target: "aarch64-apple-darwin", RegistryID: "official", SourceRepository: "https://github.com/example/state", SourceCommit: commit, ArtifactURL: "https://example.invalid/s.tgz", ArtifactSHA256: sidecarStage.SHA256, StagedHandle: sidecarStage.Handle}},
-		Kits:     []VerifiedKit{}, Home: home,
+		Components: []VerifiedComponent{
+			{Kind: "plugin", ID: "view", Version: "0.0.1", RegistryID: "official", SourceRepository: "https://github.com/example/view", SourceCommit: commit, ArtifactURL: "https://example.invalid/p.tgz", ArtifactSHA256: pluginStage.SHA256, StagedHandle: pluginStage.Handle},
+			{Kind: "sidecar", ID: "state", Version: "0.0.1", Target: "aarch64-apple-darwin", RegistryID: "official", SourceRepository: "https://github.com/example/state", SourceCommit: commit, ArtifactURL: "https://example.invalid/s.tgz", ArtifactSHA256: sidecarStage.SHA256, StagedHandle: sidecarStage.Handle},
+		}, Home: home,
 	})
 	if err != nil {
 		t.Fatal(err)

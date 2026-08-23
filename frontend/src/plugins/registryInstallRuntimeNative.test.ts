@@ -17,8 +17,9 @@ vi.mock("./registryInstallTransaction", async (orig) => {
 import { installCertifiedRegistryRelease } from "./registryInstallRuntime";
 import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 
-const CERTIFIED = { index: { id: "fixture" } } as any;
+const CERTIFIED = { registry: { id: "fixture" } } as any;
 const ROOT = { kind: "plugin", id: "weather-plugin", version: "0.0.1" } as any;
+const RELEASES: any[] = [];
 const ENVIRONMENT = { revision: 4, plugins: {}, sidecars: {}, kits: {}, contracts: {}, specs: {} };
 
 describe("native registry install wiring", () => {
@@ -38,18 +39,18 @@ describe("native registry install wiring", () => {
   });
 
   it("the default runtime is unavailable until wired (RED baseline)", async () => {
-    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT, releases: RELEASES });
     expect(result).toMatchObject({ ok: false, code: "INSTALL_RUNTIME_UNAVAILABLE" });
   });
 
   it("runs the closure and maps a committed generation to the root identity", async () => {
     closure.mockResolvedValue({ ok: true, registryId: "fixture", revision: 7, releases: [] });
     restore = wireNativeRegistryInstall();
-    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT, releases: RELEASES });
     expect(result).toEqual({ ok: true, id: "weather-plugin", version: "0.0.1", revision: 7 });
     const req = closure.mock.calls[0]![0] as any;
     expect(req.certified).toBe(CERTIFIED);
-    expect(req.root).toBe(ROOT);
+    expect(req.root).toEqual(ROOT);
     expect(req.environment).toEqual(ENVIRONMENT);
     expect(req.artifacts.begin).toBeTypeOf("function");
     expect(req.target).toBeTypeOf("string");
@@ -58,7 +59,7 @@ describe("native registry install wiring", () => {
   it("maps a fail-closed closure error to a runtime error result", async () => {
     closure.mockResolvedValue({ ok: false, code: "RELEASE_VERIFICATION_FAILED", errors: ["bad sha", "x"] });
     restore = wireNativeRegistryInstall();
-    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT, sidecars: { state: "state" } });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT, releases: RELEASES });
     expect(result).toMatchObject({
       ok: false,
       code: "RELEASE_VERIFICATION_FAILED",
@@ -70,7 +71,7 @@ describe("native registry install wiring", () => {
   it("refuses installation when the host artifact target is unavailable", async () => {
     invoke.mockRejectedValueOnce(new Error("host target unavailable"));
     restore = wireNativeRegistryInstall();
-    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT, releases: RELEASES });
     expect(result).toEqual({
       ok: false,
       code: "HOST_TARGET_UNAVAILABLE",
@@ -108,7 +109,7 @@ describe("native registry install wiring", () => {
       return { ok: true, registryId: "fixture", generation: 1, releases: [] };
     });
     restore = wireNativeRegistryInstall();
-    await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
+    await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT, releases: RELEASES });
     expect(invoke).toHaveBeenCalledWith("artifact_install_begin", { registryId: "fixture", root: ROOT });
     expect(invoke).toHaveBeenCalledWith("artifact_install_stage", {
       transactionId: "t1",
@@ -126,35 +127,17 @@ describe("native registry install wiring", () => {
     ];
     closure.mockImplementation(async (req: any) => {
       invoke.mockResolvedValueOnce({ revision: 5 });
-      const committed = await req.artifacts.commit("t1", 4, verified, ROOT, { state: "state" });
+      const committed = await req.artifacts.commit("t1", 4, verified, ROOT);
       return { ok: true, registryId: "fixture", revision: committed.revision, releases: [] };
     });
     restore = wireNativeRegistryInstall();
-    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT, releases: RELEASES });
     expect(result).toEqual({ ok: true, id: "weather-plugin", version: "0.0.1", revision: 5 });
     expect(invoke).toHaveBeenCalledWith("environment_get");
     expect(invoke).toHaveBeenCalledWith("artifact_install_commit", {
       transactionId: "t1",
       expectedRevision: 4,
-      plugins: [{
-        plugin: { id: "weather-plugin", version: "0.0.1" },
-        sidecars: { state: "state" },
-        registryId: "fixture", sourceRepository: "https://github.com/example/plugin", sourceCommit: "p",
-        artifactUrl: "https://x/p.tgz", artifactSha256: "p-sha", stagedHandle: "p-handle",
-        manifestSha256: "a".repeat(64),
-      }],
-      sidecars: [{
-        sidecar: { id: "state", version: "0.0.1" },
-        registryId: "fixture", sourceRepository: "https://github.com/example/sidecar", sourceCommit: "s",
-        artifactUrl: "https://x/s.tgz", artifactSha256: "s-sha", stagedHandle: "s-handle",
-        target: "aarch64-apple-darwin", manifestSha256: "b".repeat(64),
-      }],
-      kits: [{
-        kit: { id: "terminal-kit", version: "0.0.1" },
-        registryId: "fixture", sourceRepository: "https://github.com/example/kit", sourceCommit: "k",
-        artifactUrl: "https://x/k.tgz", artifactSha256: "k-sha", stagedHandle: "k-handle",
-        manifestSha256: "c".repeat(64),
-      }],
+      components: verified,
     });
   });
 
@@ -173,7 +156,7 @@ describe("native registry install wiring", () => {
       }
     });
     restore = wireNativeRegistryInstall();
-    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT });
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT, releases: RELEASES });
     expect(result).toMatchObject({
       ok: false,
       code: "ENVIRONMENT_UNAVAILABLE",

@@ -38,8 +38,8 @@ func TestArtifactInstallCommandsCommitAndPublishEnvironmentChange(t *testing.T) 
 	if _, err := registry.Invoke("artifact_install_read_utf8", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "handle": staged.Handle, "path": "plugin.json"})); err != nil {
 		t.Fatal(err)
 	}
-	verified := VerifiedPlugin{Plugin: PluginRef{ID: "view", Version: "0.0.1"}, RegistryID: "official", SourceRepository: "https://github.com/example/view", SourceCommit: "0123456789abcdef0123456789abcdef01234567", ArtifactURL: "https://example.invalid/view.tgz", ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle}
-	commitValue, err := registry.Invoke("artifact_install_commit", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "expectedRevision": uint64(0), "plugins": []VerifiedPlugin{verified}, "sidecars": []VerifiedSidecar{}, "kits": []VerifiedKit{}}))
+	verified := VerifiedComponent{Kind: "plugin", ID: "view", Version: "0.0.1", RegistryID: "official", SourceRepository: "https://github.com/example/view", SourceCommit: "0123456789abcdef0123456789abcdef01234567", ArtifactURL: "https://example.invalid/view.tgz", ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle}
+	commitValue, err := registry.Invoke("artifact_install_commit", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "expectedRevision": uint64(0), "components": []VerifiedComponent{verified}}))
 	if err != nil {
 		t.Fatal(err)
 	}

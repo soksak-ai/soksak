@@ -77,27 +77,6 @@ func SetSource(home, kind, id string, component Component, expected uint64) (Cha
 	}
 	return Write(home, current, exists, next, expected)
 }
-func SetSidecar(home, plugin, role, sidecar string, expected uint64) (Change, error) {
-	current, exists, err := Read(home)
-	if err != nil {
-		return Change{}, err
-	}
-	if !exists {
-		return Change{}, os.ErrNotExist
-	}
-	next := current
-	value, found := next.Plugins[plugin]
-	if !found {
-		return Change{}, os.ErrNotExist
-	}
-	if value.Sidecars == nil {
-		value.Sidecars = map[string]string{}
-	}
-	value.Sidecars[role] = sidecar
-	next.Plugins[plugin] = value
-	return Write(home, current, true, next, expected)
-}
-
 func PluginManifests(home string) ([]ManifestRecord, error) {
 	environment, exists, err := Read(home)
 	if err != nil {

@@ -53,52 +53,18 @@ const artifactStager: RegistryArtifactStager = {
     }),
   readUtf8: (transactionId, handle, path) =>
     invoke<string>("artifact_install_read_utf8", { transactionId, handle, path }),
-  commit: async (transactionId, expectedRevision, releases, root, sidecars) => {
-    const plugins = releases.filter((value) => value.kind === "plugin").map((value) => ({
-      plugin: { id: value.id, version: value.version },
-      sidecars: value.id === root.id ? sidecars : undefined,
-      registryId: value.registryId,
-      sourceRepository: value.sourceRepository,
-      sourceCommit: value.sourceCommit,
-      artifactUrl: value.artifactUrl,
-      artifactSha256: value.artifactSha256,
-      manifestSha256: value.manifestSha256,
-      stagedHandle: value.stagedHandle,
-    }));
-    const sidecarReleases = releases.filter((value) => value.kind === "sidecar").map((value) => ({
-      sidecar: { id: value.id, version: value.version },
-      registryId: value.registryId,
-      sourceRepository: value.sourceRepository,
-      sourceCommit: value.sourceCommit,
-      artifactUrl: value.artifactUrl,
-      artifactSha256: value.artifactSha256,
-      target: value.target,
-      manifestSha256: value.manifestSha256,
-      stagedHandle: value.stagedHandle,
-    }));
-    const kits = releases.filter((value) => value.kind === "kit").map((value) => ({
-      kit: { id: value.id, version: value.version },
-      registryId: value.registryId,
-      sourceRepository: value.sourceRepository,
-      sourceCommit: value.sourceCommit,
-      artifactUrl: value.artifactUrl,
-      artifactSha256: value.artifactSha256,
-      manifestSha256: value.manifestSha256,
-      stagedHandle: value.stagedHandle,
-    }));
+  commit: async (transactionId, expectedRevision, releases, _root) => {
     return invoke<{ revision: number }>("artifact_install_commit", {
       transactionId,
       expectedRevision,
-      plugins,
-      sidecars: sidecarReleases,
-      kits,
+      components: releases.map((value) => ({ ...value })),
     });
   },
   rollback: (transactionId) =>
     invoke<void>("artifact_install_rollback", { transactionId }),
 };
 
-const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root, sidecars }) => {
+const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root, releases }) => {
   let target: ArtifactTarget;
   try {
     target = await hostTarget();
@@ -117,10 +83,10 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
   if (!environment.ok) return { ok: false, code: "ENVIRONMENT_INVALID", message: environment.errors.join("; "), errors: environment.errors };
   const result = await installRegistryRelease({
     certified,
-    root,
+    root: { kind: "plugin", id: root.id, version: root.version },
+    releases,
     target,
     environment: environment.value,
-    sidecars,
     artifacts: artifactStager,
   });
   if (result.ok) {

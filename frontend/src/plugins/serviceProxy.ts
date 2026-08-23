@@ -12,8 +12,10 @@ import {
   serviceOps,
   type ContributedSchedule,
   type PluginManifest,
+  type ReleaseReference,
 } from "./spec";
 import type { ContractRequirement } from "./spec";
+import { runtimePluginRequirements } from "./runtimeDependencies";
 
 export interface ServiceProxyDeps {
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -132,7 +134,7 @@ interface LedgerSchedule {
 
 export interface LedgerServiceBinding {
   plugin: string;
-  sidecar: string;
+  sidecar: ReleaseReference;
   interface: ContractRequirement;
   ops: string[];
   subscribe: string[];
@@ -153,9 +155,11 @@ export interface BindLedger {
 export function buildServiceBinding(manifest: PluginManifest): LedgerServiceBinding | null {
   const svc = manifest.service;
   if (!svc) return null;
+  const sidecar = manifest.runtimeDependencies?.sidecars?.[0];
+  if (!sidecar) throw new Error("validated service manifest has no runtime sidecar release");
   return {
     plugin: manifest.id,
-    sidecar: svc.sidecar,
+    sidecar,
     interface: svc.interface,
     ops: serviceOps(manifest),
     subscribe: svc.subscribe,
@@ -171,7 +175,7 @@ export function buildServiceBinding(manifest: PluginManifest): LedgerServiceBind
     // "secrets" permission → target of env: vault key injection (PS9). Explicit secret name declaration is unused in v1 (empty array).
     vaultEnv: (manifest.permissions ?? []).includes("secrets"),
     // Allowed targets of brokered outbound calls (PS13, C3) — manifest dependencies (plugin↔plugin).
-    dependencies: Object.keys(manifest.dependencies ?? {}),
+    dependencies: Object.keys(runtimePluginRequirements(manifest)),
   };
 }
 

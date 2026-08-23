@@ -6,18 +6,19 @@
 // plus external libraries (libraries, collected transitively). Listing library and plugin deps is the core of
 // this function (dependencies on the consent screen = rule).
 
-import type { LibraryDep, LocalizedText, PluginManifest, SidecarDep } from "./spec";
+import type { LibraryDep, LocalizedText, PluginManifest, ReleaseReference } from "./spec";
+import { runtimePluginRequirements, runtimeSidecarReferences } from "./runtimeDependencies";
 import { transitiveLibraries, type PluginRuntime } from "../state/plugins";
 import { activationChain, type DepNode } from "./dependencyGraph";
 
-// Dependency plugin entry — id/range/name plus version and permissions. A dependency can hold strong
+// Dependency plugin entry — exact required and installed versions plus permissions. A dependency can hold strong
 // permissions (process and the like), so the consent screen must show them (honest disclosure §0-2 — the user
 // consents to dependencies too, no half consent).
 export interface DepPluginSummary {
   id: string;
-  range?: string; // Required range for a direct dependency, omitted for a transitive one
+  requiredVersion?: string;
   name?: LocalizedText;
-  version?: string;
+  installedVersion?: string;
   permissions?: string[]; // Permissions of the installed dependency (unknown while it is not installed — consent follows install)
   transitive?: boolean; // Transitive dependency, not a direct one
 }
@@ -46,8 +47,7 @@ export interface ConsentSummary {
   dependencies: {
     plugins: DepPluginSummary[];
     libraries: LibraryDep[];
-    // Sidecar (engine module) dependency — discloses that native code loads into the app process (paired with the caution permission).
-    sidecars: SidecarDep[];
+    sidecars: ReleaseReference[];
   };
 }
 
@@ -61,17 +61,17 @@ function dependencyConsents(
   const nodes: DepNode[] = Object.values(installed).map((p) => ({
     id: p.manifest.id,
     version: p.manifest.version,
-    dependencies: p.manifest.dependencies ?? {},
+    dependencies: runtimePluginRequirements(p.manifest),
   }));
   // When self is not installed yet (pre-install preview), add it as a temporary node so the chain resolves.
   if (!installed[manifest.id]) {
     nodes.push({
       id: manifest.id,
       version: manifest.version,
-      dependencies: manifest.dependencies ?? {},
+      dependencies: runtimePluginRequirements(manifest),
     });
   }
-  const directRange = manifest.dependencies ?? {};
+  const directRange = runtimePluginRequirements(manifest);
   // Installed transitive deps (chain, dependencies first) + uninstalled direct deps (the chain skips uninstalled, so they are appended after).
   const ordered = activationChain(manifest.id, nodes).filter((id) => id !== manifest.id);
   for (const id of Object.keys(directRange)) {
@@ -79,14 +79,14 @@ function dependencyConsents(
   }
   return ordered.map((id) => {
     const dep = installed[id];
-    const range = directRange[id];
+    const requiredVersion = directRange[id];
     return {
       id,
-      ...(range ? { range } : { transitive: true }),
+      ...(requiredVersion ? { requiredVersion } : { transitive: true }),
       ...(dep
         ? {
             name: dep.manifest.name,
-            version: dep.manifest.version,
+            installedVersion: dep.manifest.version,
             permissions: [...dep.manifest.permissions],
           }
         : {}),
@@ -122,7 +122,7 @@ export function consentSummary(
     dependencies: {
       plugins: dependencyConsents(manifest, installed),
       libraries: transitiveLibraries(manifest, installed),
-      sidecars: manifest.sidecars ?? [],
+      sidecars: [...runtimeSidecarReferences(manifest)],
     },
   };
 }

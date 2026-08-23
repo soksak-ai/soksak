@@ -29,6 +29,7 @@ import {
 } from "../plugins/loader";
 import { syncServiceLedger } from "../plugins/serviceProxy";
 import { defaultPluginDeps } from "../plugins/deps";
+import { runtimePluginRequirements } from "../plugins/runtimeDependencies";
 import {
   activationChain,
   cascadeRemovalSet,
@@ -45,7 +46,7 @@ function pluginDepNodes(plugins: Record<string, PluginRuntime>): DepNode[] {
   return Object.values(plugins).map((p) => ({
     id: p.manifest.id,
     version: p.manifest.version,
-    dependencies: p.manifest.dependencies ?? {},
+    dependencies: runtimePluginRequirements(p.manifest),
   }));
 }
 import { installCommandFor } from "../plugins/programRegistry";
@@ -234,7 +235,7 @@ export function transitiveLibraries(
         out.push(lib);
       }
     }
-    for (const depId of Object.keys(m.dependencies ?? {})) {
+    for (const depId of Object.keys(runtimePluginRequirements(m))) {
       const dep = plugins[depId];
       if (dep) visit(dep.manifest);
     }

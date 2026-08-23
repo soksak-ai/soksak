@@ -8,6 +8,7 @@
 //   - Dependencies are injected through deps (testable structure, not a workaround).
 
 import { moduleState } from "../lib/moduleState";
+import { runtimePluginRequirements, runtimeSidecarReferences } from "./runtimeDependencies";
 import type {
   CommandContext,
   CommandOutcome,
@@ -1032,7 +1033,7 @@ function createSidecarApi(
       secretEnv?: Record<string, string>;
       generatedSecretEnv?: Record<string, { key: string; bytes: number }>;
     }): Promise<SidecarHandle> => {
-      const decl = (manifest.sidecars ?? []).find((s) => s.name === name);
+      const decl = runtimeSidecarReferences(manifest).find((sidecar) => sidecar.id === name);
       if (!decl) {
         throw new Error(tmsg("plugin.sidecar.undeclared", { name }));
       }
@@ -1047,8 +1048,7 @@ function createSidecarApi(
       // against actual, and neither taken on the other's word.
       const opened = await deps.invoke("sidecar_open", {
         consumer: { id: manifest.id, version: manifest.version },
-        requirementName: name,
-        requirement: decl.interface,
+        sidecar: decl,
         ns: manifest.id,
         secretEnv: opts?.secretEnv ?? null,
         generatedSecretEnv: opts?.generatedSecretEnv ?? null,
@@ -1253,7 +1253,7 @@ export function buildPluginApi(
     // enforcement). Core, self, and view pass.
     const crossDeny = crossPluginDenyReason(
       id,
-      manifest.dependencies,
+      runtimePluginRequirements(manifest),
       manifest.consumes,
       deps.implementsOf,
       name,
@@ -1715,7 +1715,7 @@ export function buildPluginApi(
             // registration time, where the caller is identifiable.
             const crossDeny = crossPluginDenyReason(
               id,
-              manifest.dependencies,
+              runtimePluginRequirements(manifest),
               manifest.consumes,
               deps.implementsOf,
               job.command,

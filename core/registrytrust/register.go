@@ -17,7 +17,7 @@ func Register(commands *control.Registry, now func() time.Time) {
 		if err != nil {
 			return nil, err
 		}
-		var document registry.SignedRegistry
+		var document registry.Registry
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&document); err != nil {

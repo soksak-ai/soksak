@@ -200,19 +200,11 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		if err != nil {
 			return nil, err
 		}
-		plugins, err := control.OptionalArg[[]VerifiedPlugin](args, "plugins", []VerifiedPlugin{})
+		components, err := control.Arg[[]VerifiedComponent](args, "components")
 		if err != nil {
 			return nil, err
 		}
-		sidecars, err := control.OptionalArg[[]VerifiedSidecar](args, "sidecars", []VerifiedSidecar{})
-		if err != nil {
-			return nil, err
-		}
-		kits, err := control.OptionalArg[[]VerifiedKit](args, "kits", []VerifiedKit{})
-		if err != nil {
-			return nil, err
-		}
-		result, err := manager.Commit(CommitRequest{TransactionID: transactionID, ExpectedRevision: expected, Plugins: plugins, Sidecars: sidecars, Kits: kits, Home: deps.Home})
+		result, err := manager.Commit(CommitRequest{TransactionID: transactionID, ExpectedRevision: expected, Components: components, Home: deps.Home})
 		if err == nil && deps.Changed != nil {
 			deps.Changed(environment.ChangeEvent, result)
 		}

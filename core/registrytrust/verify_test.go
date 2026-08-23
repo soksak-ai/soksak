@@ -15,10 +15,7 @@ func TestVerifyUsesNativeEd25519AndContinuity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document := registry.SignedRegistry{
-		Registry: registry.Registry{ID: "official", Sequence: 7, Plugins: []registry.PluginRelease{}, Sidecars: []registry.SidecarRelease{}, Kits: []registry.KitRelease{}, Contracts: []registry.ContractRelease{}, Specs: []registry.SpecRelease{}},
-		IssuedAt: "2026-08-23T00:00:00Z", ExpiresAt: "2026-08-24T00:00:00Z", Algorithm: "ed25519", KeyID: "key",
-	}
+	document := registry.Registry{ID: "official", Sequence: 7, IssuedAt: "2026-08-23T00:00:00Z", ExpiresAt: "2026-08-24T00:00:00Z", Plugins: []registry.Plugin{}, Signature: registry.Signature{Algorithm: "ed25519", KeyID: "key"}}
 	if err := registry.Sign(&document, private); err != nil {
 		t.Fatal(err)
 	}

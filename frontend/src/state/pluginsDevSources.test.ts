@@ -26,9 +26,8 @@ function manifest(version: string): string {
     description: "weather plugin",
     permissions: ["commands", "sidecar", "service"],
     entry: null,
-    sidecars: [{ name: "weather-service", interface: { id: "soksak-spec-sidecar-weather-wire", requirement: "0.0.1" } }],
+    runtimeDependencies: { sidecars: [{ id: "weather-service", version: "0.0.1", url: "https://github.com/example/weather-service/releases/download/v0.0.1/release.json", size: 1, sha256: "a".repeat(64) }] },
     service: {
-      sidecar: "weather-service",
       interface: { id: "soksak-spec-service-weather", requirement: "0.0.1" },
       subscribe: [],
     },

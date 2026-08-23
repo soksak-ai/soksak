@@ -18,7 +18,7 @@ type Trust struct {
 type HighWater = registry.HighWater
 type Receipt = registry.Verification
 
-func Verify(document registry.SignedRegistry, trust Trust, now time.Time, highWater *HighWater) (Receipt, error) {
+func Verify(document registry.Registry, trust Trust, now time.Time, highWater *HighWater) (Receipt, error) {
 	publicKey, err := base64.StdEncoding.DecodeString(trust.PublicKey)
 	if err != nil || len(publicKey) != ed25519.PublicKeySize {
 		return Receipt{}, i18n.Errorf("registrytrust.publicKeyInvalid", nil)

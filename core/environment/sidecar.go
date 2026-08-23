@@ -16,7 +16,7 @@ type SidecarRuntime struct {
 	Process          string
 }
 
-func ResolveBoundSidecar(home string, consumer PluginRef, requirement string) (SidecarRuntime, error) {
+func ResolveSidecarForPlugin(home string, consumer PluginRef, sidecar PluginRef) (SidecarRuntime, error) {
 	environment, exists, err := Read(home)
 	if err != nil {
 		return SidecarRuntime{}, err
@@ -28,13 +28,12 @@ func ResolveBoundSidecar(home string, consumer PluginRef, requirement string) (S
 	if !found {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
-	sidecar, found := plugin.Sidecars[requirement]
-	if !found {
+	if plugin.Version != consumer.Version {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
-	return ResolveSidecar(home, sidecar)
+	return ResolveSidecarVersion(home, sidecar.ID, sidecar.Version)
 }
-func ResolveSidecar(home, id string) (SidecarRuntime, error) {
+func ResolveSidecarVersion(home, id, version string) (SidecarRuntime, error) {
 	environment, exists, err := Read(home)
 	if err != nil {
 		return SidecarRuntime{}, err
@@ -43,7 +42,7 @@ func ResolveSidecar(home, id string) (SidecarRuntime, error) {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
 	value, found := environment.Sidecars[id]
-	if !found {
+	if !found || value.Version != version {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
 	root := value.Path

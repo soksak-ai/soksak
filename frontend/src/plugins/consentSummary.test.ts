@@ -18,7 +18,7 @@ function mani(
     version,
     entry: "main.js",
     permissions: permissions as PluginManifest["permissions"],
-    dependencies,
+    runtimeDependencies: Object.keys(dependencies).length ? { plugins: Object.entries(dependencies).map(([depId, depVersion]) => ({ id: depId, version: depVersion.replace(/^\^/, ""), url: `https://github.com/example/${depId}/releases/download/v${depVersion.replace(/^\^/, "")}/release.json`, size: 1, sha256: "a".repeat(64) })) } : undefined,
     contributes: {
       views: [],
       commands: [],
@@ -46,9 +46,9 @@ describe("consentSummary — transitive dependency permissions", () => {
     expect(s.dependencies.plugins).toHaveLength(1);
     const dep = s.dependencies.plugins[0];
     expect(dep.id).toBe("acp-core");
-    expect(dep.range).toBe("^0.1.0");
+    expect(dep.requiredVersion).toBe("0.1.0");
     expect(dep.permissions).toEqual(["process", "fs:read"]); // the dependency's permissions are shown
-    expect(dep.version).toBe("0.1.0");
+    expect(dep.installedVersion).toBe("0.1.0");
   });
 
   it("permissions of a transitive dependency (addon→lounge→core) are collected as well", () => {

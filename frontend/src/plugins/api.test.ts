@@ -918,7 +918,7 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register)", (
   it("passes a declared cross-plugin call", async () => {
     const d = fakeDeps();
     const { api } = buildPluginApi(
-      manifestOf({ permissions: ["commands"], dependencies: { "other-plugin": "0.0.1" } }),
+      manifestOf({ permissions: ["commands"], runtimeDependencies: { plugins: [{ id: "other-plugin", version: "0.0.1", url: "https://github.com/example/other-plugin/releases/download/v0.0.1/release.json", size: 1, sha256: "a".repeat(64) }] } }),
       "/d",
       d,
     );
@@ -1021,7 +1021,7 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register)", (
   it("scheduler.register — passes declared cross-plugin and core commands", async () => {
     const inv = vi.fn(async () => "sch-1");
     const { api } = buildPluginApi(
-      manifestOf({ permissions: ["schedule"], dependencies: { "other-plugin": "0.0.1" } }),
+      manifestOf({ permissions: ["schedule"], runtimeDependencies: { plugins: [{ id: "other-plugin", version: "0.0.1", url: "https://github.com/example/other-plugin/releases/download/v0.0.1/release.json", size: 1, sha256: "a".repeat(64) }] } }),
       "/d",
       fakeDeps({ invoke: inv }),
     );
@@ -1043,7 +1043,7 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
   it("opens only a declared sidecar and rejects an undeclared name", async () => {
     const m = manifestOf({
       permissions: ["sidecar"],
-      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", requirement: "0.0.1" } }],
+      runtimeDependencies: { sidecars: [{ id: "soksak-sidecar-chromium", version: "0.0.1", url: "https://github.com/example/soksak-sidecar-chromium/releases/download/v0.0.1/release.json", size: 1, sha256: "a".repeat(64) }] },
     });
     const { api } = buildPluginApi(m, "/d", fakeDeps());
     await expect(api.sidecar!.open("undeclared")).rejects.toThrow(/undeclared/);
@@ -1053,16 +1053,15 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
       command === "sidecar_open" ? { name: "soksak-sidecar-chromium" } : { ok: true });
     const m = manifestOf({
       permissions: ["sidecar"],
-      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", requirement: "0.0.1" } }],
+      runtimeDependencies: { sidecars: [{ id: "soksak-sidecar-chromium", version: "0.0.1", url: "https://github.com/example/soksak-sidecar-chromium/releases/download/v0.0.1/release.json", size: 1, sha256: "a".repeat(64) }] },
     });
     const { api } = buildPluginApi(m, "/d", fakeDeps({ invoke }));
-    const h = await api.sidecar!.open("chromium");
+    const h = await api.sidecar!.open("soksak-sidecar-chromium");
     expect(invoke).toHaveBeenCalledWith(
       "sidecar_open",
       expect.objectContaining({
         consumer: { id: m.id, version: m.version },
-        requirementName: "chromium",
-        requirement: { id: "soksak-spec-sidecar-chromium", requirement: "0.0.1" },
+        sidecar: { id: "soksak-sidecar-chromium", version: "0.0.1", url: "https://github.com/example/soksak-sidecar-chromium/releases/download/v0.0.1/release.json", size: 1, sha256: "a".repeat(64) },
       }),
     );
     const openArgs = invoke.mock.calls.find((call) => call[0] === "sidecar_open")?.[1];

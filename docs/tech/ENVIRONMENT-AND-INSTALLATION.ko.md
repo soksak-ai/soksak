@@ -14,7 +14,8 @@ archive 검증은 `RELEASE-INTEGRITY.md`가 정의합니다.
 
 `<identity-home>/environment.json`은 유일한 로컬 component 상태입니다. Plugin, sidecar, kit,
 contract, spec은 선택된 정확한 version, 절대 로컬 경로, source 종류, managed content의 registry
-ID, 필요한 경우 target을 기록합니다. Plugin은 활성화 상태와 sidecar 역할 binding도 기록합니다.
+ID, 필요한 경우 target을 기록합니다. Plugin은 활성화 상태도 기록합니다. Runtime dependency는
+plugin manifest와 release에 남으며 environment는 역할 binding을 저장하지 않습니다.
 하나의 단조 증가 `revision`이 전체 environment를 포함하며, 변경은 compare-and-swap 후 하나의
 `environment.changed` event를 발행합니다. Polling은 사용하지 않습니다.
 Core는 identity home 소유권을 얻은 직후 revision 1을 원자적으로 생성합니다. 따라서 파일 부재는
@@ -30,14 +31,15 @@ Core installer는 검증된 plugin, sidecar 또는 직접 요청된 kit release�
 선택합니다. 선언된 크기만큼 내려받고 SHA-256을 검증한 뒤 regular file만 추출하고 manifest를
 검증합니다. Component directory와 environment는 하나의 transaction으로 공개합니다.
 
-Plugin 설치는 정확한 plugin dependency와 각 역할에 선택된 sidecar ID를 같은 transaction에서
-설치합니다. 이미 materialize된 동일 version은 공유합니다. 실패하면 이전 environment는 변하지
+Plugin 설치는 각 plugin release의 정확한 `runtimeDependencies.plugins`와
+`runtimeDependencies.sidecars` release reference를 재귀적으로 검증하고 전체 closure를 같은
+transaction에서 설치합니다. 이미 materialize된 동일 version은 공유합니다. 실패하면 이전 environment는 변하지
 않습니다. Write lock은 transaction 동안만 존재합니다.
 
 Kit은 재사용 구현 source이며 암묵적인 plugin runtime dependency가 아닙니다. Contract와 spec
-release는 validation input이고 runtime 설치 directory에 복사되지 않습니다. Release 문서는
-dependency scope나 sidecar role binding을 담지 않습니다. Plugin 설치는 plugin을 자동 활성화하지
-않으며 sidecar binding도 명시적 environment operation으로 commit합니다.
+release는 validation input이고 runtime 설치 directory에 복사되지 않습니다. 각 plugin release는
+별도로 설치되는 runtime component를 투명하게 선언합니다. Plugin 설치는 plugin을 자동
+활성화하지 않으며 environment 수준의 sidecar 선택이나 역할 binding은 없습니다.
 
 ## Development source
 
@@ -58,7 +60,6 @@ dependency, runtime 관계는 environment가 해석하는 component ID, 원격 b
 
 - `environment_get`: environment 조회
 - `plugin_enabled_set`: plugin 활성화 변경
-- `plugin_sidecar_set`: 하나의 sidecar 역할 binding 변경
 - 종류별 `source_set`: component의 정확한 source와 로컬 경로 교체
 - `artifact_install_begin/stage/read_utf8/commit/rollback`: atomic 설치 transaction
 

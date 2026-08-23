@@ -52,13 +52,14 @@ import {
 } from "../plugins/registryInstallService";
 import { publishActivity } from "../state/activityFeed";
 import { awaitViewMounted } from "../plugins/viewFocus";
+import { runtimePluginRequirements } from "../plugins/runtimeDependencies";
 
 // Installed/dev runtime → dependency graph node (based on manifest dependencies).
 function depNodes(): DepNode[] {
   return Object.values(usePlugins.getState().plugins).map((p) => ({
     id: p.manifest.id,
     version: p.manifest.version,
-    dependencies: p.manifest.dependencies ?? {},
+    dependencies: runtimePluginRequirements(p.manifest),
   }));
 }
 
@@ -222,24 +223,22 @@ export function registerPluginCatalog(): void {
   const installResolution = (raw: string, registryId?: string) => {
     const pluginIds = raw.startsWith("soksak-plugin-") ? [raw] : [`soksak-plugin-${raw}`, raw];
     for (const pluginId of pluginIds) {
-      const resolved = resolveRegistryRelease(useRegistry.getState().releases, {
+      const resolved = resolveRegistryRelease(useRegistry.getState().entries, {
         registryId,
         id: pluginId,
-        kind: "plugin",
       });
       if (resolved.ok || resolved.reason !== "not_found") return resolved;
     }
-    return resolveRegistryRelease(useRegistry.getState().releases, {
+    return resolveRegistryRelease(useRegistry.getState().entries, {
       registryId,
       id: pluginIds[0],
-      kind: "plugin",
     });
   };
 
   // Qualified plugin command names expose the owning plugin id. The registry may suggest
   // installing that plugin, but it cannot copy or claim the owner's command declarations.
   setUnknownCommandResolver((name): CommandHint[] => {
-    const entries = useRegistry.getState().releases.filter((entry) => entry.kind === "plugin");
+    const entries = useRegistry.getState().entries;
     const installed = usePlugins.getState().plugins;
     // The control plane (main) loads no plugins — an unknown plugin command here is a window problem,
     // not an install problem. Install guidance is a misdiagnosis (measured: an external agent
@@ -493,9 +492,7 @@ export function registerPluginCatalog(): void {
       await reg.refresh(p.refresh === true, registryId).catch(() => {});
       const st = useRegistry.getState();
       const installed = usePlugins.getState().plugins;
-      const pluginReleases = st.releases.filter((entry) =>
-        entry.kind === "plugin" && (!registryId || entry.registryId === registryId)
-      );
+      const pluginReleases = st.entries.filter((entry) => !registryId || entry.registryId === registryId);
       return {
         status: st.status,
         registries: st.descriptors
@@ -505,9 +502,9 @@ export function registerPluginCatalog(): void {
           registryId: e.registryId,
           pluginId: e.id,
           id: e.id,
-          kind: e.kind,
           version: e.version,
-          release: e.release,
+          url: e.url, size: e.size, sha256: e.sha256,
+          runtimeDependencies: e.runtimeDependencies ?? null,
           installed: e.id in installed,
           runtimeStatus: installed[e.id]?.status ?? null,
         })),
@@ -569,13 +566,13 @@ export function registerPluginCatalog(): void {
       return {
         core,
         plugins,
-        registry: st.releases.map((e) => ({
+        registry: st.entries.map((e) => ({
           registryId: e.registryId,
           pluginId: e.id,
           id: e.id,
-          kind: e.kind,
           version: e.version,
-          release: e.release,
+          url: e.url, size: e.size, sha256: e.sha256,
+          runtimeDependencies: e.runtimeDependencies ?? null,
           installed: e.id in installed,
         })),
       };
@@ -592,7 +589,6 @@ export function registerPluginCatalog(): void {
       },
       registryId: { type: "string", description: key("cmd.plugin.install.param.registryId") },
       pluginId: { type: "string", description: key("cmd.plugin.install.param.pluginId") },
-      sidecars: { type: "json", description: key("cmd.plugin.install.param.sidecars") },
     },
     primary: "source",
     returns: "{ id, generation }",
@@ -635,10 +631,9 @@ export function registerPluginCatalog(): void {
       }
       if (explicitPluginId || /^[a-z0-9][a-z0-9-]*$/.test(raw)) {
         const resolved = explicitPluginId
-          ? resolveRegistryRelease(useRegistry.getState().releases, {
+          ? resolveRegistryRelease(useRegistry.getState().entries, {
               registryId,
               id: explicitPluginId,
-              kind: "plugin",
             })
           : installResolution(raw, registryId);
         if (!resolved.ok) {
@@ -664,8 +659,7 @@ export function registerPluginCatalog(): void {
             message: tmsg("msg.plugin.install.unknownName", { name: raw }),
           };
         }
-        const sidecars = p.sidecars === undefined ? undefined : p.sidecars as Record<string, string>;
-        return await installQualifiedRegistryEntry(resolved.entry, sidecars);
+        return await installQualifiedRegistryEntry(resolved.entry);
       }
       return {
         ok: false,

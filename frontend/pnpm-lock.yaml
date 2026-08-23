@@ -12,8 +12,8 @@ importers:
         specifier: github:min-median-max/wails-service-native-compositor#3530617b540f9d943e0926514c158cf08dee9d80
         version: https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/3530617b540f9d943e0926514c158cf08dee9d80
       '@soksak-ai/plugin-spec':
-        specifier: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.16/soksak-ai-plugin-spec-0.0.16.tgz
-        version: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.16/soksak-ai-plugin-spec-0.0.16.tgz
+        specifier: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.22/soksak-ai-plugin-spec-0.0.22.tgz
+        version: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.22/soksak-ai-plugin-spec-0.0.22.tgz
       '@wailsio/runtime':
         specifier: 3.0.0-beta.12
         version: 3.0.0-beta.12
@@ -527,10 +527,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.16/soksak-ai-plugin-spec-0.0.16.tgz':
-    resolution: {integrity: sha512-Y5+eW961rCIayZp9RiwnB2GljuP1LZICmztu5VjPcrerZ0HpEQrWxpB8p3AfzCt5FGRjVIDvmf1/RKcaEMuoyA==, tarball: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.16/soksak-ai-plugin-spec-0.0.16.tgz}
-    version: 0.0.16
-    engines: {node: 24.19.0}
+  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.22/soksak-ai-plugin-spec-0.0.22.tgz':
+    resolution: {integrity: sha512-DexVSZMTaBb7CcXchUVgJ5RxhTNdqSmFyhcbHL2TKCn243/0jAyCkKEX4CzEyb7iLSl1MIPBvX6dL7IuMrGK/A==, tarball: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.22/soksak-ai-plugin-spec-0.0.22.tgz}
+    version: 0.0.22
     hasBin: true
 
   '@tabler/icons@3.46.0':
@@ -1353,7 +1352,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.4':
     optional: true
 
-  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.16/soksak-ai-plugin-spec-0.0.16.tgz': {}
+  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.22/soksak-ai-plugin-spec-0.0.22.tgz': {}
 
   '@tabler/icons@3.46.0': {}
 
