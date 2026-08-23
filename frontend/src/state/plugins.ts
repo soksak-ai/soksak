@@ -107,7 +107,7 @@ interface PluginsState {
   enable: (id: string) => Promise<CmdResult<{ id: string; status: string }>>;
   disable: (id: string) => Promise<CmdResult<{ id: string; status: string }>>;
   // Consent record — called by the UI (consent modal) only. Not exposed as a command (§0-5).
-  grantConsent: (id: string) => boolean;
+  grantConsent: (id: string) => Promise<boolean>;
   // Revoke consent — a safe permission-reducing operation (back to re-consent required). Deactivates if active. Command exposure allowed.
   revokeConsent: (id: string) => Promise<CmdResult<{ id: string }>>;
   // bind ledger sync (PS9) — derived from enabled ∧ service manifests and pushed to the core (idempotent).
@@ -778,19 +778,18 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       return ok({ id, status: "disabled" });
     },
 
-    grantConsent: (id) => {
-      const p = get().plugins[id];
-      if (!p) return false;
-      set((s) => ({
-        consents: {
-          ...s.consents,
-          [id]: {
-            version: p.manifest.version,
-            permissions: [...p.manifest.permissions],
-          },
+    grantConsent: async (id) => {
+		const p = get().plugins[id];
+		if (!p) return false;
+      const consents = {
+        ...get().consents,
+        [id]: {
+          version: p.manifest.version,
+          permissions: [...p.manifest.permissions],
         },
-      }));
-      persist();
+      };
+      set({ consents });
+      await pluginsSync.saveNow({ consents });
       return true;
     },
 

@@ -234,7 +234,7 @@ function PluginManager() {
     run(async () => {
       const [cur, ...rest] = consentQueue;
       if (!cur) return { ok: true };
-      usePlugins.getState().grantConsent(cur.manifest.id);
+      await usePlugins.getState().grantConsent(cur.manifest.id);
       if (rest.length > 0) {
         setConsentQueue(rest);
         return { ok: true }; // next dependency/plugin consent popup

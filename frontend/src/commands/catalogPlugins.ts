@@ -137,7 +137,7 @@ export function registerPluginCatalog(): void {
     errors: ["INVALID_PARAMS", "TIMEOUT"],
     message: (d) => tmsg("msg.program.wait", { id: String(d.id) }),
     examples: ['program.wait \'{"id":"browser","timeoutMs":20000}\''],
-    handler: async (p) => {
+    handler: (p) => {
       const id = String(p.id ?? "");
       const timeoutMs = p.timeoutMs === undefined ? 20_000 : Number(p.timeoutMs);
       if (!id || !Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) {
@@ -285,7 +285,7 @@ export function registerPluginCatalog(): void {
     returns: "{ open }",
     message: (d) => (d.open ? tmsg("msg.plugin.manager.opened") : tmsg("msg.plugin.manager.closed")),
     examples: ["plugin.manager", 'plugin.manager \'{"open":false}\''],
-    handler: (p) => {
+    handler: async (p) => {
       const open = typeof p.open === "boolean" ? p.open : !useUi.getState().pluginManagerOpen;
       useUi.getState().setPluginManagerOpen(open);
       return { open };
@@ -834,11 +834,11 @@ export function registerPluginCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ['plugin.consent.grant \'{"id":"soksak-plugin-<id>"}\''],
     danger: "destructive",
-    handler: (p) => {
+    handler: async (p) => {
       const s = usePlugins.getState();
       const pid = resolveShortId(String(p.id)) ?? String(p.id);
       if (!s.plugins[pid]) return notFound("msg.plugin.notFoundId", { id: pid });
-      const granted = s.grantConsent(pid);
+      const granted = await s.grantConsent(pid);
       return { id: pid, granted };
     },
   });
