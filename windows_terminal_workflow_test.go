@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -74,6 +75,18 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 	for _, v := range []string{"soksak-plugin-terminal", "soksak-sidecar-terminal"} {
 		if strings.Contains(s, v) {
 			t.Errorf("Core workflow names provider %s", v)
+		}
+	}
+}
+
+func TestEveryWorkflowRunnerIsExecutable(t *testing.T) {
+	output, err := exec.Command("git", "ls-files", "-s", "scripts/ci/*.sh").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line != "" && !strings.HasPrefix(line, "100755 ") {
+			t.Errorf("workflow runner is not executable: %s", line)
 		}
 	}
 }
