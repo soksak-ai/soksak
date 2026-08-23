@@ -111,3 +111,16 @@ func TestEnvironmentChangesAdvanceOneRevision(t *testing.T) {
 		t.Fatalf("change=%+v", change)
 	}
 }
+
+func TestPluginEnablementUsesTheInstalledReleaseVersion(t *testing.T) {
+	home := t.TempDir()
+	value := Empty()
+	value.Plugins["demo"] = Plugin{Component: Component{Version: "0.0.3", Path: t.TempDir(), Source: "registry", Registry: "official"}}
+	writeJSON(t, filepath.Join(home, File), value)
+	if _, err := SetPluginsEnabled(home, []PluginRef{{ID: "demo", Version: "0.0.3"}}, true, 1); err != nil {
+		t.Fatalf("installed version was refused: %v", err)
+	}
+	if _, err := SetPluginsEnabled(home, []PluginRef{{ID: "demo", Version: "0.0.2"}}, false, 2); !os.IsNotExist(err) {
+		t.Fatalf("mismatched version error = %v", err)
+	}
+}

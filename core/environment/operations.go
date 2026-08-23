@@ -31,12 +31,12 @@ func SetPluginsEnabled(home string, refs []PluginRef, enabled bool, expected uin
 	next := current
 	seen := map[string]bool{}
 	for _, ref := range refs {
-		if ref.Version != "0.0.1" || seen[ref.ID] {
+		if ref.ID == "" || ref.Version == "" || seen[ref.ID] {
 			return Change{}, os.ErrInvalid
 		}
 		seen[ref.ID] = true
 		value, found := next.Plugins[ref.ID]
-		if !found {
+		if !found || value.Version != ref.Version {
 			return Change{}, os.ErrNotExist
 		}
 		value.Enabled = enabled
