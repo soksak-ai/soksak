@@ -1086,6 +1086,31 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
     expect(calls.filter((c) => c[0] === "sidecar_release").length).toBe(1);
     expect(calls.filter((c) => c[0] === "sidecar_stop").length).toBe(0);
   });
+
+  it("settles a stream close only after Core closes the exact connection", async () => {
+    let finishClose!: () => void;
+    const closing = new Promise<void>((resolve) => { finishClose = resolve; });
+    const invoke = vi.fn<PluginApiDeps["invoke"]>(async (command) => {
+      if (command === "sidecar_open") return { name: "soksak-sidecar-chromium" };
+      if (command === "sidecar_stream_close") await closing;
+      return {};
+    });
+    const manifest = manifestOf({
+      permissions: ["sidecar"],
+      runtimeDependencies: { sidecars: [{ id: "soksak-sidecar-chromium", version: "0.0.1", url: "https://github.com/example/soksak-sidecar-chromium/releases/download/v0.0.1/release.json", size: 1, sha256: "a".repeat(64) }] },
+    });
+    const { api } = buildPluginApi(manifest, "/d", fakeDeps({ invoke }));
+    const channel = await api.sidecar!.open("soksak-sidecar-chromium");
+    const stream = await channel.stream({}, { onBytes() {} });
+    let settled = false;
+    void stream.close.settled.then(() => { settled = true; });
+    stream.close.dispose();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    finishClose();
+    await stream.close.settled;
+    expect(settled).toBe(true);
+  });
 });
 
 // The window realm declares its own identity too. With only one side declaring, a plugin has to

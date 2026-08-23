@@ -766,7 +766,7 @@ export interface PluginContext {
 export class DisposableTracker {
   private items: Disposable[] = [];
 
-  add(d: Disposable): Disposable {
+  add<T extends Disposable>(d: T): T {
     this.items.push(d);
     return d;
   }
@@ -1010,9 +1010,14 @@ export interface SidecarHandle {
   stream: (
     request: Record<string, unknown>,
     handlers: { onBytes: (data: Uint8Array) => void; onEnd?: (reason: string) => void },
-  ) => Promise<{ answer: Record<string, unknown>; close: Disposable }>;
+  ) => Promise<{ answer: Record<string, unknown>; close: SidecarStreamClose }>;
   /** Release the channel. Idempotent. */
   close: () => Promise<void>;
+}
+
+export interface SidecarStreamClose extends Disposable {
+  /** Completes after the Core has closed this exact stream connection. */
+  settled: Promise<void>;
 }
 
 // app.sidecar implementation — opens only sidecars declared in manifest sidecars[] (declaration ≡
@@ -1104,8 +1109,18 @@ function createSidecarApi(
           })) as Record<string, unknown>;
           // Disposing ends this stream and nothing else. A sidecar outlives any one connection,
           // and closing it because a view unmounted would end every other view's stream too.
-          const stop = tracker.wrap(() => {
-            void deps.invoke("sidecar_stream_close", { name: provider, stream: label }).catch(() => {});
+          let stopStarted = false;
+          let settle!: () => void;
+          let reject!: (error: unknown) => void;
+          const settled = new Promise<void>((resolve, rejected) => { settle = resolve; reject = rejected; });
+          const stop: SidecarStreamClose = tracker.add({
+            settled,
+            dispose() {
+              if (stopStarted) return;
+              stopStarted = true;
+              void deps.invoke("sidecar_stream_close", { name: provider, stream: label })
+                .then(() => settle(), reject);
+            },
           });
           return { answer, close: stop };
         },
