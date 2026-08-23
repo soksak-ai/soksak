@@ -1,6 +1,6 @@
 # soksak-core
 
-플러그인 기반 Wails desktop core 저장소이며 버전은 `0.0.2`입니다. Go module, CLI, frontend
+플러그인 기반 Wails desktop core 저장소이며 버전은 `0.0.3`입니다. Go module, CLI, frontend
 runtime은 공식 Wails `v3.0.0-beta.12` release를 사용합니다.
 
 ## 현재 계약

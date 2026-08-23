@@ -8,27 +8,27 @@
         AllowPromptForPassword="false">
     </Settings>
     <Installer
-        Path="mac-window-tabs"
+        Path="soksak.exe"
         Arguments=""
-        InstallLocation="C:\Program Files\My Company\My Product">
+        InstallLocation="C:\Program Files\soksak\soksak">
     </Installer>
     <PackageInformation
-        PackageName="My Product"
-        PackageDisplayName="My Product"
-        PublisherName="CN=My Company"
-        PublisherDisplayName="My Company"
-        Version="0.1.0.0"
-        PackageDescription="A mac-window-tabs application">
+        PackageName="soksak"
+        PackageDisplayName="soksak"
+        PublisherName="CN=soksak"
+        PublisherDisplayName="soksak"
+        Version="0.0.3.0"
+        PackageDescription="Plugin-driven recursive terminal and browser workspace">
         <Capabilities>
             <Capability Name="runFullTrust" />
             
         </Capabilities>
         <Applications>
             <Application
-                Id="com.example.macwindowtabs"
-                Description="A mac-window-tabs application"
-                DisplayName="My Product"
-                ExecutableName="mac-window-tabs"
+                Id="com.soksak.core"
+                Description="Plugin-driven recursive terminal and browser workspace"
+                DisplayName="soksak"
+                ExecutableName="soksak.exe"
                 EntryPoint="Windows.FullTrustApplication">
                 
             </Application>
@@ -41,13 +41,13 @@
         </Dependencies>
         <Properties>
             <Framework>false</Framework>
-            <DisplayName>My Product</DisplayName>
-            <PublisherDisplayName>My Company</PublisherDisplayName>
-            <Description>A mac-window-tabs application</Description>
+            <DisplayName>soksak</DisplayName>
+            <PublisherDisplayName>soksak</PublisherDisplayName>
+            <Description>Plugin-driven recursive terminal and browser workspace</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>
-    <SaveLocation PackagePath="mac-window-tabs.msix" />
+    <SaveLocation PackagePath="soksak.msix" />
     <PackageIntegrity>
         <CertificatePath></CertificatePath>
     </PackageIntegrity>

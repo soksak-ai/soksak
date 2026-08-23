@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-Name=My Product
-Comment=A mac-window-tabs application
+Name=soksak
+Comment=Plugin-driven recursive terminal and browser workspace
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/mac-window-tabs %u
+Exec=/usr/local/bin/soksak %u
 Terminal=false
 Type=Application
-Icon=mac-window-tabs
+Icon=soksak
 Categories=Utility;
-StartupWMClass=mac-window-tabs
+StartupWMClass=soksak
 
  

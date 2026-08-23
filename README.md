@@ -1,6 +1,6 @@
 # soksak-core
 
-This repository is the plugin-driven Wails desktop core, version `0.0.2`. The Go module, CLI, and
+This repository is the plugin-driven Wails desktop core, version `0.0.3`. The Go module, CLI, and
 frontend runtime use the official Wails `v3.0.0-beta.12` release.
 
 ## Current contract

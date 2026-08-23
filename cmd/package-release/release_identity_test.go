@@ -38,9 +38,17 @@ func TestApplicationVersionHasOneCanonicalSourceAndExactProjections(t *testing.T
 		path, versionText, productText string
 	}{
 		{"build/config.yml", `version: "` + version + `"`, `productName: "soksak"`},
-		{"build/windows/info.json", `"ProductVersion": "` + version + `"`, `"ProductName": "soksak"`},
+		{"build/windows/info.json", `"file_version": "` + version + `"`, `"ProductVersion": "` + version + `"`},
+		{"build/windows/wails.exe.manifest", `version="` + version + `.0"`, `name="com.soksak.core"`},
+		{"build/windows/msix/template.xml", `Version="` + version + `.0"`, `Id="com.soksak.core"`},
+		{"build/windows/msix/app_manifest.xml", `Version="` + version + `.0"`, `Name="com.soksak.core"`},
+		{"build/windows/nsis/wails_tools.nsh", `INFO_PRODUCTVERSION "` + version + `"`, `INFO_PROJECTNAME "soksak"`},
 		{"build/darwin/Info.plist", `<string>` + version + `</string>`, `<string>soksak</string>`},
+		{"build/darwin/Info.dev.plist", `<string>` + version + `</string>`, `<string>soksak</string>`},
 		{"build/linux/nfpm/nfpm.yaml", `version: "` + version + `"`, `name: "soksak"`},
+		{"build/linux/desktop", `Exec=/usr/local/bin/soksak %u`, `StartupWMClass=soksak`},
+		{"README.md", "version `" + version + "`", "plugin-driven Wails desktop core"},
+		{"README.ko.md", "`" + version + "`", "Wails desktop core"},
 	} {
 		projected, err := os.ReadFile(filepath.Join(root, projection.path))
 		if err != nil {
