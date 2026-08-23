@@ -37,6 +37,9 @@ tasks:
       This repository runs only its own gates. Dependencies run their gates in
       their owner repositories.
     cmds:
+      - |
+        required=$(cat .task-version)
+        test "$(task --version)" = "$required"
       - task: verify:go
       - task: verify:restore
       - task: verify:headless

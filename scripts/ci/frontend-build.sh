@@ -14,7 +14,7 @@ if [ -s "$root/frontend/dist/index.html" ] && [ "$(cat "$marker" 2>/dev/null || 
 fi
 image=soksak-frontend:latest
 build_frontend() {
-  pnpm --dir "$root/frontend" --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile
+  pnpm --dir "$root/frontend" install --frozen-lockfile
   pnpm --dir "$root/frontend" typecheck
   pnpm --dir "$root/frontend" build
 }
@@ -36,5 +36,5 @@ docker run --rm \
   -v "$root:/app" \
   -v soksak-frontend-node-modules:/app/frontend/node_modules \
   -v soksak-frontend-pnpm-store:/pnpm/store \
-  "$image" /bin/sh -c 'pnpm config set store-dir /pnpm/store && pnpm --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile && pnpm typecheck && pnpm build'
+  "$image" /bin/sh -c 'pnpm config set store-dir /pnpm/store && pnpm install --frozen-lockfile && pnpm typecheck && pnpm build'
 printf '%s\n' "$definition:$input" > "$marker"

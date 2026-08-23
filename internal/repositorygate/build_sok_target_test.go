@@ -54,11 +54,25 @@ func TestFrontendInstallsThePublishedWailsRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(body)
-	for _, required := range []string{
-		"pnpm --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile",
-	} {
-		if !strings.Contains(source, required) {
-			t.Errorf("frontend dependency preparation is missing %s", required)
+	if !strings.Contains(source, "pnpm install --frozen-lockfile") {
+		t.Error("frontend dependency preparation does not use the workspace install contract")
+	}
+	workspace, err := os.ReadFile("frontend/pnpm-workspace.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"nodeLinker: hoisted", "symlink: false"} {
+		if !strings.Contains(string(workspace), required) {
+			t.Errorf("frontend workspace is missing %s", required)
+		}
+	}
+	for _, path := range []string{"build/Taskfile.yml", "scripts/ci/frontend-build.sh", "scripts/ci/windows-build.sh"} {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(body), "config.node-linker") || strings.Contains(string(body), "config.symlink") {
+			t.Errorf("%s duplicates the frontend workspace install contract", path)
 		}
 	}
 	manifest, err := os.ReadFile("frontend/package.json")

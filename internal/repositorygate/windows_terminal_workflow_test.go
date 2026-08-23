@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -44,6 +45,22 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 	if !strings.Contains(s, "cache-dependency-path: soksak-core/go.sum") {
 		t.Fatal("Windows Core Go cache does not follow the checked-out module")
 	}
+	if strings.Count(s, "soksak-core/scripts/ci/require-disk-capacity.sh") != 3 {
+		t.Fatal("every native build must check capacity before installing toolchains")
+	}
+	for _, job := range []string{"windows-build:", "darwin-build:", "linux-build:"} {
+		block := s[strings.Index(s, job):]
+		next := len(block)
+		for _, other := range []string{"windows-build:", "darwin-build:", "linux-build:", "windows-system:"} {
+			if at := strings.Index(block[1:], other); at >= 0 && at+1 < next {
+				next = at + 1
+			}
+		}
+		block = block[:next]
+		if strings.Index(block, "require-disk-capacity.sh") > strings.Index(block, "actions/setup-go@") {
+			t.Fatalf("%s installs a toolchain before checking capacity", job)
+		}
+	}
 	if !strings.Contains(s, "go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12") {
 		t.Fatal("Windows workflow does not install the exact upstream Wails CLI")
 	}
@@ -83,6 +100,26 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 		if strings.Contains(s, v) {
 			t.Errorf("Core workflow names provider %s", v)
 		}
+	}
+}
+
+func TestReleaseCapacityGateFailsBeforeWorkStarts(t *testing.T) {
+	bin := t.TempDir()
+	df := filepath.Join(bin, "df")
+	run := func(available string) ([]byte, error) {
+		body := "#!/bin/sh\nprintf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n'\nprintf '/dev/test 99999999 1 " + available + " 1% /\\n'\n"
+		if err := os.WriteFile(df, []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		command := exec.Command("scripts/ci/require-disk-capacity.sh")
+		command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+		return command.CombinedOutput()
+	}
+	if output, err := run("1048575"); err == nil || !strings.Contains(string(output), "at least 10 GiB free space is required") {
+		t.Fatalf("capacity gate accepted insufficient space: %v\n%s", err, output)
+	}
+	if output, err := run("10485760"); err != nil || !strings.Contains(string(output), "disk capacity:") {
+		t.Fatalf("capacity gate rejected sufficient space: %v\n%s", err, output)
 	}
 }
 
@@ -146,6 +183,24 @@ func TestFrontendOwnsExactToolchainVersions(t *testing.T) {
 	}
 	if _, err := os.Stat(".nvmrc"); !os.IsNotExist(err) {
 		t.Fatal("frontend Node version is duplicated in .nvmrc")
+	}
+}
+
+func TestTaskfileOwnsAndChecksTheExactRunner(t *testing.T) {
+	body, err := os.ReadFile("Taskfile.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	version, err := os.ReadFile(".task-version")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`^[0-9]+[.][0-9]+[.][0-9]+\n$`).Match(version) {
+		t.Fatal("Task runner owner file is not exact")
+	}
+	if !strings.Contains(taskBlock(t, source, "verify"), `required=$(cat .task-version)`) || !strings.Contains(taskBlock(t, source, "verify"), `test "$(task --version)" = "$required"`) {
+		t.Fatal("verify does not reject a different Task runner")
 	}
 }
 

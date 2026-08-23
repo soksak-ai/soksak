@@ -34,7 +34,7 @@ frontend() {
   pnpm_version=$(node -p "require('./frontend/package.json').packageManager.split('@')[1]")
   [ "$(node --version)" = "v$node_version" ] || { echo "Node v$node_version is required" >&2; exit 1; }
   [ "$(pnpm --version)" = "$pnpm_version" ] || { echo "pnpm $pnpm_version is required" >&2; exit 1; }
-  pnpm --dir frontend --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile
+  pnpm --dir frontend install --frozen-lockfile
   pnpm --dir frontend typecheck
   pnpm --dir frontend build
   test -f frontend/dist/index.html
