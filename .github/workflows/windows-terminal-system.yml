@@ -42,7 +42,7 @@ jobs:
         with: { repository: soksak-ai/soksak-contract-terminal, ref: cab0691a1a01fca7436ac29f6cc2850245788ea6, path: soksak-contracts/soksak-contract-terminal }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
-          go-version: "1.25.0"
+          go-version-file: soksak-core/go.mod
           cache-dependency-path: soksak-core/go.sum
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with: { node-version: "24.19.0" }

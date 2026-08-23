@@ -7,10 +7,9 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$root"
 
 require_go() {
-  case "$(go version)" in
-    "go version go1.25."*) ;;
-    *) echo "Go 1.25.x is required" >&2; exit 1 ;;
-  esac
+  required=$(awk '$1 == "go" { print "go" $2; count++ } END { if (count != 1) exit 1 }' go.mod)
+  actual=$(go env GOVERSION)
+  [ "$actual" = "$required" ] || { echo "$required is required; found $actual" >&2; exit 1; }
 }
 
 require_wails() {

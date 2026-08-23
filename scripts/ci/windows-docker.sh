@@ -6,6 +6,7 @@ image=soksak-windows-ci:node24-wails-beta12
 definition=$(shasum -a 256 "$root/build/docker/Dockerfile.windows-ci" | awk '{print $1}')
 
 docker info >/dev/null
+"$root/scripts/ci/cross-image.sh"
 available=$(df -k "$root" | awk 'NR==2 {print $4}')
 [ "$available" -ge 1048576 ] || { echo "at least 1 GiB host free space is required; Docker build caches use named volumes" >&2; exit 1; }
 

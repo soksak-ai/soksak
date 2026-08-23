@@ -34,7 +34,8 @@ func TestCrossImageMatchesTheDeclaredLinuxBaseline(t *testing.T) {
 	}
 	text := string(body)
 	for _, required := range []string{
-		"FROM golang:1.25-bookworm AS go-toolchain",
+		"ARG GO_VERSION",
+		"FROM golang:${GO_VERSION}-bookworm AS go-toolchain",
 		"FROM ubuntu:24.04",
 		"COPY --from=go-toolchain /usr/local/go /usr/local/go",
 		"libgtk-4-dev libwebkitgtk-6.0-dev",
@@ -43,7 +44,7 @@ func TestCrossImageMatchesTheDeclaredLinuxBaseline(t *testing.T) {
 			t.Errorf("cross image is missing %q", required)
 		}
 	}
-	if strings.Contains(text, "FROM golang:1.25-bookworm\n") {
+	if strings.Contains(text, "FROM golang:bookworm\n") {
 		t.Error("the Linux build stage still uses Debian Bookworm and GTK 4.8")
 	}
 }

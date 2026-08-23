@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -240,7 +241,15 @@ func stageUnit(t *testing.T, home, name, source string) {
 	if err := os.WriteFile(filepath.Join(build, "main.go"), []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(build, "go.mod"), []byte("module probe\n\ngo 1.25.0\n"), 0o600); err != nil {
+	moduleBody, err := os.ReadFile(filepath.Join("..", "..", "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	goDirective := regexp.MustCompile(`(?m)^go ([0-9]+\.[0-9]+\.[0-9]+)$`).FindSubmatch(moduleBody)
+	if len(goDirective) != 2 {
+		t.Fatal("root go.mod must contain one exact Go version")
+	}
+	if err := os.WriteFile(filepath.Join(build, "go.mod"), []byte("module probe\n\ngo "+string(goDirective[1])+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	// The layout is written out here rather than taken from SidecarPath, because SidecarPath checks
