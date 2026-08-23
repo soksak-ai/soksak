@@ -8,9 +8,10 @@ import { startPluginHooks } from "./hooks";
 import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 import { usePlugins } from "../state/plugins";
 import { useRegistry } from "../state/registry";
-import { createEnvironmentEventHandler, type EnvironmentChange } from "../state/environmentEvents";
+import { createEnvironmentEventHandler, setEnvironmentEventHandler, type EnvironmentChange } from "../state/environmentEvents";
 
 let stopEnvironmentEvents = () => {};
+let stopEnvironmentReconciliation = () => {};
 
 export async function initPluginHost(): Promise<void> {
   // Point where this window's plugin runtime starts anew. Children spawned by a previous runtime(window still
@@ -48,6 +49,7 @@ export async function initPluginHost(): Promise<void> {
   }
   try {
     stopEnvironmentEvents();
+    stopEnvironmentReconciliation();
     const queued: EnvironmentChange[] = [];
     let onChange: ReturnType<typeof createEnvironmentEventHandler> | null = null;
     stopEnvironmentEvents = await safeListenReady<EnvironmentChange>("environment.changed", (event) => {
@@ -62,6 +64,7 @@ export async function initPluginHost(): Promise<void> {
       () => usePlugins.getState().reload(),
       environment.revision,
     );
+    stopEnvironmentReconciliation = setEnvironmentEventHandler(onChange);
     for (const change of queued) await onChange(change);
   } catch (e) {
     console.error("initial plugin load failed:", e);

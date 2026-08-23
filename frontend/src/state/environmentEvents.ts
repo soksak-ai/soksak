@@ -1,6 +1,21 @@
 export interface EnvironmentChange { previousRevision: number; revision: number }
 export interface EnvironmentEventHandler { (change: EnvironmentChange): Promise<void>; revision(): number }
 
+let activeHandler: EnvironmentEventHandler | null = null;
+
+export function setEnvironmentEventHandler(handler: EnvironmentEventHandler): () => void {
+  const previous = activeHandler;
+  activeHandler = handler;
+  return () => {
+    if (activeHandler === handler) activeHandler = previous;
+  };
+}
+
+export function reconcileEnvironmentRevision(revision: number): Promise<void> {
+  if (activeHandler === null) return Promise.reject(new Error("environment revision coordinator is not ready"));
+  return activeHandler({ previousRevision: activeHandler.revision(), revision });
+}
+
 export function createEnvironmentEventHandler(reload: () => Promise<void>, initialRevision: number): EnvironmentEventHandler {
   let applied = initialRevision;
   let pending = initialRevision;

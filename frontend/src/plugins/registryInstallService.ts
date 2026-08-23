@@ -1,5 +1,6 @@
 import { usePlugins } from "../state/plugins";
 import { useRegistry } from "../state/registry";
+import { reconcileEnvironmentRevision } from "../state/environmentEvents";
 import {
   resolveRegistryRelease,
   type QualifiedRegistryEntry,
@@ -27,9 +28,7 @@ export async function installQualifiedRegistryEntry(
     sidecars,
   });
   if (result.ok) {
-    // The archive is now published at home/plugins/<id>. Rescan the loader so the
-    // freshly installed plugin becomes loadable without an app restart.
-    await usePlugins.getState().reload();
+    await reconcileEnvironmentRevision(result.revision);
   }
   return result;
 }
