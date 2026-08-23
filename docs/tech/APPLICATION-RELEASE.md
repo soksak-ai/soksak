@@ -1,21 +1,26 @@
 # Application release
 
-The Core application version has one source: `frontend/package.json`. Pushing its matching `v*` tag
-runs the Wails release workflow from that tagged commit. The workflow finds a successful
-`windows-terminal-system` run for the exact same commit and downloads the `soksak.exe` and
-`sok.exe` bytes tested by that run; it does not rebuild and substitute different bytes after native
-verification.
+The Core application version has one source: root `VERSION`. `frontend/package.json` and the
+Windows, macOS, and Linux package metadata are exact projections checked by tests. The release
+matrix is Windows x86_64, macOS universal, Linux x86_64, and Linux arm64; the packager rejects a
+partial matrix and inspects PE, fat Mach-O, and ELF architectures before writing archives.
 
-The packager publishes a deterministic Windows x86_64 ZIP, `SHA256SUMS`, and a provenance document
-that names the source commit, native system run, platform, architecture, archive inventory, and
-Authenticode state. Version and tag are derived from the source package file. The workflow refuses
-an existing tag and requires owner-enforced immutable releases before publication.
+Go has one version source per repository: the exact `go` directive in `go.mod`. Docker, Actions,
+and shell gates read it rather than copying the literal. Frontend Node and pnpm versions live in
+`frontend/package.json`; one pinned frontend container writes an input digest beside `dist`, and
+every target consumes the same bytes. Cross images are target-architecture images. Linux uses the
+declared Ubuntu 24.04 GTK4/WebKit 6.0 SDK; the release record includes the observed GLIBC maximum.
 
-Version `0.0.1` has no Windows Authenticode credential. Its provenance and release notes therefore
-state `unsigned`; the release never implies an identified publisher. Adding an Authenticode
-certificate requires a new version, signed-byte verification, and a provenance state change.
+The macOS application is built natively into x86_64 and arm64 slices, joined as a universal app,
+and ad-hoc signed. Its Intel slice targets macOS 10.15 and its Apple Silicon slice targets macOS
+11.0. The Go control client uses the Go 1.26 internal-linker baseline of macOS 12.0 for both slices.
+The native command rejects linker warnings and verifies every deployment target and signature.
 
-macOS Go commands use one 10.15 deployment target for every cgo compile and final link. The link
-gate starts with an empty Go cache and rejects linker warnings. Apple's linker may receive the
-Objective-C runtime through more than one framework-backed cgo package; the build disables only
-that duplicate-library diagnostic after keeping every object on the same deployment target.
+Each platform archive records its native system run, architecture, inventory, and signing state.
+`SHA256SUMS` covers all four archives, provenance, and both release notes. Publication refuses a
+partial matrix or an existing tag and requires owner-enforced immutable releases. Windows and
+Linux are unsigned; macOS is ad-hoc signed, not Developer ID signed or notarized.
+
+The macOS link gate starts with an empty Go cache and rejects linker warnings. Apple's linker may
+receive the Objective-C runtime through more than one framework-backed cgo package; the build
+disables only that duplicate-library diagnostic while keeping each slice on its declared target.
