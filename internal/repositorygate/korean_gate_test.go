@@ -35,6 +35,7 @@ var koreanBundles = map[string]bool{
 	"core/install/messages.go":        true,
 	"core/net/messages.go":            true,
 	"core/process/messages.go":        true,
+	"core/registrytrust/messages.go":  true,
 	"core/secret/messages.go":         true,
 	"core/environment/messages.go":    true,
 	"core/service/messages.go":        true,

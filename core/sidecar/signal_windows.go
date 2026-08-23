@@ -2,15 +2,31 @@
 
 package sidecar
 
-import "fmt"
+import (
+	"strconv"
 
-// signalPID has no implementation on this target and fails by name.
-//
-// Ending a process tree here needs a job object, which is created where the process is started —
-// and a unit this host adopted was started by a run that is gone, so there is no handle to it. An
-// empty function would make "the unit was ended" and "this build cannot end one" the same answer.
+	"github.com/soksak-ai/soksak-core/core/i18n"
+	"golang.org/x/sys/windows"
+)
+
 func signalPID(pid int) error {
-	return fmt.Errorf(
-		"this build cannot end adopted unit process %d on this target: a process tree here needs a "+
-			"job object, and the handle to one belongs to the run that started it", pid)
+	if pid <= 0 {
+		return i18n.Errorf("sidecar.invalidAdoptedPID", map[string]string{"pid": strconv.Itoa(pid)})
+	}
+	handle, err := windows.OpenProcess(windows.PROCESS_TERMINATE|windows.SYNCHRONIZE, false, uint32(pid))
+	if err != nil {
+		return err
+	}
+	defer windows.CloseHandle(handle)
+	if err := windows.TerminateProcess(handle, 1); err != nil {
+		return err
+	}
+	status, err := windows.WaitForSingleObject(handle, 10_000)
+	if err != nil {
+		return err
+	}
+	if status != windows.WAIT_OBJECT_0 {
+		return i18n.Errorf("sidecar.adoptedStopTimeout", map[string]string{"pid": strconv.Itoa(pid), "seconds": "10"})
+	}
+	return nil
 }

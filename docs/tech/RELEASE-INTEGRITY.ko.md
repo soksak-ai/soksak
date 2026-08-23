@@ -20,6 +20,8 @@
 2. 코어는 다운로드한 digest와 크기를 검증하고 일반 파일만 추출한다. 컴포넌트 kind에 맞는 정식
    manifest 이름을 요구하고 staging 전에 manifest ID와 버전을 registry 식별자와 비교한다.
 3. commit은 staging된 식별자와 digest가 승인된 설치 요청과 계속 같은지 검증한다.
+4. Core는 Go native crypto 구현으로 registry Ed25519 서명, currentness, high-water continuity를
+   검증한다. Renderer engine은 공개 형식을 parse하지만 암호학적 trust를 소유하지 않는다.
 
 잘못된 바이트가 포함된 immutable release는 덮어쓰거나 마이그레이션하지 않는다. registry에
 등록하지 않으며, 책임 경계에 RED 테스트와 GREEN 수정이 생긴 뒤 새 patch 버전을 발행한다.
@@ -42,6 +44,8 @@
   처음 진행하지 않은 경계를 기록한다. 일반 timeout만으로는 완료 근거가 되지 않는다.
 - toolchain 설치나 multi-target build 전에 디스크 용량을 확인한다. 재생성 가능한 cache와 build
   output만 명시적으로 정리하며 source file과 사용자 데이터는 용량 확보에 사용하지 않는다.
+- 명시적 sidecar stop은 adopt된 process가 종료된 뒤 반환한다. Application shutdown은 stop이 아니라
+  release이며 두 lifecycle 의미를 분리한다.
 
 ## 저장소별 소유권
 

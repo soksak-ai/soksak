@@ -50,6 +50,15 @@ func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 	}
 }
 
+func TestWindowsCanStopAnAdoptedSidecarAndWaitForExit(t *testing.T) {
+	source := readText(t, "core/sidecar/signal_windows.go")
+	for _, required := range []string{"windows.OpenProcess", "windows.TerminateProcess", "windows.WaitForSingleObject"} {
+		if !strings.Contains(source, required) {
+			t.Errorf("Windows adopted sidecar stop omits %s", required)
+		}
+	}
+}
+
 func TestCrossBuilderConsumesOnePinnedFrontendAndBuildsBothBinaries(t *testing.T) {
 	dockerfile := readText(t, "build/docker/Dockerfile.cross")
 	for _, forbidden := range []string{"npm install", "npm run build"} {

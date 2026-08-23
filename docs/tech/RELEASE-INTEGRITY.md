@@ -21,6 +21,8 @@ Publication and installation enforce the same identity; neither trusts the other
 2. Core verifies the downloaded digest and size, extracts regular files only, requires the canonical
    manifest name for the component kind, and compares manifest id and version with the registry identity before staging.
 3. Commit verifies that the staged identity and digest still equal the approved installation request.
+4. Core verifies registry Ed25519 signatures, currentness, and high-water continuity with Go's native
+   crypto implementation. Renderer engines parse the public shape but do not own cryptographic trust.
 
 An immutable release with incorrect bytes is never overwritten or migrated. It remains unregistered,
 and a new patch version is published after the responsible invariant has a RED test and a GREEN fix.
@@ -43,6 +45,8 @@ and a new patch version is published after the responsible invariant has a RED t
   observation, recovery observation, or rendered frame. A plain timeout is not sufficient evidence.
 - Disk capacity is checked before toolchain installation or multi-target builds. Only regenerable caches
   and build outputs are cleaned; source files and user data are never used as capacity.
+- An explicit sidecar stop returns only after an adopted process has exited. Application shutdown
+  remains a release, not a stop; the two lifecycle meanings stay separate.
 
 ## Repository ownership
 

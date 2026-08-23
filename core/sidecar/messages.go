@@ -98,5 +98,7 @@ func init() {
 			EN: "sidecar {name} took the request and answered nothing: {reason}",
 			KO: "사이드카 {name} 이(가) 요청을 받고 아무 응답도 하지 않았습니다: {reason}",
 		},
+		"sidecar.invalidAdoptedPID":  {EN: "adopted sidecar process id is invalid: {pid}", KO: "adopt된 sidecar process id가 올바르지 않습니다: {pid}"},
+		"sidecar.adoptedStopTimeout": {EN: "adopted sidecar process {pid} did not exit within {seconds}s", KO: "adopt된 sidecar process {pid}가 {seconds}초 안에 종료되지 않았습니다"},
 	})
 }
