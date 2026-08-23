@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -14,7 +15,7 @@ func trackedRecordFiles(root string, extensions map[string]bool, excludedPrefixe
 }
 
 func trackedRecordFilesUnder(root string, extensions map[string]bool, includedPrefixes, excludedPrefixes []string) ([]string, error) {
-	command := exec.Command("git", "-C", root, "ls-files", "-z", "--cached")
+	command := exec.Command("git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
 	output, err := command.Output()
 	if err != nil {
 		return nil, fmt.Errorf("list tracked files: %w", err)
@@ -26,6 +27,12 @@ func trackedRecordFilesUnder(root string, extensions map[string]bool, includedPr
 			len(includedPrefixes) > 0 && !hasAnyPrefix(path, includedPrefixes) ||
 			hasAnyPrefix(path, excludedPrefixes) {
 			continue
+		}
+		if _, statErr := os.Lstat(filepath.Join(root, path)); statErr != nil {
+			if os.IsNotExist(statErr) {
+				continue
+			}
+			return nil, fmt.Errorf("inspect record file %s: %w", path, statErr)
 		}
 		files = append(files, path)
 	}

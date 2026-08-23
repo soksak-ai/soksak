@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestTrackedRecordFilesExcludeUntrackedAndGeneratedFiles(t *testing.T) {
+func TestTrackedRecordFilesUseTheCurrentWorktree(t *testing.T) {
 	root := t.TempDir()
 	if err := exec.Command("git", "-C", root, "init", "--quiet").Run(); err != nil {
 		t.Fatal(err)
@@ -24,8 +24,12 @@ func TestTrackedRecordFilesExcludeUntrackedAndGeneratedFiles(t *testing.T) {
 	}
 	write("tracked.go")
 	write("notes.go")
+	write("deleted.go")
 	write("generated/model.go")
-	if err := exec.Command("git", "-C", root, "add", "tracked.go", "generated/model.go").Run(); err != nil {
+	if err := exec.Command("git", "-C", root, "add", "tracked.go", "deleted.go", "generated/model.go").Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(root, "deleted.go")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -33,8 +37,8 @@ func TestTrackedRecordFilesExcludeUntrackedAndGeneratedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(files, []string{"tracked.go"}) {
-		t.Fatalf("files = %v, want [tracked.go]", files)
+	if !reflect.DeepEqual(files, []string{"notes.go", "tracked.go"}) {
+		t.Fatalf("files = %v, want [notes.go tracked.go]", files)
 	}
 }
 
