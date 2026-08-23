@@ -121,9 +121,9 @@ describe("native registry install wiring", () => {
 
   it("commits against the current installed revision", async () => {
     const verified = [
-      { ...ROOT, registryId: "fixture", sourceRepository: "https://github.com/example/plugin", sourceCommit: "p", releaseTag: "v0.0.1", artifactUrl: "https://x/p.tgz", artifactSha256: "p-sha", target: "any", manifestSha256: "a".repeat(64), stagedHandle: "p-handle" },
+      { ...ROOT, registryId: "fixture", sourceRepository: "https://github.com/example/plugin", sourceCommit: "p", releaseTag: "v0.0.1", artifactUrl: "https://x/p.tgz", artifactSha256: "p-sha", manifestSha256: "a".repeat(64), stagedHandle: "p-handle" },
       { kind: "sidecar", id: "state", version: "0.0.1", registryId: "fixture", sourceRepository: "https://github.com/example/sidecar", sourceCommit: "s", releaseTag: "v0.0.1", artifactUrl: "https://x/s.tgz", artifactSha256: "s-sha", target: "aarch64-apple-darwin", manifestSha256: "b".repeat(64), stagedHandle: "s-handle" },
-      { kind: "kit", id: "terminal-kit", version: "0.0.1", registryId: "fixture", sourceRepository: "https://github.com/example/kit", sourceCommit: "k", releaseTag: "v0.0.1", artifactUrl: "https://x/k.tgz", artifactSha256: "k-sha", target: "any", manifestSha256: "c".repeat(64), stagedHandle: "k-handle" },
+      { kind: "kit", id: "terminal-kit", version: "0.0.1", registryId: "fixture", sourceRepository: "https://github.com/example/kit", sourceCommit: "k", releaseTag: "v0.0.1", artifactUrl: "https://x/k.tgz", artifactSha256: "k-sha", manifestSha256: "c".repeat(64), stagedHandle: "k-handle" },
     ];
     closure.mockImplementation(async (req: any) => {
       invoke.mockResolvedValueOnce({ revision: 5 });

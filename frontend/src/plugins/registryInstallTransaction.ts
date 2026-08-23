@@ -14,7 +14,7 @@ import {
 
 export interface RegistryInstallTransaction { transactionId: string }
 export interface StagedRegistryArtifact { handle: string; sha256: string; size: number; manifestSha256: string; extraction: "regular-files-only"; verifiedEntrypoints?: readonly string[] }
-export interface VerifiedInstallRelease extends ReleaseIdentity { registryId: string; sourceRepository: string; sourceCommit: string; artifactUrl: string; artifactSha256: string; target: ArtifactTarget; manifestSha256: string; stagedHandle: string }
+export interface VerifiedInstallRelease extends ReleaseIdentity { registryId: string; sourceRepository: string; sourceCommit: string; artifactUrl: string; artifactSha256: string; target?: ArtifactTarget; manifestSha256: string; stagedHandle: string }
 export interface RegistryArtifactStager {
   begin(input: { registryId: string; root: ReleaseIdentity }): Promise<RegistryInstallTransaction>;
   stage(input: { transactionId: string; registryId: string; release: ReleaseIdentity; artifact: ReleaseArtifact }): Promise<StagedRegistryArtifact>;
@@ -81,7 +81,8 @@ async function stageRelease(request: RegistryInstallRequest, transactionId: stri
   const verified: VerifiedInstallRelease = Object.freeze({
     ...identity, registryId: request.certified.registry.id,
     sourceRepository: release.source.repository, sourceCommit: release.source.commit,
-    artifactUrl: artifact.url, artifactSha256: artifact.sha256, target: artifact.target,
+    artifactUrl: artifact.url, artifactSha256: artifact.sha256,
+    ...(identity.kind === "sidecar" ? { target: artifact.target } : {}),
     manifestSha256: staged.manifestSha256, stagedHandle: staged.handle,
   });
   return { raw, verified };

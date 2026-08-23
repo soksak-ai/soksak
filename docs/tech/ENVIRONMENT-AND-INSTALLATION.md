@@ -8,7 +8,7 @@ Release identity, archive validation, and immutable-version handling are defined
 
 `<identity-home>/environment.json` is the single local component state. Each plugin, sidecar, kit,
 contract, and spec records its exact selected version, absolute local path, source kind, registry ID
-for managed content, and target where applicable. Plugin entries also record activation. Runtime
+for managed content, and target for Sidecars only. Plugin entries also record activation. Runtime
 dependencies remain in the plugin manifest and release; the environment does not store role bindings.
 One monotonic `revision` covers the whole environment. A change uses compare-and-swap and
 publishes one `environment.changed` event. Polling is not used.
@@ -29,6 +29,8 @@ the exact `runtimeDependencies.plugins` and `runtimeDependencies.sidecars` relea
 by each plugin release and installs that complete closure in the same transaction. An already
 materialized exact dependency is shared. Failure leaves the previous
 environment unchanged. The write lock exists only for the transaction.
+Artifact `target` selects the downloaded bytes. Only a Sidecar keeps that target in `environment.json`;
+plugin and kit artifacts are portable and their materialized component records have no target.
 
 Kit releases distribute reusable implementation source and are not implicit plugin runtime
 dependencies. A future runtime kit dependency must first be declared by the public plugin spec;
