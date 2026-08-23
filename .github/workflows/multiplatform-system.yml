@@ -1,0 +1,138 @@
+name: multiplatform-system
+on:
+  workflow_dispatch:
+  push:
+    branches: [wails3beta-terminal-0.0.2]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  windows-build:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { path: soksak-core, persist-credentials: false }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-contentview, ref: 5af66117202f6934ecd2909199bf9b84a541e523, path: soksak-contracts/soksak-contract-contentview }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-control, ref: db724f6474eb486d775b6d799b95de8377ba3dc7, path: soksak-contracts/soksak-contract-control }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-pty, ref: 78c856f1acc0669d17b9720e27a48600d2e6ad5c, path: soksak-contracts/soksak-contract-pty }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-terminal, ref: cab0691a1a01fca7436ac29f6cc2850245788ea6, path: soksak-contracts/soksak-contract-terminal }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with: { go-version-file: soksak-core/go.mod, cache-dependency-path: soksak-core/go.sum }
+      - id: frontend-versions
+        shell: bash
+        run: echo "node=$(jq -r .engines.node soksak-core/frontend/package.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: "${{ steps.frontend-versions.outputs.node }}" }
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with: { package_json_file: soksak-core/frontend/package.json }
+      - shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
+          "WAILS3=$(Join-Path (go env GOPATH) 'bin/wails3.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - shell: bash
+        working-directory: soksak-core
+        run: scripts/ci/windows-build.sh all
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: core-windows-artifact
+          path: |
+            soksak-core/bin/soksak.exe
+            soksak-core/bin/sok.exe
+          if-no-files-found: error
+          compression-level: 0
+  darwin-build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { path: soksak-core, persist-credentials: false }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-contentview, ref: 5af66117202f6934ecd2909199bf9b84a541e523, path: soksak-contracts/soksak-contract-contentview }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-control, ref: db724f6474eb486d775b6d799b95de8377ba3dc7, path: soksak-contracts/soksak-contract-control }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-pty, ref: 78c856f1acc0669d17b9720e27a48600d2e6ad5c, path: soksak-contracts/soksak-contract-pty }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-terminal, ref: cab0691a1a01fca7436ac29f6cc2850245788ea6, path: soksak-contracts/soksak-contract-terminal }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with: { go-version-file: soksak-core/go.mod, cache-dependency-path: soksak-core/go.sum }
+      - id: frontend-versions
+        run: echo "node=$(jq -r .engines.node soksak-core/frontend/package.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: "${{ steps.frontend-versions.outputs.node }}" }
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with: { package_json_file: soksak-core/frontend/package.json }
+      - working-directory: soksak-core
+        run: scripts/ci/darwin-release.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: core-darwin-artifact
+          path: soksak-core/bin/release/darwin-universal/
+          if-no-files-found: error
+          compression-level: 0
+  linux-build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: amd64
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { path: soksak-core, persist-credentials: false }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-contentview, ref: 5af66117202f6934ecd2909199bf9b84a541e523, path: soksak-contracts/soksak-contract-contentview }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-control, ref: db724f6474eb486d775b6d799b95de8377ba3dc7, path: soksak-contracts/soksak-contract-control }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-pty, ref: 78c856f1acc0669d17b9720e27a48600d2e6ad5c, path: soksak-contracts/soksak-contract-pty }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { repository: soksak-ai/soksak-contract-terminal, ref: cab0691a1a01fca7436ac29f6cc2850245788ea6, path: soksak-contracts/soksak-contract-terminal }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with: { go-version-file: soksak-core/go.mod, cache-dependency-path: soksak-core/go.sum }
+      - id: frontend-versions
+        run: echo "node=$(jq -r .engines.node soksak-core/frontend/package.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: { node-version: "${{ steps.frontend-versions.outputs.node }}" }
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with: { package_json_file: soksak-core/frontend/package.json }
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev binutils
+      - working-directory: soksak-core
+        run: scripts/ci/linux-release.sh ${{ matrix.architecture }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: core-linux-${{ matrix.architecture }}-artifact
+          path: soksak-core/bin/release/linux-${{ matrix.architecture }}/
+          if-no-files-found: error
+          compression-level: 0
+  windows-system:
+    needs: windows-build
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@f4885ba89dc70f655b19520d148b07a45fb3d60b
+    with: { tests_ref: f4885ba89dc70f655b19520d148b07a45fb3d60b }
+  darwin-system:
+    needs: darwin-build
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/darwin-system.yml@f4885ba89dc70f655b19520d148b07a45fb3d60b
+    with: { tests_ref: f4885ba89dc70f655b19520d148b07a45fb3d60b }
+  linux-system:
+    needs: linux-build
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: amd64
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+            target: aarch64-unknown-linux-gnu
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/linux-system.yml@f4885ba89dc70f655b19520d148b07a45fb3d60b
+    with:
+      tests_ref: f4885ba89dc70f655b19520d148b07a45fb3d60b
+      runner: ${{ matrix.runner }}
+      architecture: ${{ matrix.architecture }}
+      target: ${{ matrix.target }}

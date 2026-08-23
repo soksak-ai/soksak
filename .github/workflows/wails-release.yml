@@ -28,26 +28,40 @@ jobs:
           SOURCE_COMMIT: ${{ github.sha }}
         run: |
           test "$(printf '%s' "$SOURCE_COMMIT" | wc -c)" -eq 40
-          run_id="$(gh api "repos/${{ github.repository }}/actions/workflows/windows-terminal-system.yml/runs?head_sha=$SOURCE_COMMIT&status=success&per_page=100" --jq '[.workflow_runs[] | select(.head_sha == "'"$SOURCE_COMMIT"'" and .conclusion == "success")][0].id // empty')"
+          run_id="$(gh api "repos/${{ github.repository }}/actions/workflows/multiplatform-system.yml/runs?head_sha=$SOURCE_COMMIT&status=success&per_page=100" --jq '[.workflow_runs[] | select(.head_sha == "'"$SOURCE_COMMIT"'" and .conclusion == "success")][0].id // empty')"
           test -n "$run_id"
-          test "$(gh api "repos/${{ github.repository }}/actions/runs/$run_id" --jq .path)" = .github/workflows/windows-terminal-system.yml
+          test "$(gh api "repos/${{ github.repository }}/actions/runs/$run_id" --jq .path)" = .github/workflows/multiplatform-system.yml
           echo "id=$run_id" >> "$GITHUB_OUTPUT"
-      - name: Download the exact tested Windows binaries
+      - name: Download every exact tested artifact
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download "${{ steps.system-run.outputs.id }}" --repo "${{ github.repository }}" --name core-windows-artifact --dir tested
+        run: |
+          for artifact in core-windows-artifact core-darwin-artifact core-linux-amd64-artifact core-linux-arm64-artifact; do
+            gh run download "${{ steps.system-run.outputs.id }}" --repo "${{ github.repository }}" --name "$artifact" --dir "tested/$artifact"
+          done
+          chmod +x tested/core-darwin-artifact/sok tested/core-darwin-artifact/soksak.app/Contents/MacOS/soksak
+          chmod +x tested/core-linux-amd64-artifact/sok tested/core-linux-amd64-artifact/soksak
+          chmod +x tested/core-linux-arm64-artifact/sok tested/core-linux-arm64-artifact/soksak
       - name: Package and verify the application release
         run: |
+          run_id=${{ steps.system-run.outputs.id }}
+          jq -n \
+            --arg run "$run_id" \
+            --arg root "$PWD" \
+            '{targets:[
+              {platform:"windows",architecture:"x86_64",systemRunId:$run,signing:"unsigned",application:($root+"/tested/core-windows-artifact/soksak.exe"),client:($root+"/tested/core-windows-artifact/sok.exe")},
+              {platform:"darwin",architecture:"universal",systemRunId:$run,signing:"ad-hoc",application:($root+"/tested/core-darwin-artifact/soksak.app"),client:($root+"/tested/core-darwin-artifact/sok")},
+              {platform:"linux",architecture:"x86_64",systemRunId:$run,signing:"unsigned",application:($root+"/tested/core-linux-amd64-artifact/soksak"),client:($root+"/tested/core-linux-amd64-artifact/sok")},
+              {platform:"linux",architecture:"arm64",systemRunId:$run,signing:"unsigned",application:($root+"/tested/core-linux-arm64-artifact/soksak"),client:($root+"/tested/core-linux-arm64-artifact/sok")}
+            ]}' > release-inputs.json
           go -C source run ./cmd/package-release \
             --root . \
             --out ../dist-release \
             --source-commit "${{ github.sha }}" \
-            --system-run-id "${{ steps.system-run.outputs.id }}" \
-            --app ../tested/soksak.exe \
-            --cli ../tested/sok.exe
+            --inputs ../release-inputs.json
           (cd dist-release && sha256sum --check SHA256SUMS)
           test "$(jq -r .sourceCommit dist-release/provenance.json)" = "${{ github.sha }}"
-          test "$(jq -r .authenticode dist-release/provenance.json)" = unsigned
+          test "$(jq '.targets | length == 4' dist-release/provenance.json)" = true
       - id: release-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -63,12 +77,15 @@ jobs:
           SOURCE_COMMIT: ${{ github.sha }}
         run: |
           test "$(gh api "repos/${{ github.repository }}/immutable-releases" --jq '.enabled and .enforced_by_owner')" = true
-          version="$(jq -r .version source/frontend/package.json)"
+          version="$(tr -d '\n' < source/VERSION)"
           test "${{ github.ref_name }}" = "v$version"
           test "$(jq -r .tag dist-release/provenance.json)" = "${{ github.ref_name }}"
           test -z "$(gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json tagName --jq .tagName 2>/dev/null || true)"
           gh release create "${{ github.ref_name }}" \
             dist-release/soksak-"$version"-windows-x86_64.zip \
+            dist-release/soksak-"$version"-darwin-universal.tar.gz \
+            dist-release/soksak-"$version"-linux-x86_64.tar.gz \
+            dist-release/soksak-"$version"-linux-arm64.tar.gz \
             dist-release/SHA256SUMS \
             dist-release/provenance.json \
             dist-release/RELEASE-NOTES.md \
