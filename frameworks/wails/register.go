@@ -29,8 +29,9 @@ type HostDeps struct {
 	// process. Both arrive here rather than being registered beside RegisterHost,
 	// because a group registered elsewhere is one the coverage gate and the
 	// application disagree about.
-	Reaper Reaper
-	Quit   func()
+	Reaper  Reaper
+	Release func() error
+	Quit    func()
 	// NativeParent reports whether the named window's native container exists
 	// right now.
 	NativeParent func(window string) bool
@@ -56,7 +57,7 @@ func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
 	RegisterCapture(registry, deps.Host, deps.Frames)
 	RegisterWindowInput(registry, deps.Host)
-	RegisterShutdown(registry, ShutdownDeps{Reaper: deps.Reaper, Quit: deps.Quit})
+	RegisterShutdown(registry, ShutdownDeps{Reaper: deps.Reaper, Release: deps.Release, Quit: deps.Quit})
 	// The readings over a recording need no window, so they answer in a process
 	// with none — a recording outlives the session it was taken in.
 	RegisterAnalyze(registry)

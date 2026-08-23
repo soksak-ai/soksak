@@ -41,6 +41,9 @@ func TestClosingTheOwnerRemovesTheSocketPath(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("released socket path remains: %v", err)
 	}
+	if err := listener.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
 }
 
 func TestClosingAnOldOwnerDoesNotRemoveAReplacement(t *testing.T) {

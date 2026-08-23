@@ -90,6 +90,7 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		NativeParent: func(string) bool { return false },
 		Dispatch:     func(string, string, any) error { return nil },
 		Reaper:       idleReaper{},
+		Release:      func() error { return nil },
 		Quit:         func() {},
 	})
 

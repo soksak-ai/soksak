@@ -184,6 +184,7 @@ func Run(assets embed.FS) error {
 			Assets:       assets,
 			CaptureProbe: os.Getenv("SOKSAK_CAPTURE_PROBE"),
 			Registry:     registry,
+			Release:      listener.Close,
 			Bridge:       bridge,
 			Reapers:      []wails.UnitReaper{units},
 			// Declared by whoever started this process. Unset is a person at the application, which

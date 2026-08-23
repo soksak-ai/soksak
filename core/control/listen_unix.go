@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // socketPathLimit is what a unix socket address holds.
@@ -61,19 +62,23 @@ type ownedSocketListener struct {
 	net.Listener
 	path  string
 	owner os.FileInfo
+	once  sync.Once
+	err   error
 }
 
 func (listener *ownedSocketListener) Close() error {
-	closeErr := listener.Listener.Close()
-	current, statErr := os.Stat(listener.path)
-	if statErr == nil && current.Mode()&os.ModeSocket != 0 && os.SameFile(listener.owner, current) {
-		if removeErr := os.Remove(listener.path); removeErr != nil && closeErr == nil {
-			return fmt.Errorf("removing the released control socket at %s: %w", listener.path, removeErr)
+	listener.once.Do(func() {
+		listener.err = listener.Listener.Close()
+		current, statErr := os.Stat(listener.path)
+		if statErr == nil && current.Mode()&os.ModeSocket != 0 && os.SameFile(listener.owner, current) {
+			if removeErr := os.Remove(listener.path); removeErr != nil && listener.err == nil {
+				listener.err = fmt.Errorf("removing the released control socket at %s: %w", listener.path, removeErr)
+			}
+		} else if statErr != nil && !os.IsNotExist(statErr) && listener.err == nil {
+			listener.err = fmt.Errorf("checking the released control socket at %s: %w", listener.path, statErr)
 		}
-	} else if statErr != nil && !os.IsNotExist(statErr) && closeErr == nil {
-		return fmt.Errorf("checking the released control socket at %s: %w", listener.path, statErr)
-	}
-	return closeErr
+	})
+	return listener.err
 }
 
 func Dial(path string) (net.Conn, error) { return net.Dial("unix", path) }

@@ -46,6 +46,8 @@ type ShutdownDeps struct {
 	// rather than answered around: a receipt from a host that reaped nothing
 	// reads exactly like one from a host that had nothing to reap.
 	Reaper Reaper
+	// Release gives up the process claim before Quit can bypass normal returns.
+	Release func() error
 	// Quit ends the process. Separate from the reaper so the reap is provable
 	// without ending the test that proves it.
 	Quit func()
@@ -91,6 +93,9 @@ func RegisterShutdown(registry *control.Registry, deps ShutdownDeps) {
 	if deps.Quit == nil {
 		panic("wails: the shutdown commands need a way to quit")
 	}
+	if deps.Release == nil {
+		panic("wails: the shutdown commands need a claim to release")
+	}
 
 	registry.MustRegister(control.Command{
 		Name:  "app_shutdown_prepare",
@@ -133,6 +138,9 @@ func RegisterShutdown(registry *control.Registry, deps ShutdownDeps) {
 		Name:  "app_shutdown_commit",
 		Owner: control.OwnerFramework,
 		Handler: func(control.Args) (any, error) {
+			if err := deps.Release(); err != nil {
+				return nil, fmt.Errorf("releasing the application claim: %w", err)
+			}
 			deps.Quit()
 			return map[string]any{"quit": true}, nil
 		},

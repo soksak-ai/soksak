@@ -2,6 +2,8 @@ package wails
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -63,8 +65,9 @@ func receiptOf(t *testing.T, registry *control.Registry) map[string]any {
 // rather than as the Go value.
 func TestThePrepareReceiptSaysWhatItReaped(t *testing.T) {
 	registry := shutdownRegistry(t, ShutdownDeps{
-		Reaper: &reaper{shells: 3, surfaces: 4, monitors: 1},
-		Quit:   func() {},
+		Reaper:  &reaper{shells: 3, surfaces: 4, monitors: 1},
+		Release: func() error { return nil },
+		Quit:    func() {},
 	})
 
 	receipt := receiptOf(t, registry)
@@ -101,8 +104,9 @@ func TestThePrepareReceiptSaysWhatItReaped(t *testing.T) {
 
 func TestThePrepareReceiptSeparatesLocalReapsFromDaemonTransfers(t *testing.T) {
 	registry := shutdownRegistry(t, ShutdownDeps{
-		Reaper: &reaper{shells: 3, transferred: 2},
-		Quit:   func() {},
+		Reaper:  &reaper{shells: 3, transferred: 2},
+		Release: func() error { return nil },
+		Quit:    func() {},
 	})
 	receipt := receiptOf(t, registry)
 	if receipt["localPtysReaped"] != float64(3) || receipt["daemonPtysTransferred"] != float64(2) {
@@ -117,8 +121,9 @@ func TestThePrepareReceiptSeparatesLocalReapsFromDaemonTransfers(t *testing.T) {
 // it, and the window would be gone with the child still on screen.
 func TestAPrepareThatCouldNotDrainRefusesRatherThanReport(t *testing.T) {
 	registry := shutdownRegistry(t, ShutdownDeps{
-		Reaper: &reaper{shells: 1, surfaces: 0, left: 2},
-		Quit:   func() {},
+		Reaper:  &reaper{shells: 1, surfaces: 0, left: 2},
+		Release: func() error { return nil },
+		Quit:    func() {},
 	})
 
 	_, err := registry.Invoke("app_shutdown_prepare", nil)
@@ -133,16 +138,33 @@ func TestAPrepareThatCouldNotDrainRefusesRatherThanReport(t *testing.T) {
 // The commit is what actually quits, and it is a separate call because the reply
 // to the prepare has to reach the caller first.
 func TestTheCommitQuits(t *testing.T) {
-	quit := 0
+	order := []string{}
 	registry := shutdownRegistry(t, ShutdownDeps{
-		Reaper: &reaper{},
-		Quit:   func() { quit++ },
+		Reaper:  &reaper{},
+		Release: func() error { order = append(order, "release"); return nil },
+		Quit:    func() { order = append(order, "quit") },
 	})
 
 	if _, err := registry.Invoke("app_shutdown_commit", nil); err != nil {
 		t.Fatalf("app_shutdown_commit: %v", err)
 	}
-	if quit != 1 {
-		t.Errorf("the commit quit %d times, want 1", quit)
+	if strings.Join(order, ",") != "release,quit" {
+		t.Errorf("shutdown order is %v", order)
+	}
+}
+
+func TestACommitThatCannotReleaseTheClaimDoesNotQuit(t *testing.T) {
+	want := fmt.Errorf("socket remains")
+	quit := false
+	registry := shutdownRegistry(t, ShutdownDeps{
+		Reaper:  &reaper{},
+		Release: func() error { return want },
+		Quit:    func() { quit = true },
+	})
+	if _, err := registry.Invoke("app_shutdown_commit", nil); !errors.Is(err, want) {
+		t.Fatalf("commit error = %v", err)
+	}
+	if quit {
+		t.Fatal("the application quit while its claim remained")
 	}
 }

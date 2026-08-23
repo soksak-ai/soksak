@@ -47,6 +47,8 @@ type Options struct {
 	// its window-owning commands onto it; everything else was registered by the
 	// launcher, which is what keeps those answerable with no window at all.
 	Registry *control.Registry
+	// Release gives up the process claim before a framework quit path can bypass Run's return.
+	Release func() error
 	// Attended is whether a person is at this launch.
 	//
 	// An unattended one is a measurement run: it opens windows, drives them and quits, and nobody is
@@ -265,7 +267,8 @@ func Run(options Options) error {
 			surfaces:      nativeCompositor.Drain,
 			inputMonitors: windowHost.DrainInputMonitor,
 		},
-		Quit: app.Quit,
+		Release: options.Release,
+		Quit:    app.Quit,
 		Dispatch: func(target, event string, payload any) error {
 			return dispatchToWindow(app, target, event, payload)
 		},
