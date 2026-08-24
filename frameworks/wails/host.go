@@ -49,6 +49,9 @@ type Options struct {
 	// its window-owning commands onto it; everything else was registered by the
 	// launcher, which is what keeps those answerable with no window at all.
 	Registry *control.Registry
+	// HostReady runs after every host-owned command is registered and before
+	// the first renderer is created. Nil publishes no process event.
+	HostReady func()
 	// Release gives up the process claim before a framework quit path can bypass Run's return.
 	Release func() error
 	// Presentation declares whether this process is shown on the user's desktop.
@@ -283,6 +286,9 @@ func Run(options Options) error {
 			return dispatchToWindow(app, target, event, payload)
 		},
 	})
+	if options.HostReady != nil {
+		options.HostReady()
+	}
 	bootstrap := newControlPlaneBootstrap()
 	closeBootstrap := func() {
 		application.InvokeAsync(func() {

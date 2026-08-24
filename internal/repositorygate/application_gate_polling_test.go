@@ -21,7 +21,7 @@ func TestApplicationGateStartupConsumesReadinessWithoutPolling(t *testing.T) {
 			t.Errorf("application gate startup retains %q", forbidden)
 		}
 	}
-	if !strings.Contains(source, "soksak.control.ready") {
+	if !strings.Contains(source, "soksak.host.ready") {
 		t.Fatal("application gate startup does not consume the readiness event")
 	}
 }

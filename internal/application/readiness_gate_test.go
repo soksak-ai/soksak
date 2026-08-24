@@ -31,7 +31,7 @@ func (writer *gateControlReadyWriter) Write(payload []byte) (int, error) {
 		line := append([]byte(nil), writer.pending[:newline]...)
 		writer.pending = writer.pending[newline+1:]
 		var event controlReadyEvent
-		if json.Unmarshal(line, &event) == nil && event.Event == "soksak.control.ready" {
+		if json.Unmarshal(line, &event) == nil && event.Event == "soksak.host.ready" {
 			select {
 			case writer.events <- event:
 			default:
@@ -43,7 +43,7 @@ func (writer *gateControlReadyWriter) Write(payload []byte) (int, error) {
 
 func TestGateControlReadyWriterConsumesASplitEvent(t *testing.T) {
 	writer := newGateControlReadyWriter()
-	_, _ = writer.Write([]byte("noise\n{\"event\":\"soksak.control."))
+	_, _ = writer.Write([]byte("noise\n{\"event\":\"soksak.host."))
 	_, _ = writer.Write([]byte("ready\",\"protocol\":1,\"socket\":\"<local-evidence>/gate.sock\",\"identifier\":\"com.soksak.gate\",\"pid\":42}\n"))
 	select {
 	case event := <-writer.events:

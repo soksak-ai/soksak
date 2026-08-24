@@ -198,7 +198,12 @@ func Run(assets embed.FS) error {
 			// Declared by whoever started this process. Unset is a person at the application, which
 			// is what a launch with nothing stated about it is. A measurement run declares the
 			// opposite and gets a window that draws without taking the front.
-			Presentation:     presentation,
+			Presentation: presentation,
+			HostReady: func() {
+				if err := announceHostReady(os.Stdout, resolved, os.Getpid()); err != nil {
+					log.Printf("host readiness event failed: %v", err)
+				}
+			},
 			PluginAssetRoots: func() ([]string, error) { return installedPluginRoots(resolved.Home) },
 		})
 	})

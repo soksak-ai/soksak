@@ -15,9 +15,17 @@ type controlReadyEvent struct {
 	PID        int    `json:"pid"`
 }
 
-func announceControlReady(writer io.Writer, resolved identity.Resolved, pid int) error {
+func announceReady(writer io.Writer, event string, resolved identity.Resolved, pid int) error {
 	return json.NewEncoder(writer).Encode(controlReadyEvent{
-		Event: "soksak.control.ready", Protocol: 1,
+		Event: event, Protocol: 1,
 		Socket: resolved.Socket, Identifier: resolved.Identifier, PID: pid,
 	})
+}
+
+func announceControlReady(writer io.Writer, resolved identity.Resolved, pid int) error {
+	return announceReady(writer, "soksak.control.ready", resolved, pid)
+}
+
+func announceHostReady(writer io.Writer, resolved identity.Resolved, pid int) error {
+	return announceReady(writer, "soksak.host.ready", resolved, pid)
 }
