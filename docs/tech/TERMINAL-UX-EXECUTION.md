@@ -26,6 +26,31 @@ contract group, not by reported item number.
 If a requirement is technically wrong, stop before changing its RED criterion. Record the conflict,
 propose the corrected rule, and update the rule, RED and document together after approval.
 
+## Failure classification before RED
+
+Run scripts/ci/require-frontend-toolchain.sh before a baseline or product test. It derives the exact
+Node and pnpm versions from frontend/package.json, requires the Node runtime architecture to match
+the host, materializes the frozen lockfile in non-interactive CI mode, and verifies the selected
+native frontend package. task verify runs this preflight before any product test.
+
+The preflight result determines whether product evidence exists:
+
+| Result | Classification | Action |
+| --- | --- | --- |
+| TOOLCHAIN_MISMATCH, exit 78 | Environment precondition failure | Select the declared toolchain and rerun the preflight. Do not change product code and do not record RED. |
+| DEPENDENCY_STATE_INVALID, exit 79 | Dependency materialization failure | Repair the repository-owned dependency state with the exact lockfile. Do not delete caches manually, force a package install or record RED. |
+| Test cannot reach or execute its acceptance action | Test-harness failure | Fix the fixture, observation interface or test ownership first. The product result is unknown. |
+| An unrelated accumulated gate fails before the target assertion | Existing regression | Stop the new work and restore the accumulated gate with its own RED and commit history. Do not relabel it as the target RED. |
+| The declared environment is ready, the baseline path executes, and the target acceptance assertion fails | Product RED | Record the measured failure and begin implementation. |
+
+Every evidence record includes source commit, host OS and architecture, Node version and
+architecture, pnpm version, dependency lock digest, test command, exit code and first failing named
+assertion. A second run with a different environment is not the same baseline.
+
+The first valid baseline can pass or fail. If it passes, add a focused scenario that reproduces the
+reported defect without weakening the acceptance rule. If it cannot reproduce the report, record
+the missing condition as an investigation result; do not edit implementation on an assumed RED.
+
 ## Phase 1 — observation surface
 
 Add durable public facts only where the current interfaces cannot judge a defect.

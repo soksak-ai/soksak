@@ -26,6 +26,32 @@ canonical: docs/tech/TERMINAL-UX-EXECUTION.md
 요구가 기술적으로 잘못되었다면 RED 기준을 바꾸기 전에 중단합니다. 충돌과 수정 규칙을
 기록하고, 승인 후 규칙, RED, 문서를 함께 수정합니다.
 
+## RED 이전 실패 분류
+
+Baseline 또는 product test 전에 scripts/ci/require-frontend-toolchain.sh를 실행합니다. 이
+preflight는 frontend/package.json에서 정확한 Node와 pnpm version을 읽고, Node runtime
+architecture와 host가 일치하는지 검사하고, 비대화형 CI mode에서 frozen lockfile을 materialize한
+뒤 선택된 native frontend package를 확인합니다. task verify는 모든 product test보다 먼저 이
+preflight를 실행합니다.
+
+Preflight 결과로 product 증거의 존재 여부를 판정합니다.
+
+| 결과 | 분류 | 조치 |
+| --- | --- | --- |
+| TOOLCHAIN_MISMATCH, exit 78 | 실행 환경 precondition 실패 | 선언된 toolchain을 선택하고 preflight를 다시 실행합니다. Product code를 바꾸거나 RED로 기록하지 않습니다. |
+| DEPENDENCY_STATE_INVALID, exit 79 | Dependency materialization 실패 | 정확한 lockfile로 repository 소유 dependency state를 복구합니다. Cache를 수동 삭제하거나 package install을 강제하거나 RED로 기록하지 않습니다. |
+| Test가 인수 동작에 도달하거나 실행하지 못함 | Test harness 실패 | Fixture, 관측 interface, test ownership을 먼저 수정합니다. Product 결과는 미확정입니다. |
+| 목표 assertion 전에 무관한 누적 gate 실패 | 기존 regression | 새 작업을 중단하고 별도 RED 및 commit 기록으로 누적 gate를 복구합니다. 목표 RED로 이름을 바꾸지 않습니다. |
+| 선언된 환경 준비 완료, baseline 경로 실행 완료, 목표 인수 assertion 실패 | Product RED | 측정한 실패를 기록하고 구현을 시작합니다. |
+
+모든 증거 기록에는 source commit, host OS와 architecture, Node version과 architecture, pnpm
+version, dependency lock digest, test command, exit code, 처음 실패한 named assertion을 포함합니다.
+환경이 다른 두 실행은 같은 baseline이 아닙니다.
+
+첫 유효 baseline은 통과하거나 실패할 수 있습니다. 통과하면 인수 기준을 약화하지 않고 제보된
+결함을 재현하는 집중 scenario를 추가합니다. 제보를 재현하지 못하면 누락된 조건을 investigation
+결과로 기록하며 추정한 RED를 근거로 구현을 수정하지 않습니다.
+
 ## 단계 1 — 관측면
 
 현재 interface로 결함을 판정할 수 없는 경우에만 지속적으로 사용할 공개 정보를 추가합니다.
