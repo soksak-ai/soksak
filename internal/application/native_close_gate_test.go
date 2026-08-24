@@ -32,9 +32,10 @@ func TestNativeTrafficLightCloseEndsTheAddressedWindowWithoutTakingInput(t *test
 		t.Fatalf("decode native close status: %v\n%s", err, statusRaw)
 	}
 	if !status.Data.Present || !status.Data.Enabled || !status.Data.Visible ||
-		status.Data.WindowVisible || status.Data.Width <= 0 || status.Data.Height <= 0 {
+		!status.Data.WindowVisible || status.Data.Width <= 0 || status.Data.Height <= 0 {
 		t.Fatalf("native close status=%+v", status.Data)
 	}
+	requireCaptureOnlyCompositorWindow(t, gate, closing)
 
 	var clicked struct {
 		Data struct {

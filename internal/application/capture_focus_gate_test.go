@@ -18,9 +18,7 @@ func TestWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 		t.Fatalf("unattended application start changed the input owner: %s -> %s", owner, afterStart)
 	}
 	window := gate.openWorkspace()
-	if gateWindowVisible(t, gate, window) {
-		t.Fatalf("unattended gate added a visible test window: %s", window)
-	}
+	requireCaptureOnlyCompositorWindow(t, gate, window)
 	if afterOpen := activeInputOwner(t); afterOpen != owner {
 		t.Fatalf("unattended workspace open changed the input owner: %s -> %s", owner, afterOpen)
 	}
@@ -37,9 +35,7 @@ func TestWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 		if before != after {
 			t.Fatalf("window capture %d changed the input owner: %s -> %s", capture, before, after)
 		}
-		if gateWindowVisible(t, gate, window) {
-			t.Fatalf("window capture %d made the test window visible: %s", capture, window)
-		}
+		requireCaptureOnlyCompositorWindow(t, gate, window)
 		info, err := os.Stat(path)
 		if err != nil || info.Size() == 0 {
 			t.Fatalf("window capture %d was not written: %v", capture, err)
@@ -51,8 +47,12 @@ func TestWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 	}
 }
 
-func gateWindowVisible(t *testing.T, gate *restoreGate, window string) bool {
-	return gateWindowPresentation(t, gate, window).Visible
+func requireCaptureOnlyCompositorWindow(t *testing.T, gate *restoreGate, window string) {
+	t.Helper()
+	presence := gateWindowPresentation(t, gate, window)
+	if !presence.Visible || presence.Key || presence.Alpha != 0 {
+		t.Fatalf("capture-only window is not transparent, compositor-resident and non-key: %s %+v", window, presence)
+	}
 }
 
 type gatePresentation struct {

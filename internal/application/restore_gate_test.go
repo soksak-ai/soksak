@@ -57,9 +57,7 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 	owner := activeInputOwner(t)
 	gate.start()
 	window := gate.openWorkspace()
-	if gateWindowVisible(t, gate, window) {
-		t.Fatalf("restore gate added a visible test window: %s", window)
-	}
+	requireCaptureOnlyCompositorWindow(t, gate, window)
 	if afterOpen := activeInputOwner(t); afterOpen != owner {
 		t.Fatalf("restore gate changed the input owner while opening: %s -> %s", owner, afterOpen)
 	}
@@ -75,9 +73,7 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 	// what this gate is here to read — so it is waited for exactly as the first
 	// one was.
 	gate.awaitWindow(window)
-	if gateWindowVisible(t, gate, window) {
-		t.Fatalf("restored gate added a visible test window: %s", window)
-	}
+	requireCaptureOnlyCompositorWindow(t, gate, window)
 	if afterRestore := activeInputOwner(t); afterRestore != owner {
 		t.Fatalf("restore gate changed the input owner while restoring: %s -> %s", owner, afterRestore)
 	}
