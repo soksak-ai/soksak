@@ -62,8 +62,8 @@ func TestVerifyRejectsAnInvalidBuildToolchainBeforeProductTests(t *testing.T) {
 		t.Fatal(err)
 	}
 	buildScript := string(body)
-	if strings.Contains(buildScript, "2>&1") {
-		t.Fatal("build toolchain check merges dependency progress into the Wails version")
+	if !strings.Contains(buildScript, "wails_output=") || !strings.Contains(buildScript, "wails_actual=") {
+		t.Fatal("build toolchain check does not separate Wails output from its parsed version")
 	}
 	for _, required := range []string{
 		frontendCheck,
@@ -247,7 +247,7 @@ case "$1:$2" in
   env:GOHOSTOS) echo darwin ;;
   env:GOHOSTARCH) echo ` + goArch + ` ;;
   list:*) echo ` + wailsVersion + ` ;;
-  tool:wails3) test -z "$FAIL_WAILS_TOOL" && test "$3" = version && { test -z "$WAILS_PROGRESS" || echo 'go: downloading Wails' >&2; echo ` + wailsVersion + `; } ;;
+  tool:wails3) test -z "$FAIL_WAILS_TOOL" && test "$3" = version && { test -z "$WAILS_PROGRESS" || echo 'go: downloading Wails' >&2; echo ` + wailsVersion + ` >&2; } ;;
   tool:-n) test -z "$FAIL_WAILS_TOOL" && test "$3" = wails3 && echo /fixture/wails3 version ;;
   version:-m) printf '\tbuild\tGOOS=darwin\n\tbuild\tGOARCH=` + goArch + `\n' ;;
   *) exit 1 ;;
