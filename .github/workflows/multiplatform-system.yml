@@ -92,10 +92,10 @@ jobs:
           compression-level: 0
   darwin-candidate-native-input:
     needs: darwin-build
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@6ed313a6685b2730247fedbd9686ba60d1821693
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@0d23e2a12ed2e036c56c4333807b6740d227a907
     with:
       tests_repository: min-median-max/soksak-terminal-tests
-      tests_ref: 6ed313a6685b2730247fedbd9686ba60d1821693
+      tests_ref: 0d23e2a12ed2e036c56c4333807b6740d227a907
       core_artifact_name: core-darwin-arm64-artifact
       core_source_commit: ${{ github.sha }}
   linux-build:
