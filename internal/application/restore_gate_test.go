@@ -190,6 +190,25 @@ func TestGateHomesAreOwnedByOneRunAndNeverEraseAnotherRun(t *testing.T) {
 	}
 }
 
+func TestConcurrentGateRunsReceiveDisjointIdentityAxes(t *testing.T) {
+	first := newGate(t, "<local-evidence>/soksak-concurrent-gate", "com.soksak.concurrentgate")
+	second := newGate(t, "<local-evidence>/soksak-concurrent-gate", "com.soksak.concurrentgate")
+	checks := []struct {
+		name        string
+		first, next string
+	}{
+		{name: "home", first: first.home, next: second.home},
+		{name: "runtime", first: first.runtime, next: second.runtime},
+		{name: "identifier", first: first.identifier, next: second.identifier},
+		{name: "socket", first: first.socket(), next: second.socket()},
+	}
+	for _, check := range checks {
+		if check.first == check.next {
+			t.Errorf("concurrent gates share %s %q", check.name, check.first)
+		}
+	}
+}
+
 func TestGateStartupReclaimsOnlyRunsWhoseOwnerIsDead(t *testing.T) {
 	root := t.TempDir()
 	dead := filepath.Join(root, "99999999-1")
