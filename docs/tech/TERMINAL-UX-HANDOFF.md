@@ -156,12 +156,28 @@ Verified facts:
 - Existing system tests primarily exercise command-based send, read, status and restore paths.
 - Existing tests do not prove pointer focus, real keyboard entry, cursor pixels, overlay and sidebar
   motion, native traffic-light input, or an undisturbed user desktop.
+- The installed-product matrix reaches the Kitty sidecar artifact and remains at `staging 1/2`.
+  A SIGQUIT stack captured the blocked test-owned process in `HTTPFetcher.Fetch`, inside the Go
+  HTTP/2 response-body read. Registry locking, archive extraction and the renderer bridge were not
+  on the blocked goroutine.
+
+Current unpublished candidates:
+
+- The terminal behavior contract 0.0.6 defines one 256-color palette and one presentation status
+  for byte and frame renderers.
+- The kit candidate preserves row/run DOM nodes, exposes input/focus/cursor/render sequences and
+  timestamps, and passed its typecheck and 33 source tests against the packed contract candidate.
+- The kit manifest must not retain a local file dependency. Its repository metadata gate correctly
+  rejects that dependency until the release train provides the immutable contract artifact.
+- The seven-provider blank-frame verdict remains unproven. Do not classify defects 5–7 as complete.
 
 Hypotheses that require RED evidence:
 
-- Full frame DOM replacement causes the reported latency.
+- Frame DOM replacement may contribute to the reported latency; the candidate removes replacement,
+  but the performance threshold has not run on the installed provider matrix.
 - Hidden-textarea focus transfer causes the focus, cursor and keyboard failures.
-- Separate default and named-color mappings cause the renderer color difference.
+- Separate default and named-color mappings may cause the renderer color difference; the candidate uses
+  the contract palette, but installed Xterm/provider parity has not run.
 
 Do not record a hypothesis as a cause before the corresponding RED measurement identifies it.
 

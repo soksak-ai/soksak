@@ -156,12 +156,28 @@ socket, owner를 받습니다. SOKSAK_PRESENTATION=capture-only는 test window�
 - 기존 system test는 주로 command 기반 send, read, status, restore 경로를 검사합니다.
 - 기존 test는 pointer focus, 실제 keyboard entry, cursor pixel, overlay 및 sidebar motion,
   native traffic-light input, 사용자 desktop 비간섭을 증명하지 않습니다.
+- Installed-product matrix는 Kitty sidecar artifact에서 `staging 1/2` 상태를 유지합니다.
+  Test-owned process의 SIGQUIT stack은 Go HTTP/2 response-body read 내부의
+  `HTTPFetcher.Fetch`에서 정지를 확인했습니다. Registry lock, archive extraction, renderer
+  bridge는 정지한 goroutine 경로에 없었습니다.
+
+현재 미공개 candidate:
+
+- Terminal behavior contract 0.0.6은 byte 및 frame renderer에 하나의 256색 palette와 하나의
+  presentation status를 정의합니다.
+- Kit candidate는 row/run DOM node를 유지하고 input/focus/cursor/render sequence와 timestamp를
+  공개합니다. Packed contract candidate 기준 typecheck와 source test 33개를 통과했습니다.
+- Kit manifest에 local file dependency를 남기면 안 됩니다. Repository metadata gate는 release
+  train이 immutable contract artifact를 제공할 때까지 해당 dependency를 올바르게 거부합니다.
+- 일곱 provider blank-frame 판정은 아직 증명되지 않았습니다. 결함 5–7을 완료로 분류하면 안 됩니다.
 
 RED 증거가 필요한 가설:
 
-- 전체 frame DOM 교체가 제보된 지연을 일으킵니다.
+- Frame DOM 교체가 제보된 지연에 기여할 수 있습니다. Candidate가 교체를 제거했지만 installed provider
+  matrix에서 성능 기준을 실행하지 않았습니다.
 - Hidden textarea focus transfer가 focus, cursor, keyboard 결함을 일으킵니다.
-- 서로 다른 default 및 named color mapping이 renderer 색상 차이를 일으킵니다.
+- 서로 다른 default 및 named color mapping이 renderer 색상 차이를 일으킬 수 있습니다. Candidate는 contract
+  palette를 사용하지만 installed Xterm/provider parity를 실행하지 않았습니다.
 
 대응 RED 측정으로 확인하기 전에는 가설을 원인으로 기록하지 않습니다.
 
