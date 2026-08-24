@@ -90,6 +90,13 @@ jobs:
           path: soksak-core/bin/release/darwin-universal/
           if-no-files-found: error
           compression-level: 0
+  darwin-candidate-native-input:
+    needs: darwin-build
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@1497af685e77125749381eaca12bb9becd01671b
+    with:
+      tests_ref: 1497af685e77125749381eaca12bb9becd01671b
+      core_artifact_name: core-darwin-arm64-artifact
+      core_source_commit: ${{ github.sha }}
   linux-build:
     strategy:
       fail-fast: false
