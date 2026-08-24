@@ -56,6 +56,5 @@ func nativeCloseStatus(unsafe.Pointer) (NativeCloseStatus, error) {
 func clickNativeClose(unsafe.Pointer, uint64) (bool, error) {
 	return false, ErrWindowInputUnsupported
 }
-func makeWindowTransparent(unsafe.Pointer)          {}
 func installWindowInputMonitor(*windowInputMonitor) {}
 func removeWindowInputMonitor(*windowInputMonitor)  {}
