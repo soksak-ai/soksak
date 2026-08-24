@@ -107,7 +107,11 @@ describe("content view effective visibility", () => {
     expect(isViewSurfaceVisible(true, "v2", "v1", "v1", false, false)).toBe(false);
   });
 
-  it("an overlay hides even the view its pane is showing", () => {
-    expect(isViewSurfaceVisible(true, null, "v1", "v1", true, false)).toBe(false);
+  it("an overlay keeps the DOM view visible", () => {
+    expect(isViewSurfaceVisible(true, null, "v1", "v1", true, false)).toBe(true);
+  });
+
+  it("layout travel keeps the DOM view visible", () => {
+    expect(isViewSurfaceVisible(true, null, "v1", "v1", false, true)).toBe(true);
   });
 });

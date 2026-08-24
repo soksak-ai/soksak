@@ -4,7 +4,7 @@
 // the core as "visible" and that workspace's native browser webview stayed on screen after the
 // switch (measured snapshot).
 import { describe, expect, it, vi } from "vitest";
-import { surfaceShown, viewSurfacePlacement, viewSurfaceStyle } from "./viewPark";
+import { resolveViewVisibility, surfaceShown, viewSurfacePlacement, viewSurfaceStyle } from "./viewPark";
 
 describe("effective view visibility — all three layers", () => {
   it("an inactive workspace is not visible even when the space and the tab are active", () => {
@@ -27,6 +27,35 @@ describe("effective view visibility — all three layers", () => {
   // plugin manager opened and two browser pages drew over its card, measured 2026-08-17.
   it("an overlay over the window hides it, whatever the other three say", () => {
     expect(surfaceShown(true, true, true, true, false)).toBe(false);
+  });
+});
+
+describe("view visibility ownership", () => {
+  it("keeps DOM content visible while an overlay occludes an out-of-document surface", () => {
+    expect(resolveViewVisibility(true, true, true, true, false)).toEqual({
+      contentVisible: true,
+      surfaceVisible: false,
+      occluded: true,
+      moving: false,
+    });
+  });
+
+  it("keeps DOM content visible while layout motion replaces an out-of-document surface", () => {
+    expect(resolveViewVisibility(true, true, true, false, true)).toEqual({
+      contentVisible: true,
+      surfaceVisible: false,
+      occluded: false,
+      moving: true,
+    });
+  });
+
+  it("hides both content and surface when the active tab chain is false", () => {
+    expect(resolveViewVisibility(true, true, false, false, false)).toEqual({
+      contentVisible: false,
+      surfaceVisible: false,
+      occluded: false,
+      moving: false,
+    });
   });
 });
 
