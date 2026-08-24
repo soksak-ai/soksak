@@ -72,7 +72,14 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 			t.Errorf("Windows workflow duplicates runner logic: %s", inline)
 		}
 	}
-	const testsRef = "3803aec44de4db9c91973381b1e8cf8e9d7ff91c"
+	refBody, err := os.ReadFile(".system-tests-ref")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testsRef := strings.TrimSpace(string(refBody))
+	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(testsRef) || string(refBody) != testsRef+"\n" {
+		t.Fatal("system-test owner ref must be one exact lowercase commit")
+	}
 	for _, platform := range []string{"windows", "darwin", "linux"} {
 		if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/"+platform+"-system.yml@"+testsRef) {
 			t.Errorf("%s fleet workflow is not pinned", platform)
@@ -80,6 +87,18 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 	}
 	if strings.Count(s, "tests_ref: "+testsRef) != 3 {
 		t.Fatal("native fleet executions do not share one exact Acceptance commit")
+	}
+	for _, required := range []string{
+		"artifact: core-darwin-arm64-artifact", "runner: macos-15", "architecture: arm64", "target: aarch64-apple-darwin", "variant: thin",
+		"artifact: core-darwin-x86_64-artifact", "runner: macos-15-intel", "architecture: x86_64", "target: x86_64-apple-darwin",
+		"artifact: core-darwin-artifact", "variant: universal",
+	} {
+		if !strings.Contains(s, required) {
+			t.Errorf("Darwin system matrix omits %s", required)
+		}
+	}
+	if strings.Count(s, "variant: universal") != 2 {
+		t.Fatal("universal Darwin artifact is not tested on both native architectures")
 	}
 	for _, forbidden := range []string{"soksak-ai/wails", "frameworks/wails3"} {
 		if strings.Contains(s, forbidden) {
