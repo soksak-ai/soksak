@@ -21,6 +21,27 @@ func orderWindowFrontWithoutKey(window unsafe.Pointer) error {
 	return nil
 }
 
+func presentCaptureOnlyWindow(window unsafe.Pointer) error {
+	if window == nil {
+		return i18n.Errorf("wails.window.noNativeLifetimeFront", nil)
+	}
+	handle := w32.HWND(uintptr(window))
+	required := uint32(w32.WS_EX_LAYERED | w32.WS_EX_TRANSPARENT | w32.WS_EX_NOACTIVATE)
+	current := uint32(w32.GetWindowLong(handle, w32.GWL_EXSTYLE))
+	w32.SetWindowLong(handle, w32.GWL_EXSTYLE, current|required)
+	if uint32(w32.GetWindowLong(handle, w32.GWL_EXSTYLE))&required != required {
+		return i18n.Errorf("wails.window.captureOnlyPresentationFailed", nil)
+	}
+	if !w32.SetLayeredWindowAttributes(handle, 0, 0, w32.LWA_ALPHA) {
+		return i18n.Errorf("wails.window.captureOnlyPresentationFailed", nil)
+	}
+	flags := uint(w32.SWP_NOMOVE | w32.SWP_NOSIZE | w32.SWP_NOACTIVATE | w32.SWP_SHOWWINDOW)
+	if !w32.SetWindowPos(handle, w32.HWND_TOP, 0, 0, 0, 0, flags) || !w32.IsWindowVisible(handle) {
+		return i18n.Errorf("wails.window.captureOnlyPresentationFailed", nil)
+	}
+	return nil
+}
+
 var ErrActivationUnsupported = i18n.Errorf("wails.window.activationUnsupported", nil)
 
 func activateApplication() error { return ErrActivationUnsupported }

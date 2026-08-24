@@ -24,6 +24,16 @@ func orderWindowFrontWithoutKey(window unsafe.Pointer) error {
 	return nil
 }
 
+func presentCaptureOnlyWindow(window unsafe.Pointer) error {
+	if window == nil {
+		return i18n.Errorf("wails.window.noNativeLifetimeFront", nil)
+	}
+	if C.soksakPresentCaptureOnlyWindow(window) == 0 {
+		return i18n.Errorf("wails.window.captureOnlyPresentationFailed", nil)
+	}
+	return nil
+}
+
 func activateApplication() error { return ErrActivationUnsupported }
 
 var ErrActivationUnsupported = i18n.Errorf("wails.window.activationUnsupported", nil)

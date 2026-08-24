@@ -33,11 +33,9 @@ func TestCaptureOnlyPresentationHasNativeLinuxAndWindowsOwners(t *testing.T) {
 		}
 	}
 
-	other, err := os.ReadFile("frameworks/wails/window_capture_attendance_other.go")
-	if err != nil {
+	if _, err := os.Stat("frameworks/wails/window_capture_attendance_other.go"); err == nil {
+		t.Fatal("unsupported platforms still receive a no-op capture-only fallback")
+	} else if !os.IsNotExist(err) {
 		t.Fatal(err)
-	}
-	if !strings.Contains(string(other), "!darwin && !linux && !windows") {
-		t.Fatal("generic capture-only fallback still owns Linux or Windows")
 	}
 }

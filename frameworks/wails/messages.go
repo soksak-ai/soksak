@@ -107,6 +107,10 @@ func init() {
 			EN: "Windows did not show the window without activation",
 			KO: "Windows가 창을 활성화하지 않고 표시하지 못했습니다",
 		},
+		"wails.window.captureOnlyPresentationFailed": {
+			EN: "the native window did not enter transparent, input-free capture-only presentation",
+			KO: "네이티브 창이 투명하고 입력을 받지 않는 capture-only 표시 상태에 들어가지 못했습니다",
+		},
 		"wails.window.activationUnsupported": {
 			EN: "application activation is not implemented on this platform",
 			KO: "이 플랫폼에는 애플리케이션 활성화가 구현되어 있지 않습니다",
