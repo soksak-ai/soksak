@@ -1,7 +1,9 @@
 package install
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,7 +15,7 @@ const maxArtifactDownloadBytes = archiveMaxTotalBytes + 1
 
 type HTTPFetcher struct{ Client *http.Client }
 
-func (fetcher HTTPFetcher) Fetch(ctx context.Context, url string) ([]byte, error) {
+func (fetcher HTTPFetcher) Fetch(ctx context.Context, url string, progress func(uint64)) ([]byte, error) {
 	if fetcher.Client == nil {
 		return nil, i18n.Errorf("install.fetch.noClient", nil)
 	}
@@ -29,12 +31,35 @@ func (fetcher HTTPFetcher) Fetch(ctx context.Context, url string) ([]byte, error
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return nil, i18n.Errorf("install.fetch.httpStatus", map[string]string{"status": fmt.Sprint(response.StatusCode)})
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxArtifactDownloadBytes))
-	if err != nil {
-		return nil, err
+	var body bytes.Buffer
+	buffer := make([]byte, 256<<10)
+	var received uint64
+	var reported uint64
+	if progress != nil {
+		progress(0)
 	}
-	if len(body) >= maxArtifactDownloadBytes {
-		return nil, i18n.Errorf("install.fetch.sizeLimit", nil)
+	for {
+		read, readErr := response.Body.Read(buffer)
+		if read > 0 {
+			received += uint64(read)
+			if received >= maxArtifactDownloadBytes {
+				return nil, i18n.Errorf("install.fetch.sizeLimit", nil)
+			}
+			_, _ = body.Write(buffer[:read])
+			if progress != nil && received-reported >= 128<<10 {
+				progress(received)
+				reported = received
+			}
+		}
+		if readErr != nil {
+			if !errors.Is(readErr, io.EOF) {
+				return nil, readErr
+			}
+			break
+		}
 	}
-	return body, nil
+	if progress != nil && received != reported {
+		progress(received)
+	}
+	return body.Bytes(), nil
 }

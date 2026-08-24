@@ -27,6 +27,14 @@ var unbuilt = []struct{ name, blockedBy string }{
 		installTransactionBlocked,
 	},
 	{
+		"artifact_install_status",
+		installTransactionBlocked,
+	},
+	{
+		"artifact_install_wait",
+		installTransactionBlocked,
+	},
+	{
 		"artifact_install_read_utf8",
 		installTransactionBlocked,
 	},
@@ -42,9 +50,9 @@ var unbuilt = []struct{ name, blockedBy string }{
 
 // installTransactionBlocked is one reason because it is one blockage.
 //
-// The five commands share a single in-process transaction: begin opens it,
-// stage fills it, read_utf8 inspects it, and commit or rollback ends it.
+// The seven commands share a single in-process transaction: begin opens it,
+// status and wait expose progress, stage fills it, read_utf8 inspects it, and commit or rollback ends it.
 // Serving the front of that sequence without the end is not partial progress —
 // it is a download that can only ever be thrown away, and it reports success at
 // every step until the last one. So they land together or not at all.
-const installTransactionBlocked = "artifact installation is one transaction across five commands (begin, stage, read_utf8, commit, rollback) and none of the five is ported yet. Serving the front of the sequence without commit would leave a staged download that can only be rolled back. Port the five together"
+const installTransactionBlocked = "artifact installation is one transaction across seven commands (begin, status, wait, stage, read_utf8, commit, rollback) and none of the seven is ported yet. Serving the front of the sequence without commit would leave a staged download that can only be rolled back. Port the seven together"

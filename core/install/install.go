@@ -8,10 +8,13 @@ package install
 import (
 	"context"
 	"path/filepath"
+	"strconv"
+	"time"
 
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/environment"
 	"github.com/soksak-ai/soksak-core/core/files"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Deps is what the process supplies. Every field is something this package
@@ -65,7 +68,7 @@ func Register(registry *control.Registry, deps Deps) {
 		if err := RecoverTransactions(deps.Home, root); err != nil {
 			panic(err)
 		}
-		transactions = NewTransactionManager(root, deps.Fetcher)
+		transactions = NewTransactionManager(root, deps.Fetcher, deps.Changed)
 	}
 	registry.MustRegister(control.Command{
 		Name: "binary_integrity",
@@ -146,6 +149,31 @@ func isInstallTransactionCommand(name string) bool {
 }
 
 func registerInstallTransactions(registry *control.Registry, manager *TransactionManager, deps Deps) {
+	registry.MustRegister(control.Command{Name: "artifact_install_status", Handler: func(args control.Args) (any, error) {
+		rootID, err := control.Arg[string](args, "rootId")
+		if err != nil {
+			return nil, err
+		}
+		return manager.Progress(rootID)
+	}})
+	registry.MustRegister(control.Command{Name: "artifact_install_wait", Handler: func(args control.Args) (any, error) {
+		rootID, err := control.Arg[string](args, "rootId")
+		if err != nil {
+			return nil, err
+		}
+		after, err := control.Arg[uint64](args, "afterSequence")
+		if err != nil {
+			return nil, err
+		}
+		timeoutMs, err := control.Arg[int](args, "timeoutMs")
+		if err != nil {
+			return nil, err
+		}
+		if timeoutMs < 1 || timeoutMs > 30000 {
+			return nil, i18n.Errorf("install.progress.invalidTimeout", map[string]string{"timeout": strconv.Itoa(timeoutMs)})
+		}
+		return manager.WaitProgress(rootID, after, time.Duration(timeoutMs)*time.Millisecond)
+	}})
 	registry.MustRegister(control.Command{Name: "artifact_install_begin", Handler: func(args control.Args) (any, error) {
 		registryID, err := control.Arg[string](args, "registryId")
 		if err != nil {

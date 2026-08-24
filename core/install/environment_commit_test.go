@@ -11,7 +11,7 @@ import (
 
 func TestCommitPublishesOneEnvironmentWithSeparateComponentPaths(t *testing.T) {
 	home := t.TempDir()
-	manager := NewTransactionManager(filepath.Join(home, ".transactions"), memoryFetcher{})
+	manager := NewTransactionManager(filepath.Join(home, ".transactions"), memoryFetcher{}, nil)
 	root := ArtifactIdentity{Kind: "plugin", ID: "view", Version: "0.0.1"}
 	transaction, _ := manager.Begin("official", root)
 	pluginArchive := tgz(t, archiveEntry{name: "plugin.json", body: `{"id":"view","version":"0.0.1"}`})

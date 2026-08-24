@@ -81,6 +81,9 @@ func init() {
 		"install.fetch.noClient":                       {EN: "installer HTTP client is required", KO: "인스톨러 HTTP client 가 필요합니다"},
 		"install.fetch.httpStatus":                     {EN: "artifact download returned HTTP {status}", KO: "아티팩트 다운로드가 HTTP {status} 을(를) 반환했습니다"},
 		"install.fetch.sizeLimit":                      {EN: "artifact download exceeds size limit", KO: "아티팩트 다운로드가 크기 한도를 초과했습니다"},
+		"install.progress.notFound":                    {EN: "artifact install progress not found for {id}", KO: "{id}의 아티팩트 설치 진행 상태가 없습니다"},
+		"install.progress.timedOut":                    {EN: "artifact install {id} had no event after sequence {sequence} within {timeout}", KO: "아티팩트 설치 {id}에서 {timeout} 동안 sequence {sequence} 이후 이벤트가 없었습니다"},
+		"install.progress.invalidTimeout":              {EN: "artifact progress timeout must be between 1 and 30000 ms, got {timeout}", KO: "아티팩트 진행 상태 제한 시간은 1~30000ms이어야 합니다: {timeout}"},
 	})
 }
 

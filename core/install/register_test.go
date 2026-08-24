@@ -112,7 +112,8 @@ func TestArtifactInstallCommandsCommitAndPublishEnvironmentChange(t *testing.T) 
 	if commitValue.(CommitResult).Revision != 1 {
 		t.Fatalf("commit=%+v", commitValue)
 	}
-	if len(changes) != 1 || changes[0].event != "environment.changed" {
+	if len(changes) != 6 || changes[0].event != ArtifactInstallProgressEvent ||
+		changes[4].event != ArtifactInstallProgressEvent || changes[5].event != "environment.changed" {
 		t.Fatalf("changes=%+v", changes)
 	}
 }

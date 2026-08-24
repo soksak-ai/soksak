@@ -47,6 +47,10 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 	if transaction == nil {
 		return CommitResult{}, i18n.Errorf("install.transaction.notFound", map[string]string{"id": request.TransactionID})
 	}
+	manager.recordProgress(ArtifactInstallProgress{
+		TransactionID: request.TransactionID, RegistryID: transaction.registryID,
+		Root: transaction.root, Component: transaction.root, Phase: "committing",
+	})
 	artifacts := []publishArtifact{}
 	for _, value := range request.Components {
 		artifacts = append(artifacts, publishArtifact{kind: value.Kind, id: value.ID, version: value.Version, target: value.Target, repository: value.SourceRepository, commit: value.SourceCommit, url: value.ArtifactURL, digest: value.ArtifactSHA256, handle: value.StagedHandle})
@@ -142,5 +146,9 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 	delete(manager.transactions, request.TransactionID)
 	manager.mu.Unlock()
 	_ = os.RemoveAll(filepath.Join(manager.root, request.TransactionID))
+	manager.recordProgress(ArtifactInstallProgress{
+		TransactionID: request.TransactionID, RegistryID: transaction.registryID,
+		Root: transaction.root, Component: transaction.root, Phase: "committed",
+	})
 	return CommitResult{Revision: change.Revision}, nil
 }

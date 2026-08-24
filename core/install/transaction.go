@@ -30,7 +30,7 @@ const (
 )
 
 type Fetcher interface {
-	Fetch(context.Context, string) ([]byte, error)
+	Fetch(context.Context, string, func(receivedBytes uint64)) ([]byte, error)
 }
 
 type ArtifactIdentity struct {
@@ -88,14 +88,24 @@ type stagedState struct {
 }
 
 type TransactionManager struct {
-	mu           sync.Mutex
-	root         string
-	fetcher      Fetcher
-	transactions map[string]*transactionState
+	mu                     sync.Mutex
+	root                   string
+	fetcher                Fetcher
+	transactions           map[string]*transactionState
+	progress               map[string]ArtifactInstallProgress
+	progressWaiters        map[string]map[uint64]chan ArtifactInstallProgress
+	progressSequence       uint64
+	progressWaiterSequence uint64
+	progressChanged        func(event string, payload any)
 }
 
-func NewTransactionManager(root string, fetcher Fetcher) *TransactionManager {
-	return &TransactionManager{root: root, fetcher: fetcher, transactions: map[string]*transactionState{}}
+func NewTransactionManager(root string, fetcher Fetcher, changed func(event string, payload any)) *TransactionManager {
+	return &TransactionManager{
+		root: root, fetcher: fetcher, transactions: map[string]*transactionState{},
+		progress:        map[string]ArtifactInstallProgress{},
+		progressWaiters: map[string]map[uint64]chan ArtifactInstallProgress{},
+		progressChanged: changed,
+	}
 }
 
 func (manager *TransactionManager) Begin(registryID string, root ArtifactIdentity) (Transaction, error) {
@@ -116,6 +126,9 @@ func (manager *TransactionManager) Begin(registryID string, root ArtifactIdentit
 	manager.mu.Lock()
 	manager.transactions[id] = &transactionState{registryID: registryID, root: root, handles: map[string]stagedState{}}
 	manager.mu.Unlock()
+	manager.recordProgress(ArtifactInstallProgress{
+		TransactionID: id, RegistryID: registryID, Root: root, Component: root, Phase: "begun",
+	})
 	return Transaction{TransactionID: id}, nil
 }
 
@@ -139,7 +152,13 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 	if request.Artifact.Manifest != expectedManifest || !safeArchivePath(request.Artifact.Manifest) {
 		return StagedArtifact{}, i18n.Errorf("install.transaction.manifestPathMismatch", map[string]string{"manifest": request.Artifact.Manifest, "expected": expectedManifest})
 	}
-	body, err := manager.fetcher.Fetch(ctx, request.Artifact.URL)
+	body, err := manager.fetcher.Fetch(ctx, request.Artifact.URL, func(receivedBytes uint64) {
+		manager.recordProgress(ArtifactInstallProgress{
+			TransactionID: request.TransactionID, RegistryID: request.RegistryID,
+			Root: transaction.root, Component: request.Identity, Phase: "downloading",
+			ReceivedBytes: receivedBytes, TotalBytes: request.Artifact.Size,
+		})
+	})
 	if err != nil {
 		return StagedArtifact{}, fmt.Errorf("fetch artifact: %w", err)
 	}
@@ -202,6 +221,11 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 	}
 	transaction.handles[handle] = stagedState{path: destination, identity: request.Identity, sha256: digest, size: uint64(len(body)), manifestSHA256: manifestDigest, manifest: request.Artifact.Manifest}
 	manager.mu.Unlock()
+	manager.recordProgress(ArtifactInstallProgress{
+		TransactionID: request.TransactionID, RegistryID: request.RegistryID,
+		Root: transaction.root, Component: request.Identity, Phase: "staged",
+		ReceivedBytes: uint64(len(body)), TotalBytes: request.Artifact.Size,
+	})
 	return StagedArtifact{Handle: handle, SHA256: digest, Size: uint64(len(body)), ManifestSHA256: manifestDigest, Extraction: "regular-files-only", VerifiedEntrypoints: verified}, nil
 }
 
@@ -249,13 +273,19 @@ func (manager *TransactionManager) staged(transactionID, handle string) (stagedS
 
 func (manager *TransactionManager) Rollback(transactionID string) error {
 	manager.mu.Lock()
-	if manager.transactions[transactionID] == nil {
+	transaction := manager.transactions[transactionID]
+	if transaction == nil {
 		manager.mu.Unlock()
 		return i18n.Errorf("install.transaction.notFound", map[string]string{"id": transactionID})
 	}
 	delete(manager.transactions, transactionID)
 	manager.mu.Unlock()
-	return os.RemoveAll(filepath.Join(manager.root, transactionID))
+	err := os.RemoveAll(filepath.Join(manager.root, transactionID))
+	manager.recordProgress(ArtifactInstallProgress{
+		TransactionID: transactionID, RegistryID: transaction.registryID,
+		Root: transaction.root, Component: transaction.root, Phase: "rolled-back",
+	})
+	return err
 }
 
 func extractTGZ(body []byte, destination string) error {
