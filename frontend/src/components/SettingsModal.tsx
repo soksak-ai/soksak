@@ -74,14 +74,15 @@ export function SettingsModal({
   }, [onClose]);
 
   return (
-    <div className="dmodal-overlay" onMouseDown={onClose}>
+    <div className="dmodal-overlay" data-node="settings/modal" onMouseDown={onClose}>
       <div
         ref={cardRef}
         className="dmodal-card dmodal-settings"
+        data-node="settings/card"
         style={cardStyle}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="dmodal-head" onMouseDown={onHeaderDown}>
+        <div className="dmodal-head" data-node="settings/header" onMouseDown={onHeaderDown}>
           <svg
             width="14"
             height="14"
@@ -105,6 +106,7 @@ export function SettingsModal({
           <button
             type="button"
             className="icon-btn dmodal-close"
+            data-node="settings/close"
             onClick={onClose}
           >
             <Icon name="close" />

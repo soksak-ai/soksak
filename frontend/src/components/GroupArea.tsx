@@ -4,6 +4,7 @@ import { execute } from "../commands/registry";
 import { rafThrottle } from "../lib/rafThrottle";
 import {
   commitViewVisibility,
+  resolveViewVisibility,
   surfaceShown,
   viewSurfacePlacement,
   viewSurfaceStyle,
@@ -147,16 +148,14 @@ function emitResizeGesture(active: boolean): void {
 
 // memo boundary = content data boundary (principle 2): a store write for content X preserves the object identity of
 // content Y (mapContent), so the GroupArea of another content or workspace is skipped.
-export function isViewSurfaceVisible(
+export function isViewContentVisible(
   surfaceActive: boolean,
   maximizedId: string | null,
   viewId: string,
   activeTabId: string,
-  overlayed: boolean,
-  traveling: boolean,
 ): boolean {
   const tabActive = maximizedId ? viewId === maximizedId : viewId === activeTabId;
-  return surfaceShown(surfaceActive, true, tabActive, overlayed, traveling);
+  return resolveViewVisibility(surfaceActive, true, tabActive, false, false).contentVisible;
 }
 
 export const GroupArea = memo(function GroupArea({
@@ -896,24 +895,30 @@ export const GroupArea = memo(function GroupArea({
       {cells.flatMap(({ group, rect }) =>
         group.tabs.map((view) => {
           // While maximized only the maximized view is visible (full rect) — the rest stay hidden.
-          const shown = isViewSurfaceVisible(
+          const contentVisible = isViewContentVisible(
             surfaceActive,
             maxCell ? maximizedId : null,
             view.id,
             group.activeTabId,
+          );
+          const tabActive = maxCell ? view.id === maximizedId : view.id === group.activeTabId;
+          const visibility = resolveViewVisibility(
+            surfaceActive,
+            true,
+            tabActive,
             overlayed,
             traveling,
           );
-          const slotRect = maxCell && shown ? FULL_RECT : rect;
+          const slotRect = maxCell && contentVisible ? FULL_RECT : rect;
           // B4 restore hydration gate — a cold view (restored but not yet visible) defers its body mount
           // (spreads concurrent PTY spawns). The moment it becomes visible, or the idle chain, promotes it. Normally
           // cold is empty, so the gate costs 0. The slot div itself always renders (atomic appearance, stable address).
-          const hydrated = !coldSet.has(view.id) || shown;
+          const hydrated = !coldSet.has(view.id) || contentVisible;
           const presentation = presentationOf(group, view.id);
           return (
             <div
               key={view.id}
-              className={`tab-body${shown && presentation.domSurfaceMotion === "active" ? " flip-move" : ""}`}
+              className={`tab-body${contentVisible && presentation.domSurfaceMotion === "active" ? " flip-move" : ""}`}
               // Read the same value as the cell — recombining the reasons here makes the two surfaces diverge silently.
               {...dimOf(group.id)}
               // For native click resolution (App.tsx native-mousedown → elementFromPoint).
@@ -922,17 +927,20 @@ export const GroupArea = memo(function GroupArea({
               data-input-activate-pane={group.id}
               data-workspace-id={projectId}
               data-node={`layout/tab/${view.id}`}
+              data-content-visible={String(visibility.contentVisible)}
+              data-surface-visible={String(visibility.surfaceVisible)}
+              data-visibility-reason={visibility.reason}
               data-wv-geometry-owner
               // What is inside this box is alive — a terminal, a page. It travels with the layout and
               // takes its size at once, so the thing inside lays itself out when the motion is over
               // rather than on each of its frames. The chrome around it holds the shape.
               data-rect-motion="travel"
-              ref={shown ? rectMotion.ref : undefined}
+              ref={contentVisible ? rectMotion.ref : undefined}
               // Normally an inactive slot only turns off visibility, while a slot excluded by maximize is also removed
               // from the compositing tree (viewSurfaceStyle is the single truth). Both keep the DOM and plugin instance lifetime.
               style={{
                 ...cellVars(slotRect, group.id),
-                ...viewSurfaceStyle(shown, !!maxCell),
+                ...viewSurfaceStyle(contentVisible, !!maxCell),
                 ...dimOf(group.id).style,
               }}
               onMouseDownCapture={() => {
@@ -959,7 +967,11 @@ export const GroupArea = memo(function GroupArea({
                   // The same dim as the cell, from one place. Recombining the reasons here would
                   // make the veil and the surface disagree, and no veil is painted on the
                   // surface at all.
-                  surfacePlacement={viewSurfacePlacement(shown, !!maxCell, dimStrengthOf(group.id))}
+                  surfacePlacement={viewSurfacePlacement(
+                    visibility.surfaceVisible,
+                    !!maxCell,
+                    dimStrengthOf(group.id),
+                  )}
                   command={view.command ?? null}
                   // B3 restore seam — the observed runtime (cwd, plugin state). A terminal restores the spawn
                   // location, browser-like views restore state (URL etc.). With no observed value it is null (a new view).

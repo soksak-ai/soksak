@@ -23,6 +23,8 @@ export type DomTraceSample = {
     address: string;
     connected: boolean;
     rect: { x: number; y: number; w: number; h: number };
+    dataset: Record<string, string>;
+    style: { display: string; visibility: string; opacity: string };
     animations: DomAnimationSample[];
     stacking: StackingPathEntry[];
   }>;
@@ -73,6 +75,10 @@ export function createFiniteDomTraceSampler(
     sample(captureFrame, frameTime = performance.now()) {
       const nodes = targets.map(({ address, el }) => {
         const rect = el.getBoundingClientRect();
+        const computed = getComputedStyle(el);
+        const dataset = "dataset" in el
+          ? Object.fromEntries(Object.entries((el as HTMLElement).dataset)) as Record<string, string>
+          : {};
         const animations = typeof el.getAnimations === "function"
           ? el.getAnimations().map((animation) => {
               const css = animation as CSSAnimation;
@@ -90,6 +96,12 @@ export function createFiniteDomTraceSampler(
           address,
           connected: el.isConnected,
           rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
+          dataset,
+          style: {
+            display: computed.display,
+            visibility: computed.visibility,
+            opacity: computed.opacity,
+          },
           animations,
           stacking: stackingPathOf(el, {
             getStyle: (node) => getComputedStyle(node) as unknown as Partial<StackingComputedStyle>,

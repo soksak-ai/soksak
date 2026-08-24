@@ -1140,7 +1140,7 @@ export const en: Record<MsgKey, string> = {
   "cmd.ui.input.click.param.phase": "'down' = mousedown only; 'up' = mouseup+click only; omit for the full sequence",
   "cmd.ui.input.click.param.x": "Content-view-relative x (CSS px). Only when the address resolves to a content view; the click is delivered inside it as real input.",
   "cmd.ui.input.click.param.y": "Content-view-relative y (CSS px).",
-  "cmd.ui.input.click.param.traceAddresses": "Optional exposed node addresses sampled on each saved recording frame. Requires recordDir; every sample maps 1:1 to fNNNN.png.",
+  "cmd.ui.input.click.param.traceAddresses": "Optional exposed node addresses sampled on each saved recording frame. Requires recordDir; every sample maps 1:1 to fNNNN.png and includes rect, dataset, display, visibility, opacity, animations, and stacking.",
   "cmd.ui.input.click.param.causeTraceId": "Caller-owned observation-transaction id stamped on the layout transaction this stimulus opens; read it back as causeTraceId in layout.transactions. Without it a caller can only guess which journal entry the click caused.",
   "cmd.ui.input.compose.desc": "Start or update IME composition at an exposed input/surface address, or end it by omitting text. This reproduces the compositionstart/update/end path used by Korean, Japanese, and Chinese input; ordinary fill/typing only sends finished text and cannot test a click that ends composition.",
   "cmd.ui.input.compose.param.address": "Exposed surface address from ui.tree",

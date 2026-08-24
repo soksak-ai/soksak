@@ -1689,7 +1689,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         required: false,
       },
     },
-    returns: "{ clicked, address, atUnixMs, clock, causeTraceId?, phase?, surface?, recording:{status:'not-requested'|'complete'|'failed',mode:'realtime',dir?,requestedFrames?,frames?,reason?}, trace?:{frames,samples} }",
+    returns: "{ clicked, address, atUnixMs, clock, causeTraceId?, phase?, surface?, recording:{status:'not-requested'|'complete'|'failed',mode:'realtime',dir?,requestedFrames?,frames?,reason?}, trace?:{frames,samples:[{captureFrame,frameTime,unixMs,nodes:[{address,connected,rect,dataset,style:{display,visibility,opacity},animations,stacking}],intersections}]} }",
     message: () => tmsg("msg.ui.input.click"),
     errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
     danger: "inject",

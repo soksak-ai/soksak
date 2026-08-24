@@ -38,6 +38,38 @@ import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost
 //
 // CSS hides these layers separately, but the native layer is outside CSS, so the judgment is
 // collected into one expression.
+export function resolveViewVisibility(
+  workspaceActive: boolean,
+  spaceActive: boolean,
+  tabActive: boolean,
+  overlayed: boolean,
+  traveling: boolean,
+): Readonly<{
+  contentVisible: boolean;
+  surfaceVisible: boolean;
+  occluded: boolean;
+  moving: boolean;
+  reason: "visible" | "inactive-chain" | "overlay" | "layout-motion" | "overlay+layout-motion";
+}> {
+  const contentVisible = workspaceActive && spaceActive && tabActive;
+  const reason = !contentVisible
+    ? "inactive-chain"
+    : overlayed && traveling
+      ? "overlay+layout-motion"
+      : overlayed
+        ? "overlay"
+        : traveling
+          ? "layout-motion"
+          : "visible";
+  return {
+    contentVisible,
+    surfaceVisible: contentVisible && !overlayed && !traveling,
+    occluded: overlayed,
+    moving: traveling,
+    reason,
+  };
+}
+
 export function surfaceShown(
   workspaceActive: boolean,
   spaceActive: boolean,
@@ -45,7 +77,13 @@ export function surfaceShown(
   overlayed: boolean,
   traveling: boolean,
 ): boolean {
-  return workspaceActive && spaceActive && tabActive && !overlayed && !traveling;
+  return resolveViewVisibility(
+    workspaceActive,
+    spaceActive,
+    tabActive,
+    overlayed,
+    traveling,
+  ).surfaceVisible;
 }
 
 /**

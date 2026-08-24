@@ -1145,7 +1145,7 @@ export const ko = {
   "cmd.ui.input.click.param.phase": "'down' = mousedown 만, 'up' = mouseup+click 만. 생략하면 전체 연속",
   "cmd.ui.input.click.param.x": "콘텐츠 뷰 기준 x (CSS px). 주소가 콘텐츠 뷰로 풀릴 때만 쓰이며, 클릭은 그 안에서 실제 입력으로 전달됩니다.",
   "cmd.ui.input.click.param.y": "콘텐츠 뷰 기준 y (CSS px).",
-  "cmd.ui.input.click.param.traceAddresses": "저장되는 녹화 프레임마다 표본을 뜰 선택적 노출 노드 주소들. recordDir 이 필요하며, 모든 표본은 fNNNN.png 와 1:1 로 대응합니다.",
+  "cmd.ui.input.click.param.traceAddresses": "저장되는 녹화 프레임마다 표본을 뜰 선택적 노출 노드 주소들. recordDir 이 필요하며, 모든 표본은 fNNNN.png 와 1:1 로 대응하고 rect, dataset, display, visibility, opacity, animation, stacking을 포함합니다.",
   "cmd.ui.input.click.param.causeTraceId": "이 자극이 여는 레이아웃 트랜잭션에 찍히는, 호출자가 소유한 관측 트랜잭션 id. layout.transactions 에서 causeTraceId 로 되읽습니다. 이것이 없으면 호출자는 클릭이 어느 저널 항목을 일으켰는지 추측할 수밖에 없습니다.",
   "cmd.ui.input.compose.desc": "노출된 입력칸이나 브라우저 화면에서 한글 조합을 시작·변경·종료합니다. text를 주면 조합 중인 글자를 만들고, 생략하면 조합을 끝냅니다. 일반 글자 입력은 완성된 글자만 보내므로 ‘조합 중 다른 tabview 클릭’ 문제를 재현할 수 없습니다.",
   "cmd.ui.input.compose.param.address": "ui.tree 의 노출 표면 주소",

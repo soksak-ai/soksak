@@ -1386,8 +1386,8 @@ function App() {
           <PluginHeaderActions />
           <button
             type="button"
-            className={`icon-btn sidebar-toggle${activeWorkspace?.regionOpen.rail ? " active" : ""}`}
-            data-node="titlebar/region/rail"
+            className={`icon-btn sidebar-toggle${activeWorkspace?.regionOpen.left ? " active" : ""}`}
+            data-node="titlebar/region/left"
             title={t("sidebar.toggle")}
             aria-label={t("sidebar.toggle")}
             onClick={() => activeWorkspace && toggleRegion(activeWorkspace.id, "left")}
