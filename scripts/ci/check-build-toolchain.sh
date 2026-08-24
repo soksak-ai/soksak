@@ -16,6 +16,8 @@ fi
 required=$(printf '%s\n' "$frontend" | sed -n 's/.* required=\([^ ]*\).*/\1/p')
 required_platform=${required%/*}
 required_arch=${required#*/}
+go_required_arch=$required_arch
+if [ "$required_arch" = x86_64 ]; then go_required_arch=amd64; fi
 
 go_expected=$(awk '$1 == "go" { value="go" $2; count++ } END { if (count == 1) print value; else exit 1 }' "$root/go.mod" 2>/dev/null || true)
 go_actual=$(go env GOVERSION 2>/dev/null || true)
@@ -30,8 +32,8 @@ wails_arch=$(printf '%s\n' "$wails_info" | sed -n 's/^[[:space:]]*build[[:space:
 
 if [ -z "$required" ] || [ -z "$go_expected" ] || [ -z "$wails_expected" ] || \
    [ "$go_actual" != "$go_expected" ] || [ "$go_platform" != "$required_platform" ] || \
-   [ "$go_arch" != "$required_arch" ] || [ "$wails_actual" != "$wails_expected" ] || \
-   [ "$wails_platform" != "$required_platform" ] || [ "$wails_arch" != "$required_arch" ]; then
+   [ "$go_arch" != "$go_required_arch" ] || [ "$wails_actual" != "$wails_expected" ] || \
+   [ "$wails_platform" != "$required_platform" ] || [ "$wails_arch" != "$go_required_arch" ]; then
   echo "TOOLCHAIN_MISMATCH: required=${required:-missing} expected go=${go_expected:-missing} wails=${wails_expected:-missing}; actual go=${go_actual:-missing} goRuntime=${go_platform:-unknown}/${go_arch:-unknown} wailsVersion=${wails_actual:-missing} wailsRuntime=${wails_platform:-unknown}/${wails_arch:-unknown}" >&2
   exit 78
 fi
