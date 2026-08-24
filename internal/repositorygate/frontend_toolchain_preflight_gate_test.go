@@ -94,7 +94,7 @@ func TestVerifyRejectsAnInvalidBuildToolchainBeforeProductTests(t *testing.T) {
 }
 
 func TestBuildToolchainRejectsTranslatedGoOnAppleSilicon(t *testing.T) {
-	bin := buildToolchainFixture(t, "amd64")
+	bin := buildToolchainFixture(t, "arm64", "amd64")
 	command := exec.Command("sh", "scripts/ci/check-build-toolchain.sh", "--toolchain-only")
 	command.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	output, err := command.CombinedOutput()
@@ -106,7 +106,7 @@ func TestBuildToolchainRejectsTranslatedGoOnAppleSilicon(t *testing.T) {
 }
 
 func TestBuildToolchainAcceptsArm64GoNodeAndWailsOnAppleSilicon(t *testing.T) {
-	bin := buildToolchainFixture(t, "arm64")
+	bin := buildToolchainFixture(t, "arm64", "arm64")
 	command := exec.Command("sh", "scripts/ci/check-build-toolchain.sh", "--toolchain-only")
 	command.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	output, err := command.CombinedOutput()
@@ -121,7 +121,27 @@ func TestBuildToolchainAcceptsArm64GoNodeAndWailsOnAppleSilicon(t *testing.T) {
 	}
 }
 
-func buildToolchainFixture(t *testing.T, goArch string) string {
+func TestBuildToolchainAcceptsNativeX86RuntimeAliasesOnIntel(t *testing.T) {
+	bin := buildToolchainFixture(t, "x86_64", "amd64")
+	command := exec.Command("sh", "scripts/ci/check-build-toolchain.sh", "--toolchain-only")
+	command.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("native Intel build toolchain was rejected: %v\n%s", err, output)
+	}
+	for _, expected := range []string{
+		"required=darwin/x86_64",
+		"nodeRuntime=darwin/x64",
+		"goRuntime=darwin/amd64",
+		"wailsRuntime=darwin/amd64",
+	} {
+		if !strings.Contains(string(output), expected) {
+			t.Errorf("native Intel toolchain output omits %s: %s", expected, output)
+		}
+	}
+}
+
+func buildToolchainFixture(t *testing.T, requiredArchitecture, goArch string) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("the build preflight is a POSIX shell command")
@@ -157,14 +177,22 @@ func buildToolchainFixture(t *testing.T, goArch string) string {
 	if frontend.Engines.Node == "" || !found || pnpmVersion == "" || parsed.Go == nil || wailsVersion == "" {
 		t.Fatal("build toolchain declarations are incomplete")
 	}
+	nodeArch := "arm64"
+	sysctl := "#!/bin/sh\ntest \"$1\" = -n && test \"$2\" = hw.optional.arm64 && echo 1\n"
+	if requiredArchitecture == "x86_64" {
+		nodeArch = "x64"
+		sysctl = "#!/bin/sh\nexit 1\n"
+	} else if requiredArchitecture != "arm64" {
+		t.Fatalf("unsupported required fixture architecture %s", requiredArchitecture)
+	}
 	bin := t.TempDir()
 	commands := map[string]string{
 		"uname":  "#!/bin/sh\ncase \"$1\" in -s) echo Darwin ;; -m) echo x86_64 ;; *) exit 1 ;; esac\n",
-		"sysctl": "#!/bin/sh\ntest \"$1\" = -n && test \"$2\" = hw.optional.arm64 && echo 1\n",
+		"sysctl": sysctl,
 		"node": `#!/bin/sh
 case "$1" in
   --version) echo v` + frontend.Engines.Node + ` ;;
-  -p) case "$2" in process.platform) echo darwin ;; process.arch) echo arm64 ;; *) exit 1 ;; esac ;;
+  -p) case "$2" in process.platform) echo darwin ;; process.arch) echo ` + nodeArch + ` ;; *) exit 1 ;; esac ;;
   -e) printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ;;
   *) exit 1 ;;
 esac
