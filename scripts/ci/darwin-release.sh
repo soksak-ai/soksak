@@ -16,6 +16,7 @@ test -n "$source_commit" && test -z "$(git status --porcelain --untracked-files=
   exit 78
 }
 scripts/ci/check-build-toolchain.sh --toolchain-only
+go mod download
 scripts/ci/frontend-build.sh
 scripts/ci/check-build-toolchain.sh
 

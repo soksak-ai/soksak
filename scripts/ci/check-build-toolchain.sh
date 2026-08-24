@@ -23,8 +23,21 @@ go_expected=$(awk '$1 == "go" { value="go" $2; count++ } END { if (count == 1) p
 go_actual=$(go env GOVERSION 2>/dev/null || true)
 go_platform=$(go env GOHOSTOS 2>/dev/null || true)
 go_arch=$(go env GOHOSTARCH 2>/dev/null || true)
-wails_expected=$(cd "$root" && go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3 2>/dev/null || true)
-wails_actual=$(cd "$root" && go tool wails3 version 2>&1 || true)
+wails_expected=$(awk '$1 == "github.com/wailsapp/wails/v3" { value=$2; count++ } END { if (count == 1) print value; else exit 1 }' "$root/go.mod" 2>/dev/null || true)
+
+if [ "${1:-}" = "--toolchain-only" ]; then
+  if [ -z "$required" ] || [ -z "$go_expected" ] || [ -z "$wails_expected" ] || \
+     [ "$go_actual" != "$go_expected" ] || [ "$go_platform" != "$required_platform" ] || \
+     [ "$go_arch" != "$go_required_arch" ]; then
+    echo "TOOLCHAIN_MISMATCH: required=${required:-missing} expected go=${go_expected:-missing} wails=${wails_expected:-missing}; actual go=${go_actual:-missing} goRuntime=${go_platform:-unknown}/${go_arch:-unknown} wailsVersion=${wails_expected:-missing} wailsRuntime=deferred" >&2
+    exit 78
+  fi
+  printf 'BUILD_TOOLCHAIN_READY required=%s go=%s goRuntime=%s/%s wailsVersion=%s wailsRuntime=deferred\n' \
+    "$required" "$go_actual" "$go_platform" "$go_arch" "$wails_expected"
+  exit 0
+fi
+
+wails_actual=$(cd "$root" && go tool wails3 version 2>/dev/null || true)
 wails_binary=$(cd "$root" && go tool -n wails3 2>/dev/null || true)
 wails_info=$([ -n "$wails_binary" ] && go version -m "$wails_binary" 2>/dev/null || true)
 wails_platform=$(printf '%s\n' "$wails_info" | sed -n 's/^[[:space:]]*build[[:space:]]*GOOS=//p')
