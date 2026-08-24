@@ -208,10 +208,11 @@ func (h *wailsHost) ClickNativeClose(name string) (NativeCloseClickReceipt, erro
 	})
 	if h.presentation == PresentationCaptureOnly {
 		for _, candidate := range h.app.Window.GetAll() {
-			if err := materializeCaptureOnlyWindow(candidate); err != nil {
-				return NativeCloseClickReceipt{}, err
-			}
+			native := candidate.NativeWindow()
+			application.InvokeSync(func() { makeWindowTransparent(native) })
+			candidate.Show()
 		}
+		window.Show()
 	}
 	var posted bool
 	var failure error
@@ -367,7 +368,7 @@ func (h *wailsHost) Reveal(name string, key bool) error {
 		return i18n.Errorf("wails.host.cannotReveal", map[string]string{"window": name})
 	}
 	if h.presentation == PresentationCaptureOnly {
-		return materializeCaptureOnlyWindow(window)
+		return nil
 	}
 	if key {
 		window.Show()
@@ -384,23 +385,6 @@ func (h *wailsHost) Reveal(name string, key bool) error {
 	native := window.NativeWindow()
 	var failure error
 	application.InvokeSync(func() { failure = orderWindowFrontWithoutKey(native) })
-	return failure
-}
-
-// materializeCaptureOnlyWindow orders a zero-alpha window into AppKit without making it key.
-//
-// Hidden is only the creation state: it prevents a partially positioned first frame. Leaving a
-// measurement window hidden forever also tells WebKit IntersectionObserver consumers that their
-// content is not presented. Xterm then pauses its retained renderer and a document capture contains
-// a buffer with no pixels. Zero alpha is the desktop-visibility rule; ordering is the renderer-
-// presentation rule. They are independent state, and neither is a substitute for the other.
-func materializeCaptureOnlyWindow(window application.Window) error {
-	native := window.NativeWindow()
-	var failure error
-	application.InvokeSync(func() {
-		makeWindowTransparent(native)
-		failure = orderWindowFrontWithoutKey(native)
-	})
 	return failure
 }
 

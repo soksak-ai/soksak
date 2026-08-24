@@ -54,43 +54,6 @@ static NSData *pngFromCGImage(CGImageRef image) {
   return png;
 }
 
-// A transparent document is designed to be composited over its NSWindow background. WKWebView's
-// snapshot contains only the document, so encoding it as-is drops that owned layer and leaves
-// transparent CSS painted over arbitrary viewer black (or over stale premultiplied RGB). Flattening
-// against window.backgroundColor reconstructs exactly the document half of the window composition
-// without raising the zero-alpha measurement window onto the user's desktop.
-static NSData *documentPNGOnWindowBackground(CGImageRef image, NSWindow *window) {
-  size_t width = CGImageGetWidth(image);
-  size_t height = CGImageGetHeight(image);
-  if (width == 0 || height == 0) return nil;
-
-  CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-  CGContextRef context = CGBitmapContextCreate(
-      NULL, width, height, 8, width * 4, space,
-      kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
-  CGColorSpaceRelease(space);
-  if (context == NULL) return nil;
-
-  NSColor *background = [window.backgroundColor colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];
-  CGFloat red = 0, green = 0, blue = 0, alpha = 1;
-  if (background == nil) {
-    red = 6.0 / 255.0;
-    green = 7.0 / 255.0;
-    blue = 15.0 / 255.0;
-  } else {
-    [background getRed:&red green:&green blue:&blue alpha:&alpha];
-  }
-  CGContextSetRGBFillColor(context, red, green, blue, 1);
-  CGContextFillRect(context, CGRectMake(0, 0, width, height));
-  CGContextDrawImage(context, CGRectMake(0, 0, width, height), image);
-  CGImageRef composed = CGBitmapContextCreateImage(context);
-  CGContextRelease(context);
-  if (composed == NULL) return nil;
-  NSData *png = pngFromCGImage(composed);
-  CGImageRelease(composed);
-  return png;
-}
-
 SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
                                   double h, int timeout_ms) {
   if (nsWindow == NULL) return failure(@"capture received a nil window");
@@ -317,10 +280,7 @@ SoksakCapture soksakCaptureDocument(void *nsWindow, double x, double y, double w
                           dispatch_semaphore_signal(done);
                           return;
                         }
-                        png = [documentPNGOnWindowBackground(cg, window) retain];
-                        if (png == nil) {
-                          error = @"compositing the document over its window background failed";
-                        }
+                        png = [pngFromCGImage(cg) retain];
                         dispatch_semaphore_signal(done);
                       }];
     [config release];

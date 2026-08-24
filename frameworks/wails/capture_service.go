@@ -53,10 +53,6 @@ type CaptureService struct {
 	// frame. Renderers with their own retained surface use this event to redraw
 	// after the occlusion throttle has been removed.
 	prepare func()
-	// documentOnly is true when the native window is deliberately ordered at zero alpha. Capturing
-	// that final window layer would correctly return no light; the WebView document is the owned
-	// pixel source for a capture-only presentation and the receipt says so.
-	documentOnly bool
 }
 
 func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureService {
@@ -226,16 +222,6 @@ func (service *CaptureService) holdRendering(handle unsafe.Pointer) func() {
 // picture is not the first: a page is composited above the document by another process and is not
 // in it.
 func (service *CaptureService) capturing(handle unsafe.Pointer, rect Rect) ([]byte, bool, error) {
-	if service.documentOnly {
-		if service.captureDocument == nil {
-			return nil, false, i18n.Errorf("wails.capture.noDocumentSource", nil)
-		}
-		document, err := service.captureDocument(handle, rect)
-		if err != nil {
-			return nil, false, err
-		}
-		return document, true, nil
-	}
 	if service.refused.Load() && service.captureDocument != nil {
 		document, documentErr := service.captureDocument(handle, rect)
 		if documentErr == nil {

@@ -55,8 +55,6 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 			return nil, i18n.Errorf("wails.capture.noPixels", map[string]string{"window": name})
 		}
 		service := NewCaptureService(name, func() unsafe.Pointer { return handle })
-		presence := host.Presence(name)
-		service.documentOnly = capturePixelSourceFor(presence) == capturePixelSourceDocument
 		if preparer, ok := host.(capturePreparer); ok {
 			service.prepare = func() { preparer.PrepareCapture(name) }
 		}

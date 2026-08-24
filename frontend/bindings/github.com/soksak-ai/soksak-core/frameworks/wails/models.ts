@@ -88,7 +88,6 @@ export class RecordReport {
     "requested": number;
     "frames": number;
     "bytes": number;
-    "documentOnly"?: boolean;
     "stopped"?: string;
 
     /** Creates a new RecordReport instance. */

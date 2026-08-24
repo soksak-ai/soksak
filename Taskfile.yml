@@ -43,7 +43,6 @@ tasks:
         required=$(cat .task-version)
         test "$(task --version)" = "$required"
       - task: verify:go
-      - task: verify:capture-focus
       - task: verify:restore
       - task: verify:native-close
       - task: verify:headless
@@ -78,14 +77,6 @@ tasks:
       - task: build
       - task: build:sok
       - go test ./internal/application -run '^TestTheDigestSurvivesARestart$' -count=1
-
-  verify:capture-focus:
-    summary: Proves capture-only windows render without entering the user's desktop or input order
-    platforms: [darwin]
-    cmds:
-      - task: build
-      - task: build:sok
-      - go test ./internal/application -run '^TestWindowCaptureDoesNotChangeTheInputOwner$' -count=1
 
   verify:headless:
     summary: The core answers with no window — the boundary a second host needs

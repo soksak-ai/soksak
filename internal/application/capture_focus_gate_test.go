@@ -16,7 +16,6 @@ func TestWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 		t.Fatalf("unattended application start changed the input owner: %s -> %s", owner, afterStart)
 	}
 	window := gate.openWorkspace()
-	assertCaptureOnlyWindowIsMaterialized(t, gate, window)
 	if gateWindowVisible(t, gate, window) {
 		t.Fatalf("unattended gate added a visible test window: %s", window)
 	}
@@ -39,7 +38,6 @@ func TestWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 		if gateWindowVisible(t, gate, window) {
 			t.Fatalf("window capture %d made the test window visible: %s", capture, window)
 		}
-		assertCaptureOnlyWindowIsMaterialized(t, gate, window)
 		info, err := os.Stat(path)
 		if err != nil || info.Size() == 0 {
 			t.Fatalf("window capture %d was not written: %v", capture, err)
@@ -51,40 +49,7 @@ func TestWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 	}
 }
 
-type gateWindowPresentation struct {
-	Known   bool
-	Visible bool
-	Key     bool
-	Alpha   float64
-}
-
-// A capture-only window has two independent obligations. It must be ordered into AppKit so
-// WebKit and retained renderers receive presentation callbacks, and it must put no light on the
-// user's desktop or become the key window. Keeping it hidden satisfies only the second obligation:
-// Xterm's IntersectionObserver then pauses its renderer and a capture contains an empty terminal.
-func assertCaptureOnlyWindowIsMaterialized(t *testing.T, gate *restoreGate, window string) {
-	t.Helper()
-	presence := gateWindowPresence(t, gate, window)
-	if !presence.Known {
-		t.Fatalf("capture-only window has no native presentation observation: %s", window)
-	}
-	if !presence.Visible {
-		t.Fatalf("capture-only window is hidden, so retained renderers cannot present: %s", window)
-	}
-	if presence.Alpha != 0 {
-		t.Fatalf("capture-only window puts light on the desktop: %s alpha=%v", window, presence.Alpha)
-	}
-	if presence.Key {
-		t.Fatalf("capture-only window owns keyboard focus: %s", window)
-	}
-}
-
 func gateWindowVisible(t *testing.T, gate *restoreGate, window string) bool {
-	presence := gateWindowPresence(t, gate, window)
-	return presence.Visible && presence.Alpha > 0
-}
-
-func gateWindowPresence(t *testing.T, gate *restoreGate, window string) gateWindowPresentation {
 	t.Helper()
 	out, err := gate.try("window.monitors", "window="+window)
 	if err != nil {
@@ -95,10 +60,7 @@ func gateWindowPresence(t *testing.T, gate *restoreGate, window string) gateWind
 			Windows []struct {
 				Label    string `json:"label"`
 				Presence struct {
-					Known   bool    `json:"known"`
-					Visible bool    `json:"visible"`
-					Key     bool    `json:"key"`
-					Alpha   float64 `json:"alpha"`
+					Visible bool `json:"visible"`
 				} `json:"presence"`
 			} `json:"windows"`
 		} `json:"data"`
@@ -108,12 +70,9 @@ func gateWindowPresence(t *testing.T, gate *restoreGate, window string) gateWind
 	}
 	for _, candidate := range reply.Data.Windows {
 		if candidate.Label == window {
-			return gateWindowPresentation{
-				Known: candidate.Presence.Known, Visible: candidate.Presence.Visible,
-				Key: candidate.Presence.Key, Alpha: candidate.Presence.Alpha,
-			}
+			return candidate.Presence.Visible
 		}
 	}
 	t.Fatalf("test window presentation omitted %s", window)
-	return gateWindowPresentation{}
+	return false
 }
