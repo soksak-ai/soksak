@@ -129,3 +129,25 @@ func TestBuildEnvironmentsSelectNodeFromTheRootDeclaration(t *testing.T) {
 		}
 	}
 }
+
+func TestFrontendBuildResolvesPnpmFromTheFrontendPackage(t *testing.T) {
+	body, err := os.ReadFile("scripts/ci/frontend-build.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, required := range []string{
+		`pnpm_actual=$(cd "$root/frontend" && pnpm --version`,
+		`cd "$root/frontend"`,
+		"pnpm install --frozen-lockfile",
+		"pnpm typecheck",
+		"pnpm build",
+	} {
+		if !strings.Contains(text, required) {
+			t.Errorf("frontend build does not resolve its owner through %q", required)
+		}
+	}
+	if strings.Contains(text, `pnpm --dir "$root/frontend"`) {
+		t.Fatal("frontend build starts pnpm outside the package that owns its version")
+	}
+}
