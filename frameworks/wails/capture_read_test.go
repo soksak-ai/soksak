@@ -62,7 +62,12 @@ func TestCaptureDoesNotChangeWebKitSchedulingThroughPrivateSPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files = append(files, "window_host_wails.go", "../../frontend/src/commands/catalogWindow.ts")
+	files = append(files,
+		"window_host_wails.go",
+		"../../frontend/src/commands/catalogWindow.ts",
+		"../../frontend/src/commands/catalogCapture.ts",
+		"../../frontend/src/commands/captureSettle.ts",
+	)
 	for _, path := range files {
 		if strings.HasSuffix(path, "_test.go") {
 			continue
@@ -76,6 +81,7 @@ func TestCaptureDoesNotChangeWebKitSchedulingThroughPrivateSPI(t *testing.T) {
 			"soksakSetWindowOcclusionDetection",
 			"window_occlusion",
 			"soksak:capture-prepare",
+			"settleAnimationsForCapture",
 		} {
 			if strings.Contains(string(body), forbidden) {
 				t.Errorf("%s changes capture scheduling through %q", path, forbidden)
