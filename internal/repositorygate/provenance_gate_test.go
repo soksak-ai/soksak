@@ -30,18 +30,21 @@ func TestFrontendUsesThePublishedWailsRuntime(t *testing.T) {
 // The words below are the ones that carried the attribution. They stay listed
 // because a scan for one of them is a scan for a habit, and the habit returns
 // whenever someone ports another rule.
-var attributions = []*regexp.Regexp{
+var historicalAttributions = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\bearlier builds?\b`),
 	regexp.MustCompile(`전임`),
 	regexp.MustCompile(`구 저장소`),
+	// A path into a checkout that is not this one. It cannot be followed, and
+	// it names where the code came from.
+	regexp.MustCompile(`frameworks?/tauri/`),
+}
+
+var foreignToolchainAttributions = []*regexp.Regexp{
 	// The language and toolchain of a build this one does not contain. Naming
 	// them dates the file to a port rather than to a rule.
 	regexp.MustCompile(`\bRust\b`),
 	regexp.MustCompile(`\bCargo\b`),
 	regexp.MustCompile(`\bcrates/`),
-	// A path into a checkout that is not this one. It cannot be followed, and
-	// it names where the code came from.
-	regexp.MustCompile(`frameworks?/tauri/`),
 }
 
 // scanned is every extension holding prose a reader will believe.
@@ -65,12 +68,8 @@ func TestTheRecordKeepsReasonsAndDropsSources(t *testing.T) {
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
-		for index, line := range strings.Split(string(body), "\n") {
-			for _, attribution := range attributions {
-				if attribution.MatchString(line) {
-					found = append(found, rel+":"+itoa(index+1)+" "+strings.TrimSpace(line))
-				}
-			}
+		for _, finding := range recordAttributions(string(body)) {
+			found = append(found, rel+":"+finding)
 		}
 	}
 
@@ -83,6 +82,39 @@ func TestTheRecordKeepsReasonsAndDropsSources(t *testing.T) {
 		t.Errorf("the record names where a rule came from in %d places:\n%s\nKeep the reason and the measurement; drop the attribution.",
 			len(found), strings.Join(found, "\n"))
 	}
+}
+
+func recordAttributions(body string) []string {
+	attributions := historicalAttributions
+	if !workspaceScopedRecord(body) {
+		attributions = append(append([]*regexp.Regexp{}, historicalAttributions...), foreignToolchainAttributions...)
+	}
+	var found []string
+	for index, line := range strings.Split(body, "\n") {
+		for _, attribution := range attributions {
+			if attribution.MatchString(line) {
+				found = append(found, itoa(index+1)+" "+strings.TrimSpace(line))
+			}
+		}
+	}
+	return found
+}
+
+func workspaceScopedRecord(body string) bool {
+	lines := strings.Split(body, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return false
+	}
+	workspace := false
+	for _, line := range lines[1:] {
+		switch strings.TrimSpace(line) {
+		case "scope: workspace":
+			workspace = true
+		case "---":
+			return workspace
+		}
+	}
+	return false
 }
 
 func TestWorkspaceScopedRecordMayNameToolOwnersButNotHistoricalAttribution(t *testing.T) {
