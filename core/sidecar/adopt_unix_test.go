@@ -94,6 +94,34 @@ func TestASecondRunCanIdempotentlyStopAnOwnedUnitWithoutStartingIt(t *testing.T)
 	}
 }
 
+func TestRecordedInventoryExposesOwnershipWithoutAdoptingOrLeakingToken(t *testing.T) {
+	home := shortHome(t)
+	runtimeRoot := shortHome(t)
+	stageUnit(t, home, "probe", probeSource)
+	deps := Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+	}
+	first := NewHost(deps)
+	started, err := first.Start("probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Release("probe"); err != nil {
+		t.Fatal(err)
+	}
+
+	second := NewHost(deps)
+	t.Cleanup(func() { _ = second.Stop("probe") })
+	recorded := second.Recorded()
+	if len(recorded) != 1 || recorded[0] != started {
+		t.Fatalf("recorded=%+v started=%+v", recorded, started)
+	}
+	if len(second.Started()) != 0 {
+		t.Fatal("reading recorded ownership adopted the unit")
+	}
+}
+
 // A record left by a unit that has gone starts a new one rather than failing.
 //
 // The record is not evidence that anything is listening — a path exists both when someone is and
