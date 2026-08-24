@@ -76,6 +76,8 @@ func TestApplicationReleaseDeclaresEverySupportedTarget(t *testing.T) {
 	}
 	want := map[string]string{
 		"windows/x86_64":   "zip",
+		"darwin/arm64":     "tar.gz",
+		"darwin/x86_64":    "tar.gz",
 		"darwin/universal": "tar.gz",
 		"linux/x86_64":     "tar.gz",
 		"linux/arm64":      "tar.gz",

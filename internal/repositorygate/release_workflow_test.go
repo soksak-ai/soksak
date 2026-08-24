@@ -24,10 +24,18 @@ func TestWailsReleasePublishesTheCompleteVerifiedMatrix(t *testing.T) {
 			t.Errorf("Wails release workflow omits %s", required)
 		}
 	}
-	for _, archive := range []string{"windows-x86_64.zip", "darwin-universal.tar.gz", "linux-x86_64.tar.gz", "linux-arm64.tar.gz"} {
+	for _, archive := range []string{"windows-x86_64.zip", "darwin-arm64.tar.gz", "darwin-x86_64.tar.gz", "darwin-universal.tar.gz", "linux-x86_64.tar.gz", "linux-arm64.tar.gz"} {
 		if !strings.Contains(text, archive) {
 			t.Errorf("release workflow omits %s", archive)
 		}
+	}
+	for _, artifact := range []string{"core-darwin-arm64-artifact", "core-darwin-x86_64-artifact", "core-darwin-artifact"} {
+		if !strings.Contains(text, artifact) {
+			t.Errorf("release workflow omits tested Darwin artifact %s", artifact)
+		}
+	}
+	if !strings.Contains(text, "length == 6") {
+		t.Fatal("release provenance does not require the six-target matrix")
 	}
 	for _, forbidden := range []string{"version: 0.0.1", "tag: v0.0.1", "300aa63f"} {
 		if strings.Contains(text, forbidden) {

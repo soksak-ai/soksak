@@ -14,9 +14,11 @@ func TestPackageReleaseRequiresAndInspectsEveryDeclaredTarget(t *testing.T) {
 	root := releaseFixtureRoot(t)
 	inputs := releaseInputs{Targets: []releaseInput{
 		fixtureReleaseInput(t, "windows", "x86_64", "401"),
-		fixtureReleaseInput(t, "darwin", "universal", "402"),
-		fixtureReleaseInput(t, "linux", "x86_64", "403"),
-		fixtureReleaseInput(t, "linux", "arm64", "404"),
+		fixtureReleaseInput(t, "darwin", "arm64", "402"),
+		fixtureReleaseInput(t, "darwin", "x86_64", "403"),
+		fixtureReleaseInput(t, "darwin", "universal", "404"),
+		fixtureReleaseInput(t, "linux", "x86_64", "405"),
+		fixtureReleaseInput(t, "linux", "arm64", "406"),
 	}}
 	out := filepath.Join(root, "out")
 	if err := packageRelease(root, out, strings.Repeat("a", 40), inputs); err != nil {
@@ -24,6 +26,8 @@ func TestPackageReleaseRequiresAndInspectsEveryDeclaredTarget(t *testing.T) {
 	}
 	for _, name := range []string{
 		"soksak-0.0.2-windows-x86_64.zip",
+		"soksak-0.0.2-darwin-arm64.tar.gz",
+		"soksak-0.0.2-darwin-x86_64.tar.gz",
 		"soksak-0.0.2-darwin-universal.tar.gz",
 		"soksak-0.0.2-linux-x86_64.tar.gz",
 		"soksak-0.0.2-linux-arm64.tar.gz",
@@ -41,7 +45,7 @@ func TestPackageReleaseRequiresAndInspectsEveryDeclaredTarget(t *testing.T) {
 	if err := json.Unmarshal(body, &provenance); err != nil {
 		t.Fatal(err)
 	}
-	if provenance.Version != "0.0.2" || len(provenance.Targets) != 4 {
+	if provenance.Version != "0.0.2" || len(provenance.Targets) != 6 {
 		t.Fatalf("provenance=%+v", provenance)
 	}
 	for _, target := range provenance.Targets {
@@ -101,7 +105,7 @@ func releaseFixtureRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	writeFixture(t, filepath.Join(root, "VERSION"), []byte("0.0.2\n"))
-	writeFixture(t, filepath.Join(root, "release", "targets.json"), []byte(`{"targets":[{"platform":"windows","architecture":"x86_64","archiveFormat":"zip"},{"platform":"darwin","architecture":"universal","archiveFormat":"tar.gz"},{"platform":"linux","architecture":"x86_64","archiveFormat":"tar.gz"},{"platform":"linux","architecture":"arm64","archiveFormat":"tar.gz"}]}`))
+	writeFixture(t, filepath.Join(root, "release", "targets.json"), []byte(`{"targets":[{"platform":"windows","architecture":"x86_64","archiveFormat":"zip"},{"platform":"darwin","architecture":"arm64","archiveFormat":"tar.gz"},{"platform":"darwin","architecture":"x86_64","archiveFormat":"tar.gz"},{"platform":"darwin","architecture":"universal","archiveFormat":"tar.gz"},{"platform":"linux","architecture":"x86_64","archiveFormat":"tar.gz"},{"platform":"linux","architecture":"arm64","archiveFormat":"tar.gz"}]}`))
 	return root
 }
 
@@ -109,9 +113,11 @@ func completeReleaseInputs(t *testing.T) releaseInputs {
 	t.Helper()
 	return releaseInputs{Targets: []releaseInput{
 		fixtureReleaseInput(t, "windows", "x86_64", "401"),
-		fixtureReleaseInput(t, "darwin", "universal", "402"),
-		fixtureReleaseInput(t, "linux", "x86_64", "403"),
-		fixtureReleaseInput(t, "linux", "arm64", "404"),
+		fixtureReleaseInput(t, "darwin", "arm64", "402"),
+		fixtureReleaseInput(t, "darwin", "x86_64", "403"),
+		fixtureReleaseInput(t, "darwin", "universal", "404"),
+		fixtureReleaseInput(t, "linux", "x86_64", "405"),
+		fixtureReleaseInput(t, "linux", "arm64", "406"),
 	}}
 }
 
@@ -127,8 +133,13 @@ func fixtureReleaseInput(t *testing.T, platform, architecture, runID string) rel
 		writeMinimalPE(t, client)
 	} else if platform == "darwin" {
 		application = filepath.Join(directory, "soksak.app")
-		writeMinimalFatMachO(t, filepath.Join(application, "Contents", "MacOS", "soksak"))
-		writeMinimalFatMachO(t, client)
+		if architecture == "universal" {
+			writeMinimalFatMachO(t, filepath.Join(application, "Contents", "MacOS", "soksak"))
+			writeMinimalFatMachO(t, client)
+		} else {
+			writeMinimalThinMachO(t, filepath.Join(application, "Contents", "MacOS", "soksak"), architecture)
+			writeMinimalThinMachO(t, client, architecture)
+		}
 		writeFixture(t, filepath.Join(application, "Contents", "Info.plist"), []byte("plist"))
 	} else {
 		machine := uint16(62)
@@ -139,6 +150,19 @@ func fixtureReleaseInput(t *testing.T, platform, architecture, runID string) rel
 		writeMinimalELF(t, client, machine)
 	}
 	return releaseInput{Platform: platform, Architecture: architecture, SystemRunID: runID, Application: application, Client: client, Signing: "unsigned"}
+}
+
+func writeMinimalThinMachO(t *testing.T, path, architecture string) {
+	t.Helper()
+	cpu := uint32(0x01000007)
+	if architecture == "arm64" {
+		cpu = 0x0100000c
+	} else if architecture != "x86_64" {
+		t.Fatalf("unsupported Mach-O fixture architecture %s", architecture)
+	}
+	body := make([]byte, 32)
+	writeThinMachO(body, cpu, 0)
+	writeFixture(t, path, body)
 }
 
 func writeMinimalELF(t *testing.T, path string, machine uint16) {

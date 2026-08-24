@@ -105,13 +105,16 @@ func TestCrossBuilderConsumesOnePinnedFrontendAndBuildsBothBinaries(t *testing.T
 		t.Fatal("frontend image does not disable the npm update notifier")
 	}
 	universal := readText(t, "scripts/ci/darwin-universal.sh")
-	for _, required := range []string{"cross-build.sh", "lipo -create", "soksak.app", `test "$(lipo -archs`} {
+	for _, required := range []string{"bin/release/darwin-arm64", "bin/release/darwin-x86_64", "lipo -create", "soksak.app", `test "$(lipo -archs`} {
 		if !strings.Contains(universal, required) {
 			t.Errorf("Darwin universal runner omits %q", required)
 		}
 	}
+	if strings.Contains(universal, "cross-build.sh") {
+		t.Fatal("Darwin universal runner recompiles instead of composing tested thin artifacts")
+	}
 	native := readText(t, "scripts/ci/darwin-release.sh")
-	for _, required := range []string{"MACOSX_DEPLOYMENT_TARGET=10.15", "minimum=11.0", "GOARCH=$architecture", "clang_arch=x86_64", "cli_minimum", "want 12.0", "vtool -show-build", "lipo -create", "grep -F 'warning:'", "codesign --verify --deep --strict"} {
+	for _, required := range []string{"usage: darwin-release.sh <arm64|x86_64>", "MACOSX_DEPLOYMENT_TARGET=10.15", "GOARCH=$go_arch", "uname -m", "cli_minimum", "vtool -show-build", "grep -F 'warning:'", "codesign --verify --deep --strict", "bin/release/darwin-$release_arch"} {
 		if !strings.Contains(native, required) {
 			t.Errorf("native Darwin release runner omits %q", required)
 		}
