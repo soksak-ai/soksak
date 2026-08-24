@@ -2,6 +2,9 @@ package repositorygate
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -58,5 +61,50 @@ func TestVerifyRejectsAnInvalidFrontendToolchainBeforeProductTests(t *testing.T)
 		if !strings.Contains(materialize, required) {
 			t.Errorf("frontend dependency prepare is missing %q", required)
 		}
+	}
+}
+
+func TestFrontendToolchainCheckReadsPnpmFromItsOwningPackage(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the frontend preflight is a POSIX shell command")
+	}
+	platform := runtime.GOOS
+	arch := runtime.GOARCH
+	if arch == "amd64" {
+		arch = "x64"
+	}
+	bin := t.TempDir()
+	node := `#!/bin/sh
+case "$1" in
+  --version) echo v26.7.0 ;;
+  -p)
+    case "$2" in
+      process.platform) echo ` + platform + ` ;;
+      process.arch) echo ` + arch + ` ;;
+      *) exit 1 ;;
+    esac ;;
+  -e) printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ;;
+  *) exit 1 ;;
+esac
+`
+	pnpm := `#!/bin/sh
+case "$PWD" in
+  */frontend) echo 11.22.0 ;;
+  *) echo 10.30.3 ;;
+esac
+`
+	for name, body := range map[string]string{"node": node, "pnpm": pnpm} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	command := exec.Command("sh", "scripts/ci/check-frontend-toolchain.sh", "--toolchain-only")
+	command.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("frontend-owned pnpm was rejected: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "pnpm=11.22.0") {
+		t.Fatalf("frontend-owned pnpm was not reported: %s", output)
 	}
 }
