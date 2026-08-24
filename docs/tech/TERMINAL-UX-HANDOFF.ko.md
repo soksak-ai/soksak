@@ -197,7 +197,7 @@ recording 결과는 재사용하면 안 됩니다. 이를 대체한 clean render
 | plugin-terminal-shitty 0.0.15 | 8a30c15 | a2678e89a44bb1cfe9b26c227d932f846384909b6c053768c0c5ec1afdcead8c |
 | plugin-terminal-vt100 0.0.15 | bc56b75 | 301ae9fee054101a44a00db0941faff8b8cd50da24bfbfe95a04ef9e1159434e |
 | plugin-terminal-wezterm 0.0.15 | ba744e8 | 55e41f83907f6476baa5a20810b886cccfca25435adbb4bb0cf50b833c73dcc6 |
-| plugin-terminal-xterm 0.0.22 | 91a724e | 6ae01661d5a1d82ef0ab0b1a114a81713d3d6594fa872cbfc22acea2b805dfcf |
+| plugin-terminal-xterm 0.0.22 | 7adc1d1 | 6ae01661d5a1d82ef0ab0b1a114a81713d3d6594fa872cbfc22acea2b805dfcf |
 
 이 표는 renderer package composition만 검증합니다. Sidecar candidate, 설치 제품 parity,
 screenshot, motion 증거를 대체하지 않습니다.
