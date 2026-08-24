@@ -115,7 +115,14 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 			t.Errorf("missing native system job %s", job)
 		}
 	}
-	candidateTestsRef := "1497af685e77125749381eaca12bb9becd01671b"
+	candidateRefBody, err := os.ReadFile(".candidate-system-tests-ref")
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidateTestsRef := strings.TrimSpace(string(candidateRefBody))
+	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(candidateTestsRef) || string(candidateRefBody) != candidateTestsRef+"\n" {
+		t.Fatal("candidate system-test owner ref must be one exact lowercase commit")
+	}
 	for _, required := range []string{
 		"darwin-candidate-native-input:",
 		"needs: darwin-build",
