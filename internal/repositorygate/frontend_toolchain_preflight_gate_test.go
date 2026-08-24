@@ -69,6 +69,9 @@ func TestVerifyRejectsAnInvalidBuildToolchainBeforeProductTests(t *testing.T) {
 		"go env GOHOSTARCH",
 		"go list -m",
 		"go tool wails3 version",
+		"go tool -n wails3",
+		"go version -m",
+		"wailsRuntime=",
 		"BUILD_TOOLCHAIN_READY",
 		"TOOLCHAIN_MISMATCH",
 		"exit 78",
@@ -112,6 +115,7 @@ func TestBuildToolchainAcceptsArm64GoNodeAndWailsOnAppleSilicon(t *testing.T) {
 	}
 	if !strings.Contains(string(output), "BUILD_TOOLCHAIN_READY") ||
 		!strings.Contains(string(output), "goRuntime=darwin/arm64") ||
+		!strings.Contains(string(output), "wailsRuntime=darwin/arm64") ||
 		!strings.Contains(string(output), "nodeRuntime=darwin/arm64") {
 		t.Fatalf("aligned arm64 build toolchain was not reported: %s", output)
 	}
@@ -173,6 +177,8 @@ case "$1:$2" in
   env:GOHOSTARCH) echo ` + goArch + ` ;;
   list:*) echo ` + wailsVersion + ` ;;
   tool:wails3) test "$3" = version && echo ` + wailsVersion + ` ;;
+  tool:-n) test "$3" = wails3 && echo /fixture/wails3 version ;;
+  version:-m) printf '\tbuild\tGOOS=darwin\n\tbuild\tGOARCH=` + goArch + `\n' ;;
   *) exit 1 ;;
 esac
 `,
