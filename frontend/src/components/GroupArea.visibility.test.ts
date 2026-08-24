@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { layoutDecorationMotionReceipt } from "../lib/layoutDecorationPresentation";
-import { isViewSurfaceVisible } from "./GroupArea";
+import { isViewContentVisible } from "./GroupArea";
 
 
 describe("what a motion takes off the screen", () => {
@@ -93,25 +93,32 @@ describe("content view effective visibility", () => {
     expect(source).toContain("logicalPaneId={group.id}");
   });
 
+  it("exposes the content and native-surface visibility decision on each tab body", () => {
+    const source = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
+    expect(source).toContain('data-content-visible={String(visibility.contentVisible)}');
+    expect(source).toContain('data-surface-visible={String(visibility.surfaceVisible)}');
+    expect(source).toContain('data-visibility-reason={visibility.reason}');
+  });
+
   it("a parked workspace or space surface hides its active tab as well", () => {
-    expect(isViewSurfaceVisible(false, null, "v1", "v1", false, false)).toBe(false);
+    expect(isViewContentVisible(false, null, "v1", "v1")).toBe(false);
   });
 
   it("an active surface shows the pane active tab only", () => {
-    expect(isViewSurfaceVisible(true, null, "v1", "v1", false, false)).toBe(true);
-    expect(isViewSurfaceVisible(true, null, "v2", "v1", false, false)).toBe(false);
+    expect(isViewContentVisible(true, null, "v1", "v1")).toBe(true);
+    expect(isViewContentVisible(true, null, "v2", "v1")).toBe(false);
   });
 
   it("while maximized, that one view is the only visible one", () => {
-    expect(isViewSurfaceVisible(true, "v2", "v2", "v1", false, false)).toBe(true);
-    expect(isViewSurfaceVisible(true, "v2", "v1", "v1", false, false)).toBe(false);
+    expect(isViewContentVisible(true, "v2", "v2", "v1")).toBe(true);
+    expect(isViewContentVisible(true, "v2", "v1", "v1")).toBe(false);
   });
 
   it("an overlay keeps the DOM view visible", () => {
-    expect(isViewSurfaceVisible(true, null, "v1", "v1", true, false)).toBe(true);
+    expect(isViewContentVisible(true, null, "v1", "v1")).toBe(true);
   });
 
   it("layout travel keeps the DOM view visible", () => {
-    expect(isViewSurfaceVisible(true, null, "v1", "v1", false, true)).toBe(true);
+    expect(isViewContentVisible(true, null, "v1", "v1")).toBe(true);
   });
 });

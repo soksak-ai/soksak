@@ -37,6 +37,7 @@ describe("view visibility ownership", () => {
       surfaceVisible: false,
       occluded: true,
       moving: false,
+      reason: "overlay",
     });
   });
 
@@ -46,6 +47,7 @@ describe("view visibility ownership", () => {
       surfaceVisible: false,
       occluded: false,
       moving: true,
+      reason: "layout-motion",
     });
   });
 
@@ -55,7 +57,12 @@ describe("view visibility ownership", () => {
       surfaceVisible: false,
       occluded: false,
       moving: false,
+      reason: "inactive-chain",
     });
+  });
+
+  it("names the fully visible state", () => {
+    expect(resolveViewVisibility(true, true, true, false, false).reason).toBe("visible");
   });
 });
 
