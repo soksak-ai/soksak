@@ -102,6 +102,8 @@ type WindowHost interface {
 	// input owner. It is the reproducible input half of the diagnostics contract.
 	SetMarkedText(name, text string) (WindowInputState, error)
 	InjectInputPointer(name string, x, y float64) (WindowPointerInjectionReceipt, error)
+	ClickInputPointer(name string, x, y float64) (WindowPointerClickReceipt, error)
+	PressInputKey(name, key string, ctrl, meta, shift, alt bool) (WindowKeyPressReceipt, error)
 	WaitInputPointer(sequence uint64, timeout time.Duration) (WindowPointerReceipt, error)
 	NativeCloseStatus(name string) (NativeCloseStatus, error)
 	ClickNativeClose(name string) (NativeCloseClickReceipt, error)

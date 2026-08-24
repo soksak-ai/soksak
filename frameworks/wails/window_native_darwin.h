@@ -130,6 +130,28 @@ typedef struct {
 SoksakWindowInputState soksakWindowInputState(void *nsWindow);
 SoksakWindowInputState soksakSetWindowMarkedText(void *nsWindow, const char *text);
 
+typedef struct {
+  bool delivered;
+  bool windowFocused;
+  char *errorMessage;
+} SoksakNativeInputDelivery;
+
+// Deliver input to the window's WKWebView through AppKit without activating
+// the application, moving the system pointer or making the window key.
+// Coordinates use the window content's top-left origin in device-independent
+// points, the same space returned by ui.measure.
+SoksakNativeInputDelivery soksakClickWindowPointer(void *nsWindow,
+                                                    unsigned long long sequence,
+                                                    double x,
+                                                    double y);
+SoksakNativeInputDelivery soksakPressWindowKey(void *nsWindow,
+                                               unsigned long long sequence,
+                                               const char *key,
+                                               bool ctrl,
+                                               bool meta,
+                                               bool shift,
+                                               bool alt);
+
 // Observe physical left-button edges before WebKit decides whether its DOM
 // receives them. The returned token owns exactly one local monitor and must be
 // removed during application shutdown.

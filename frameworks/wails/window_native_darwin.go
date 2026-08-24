@@ -230,6 +230,29 @@ func setWindowMarkedText(window unsafe.Pointer, text string) (WindowInputState, 
 	}, nil
 }
 
+func clickWindowPointer(window unsafe.Pointer, sequence uint64, x, y float64) (bool, bool, error) {
+	read := C.soksakClickWindowPointer(window, C.ulonglong(sequence), C.double(x), C.double(y))
+	defer C.free(unsafe.Pointer(read.errorMessage))
+	if read.errorMessage != nil {
+		return false, bool(read.windowFocused), i18n.Errorf("wails.input.nativeDeliveryFailed", map[string]string{"reason": C.GoString(read.errorMessage)})
+	}
+	return bool(read.delivered), bool(read.windowFocused), nil
+}
+
+func pressWindowKey(window unsafe.Pointer, sequence uint64, key string, ctrl, meta, shift, alt bool) (bool, bool, error) {
+	nativeKey := C.CString(key)
+	defer C.free(unsafe.Pointer(nativeKey))
+	read := C.soksakPressWindowKey(
+		window, C.ulonglong(sequence), nativeKey,
+		C.bool(ctrl), C.bool(meta), C.bool(shift), C.bool(alt),
+	)
+	defer C.free(unsafe.Pointer(read.errorMessage))
+	if read.errorMessage != nil {
+		return false, bool(read.windowFocused), i18n.Errorf("wails.input.nativeDeliveryFailed", map[string]string{"reason": C.GoString(read.errorMessage)})
+	}
+	return bool(read.delivered), bool(read.windowFocused), nil
+}
+
 func nativeCloseStatus(window unsafe.Pointer) (NativeCloseStatus, error) {
 	if window == nil {
 		return NativeCloseStatus{}, i18n.Errorf("wails.window.noNativeClose", nil)

@@ -22,6 +22,14 @@ func init() {
 			EN: "window input coordinates must be non-negative: x={x}, y={y}",
 			KO: "창 입력 좌표는 0 이상이어야 합니다: x={x}, y={y}",
 		},
+		"wails.input.emptyKey": {
+			EN: "window input key must not be empty",
+			KO: "창 입력 key는 비어 있을 수 없습니다",
+		},
+		"wails.input.nativeDeliveryFailed": {
+			EN: "native window input failed: {reason}",
+			KO: "native 창 입력 실패: {reason}",
+		},
 		"wails.input.invalidTimeout": {
 			EN: "timeoutMs must be between 1 and 30000: {timeout}",
 			KO: "timeoutMs는 1에서 30000 사이여야 합니다: {timeout}",

@@ -11,6 +11,8 @@ describe("window.input — discoverable native input diagnostics", () => {
     ["window.input.mark", ["text"]],
     ["window.input.pointer.wait", ["sequence", "timeoutMs"]],
     ["window.input.pointer.inject", ["x", "y"]],
+    ["window.input.pointer.click", ["x", "y"]],
+    ["window.input.key.press", ["key", "ctrl", "meta", "shift", "alt"]],
     ["window.native-close.status", []],
     ["window.native-close.click", []],
     ["window.native-close.wait", ["sequence", "timeoutMs"]],

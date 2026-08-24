@@ -98,6 +98,12 @@ func (h *fakeHost) WaitInputPointer(uint64, time.Duration) (WindowPointerReceipt
 func (h *fakeHost) InjectInputPointer(string, float64, float64) (WindowPointerInjectionReceipt, error) {
 	return WindowPointerInjectionReceipt{}, nil
 }
+func (h *fakeHost) ClickInputPointer(string, float64, float64) (WindowPointerClickReceipt, error) {
+	return WindowPointerClickReceipt{}, nil
+}
+func (h *fakeHost) PressInputKey(string, string, bool, bool, bool, bool) (WindowKeyPressReceipt, error) {
+	return WindowKeyPressReceipt{}, nil
+}
 func (h *fakeHost) NativeCloseStatus(name string) (NativeCloseStatus, error) {
 	return NativeCloseStatus{Window: name}, nil
 }

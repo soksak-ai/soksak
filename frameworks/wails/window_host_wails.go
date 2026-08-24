@@ -185,6 +185,51 @@ func (h *wailsHost) InjectInputPointer(name string, x, y float64) (WindowPointer
 	}, nil
 }
 
+func (h *wailsHost) ClickInputPointer(name string, x, y float64) (WindowPointerClickReceipt, error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return WindowPointerClickReceipt{}, i18n.Errorf("wails.host.noInputWindow", map[string]string{"window": name})
+	}
+	sequence := (uint64(1) << 40) + windowInputClickSequence.Add(1)
+	var delivered bool
+	var focused bool
+	var failure error
+	native := window.NativeWindow()
+	application.InvokeSync(func() {
+		delivered, focused, failure = clickWindowPointer(native, sequence, x, y)
+	})
+	if failure != nil {
+		return WindowPointerClickReceipt{}, failure
+	}
+	return WindowPointerClickReceipt{
+		Window: name, Sequence: sequence, Delivered: delivered,
+		InputRoute: "appkit-wkwebview-nsevent", CursorPositionMayChange: false,
+		X: x, Y: y, WindowFocused: focused,
+	}, nil
+}
+
+func (h *wailsHost) PressInputKey(name, key string, ctrl, meta, shift, alt bool) (WindowKeyPressReceipt, error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return WindowKeyPressReceipt{}, i18n.Errorf("wails.host.noInputWindow", map[string]string{"window": name})
+	}
+	sequence := (uint64(1) << 40) + windowInputClickSequence.Add(1)
+	var delivered bool
+	var focused bool
+	var failure error
+	native := window.NativeWindow()
+	application.InvokeSync(func() {
+		delivered, focused, failure = pressWindowKey(native, sequence, key, ctrl, meta, shift, alt)
+	})
+	if failure != nil {
+		return WindowKeyPressReceipt{}, failure
+	}
+	return WindowKeyPressReceipt{
+		Window: name, Sequence: sequence, Delivered: delivered,
+		InputRoute: "appkit-wkwebview-nsevent", Key: key, WindowFocused: focused,
+	}, nil
+}
+
 func (h *wailsHost) NativeCloseStatus(name string) (NativeCloseStatus, error) {
 	window, addressable := h.live(name)
 	if !addressable {

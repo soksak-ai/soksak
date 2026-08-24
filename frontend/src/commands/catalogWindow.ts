@@ -700,6 +700,39 @@ export function registerWindowCatalog(): void {
     handler: async (p) => invoke("window.input.pointer.inject", { x: p.x, y: p.y }),
   });
 
+  register("window.input.pointer.click", {
+    description: key("cmd.window.input.pointer.click.desc"),
+    params: {
+      x: { type: "number", description: key("cmd.window.input.pointer.click.param.x"), required: true },
+      y: { type: "number", description: key("cmd.window.input.pointer.click.param.y"), required: true },
+    },
+    returns: "{ window, sequence, delivered:true, inputRoute, cursorPositionMayChange:false, x, y, windowFocused }",
+    message: (d) => tmsg("msg.window.input.pointer.click", { sequence: String(d.sequence ?? "") }),
+    examples: ["window.input.pointer.click window=win-example x=400 y=200"],
+    handler: async (p) => invoke("window.input.pointer.click", { x: p.x, y: p.y }),
+  });
+
+  register("window.input.key.press", {
+    description: key("cmd.window.input.key.press.desc"),
+    params: {
+      key: { type: "string", description: key("cmd.window.input.key.press.param.key"), required: true },
+      ctrl: { type: "boolean", description: key("cmd.window.input.key.press.param.ctrl") },
+      meta: { type: "boolean", description: key("cmd.window.input.key.press.param.meta") },
+      shift: { type: "boolean", description: key("cmd.window.input.key.press.param.shift") },
+      alt: { type: "boolean", description: key("cmd.window.input.key.press.param.alt") },
+    },
+    returns: "{ window, sequence, delivered:true, inputRoute, key, windowFocused }",
+    message: (d) => tmsg("msg.window.input.key.press", { key: String(d.key ?? "") }),
+    examples: ["window.input.key.press window=win-example key=Enter"],
+    handler: async (p) => invoke("window.input.key.press", {
+      key: p.key,
+      ctrl: p.ctrl ?? false,
+      meta: p.meta ?? false,
+      shift: p.shift ?? false,
+      alt: p.alt ?? false,
+    }),
+  });
+
   register("window.native-close.status", {
     description: key("cmd.window.nativeClose.status.desc"),
     params: {},

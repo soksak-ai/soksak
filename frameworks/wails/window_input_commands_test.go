@@ -33,6 +33,21 @@ func (h *inputHostFixture) InjectInputPointer(window string, x, y float64) (Wind
 	return WindowPointerInjectionReceipt{Sequence: 9, Posted: true, InputRoute: "contract-injection", X: x, Y: y}, nil
 }
 
+func (h *inputHostFixture) ClickInputPointer(window string, x, y float64) (WindowPointerClickReceipt, error) {
+	h.window = window
+	return WindowPointerClickReceipt{
+		Window: window, Sequence: 11, Delivered: true, InputRoute: "native-fixture",
+		X: x, Y: y,
+	}, nil
+}
+
+func (h *inputHostFixture) PressInputKey(window, key string, _, _, _, _ bool) (WindowKeyPressReceipt, error) {
+	h.window = window
+	return WindowKeyPressReceipt{
+		Window: window, Sequence: 12, Delivered: true, InputRoute: "native-fixture", Key: key,
+	}, nil
+}
+
 func (h *inputHostFixture) NativeCloseStatus(window string) (NativeCloseStatus, error) {
 	h.window = window
 	return NativeCloseStatus{Window: window, Present: true, Enabled: true, Visible: true}, nil
@@ -90,6 +105,34 @@ func TestWindowInputCommandsExposeNativeControlStatusAndClick(t *testing.T) {
 		if !served[name] {
 			t.Errorf("%s is not exposed", name)
 		}
+	}
+}
+
+func TestWindowInputCommandsExposeNativePointerAndKeyboardReceipts(t *testing.T) {
+	registry := control.NewRegistry()
+	RegisterWindowInput(registry, &inputHostFixture{})
+	caller := control.Args{control.CallerWindowArgument: jsonString("win-a")}
+
+	pointer, err := registry.Invoke("window.input.pointer.click", mergeControlArgs(caller, control.Args{
+		"x": json.RawMessage("40"), "y": json.RawMessage("60"),
+	}))
+	if err != nil {
+		t.Fatalf("pointer click: %v", err)
+	}
+	clicked := pointer.(WindowPointerClickReceipt)
+	if !clicked.Delivered || clicked.InputRoute != "native-fixture" || clicked.Window != "win-a" {
+		t.Fatalf("pointer receipt = %+v", clicked)
+	}
+
+	keyboard, err := registry.Invoke("window.input.key.press", mergeControlArgs(caller, control.Args{
+		"key": jsonString("x"), "shift": json.RawMessage("true"),
+	}))
+	if err != nil {
+		t.Fatalf("key press: %v", err)
+	}
+	pressed := keyboard.(WindowKeyPressReceipt)
+	if !pressed.Delivered || pressed.InputRoute != "native-fixture" || pressed.Key != "x" {
+		t.Fatalf("keyboard receipt = %+v", pressed)
 	}
 }
 

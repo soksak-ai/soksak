@@ -6,6 +6,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+static NSView *soksakFindWebview(NSWindow *window) {
+  NSView *content = window.contentView;
+  if (content == nil) return nil;
+  NSMutableArray *pending = [NSMutableArray arrayWithObject:content];
+  while ([pending count] > 0) {
+    NSView *view = [pending objectAtIndex:0];
+    [pending removeObjectAtIndex:0];
+    if ([view isKindOfClass:NSClassFromString(@"WKWebView")]) return view;
+    [pending addObjectsFromArray:[view subviews]];
+  }
+  return nil;
+}
+
 extern void soksakWindowInputPointer(void *nsWindow,
                                      unsigned long long sequence,
                                      int phase,
@@ -64,19 +77,8 @@ void soksakWindowContentSize(void *nsWindow, double *width, double *height) {
 
 void soksakWebviewFrame(void *nsWindow, double *x, double *y, double *width, double *height) {
   NSWindow *window = (NSWindow *)nsWindow;
-  // The deepest WKWebView under the content view. The hierarchy is the
-  // framework's, so it is walked rather than assumed.
-  NSView *found = nil;
-  NSMutableArray *pending = [NSMutableArray arrayWithObject:[window contentView]];
-  while ([pending count] > 0) {
-    NSView *view = [pending objectAtIndex:0];
-    [pending removeObjectAtIndex:0];
-    if ([view isKindOfClass:NSClassFromString(@"WKWebView")]) {
-      found = view;
-      break;
-    }
-    [pending addObjectsFromArray:[view subviews]];
-  }
+  // The hierarchy is the framework's, so it is walked rather than assumed.
+  NSView *found = soksakFindWebview(window);
   if (found == nil) {
     *x = *y = *width = *height = -1;
     return;
@@ -183,6 +185,143 @@ SoksakWindowInputState soksakSetWindowMarkedText(void *nsWindow, const char *tex
   return soksakReadWindowInputState(window);
 }
 
+static SoksakNativeInputDelivery soksakNativeInputFailure(const char *message,
+                                                           NSWindow *window) {
+  SoksakNativeInputDelivery out = {false, false, NULL};
+  out.windowFocused = window != nil && window.isKeyWindow;
+  out.errorMessage = strdup(message);
+  return out;
+}
+
+static NSEvent *soksakWindowMouseEvent(NSWindow *window,
+                                       NSPoint location,
+                                       NSEventType type,
+                                       unsigned long long sequence) {
+  NSEvent *event = [NSEvent mouseEventWithType:type
+                                      location:location
+                                 modifierFlags:0
+                                     timestamp:NSProcessInfo.processInfo.systemUptime
+                                  windowNumber:window.windowNumber
+                                       context:nil
+                                   eventNumber:(NSInteger)(sequence & 0x7fffffff)
+                                    clickCount:1
+                                      pressure:type == NSEventTypeLeftMouseDown ? 1.0 : 0.0];
+  CGEventRef native = event.CGEvent;
+  if (native != NULL) {
+    CGEventSetIntegerValueField(native, kCGEventSourceUserData, (int64_t)sequence);
+  }
+  return event;
+}
+
+SoksakNativeInputDelivery soksakClickWindowPointer(void *nsWindow,
+                                                    unsigned long long sequence,
+                                                    double x,
+                                                    double y) {
+  NSWindow *window = (NSWindow *)nsWindow;
+  if (window == nil) return soksakNativeInputFailure("window has no native lifetime", nil);
+  NSView *webview = soksakFindWebview(window);
+  if (webview == nil) return soksakNativeInputFailure("window has no WKWebView", window);
+  NSRect bounds = webview.bounds;
+  if (x < 0 || y < 0 || x >= NSWidth(bounds) || y >= NSHeight(bounds)) {
+    return soksakNativeInputFailure("pointer coordinates are outside the WKWebView", window);
+  }
+  NSPoint local = NSMakePoint(x, webview.isFlipped ? y : NSHeight(bounds) - y);
+  NSPoint location = [webview convertPoint:local toView:nil];
+  NSEvent *down = soksakWindowMouseEvent(window, location, NSEventTypeLeftMouseDown, sequence);
+  NSEvent *up = soksakWindowMouseEvent(window, location, NSEventTypeLeftMouseUp, sequence);
+  if (down == nil || up == nil) {
+    return soksakNativeInputFailure("AppKit did not create the pointer events", window);
+  }
+  if (![window makeFirstResponder:webview]) {
+    return soksakNativeInputFailure("WKWebView refused the native responder role", window);
+  }
+  [webview mouseDown:down];
+  [webview mouseUp:up];
+  SoksakNativeInputDelivery out = {true, window.isKeyWindow, NULL};
+  return out;
+}
+
+static bool soksakKeyIdentity(NSString *key, unsigned short *code, NSString **characters) {
+  if ([key isEqualToString:@"Enter"]) {
+    *code = 36; *characters = @"\r";
+  } else if ([key isEqualToString:@"Tab"]) {
+    *code = 48; *characters = @"\t";
+  } else if ([key isEqualToString:@"Escape"]) {
+    *code = 53; *characters = [NSString stringWithFormat:@"%C", (unichar)0x1b];
+  } else if ([key isEqualToString:@"Backspace"]) {
+    *code = 51; *characters = [NSString stringWithFormat:@"%C", (unichar)0x7f];
+  } else if ([key isEqualToString:@"Delete"]) {
+    *code = 117; *characters = [NSString stringWithFormat:@"%C", (unichar)NSDeleteFunctionKey];
+  } else if ([key isEqualToString:@"ArrowLeft"]) {
+    *code = 123; *characters = [NSString stringWithFormat:@"%C", (unichar)NSLeftArrowFunctionKey];
+  } else if ([key isEqualToString:@"ArrowRight"]) {
+    *code = 124; *characters = [NSString stringWithFormat:@"%C", (unichar)NSRightArrowFunctionKey];
+  } else if ([key isEqualToString:@"ArrowDown"]) {
+    *code = 125; *characters = [NSString stringWithFormat:@"%C", (unichar)NSDownArrowFunctionKey];
+  } else if ([key isEqualToString:@"ArrowUp"]) {
+    *code = 126; *characters = [NSString stringWithFormat:@"%C", (unichar)NSUpArrowFunctionKey];
+  } else if ([key length] == 1) {
+    *code = 0; *characters = key;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+SoksakNativeInputDelivery soksakPressWindowKey(void *nsWindow,
+                                               unsigned long long sequence,
+                                               const char *rawKey,
+                                               bool ctrl,
+                                               bool meta,
+                                               bool shift,
+                                               bool alt) {
+  NSWindow *window = (NSWindow *)nsWindow;
+  if (window == nil) return soksakNativeInputFailure("window has no native lifetime", nil);
+  NSView *webview = soksakFindWebview(window);
+  if (webview == nil) return soksakNativeInputFailure("window has no WKWebView", window);
+  NSString *key = rawKey == NULL ? nil : [NSString stringWithUTF8String:rawKey];
+  unsigned short code = 0;
+  NSString *characters = nil;
+  if (key == nil || !soksakKeyIdentity(key, &code, &characters)) {
+    return soksakNativeInputFailure("key must be one character or a supported named key", window);
+  }
+  if (![window makeFirstResponder:webview]) {
+    return soksakNativeInputFailure("WKWebView refused the native responder role", window);
+  }
+  NSEventModifierFlags flags = 0;
+  if (ctrl) flags |= NSEventModifierFlagControl;
+  if (meta) flags |= NSEventModifierFlagCommand;
+  if (shift) flags |= NSEventModifierFlagShift;
+  if (alt) flags |= NSEventModifierFlagOption;
+  NSEvent *down = [NSEvent keyEventWithType:NSEventTypeKeyDown
+                                    location:NSZeroPoint
+                               modifierFlags:flags
+                                   timestamp:NSProcessInfo.processInfo.systemUptime
+                                windowNumber:window.windowNumber
+                                     context:nil
+                                  characters:characters
+                 charactersIgnoringModifiers:characters
+                                   isARepeat:NO
+                                     keyCode:code];
+  NSEvent *up = [NSEvent keyEventWithType:NSEventTypeKeyUp
+                                  location:NSZeroPoint
+                             modifierFlags:flags
+                                 timestamp:NSProcessInfo.processInfo.systemUptime
+                              windowNumber:window.windowNumber
+                                   context:nil
+                                characters:characters
+               charactersIgnoringModifiers:characters
+                                 isARepeat:NO
+                                   keyCode:code];
+  if (down == nil || up == nil) {
+    return soksakNativeInputFailure("AppKit did not create the keyboard events", window);
+  }
+  [webview keyDown:down];
+  [webview keyUp:up];
+  SoksakNativeInputDelivery out = {true, window.isKeyWindow, NULL};
+  return out;
+}
+
 void *soksakInstallWindowInputMonitor(void) {
   __block unsigned long long sequence = 0;
   __block unsigned long long gesture = 0;
@@ -250,20 +389,7 @@ static NSEvent *soksakCloseMouseEvent(NSWindow *window, NSButton *button,
                                       NSEventType type, unsigned long long sequence) {
   NSPoint centre = NSMakePoint(NSMidX(button.bounds), NSMidY(button.bounds));
   NSPoint location = [button convertPoint:centre toView:nil];
-  NSEvent *event = [NSEvent mouseEventWithType:type
-                                      location:location
-                                 modifierFlags:0
-                                     timestamp:NSProcessInfo.processInfo.systemUptime
-                                  windowNumber:window.windowNumber
-                                       context:nil
-                                   eventNumber:(NSInteger)(sequence & 0x7fffffff)
-                                    clickCount:1
-                                      pressure:type == NSEventTypeLeftMouseDown ? 1.0 : 0.0];
-  CGEventRef native = event.CGEvent;
-  if (native != NULL) {
-    CGEventSetIntegerValueField(native, kCGEventSourceUserData, (int64_t)sequence);
-  }
-  return event;
+  return soksakWindowMouseEvent(window, location, type, sequence);
 }
 
 bool soksakClickNativeClose(void *nsWindow, unsigned long long sequence) {
