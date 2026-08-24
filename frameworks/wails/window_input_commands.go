@@ -62,16 +62,18 @@ type WindowPointerClickReceipt struct {
 	X                       float64 `json:"x"`
 	Y                       float64 `json:"y"`
 	WindowFocused           bool    `json:"windowFocused"`
+	ForegroundPreserved     bool    `json:"foregroundPreserved"`
 }
 
 // WindowKeyPressReceipt records one native-window key down/up pair.
 type WindowKeyPressReceipt struct {
-	Window        string `json:"window"`
-	Sequence      uint64 `json:"sequence"`
-	Delivered     bool   `json:"delivered"`
-	InputRoute    string `json:"inputRoute"`
-	Key           string `json:"key"`
-	WindowFocused bool   `json:"windowFocused"`
+	Window              string `json:"window"`
+	Sequence            uint64 `json:"sequence"`
+	Delivered           bool   `json:"delivered"`
+	InputRoute          string `json:"inputRoute"`
+	Key                 string `json:"key"`
+	WindowFocused       bool   `json:"windowFocused"`
+	ForegroundPreserved bool   `json:"foregroundPreserved"`
 }
 
 // WindowInputHost provides keyboard composition and pointer event diagnostics.

@@ -49,11 +49,11 @@ func windowInputState(unsafe.Pointer) (WindowInputState, error) {
 func setWindowMarkedText(unsafe.Pointer, string) (WindowInputState, error) {
 	return WindowInputState{}, ErrWindowInputUnsupported
 }
-func clickWindowPointer(unsafe.Pointer, uint64, float64, float64) (bool, bool, error) {
-	return false, false, ErrWindowInputUnsupported
+func clickWindowPointer(unsafe.Pointer, uint64, float64, float64) (bool, bool, bool, error) {
+	return false, false, false, ErrWindowInputUnsupported
 }
-func pressWindowKey(unsafe.Pointer, uint64, string, bool, bool, bool, bool) (bool, bool, error) {
-	return false, false, ErrWindowInputUnsupported
+func pressWindowKey(unsafe.Pointer, uint64, string, bool, bool, bool, bool) (bool, bool, bool, error) {
+	return false, false, false, ErrWindowInputUnsupported
 }
 func nativeCloseStatus(unsafe.Pointer) (NativeCloseStatus, error) {
 	return NativeCloseStatus{}, ErrWindowInputUnsupported

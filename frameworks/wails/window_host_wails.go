@@ -193,10 +193,11 @@ func (h *wailsHost) ClickInputPointer(name string, x, y float64) (WindowPointerC
 	sequence := (uint64(1) << 40) + windowInputClickSequence.Add(1)
 	var delivered bool
 	var focused bool
+	var foregroundPreserved bool
 	var failure error
 	native := window.NativeWindow()
 	application.InvokeSync(func() {
-		delivered, focused, failure = clickWindowPointer(native, sequence, x, y)
+		delivered, focused, foregroundPreserved, failure = clickWindowPointer(native, sequence, x, y)
 	})
 	if failure != nil {
 		return WindowPointerClickReceipt{}, failure
@@ -204,7 +205,7 @@ func (h *wailsHost) ClickInputPointer(name string, x, y float64) (WindowPointerC
 	return WindowPointerClickReceipt{
 		Window: name, Sequence: sequence, Delivered: delivered,
 		InputRoute: "appkit-hit-tested-nsevent", CursorPositionMayChange: false,
-		X: x, Y: y, WindowFocused: focused,
+		X: x, Y: y, WindowFocused: focused, ForegroundPreserved: foregroundPreserved,
 	}, nil
 }
 
@@ -216,10 +217,11 @@ func (h *wailsHost) PressInputKey(name, key string, ctrl, meta, shift, alt bool)
 	sequence := (uint64(1) << 40) + windowInputClickSequence.Add(1)
 	var delivered bool
 	var focused bool
+	var foregroundPreserved bool
 	var failure error
 	native := window.NativeWindow()
 	application.InvokeSync(func() {
-		delivered, focused, failure = pressWindowKey(native, sequence, key, ctrl, meta, shift, alt)
+		delivered, focused, foregroundPreserved, failure = pressWindowKey(native, sequence, key, ctrl, meta, shift, alt)
 	})
 	if failure != nil {
 		return WindowKeyPressReceipt{}, failure
@@ -227,6 +229,7 @@ func (h *wailsHost) PressInputKey(name, key string, ctrl, meta, shift, alt bool)
 	return WindowKeyPressReceipt{
 		Window: name, Sequence: sequence, Delivered: delivered,
 		InputRoute: "appkit-hit-tested-nsevent", Key: key, WindowFocused: focused,
+		ForegroundPreserved: foregroundPreserved,
 	}, nil
 }
 

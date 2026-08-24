@@ -706,7 +706,7 @@ export function registerWindowCatalog(): void {
       x: { type: "number", description: key("cmd.window.input.pointer.click.param.x"), required: true },
       y: { type: "number", description: key("cmd.window.input.pointer.click.param.y"), required: true },
     },
-    returns: "{ window, sequence, delivered:true, inputRoute, cursorPositionMayChange:false, x, y, windowFocused }",
+    returns: "{ window, sequence, delivered:true, inputRoute, cursorPositionMayChange:false, x, y, windowFocused, foregroundPreserved:true }",
     message: (d) => tmsg("msg.window.input.pointer.click", { sequence: String(d.sequence ?? "") }),
     examples: ["window.input.pointer.click window=win-example x=400 y=200"],
     handler: async (p) => invoke("window.input.pointer.click", { x: p.x, y: p.y }),
@@ -721,7 +721,7 @@ export function registerWindowCatalog(): void {
       shift: { type: "boolean", description: key("cmd.window.input.key.press.param.shift") },
       alt: { type: "boolean", description: key("cmd.window.input.key.press.param.alt") },
     },
-    returns: "{ window, sequence, delivered:true, inputRoute, key, windowFocused }",
+    returns: "{ window, sequence, delivered:true, inputRoute, key, windowFocused, foregroundPreserved:true }",
     message: (d) => tmsg("msg.window.input.key.press", { key: String(d.key ?? "") }),
     examples: ["window.input.key.press window=win-example key=Enter"],
     handler: async (p) => invoke("window.input.key.press", {

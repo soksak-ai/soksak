@@ -133,6 +133,7 @@ SoksakWindowInputState soksakSetWindowMarkedText(void *nsWindow, const char *tex
 typedef struct {
   bool delivered;
   bool windowFocused;
+  bool foregroundPreserved;
   char *errorMessage;
 } SoksakNativeInputDelivery;
 
