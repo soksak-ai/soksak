@@ -2,6 +2,7 @@
 kind: guide
 status: active
 canonical: self
+scope: workspace
 ---
 
 # Terminal UX execution directive
@@ -28,8 +29,9 @@ propose the corrected rule, and update the rule, RED and document together after
 
 ## Failure classification before RED
 
-Run scripts/ci/prepare-frontend-dependencies.sh and then
-scripts/ci/check-build-toolchain.sh before a baseline or product test. Prepare alone materializes
+Run `make prepare` and then `make preflight` before a baseline or product test; `make verify` owns
+the full Core gate. The commands delegate to scripts/ci/prepare-frontend-dependencies.sh and
+scripts/ci/check-build-toolchain.sh. Prepare alone materializes
 the frozen lockfile under the cross-process dependency-owner lock. Check is read-only: it derives
 the Node selector from `.node-version`, verifies its `frontend/package.json` projection and pnpm
 declaration, and verifies the selected native frontend package. It separately reports the required,
@@ -54,6 +56,13 @@ assertion. A second run with a different environment is not the same baseline.
 The first valid baseline can pass or fail. If it passes, add a focused scenario that reproduces the
 reported defect without weakening the acceptance rule. If it cannot reproduce the report, record
 the missing condition as an investigation result; do not edit implementation on an assumed RED.
+
+Every active source repository exposes its existing operations through Make. Make owns commands,
+not versions or dependency identities. Node, pnpm, Go, Rust and Python versions stay in their
+ecosystem owner files; external SDK repositories, commits, tools and target outputs stay in
+`build-dependencies.json`. A workflow selects the native runner, injects those owners and calls the
+same Make target. It does not contain a second implementation of the build. No source file records
+an installed executable path or searches the workstation for an alternate tool.
 
 ## Local cross-repository candidate verification
 
@@ -93,35 +102,42 @@ into the runtime plugin/sidecar component list.
 
 Build-time composition uses one canonical materializer and a disposable staging checkout. The
 materializer verifies the plan and digests, snapshots a clean source commit, supplies candidate
-artifacts through its content-addressed staging transport, builds, and destroys the staging state.
+artifacts through its content-addressed staging transport, builds, and finalizes the staging state.
 Staging metadata is not source, is not committed, and is never copied into a candidate archive.
 Neither a developer nor an ad-hoc script edits dependency metadata to imitate this operation. If
 the canonical materializer cannot express a dependency edge, that is a missing product tool: add a
 RED and implement the materializer before continuing.
 
-`soksak-spec` commit `9de8149` provides the canonical staging command:
+`soksak-spec` commits `9de8149` through `25c58b7` provide the canonical stage and archive-exit
+commands:
 
 ~~~sh
 node <spec-package>/release-template/stage-node-candidate.mjs \
   --source <clean-absolute-repository-root> \
   --out <empty-absolute-staging-directory> \
   --plan <absolute-candidate-stage-plan.json>
+
+node <spec-package>/release-template/build-node-candidate.mjs \
+  --stage <absolute-staging-directory> \
+  --out <empty-absolute-candidate-output-directory> \
+  --kind <portable-or-plugin> \
+  [--generated <declared-output-path> ...]
 ~~~
 
 The plan contains only `packagePath` and `dependencies`; each dependency records package
 name, absolute artifact path and SHA-256. The command archives one clean exact source commit,
 verifies and copies dependency artifacts under the disposable checkout, and writes staging-local
 `pnpm.overrides`. It refuses a dirty source, digest mismatch, path escape, symlink and nonempty output.
-It does not edit the canonical source.
+It does not edit the canonical source. Both output directories must already exist and be empty.
 
-This command stages dependencies only. It does not yet own the build, projection of declared build
-outputs, restoration of canonical package and lock bytes, or final candidate archive validation.
-Those exit steps require their own RED-to-GREEN command before end-to-end cross-repository candidate
-build evidence can be claimed. A staging-local locator is not source metadata and must not leave
-staging. Every produced archive still passes the canonical no-local-dependency release gate. The
-current system-test candidate code validates and installs already-built artifacts; it does not
-replace the missing exit command. Publishing every development iteration is not the replacement;
-the release train starts only after the complete candidate is GREEN.
+The exit command installs only inside staging, invokes the repository's `make verify` from the
+staged repository root, restores canonical package and lock bytes, rejects every undeclared source
+change, retains only declared generated outputs, removes `.candidate-inputs` and staging control
+metadata, rejects local locators, builds and validates the candidate archive, and writes
+`candidate-build.json`. A staging-local locator is not source metadata but is invalid if it survives
+finalization. The caller disposes the finalized staging checkout after evidence extraction.
+Publishing every development iteration is not a replacement; the release train starts only after
+the complete candidate and installed-product matrix are GREEN.
 
 The canonical `soksak-spec` release builder rejects local dependency locators in source metadata,
 lockfiles and produced archives. The system-test candidate plan verifies candidate identity,
@@ -257,12 +273,22 @@ test-owned sidecars and then calls app.shutdown.commit.
 Discover command schemas from the running binary. Do not infer them from old examples. Discover
 repository roots with Git; do not join repositories through guessed sibling paths.
 
-| Tool | Pinned version and path |
+The repository never records a workstation tool path. The selected environment must satisfy the
+owner file read by the addressed repository:
+
+| Tool | Canonical owner |
 | --- | --- |
-| Node | 26.7.0 — <workspace-root>/local/runtime/node-v26.7.0-darwin-arm64/bin |
-| pnpm | 11.22.0 — <machine-path>/Library/pnpm/.tools/pnpm/11.22.0/bin |
-| Task | 3.53.1 — <workspace-root>/local/runtime/task-v3.53.1 |
-| Wails | 3.0.0-beta.12 — <workspace-root>/local/runtime/wails3-v3.0.0-beta.12/wails3 |
+| Node | `.node-version` and the matching package `engines.node` projection |
+| pnpm | the addressed `package.json#packageManager` |
+| Go and Wails | `go.mod`; invoke Wails with `go tool wails3` |
+| Rust | `rust-toolchain.toml` |
+| Python | `.python-version` when the repository directly owns Python operations; external SDK Python belongs in `build-dependencies.json` |
+| Native target | explicit `TARGET=<target-triple>` Make command and the Actions runner matrix |
+
+An Apple Silicon source-level gate requires the actual Node, Go, Rust and Python processes it uses
+to be arm64. A Rosetta process is an exit-78 environment failure even when it can cross-compile an
+arm64 file. Final native evidence additionally verifies the headers of every Core, sidecar, SDK and
+test process artifact.
 
 ## Evidence and commits
 

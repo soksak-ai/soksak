@@ -2,6 +2,7 @@
 kind: translation
 status: active
 canonical: docs/tech/TERMINAL-UX-EXECUTION.md
+scope: workspace
 ---
 
 # 터미널 UX 실행 지시서
@@ -28,9 +29,11 @@ canonical: docs/tech/TERMINAL-UX-EXECUTION.md
 
 ## RED 이전 실패 분류
 
-Baseline 또는 product test 전에 scripts/ci/prepare-frontend-dependencies.sh를 실행한 뒤
-scripts/ci/check-build-toolchain.sh를 실행합니다. Prepare만 cross-process dependency owner
-lock 아래에서 frozen lockfile을 materialize합니다. Check는 read-only이며 `.node-version`의 Node
+Baseline 또는 product test 전에 `make prepare`를 실행한 뒤 `make preflight`를 실행합니다.
+`make verify`가 Core 전체 gate를 소유합니다. 이 명령은
+scripts/ci/prepare-frontend-dependencies.sh와 scripts/ci/check-build-toolchain.sh에 위임합니다.
+Prepare만 cross-process dependency owner lock 아래에서 frozen lockfile을 materialize합니다.
+Check는 read-only이며 `.node-version`의 Node
 selector, `frontend/package.json` projection과 pnpm 선언, 선택된 native frontend package를
 검사합니다. Required, Node, Go, Wails architecture 축을 별도로 보고하고
 lock SHA-256을 출력합니다. `go tool wails3 task verify`는 모든 product test보다 먼저 prepare와
@@ -53,6 +56,13 @@ pnpm version, dependency lock digest, test command, exit code, 처음 실패한 
 첫 유효 baseline은 통과하거나 실패할 수 있습니다. 통과하면 인수 기준을 약화하지 않고 제보된
 결함을 재현하는 집중 scenario를 추가합니다. 제보를 재현하지 못하면 누락된 조건을 investigation
 결과로 기록하며 추정한 RED를 근거로 구현을 수정하지 않습니다.
+
+모든 active source repository는 실제 존재하는 operation을 Make로 공개합니다. Make는 command를
+소유하며 version이나 dependency identity를 복사하지 않습니다. Node, pnpm, Go, Rust, Python
+version은 생태계 owner file에 두고 external SDK repository, commit, tool, target output은
+`build-dependencies.json`에 둡니다. Workflow는 native runner를 선택하고 owner를 주입한 뒤 같은
+Make target을 호출합니다. Build를 YAML에 다시 구현하거나 설치된 executable path를 source에
+기록하거나 다른 tool을 workstation에서 탐색하면 안 됩니다.
 
 ## Local cross-repository candidate 검증
 
@@ -93,34 +103,40 @@ repository, source commit, artifact size와 SHA-256, dependency commit, 필요�
 Build-time composition은 하나의 canonical materializer와 폐기 가능한 staging checkout을
 사용합니다. Materializer는 plan과 digest를 검증하고, clean source commit을 snapshot하고,
 content-addressed staging transport로 candidate artifact를 제공하고, build 후 staging state를
-폐기합니다. Staging metadata는 source가 아니며 commit하지 않고 candidate archive에 복사하지
+finalize합니다. Staging metadata는 source가 아니며 commit하지 않고 candidate archive에 복사하지
 않습니다. 개발자나 일회성 script가 이 동작을 흉내 내기 위해 dependency metadata를 편집하면 안
 됩니다. Canonical materializer가 dependency edge를 표현하지 못하면 product tool이 누락된
 것입니다. 진행을 멈추고 RED를 추가한 뒤 materializer를 먼저 구현합니다.
 
-`soksak-spec` commit `9de8149`가 canonical staging command를 제공합니다.
+`soksak-spec` commit `9de8149`부터 `25c58b7`까지가 canonical staging 및 archive-exit command를
+제공합니다.
 
 ~~~sh
 node <spec-package>/release-template/stage-node-candidate.mjs \
   --source <clean-absolute-repository-root> \
   --out <empty-absolute-staging-directory> \
   --plan <absolute-candidate-stage-plan.json>
+
+node <spec-package>/release-template/build-node-candidate.mjs \
+  --stage <absolute-staging-directory> \
+  --out <empty-absolute-candidate-output-directory> \
+  --kind <portable-or-plugin> \
+  [--generated <declared-output-path> ...]
 ~~~
 
 Plan은 `packagePath`와 `dependencies`만 포함합니다. 각 dependency는 package name,
 absolute artifact path, SHA-256을 기록합니다. Command는 clean exact source commit 하나를 archive하고
 dependency artifact를 검증해 폐기 가능한 checkout 내부로 복사한 뒤 staging-local `pnpm.overrides`를
 기록합니다. Dirty source, digest mismatch, path escape, symlink, nonempty output을 거부하며 canonical
-source는 수정하지 않습니다.
+source는 수정하지 않습니다. 두 output directory는 미리 존재하는 빈 directory여야 합니다.
 
-이 command는 dependency staging만 소유합니다. Build, 선언된 build output 투영, canonical package와
-lock byte 복원, 최종 candidate archive 검증은 아직 소유하지 않습니다. End-to-end cross-repository
-candidate build 증거를 주장하기 전에 이 exit 단계를 소유하는 command를 별도 RED→GREEN으로 만들어야
-합니다. Staging-local locator는 source metadata가 아니며 staging 밖으로 나가면 안 됩니다. 생성된
-모든 archive는 canonical no-local-dependency release gate를 계속 통과해야 합니다. 현재 system-test
-candidate code는 이미 만들어진 artifact를 검증하고 설치할 뿐 누락된 exit command를 대체하지
-않습니다. 개발 반복마다 release하는 방식으로 대체하지 않으며 release train은 전체 candidate가
-GREEN인 뒤에만 시작합니다.
+Exit command는 staging 내부에서만 install하고 staged repository root에서 repository의
+`make verify`를 실행합니다. Canonical package와 lock byte를 복원하고, 선언되지 않은 source 변경을
+거부하고, 선언된 generated output만 유지하고, `.candidate-inputs`와 staging control metadata를
+제거하고, local locator를 거부한 뒤 candidate archive를 build·검증하고 `candidate-build.json`을
+기록합니다. Staging-local locator도 finalization 뒤 남으면 실패입니다. Caller는 증거를 추출한 뒤
+finalized staging checkout을 폐기합니다. 개발 반복마다 release하는 방식으로 대체하지 않으며 전체
+candidate와 설치 제품 matrix가 GREEN인 뒤에만 release train을 시작합니다.
 
 Canonical `soksak-spec` release builder는 source metadata, lockfile, 생성 archive의 local dependency
 locator를 거부합니다. System-test candidate plan은 candidate identity, digest, validation input을
@@ -248,12 +264,21 @@ app.shutdown.commit을 호출합니다.
 실행 중인 binary에서 command schema를 확인합니다. 오래된 예시로 추정하지 않습니다. Git으로
 repository root를 확인하며 추정한 sibling path로 repository를 연결하지 않습니다.
 
-| Tool | 고정 version 및 path |
+Repository는 workstation tool path를 기록하지 않습니다. 선택된 environment는 대상 repository의
+owner file을 충족해야 합니다.
+
+| Tool | 정본 owner |
 | --- | --- |
-| Node | 26.7.0 — <workspace-root>/local/runtime/node-v26.7.0-darwin-arm64/bin |
-| pnpm | 11.22.0 — <machine-path>/Library/pnpm/.tools/pnpm/11.22.0/bin |
-| Task | 3.53.1 — <workspace-root>/local/runtime/task-v3.53.1 |
-| Wails | 3.0.0-beta.12 — <workspace-root>/local/runtime/wails3-v3.0.0-beta.12/wails3 |
+| Node | `.node-version`과 해당 package `engines.node` projection |
+| pnpm | 대상 `package.json#packageManager` |
+| Go 및 Wails | `go.mod`; Wails는 `go tool wails3`로 호출 |
+| Rust | `rust-toolchain.toml` |
+| Python | Repository가 Python operation을 직접 소유하면 `.python-version`; external SDK Python은 `build-dependencies.json` |
+| Native target | 명시적 `TARGET=<target-triple>` Make command와 Actions runner matrix |
+
+Apple Silicon source-level gate에서 실제 사용한 Node, Go, Rust, Python process는 arm64여야 합니다.
+Rosetta process가 arm64 file을 cross-compile할 수 있어도 exit 78 환경 실패입니다. 최종 native 증거는
+Core, sidecar, SDK, test process artifact의 header도 모두 검증합니다.
 
 ## 증거와 commit
 

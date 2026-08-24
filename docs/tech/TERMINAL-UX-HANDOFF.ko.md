@@ -2,6 +2,7 @@
 kind: translation
 status: active
 canonical: docs/tech/TERMINAL-UX-HANDOFF.md
+scope: workspace
 ---
 
 # 터미널 UX 결함 인계
@@ -34,7 +35,7 @@ environment.json에서 확인합니다.
 | --- | --- |
 | soksak-core/ | 현재 Wails application, control CLI, renderer, framework adapter, application lifecycle, Core gate. 이 인계 문서의 소유 repository입니다. |
 | soksak-plugins/ | 설치 가능한 plugin별 repository. 일곱 terminal provider repository가 있습니다. |
-| soksak-kits/ | 공유 component 구현. soksak-kit-plugin-terminal은 공통 terminal lifecycle과 frame presenter를 소유하며 terminal conformance 및 sidecar kit는 별도 repository입니다. |
+| soksak-kits/ | 공유 component 구현. soksak-kit-plugin-terminal은 공통 terminal lifecycle과 frame presenter를, soksak-kit-sidecar-terminal은 recovery-sidecar runtime을 소유합니다. 예전 terminal-common과 engine-as-judge conformance repository는 consumer가 없으며 폐기 대상입니다. |
 | soksak-sidecars/ | Plugin process별 repository. PTY 및 여섯 frame-producing terminal sidecar가 있습니다. |
 | soksak-contracts/ | Composition, control, PTY, registry, terminal 경계의 공개 contract와 acceptance package입니다. |
 | soksak-specs/ | 공개 schema와 validator의 정본입니다. 공개 state 또는 command 모양을 바꾸면 consumer보다 먼저 수정합니다. |
@@ -68,9 +69,7 @@ environment.json에서 확인합니다.
 │   └── soksak-plugin-terminal-wezterm/           frame-provider adapter
 ├── soksak-kits/
 │   ├── soksak-kit-plugin-terminal/               공유 plugin lifecycle 및 frame presenter
-│   ├── soksak-kit-sidecar-terminal/              공유 terminal-sidecar 구현
-│   ├── soksak-kit-terminal-common/               공통 terminal type 및 behavior
-│   └── soksak-kit-terminal-conformance/          provider 간 conformance gate
+│   └── soksak-kit-sidecar-terminal/              공유 terminal-sidecar 구현
 ├── soksak-sidecars/
 │   ├── soksak-sidecar-pty/                       PTY process
 │   ├── soksak-sidecar-terminal-alacritty/        Alacritty frame producer
@@ -83,9 +82,9 @@ environment.json에서 확인합니다.
 │   ├── soksak-contract-plugin-terminal/          plugin behavior contract package
 │   ├── soksak-contract-terminal/                 terminal data contract
 │   ├── soksak-contract-pty/                      PTY contract
-│   ├── soksak-contract-composition/              view composition contract
 │   ├── soksak-contract-contentview/              content-view contract
-│   └── soksak-contract-control/                  command 및 event envelope contract
+│   ├── soksak-contract-control/                  command 및 event envelope contract
+│   └── soksak-contract-registry/                 Registry 인증 및 연속성 contract
 ├── soksak-specs/soksak-spec/                     공개 schema 및 validator
 ├── wails-services/wails-service-native-compositor/ native composition 적용
 ├── soksak-plugin-registry/                       공개된 plugin 참조
@@ -167,8 +166,12 @@ socket, owner를 받습니다. SOKSAK_PRESENTATION=capture-only는 test window�
   palette, byte 및 frame renderer의 presentation status 하나를 정의합니다.
 - Kit candidate는 row/run DOM node를 유지하고 input/focus/cursor/render sequence와 timestamp를
   공개합니다. Packed contract candidate 기준 typecheck와 source test 33개를 통과했습니다.
-- Kit manifest에 local file dependency를 남기면 안 됩니다. Repository metadata gate는 release
-  train이 immutable contract artifact를 제공할 때까지 해당 dependency를 올바르게 거부합니다.
+- Xterm은 `@xterm/xterm` 6.0.0과 `@xterm/addon-fit` 0.11.0을 사용합니다. WebKit IME dependency는
+  package.json/lockfile의 정확한 Git archive 하나로만 소비하며 release workflow의 충돌하는 과거
+  source checkout을 제거했습니다.
+- Contract, kit, 일곱 renderer plugin의 clean candidate closure가 존재합니다. Source manifest와
+  lockfile은 공개 HTTPS dependency를 유지하며 local locator가 없습니다. Candidate provenance는
+  정확한 source commit과 dependency archive digest를 기록합니다.
 - 일곱 provider blank-frame 판정은 아직 증명되지 않았습니다. 결함 5–7을 완료로 분류하면 안 됩니다.
 
 임시 terminal contract 및 terminal kit archive에서 생성한 candidate 증거는 무효입니다. Kit source
@@ -176,22 +179,65 @@ manifest가 외부 local archive를 사용하도록 임시 변경됐고 pnpm은 
 absolute locator와 parent-relative locator 두 형태로 기록했습니다. Source file을 되돌려도 오염된
 metadata에서 이미 만든 archive와 downstream 증거는 복구되지 않습니다.
 
-해당 kit archive가 closure에 포함된 candidate archive, parity, visibility, screenshot, recording
-결과는 재사용하면 안 됩니다. 기록된 clean commit에서 canonical candidate materializer를 통해
-contract, kit, 모든 downstream plugin candidate를 다시 build해야 합니다. Source worktree는 변하지
-않아야 하고, `soksak-spec`이 source 및 archive dependency metadata를 승인해야 하며, system-test
-plan이 다시 만든 closure digest를 기록해야 증거로 인정할 수 있습니다.
+해당 오염 kit archive가 closure에 포함된 candidate archive, parity, visibility, screenshot,
+recording 결과는 재사용하면 안 됩니다. 이를 대체한 clean renderer closure는 다음과 같습니다.
+
+| Artifact | Source commit | SHA-256 |
+| --- | --- | --- |
+| contract-plugin-terminal 0.0.7 | 0f573cd | 1fd332609d141617372112b43827fc24f30a78f3b8118b3cb1ffe6e5b2bc228d |
+| kit-plugin-terminal 0.0.18 | e8754fc | 0587a1fb44d19da0e8dacffa1f51471fd67c76adccb6eb1c240d0dc5e6418950 |
+| plugin-terminal-alacritty 0.0.15 | 16c71ce | 2b02a19dc298ad8170f6787468b531640f238536df306da7c05b92411ae1cc43 |
+| plugin-terminal-ghostty 0.0.16 | 8bd4805 | a388ac2f267ea41c98a58d4a54e19f7c16851b839f59942f1314a5c6dce908ba |
+| plugin-terminal-kitty 0.0.15 | ecb6479 | 43e18e5c157e52018b641e689eb172d80aafb30cca3cd62289685551ac633b99 |
+| plugin-terminal-shitty 0.0.15 | 8a30c15 | a2678e89a44bb1cfe9b26c227d932f846384909b6c053768c0c5ec1afdcead8c |
+| plugin-terminal-vt100 0.0.15 | bc56b75 | 301ae9fee054101a44a00db0941faff8b8cd50da24bfbfe95a04ef9e1159434e |
+| plugin-terminal-wezterm 0.0.15 | ba744e8 | 55e41f83907f6476baa5a20810b886cccfca25435adbb4bb0cf50b833c73dcc6 |
+| plugin-terminal-xterm 0.0.22 | 91a724e | 6ae01661d5a1d82ef0ab0b1a114a81713d3d6594fa872cbfc22acea2b805dfcf |
+
+이 표는 renderer package composition만 검증합니다. Sidecar candidate, 설치 제품 parity,
+screenshot, motion 증거를 대체하지 않습니다.
 
 허용되는 local build-time 검증 경로는 TERMINAL-UX-EXECUTION.ko.md의 “Local cross-repository
 candidate 검증”에 정의합니다. Consumer manifest 또는 lockfile 직접 편집은 development mode가
 아닙니다.
 
-`soksak-spec` commit `9de8149`가 clean-source, digest-verified dependency staging을 소유합니다. 아직
-downstream build와 clean candidate-archive 투영은 소유하지 않습니다. 현재 system-test candidate
-code는 artifact가 이미 만들어진 이후부터 처리합니다. Staging command는 문서화된 첫 단계로만
-사용하며 checkout이나 output을 release candidate로 취급하면 안 됩니다. 다음으로 허용되는 통합
-작업은 build/projection/archive exit command와 gate를 추가하는 것이며 consumer 편집이나 미완성
-dependency train 공개가 아닙니다.
+`soksak-spec` commit `9de8149`부터 `25c58b7`까지가 complete candidate transaction을 소유합니다.
+Clean exact source staging, dependency SHA-256 검증, staging-only workspace override, repository-owned
+Make 검증, canonical package/lock byte 복원, 선언된 generated output 투영, local-locator 거부,
+`candidate-build.json`을 포함한 verified archive exit를 수행합니다. 현재 spec source `db47a94`는
+package install은 package directory에서, Make는 staged repository root에서 실행합니다. Staging
+metadata와 `.candidate-inputs`는 archive에 들어가지 않습니다.
+
+## 현재 진행 상태와 차단점
+
+| 결함 | 2026-08-24 상태 |
+| --- | --- |
+| 1 — 지연 | 미완료. Owner-report schema는 정정됐지만 기존 여섯 report에 폐기된 demand field가 남아 무효입니다. 설치된 일곱 provider timing threshold를 실행하지 않았습니다. |
+| 2 — focus | 미완료. Candidate에 공개 focus/input 정보가 있으나 실제 pointer 일곱 provider matrix가 없습니다. |
+| 3 — active cursor | 미완료. Cursor state는 공개됐으나 일곱 provider pixel assertion이 없습니다. |
+| 4 — keyboard input | 미완료. Input sequence 정보는 있으나 real-keyboard-to-PTY matrix가 없습니다. |
+| 5–7 — picker/modal/sidebar blanking | 공유 visibility state와 parked-picture 규칙의 집중 test는 GREEN입니다. 새 clean closure로 설치 제품 일곱 provider frame/motion matrix를 실행하지 않았습니다. |
+| 8 — 색상 parity | Candidate가 contract palette를 소비하지만 모든 provider의 semantic/pixel parity는 미증명입니다. |
+| 9 — macOS 신호등 닫기 | 실제 native close request의 집중 Core application gate는 GREEN입니다. 최종 누적 gate에 계속 포함됩니다. |
+| 10 — test 간섭 | Core capture-only identity와 application ownership은 구현됐습니다. 외부 system workflow의 Darwin runtime path는 아직 고정이며 test-owned process/window leak count가 0이 아닙니다. |
+
+Active spec, contract, 공유 kit, 일곱 renderer plugin, PTY, 결정적으로 build 가능한 다섯 frame
+sidecar, Core, Registry, terminal-tests, 두 Wails framework service의 build/release command ownership은
+Make로 통일했습니다. Tool version은 생태계 owner file에 남고 Actions는 이를 주입해 같은 Make target을
+호출합니다. 기록된 source-level arm64 gate는 GREEN이지만 Darwin arm64/x86_64/universal, Linux
+arm64/x86_64, Windows x86_64 전체 native matrix는 아직 실행하지 않았습니다.
+
+남은 build 차단점은 `soksak-sidecar-terminal-shitty`입니다. 최신 remote-tracking commit
+`c726e10f`을 포함한 upstream `pg83/shitty` source는 `date.today()`를 `SHITTY_VERSION`에
+컴파일합니다. 따라서 fixed source commit도 날짜가 다르면 다른 SDK byte를 만들 수 있습니다.
+Staging patch, clock 조작, 존재하지 않는 fork 선언은 금지합니다. Shitty SDK를
+`build-dependencies.json`과 sidecar candidate closure에 넣기 전에 명시적 reproducible-build input을
+소유하는 public upstream commit이 필요합니다.
+
+구현 밖 release 차단점도 명시합니다. `soksak-terminal-tests`는 product-specific인데 아직
+`min-median-max` module/reusable-workflow identity에 있으므로 ref를 바꾸기 전에 실제 repository
+ownership 결정이 필요합니다. `soksak-contract-registry`에는 LICENSE가 없으며 owner가 license를
+선택해야 합니다. 두 값 모두 로컬에서 발명하지 않습니다.
 
 RED 증거가 필요한 가설:
 
