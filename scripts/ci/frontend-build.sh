@@ -2,7 +2,7 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-node_version=$(sed -n 's/^[[:space:]]*"node": "\([^"]*\)".*/\1/p' "$root/frontend/package.json")
+node_version=$(cat "$root/.node-version")
 pnpm_version=$(sed -n 's/^[[:space:]]*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "$root/frontend/package.json")
 [ -n "$node_version" ] && [ -n "$pnpm_version" ] || { echo "frontend tool versions are missing" >&2; exit 1; }
 dockerfile=$root/build/docker/Dockerfile.frontend

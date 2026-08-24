@@ -8,9 +8,6 @@ version: '3'
 env:
   GOWORK: "off"
 
-vars:
-  WAILS3: '{{.WAILS3 | default "wails3"}}'
-
 tasks:
   go:mod:tidy:
     summary: Runs `go mod tidy`
@@ -110,10 +107,7 @@ tasks:
       # The package set is explicit. With no pattern the current CLI scans only the root package;
       # measured 2026-08-19, it found 0 services and cleaned every existing binding before writing
       # nothing. ./... discovers the five registered services and their sibling-module models.
-      - '"{{.WAILS3}}" generate bindings -f ''{{.BUILD_FLAGS}}'' -clean=true -ts ./...'
-    preconditions:
-      - sh: 'test "$("{{.WAILS3}}" version 2>&1)" = "v3.0.0-beta.12"'
-        msg: "This workspace requires Wails CLI v3.0.0-beta.12 at {{.WAILS3}}"
+      - go tool wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true -ts ./...
 
   generate:icons:
     summary: Generates Windows `.ico` and Mac `.icns` from an image; on macOS, `-iconcomposerinput appicon.icon -macassetdir darwin` also produces `Assets.car` from a `.icon` file (skipped on other platforms).
@@ -125,7 +119,7 @@ tasks:
       - "darwin/icons.icns"
       - "windows/icon.ico"
     cmds:
-      - '"{{.WAILS3}}" generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico -iconcomposerinput appicon.icon -macassetdir darwin'
+      - go tool wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico -iconcomposerinput appicon.icon -macassetdir darwin
 
   dev:frontend:
     summary: Runs the frontend in development mode
@@ -143,7 +137,7 @@ tasks:
     summary: Updates the build assets
     dir: build
     cmds:
-      - '"{{.WAILS3}}" update build-assets -name "{{.APP_NAME}}" -binaryname "{{.APP_NAME}}" -config config.yml -dir .'
+      - go tool wails3 update build-assets -name "{{.APP_NAME}}" -binaryname "{{.APP_NAME}}" -config config.yml -dir .
 
   build:server:
     summary: Builds the application in server mode (no GUI, HTTP server only)
@@ -182,7 +176,7 @@ tasks:
       - sh: docker info > /dev/null 2>&1
         msg: "Docker is required. Please install Docker first."
       - sh: test -f build/docker/Dockerfile.server
-        msg: "Dockerfile.server not found. Run 'wails3 update build-assets' to generate it."
+        msg: "Dockerfile.server not found. Run 'go tool wails3 update build-assets' to generate it."
 
   run:docker:
     summary: Builds and runs the Docker image

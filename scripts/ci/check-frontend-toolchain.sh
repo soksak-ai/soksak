@@ -4,12 +4,14 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 manifest=$root/frontend/package.json
 lockfile=$root/frontend/pnpm-lock.yaml
-node_expected=$(sed -n 's/^[[:space:]]*"node": "\([^"]*\)".*/\1/p' "$manifest")
+selection=$root/.node-version
+node_expected=$(awk 'NF { value=$0; count++ } END { if (count == 1) print value; else exit 1 }' "$selection" 2>/dev/null || true)
+node_declared=$(sed -n 's/^[[:space:]]*"node": "\([^"]*\)".*/\1/p' "$manifest")
 pnpm_expected=$(sed -n 's/^[[:space:]]*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "$manifest")
-[ -n "$node_expected" ] && [ -n "$pnpm_expected" ] || {
-  echo "PRECONDITION_INVALID: frontend/package.json has no exact Node or pnpm version" >&2
+if [ -z "$node_expected" ] || [ -z "$node_declared" ] || [ "$node_expected" != "$node_declared" ] || [ -z "$pnpm_expected" ]; then
+  echo "PRECONDITION_INVALID: .node-version, frontend Node engine and pnpm declaration must be exact and aligned" >&2
   exit 78
-}
+fi
 
 case "$(uname -s)" in
   Darwin) host_platform=darwin ;;

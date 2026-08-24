@@ -12,25 +12,15 @@ require_go() {
   [ "$actual" = "$required" ] || { echo "$required is required; found $actual" >&2; exit 1; }
 }
 
-require_wails() {
-  wails=${WAILS3:-$(command -v wails3 || true)}
-  if command -v cygpath >/dev/null 2>&1 && [ -n "$wails" ]; then wails=$(cygpath -u "$wails"); fi
-  if [ -z "$wails" ] || [ "$("$wails" version 2>&1)" != "v3.0.0-beta.12" ]; then
-    echo "Wails v3.0.0-beta.12 is required" >&2
-    exit 1
-  fi
-}
-
 generate() {
   require_go
-  require_wails
   go mod tidy -diff
   test -d frontend/bindings
-  "$wails" generate syso -arch amd64 -icon build/windows/icon.ico -manifest build/windows/wails.exe.manifest -info build/windows/info.json -out wails_windows_amd64.syso
+  go tool wails3 generate syso -arch amd64 -icon build/windows/icon.ico -manifest build/windows/wails.exe.manifest -info build/windows/info.json -out wails_windows_amd64.syso
 }
 
 frontend() {
-  node_version=$(node -p "require('./frontend/package.json').engines.node")
+  node_version=$(cat .node-version)
   pnpm_version=$(node -p "require('./frontend/package.json').packageManager.split('@')[1]")
   [ "$(node --version)" = "v$node_version" ] || { echo "Node v$node_version is required" >&2; exit 1; }
   [ "$(pnpm --version)" = "$pnpm_version" ] || { echo "pnpm $pnpm_version is required" >&2; exit 1; }

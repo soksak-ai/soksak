@@ -10,11 +10,9 @@ LABEL io.soksak.windows-ci.definition-sha="$CI_DEFINITION_SHA"
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git \
-    && rm -rf /var/lib/apt/lists/* \
-    && GOBIN=/usr/local/bin go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=node-runtime /usr/local/ /usr/local/
 RUN npm install --global --no-update-notifier --no-fund "pnpm@$PNPM_VERSION" \
-    && pnpm --version | grep -Fx "$PNPM_VERSION" \
-    && wails3 version 2>&1 | grep -Fx "v3.0.0-beta.12"
+    && pnpm --version | grep -Fx "$PNPM_VERSION"
 
 ENTRYPOINT ["/bin/sh"]

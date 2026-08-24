@@ -3,9 +3,9 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 phase=${1:-all}
-node_version=$(node -p "require('$root/frontend/package.json').engines.node")
+node_version=$(cat "$root/.node-version")
 pnpm_version=$(node -p "require('$root/frontend/package.json').packageManager.split('@')[1]")
-image=soksak-windows-ci:wails-beta12
+image=soksak-windows-ci:latest
 
 docker info >/dev/null
 docker_arch=$(docker info --format '{{.Architecture}}')
@@ -24,6 +24,6 @@ fi
 docker run --rm -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$root:/app" -v soksak-windows-ci-go-mod:/go/pkg/mod -v soksak-windows-ci-go-build:<local-evidence>/go-build \
   -v soksak-windows-ci-node-modules:/app/frontend/node_modules -v soksak-windows-ci-pnpm-store:/app/.pnpm-store \
-  -e GOCACHE=<local-evidence>/go-build -e WAILS3=/usr/local/bin/wails3 --entrypoint /bin/sh "$image" \
+  -e GOCACHE=<local-evidence>/go-build --entrypoint /bin/sh "$image" \
   -e BUILD_PHASE="$phase" \
-  -c 'mkdir -p <local-evidence>/home <local-evidence>/go-build /go/pkg/mod /app/.pnpm-store /app/frontend/node_modules && chown -R "$HOST_UID:$HOST_GID" <local-evidence>/home <local-evidence>/go-build /go/pkg/mod /app/.pnpm-store /app/frontend/node_modules && exec setpriv --reuid="$HOST_UID" --regid="$HOST_GID" --clear-groups env HOME=<local-evidence>/home GOCACHE=<local-evidence>/go-build WAILS3=/usr/local/bin/wails3 /bin/sh -c "cd /app && scripts/ci/windows-build.sh $BUILD_PHASE"'
+  -c 'mkdir -p <local-evidence>/home <local-evidence>/go-build /go/pkg/mod /app/.pnpm-store /app/frontend/node_modules && chown -R "$HOST_UID:$HOST_GID" <local-evidence>/home <local-evidence>/go-build /go/pkg/mod /app/.pnpm-store /app/frontend/node_modules && exec setpriv --reuid="$HOST_UID" --regid="$HOST_GID" --clear-groups env HOME=<local-evidence>/home GOCACHE=<local-evidence>/go-build /bin/sh -c "cd /app && scripts/ci/windows-build.sh $BUILD_PHASE"'

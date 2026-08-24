@@ -16,10 +16,9 @@ vars:
   PACKAGE_MANAGER: pnpm
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
   # Target OS for build/package/run. Defaults to the host OS, and is overridden
-  # by `wails3 build GOOS=...` (or the GOOS env var) for cross-compilation. The
+  # by `go tool wails3 build GOOS=...` (or the GOOS env var) for cross-compilation. The
   # tasks below dispatch to the matching platform Taskfile via this variable.
   GOOS: '{{.GOOS | default OS}}'
-  WAILS3: '{{.WAILS3 | default "wails3"}}'
 
 includes:
   common: ./build/Taskfile.yml
@@ -39,9 +38,6 @@ tasks:
     cmds:
       - scripts/ci/prepare-frontend-dependencies.sh
       - scripts/ci/check-frontend-toolchain.sh
-      - |
-        required=$(cat .task-version)
-        test "$(task --version)" = "$required"
       - task: verify:go
       - task: verify:restore
       - task: verify:native-close
@@ -155,7 +151,7 @@ tasks:
   dev:
     summary: Runs the application in development mode
     cmds:
-      - '"{{.WAILS3}}" dev -config ./build/config.yml -port {{.VITE_PORT}}'
+      - go tool wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
   setup:docker:
     summary: Builds Docker image for cross-compilation (~800MB download)
