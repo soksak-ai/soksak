@@ -1,6 +1,7 @@
 package repositorygate
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,10 +74,27 @@ func TestFrontendToolchainCheckReadsPnpmFromItsOwningPackage(t *testing.T) {
 	if arch == "amd64" {
 		arch = "x64"
 	}
+	manifest, err := os.ReadFile("frontend/package.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Engines struct {
+			Node string `json:"node"`
+		} `json:"engines"`
+		PackageManager string `json:"packageManager"`
+	}
+	if err := json.Unmarshal(manifest, &declared); err != nil {
+		t.Fatal(err)
+	}
+	pnpmVersion, found := strings.CutPrefix(declared.PackageManager, "pnpm@")
+	if declared.Engines.Node == "" || !found || pnpmVersion == "" {
+		t.Fatalf("frontend toolchain declaration is incomplete: %#v", declared)
+	}
 	bin := t.TempDir()
 	node := `#!/bin/sh
 case "$1" in
-  --version) echo v26.7.0 ;;
+  --version) echo v` + declared.Engines.Node + ` ;;
   -p)
     case "$2" in
       process.platform) echo ` + platform + ` ;;
@@ -89,8 +107,8 @@ esac
 `
 	pnpm := `#!/bin/sh
 case "$PWD" in
-  */frontend) echo 11.22.0 ;;
-  *) echo 10.30.3 ;;
+  */frontend) echo ` + pnpmVersion + ` ;;
+  *) echo wrong-package-manager ;;
 esac
 `
 	for name, body := range map[string]string{"node": node, "pnpm": pnpm} {
@@ -104,7 +122,7 @@ esac
 	if err != nil {
 		t.Fatalf("frontend-owned pnpm was rejected: %v\n%s", err, output)
 	}
-	if !strings.Contains(string(output), "pnpm=11.22.0") {
+	if !strings.Contains(string(output), "pnpm="+pnpmVersion) {
 		t.Fatalf("frontend-owned pnpm was not reported: %s", output)
 	}
 }

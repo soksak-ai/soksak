@@ -1,0 +1,105 @@
+package repositorygate
+
+import (
+	"encoding/json"
+	"os"
+	"strings"
+	"testing"
+
+	"golang.org/x/mod/modfile"
+)
+
+const wailsToolPath = "github.com/wailsapp/wails/v3/cmd/wails3"
+
+func TestBuildToolchainVersionsHaveDeclaredOwners(t *testing.T) {
+	manifest, err := os.ReadFile("frontend/package.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var frontend struct {
+		Engines struct {
+			Node string `json:"node"`
+		} `json:"engines"`
+		PackageManager string `json:"packageManager"`
+	}
+	if err := json.Unmarshal(manifest, &frontend); err != nil {
+		t.Fatal(err)
+	}
+	selection, err := os.ReadFile(".node-version")
+	if err != nil {
+		t.Errorf("reading the Node environment selector: %v", err)
+	} else {
+		if selected := strings.TrimSpace(string(selection)); selected == "" || selected != frontend.Engines.Node {
+			t.Errorf("Node selector %q does not match frontend engine %q", selected, frontend.Engines.Node)
+		}
+	}
+	if manager, version, found := strings.Cut(frontend.PackageManager, "@"); !found || manager != "pnpm" || version == "" {
+		t.Errorf("frontend package manager is not an exact pnpm declaration: %q", frontend.PackageManager)
+	}
+
+	goMod, err := os.ReadFile("go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := modfile.Parse("go.mod", goMod, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wailsRequired := false
+	for _, requirement := range parsed.Require {
+		if requirement.Mod.Path == "github.com/wailsapp/wails/v3" && requirement.Mod.Version != "" {
+			wailsRequired = true
+		}
+	}
+	wailsRegistered := false
+	for _, tool := range parsed.Tool {
+		if tool.Path == wailsToolPath {
+			wailsRegistered = true
+		}
+	}
+	if !wailsRequired || !wailsRegistered {
+		t.Errorf("go.mod must own both the Wails module and %s tool: required=%t tool=%t", wailsToolPath, wailsRequired, wailsRegistered)
+	}
+}
+
+func TestBuildCommandsUseTheModuleOwnedWailsRunner(t *testing.T) {
+	paths := []string{
+		"Taskfile.yml",
+		"build/Taskfile.yml",
+		"build/config.yml",
+		"build/darwin/Taskfile.yml",
+		"build/docker/Dockerfile.windows-ci",
+		"build/linux/Taskfile.yml",
+		"build/windows/Taskfile.yml",
+		"scripts/ci/windows-build.sh",
+		"scripts/ci/windows-docker.sh",
+		".github/workflows/multiplatform-system.yml",
+	}
+	ownedCalls := 0
+	for _, path := range paths {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(body)
+		ownedCalls += strings.Count(text, "go tool wails3")
+		for _, forbidden := range []string{"WAILS3", "cmd/wails3@v", `\"wails3\"`} {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s contains ambient or independently versioned Wails path %q", path, forbidden)
+			}
+		}
+	}
+	if ownedCalls == 0 {
+		t.Fatal("build commands do not invoke the module-owned Wails tool")
+	}
+	if _, err := os.Stat(".task-version"); !os.IsNotExist(err) {
+		t.Errorf(".task-version exists even though Wails owns the active Task runner: %v", err)
+	}
+	taskfile, err := os.ReadFile("Taskfile.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(taskfile), "task --version") {
+		t.Fatal("verify checks an ambient Task binary instead of its Wails-owned runner")
+	}
+}
