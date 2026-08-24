@@ -461,7 +461,18 @@ func firstWindow(out string) string {
 	if json.Unmarshal([]byte(out), &response) != nil || len(response.Data) == 0 {
 		return ""
 	}
-	return response.Data[0]
+	for _, window := range response.Data {
+		if strings.HasPrefix(window, "win-") {
+			return window
+		}
+	}
+	return ""
+}
+
+func TestFirstWindowSelectsAWorkspaceRatherThanTheRetiringControlPlane(t *testing.T) {
+	if got := firstWindow(`{"data":["main","win-a"]}`); got != "win-a" {
+		t.Fatalf("first workspace window=%q", got)
+	}
 }
 
 // quit ends the process through the command, never by killing it. A kill skips
