@@ -84,7 +84,8 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 
 	want := []string{
 		"artifact_install_begin", "artifact_install_commit", "artifact_install_read_utf8",
-		"artifact_install_rollback", "artifact_install_stage", "binary_integrity",
+		"artifact_install_rollback", "artifact_install_stage", "artifact_install_status",
+		"artifact_install_wait", "binary_integrity",
 		"host_artifact_target", "npm_global_dirs", "probe_binary", "theme_install",
 	}
 	if strings.Join(served, ",") != strings.Join(want, ",") {
