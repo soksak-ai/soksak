@@ -163,13 +163,28 @@ socket, owner를 받습니다. SOKSAK_PRESENTATION=capture-only는 test window�
 
 현재 미공개 candidate:
 
-- Terminal behavior contract 0.0.6은 byte 및 frame renderer에 하나의 256색 palette와 하나의
-  presentation status를 정의합니다.
+- 미공개 terminal contract package 0.0.7은 terminal behavior interface 0.0.6, 하나의 256색
+  palette, byte 및 frame renderer의 presentation status 하나를 정의합니다.
 - Kit candidate는 row/run DOM node를 유지하고 input/focus/cursor/render sequence와 timestamp를
   공개합니다. Packed contract candidate 기준 typecheck와 source test 33개를 통과했습니다.
 - Kit manifest에 local file dependency를 남기면 안 됩니다. Repository metadata gate는 release
   train이 immutable contract artifact를 제공할 때까지 해당 dependency를 올바르게 거부합니다.
 - 일곱 provider blank-frame 판정은 아직 증명되지 않았습니다. 결함 5–7을 완료로 분류하면 안 됩니다.
+
+임시 terminal contract 및 terminal kit archive에서 생성한 candidate 증거는 무효입니다. Kit source
+manifest가 외부 local archive를 사용하도록 임시 변경됐고 pnpm은 해당 dependency를 lockfile에 local
+absolute locator와 parent-relative locator 두 형태로 기록했습니다. Source file을 되돌려도 오염된
+metadata에서 이미 만든 archive와 downstream 증거는 복구되지 않습니다.
+
+해당 kit archive가 closure에 포함된 candidate archive, parity, visibility, screenshot, recording
+결과는 재사용하면 안 됩니다. 기록된 clean commit에서 canonical candidate materializer를 통해
+contract, kit, 모든 downstream plugin candidate를 다시 build해야 합니다. Source worktree는 변하지
+않아야 하고, `soksak-spec`이 source 및 archive dependency metadata를 승인해야 하며, system-test
+plan이 다시 만든 closure digest를 기록해야 증거로 인정할 수 있습니다.
+
+허용되는 local build-time 검증 경로는 TERMINAL-UX-EXECUTION.ko.md의 “Local cross-repository
+candidate 검증”에 정의합니다. Consumer manifest 또는 lockfile 직접 편집은 development mode가
+아닙니다.
 
 RED 증거가 필요한 가설:
 

@@ -53,6 +53,66 @@ version, dependency lock digest, test command, exit code, 처음 실패한 named
 결함을 재현하는 집중 scenario를 추가합니다. 제보를 재현하지 못하면 누락된 조건을 investigation
 결과로 기록하며 추정한 RED를 근거로 구현을 수정하지 않습니다.
 
+## Local cross-repository candidate 검증
+
+공개되지 않은 dependency를 연결하기 위해 consumer 원본 repository를 수정하면 안 됩니다. 다음
+locator는 canonical source manifest, lockfile, component manifest, workflow, candidate 또는 release
+archive, registry metadata에서 모두 금지합니다.
+
+- `file:` 및 `file://`
+- `link:` 및 `workspace:`
+- repository 밖으로 나가는 parent-relative path
+- `<local-evidence>`, user directory, drive path를 포함한 local absolute path
+- 다른 checkout을 해석하는 symlink 또는 주입된 workspace root
+
+`file:../../../../../...`은 `file:<local-evidence>/...`보다 안전하지 않습니다. Package manager가 같은 외부 local
+dependency를 lockfile 기준 상대경로로 직렬화했을 뿐입니다. 둘 다 repository 배치 결합이며 같은
+gate에서 실패합니다.
+
+Candidate composition 중 canonical source checkout은 변하지 않아야 합니다. Candidate
+materializer는 공개되지 않은 dependency를 선택하기 위해 원본 `package.json` 또는 lockfile을
+수정하거나 다시 생성하면 안 됩니다. 실행 전후 source worktree를 기록하고 비교하며 차이가 있으면
+해당 실행을 무효로 판정합니다.
+
+하나의 candidate closure는 `local/candidates/<closure-id>/` 아래에 선언합니다.
+
+~~~text
+candidate-plan.json
+contracts/<artifact>
+kits/<artifact>
+plugins/<artifact>
+sidecars/<artifact>
+~~~
+
+Plan의 path는 이 closure 내부 regular file만 식별합니다. 각 entry는 kind, id, version, source
+repository, source commit, artifact size와 SHA-256, dependency commit, 필요한 경우 platform target을
+기록합니다. Contract와 spec은 validation input이며 runtime plugin/sidecar component 목록에 넣지
+않습니다.
+
+Build-time composition은 하나의 canonical materializer와 폐기 가능한 staging checkout을
+사용합니다. Materializer는 plan과 digest를 검증하고, clean source commit을 snapshot하고,
+content-addressed staging transport로 candidate artifact를 제공하고, build 후 staging state를
+폐기합니다. Staging metadata는 source가 아니며 commit하지 않고 candidate archive에 복사하지
+않습니다. 개발자나 일회성 script가 이 동작을 흉내 내기 위해 dependency metadata를 편집하면 안
+됩니다. Canonical materializer가 dependency edge를 표현하지 못하면 product tool이 누락된
+것입니다. 진행을 멈추고 RED를 추가한 뒤 materializer를 먼저 구현합니다.
+
+Canonical `soksak-spec` release builder는 source metadata, lockfile, 생성 archive의 local dependency
+locator를 거부합니다. System-test candidate plan은 candidate identity, digest, validation input을
+독립적으로 검증합니다. 두 gate가 모두 통과해야 downstream candidate가 유효합니다.
+
+Canonical metadata에서 local dependency가 발견되면 다음을 모두 무효로 판정합니다.
+
+1. 수정된 lockfile 또는 manifest
+2. 해당 metadata로 생성한 모든 archive
+3. 해당 archive로 build한 모든 downstream candidate
+4. 해당 closure에서 생성한 모든 test 결과, screenshot, recording
+
+오염을 제거하고 기록된 source commit에서 전체 closure를 다시 build한 뒤 같은 gate를 재실행합니다.
+눈에 보이는 manifest만 되돌려도 이미 생성된 증거는 복구되지 않습니다. Development candidate
+증거는 잠정 증거입니다. 최종 증거는 dependency release train 이후 정확한 immutable release URL과
+digest로 다시 생성합니다.
+
 ## 단계 1 — 관측면
 
 현재 interface로 결함을 판정할 수 없는 경우에만 지속적으로 사용할 공개 정보를 추가합니다.

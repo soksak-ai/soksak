@@ -163,13 +163,29 @@ Verified facts:
 
 Current unpublished candidates:
 
-- The terminal behavior contract 0.0.6 defines one 256-color palette and one presentation status
-  for byte and frame renderers.
+- The unpublished terminal contract package 0.0.7 defines terminal behavior interface 0.0.6, one
+  256-color palette and one presentation status for byte and frame renderers.
 - The kit candidate preserves row/run DOM nodes, exposes input/focus/cursor/render sequences and
   timestamps, and passed its typecheck and 33 source tests against the packed contract candidate.
 - The kit manifest must not retain a local file dependency. Its repository metadata gate correctly
   rejects that dependency until the release train provides the immutable contract artifact.
 - The seven-provider blank-frame verdict remains unproven. Do not classify defects 5–7 as complete.
+
+Candidate evidence created from the temporary terminal-contract and terminal-kit archives is
+invalid. The kit source manifest was temporarily changed to an external local archive and pnpm
+serialized that dependency into its lockfile as both an absolute temporary locator and a
+parent-relative locator. Reverting the source files did not restore archives or downstream evidence
+already created from the contaminated metadata.
+
+Do not reuse any candidate archive or parity, visibility, screenshot or recording result whose
+closure included that kit archive. Rebuild the contract, kit and every downstream plugin candidate
+from their recorded clean commits through the canonical candidate materializer. The source
+worktrees must remain unchanged, `soksak-spec` must accept source and archive dependency metadata,
+and the system-test plan must record the rebuilt closure digests before the evidence can count.
+
+The allowed local build-time verification path is defined in
+TERMINAL-UX-EXECUTION.md under “Local cross-repository candidate verification.” Direct consumer
+manifest or lockfile editing is not a development mode.
 
 Hypotheses that require RED evidence:
 

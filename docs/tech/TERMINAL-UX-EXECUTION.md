@@ -53,6 +53,67 @@ The first valid baseline can pass or fail. If it passes, add a focused scenario 
 reported defect without weakening the acceptance rule. If it cannot reproduce the report, record
 the missing condition as an investigation result; do not edit implementation on an assumed RED.
 
+## Local cross-repository candidate verification
+
+An unpublished dependency is never connected by editing its consumer repository. The following
+locators are forbidden in a canonical source manifest, lockfile, component manifest, workflow,
+candidate or release archive, and registry metadata:
+
+- `file:` and `file://`;
+- `link:` and `workspace:`;
+- a parent-relative path that leaves the repository;
+- an absolute local path, including `<local-evidence>`, a user directory or a drive path;
+- a symlink or injected workspace root that resolves another checkout.
+
+`file:../../../../../...` is not safer than `file:<local-evidence>/...`. A package manager merely serialized the
+same external local dependency relative to the lockfile. Both are repository-topology coupling and
+fail the same gate.
+
+The canonical source checkout remains unchanged during candidate composition. In particular, a
+candidate materializer must not edit or regenerate the source `package.json` or lockfile to select
+an unpublished dependency. It must record and compare the source worktree before and after the run;
+any difference invalidates the run.
+
+One candidate closure is declared under `local/candidates/<closure-id>/`:
+
+~~~text
+candidate-plan.json
+contracts/<artifact>
+kits/<artifact>
+plugins/<artifact>
+sidecars/<artifact>
+~~~
+
+Paths in the plan are confined to that closure and identify regular files. Each entry records kind,
+id, version, source repository, source commit, artifact size and SHA-256, dependency commits and,
+where applicable, platform target. Contracts and specs are validation inputs; they are not inserted
+into the runtime plugin/sidecar component list.
+
+Build-time composition uses one canonical materializer and a disposable staging checkout. The
+materializer verifies the plan and digests, snapshots a clean source commit, supplies candidate
+artifacts through its content-addressed staging transport, builds, and destroys the staging state.
+Staging metadata is not source, is not committed, and is never copied into a candidate archive.
+Neither a developer nor an ad-hoc script edits dependency metadata to imitate this operation. If
+the canonical materializer cannot express a dependency edge, that is a missing product tool: add a
+RED and implement the materializer before continuing.
+
+The canonical `soksak-spec` release builder rejects local dependency locators in source metadata,
+lockfiles and produced archives. The system-test candidate plan verifies candidate identity,
+digests and validation inputs independently. A downstream candidate is valid only when both gates
+pass.
+
+Any local dependency found in canonical metadata invalidates:
+
+1. the modified lockfile or manifest;
+2. every archive created from it;
+3. every downstream candidate built from that archive;
+4. every test result, screenshot and recording produced from that closure.
+
+Remove the contamination, rebuild the entire closure from the recorded source commits, and rerun
+the same gates. Reverting the visible manifest alone does not restore evidence already produced.
+Development candidate evidence is provisional. Final evidence is regenerated after the dependency
+release train uses exact immutable release URLs and digests.
+
 ## Phase 1 — observation surface
 
 Add durable public facts only where the current interfaces cannot judge a defect.
