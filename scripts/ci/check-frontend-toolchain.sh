@@ -24,7 +24,7 @@ case "$(uname -m)" in
 esac
 
 node_actual=$(node --version 2>/dev/null || true)
-pnpm_actual=$(pnpm --version 2>/dev/null || true)
+pnpm_actual=$(cd "$root/frontend" && pnpm --version 2>/dev/null || true)
 node_platform=$(node -p 'process.platform' 2>/dev/null || true)
 node_arch=$(node -p 'process.arch' 2>/dev/null || true)
 if [ "$node_actual" != "v$node_expected" ] || [ "$pnpm_actual" != "$pnpm_expected" ] || \
