@@ -40,6 +40,30 @@ func TestCaptureBeforeTheWindowExists(t *testing.T) {
 	}
 }
 
+func TestCaptureOnlyReadsTheDocumentAndDeclaresTheMissingNativeChildren(t *testing.T) {
+	handle := byte(1)
+	service := NewCaptureService("main", func() unsafe.Pointer { return unsafe.Pointer(&handle) }, PresentationCaptureOnly)
+	service.occlusion = func(unsafe.Pointer, bool) int { return 0 }
+	windowCaptures := 0
+	documentCaptures := 0
+	service.capture = func(unsafe.Pointer, Rect) ([]byte, error) {
+		windowCaptures++
+		return solidPNG(t, 2, 2, background), nil
+	}
+	service.captureDocument = func(unsafe.Pointer, Rect) ([]byte, error) {
+		documentCaptures++
+		return solidPNG(t, 2, 2, background), nil
+	}
+
+	pixels, err := service.Pixels(Whole)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if windowCaptures != 0 || documentCaptures != 1 || !pixels.Note.DocumentOnly {
+		t.Fatalf("capture-only source window=%d document=%d note=%+v", windowCaptures, documentCaptures, pixels.Note)
+	}
+}
+
 func TestUnsupportedPlatformIsNamed(t *testing.T) {
 	// The sentinel exists so a caller can tell "not implemented here" from
 	// "the capture failed", rather than reading a message.
