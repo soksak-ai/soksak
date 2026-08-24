@@ -97,16 +97,29 @@ Neither a developer nor an ad-hoc script edits dependency metadata to imitate th
 the canonical materializer cannot express a dependency edge, that is a missing product tool: add a
 RED and implement the materializer before continuing.
 
-As of 2026-08-24, the canonical materializer is under RED-to-GREEN development in `soksak-spec` and is
-not yet a usable contract. Its staging design copies digest-verified archives under the disposable
-checkout and may use a staging-local locator to run the package manager. That locator is not source
-metadata and must not leave staging. The candidate archive must restore canonical package and lock
-bytes, include only declared build outputs, and pass the canonical no-local-dependency archive gate.
-Until those exit invariants and source-before/source-after equality are GREEN and committed,
-cross-repository candidate build evidence cannot be claimed. The current system-test candidate code
-validates and installs already-built artifacts; it does not replace the materializer. Publishing
-every development iteration is not the replacement; the release train starts only after the
-complete candidate is GREEN.
+`soksak-spec` commit `9de8149` provides the canonical staging command:
+
+~~~sh
+node <spec-package>/release-template/stage-node-candidate.mjs \
+  --source <clean-absolute-repository-root> \
+  --out <empty-absolute-staging-directory> \
+  --plan <absolute-candidate-stage-plan.json>
+~~~
+
+The plan contains only `packagePath` and `dependencies`; each dependency records package
+name, absolute artifact path and SHA-256. The command archives one clean exact source commit,
+verifies and copies dependency artifacts under the disposable checkout, and writes staging-local
+`pnpm.overrides`. It refuses a dirty source, digest mismatch, path escape, symlink and nonempty output.
+It does not edit the canonical source.
+
+This command stages dependencies only. It does not yet own the build, projection of declared build
+outputs, restoration of canonical package and lock bytes, or final candidate archive validation.
+Those exit steps require their own RED-to-GREEN command before end-to-end cross-repository candidate
+build evidence can be claimed. A staging-local locator is not source metadata and must not leave
+staging. Every produced archive still passes the canonical no-local-dependency release gate. The
+current system-test candidate code validates and installs already-built artifacts; it does not
+replace the missing exit command. Publishing every development iteration is not the replacement;
+the release train starts only after the complete candidate is GREEN.
 
 The canonical `soksak-spec` release builder rejects local dependency locators in source metadata,
 lockfiles and produced archives. The system-test candidate plan verifies candidate identity,

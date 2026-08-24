@@ -97,15 +97,29 @@ content-addressed staging transport로 candidate artifact를 제공하고, build
 됩니다. Canonical materializer가 dependency edge를 표현하지 못하면 product tool이 누락된
 것입니다. 진행을 멈추고 RED를 추가한 뒤 materializer를 먼저 구현합니다.
 
-2026-08-24 현재 canonical materializer는 `soksak-spec`에서 RED→GREEN으로 구현 중이며 아직 사용할 수
-있는 계약이 아닙니다. Staging 설계는 digest를 검증한 archive를 폐기 가능한 checkout 내부로
-복사하고 package manager 실행을 위해 staging-local locator를 사용할 수 있습니다. 이 locator는
-source metadata가 아니며 staging 밖으로 나가면 안 됩니다. Candidate archive는 canonical package와
-lock byte를 복원하고 선언된 build output만 포함하며 canonical no-local-dependency archive gate를
-통과해야 합니다. 이 exit invariant와 source 실행 전후 동일성이 GREEN으로 commit되기 전에는
-cross-repository candidate build 증거를 주장할 수 없습니다. 현재 system-test candidate code는 이미
-만들어진 artifact를 검증하고 설치할 뿐 materializer를 대체하지 않습니다. 개발 반복마다 release하는
-방식으로 대체하지 않으며 release train은 전체 candidate가 GREEN인 뒤에만 시작합니다.
+`soksak-spec` commit `9de8149`가 canonical staging command를 제공합니다.
+
+~~~sh
+node <spec-package>/release-template/stage-node-candidate.mjs \
+  --source <clean-absolute-repository-root> \
+  --out <empty-absolute-staging-directory> \
+  --plan <absolute-candidate-stage-plan.json>
+~~~
+
+Plan은 `packagePath`와 `dependencies`만 포함합니다. 각 dependency는 package name,
+absolute artifact path, SHA-256을 기록합니다. Command는 clean exact source commit 하나를 archive하고
+dependency artifact를 검증해 폐기 가능한 checkout 내부로 복사한 뒤 staging-local `pnpm.overrides`를
+기록합니다. Dirty source, digest mismatch, path escape, symlink, nonempty output을 거부하며 canonical
+source는 수정하지 않습니다.
+
+이 command는 dependency staging만 소유합니다. Build, 선언된 build output 투영, canonical package와
+lock byte 복원, 최종 candidate archive 검증은 아직 소유하지 않습니다. End-to-end cross-repository
+candidate build 증거를 주장하기 전에 이 exit 단계를 소유하는 command를 별도 RED→GREEN으로 만들어야
+합니다. Staging-local locator는 source metadata가 아니며 staging 밖으로 나가면 안 됩니다. 생성된
+모든 archive는 canonical no-local-dependency release gate를 계속 통과해야 합니다. 현재 system-test
+candidate code는 이미 만들어진 artifact를 검증하고 설치할 뿐 누락된 exit command를 대체하지
+않습니다. 개발 반복마다 release하는 방식으로 대체하지 않으며 release train은 전체 candidate가
+GREEN인 뒤에만 시작합니다.
 
 Canonical `soksak-spec` release builder는 source metadata, lockfile, 생성 archive의 local dependency
 locator를 거부합니다. System-test candidate plan은 candidate identity, digest, validation input을
