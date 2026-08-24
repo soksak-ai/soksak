@@ -103,3 +103,29 @@ func TestBuildCommandsUseTheModuleOwnedWailsRunner(t *testing.T) {
 		t.Fatal("verify checks an ambient Task binary instead of its Wails-owned runner")
 	}
 }
+
+func TestBuildEnvironmentsSelectNodeFromTheRootDeclaration(t *testing.T) {
+	for _, path := range []string{
+		".github/workflows/multiplatform-system.yml",
+		"scripts/ci/frontend-build.sh",
+		"scripts/ci/windows-build.sh",
+		"scripts/ci/windows-docker.sh",
+	} {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(body), ".node-version") {
+			t.Errorf("%s does not select Node from .node-version", path)
+		}
+	}
+	check, err := os.ReadFile("scripts/ci/check-frontend-toolchain.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"$root/.node-version", "node_declared", `"$node_expected" != "$node_declared"`} {
+		if !strings.Contains(string(check), required) {
+			t.Errorf("frontend preflight does not enforce Node selector projection through %q", required)
+		}
+	}
+}

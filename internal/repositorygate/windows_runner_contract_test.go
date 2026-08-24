@@ -35,7 +35,7 @@ func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 	if !strings.Contains(docker, "io.soksak.windows-ci.definition-sha") {
 		t.Fatal("Docker runner rebuilds the CI image without a definition hash")
 	}
-	for _, required := range []string{"frontend/package.json", "NODE_IMAGE=node:$node_version-bookworm", "PNPM_VERSION=$pnpm_version"} {
+	for _, required := range []string{".node-version", "frontend/package.json", "NODE_IMAGE=node:$node_version-bookworm", "PNPM_VERSION=$pnpm_version"} {
 		if !strings.Contains(docker, required) {
 			t.Errorf("Docker runner does not project the frontend owner file through %q", required)
 		}

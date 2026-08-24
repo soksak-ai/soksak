@@ -31,7 +31,7 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 		"actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
 		"pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86",
 		"actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-		"node-version-file: soksak-core/frontend/package.json",
+		"node-version-file: soksak-core/.node-version",
 		"package_json_file: soksak-core/frontend/package.json",
 		"windows-build:", "darwin-build:", "linux-build:",
 		"ubuntu-24.04-arm", "architecture: amd64", "architecture: arm64",
