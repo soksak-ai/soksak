@@ -16,6 +16,7 @@ What has to pass, and what a test is for here.
 | Gate | Command |
 | --- | --- |
 | `verify:go` | `go build ./...`, `go vet ./...`, `go test ./...` |
+| `verify:application` | builds current `soksak` and `sok`, then runs capture-only restore, capture-focus and native-close gates |
 | `verify:headless` | `go test ./core/...` — the core answers with no window |
 | `verify:windows` | `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...` |
 | `verify:frontend` | `pnpm typecheck`, `pnpm test` |

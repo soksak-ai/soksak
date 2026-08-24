@@ -31,7 +31,7 @@ module and Wails CLI; `.node-version` and `frontend/package.json` own the fronte
 
 ```sh
 scripts/ci/prepare-frontend-dependencies.sh
-scripts/ci/check-frontend-toolchain.sh
+scripts/ci/check-build-toolchain.sh
 go tool wails3 task verify
 go tool wails3 dev
 ```

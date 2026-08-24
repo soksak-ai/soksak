@@ -15,6 +15,7 @@ canonical: docs/manual/TESTING.md
 | Gate | Command |
 | --- | --- |
 | `verify:go` | `go build ./...`, `go vet ./...`, `go test ./...` |
+| `verify:application` | 현재 `soksak`과 `sok`을 build한 뒤 capture-only restore, capture-focus, native-close gate 실행 |
 | `verify:headless` | `go test ./core/...` |
 | `verify:windows` | `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...` |
 | `verify:frontend` | `pnpm typecheck`, `pnpm test` |

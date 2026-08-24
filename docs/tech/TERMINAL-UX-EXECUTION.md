@@ -29,12 +29,13 @@ propose the corrected rule, and update the rule, RED and document together after
 ## Failure classification before RED
 
 Run scripts/ci/prepare-frontend-dependencies.sh and then
-scripts/ci/check-frontend-toolchain.sh before a baseline or product test. Prepare alone materializes
+scripts/ci/check-build-toolchain.sh before a baseline or product test. Prepare alone materializes
 the frozen lockfile under the cross-process dependency-owner lock. Check is read-only: it derives
 the Node selector from `.node-version`, verifies its `frontend/package.json` projection and pnpm
-declaration, requires the Node runtime architecture to match the host, verifies the selected native
-frontend package and prints the lock SHA-256. `go tool wails3 task verify` runs prepare and check in
-that order before any product test. `BUILD-TOOLCHAIN.md` owns the general toolchain rule.
+declaration, and verifies the selected native frontend package. It separately reports the required,
+Node, Go and Wails architecture axes and prints the lock SHA-256. `go tool wails3 task verify` runs
+prepare and check in that order before any product test. `BUILD-TOOLCHAIN.md` owns the general
+toolchain rule.
 
 The preflight result determines whether product evidence exists:
 
@@ -46,8 +47,8 @@ The preflight result determines whether product evidence exists:
 | An unrelated accumulated gate fails before the target assertion | Existing regression | Stop the new work and restore the accumulated gate with its own RED and commit history. Do not relabel it as the target RED. |
 | The declared environment is ready, the baseline path executes, and the target acceptance assertion fails | Product RED | Record the measured failure and begin implementation. |
 
-Every evidence record includes source commit, host OS and architecture, Node version and
-architecture, pnpm version, dependency lock digest, test command, exit code and first failing named
+Every evidence record includes source commit, required platform, Node/Go/Wails versions and runtime
+architectures, pnpm version, dependency lock digest, test command, exit code and first failing named
 assertion. A second run with a different environment is not the same baseline.
 
 The first valid baseline can pass or fail. If it passes, add a focused scenario that reproduces the

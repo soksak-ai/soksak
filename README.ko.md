@@ -24,7 +24,7 @@ Wails CLI를 소유하고 `.node-version`과 `frontend/package.json`이 frontend
 
 ```sh
 scripts/ci/prepare-frontend-dependencies.sh
-scripts/ci/check-frontend-toolchain.sh
+scripts/ci/check-build-toolchain.sh
 go tool wails3 task verify
 go tool wails3 dev
 ```

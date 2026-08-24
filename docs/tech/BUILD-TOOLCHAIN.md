@@ -10,6 +10,31 @@ This document defines build-tool ownership, discovery, preparation and upgrade r
 version is declared by its owning ecosystem. Tests, commands, workflows and container definitions
 derive that declaration; they do not copy the version.
 
+## Invariants
+
+- **BT1 — One owner.** Each version has one owning manifest. Other required ecosystem fields are
+  projections and must equal their owner.
+- **BT2 — Required platform policy.** Local verification on Apple Silicon requires
+  `darwin/arm64`. A translated child process reporting `uname -m=x86_64` cannot change that policy.
+- **BT3 — Actual execution axes.** Node reports `process.platform/process.arch`; Go reports
+  `GOHOSTOS/GOHOSTARCH`; Wails is the module-owned Go tool; product, CLI, test application, sidecar
+  and native-library architectures come from their binary header or runtime status.
+- **BT4 — Every axis must match.** Any difference between the required platform and an actual axis
+  is `TOOLCHAIN_MISMATCH`, exit 78. Physical arm64 with x64 Node or Go is not accepted.
+- **BT5 — Preconditions precede products.** No build, product test or product RED starts before
+  BT1–BT4 are GREEN. An ambient or stale binary is never a test input.
+- **BT6 — Separate public facts.** Evidence reports `required`, `nodeRuntime`, `goRuntime`,
+  `wailsVersion`, and artifact/runtime architectures separately. One `runtime` field cannot merge
+  these axes.
+- **BT7 — No ambient path.** Global Wails or Task executables, fallback binaries, absolute source
+  paths and automatic architecture substitution are forbidden. Failure to select the declaration
+  is a refusal, not a search for another installation.
+- **BT8 — Upgrade transaction.** An upgrade changes the owner, every projection, locks, CI inputs
+  and artifact matrix in one verified change. Test fixtures contain no current version literals.
+- **BT9 — Repository ownership.** Core verifies Core, CLI and framework boundaries. Each component
+  verifies its own artifact. The terminal system-test repository verifies the architecture and
+  coexistence of an installed multi-component fleet.
+
 ## Version owners
 
 | Tool or state | Owner | Projection or consumer |
@@ -28,14 +53,17 @@ there is no independent `.task-version`, global Task requirement or Task version
 ## Discovery and execution
 
 The repository never records an installed tool path. A developer or CI environment selects the
-Node version declared by `.node-version`. The read-only preflight then verifies exact Node and pnpm
-versions, host/runtime architecture, the selected native frontend package and the lock digest.
+Node version declared by `.node-version` and the Go version declared by `go.mod`. On Apple Silicon,
+platform policy establishes `required=darwin/arm64`; a translated amd64 parent process cannot
+change it. The preflight compares that requirement separately with Node, Go and Wails runtimes.
+The native frontend package is selected by the actual Node process and must also equal the required
+platform. Physical arm64 alone never permits an x64 process or package.
 
 Wails is not discovered from `PATH`. Go builds and executes the tool registered by `go.mod`:
 
 ```sh
 scripts/ci/prepare-frontend-dependencies.sh
-scripts/ci/check-frontend-toolchain.sh
+scripts/ci/check-build-toolchain.sh
 go tool wails3 task verify
 go tool wails3 dev
 ```
@@ -48,10 +76,11 @@ observed executable, but never in source, a lockfile, a workflow or a release ar
 
 Toolchain inspection and dependency preparation are separate operations.
 
-1. `check-frontend-toolchain.sh --toolchain-only` is read-only.
-2. `prepare-frontend-dependencies.sh` obtains the repository dependency-owner lock and materializes
+1. `prepare-frontend-dependencies.sh` first runs the read-only frontend tool check.
+2. Preparation obtains the repository dependency-owner lock and materializes
    the exact frozen lockfile.
-3. `check-frontend-toolchain.sh` verifies the materialized native package.
+3. `check-build-toolchain.sh` verifies the materialized native package, Go host toolchain and the
+   selected module-owned Wails binary.
 4. Product gates may start only after all three conditions pass.
 
 `TOOLCHAIN_MISMATCH` and an invalid declaration exit 78. `DEPENDENCY_STATE_INVALID` exits 79. Neither
@@ -78,4 +107,5 @@ independent version literal.
 `internal/repositorygate/build_toolchain_owner_test.go` rejects duplicate owners, ambient Wails or
 Task executables, missing Go tool registration and Node selector drift.
 `internal/repositorygate/frontend_toolchain_preflight_gate_test.go` verifies the read-only/preparation
-split and proves pnpm is resolved from the frontend package that owns its declaration.
+split, proves pnpm is resolved from the frontend package that owns its declaration, rejects a
+translated amd64 Go runtime and exposes required, Node, Go and Wails architecture axes separately.

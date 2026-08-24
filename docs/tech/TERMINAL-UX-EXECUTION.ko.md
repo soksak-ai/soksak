@@ -29,12 +29,12 @@ canonical: docs/tech/TERMINAL-UX-EXECUTION.md
 ## RED 이전 실패 분류
 
 Baseline 또는 product test 전에 scripts/ci/prepare-frontend-dependencies.sh를 실행한 뒤
-scripts/ci/check-frontend-toolchain.sh를 실행합니다. Prepare만 cross-process dependency owner
+scripts/ci/check-build-toolchain.sh를 실행합니다. Prepare만 cross-process dependency owner
 lock 아래에서 frozen lockfile을 materialize합니다. Check는 read-only이며 `.node-version`의 Node
-selector, `frontend/package.json` projection과 pnpm 선언, host와 Node runtime architecture, 선택된
-native frontend package를 검사하고 lock SHA-256을 출력합니다. `go tool wails3 task verify`는 모든
-product test보다 먼저 prepare와 check를 이 순서로 실행합니다. 일반 toolchain 규칙은
-`BUILD-TOOLCHAIN.ko.md`가 소유합니다.
+selector, `frontend/package.json` projection과 pnpm 선언, 선택된 native frontend package를
+검사합니다. Required, Node, Go, Wails architecture 축을 별도로 보고하고
+lock SHA-256을 출력합니다. `go tool wails3 task verify`는 모든 product test보다 먼저 prepare와
+check를 이 순서로 실행합니다. 일반 toolchain 규칙은 `BUILD-TOOLCHAIN.ko.md`가 소유합니다.
 
 Preflight 결과로 product 증거의 존재 여부를 판정합니다.
 
@@ -46,8 +46,8 @@ Preflight 결과로 product 증거의 존재 여부를 판정합니다.
 | 목표 assertion 전에 무관한 누적 gate 실패 | 기존 regression | 새 작업을 중단하고 별도 RED 및 commit 기록으로 누적 gate를 복구합니다. 목표 RED로 이름을 바꾸지 않습니다. |
 | 선언된 환경 준비 완료, baseline 경로 실행 완료, 목표 인수 assertion 실패 | Product RED | 측정한 실패를 기록하고 구현을 시작합니다. |
 
-모든 증거 기록에는 source commit, host OS와 architecture, Node version과 architecture, pnpm
-version, dependency lock digest, test command, exit code, 처음 실패한 named assertion을 포함합니다.
+모든 증거 기록에는 source commit, required platform, Node/Go/Wails version과 runtime architecture,
+pnpm version, dependency lock digest, test command, exit code, 처음 실패한 named assertion을 포함합니다.
 환경이 다른 두 실행은 같은 baseline이 아닙니다.
 
 첫 유효 baseline은 통과하거나 실패할 수 있습니다. 통과하면 인수 기준을 약화하지 않고 제보된

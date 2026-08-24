@@ -159,7 +159,7 @@ the last bits of a double, and a digest counting those would never match twice.
 Workspaces are ordered by root, so restoring the same workspaces in another
 order is not reported as a difference.
 
-Gate: `restore_gate_test.go`, run by `go tool wails3 task verify:restore`. It builds the two binaries, starts the
+Gate: `restore_gate_test.go`, run by `go tool wails3 task verify:application`. It builds the two binaries, starts the
 application against a home of its own, opens a workspace window, reads the digest, quits through
 `app.shutdown.commit`, starts again and reads them a second time.
 
