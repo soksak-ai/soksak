@@ -696,7 +696,7 @@ export function registerPluginCatalog(): void {
     params: {
       pluginId: { type: "string", required: true, description: key("cmd.plugin.install.param.pluginId") },
       phase: { type: "string", required: true, enum: ["resolving", "staging", "committing", "installed", "failed"], description: key("cmd.plugin.install.wait.param.phase") },
-      timeoutMs: { type: "number", description: key("cmd.plugin.install.param.timeoutMs") },
+      timeoutMs: { type: "number", description: key("cmd.plugin.install.wait.param.timeoutMs") },
     },
     returns: "{pluginId,phase,completed,total,componentId?,error?}",
     message: (d) => tmsg("msg.plugin.install.wait", { id: String(d.pluginId), phase: String(d.phase) }),

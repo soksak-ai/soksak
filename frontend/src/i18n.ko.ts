@@ -1239,6 +1239,7 @@ export const ko = {
   "cmd.plugin.install.status.desc": "네트워크 I/O 없이 검증된 플러그인 설치 단계와 실제 component 진행률을 읽습니다.",
   "cmd.plugin.install.wait.desc": "플러그인 설치가 지정한 단계에 도달할 때까지 기다립니다.",
   "cmd.plugin.install.wait.param.phase": "기다릴 설치 단계",
+  "cmd.plugin.install.wait.param.timeoutMs": "설치 관측의 유한 종료 시간(밀리초)",
   "cmd.plugin.install.param.sidecars": "플러그인 역할별 sidecar ID",
   "cmd.plugin.update.desc": "설치된 플러그인과 그 의존 폐포 전체를 그 레지스트리의 가장 높은 인증 릴리스로 바꿉니다. 검증된 매니페스트가 권한을 바꾸면 다시 동의를 받아야 합니다.",
   "cmd.plugin.update.param.id": "플러그인 id",

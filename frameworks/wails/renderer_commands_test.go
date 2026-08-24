@@ -264,6 +264,10 @@ func TestRendererDeadlineExceedsTheCommandTimeout(t *testing.T) {
 	if got := rendererCallDeadline(rendererDeadline, control.Args{}); got != rendererDeadline {
 		t.Fatalf("default deadline=%s", got)
 	}
+	args = control.Args{"timeoutMs": json.RawMessage(`180000`)}
+	if got := rendererCallDeadline(rendererDeadline, args); got != 185*time.Second {
+		t.Fatalf("transaction observation deadline=%s, want 3m5s", got)
+	}
 }
 
 func TestAWindowThatClosesStopsAnsweringAndReleasesItsCallers(t *testing.T) {

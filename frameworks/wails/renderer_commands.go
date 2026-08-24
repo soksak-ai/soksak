@@ -61,6 +61,10 @@ const (
 // than report a silent renderer while the native request is still running.
 const rendererDeadline = 35 * time.Second
 const rendererDeadlineMargin = 5 * time.Second
+// A renderer command may expose an event-driven wait longer than the default
+// request/HTTP boundary. The transport contains that declared wait, up to one
+// finite process-level ceiling; it does not silently shorten it to the default.
+const rendererCommandTimeoutCeiling = 10 * time.Minute
 
 // RendererDelivery hands one payload to one window's page, or fails naming the
 // window. It is a function rather than the vendor's window handle so every rule
@@ -576,10 +580,14 @@ func rendererCallDeadline(base time.Duration, args control.Args) time.Duration {
 		return base
 	}
 	var timeoutMs float64
-	if json.Unmarshal(raw, &timeoutMs) != nil || timeoutMs <= 0 || timeoutMs > 60000 {
+	if json.Unmarshal(raw, &timeoutMs) != nil || timeoutMs <= 0 {
 		return base
 	}
-	requested := time.Duration(timeoutMs*float64(time.Millisecond)) + rendererDeadlineMargin
+	requestedTimeout := time.Duration(timeoutMs * float64(time.Millisecond))
+	if requestedTimeout > rendererCommandTimeoutCeiling {
+		requestedTimeout = rendererCommandTimeoutCeiling
+	}
+	requested := requestedTimeout + rendererDeadlineMargin
 	if requested > base {
 		return requested
 	}

@@ -1234,6 +1234,7 @@ export const en: Record<MsgKey, string> = {
   "cmd.plugin.install.status.desc": "Read the current verified plugin installation phase and real component progress without network I/O.",
   "cmd.plugin.install.wait.desc": "Wait until a plugin installation reaches the requested phase.",
   "cmd.plugin.install.wait.param.phase": "Installation phase to await",
+  "cmd.plugin.install.wait.param.timeoutMs": "Finite installation-observation deadline in milliseconds",
   "cmd.plugin.install.param.sidecars": "Sidecar IDs keyed by plugin role",
   "cmd.plugin.update.desc": "Replace an installed plugin and its complete dependency closure with the greatest authenticated release from its registry. Re-consent is required when the verified manifest changes permissions.",
   "cmd.plugin.update.param.id": "Plugin id",
