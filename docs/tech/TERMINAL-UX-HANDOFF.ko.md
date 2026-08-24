@@ -7,8 +7,9 @@ scope: workspace
 
 # 터미널 UX 결함 인계
 
-이 문서는 2026-08-24 현재 해결되지 않은 결함과 확인된 시작점을 기록합니다. 완료 보고가
-아닙니다. 필수 실행 순서와 증거는 TERMINAL-UX-EXECUTION.ko.md에 정의합니다.
+이 문서는 2026-08-25 현재 제보된 열 결함, 현재 증거, 남은 release 경계를 기록합니다. 필수 실행
+순서와 증거는 TERMINAL-UX-EXECUTION.ko.md에 정의합니다. Local candidate GREEN을 immutable
+release 또는 실행하지 않은 native-platform GREEN으로 확대해서는 안 됩니다.
 
 ## 제보된 결함
 
@@ -144,40 +145,54 @@ registry cleanup, window destruction을 증명할 수 없습니다.
 
 Test window ownership 경계는 soksak-core/internal/application/restore_gate_test.go,
 capture_focus_gate_test.go, run.go에 걸쳐 있습니다. 각 run은 고유 home, runtime, identifier,
-socket, owner를 받습니다. SOKSAK_PRESENTATION=capture-only는 test window를 desktop에 표시하지
-않습니다. 현재 Wails runtime은 blocking file lock을 통해 한 번에 하나의 test application owner만
-허용합니다.
+socket, owner를 받습니다. Darwin의 `SOKSAK_PRESENTATION=capture-only` window는 compositor에
+남아 있으면서 투명하고 mouse-transparent이며 non-key입니다. Capture는 application을 활성화하지
+않고 document pixel을 읽습니다. 현재 Wails runtime은 blocking file lock을 통해 한 번에 하나의
+test application owner만 허용합니다.
 
 ## 사실과 가설
 
 확인된 사실:
 
-- Xterm과 여섯 frame provider는 서로 다른 presentation 및 input 구현을 사용합니다.
-- Frame presenter는 표시할 frame DOM을 교체하며 숨겨진 textarea를 사용합니다.
-- 이전 visibility 식은 overlay와 layout motion 중 활성 DOM content를 숨겼습니다.
-- Core visibility test와 Xterm/VT100 개발 capture는 통과했지만 일곱 provider installed-product
-  visibility matrix는 아직 없습니다.
-- 기존 system test는 주로 command 기반 send, read, status, restore 경로를 검사합니다.
-- 기존 test는 pointer focus, 실제 keyboard entry, cursor pixel, overlay 및 sidebar motion,
-  native traffic-light input, 사용자 desktop 비간섭을 증명하지 않습니다.
-- Installed-product matrix는 Kitty sidecar artifact에서 `staging 1/2` 상태를 유지합니다.
-  Test-owned process의 SIGQUIT stack은 Go HTTP/2 response-body read 내부의
-  `HTTPFetcher.Fetch`에서 정지를 확인했습니다. Registry lock, archive extraction, renderer
-  bridge는 정지한 goroutine 경로에 없었습니다.
+- Xterm과 여섯 frame provider는 하나의 terminal behavior contract 및 공유 provider lifecycle
+  뒤에서 서로 다른 presentation 구현을 사용합니다.
+- 정정된 frame presenter는 row/run DOM identity를 보존하고 input, focus, cursor, render,
+  PTY-write sequence와 timestamp를 공개합니다.
+- 이전 visibility 식은 overlay와 layout motion 중 활성 DOM content를 숨겼습니다. 현재 하나의
+  visibility transaction이 DOM content를 mount 상태로 유지하고 live surface visibility와 parked
+  pixel을 분리합니다.
+- Clean installed-product candidate matrix는 일곱 provider를 모두 실행했습니다. Capture-only parity
+  경로는 공개 DOM input command를 사용하고 `windowFocused=false`를 기록하며 foreground app을
+  방해하지 않고 terminal-to-PTY input, cursor 상태, timing, pixel palette parity를 증명합니다.
+- `ui.input.click`과 `ui.input.key`는 노출된 DOM address를 통해 browser event를 dispatch합니다.
+  운영체제 입력이 아니므로 native pointer 또는 keyboard 증거로 인용하면 안 됩니다.
+- AppKit은 inactive non-key window의 WebKit에 keyboard input을 전달하지 않습니다. Core의
+  `window.input.pointer.click`과 `window.input.key.press`는 이미 active key window를 요구하며
+  application을 스스로 활성화하지 않습니다. 별도 `system-native-input` gate가 사람이 없는 native
+  runner에서 AppKit NSEvent부터 terminal과 PTY까지의 전달을 증명합니다.
+- Capture-only visibility matrix는 picker, settings, sidebar transition에 대해 21개 report와 840개
+  frame을 만들었고 blank frame과 violation이 모두 0입니다. 직접 확인한 contact sheet에서도 모든
+  terminal image가 유지됩니다.
+- 실제 macOS 신호등 닫기 gate는 현재 Core 누적 검증에서 세 번 GREEN입니다.
+- 모든 system run은 process, home, runtime, identifier, socket, window, input state 및 open/recorded
+  sidecar ownership을 기록합니다. Cleanup 뒤 두 sidecar set이 비고 application이 정상 종료됩니다.
+  오래 남았던 test-owned sidecar 두 개는 기록된 identity로 회수했고 사용자 application은 변경하지
+  않았습니다.
 
 현재 미공개 candidate:
 
 - 미공개 terminal contract package 0.0.7은 terminal behavior interface 0.0.6, 하나의 256색
   palette, byte 및 frame renderer의 presentation status 하나를 정의합니다.
 - Kit candidate는 row/run DOM node를 유지하고 input/focus/cursor/render sequence와 timestamp를
-  공개합니다. Packed contract candidate 기준 typecheck와 source test 33개를 통과했습니다.
+  공개하며 bold ANSI foreground를 공유 bright palette에 연결합니다.
 - Xterm은 `@xterm/xterm` 6.0.0과 `@xterm/addon-fit` 0.11.0을 사용합니다. WebKit IME dependency는
   package.json/lockfile의 정확한 Git archive 하나로만 소비하며 release workflow의 충돌하는 과거
   source checkout을 제거했습니다.
 - Contract, kit, 일곱 renderer plugin의 clean candidate closure가 존재합니다. Source manifest와
   lockfile은 공개 HTTPS dependency를 유지하며 local locator가 없습니다. Candidate provenance는
   정확한 source commit과 dependency archive digest를 기록합니다.
-- 일곱 provider blank-frame 판정은 아직 증명되지 않았습니다. 결함 5–7을 완료로 분류하면 안 됩니다.
+- Clean candidate closure는 capture-only parity 및 visibility matrix를 통과했습니다. Native AppKit
+  pointer/keyboard 인증은 unattended runner를 활성화해야 하므로 별도 gate입니다.
 
 임시 terminal contract 및 terminal kit archive에서 생성한 candidate 증거는 무효입니다. Kit source
 manifest가 외부 local archive를 사용하도록 임시 변경됐고 pnpm은 해당 dependency를 lockfile에 local
@@ -190,17 +205,19 @@ recording 결과는 재사용하면 안 됩니다. 이를 대체한 clean render
 | Artifact | Source commit | SHA-256 |
 | --- | --- | --- |
 | contract-plugin-terminal 0.0.7 | 0f573cd | 1fd332609d141617372112b43827fc24f30a78f3b8118b3cb1ffe6e5b2bc228d |
-| kit-plugin-terminal 0.0.18 | e8754fc | 0587a1fb44d19da0e8dacffa1f51471fd67c76adccb6eb1c240d0dc5e6418950 |
-| plugin-terminal-alacritty 0.0.15 | 16c71ce | 2b02a19dc298ad8170f6787468b531640f238536df306da7c05b92411ae1cc43 |
-| plugin-terminal-ghostty 0.0.16 | 8bd4805 | a388ac2f267ea41c98a58d4a54e19f7c16851b839f59942f1314a5c6dce908ba |
-| plugin-terminal-kitty 0.0.15 | ecb6479 | 43e18e5c157e52018b641e689eb172d80aafb30cca3cd62289685551ac633b99 |
-| plugin-terminal-shitty 0.0.15 | 8a30c15 | a2678e89a44bb1cfe9b26c227d932f846384909b6c053768c0c5ec1afdcead8c |
-| plugin-terminal-vt100 0.0.15 | bc56b75 | 301ae9fee054101a44a00db0941faff8b8cd50da24bfbfe95a04ef9e1159434e |
-| plugin-terminal-wezterm 0.0.15 | ba744e8 | 55e41f83907f6476baa5a20810b886cccfca25435adbb4bb0cf50b833c73dcc6 |
-| plugin-terminal-xterm 0.0.22 | 7adc1d1 | 6ae01661d5a1d82ef0ab0b1a114a81713d3d6594fa872cbfc22acea2b805dfcf |
+| kit-plugin-terminal 0.0.18 | 4620a35 | 32b204a8d48846c0e1b5568f438f49645b172f1f3baf3490369c952b61885f8c |
+| plugin-terminal-alacritty 0.0.15 | 16c71ce | d143716752d791395cf5e2e60c2bd190fc39419f051c1efda7992efa734ba914 |
+| plugin-terminal-ghostty 0.0.16 | 8bd4805 | 7615dc19649f6647db27c57ff29ed764341b29c0ef29ffcf9adfd60a5e87bbdd |
+| plugin-terminal-kitty 0.0.15 | ecb6479 | 38b8001cd610f1a8e6e5bb95f0d1404d42309983d4166501c58d015b05756264 |
+| plugin-terminal-shitty 0.0.15 | 8a30c15 | 174a121b6a1fcb84e3360fc40280aae79b06621316d4023145a8494da38eb78d |
+| plugin-terminal-vt100 0.0.15 | bc56b75 | 4ab5fbbea8b62b267ca25538b15eb0ebd8283d27dee6a1d0c5f68e4a0c4723e4 |
+| plugin-terminal-wezterm 0.0.15 | ba744e8 | b14d3211e6438f909f9af9eb293c60132f7dfcd944731165696d749e9a1d5ce3 |
+| plugin-terminal-xterm 0.0.22 | dd3febc | caec620c0cded48fb1082186a532995657a55b154684d4bdf077fdc989f2c30f |
 
-이 표는 renderer package composition만 검증합니다. Sidecar candidate, 설치 제품 parity,
-screenshot, motion 증거를 대체하지 않습니다.
+Candidate plan SHA-256은
+`ab94f623ad0e167ee396e91f69bd6249fb0fc98fcb9055c4c2369c9864da35d6`입니다. 이 plan은 PTY와 여섯
+frame-sidecar archive도 고정합니다. 표와 digest는 closure identity이며 설치 제품 report,
+screenshot, recording이 동작 증거입니다.
 
 허용되는 local build-time 검증 경로는 TERMINAL-UX-EXECUTION.ko.md의 “Local cross-repository
 candidate 검증”에 정의합니다. Consumer manifest 또는 lockfile 직접 편집은 development mode가
@@ -209,22 +226,22 @@ candidate 검증”에 정의합니다. Consumer manifest 또는 lockfile 직접
 `soksak-spec` commit `9de8149`부터 `25c58b7`까지가 complete candidate transaction을 소유합니다.
 Clean exact source staging, dependency SHA-256 검증, staging-only workspace override, repository-owned
 Make 검증, canonical package/lock byte 복원, 선언된 generated output 투영, local-locator 거부,
-`candidate-build.json`을 포함한 verified archive exit를 수행합니다. 현재 spec source `db47a94`는
-package install은 package directory에서, Make는 staged repository root에서 실행합니다. Staging
-metadata와 `.candidate-inputs`는 archive에 들어가지 않습니다.
+`candidate-build.json`을 포함한 verified archive exit를 수행합니다. 현재 spec source `0a1e217`은
+해당 경계를 지키면서 긴 ustar path도 지원합니다. Staging metadata와 `.candidate-inputs`는
+archive에 들어가지 않습니다.
 
 ## 현재 진행 상태와 차단점
 
-| 결함 | 2026-08-24 상태 |
+| 결함 | 2026-08-25 상태 |
 | --- | --- |
-| 1 — 지연 | 미완료. Owner-report schema는 정정됐지만 기존 여섯 report에 폐기된 demand field가 남아 무효입니다. 설치된 일곱 provider timing threshold를 실행하지 않았습니다. |
-| 2 — focus | 미완료. Candidate에 공개 focus/input 정보가 있으나 실제 pointer 일곱 provider matrix가 없습니다. |
-| 3 — active cursor | 미완료. Cursor state는 공개됐으나 일곱 provider pixel assertion이 없습니다. |
-| 4 — keyboard input | 미완료. Input sequence 정보는 있으나 real-keyboard-to-PTY matrix가 없습니다. |
-| 5–7 — picker/modal/sidebar blanking | 공유 visibility state와 parked-picture 규칙의 집중 test는 GREEN입니다. 새 clean closure로 설치 제품 일곱 provider frame/motion matrix를 실행하지 않았습니다. |
-| 8 — 색상 parity | Candidate가 contract palette를 소비하지만 모든 provider의 semantic/pixel parity는 미증명입니다. |
-| 9 — macOS 신호등 닫기 | 실제 native close request의 집중 Core application gate는 GREEN입니다. 최종 누적 gate에 계속 포함됩니다. |
-| 10 — test 간섭 | Core capture-only identity와 application ownership은 구현됐습니다. 외부 system workflow의 Darwin runtime path는 아직 고정이며 test-owned process/window leak count가 0이 아닙니다. |
+| 1 — 지연 | Local Darwin candidate GREEN. 일곱 provider render는 16.67ms 기준에 대해 1–3ms, input-to-PTY는 50ms 기준에 대해 2–8ms입니다. |
+| 2 — focus | Capture-only 공개 DOM 경로는 일곱 provider GREEN입니다. 최종 AppKit native pointer matrix를 구현했지만 unattended native runner에서 아직 실행하지 않았으므로 native 인증은 열려 있습니다. |
+| 3 — active cursor | 공개 active/visible cursor state와 직접 확인한 pixel은 local candidate GREEN입니다. 사용자 입력 acceptance는 남은 native pointer 인증과 함께 판정합니다. |
+| 4 — keyboard input | Capture-only terminal-to-PTY round trip은 일곱 provider GREEN입니다. 최종 AppKit key-to-PTY matrix는 구현됐지만 unattended native runner에서 아직 실행하지 않았습니다. |
+| 5–7 — picker/modal/sidebar blanking | Local Darwin candidate GREEN. 21개 report, 840개 frame, blank 0, violation 0이며 contact sheet를 직접 확인했습니다. |
+| 8 — 색상 parity | Local Darwin candidate GREEN. 일곱 provider 모두 정확한 base/bright RGB region이 있습니다. |
+| 9 — macOS 신호등 닫기 | 현재 Core 누적 gate에서 실제 AppKit close-button mouse down/up 세 번 GREEN입니다. |
+| 10 — test 간섭 | Local GREEN. Capture-only window는 transparent/non-key이고 readiness는 polling 0의 event 기반이며 run마다 고유 ownership을 가집니다. Cleanup은 open/recorded sidecar 0에 도달하고 사용자 app을 건드리지 않습니다. |
 
 Active spec, contract, 공유 kit, 일곱 renderer plugin, PTY, 결정적으로 build 가능한 여섯 frame
 sidecar, Core, Registry, terminal-tests, 두 Wails framework service의 build/release command ownership은
@@ -245,15 +262,10 @@ owner-only benchmark contract closure는 아직 검증하지 않았습니다.
 ownership 결정이 필요합니다. `soksak-contract-registry`에는 LICENSE가 없으며 owner가 license를
 선택해야 합니다. 두 값 모두 로컬에서 발명하지 않습니다.
 
-RED 증거가 필요한 가설:
-
-- Frame DOM 교체가 제보된 지연에 기여할 수 있습니다. Candidate가 교체를 제거했지만 installed provider
-  matrix에서 성능 기준을 실행하지 않았습니다.
-- Hidden textarea focus transfer가 focus, cursor, keyboard 결함을 일으킵니다.
-- 서로 다른 default 및 named color mapping이 renderer 색상 차이를 일으킬 수 있습니다. Candidate는 contract
-  palette를 사용하지만 installed Xterm/provider parity를 실행하지 않았습니다.
-
-대응 RED 측정으로 확인하기 전에는 가설을 원인으로 기록하지 않습니다.
+남은 acceptance blocker는 timeout이나 fallback이 아닙니다. WebKit은 native keyboard 전달에 active
+key window를 요구합니다. Local capture-only run은 사용자의 foreground session을 침해하면 안 됩니다.
+따라서 native matrix는 unattended final Darwin runner가 소유하며 DOM-event 증거로 대체하거나 개발자
+desktop을 focus해서는 안 됩니다.
 
 ## 기준점
 

@@ -57,3 +57,19 @@ A file that grows is split by what it is a rule about, never by size or alphabet
 A visual defect is observed with a capture and judged by a number. See EVIDENCE.md.
 
 If no command produces that number, writing the command is the work — not a detour from it.
+
+## T7. Capture-only and native input are different gates
+
+Local visual and parity gates use compositor-resident, alpha-zero, non-key windows and must preserve
+the user's foreground process. Their `ui.input.*` commands prove the exposed browser-event route;
+they do not claim operating-system input.
+
+WebKit requires an active key window for native keyboard delivery. The terminal system repository's
+`make system-native-input TARGET=<darwin-target>` therefore runs only on an unattended native runner
+with an isolated interactive application. It uses `window.input.pointer.click` and
+`window.input.key.press`, verifies terminal-to-PTY delivery, and records the native route. Both
+matrices are required; neither may be renamed to stand in for the other.
+
+Every application gate waits for `soksak.host.ready` rather than polling and records its process,
+window, socket, home, runtime and open/recorded sidecar ownership. GREEN cleanup means graceful
+application exit and zero remaining test-owned sidecars.

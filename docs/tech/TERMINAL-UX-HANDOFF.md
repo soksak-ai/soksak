@@ -7,8 +7,9 @@ scope: workspace
 
 # Terminal UX defect handoff
 
-This document records unresolved defects and the verified starting point on 2026-08-24. It is not
-a completion report. TERMINAL-UX-EXECUTION.md defines the required execution order and evidence.
+This document records the ten reported defects, their current evidence on 2026-08-25, and the
+remaining release boundary. TERMINAL-UX-EXECUTION.md defines the required execution order and
+evidence. A local candidate GREEN is not an immutable-release or unrun native-platform GREEN.
 
 ## Reported defects
 
@@ -145,39 +146,55 @@ macOS close request performs persistence, registry cleanup and window destructio
 
 Test window ownership spans soksak-core/internal/application/restore_gate_test.go,
 capture_focus_gate_test.go and run.go. Each run receives a unique home, runtime, identifier, socket
-and owner. SOKSAK_PRESENTATION=capture-only keeps test windows off the desktop. The current Wails
-runtime admits one test application owner at a time through a blocking file lock.
+and owner. On Darwin, `SOKSAK_PRESENTATION=capture-only` keeps a window compositor-resident,
+transparent, mouse-transparent and non-key. Capture reads document pixels without activating the
+application. The current Wails runtime admits one test application owner at a time through a
+blocking file lock.
 
 ## Facts and hypotheses
 
 Verified facts:
 
-- Xterm and the six frame providers use different presentation and input implementations.
-- The frame presenter replaces the presented frame DOM and uses a hidden textarea.
-- The previous visibility expression hid active DOM content during overlays and layout motion.
-- The Core visibility tests and Xterm/VT100 development captures pass, but no seven-provider
-  installed-product visibility matrix exists yet.
-- Existing system tests primarily exercise command-based send, read, status and restore paths.
-- Existing tests do not prove pointer focus, real keyboard entry, cursor pixels, overlay and sidebar
-  motion, native traffic-light input, or an undisturbed user desktop.
-- The installed-product matrix reaches the Kitty sidecar artifact and remains at `staging 1/2`.
-  A SIGQUIT stack captured the blocked test-owned process in `HTTPFetcher.Fetch`, inside the Go
-  HTTP/2 response-body read. Registry locking, archive extraction and the renderer bridge were not
-  on the blocked goroutine.
+- Xterm and the six frame providers use different presentation implementations behind one terminal
+  behavior contract and one shared provider lifecycle.
+- The corrected frame presenter preserves row/run DOM identity and exposes input, focus, cursor,
+  render and PTY-write sequences and timestamps.
+- The previous visibility expression hid active DOM content during overlays and layout motion. One
+  visibility transaction now keeps DOM content mounted and separates live surface visibility from
+  its parked pixels.
+- The clean installed-product candidate matrix covers all seven providers. Its capture-only parity
+  path uses the public DOM input commands, reports `windowFocused=false`, and proves terminal-to-PTY
+  input, cursor state, timing and pixel palette parity without disturbing the foreground app.
+- `ui.input.click` and `ui.input.key` dispatch browser events through exposed DOM addresses. They are
+  not operating-system input and must not be cited as native pointer or keyboard evidence.
+- AppKit does not deliver WebKit keyboard input to an inactive non-key window. Core therefore exposes
+  `window.input.pointer.click` and `window.input.key.press`, which require an already active key
+  window and never activate the application themselves. The separate `system-native-input` gate
+  runs only on an unattended native runner and proves AppKit NSEvent to terminal to PTY delivery.
+- The capture-only visibility matrix produced 21 reports and 840 frames across picker, settings and
+  sidebar transitions, with zero blank frames and zero violations. The inspected contact sheets
+  preserve every terminal image.
+- The actual native macOS traffic-light close gate is GREEN three times in the current accumulated
+  Core verification.
+- Every system run records its process, home, runtime, identifier, socket, windows, input state and
+  both open and recorded sidecar ownership. Cleanup leaves both sidecar sets empty and the
+  application exits gracefully. Two historical test-owned sidecars were reclaimed through their
+  recorded identity; the user-owned application was not changed.
 
 Current unpublished candidates:
 
 - The unpublished terminal contract package 0.0.7 defines terminal behavior interface 0.0.6, one
   256-color palette and one presentation status for byte and frame renderers.
 - The kit candidate preserves row/run DOM nodes, exposes input/focus/cursor/render sequences and
-  timestamps, and passed its typecheck and 33 source tests against the packed contract candidate.
+  timestamps, and maps bold ANSI foregrounds to the shared bright palette.
 - Xterm uses `@xterm/xterm` 6.0.0 and `@xterm/addon-fit` 0.11.0. Its WebKit IME dependency is one
   exact package.json/lockfile Git archive; the release workflow no longer checks out a conflicting
   older source commit.
 - A clean candidate closure now exists for the contract, kit and all seven renderer plugins. The
   source manifests and lockfiles retain their public HTTPS dependencies and contain no local
   locator. Candidate provenance records the exact source commit and dependency archive digests.
-- The seven-provider blank-frame verdict remains unproven. Do not classify defects 5–7 as complete.
+- The clean candidate closure has passed capture-only parity and visibility matrices. Native AppKit
+  pointer/keyboard certification remains separate because it must activate an unattended runner.
 
 Candidate evidence created from the temporary terminal-contract and terminal-kit archives is
 invalid. The kit source manifest was temporarily changed to an external local archive and pnpm
@@ -191,17 +208,19 @@ closure included that contaminated kit archive. The clean replacement renderer c
 | Artifact | Source commit | SHA-256 |
 | --- | --- | --- |
 | contract-plugin-terminal 0.0.7 | 0f573cd | 1fd332609d141617372112b43827fc24f30a78f3b8118b3cb1ffe6e5b2bc228d |
-| kit-plugin-terminal 0.0.18 | e8754fc | 0587a1fb44d19da0e8dacffa1f51471fd67c76adccb6eb1c240d0dc5e6418950 |
-| plugin-terminal-alacritty 0.0.15 | 16c71ce | 2b02a19dc298ad8170f6787468b531640f238536df306da7c05b92411ae1cc43 |
-| plugin-terminal-ghostty 0.0.16 | 8bd4805 | a388ac2f267ea41c98a58d4a54e19f7c16851b839f59942f1314a5c6dce908ba |
-| plugin-terminal-kitty 0.0.15 | ecb6479 | 43e18e5c157e52018b641e689eb172d80aafb30cca3cd62289685551ac633b99 |
-| plugin-terminal-shitty 0.0.15 | 8a30c15 | a2678e89a44bb1cfe9b26c227d932f846384909b6c053768c0c5ec1afdcead8c |
-| plugin-terminal-vt100 0.0.15 | bc56b75 | 301ae9fee054101a44a00db0941faff8b8cd50da24bfbfe95a04ef9e1159434e |
-| plugin-terminal-wezterm 0.0.15 | ba744e8 | 55e41f83907f6476baa5a20810b886cccfca25435adbb4bb0cf50b833c73dcc6 |
-| plugin-terminal-xterm 0.0.22 | 7adc1d1 | 6ae01661d5a1d82ef0ab0b1a114a81713d3d6594fa872cbfc22acea2b805dfcf |
+| kit-plugin-terminal 0.0.18 | 4620a35 | 32b204a8d48846c0e1b5568f438f49645b172f1f3baf3490369c952b61885f8c |
+| plugin-terminal-alacritty 0.0.15 | 16c71ce | d143716752d791395cf5e2e60c2bd190fc39419f051c1efda7992efa734ba914 |
+| plugin-terminal-ghostty 0.0.16 | 8bd4805 | 7615dc19649f6647db27c57ff29ed764341b29c0ef29ffcf9adfd60a5e87bbdd |
+| plugin-terminal-kitty 0.0.15 | ecb6479 | 38b8001cd610f1a8e6e5bb95f0d1404d42309983d4166501c58d015b05756264 |
+| plugin-terminal-shitty 0.0.15 | 8a30c15 | 174a121b6a1fcb84e3360fc40280aae79b06621316d4023145a8494da38eb78d |
+| plugin-terminal-vt100 0.0.15 | bc56b75 | 4ab5fbbea8b62b267ca25538b15eb0ebd8283d27dee6a1d0c5f68e4a0c4723e4 |
+| plugin-terminal-wezterm 0.0.15 | ba744e8 | b14d3211e6438f909f9af9eb293c60132f7dfcd944731165696d749e9a1d5ce3 |
+| plugin-terminal-xterm 0.0.22 | dd3febc | caec620c0cded48fb1082186a532995657a55b154684d4bdf077fdc989f2c30f |
 
-This table validates renderer package composition only. It does not replace sidecar candidates,
-installed-product parity, screenshots or motion evidence.
+The candidate plan SHA-256 is
+`ab94f623ad0e167ee396e91f69bd6249fb0fc98fcb9055c4c2369c9864da35d6`. It also pins PTY and the six
+frame-sidecar archives. This table and digest identify the closure; the installed-product reports,
+screenshots and recordings remain the behavioral evidence.
 
 The allowed local build-time verification path is defined in
 TERMINAL-UX-EXECUTION.md under “Local cross-repository candidate verification.” Direct consumer
@@ -211,21 +230,21 @@ manifest or lockfile editing is not a development mode.
 source staging, dependency SHA-256 verification, staging-only workspace override, repository-owned
 Make verification, canonical package and lock byte restoration, declared generated-output
 projection, local-locator rejection and verified archive exit with `candidate-build.json`. Current
-spec source `db47a94` also runs package installation from the package directory and Make from the
-staged repository root. Staging metadata and `.candidate-inputs` do not enter the archive.
+spec source `0a1e217` also supports long ustar paths while preserving those boundaries. Staging
+metadata and `.candidate-inputs` do not enter the archive.
 
 ## Current progress and blockers
 
-| Defect | State on 2026-08-24 |
+| Defect | State on 2026-08-25 |
 | --- | --- |
-| 1 — latency | Not complete. Owner-report schema is corrected, but the existing six reports use the retired demand fields and are invalid. Installed seven-provider timing thresholds have not run. |
-| 2 — focus | Not complete. Public focus/input facts exist in candidates; no seven-provider real-pointer matrix exists. |
-| 3 — active cursor | Not complete. Cursor state is exposed; no seven-provider pixel assertion exists. |
-| 4 — keyboard input | Not complete. Input sequence facts exist; no real-keyboard-to-PTY matrix exists. |
-| 5–7 — picker/modal/sidebar blanking | Shared visibility state and parked-picture rules have focused GREEN tests. The new clean closure has not run the installed seven-provider frame/motion matrix. |
-| 8 — color parity | The contract palette is consumed by candidates; semantic and pixel parity across all providers is unproven. |
-| 9 — macOS traffic-light close | Focused Core application gate is GREEN for an actual native close request. It remains part of the final accumulated gate. |
-| 10 — test interference | Core capture-only identity and application ownership are implemented. External system workflows still use a fixed Darwin runtime path, and test-owned process/window leak count has not reached zero. |
+| 1 — latency | Local Darwin candidate GREEN. Seven providers render within 1–3ms against a 16.67ms budget; input-to-PTY is 2–8ms against a 50ms budget. |
+| 2 — focus | Capture-only public DOM route GREEN for seven providers. Final AppKit native pointer matrix is implemented but not yet run on the unattended native runner, so native certification remains open. |
+| 3 — active cursor | Local candidate GREEN for exposed active/visible cursor state and inspected pixels. It remains coupled to the pending native pointer certification for user-input acceptance. |
+| 4 — keyboard input | Capture-only terminal-to-PTY round trip GREEN for seven providers. Final AppKit key-to-PTY matrix is implemented but not yet run on the unattended native runner. |
+| 5–7 — picker/modal/sidebar blanking | Local Darwin candidate GREEN: 21 reports, 840 frames, blank 0, violations 0, with direct contact-sheet inspection. |
+| 8 — color parity | Local Darwin candidate GREEN. Exact base and bright RGB regions are present for all seven providers. |
+| 9 — macOS traffic-light close | Current accumulated Core gate GREEN for three actual AppKit close-button mouse down/up sequences. |
+| 10 — test interference | Local GREEN. Capture-only windows are transparent/non-key, readiness is event-driven with polling count zero, every run has unique ownership, cleanup reaches zero open/recorded sidecars, and the user app remains untouched. |
 
 Build and release command ownership is now Make-based for the active spec, contracts, shared kits,
 seven renderer plugins, PTY, six deterministic frame sidecars, Core, Registry, terminal-tests and
@@ -247,15 +266,10 @@ under the product-specific `min-median-max` module/reusable-workflow identity an
 repository ownership decision before changing refs; `soksak-contract-registry` has no LICENSE and
 requires an owner-selected license. Do not invent either value locally.
 
-Hypotheses that require RED evidence:
-
-- Frame DOM replacement may contribute to the reported latency; the candidate removes replacement,
-  but the performance threshold has not run on the installed provider matrix.
-- Hidden-textarea focus transfer causes the focus, cursor and keyboard failures.
-- Separate default and named-color mappings may cause the renderer color difference; the candidate uses
-  the contract palette, but installed Xterm/provider parity has not run.
-
-Do not record a hypothesis as a cause before the corresponding RED measurement identifies it.
+The remaining acceptance blocker is not a timeout or implementation fallback: WebKit requires an
+active key window for native keyboard delivery. Local capture-only runs must not violate the user's
+foreground session. The native matrix therefore belongs to the unattended final Darwin runner and
+must not be replaced by DOM-event evidence or by focusing the developer's desktop.
 
 ## Baseline
 

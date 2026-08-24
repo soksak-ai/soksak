@@ -178,13 +178,19 @@ RED는 각 matrix row에서 누락되거나 잘못된 정보를 이름으로 식
 
 ## 단계 2 — renderer parity
 
-하나의 provider matrix scenario를 사용합니다.
+같은 provider row를 명시적으로 다른 두 matrix에서 사용합니다. Local capture-only matrix는 사용자
+foreground application을 보존해야 합니다. 노출된 DOM address를 사용하며 `ui.input.click`과
+`ui.input.key`가 운영체제 증거가 아닌 browser-event 경로임을 기록합니다. Native-input matrix는
+사람이 없는 native runner의 격리된 interactive test application에서만 실행합니다.
+
+Native-input matrix의 각 provider에서:
 
 1. 대상 provider의 terminal tab 하나를 엽니다.
 2. Interval loop가 아니라 명시적인 ready event를 기다립니다.
-3. 공개된 terminal-screen 또는 terminal-input node를 실제 pointer로 클릭합니다.
+3. 노출된 terminal-screen rectangle을 해석하고 `window.input.pointer.click`로 AppKit mouse
+   down/up 한 쌍을 보냅니다.
 4. Browser active element와 공개 focus status가 input owner를 식별하는지 확인합니다.
-5. UI 경로로 실제 keyboard input을 전달합니다.
+5. `window.input.key.press`로 AppKit key down/up 한 쌍을 보냅니다.
 6. Input sequence가 한 번의 PTY write와 한 번의 shell marker output이 되는지 확인합니다.
 7. Capture frame에서 활성 cursor가 보이는지 확인합니다.
 8. Open to visible frame, open to focusable input, click to input owner, key to PTY write, PTY
@@ -192,9 +198,10 @@ RED는 각 matrix row에서 누락되거나 잘못된 정보를 이름으로 식
 9. Default foreground와 background, 16 named colors, bright colors, inverse, bold, reset을
    포함하는 ANSI fixture 하나를 적용합니다.
 
-plugin.send는 command 경로만 증명합니다. Keyboard input 증거가 아닙니다. focus() 성공은 pointer
-focus 증거가 아닙니다. Xterm은 비교 기준일 뿐 theme 정본이 아닙니다. Canonical theme token이
-예상 semantic을 정의합니다.
+`plugin.send`는 command 경로만 증명합니다. `ui.input.key`는 노출된 browser-event 경로만
+증명합니다. 둘 다 native keyboard 증거가 아닙니다. `focus()` 성공도 native pointer-focus 증거가
+아닙니다. Xterm은 비교 기준일 뿐 theme 정본이 아닙니다. Canonical theme token이 예상 semantic을
+정의합니다.
 
 숫자 제품 기준을 선택하기 전에 기존 Xterm과 frame provider의 timing distribution을 기록합니다.
 구현을 바꾸기 전에 threshold를 RED test에 commit합니다. 모든 provider가 동일한 semantic
@@ -244,9 +251,12 @@ Gate 전, 중, 후에 사용자 input owner가 바뀌지 않고, 보이는 test 
 테스트 소유 application과 sidecar가 종료되어야 하며 cleanup은 test owner가 발급한 identity만
 선택해야 합니다.
 
-먼저 platform이 필요한 view를 hidden 상태로 render 및 capture할 수 있는지 확인합니다. 불가능하면
-검증된 제한을 기록하고 별도 test session 또는 runner를 구현합니다. Visual test를 삭제, skip,
-약화하지 않습니다.
+Darwin capture-only window는 compositor에 남고 alpha 0이며 mouse input을 무시하고 non-key 상태를
+유지합니다. `window.snapshot`은 foreground process를 바꾸지 않고 document를 capture합니다.
+WebKit은 application이 inactive이고 window가 non-key이면 native keyboard input을 거부합니다. 이를
+개발자 desktop focus 또는 DOM event의 native 재명명으로 우회하면 안 됩니다.
+`system-native-input`은 사람이 없는 native runner에서만 격리된 interactive application을
+사용합니다. 두 matrix 모두 삭제, skip, 약화하면 안 됩니다.
 
 ## 실행 환경
 
@@ -255,11 +265,13 @@ soksak-core/bin/sok와 soksak-core/bin/soksak입니다. 이전 skill text의 오
 않습니다.
 
 격리 실행에는 별도 SOKSAK_HOME, Darwin의 짧은 <local-evidence> runtime directory, 고유 identifier와 owner,
-SOKSAK_PRESENTATION=capture-only, 모든 CLI call의 명시적 --socket, window 범위 request의 명시적
-window field가 필요합니다. 현재 Wails runtime은 GUI process 두 개를 안전하게 공존시키지 못하므로
-test application은 전체 lifetime 동안 repository-owned application lock을 소유합니다. targetWindow는
-window_renderer_wait에서만 사용합니다. Cleanup은 테스트 소유 sidecar만 종료한 뒤
-app.shutdown.commit을 호출합니다.
+모든 CLI call의 명시적 --socket, window 범위 request의 명시적 window field가 필요합니다. Local 및
+visual matrix는 `SOKSAK_PRESENTATION=capture-only`를 사용하고 사람이 없는
+`system-native-input` 인증만 `interactive`를 사용합니다. 현재 Wails runtime은 GUI process 두 개를
+안전하게 공존시키지 못하므로 test application은 전체 lifetime 동안 repository-owned application
+lock을 소유합니다. targetWindow는 window_renderer_wait에서만 사용하며 readiness는 polling이 아니라
+`soksak.host.ready` event에서 옵니다. Cleanup은 정확한 test-owned open/recorded sidecar inventory를
+중지하고 app.shutdown.commit을 호출한 뒤 application의 정상 종료를 증명합니다.
 
 실행 중인 binary에서 command schema를 확인합니다. 오래된 예시로 추정하지 않습니다. Git으로
 repository root를 확인하며 추정한 sibling path로 repository를 연결하지 않습니다.

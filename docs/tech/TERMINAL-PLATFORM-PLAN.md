@@ -193,8 +193,9 @@ theme, accessibility, capture and renderer-failure behavior on its supported pla
 ## Wails application gates
 
 Real-window gates remain because they measure pixels, native-surface geometry and arrangement
-journals. A capture-only launch uses the accessory activation policy, creates hidden windows, does
-not take focus and does not add a Dock icon. SOKSAK_PRESENTATION accepts only `interactive` and
+journals. A capture-only launch uses the accessory activation policy and creates compositor-resident
+windows that are alpha-zero, mouse-transparent and non-key; it does not activate the application or
+add a Dock icon. `window.snapshot` reads document pixels from those windows. SOKSAK_PRESENTATION accepts only `interactive` and
 `capture-only`; the removed SOKSAK_UNATTENDED name is not a fallback. Each gate run has a unique
 home, runtime, identifier, socket and owner. The current Wails runtime is protected by one
 repository-owned application lock for the full test process lifetime. Normal and forcibly

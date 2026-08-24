@@ -180,13 +180,20 @@ inferred values are failures.
 
 ## Phase 2 — renderer parity
 
-Use one provider-matrix scenario:
+Use the same provider rows in two explicitly different matrices. The local capture-only matrix
+must preserve the user's foreground application. It uses exposed DOM addresses and records that
+`ui.input.click` and `ui.input.key` are browser-event routes, not operating-system evidence. The
+native-input matrix runs only on an unattended native runner with an isolated interactive test
+application.
+
+For each provider in the native-input matrix:
 
 1. Open one terminal tab for the provider.
 2. Wait for an explicit ready event, not an interval loop.
-3. Perform a real pointer click on the exposed terminal-screen or terminal-input node.
+3. Resolve the exposed terminal-screen rectangle and send an AppKit mouse down/up pair through
+   `window.input.pointer.click`.
 4. Confirm the browser active element and public focus status identify the input owner.
-5. Dispatch actual keyboard input through the UI path.
+5. Send AppKit key down/up pairs through `window.input.key.press`.
 6. Confirm the input sequence becomes one PTY write and one shell marker output.
 7. Confirm a visible active cursor in the captured frame.
 8. Measure open to visible frame, open to focusable input, click to input owner, key to PTY write,
@@ -194,9 +201,10 @@ Use one provider-matrix scenario:
 9. Apply one ANSI fixture covering default foreground and background, 16 named colors, bright
    colors, inverse, bold and reset.
 
-plugin.send proves the command path only. It is not keyboard-input evidence. A successful focus()
-call is not pointer-focus evidence. Xterm is a comparison baseline, not the theme source of truth;
-canonical theme tokens define expected semantics.
+`plugin.send` proves the command path only. `ui.input.key` proves the exposed browser-event route
+only. Neither is native keyboard evidence. A successful `focus()` call is not native pointer-focus
+evidence. Xterm is a comparison baseline, not the theme source of truth; canonical theme tokens
+define expected semantics.
 
 Record existing Xterm and frame-provider timing distributions before selecting numeric product
 thresholds. Commit thresholds to the RED test before changing implementation. Every provider must
@@ -253,9 +261,12 @@ Assert before, during and after the gate:
 - every test-owned application and sidecar terminates, including failure paths;
 - cleanup selects only identities issued by the test owner.
 
-First determine whether the platform can render and capture the required view while hidden. If it
-cannot, record the verified limitation and implement a separate test session or runner. Do not
-delete, skip or weaken visual tests.
+On Darwin, capture-only windows remain compositor-resident with alpha zero, ignore mouse input and
+stay non-key. `window.snapshot` captures their document without changing the foreground process.
+WebKit rejects native keyboard input while its application is inactive and its window is non-key;
+do not work around that limit by focusing the developer desktop or by relabelling DOM events as
+native. `system-native-input` uses an isolated interactive application only on an unattended native
+runner. Do not delete, skip or weaken either matrix.
 
 ## Execution environment
 
@@ -264,11 +275,13 @@ soksak-core/bin/sok and soksak-core/bin/soksak; do not use the obsolete CLI path
 skill text.
 
 An isolated run requires a distinct SOKSAK_HOME, a short runtime directory under <local-evidence> on Darwin, a
-unique identifier and owner, SOKSAK_PRESENTATION=capture-only, an explicit --socket for every CLI
-call, an explicit window field for window-scoped requests, and targetWindow only for
-window_renderer_wait. Test applications hold the repository-owned application lock for their whole
-lifetime because the current Wails runtime cannot host two GUI processes safely. Cleanup stops only
-test-owned sidecars and then calls app.shutdown.commit.
+unique identifier and owner, an explicit --socket for every CLI call, an explicit window field for
+window-scoped requests, and targetWindow only for window_renderer_wait. Local and visual matrices
+use `SOKSAK_PRESENTATION=capture-only`. Only the unattended `system-native-input` certification uses
+`interactive`. Test applications hold the repository-owned application lock for their whole
+lifetime because the current Wails runtime cannot host two GUI processes safely. Readiness comes
+from `soksak.host.ready`, not polling. Cleanup inventories and stops exact test-owned open and
+recorded sidecars, calls app.shutdown.commit, and proves graceful application exit.
 
 Discover command schemas from the running binary. Do not infer them from old examples. Discover
 repository roots with Git; do not join repositories through guessed sibling paths.
