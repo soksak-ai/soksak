@@ -35,7 +35,7 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 		"package_json_file: soksak-core/frontend/package.json",
 		"windows-build:", "darwin-build:", "linux-build:",
 		"ubuntu-24.04-arm", "architecture: amd64", "architecture: arm64",
-		"scripts/ci/windows-build.sh all", "scripts/ci/darwin-release.sh", "scripts/ci/linux-release.sh ${{ matrix.architecture }}",
+		"make build TARGET=x86_64-pc-windows-msvc", "make build TARGET=\"${{ matrix.target }}\"", "make compose TARGET=universal-apple-darwin",
 		"core-windows-artifact", "core-darwin-artifact", "core-linux-${{ matrix.architecture }}-artifact",
 	} {
 		if !strings.Contains(s, required) {
@@ -64,8 +64,8 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 	if !strings.Contains(s, "go tool wails3") {
 		t.Fatal("Windows workflow does not use the Wails CLI owned by go.mod")
 	}
-	if !strings.Contains(s, "scripts/ci/windows-build.sh all") {
-		t.Fatal("Windows workflow does not use the repository build runner")
+	if !strings.Contains(s, "make build TARGET=x86_64-pc-windows-msvc") {
+		t.Fatal("Windows workflow does not use the repository Make build entrypoint")
 	}
 	for _, inline := range []string{"task build GOOS=windows", "task build:sok GOOS=windows"} {
 		if strings.Contains(s, inline) {

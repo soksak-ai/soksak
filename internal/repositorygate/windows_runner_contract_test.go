@@ -15,8 +15,8 @@ func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 	}
 	workflow := readText(t, ".github/workflows/multiplatform-system.yml")
 	docker := readText(t, "scripts/ci/windows-docker.sh")
-	if !strings.Contains(workflow, "windows-build.sh all") {
-		t.Error("workflow does not execute the complete Windows build")
+	if !strings.Contains(workflow, "make build TARGET=x86_64-pc-windows-msvc") {
+		t.Error("workflow does not execute the complete Windows build through Make")
 	}
 	for _, required := range []string{"phase=${1:-all}", "windows-build.sh $BUILD_PHASE"} {
 		if !strings.Contains(docker, required) {
@@ -120,11 +120,11 @@ func TestCrossBuilderConsumesOnePinnedFrontendAndBuildsBothBinaries(t *testing.T
 		}
 	}
 	workflow := readText(t, ".github/workflows/multiplatform-system.yml")
-	if strings.Count(workflow, "scripts/ci/darwin-release.sh ${{ matrix.architecture }}") != 2 {
-		t.Fatal("Darwin thin build is not repeated for byte-idempotence")
+	if strings.Count(workflow, "make build TARGET=\"${{ matrix.target }}\"") != 3 {
+		t.Fatal("Darwin and Linux thin builds do not use Make, or Darwin is not repeated for byte-idempotence")
 	}
-	if strings.Count(workflow, "soksak-core/scripts/ci/darwin-universal.sh") != 2 {
-		t.Fatal("Darwin universal composition is not repeated for byte-idempotence")
+	if strings.Count(workflow, "make compose TARGET=universal-apple-darwin") != 2 {
+		t.Fatal("Darwin universal composition is not repeated through Make for byte-idempotence")
 	}
 }
 

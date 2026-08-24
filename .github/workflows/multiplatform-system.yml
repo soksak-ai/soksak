@@ -18,12 +18,14 @@ jobs:
         with: { node-version-file: soksak-core/.node-version }
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
         with: { package_json_file: soksak-core/frontend/package.json }
+      - shell: powershell
+        run: choco install make --version=4.4.1 --no-progress --yes
       - shell: bash
         working-directory: soksak-core
         run: go tool wails3 version
       - shell: bash
         working-directory: soksak-core
-        run: scripts/ci/windows-build.sh all
+        run: make build TARGET=x86_64-pc-windows-msvc
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-windows-artifact
@@ -39,8 +41,10 @@ jobs:
         include:
           - runner: macos-15
             architecture: arm64
+            target: aarch64-apple-darwin
           - runner: macos-15-intel
             architecture: x86_64
+            target: x86_64-apple-darwin
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -54,8 +58,8 @@ jobs:
         with: { package_json_file: soksak-core/frontend/package.json }
       - working-directory: soksak-core
         run: |
-          scripts/ci/darwin-release.sh ${{ matrix.architecture }}
-          scripts/ci/darwin-release.sh ${{ matrix.architecture }}
+          make build TARGET="${{ matrix.target }}"
+          make build TARGET="${{ matrix.target }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-darwin-${{ matrix.architecture }}-artifact
@@ -76,9 +80,10 @@ jobs:
         with:
           name: core-darwin-x86_64-artifact
           path: soksak-core/bin/release/darwin-x86_64
-      - run: |
-          soksak-core/scripts/ci/darwin-universal.sh
-          soksak-core/scripts/ci/darwin-universal.sh
+      - working-directory: soksak-core
+        run: |
+          make compose TARGET=universal-apple-darwin
+          make compose TARGET=universal-apple-darwin
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-darwin-artifact
@@ -92,8 +97,10 @@ jobs:
         include:
           - runner: ubuntu-24.04
             architecture: amd64
+            target: x86_64-unknown-linux-gnu
           - runner: ubuntu-24.04-arm
             architecture: arm64
+            target: aarch64-unknown-linux-gnu
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -107,7 +114,7 @@ jobs:
         with: { package_json_file: soksak-core/frontend/package.json }
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev binutils
       - working-directory: soksak-core
-        run: scripts/ci/linux-release.sh ${{ matrix.architecture }}
+        run: make build TARGET="${{ matrix.target }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-linux-${{ matrix.architecture }}-artifact
