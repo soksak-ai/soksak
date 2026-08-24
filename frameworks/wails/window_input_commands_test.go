@@ -60,6 +60,20 @@ func TestWindowInputCommandsUseTheNamedWindowAndExposeDeliveryReceipts(t *testin
 	}
 }
 
+func TestWindowInputCommandsExposeNativeControlStatusAndClick(t *testing.T) {
+	registry := control.NewRegistry()
+	RegisterWindowInput(registry, &inputHostFixture{})
+	served := map[string]bool{}
+	for _, command := range registry.Describe().Commands {
+		served[command.Name] = true
+	}
+	for _, name := range []string{"window_native_control_status", "window_native_control_click"} {
+		if !served[name] {
+			t.Errorf("%s is not exposed", name)
+		}
+	}
+}
+
 func mergeControlArgs(left, right control.Args) control.Args {
 	out := control.Args{}
 	for key, value := range left {
