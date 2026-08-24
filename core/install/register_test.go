@@ -8,10 +8,76 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/files"
 )
+
+func object(t *testing.T, value any) map[string]any {
+	t.Helper()
+	body, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func TestArtifactInstallProgressHasStatusAndAnEventCursor(t *testing.T) {
+	home := t.TempDir()
+	archive := tgz(t, archiveEntry{name: "plugin.json", body: `{"id":"view","version":"0.0.1"}`})
+	registry := control.NewRegistry()
+	Register(registry, Deps{Home: home, Fetcher: memoryFetcher{body: archive}})
+	identity := ArtifactIdentity{Kind: "plugin", ID: "view", Version: "0.0.1"}
+	beginValue, err := registry.Invoke("artifact_install_begin", arguments(t, map[string]any{
+		"registryId": "official", "root": identity,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	transaction := beginValue.(Transaction)
+	statusValue, err := registry.Invoke("artifact_install_status", arguments(t, map[string]any{"rootId": "view"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := object(t, statusValue)
+	if status["phase"] != "begun" || status["sequence"].(float64) < 1 {
+		t.Fatalf("begin status=%+v", status)
+	}
+	result := make(chan any, 1)
+	failure := make(chan error, 1)
+	go func() {
+		value, waitErr := registry.Invoke("artifact_install_wait", arguments(t, map[string]any{
+			"rootId": "view", "afterSequence": uint64(status["sequence"].(float64)), "timeoutMs": 1000,
+		}))
+		if waitErr != nil {
+			failure <- waitErr
+			return
+		}
+		result <- value
+	}()
+	if _, err := registry.Invoke("artifact_install_stage", arguments(t, map[string]any{
+		"transactionId": transaction.TransactionID, "registryId": "official", "identity": identity,
+		"artifact": Artifact{URL: "https://example.invalid/view.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}},
+	})); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case value := <-result:
+		event := object(t, value)
+		if event["phase"] != "downloading" && event["phase"] != "staged" {
+			t.Fatalf("event=%+v", event)
+		}
+	case err := <-failure:
+		t.Fatal(err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("artifact progress wait did not receive an event")
+	}
+}
 
 type recordingChange struct {
 	event   string
