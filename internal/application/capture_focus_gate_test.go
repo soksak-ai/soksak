@@ -9,12 +9,6 @@ import (
 )
 
 func TestWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
-	for run := 0; run < 2; run++ {
-		t.Run(fmt.Sprintf("run-%d", run+1), testWindowCaptureDoesNotChangeTheInputOwner)
-	}
-}
-
-func testWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 	owner := activeInputOwner(t)
 	gate := newGate(t, "<local-evidence>/soksak-capture-focus-gate", "com.soksak.capturefocusgate")
 	gate.start()
@@ -28,19 +22,26 @@ func testWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 	if afterOpen := activeInputOwner(t); afterOpen != owner {
 		t.Fatalf("unattended workspace open changed the input owner: %s -> %s", owner, afterOpen)
 	}
-	path, err := filepath.Abs(filepath.Join(".task", "capture-focus", "window.png"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	before := activeInputOwner(t)
-	gate.run("window.snapshot", "window="+window, "path="+path)
-	after := activeInputOwner(t)
-	if before != after {
-		t.Fatalf("window capture changed the input owner: %s -> %s", before, after)
-	}
-	info, err := os.Stat(path)
-	if err != nil || info.Size() == 0 {
-		t.Fatalf("window capture was not written: %v", err)
+	for capture := 1; capture <= 2; capture++ {
+		path, err := filepath.Abs(filepath.Join(
+			".task", "capture-focus", fmt.Sprintf("window-%d.png", capture),
+		))
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := activeInputOwner(t)
+		gate.run("window.snapshot", "window="+window, "path="+path)
+		after := activeInputOwner(t)
+		if before != after {
+			t.Fatalf("window capture %d changed the input owner: %s -> %s", capture, before, after)
+		}
+		if gateWindowVisible(t, gate, window) {
+			t.Fatalf("window capture %d made the test window visible: %s", capture, window)
+		}
+		info, err := os.Stat(path)
+		if err != nil || info.Size() == 0 {
+			t.Fatalf("window capture %d was not written: %v", capture, err)
+		}
 	}
 	gate.quit()
 	if afterQuit := activeInputOwner(t); afterQuit != owner {

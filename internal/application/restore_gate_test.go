@@ -52,17 +52,33 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 	}
 
 	gate := newGate(t, restoreGateHome, restoreGateIdentifier)
+	owner := activeInputOwner(t)
 	gate.start()
 	window := gate.openWorkspace()
+	if gateWindowVisible(t, gate, window) {
+		t.Fatalf("restore gate added a visible test window: %s", window)
+	}
+	if afterOpen := activeInputOwner(t); afterOpen != owner {
+		t.Fatalf("restore gate changed the input owner while opening: %s -> %s", owner, afterOpen)
+	}
 
 	before := gate.fingerprint(window)
 
 	gate.quit()
+	if afterQuit := activeInputOwner(t); afterQuit != owner {
+		t.Fatalf("restore gate changed the input owner while stopping: %s -> %s", owner, afterQuit)
+	}
 	gate.start()
 	// The restored window declares its commands again, and the restore itself is
 	// what this gate is here to read — so it is waited for exactly as the first
 	// one was.
 	gate.awaitWindow(window)
+	if gateWindowVisible(t, gate, window) {
+		t.Fatalf("restored gate added a visible test window: %s", window)
+	}
+	if afterRestore := activeInputOwner(t); afterRestore != owner {
+		t.Fatalf("restore gate changed the input owner while restoring: %s -> %s", owner, afterRestore)
+	}
 
 	after := gate.fingerprint(window)
 
@@ -82,6 +98,10 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 	}
 	if before.IDs != after.IDs {
 		t.Errorf("the identifiers moved across a restart: %s then %s", before.IDs, after.IDs)
+	}
+	gate.quit()
+	if afterFinalQuit := activeInputOwner(t); afterFinalQuit != owner {
+		t.Fatalf("restore gate changed the input owner while finishing: %s -> %s", owner, afterFinalQuit)
 	}
 }
 

@@ -14,7 +14,7 @@ import (
 // Measured 2026-08-15: a dark theme with a white pane body in every workspace
 // window, in all five themes, because the webview was solid.
 func TestTheWebviewIsTransparentSoTheWindowsColourShows(t *testing.T) {
-	template := newWindowTemplate()
+	template := newWindowTemplate(PresentationInteractive)
 
 	// darwin reads Mac.Backdrop and ignores BackgroundType entirely; linux and
 	// windows read BackgroundType. Both have to say the same thing or the same
@@ -32,7 +32,7 @@ func TestTheWebviewIsTransparentSoTheWindowsColourShows(t *testing.T) {
 // Transparent is not translucent. Translucent shows the desktop through the
 // window, and the desktop is not part of any theme.
 func TestTheDesktopIsNotVisibleThroughTheWindow(t *testing.T) {
-	template := newWindowTemplate()
+	template := newWindowTemplate(PresentationInteractive)
 
 	if template.BackgroundType == application.BackgroundTypeTranslucent {
 		t.Error("the window is translucent, so the desktop shows through every unpainted region")
@@ -45,9 +45,18 @@ func TestTheDesktopIsNotVisibleThroughTheWindow(t *testing.T) {
 // A window with no colour at all is the engine's default until the theme
 // arrives, and that default is not this application's.
 func TestTheWindowHasAColourBeforeTheThemeArrives(t *testing.T) {
-	template := newWindowTemplate()
+	template := newWindowTemplate(PresentationInteractive)
 
 	if template.BackgroundColour == (application.RGBA{}) {
 		t.Error("the window opens with no colour, so the first frames are the engine's choice")
+	}
+}
+
+func TestCaptureOnlyWindowsStayOffTheDesktop(t *testing.T) {
+	if !newWindowTemplate(PresentationCaptureOnly).Hidden {
+		t.Fatal("a capture-only window is visible on the user's desktop")
+	}
+	if newWindowTemplate(PresentationInteractive).Hidden {
+		t.Fatal("an interactive window starts hidden")
 	}
 }

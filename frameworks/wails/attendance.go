@@ -6,6 +6,13 @@ import (
 	"os"
 )
 
+type PresentationMode string
+
+const (
+	PresentationInteractive PresentationMode = "interactive"
+	PresentationCaptureOnly PresentationMode = "capture-only"
+)
+
 // endWithSpawner quits the application once the channel from whoever started it ends.
 //
 // Reads until the far end closes, then calls quit once. Bytes are discarded: nothing is sent on this
@@ -29,8 +36,8 @@ func endWithSpawner(channel io.ReadCloser, quit func()) {
 //
 // A person's application does not quit because a terminal closed — it was opened from somewhere and
 // outlives it, which is what an application is.
-func watchSpawner(attended bool, quit func()) {
-	if attended {
+func watchSpawner(presentation PresentationMode, quit func()) {
+	if presentation == PresentationInteractive {
 		return
 	}
 	go endWithSpawner(os.Stdin, func() {

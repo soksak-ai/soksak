@@ -190,7 +190,12 @@ func Run(assets embed.FS) error {
 			// Declared by whoever started this process. Unset is a person at the application, which
 			// is what a launch with nothing stated about it is. A measurement run declares the
 			// opposite and gets a window that draws without taking the front.
-			Attended:         os.Getenv("SOKSAK_UNATTENDED") == "",
+			Presentation: func() wails.PresentationMode {
+				if os.Getenv("SOKSAK_UNATTENDED") != "" {
+					return wails.PresentationCaptureOnly
+				}
+				return wails.PresentationInteractive
+			}(),
 			PluginAssetRoots: func() ([]string, error) { return installedPluginRoots(resolved.Home) },
 		})
 	})

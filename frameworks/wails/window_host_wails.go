@@ -37,6 +37,7 @@ type wailsHost struct {
 	// of answering, so this fact has to be certain before any command runs.
 	started      atomic.Bool
 	inputMonitor *windowInputMonitor
+	presentation PresentationMode
 }
 
 // NewWindowHost binds the window commands to this application.
@@ -46,11 +47,11 @@ type wailsHost struct {
 // and that listener being called the commands refuse — brief, at boot only, and
 // in the safe direction: a refusal names itself, while a dispatch to a missing
 // main thread does not come back at all.
-func NewWindowHost(app *application.App, template application.WebviewWindowOptions) WindowHost {
+func NewWindowHost(app *application.App, template application.WebviewWindowOptions, presentation PresentationMode) WindowHost {
 	if app == nil {
 		panic("wails: the window host needs an application")
 	}
-	host := &wailsHost{app: app, template: template}
+	host := &wailsHost{app: app, template: template, presentation: presentation}
 	host.inputMonitor = newWindowInputMonitor(
 		func(native uintptr) string {
 			for _, window := range host.app.Window.GetAll() {
@@ -292,6 +293,9 @@ func (h *wailsHost) Reveal(name string, key bool) error {
 	window, addressable := h.live(name)
 	if !addressable {
 		return i18n.Errorf("wails.host.cannotReveal", map[string]string{"window": name})
+	}
+	if h.presentation == PresentationCaptureOnly {
+		return nil
 	}
 	if key {
 		window.Show()

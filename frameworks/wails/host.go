@@ -8,6 +8,7 @@ package wails
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -49,28 +50,27 @@ type Options struct {
 	Registry *control.Registry
 	// Release gives up the process claim before a framework quit path can bypass Run's return.
 	Release func() error
-	// Attended is whether a person is at this launch.
+	// Presentation declares whether this process belongs on the user's desktop.
 	//
 	// An unattended one is a measurement run: it opens windows, drives them and quits, and nobody is
 	// looking at any of it. Coming to the front there interrupts whoever is actually at the machine.
 	//
 	// The application cannot work this out — a window is a window, and an identifier is a name. It is
 	// a fact about the launch, so the launch declares it, the same way it declares the home.
-	Attended         bool
+	Presentation     PresentationMode
 	PluginAssetRoots func() ([]string, error)
 }
 
 // macActivation is how this launch presents itself to the desktop.
 //
 // Regular is an application a person opened: it activates, takes the front and holds a dock icon.
-// Accessory still draws its windows and is still captured — it just does not take the front and is
-// not in the dock, which is the whole difference between measuring a build and interrupting a
-// person.
+// Accessory keeps the capture-only process out of the Dock and activation order. Its window
+// template also stays hidden; activation policy and presentation are separate platform facts.
 //
 // Nothing else on this axis fits: Prohibited refuses to show a window at all, and the gates measure
 // windows.
-func macActivation(attended bool) application.ActivationPolicy {
-	if attended {
+func macActivation(presentation PresentationMode) application.ActivationPolicy {
+	if presentation == PresentationInteractive {
 		return application.ActivationPolicyRegular
 	}
 	return application.ActivationPolicyAccessory
@@ -153,6 +153,9 @@ const (
 // Run builds the application, registers the plugin services, opens the first
 // window, and blocks until the application exits.
 func Run(options Options) error {
+	if options.Presentation != PresentationInteractive && options.Presentation != PresentationCaptureOnly {
+		return fmt.Errorf("wails: invalid presentation mode %q", options.Presentation)
+	}
 	// The window host is captured by reference: the compositor resolves a window
 	// by name, and no window — not even the host that holds them — exists until
 	// the application is built below.
@@ -216,7 +219,7 @@ func Run(options Options) error {
 			},
 		},
 		Mac: application.MacOptions{
-			ActivationPolicy: macActivation(options.Attended),
+			ActivationPolicy: macActivation(options.Presentation),
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
@@ -224,12 +227,12 @@ func Run(options Options) error {
 	// it under its reserved name; every workspace window is the same window
 	// under a generated one. Two definitions would let the second window differ
 	// from the first in ways nobody chose.
-	windowTemplate := newWindowTemplate()
+	windowTemplate := newWindowTemplate(options.Presentation)
 
 	// Built before the run loop, because it subscribes to the event marking that
 	// the run loop started. Created afterwards it would never hear it, and every
 	// window command would refuse forever.
-	windowHost = NewWindowHost(app, windowTemplate)
+	windowHost = NewWindowHost(app, windowTemplate, options.Presentation)
 
 	// Filled here, before Run, so that the commands the core registered against
 	// it start answering the moment the application exists rather than at the
@@ -373,7 +376,7 @@ func Run(options Options) error {
 
 	// An unattended launch is one run's application. Started here rather than earlier because the
 	// quit it calls is the framework's, and it does not exist until the application does.
-	watchSpawner(options.Attended, app.Quit)
+	watchSpawner(options.Presentation, app.Quit)
 
 	return app.Run()
 }
@@ -412,11 +415,12 @@ func dispatchToWindow(app *application.App, target, event string, payload any) e
 //
 // Transparent is not translucent. Translucent shows the desktop through the
 // window; this shows the window's own colour, which the theme owns.
-func newWindowTemplate() application.WebviewWindowOptions {
+func newWindowTemplate(presentation PresentationMode) application.WebviewWindowOptions {
 	return application.WebviewWindowOptions{
 		Title:  windowTitle,
 		Width:  windowWidth,
 		Height: windowHeight,
+		Hidden: presentation == PresentationCaptureOnly,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			// Transparent, not Translucent. Translucent blurs the desktop into

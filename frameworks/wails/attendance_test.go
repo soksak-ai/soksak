@@ -22,7 +22,7 @@ import (
 // This is not a test mode. Attended is a fact about the launch, and a build deriving it from
 // anything else is guessing about who is in the room.
 func TestAnUnattendedLaunchDoesNotTakeTheFront(t *testing.T) {
-	if policy := macActivation(false); policy != application.ActivationPolicyAccessory {
+	if policy := macActivation(PresentationCaptureOnly); policy != application.ActivationPolicyAccessory {
 		t.Fatalf("an unattended launch asks for activation policy %d.\n"+
 			"Regular activates the application and puts it in the dock, so a measurement run "+
 			"interrupts whoever is at the machine — which is the one thing a measurement must not do.",
@@ -35,7 +35,7 @@ func TestAnUnattendedLaunchDoesNotTakeTheFront(t *testing.T) {
 // Stated separately because a build that is always an accessory has no dock icon and never comes
 // forward when it is opened, which reads as an application that did not start.
 func TestAnAttendedLaunchIsAnOrdinaryApplication(t *testing.T) {
-	if policy := macActivation(true); policy != application.ActivationPolicyRegular {
+	if policy := macActivation(PresentationInteractive); policy != application.ActivationPolicyRegular {
 		t.Fatalf("an attended launch asks for activation policy %d rather than regular", policy)
 	}
 }
