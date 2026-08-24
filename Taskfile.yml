@@ -44,6 +44,7 @@ tasks:
         test "$(task --version)" = "$required"
       - task: verify:go
       - task: verify:restore
+      - task: verify:native-close
       - task: verify:headless
       - task: verify:windows
       - task: verify:frontend
@@ -81,6 +82,14 @@ tasks:
     summary: The core answers with no window — the boundary a second host needs
     cmds:
       - go test ./core/...
+
+  verify:native-close:
+    summary: Proves a real macOS traffic-light click closes only its addressed window
+    platforms: [darwin]
+    cmds:
+      - task: build
+      - task: build:sok
+      - go test ./internal/application -run '^TestNativeTrafficLightCloseEndsTheAddressedWindowWithoutTakingInput$' -count=3
 
   verify:windows:
     summary: Windows stays cgo-free, so it cross-compiles from any host (N3)
