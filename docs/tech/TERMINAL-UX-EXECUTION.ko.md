@@ -30,10 +30,11 @@ canonical: docs/tech/TERMINAL-UX-EXECUTION.md
 
 Baseline 또는 product test 전에 scripts/ci/prepare-frontend-dependencies.sh를 실행한 뒤
 scripts/ci/check-frontend-toolchain.sh를 실행합니다. Prepare만 cross-process dependency owner
-lock 아래에서 frozen lockfile을 materialize합니다. Check는 read-only이며 frontend/package.json의
-정확한 Node와 pnpm version, host와 Node runtime architecture, 선택된 native frontend package를
-검사하고 lock SHA-256을 출력합니다. task verify는 모든 product test보다 먼저 prepare와 check를
-이 순서로 실행합니다.
+lock 아래에서 frozen lockfile을 materialize합니다. Check는 read-only이며 `.node-version`의 Node
+selector, `frontend/package.json` projection과 pnpm 선언, host와 Node runtime architecture, 선택된
+native frontend package를 검사하고 lock SHA-256을 출력합니다. `go tool wails3 task verify`는 모든
+product test보다 먼저 prepare와 check를 이 순서로 실행합니다. 일반 toolchain 규칙은
+`BUILD-TOOLCHAIN.ko.md`가 소유합니다.
 
 Preflight 결과로 product 증거의 존재 여부를 판정합니다.
 

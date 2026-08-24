@@ -82,6 +82,7 @@ that on the same date and the gate landed against it.
 | [`tech/SIDEBAR.CHANGELOG.md`](tech/SIDEBAR.CHANGELOG.md) | Why plugins declare surfaces while workspaces own placement |
 | [`tech/REPO-LAYOUT.md`](tech/REPO-LAYOUT.md) | Which folder declares what, the workspace and the application tree, two binaries, where a document goes |
 | [`tech/REPOSITORY-GOVERNANCE.md`](tech/REPOSITORY-GOVERNANCE.md) | Canonical branches, fork improvement lines, historical archives, and the no-source-loss rule |
+| [`tech/BUILD-TOOLCHAIN.md`](tech/BUILD-TOOLCHAIN.md) | Tool version owners, discovery, preparation, upgrades and precondition failures |
 | [`tech/IDENTITY.md`](tech/IDENTITY.md) | One derivation for home, socket, CLI name and axis; the core reads no ambient; one backend per home |
 | [`tech/ENVIRONMENT-AND-INSTALLATION.md`](tech/ENVIRONMENT-AND-INSTALLATION.md) | Component environment, development sources and installer ownership |
 | [`tech/ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md`](tech/ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md) | Why local component state became one atomic environment |
@@ -95,7 +96,7 @@ that on the same date and the gate landed against it.
 | [`tech/PLUGIN-CONTRACT.md`](tech/PLUGIN-CONTRACT.md) | What a plugin declares, who owns each definition, the generated contract.json, permissions, and contract ids |
 | [`tech/I18N.md`](tech/I18N.md) | Who reads a sentence decides where it lives, the key table and the Go mechanism, what a test may assert |
 | [`tech/UI-GEOMETRY.md`](tech/UI-GEOMETRY.md) | Bands, boxes, and which box draws which line — the alignment rules R1–R5, the border-ownership constitution B1–B8, and the layer principle |
-| [`manual/TESTING.md`](manual/TESTING.md) | What `task verify` runs, why gates only increase, red before green, where tests live |
+| [`manual/TESTING.md`](manual/TESTING.md) | What `go tool wails3 task verify` runs, why gates only increase, red before green, where tests live |
 | [`manual/EVIDENCE.md`](manual/EVIDENCE.md) | A number decides a visual claim, captures take no focus, where evidence is kept, the frame clock, why an instrument may not share a source with its subject, and proving a gate bites |
 | [`manual/AGENT-CONTROL.md`](manual/AGENT-CONTROL.md) | The registry as single source, thin channels, one permission gate, event symmetry, what is visible |
 | [`manual/DEVELOPMENT.md`](manual/DEVELOPMENT.md) | Order of a change, no compatibility layers, deleting failed attempts, reverting, prose |

@@ -37,7 +37,7 @@ E3 keeps a capture from taking focus. The same reason forbids more than that: th
 someone's working environment, and observing it must not disturb what is being observed.
 
 Quitting the application is the largest form of that disturbance, and it was done about fifteen times
-on 2026-08-16 — before every rebuild, before `task verify`, and after a check, left closed. Two of
+on 2026-08-16 — before every rebuild, before `go tool wails3 task verify`, and after a check, left closed. Two of
 the three reasons were wrong: a plugin change needs `plugin.reload`, not a restart, and `verify`
 collides with a stray instance rarely enough to handle when it happens rather than to pre-empt.
 

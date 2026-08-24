@@ -1,7 +1,7 @@
 # soksak-core
 
-플러그인 기반 Wails desktop core 저장소이며 버전은 `0.0.3`입니다. Go module, CLI, frontend
-runtime은 공식 Wails `v3.0.0-beta.12` release를 사용합니다.
+플러그인 기반 Wails desktop core 저장소이며 버전은 `0.0.3`입니다. `go.mod`가 Go module과
+Wails CLI를 소유하고 `.node-version`과 `frontend/package.json`이 frontend toolchain을 소유합니다.
 
 ## 현재 계약
 
@@ -23,10 +23,14 @@ runtime은 공식 Wails `v3.0.0-beta.12` release를 사용합니다.
 ## 재현 가능한 명령
 
 ```sh
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
-wails3 task verify
-wails3 dev
+scripts/ci/prepare-frontend-dependencies.sh
+scripts/ci/check-frontend-toolchain.sh
+go tool wails3 task verify
+go tool wails3 dev
 ```
+
+Version 소유권, 업그레이드 transaction, precondition 분류는
+[`docs/tech/BUILD-TOOLCHAIN.ko.md`](docs/tech/BUILD-TOOLCHAIN.ko.md)에 정의합니다.
 
 ## 검증 소유권
 

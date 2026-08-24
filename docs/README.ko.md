@@ -61,6 +61,7 @@ changelog에 기록합니다.
 | `SIDEBAR.CHANGELOG.md` | Surface와 placement를 분리한 이유 |
 | `REPO-LAYOUT.md` | Repository 내부 책임 배치 |
 | `REPOSITORY-GOVERNANCE.md` | Branch, fork, archive, source 보존 규칙 |
+| `BUILD-TOOLCHAIN.ko.md` | Tool version 소유권, 발견, 준비, 업그레이드, precondition 실패 |
 | `IDENTITY.md` | Home, socket, CLI identity |
 | `ENVIRONMENT-AND-INSTALLATION.md` | Component environment와 installer |
 | `ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md` | 두 상태 파일을 하나로 합친 이유 |

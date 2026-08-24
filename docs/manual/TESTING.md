@@ -11,7 +11,7 @@ What has to pass, and what a test is for here.
 
 ## T1. One command
 
-`task verify` runs every gate. A commit that has not cleared it does not land.
+`go tool wails3 task verify` runs every gate. A commit that has not cleared it does not land.
 
 | Gate | Command |
 | --- | --- |

@@ -28,7 +28,8 @@
 
 ## 실행 전 조건
 
-- CI action, 언어 toolchain, SDK source, 재사용 workflow는 정확한 commit 또는 버전을 사용한다.
+- CI action, SDK source, 재사용 workflow는 정확한 commit 또는 버전을 사용한다. Build tool
+  version 소유권, 발견, 업그레이드는 `BUILD-TOOLCHAIN.ko.md`를 따른다.
 - text source와 module checksum 파일은 모든 host에서 LF로 checkout한다. 플랫폼별 checkout
   변환 때문에 source-integrity gate가 거짓 module 변경을 보고해서는 안 된다.
 - renderer command가 제한 시간이 있는 native 작업을 위임하면 바깥 제한 시간은 native 제한보다

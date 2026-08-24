@@ -10,7 +10,7 @@ canonical: docs/manual/TESTING.md
 
 ## T1. 하나의 명령
 
-`task verify`는 Core가 소유한 모든 gate를 실행합니다. 통과하지 않은 commit은 반영하지 않습니다.
+`go tool wails3 task verify`는 Core가 소유한 모든 gate를 실행합니다. 통과하지 않은 commit은 반영하지 않습니다.
 
 | Gate | Command |
 | --- | --- |

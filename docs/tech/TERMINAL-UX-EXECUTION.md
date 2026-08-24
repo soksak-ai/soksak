@@ -31,9 +31,10 @@ propose the corrected rule, and update the rule, RED and document together after
 Run scripts/ci/prepare-frontend-dependencies.sh and then
 scripts/ci/check-frontend-toolchain.sh before a baseline or product test. Prepare alone materializes
 the frozen lockfile under the cross-process dependency-owner lock. Check is read-only: it derives
-the exact Node and pnpm versions from frontend/package.json, requires the Node runtime architecture
-to match the host, verifies the selected native frontend package and prints the lock SHA-256. task
-verify runs prepare and check in that order before any product test.
+the Node selector from `.node-version`, verifies its `frontend/package.json` projection and pnpm
+declaration, requires the Node runtime architecture to match the host, verifies the selected native
+frontend package and prints the lock SHA-256. `go tool wails3 task verify` runs prepare and check in
+that order before any product test. `BUILD-TOOLCHAIN.md` owns the general toolchain rule.
 
 The preflight result determines whether product evidence exists:
 

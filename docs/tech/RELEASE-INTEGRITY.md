@@ -29,7 +29,8 @@ and a new patch version is published after the responsible invariant has a RED t
 
 ## Execution preconditions
 
-- CI actions, language toolchains, SDK sources, and reusable workflows use exact commits or versions.
+- CI actions, SDK sources, and reusable workflows use exact commits or versions. Build tool version
+  ownership, discovery and upgrade follow `BUILD-TOOLCHAIN.md`.
 - Text source and module checksum files are checked out with LF on every host; platform checkout
   conversion must not make a source-integrity gate report a false module change.
 - A renderer command that delegates to a bounded native operation has an outer deadline longer than

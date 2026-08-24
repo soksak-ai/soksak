@@ -13,6 +13,7 @@ Discovered in the repository, not asked for.
 | Repository root | the checkout containing this `AGENTS.md` and `go.mod` |
 | Observation interface | `bin/sok` (control plane client), `bin/soksak` (application) |
 | Test runner | `go test` (Go), `vitest run` (TypeScript) |
+| Build toolchain contract | [`docs/tech/BUILD-TOOLCHAIN.md`](docs/tech/BUILD-TOOLCHAIN.md) |
 | Test location | Core tests in the core, plugin tests in each plugin |
 | Commit language | English |
 | i18n framework | Own key table: `frontend/src/i18n.ts` with `i18n.ko.ts` / `i18n.en.ts`. Go has none yet |
@@ -188,6 +189,9 @@ In order:
    conclude it cannot.
 2. Is there a proven library that reduces complexity or raises reliability? Prefer it.
 3. Is there a clear reason? Without one, a common feature is not reimplemented.
+
+Tool versions and build entrypoints follow `docs/tech/BUILD-TOOLCHAIN.md`. Tests and scripts read
+the owning manifests; they never copy a current version or select an ambient fallback binary.
 
 ### 4-5. Polling
 
@@ -437,10 +441,7 @@ the work. Code alone is not done.
 Everything here passes before completion is reported. One miss means not done.
 
 ```sh
-go test ./... && go vet ./...
-go test ./core/...                                       # headless: core answers with no window
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...   # N3
-(cd frontend && pnpm test && pnpm typecheck)
+go tool wails3 task verify
 ```
 
 Gates increase monotonically. Once a gate stands, every later commit passes every gate so far. A

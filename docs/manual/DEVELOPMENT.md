@@ -25,7 +25,7 @@ not one step of the work.
 
 ## D3. Every commit clears every gate
 
-`task verify` (see TESTING.md). Gates only increase, and a commit that has not cleared them does not
+`go tool wails3 task verify` (see TESTING.md). Gates only increase, and a commit that has not cleared them does not
 land.
 
 ## D4. No compatibility layers

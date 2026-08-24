@@ -1,7 +1,7 @@
 # soksak-core
 
-This repository is the plugin-driven Wails desktop core, version `0.0.3`. The Go module, CLI, and
-frontend runtime use the official Wails `v3.0.0-beta.12` release.
+This repository is the plugin-driven Wails desktop core, version `0.0.3`. `go.mod` owns the Go
+module and Wails CLI; `.node-version` and `frontend/package.json` own the frontend toolchain.
 
 ## Current contract
 
@@ -29,17 +29,15 @@ frontend runtime use the official Wails `v3.0.0-beta.12` release.
 
 ## Reproducible commands
 
-Install the exact upstream CLI before running the build tasks.
-
 ```sh
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12
-go test ./...
-(cd frontend && pnpm test)
-wails3 dev
+scripts/ci/prepare-frontend-dependencies.sh
+scripts/ci/check-frontend-toolchain.sh
+go tool wails3 task verify
+go tool wails3 dev
 ```
 
-This repository owns its desktop build tasks. Package installation and scripts use checked-in
-lockfiles.
+The version owners, upgrade transaction and precondition classes are defined in
+[`docs/tech/BUILD-TOOLCHAIN.md`](docs/tech/BUILD-TOOLCHAIN.md).
 
 ## Verification
 
