@@ -82,8 +82,9 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	// names register depends on the dependencies being present, never on what
 	// they answer, so stubs are enough.
 	RegisterHost(registry, HostDeps{
-		Host:  startedHost(),
-		NewID: counter("1"),
+		Host:         startedHost(),
+		Presentation: PresentationInteractive,
+		NewID:        counter("1"),
 		// The plugin groups this build composes, named here because this gate's
 		// subject is the build and not the package: the frontend calls a
 		Composition:  stubComposition{},

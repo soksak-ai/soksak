@@ -8,7 +8,6 @@ package wails
 import (
 	"embed"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -50,7 +49,7 @@ type Options struct {
 	Registry *control.Registry
 	// Release gives up the process claim before a framework quit path can bypass Run's return.
 	Release func() error
-	// Presentation declares whether this process belongs on the user's desktop.
+	// Presentation declares whether this process is shown on the user's desktop.
 	//
 	// An unattended one is a measurement run: it opens windows, drives them and quits, and nobody is
 	// looking at any of it. Coming to the front there interrupts whoever is actually at the machine.
@@ -154,7 +153,9 @@ const (
 // window, and blocks until the application exits.
 func Run(options Options) error {
 	if options.Presentation != PresentationInteractive && options.Presentation != PresentationCaptureOnly {
-		return fmt.Errorf("wails: invalid presentation mode %q", options.Presentation)
+		return i18n.Errorf("wails.presentation.invalid", map[string]string{
+			"mode": string(options.Presentation),
+		})
 	}
 	// The window host is captured by reference: the compositor resolves a window
 	// by name, and no window — not even the host that holds them — exists until
@@ -248,9 +249,10 @@ func Run(options Options) error {
 	// report that it closed, and its names would stay on the table pointing at
 	// a page that is gone.
 	renderer := RegisterHost(options.Registry, HostDeps{
-		Host:        windowHost,
-		NewID:       newWindowID,
-		Composition: surfaceComposition,
+		Host:         windowHost,
+		Presentation: options.Presentation,
+		NewID:        newWindowID,
+		Composition:  surfaceComposition,
 		Frames: func(stream string, frame any) {
 			options.Bridge.Emit(control.StreamEvent, control.StreamFrame{Stream: stream, Frame: frame})
 		},

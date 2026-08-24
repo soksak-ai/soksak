@@ -939,7 +939,7 @@ export const en: Record<MsgKey, string> = {
   "cmd.secret.set.desc": "Store a sensitive value under ns/key using envelope encryption (per-item DEK wrapped by the device KEK). Overwrites the existing value if the key already exists. Rejected when the OS key store is unavailable (no secret service).",
   "cmd.secret.set.param.value": "Sensitive value to store",
   "cmd.system.hello.desc": "Greet the app and read the socket protocol version, the oldest client protocol still served, and app identity (version, pid, start time, capabilities). A client sends this first to detect version skew before issuing commands. Also answered at the transport, so it replies even when the front is wedged.",
-  "cmd.app.environment.desc": "Read this app's compile-time core identity, isolated home, matching CLI name, build profile, updater channel, and explicitly selected development units.",
+  "cmd.app.environment.desc": "Read this app's compile-time core identity, isolated home, matching CLI name, build profile, updater channel, explicitly selected development units, and desktop presentation policy.",
   "cmd.framework.provision.desc": "Read what this window's framework provides. Adapter name is diagnostic identity; product behavior branches only on explicit capabilities such as document-start scripts and real input injection.",
   "cmd.window.move.param.x": "Physical x coordinate",
   "cmd.window.move.param.y": "Physical y coordinate",

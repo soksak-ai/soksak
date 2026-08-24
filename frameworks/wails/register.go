@@ -11,6 +11,8 @@ import (
 type HostDeps struct {
 	// Host answers about the windows this process holds.
 	Host WindowHost
+	// Presentation is the process-wide desktop policy reported through app.environment.
+	Presentation PresentationMode
 	// NewID mints a window name.
 	NewID func() string
 	// A field for plugin command groups stood here until 2026-08-20, so a build could hand this host
@@ -53,6 +55,7 @@ type HostDeps struct {
 // values, and a test that had to start an application to see the table would be
 // measuring the framework's startup rather than the table.
 func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
+	RegisterPresentation(registry, deps.Presentation)
 	renderer := RegisterRendererCommands(registry, deps.Dispatch)
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
 	RegisterCapture(registry, deps.Host, deps.Frames)

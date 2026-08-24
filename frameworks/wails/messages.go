@@ -8,6 +8,10 @@ import "github.com/soksak-ai/soksak-core/core/i18n"
 
 func init() {
 	i18n.Declare(map[string]i18n.Sentence{
+		"wails.presentation.invalid": {
+			EN: "invalid application presentation mode: {mode}",
+			KO: "잘못된 application presentation mode입니다: {mode}",
+		},
 		"wails.window.invalidClientRect": {EN: "window client rect has no area: {width}x{height}", KO: "창 client rect에 면적이 없습니다: {width}x{height}"},
 		"wails.window.noClientDPI":       {EN: "window client rect has no DPI", KO: "창 client rect에 DPI가 없습니다"},
 		"wails.input.negativeCoordinates": {

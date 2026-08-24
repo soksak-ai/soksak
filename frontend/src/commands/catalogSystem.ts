@@ -116,14 +116,17 @@ export function registerSystemCatalog(): void {
     // The owner defines the answer — identical from any window (registry.ts windowScoped).
     windowScoped: false,
     returns:
-      "{ coreBuild, identity, cli, home, loginShell, buildProfile, updaterEnabled, unitMode, developmentUnits[] }",
+      "{ coreBuild, identity, cli, home, loginShell, buildProfile, updaterEnabled, unitMode, developmentUnits[], presentation:{ mode:'interactive'|'capture-only', desktopVisible:boolean } }",
     message: (d) =>
       tmsg("msg.app.environment", {
         core: String(d.coreBuild),
         mode: String(d.unitMode),
       }),
     examples: ["app.environment"],
-    handler: () => invoke("app_environment"),
+    handler: async () => ({
+      ...await invoke<Record<string, unknown>>("app_environment"),
+      presentation: await invoke("app_presentation"),
+    }),
   });
 
   // What the framework provides — the deciding side must be **able to query it**.
