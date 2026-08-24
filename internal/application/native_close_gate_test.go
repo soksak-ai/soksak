@@ -15,6 +15,7 @@ func TestNativeTrafficLightCloseEndsTheAddressedWindowWithoutTakingInput(t *test
 	gate.start()
 	first := gate.openWorkspace()
 	closing := openNativeCloseWorkspace(t, gate, t.TempDir())
+	remainingBefore := gateWindowPresentation(t, gate, first)
 
 	var status struct {
 		Data struct {
@@ -62,6 +63,9 @@ func TestNativeTrafficLightCloseEndsTheAddressedWindowWithoutTakingInput(t *test
 	windows := gate.run("window_list", "window="+first)
 	if strings.Contains(windows, closing) || !strings.Contains(windows, first) {
 		t.Fatalf("window list after native close=%s", windows)
+	}
+	if remainingAfter := gateWindowPresentation(t, gate, first); remainingAfter != remainingBefore {
+		t.Fatalf("native close changed the remaining capture-only window: before=%+v after=%+v", remainingBefore, remainingAfter)
 	}
 	if current := activeInputOwner(t); current != inputOwner {
 		t.Fatalf("native close changed the input owner: %s -> %s", inputOwner, current)

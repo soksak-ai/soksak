@@ -52,6 +52,16 @@ func TestWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 }
 
 func gateWindowVisible(t *testing.T, gate *restoreGate, window string) bool {
+	return gateWindowPresentation(t, gate, window).Visible
+}
+
+type gatePresentation struct {
+	Visible bool    `json:"visible"`
+	Key     bool    `json:"key"`
+	Alpha   float64 `json:"alpha"`
+}
+
+func gateWindowPresentation(t *testing.T, gate *restoreGate, window string) gatePresentation {
 	t.Helper()
 	out, err := gate.try("window.monitors", "window="+window)
 	if err != nil {
@@ -60,10 +70,8 @@ func gateWindowVisible(t *testing.T, gate *restoreGate, window string) bool {
 	var reply struct {
 		Data struct {
 			Windows []struct {
-				Label    string `json:"label"`
-				Presence struct {
-					Visible bool `json:"visible"`
-				} `json:"presence"`
+				Label    string           `json:"label"`
+				Presence gatePresentation `json:"presence"`
 			} `json:"windows"`
 		} `json:"data"`
 	}
@@ -72,9 +80,9 @@ func gateWindowVisible(t *testing.T, gate *restoreGate, window string) bool {
 	}
 	for _, candidate := range reply.Data.Windows {
 		if candidate.Label == window {
-			return candidate.Presence.Visible
+			return candidate.Presence
 		}
 	}
 	t.Fatalf("test window presentation omitted %s", window)
-	return false
+	return gatePresentation{}
 }
