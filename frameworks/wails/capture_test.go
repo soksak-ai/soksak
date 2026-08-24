@@ -40,6 +40,34 @@ func TestCaptureBeforeTheWindowExists(t *testing.T) {
 	}
 }
 
+func TestZeroAlphaPresentationCapturesTheDocumentWithoutReadingTheDarkWindowLayer(t *testing.T) {
+	handle := byte(1)
+	want := []byte("document pixels")
+	windowCaptureCalled := false
+	service := NewCaptureService("measurement", func() unsafe.Pointer { return unsafe.Pointer(&handle) })
+	service.documentOnly = true
+	service.capture = func(unsafe.Pointer, Rect) ([]byte, error) {
+		windowCaptureCalled = true
+		return []byte("zero-alpha window"), nil
+	}
+	service.captureDocument = func(unsafe.Pointer, Rect) ([]byte, error) { return want, nil }
+	service.occlusion = nil
+
+	result, err := service.Pixels(Whole)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if windowCaptureCalled {
+		t.Fatal("zero-alpha capture read the native window layer")
+	}
+	if !result.Note.DocumentOnly {
+		t.Fatal("capture receipt hid that the document was the pixel source")
+	}
+	if result.PNG != "ZG9jdW1lbnQgcGl4ZWxz" {
+		t.Fatalf("captured %q instead of the document", result.PNG)
+	}
+}
+
 func TestUnsupportedPlatformIsNamed(t *testing.T) {
 	// The sentinel exists so a caller can tell "not implemented here" from
 	// "the capture failed", rather than reading a message.

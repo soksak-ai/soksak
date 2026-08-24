@@ -334,6 +334,10 @@ func init() {
 			EN: "window {window} has no native lifetime and no pixels",
 			KO: "창 {window} 에 네이티브 수명이 없어 픽셀도 없습니다",
 		},
+		"wails.capture.noDocumentSource": {
+			EN: "capture-only presentation has no document pixel source",
+			KO: "capture-only presentation에 document 픽셀 소스가 없습니다",
+		},
 		"wails.capture.nilWindow": {
 			EN: "native capture received a nil window",
 			KO: "네이티브 캡처에 창이 전달되지 않았습니다",

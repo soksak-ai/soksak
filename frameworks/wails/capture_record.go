@@ -65,11 +65,12 @@ type RecordRequest struct {
 // Stopped is why when they differ. A count with no reason next to it makes a
 // short recording and a complete one the same answer.
 type RecordReport struct {
-	Dir       string `json:"dir"`
-	Requested int    `json:"requested"`
-	Frames    int    `json:"frames"`
-	Bytes     int64  `json:"bytes"`
-	Stopped   string `json:"stopped,omitempty"`
+	Dir          string `json:"dir"`
+	Requested    int    `json:"requested"`
+	Frames       int    `json:"frames"`
+	Bytes        int64  `json:"bytes"`
+	DocumentOnly bool   `json:"documentOnly,omitempty"`
+	Stopped      string `json:"stopped,omitempty"`
 }
 
 // Record captures Frames frames of this service's window into Dir.
@@ -116,7 +117,7 @@ func (service *CaptureService) Record(request RecordRequest) (RecordReport, erro
 		if frame > 0 && request.IntervalMs > 0 {
 			time.Sleep(time.Duration(request.IntervalMs) * time.Millisecond)
 		}
-		png, err := service.grab(handle, request.Region, deadline)
+		png, documentOnly, err := service.grab(handle, request.Region, deadline)
 		if err != nil {
 			// The frames already on disk are the recording. Losing them because
 			// the next grab failed would throw away the evidence the burst was
@@ -124,6 +125,7 @@ func (service *CaptureService) Record(request RecordRequest) (RecordReport, erro
 			report.Stopped = fmt.Sprintf("frame %d could not be captured: %v", frame, err)
 			return report, nil
 		}
+		report.DocumentOnly = documentOnly
 		// Checked before the file is written, so an over-budget frame leaves
 		// nothing behind and the count matches what is on disk.
 		if request.MaxBytes > 0 && report.Bytes+int64(len(png)) > request.MaxBytes {
@@ -170,14 +172,14 @@ type StreamSink func(stream string, frame any)
 // capture dereferenced the released NSWindow (SIGSEGV in windowNumber). The platform capture already
 // has its own finite completion bound. We wait for that owned call to finish, discard a late frame,
 // and only then let the recording or window lifetime advance.
-func (service *CaptureService) grab(handle unsafe.Pointer, region Rect, deadline time.Duration) ([]byte, error) {
+func (service *CaptureService) grab(handle unsafe.Pointer, region Rect, deadline time.Duration) ([]byte, bool, error) {
 	started := time.Now()
-	png, _, err := service.capturing(handle, region)
+	png, documentOnly, err := service.capturing(handle, region)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if time.Since(started) > deadline {
-		return nil, i18n.Errorf("wails.record.frameLate", map[string]string{"deadline": deadline.String()})
+		return nil, false, i18n.Errorf("wails.record.frameLate", map[string]string{"deadline": deadline.String()})
 	}
-	return png, nil
+	return png, documentOnly, nil
 }
