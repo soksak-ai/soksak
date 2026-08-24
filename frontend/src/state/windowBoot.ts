@@ -45,6 +45,7 @@ import {
 import { readableWindowSnapshot } from "./windowSnapshotShape";
 import { snapshotsToForget } from "./windowSnapshotSweep";
 import { onWindowPersist } from "./windowPersistRequest";
+import { scopedStorage } from "../lib/scopedStorage";
 
 // This window's frame (logical px) — for the manifest rect. On failure the rect is omitted (restore uses the OS default position).
 async function currentFrame(): Promise<
@@ -84,6 +85,10 @@ export const coreStoreDeps = {
   onDataChange: coreOnDataChange,
   localStorage: window.localStorage,
 };
+
+export function configureCoreStoreIdentity(identity: string): void {
+  coreStoreDeps.localStorage = scopedStorage(window.localStorage, identity);
+}
 
 const EMPTY_WINDOW: WindowSnapshot = { activeId: "", workspaces: [] };
 const EMPTY_MANIFEST: WindowManifest = { slots: [] };

@@ -53,6 +53,7 @@ import {
   respawnSavedWindows,
   initControlPlaneFrame,
   coreStoreDeps,
+  configureCoreStoreIdentity,
 } from "./state/windowBoot";
 import { initWindowTitle } from "./state/windowTitle";
 import { installSwapObserver, installInputObserver } from "./lib/motionDebug";
@@ -74,6 +75,10 @@ import { tmsg } from "./i18n";
 // the plugin view spawns directly on mount with PluginViewContext (root/command) and its own setting (shell).
 
 // AI command interface: catalog registration + socket request executor (once per app lifetime).
+const applicationIdentity = new URLSearchParams(window.location.search).get("identity");
+if (!applicationIdentity) throw new Error("application identity is missing from the window URL");
+configureCoreStoreIdentity(applicationIdentity);
+
 startExecutor();
 
 // The door from outside to this window's commands. There is one registry and this is the transport in front of it —

@@ -38,6 +38,7 @@ type wailsHost struct {
 	started      atomic.Bool
 	inputMonitor *windowInputMonitor
 	presentation PresentationMode
+	identity     string
 }
 
 // NewWindowHost binds the window commands to this application.
@@ -47,11 +48,16 @@ type wailsHost struct {
 // and that listener being called the commands refuse — brief, at boot only, and
 // in the safe direction: a refusal names itself, while a dispatch to a missing
 // main thread does not come back at all.
-func NewWindowHost(app *application.App, template application.WebviewWindowOptions, presentation PresentationMode) WindowHost {
+func NewWindowHost(
+	app *application.App,
+	template application.WebviewWindowOptions,
+	presentation PresentationMode,
+	identity string,
+) WindowHost {
 	if app == nil {
 		panic("wails: the window host needs an application")
 	}
-	host := &wailsHost{app: app, template: template, presentation: presentation}
+	host := &wailsHost{app: app, template: template, presentation: presentation, identity: identity}
 	host.inputMonitor = newWindowInputMonitor(
 		func(native uintptr) string {
 			for _, window := range host.app.Window.GetAll() {
@@ -266,7 +272,7 @@ func (h *wailsHost) Displays() []Display {
 func (h *wailsHost) Open(spec OpenSpec) error {
 	options := h.template
 	options.Name = spec.Name
-	options.URL = spec.URL
+	options.URL = windowIdentityURL(spec.URL, h.identity)
 	// Hidden until the frame is final. A window revealed first appears wherever
 	// the OS put it and then moves, which reads as a flicker rather than as a
 	// misplaced window.

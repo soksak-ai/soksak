@@ -28,6 +28,8 @@ import (
 // directory that declares them; the frontend build is above this package.
 type Options struct {
 	Assets embed.FS
+	// Identity scopes synchronous document caches before the command bridge is available.
+	Identity string
 	// CaptureProbe, when set, captures the window to this path shortly after
 	// startup and exits. It is how the capture path is observed without a
 	// working frontend.
@@ -157,6 +159,9 @@ func Run(options Options) error {
 			"mode": string(options.Presentation),
 		})
 	}
+	if options.Identity == "" {
+		return i18n.Errorf("wails.identity.missing", nil)
+	}
 	// The window host is captured by reference: the compositor resolves a window
 	// by name, and no window — not even the host that holds them — exists until
 	// the application is built below.
@@ -233,7 +238,7 @@ func Run(options Options) error {
 	// Built before the run loop, because it subscribes to the event marking that
 	// the run loop started. Created afterwards it would never hear it, and every
 	// window command would refuse forever.
-	windowHost = NewWindowHost(app, windowTemplate, options.Presentation)
+	windowHost = NewWindowHost(app, windowTemplate, options.Presentation, options.Identity)
 
 	// Filled here, before Run, so that the commands the core registered against
 	// it start answering the moment the application exists rather than at the
@@ -342,7 +347,7 @@ func Run(options Options) error {
 	// framework: the application branches on this name, and a generated
 	// "window-1" would make that branch depend on creation order.
 	controlPlane.Name = controlPlaneWindow
-	controlPlane.URL = "/"
+	controlPlane.URL = windowIdentityURL("/", options.Identity)
 	window = app.Window.NewWithOptions(controlPlane)
 	// The transparent backdrop cleared this window's colour on the way in. The
 	// same restore wailsHost.Open performs, for the one window it does not open.

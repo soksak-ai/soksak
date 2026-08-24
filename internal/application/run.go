@@ -182,6 +182,7 @@ func Run(assets embed.FS) error {
 		})
 		return wails.Run(wails.Options{
 			Assets:       assets,
+			Identity:     resolved.Identifier,
 			CaptureProbe: os.Getenv("SOKSAK_CAPTURE_PROBE"),
 			Registry:     registry,
 			Release:      listener.Close,

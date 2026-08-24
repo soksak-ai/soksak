@@ -109,13 +109,16 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 // a second answer to "how is the application started and quit", and the two would disagree the day
 // one of them was edited.
 type restoreGate struct {
-	t          *testing.T
-	app        string
-	client     string
-	home       string
-	runtime    string
-	identifier string
-	proc       *exec.Cmd
+	t                           *testing.T
+	app                         string
+	client                      string
+	home                        string
+	runtime                     string
+	identifier                  string
+	owner                       string
+	gateRoot                    string
+	releaseApplicationOwnership func()
+	proc                        *exec.Cmd
 	// held is this process's end of the application's channel. It is written to never — what the
 	// application reads is its close, which happens when this process ends by any route.
 	held io.WriteCloser
@@ -201,11 +204,36 @@ func TestConcurrentGateRunsReceiveDisjointIdentityAxes(t *testing.T) {
 		{name: "runtime", first: first.runtime, next: second.runtime},
 		{name: "identifier", first: first.identifier, next: second.identifier},
 		{name: "socket", first: first.socket(), next: second.socket()},
+		{name: "owner", first: first.owner, next: second.owner},
 	}
 	for _, check := range checks {
 		if check.first == check.next {
 			t.Errorf("concurrent gates share %s %q", check.name, check.first)
 		}
+	}
+	if t.Failed() {
+		return
+	}
+	first.start()
+	lockPath := filepath.Join(first.gateRoot, "application-owner.lock")
+	if gateApplicationLockAvailable(lockPath) {
+		t.Fatal("a live gate does not hold application ownership")
+	}
+	firstWindow := first.openWorkspace()
+	if _, err := first.try("app.environment", "window="+firstWindow); err != nil {
+		t.Fatalf("first owned gate lost its window: %v", err)
+	}
+	first.quit()
+	if !gateApplicationLockAvailable(lockPath) {
+		t.Fatal("a stopped gate retained application ownership")
+	}
+	second.start()
+	secondWindow := second.openWorkspace()
+	if firstWindow == "" || secondWindow == "" {
+		t.Fatalf("concurrent gates did not open addressable windows: %q, %q", firstWindow, secondWindow)
+	}
+	if _, err := second.try("app.environment", "window="+secondWindow); err != nil {
+		t.Fatalf("second owned gate lost its window: %v", err)
 	}
 }
 
@@ -273,7 +301,9 @@ func newGate(t *testing.T, homePrefix string, identifier string) *restoreGate {
 	}
 	sequence := gateRunSequence.Add(1)
 	run := strconv.Itoa(os.Getpid()) + "-" + strconv.FormatUint(sequence, 10)
-	axis := strings.TrimPrefix(identifier, "com.soksak.")
+	baseIdentifier := identifier
+	identifier = baseIdentifier + "." + strings.ReplaceAll(run, "-", "")
+	axis := strings.TrimPrefix(baseIdentifier, "com.soksak.")
 	home := filepath.Join(root, axis, run)
 	runtimeRoot := filepath.Join(filepath.Dir(homePrefix), "soksak-gate-runtime", run)
 	if err := reclaimRunDirectories(filepath.Dir(runtimeRoot)); err != nil {
@@ -287,7 +317,10 @@ func newGate(t *testing.T, homePrefix string, identifier string) *restoreGate {
 			t.Fatalf("creating run-owned gate path %s: %v", directory, err)
 		}
 	}
-	gate := &restoreGate{t: t, app: app, client: client, home: home, runtime: runtimeRoot, identifier: identifier}
+	gate := &restoreGate{
+		t: t, app: app, client: client, home: home, runtime: runtimeRoot,
+		identifier: identifier, owner: "gate/" + run, gateRoot: root,
+	}
 	if err := os.MkdirAll(gate.installationHome(), 0o700); err != nil {
 		t.Fatalf("creating installation home: %v", err)
 	}
@@ -355,11 +388,19 @@ const startupPollInterval = 250 * time.Millisecond
 
 func (gate *restoreGate) start() {
 	gate.t.Helper()
+	if gate.releaseApplicationOwnership == nil {
+		release, err := acquireGateApplicationLock(filepath.Join(gate.gateRoot, "application-owner.lock"))
+		if err != nil {
+			gate.t.Fatalf("acquiring test application ownership: %v", err)
+		}
+		gate.releaseApplicationOwnership = release
+	}
 	cmd := exec.Command("./" + gate.app)
 	cmd.Env = append(os.Environ(),
 		"SOKSAK_HOME="+gate.installationHome(),
 		"SOKSAK_IDENTIFIER="+gate.identifier,
 		"SOKSAK_RUNTIME="+gate.runtime,
+		"SOKSAK_RUN_OWNER="+gate.owner,
 		// Nobody is watching this one. Nine of these start over a verify run, and each took the
 		// front and a dock icon until 2026-08-20 — a person at the machine had nine windows arrive
 		// over what they were doing. It still draws and is still captured; it does not activate.
@@ -404,6 +445,7 @@ func (gate *restoreGate) start() {
 		if err == nil && strings.Contains(out, "win-") {
 			if window := firstWindow(out); window != "" {
 				gate.opened = append(gate.opened, window)
+				gate.awaitWindow(window)
 			}
 			return
 		}
@@ -426,6 +468,10 @@ func firstWindow(out string) string {
 // the drain and the save, and the run after it would be measuring a crash.
 func (gate *restoreGate) quit() {
 	if gate.proc == nil {
+		if gate.releaseApplicationOwnership != nil {
+			gate.releaseApplicationOwnership()
+			gate.releaseApplicationOwnership = nil
+		}
 		return
 	}
 	// The channel goes with the process it named. Left open, this gate's own end outlives the run
@@ -458,6 +504,10 @@ func (gate *restoreGate) quit() {
 			refusal, strings.TrimSpace(answer), gate.lastWords())
 	}
 	gate.proc = nil
+	if gate.releaseApplicationOwnership != nil {
+		gate.releaseApplicationOwnership()
+		gate.releaseApplicationOwnership = nil
+	}
 }
 
 // awaitWindow waits until one window answers its own commands and its layout has
