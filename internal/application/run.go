@@ -184,6 +184,9 @@ func Run(assets embed.FS) error {
 		serveControl(listener, registry, resolved.Identifier, func(err error) {
 			log.Printf("control plane stopped: %v", err)
 		})
+		if err := announceControlReady(os.Stdout, resolved, os.Getpid()); err != nil {
+			log.Printf("control readiness event failed: %v", err)
+		}
 		return wails.Run(wails.Options{
 			Assets:       assets,
 			Identity:     resolved.Identifier,
