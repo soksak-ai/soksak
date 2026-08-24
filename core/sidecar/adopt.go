@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
@@ -59,6 +60,28 @@ func (host *Host) remember(name string, open Open, token, secretNames string) {
 }
 
 func (host *Host) forget(name string) { _ = os.Remove(host.recordPath(name)) }
+
+// adoptOwned verifies and attaches the unit named by this home's record without
+// starting anything. Stop uses it to reclaim work left by an earlier process.
+func (host *Host) adoptOwned(name string) (bool, error) {
+	raw, err := os.ReadFile(host.recordPath(name))
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var remembered record
+	if json.Unmarshal(raw, &remembered) != nil || remembered.Address == "" {
+		host.forget(name)
+		return false, nil
+	}
+	if remembered.PID < 1 {
+		return false, i18n.Errorf("sidecar.invalidAdoptedPID", map[string]string{"pid": strconv.Itoa(remembered.PID)})
+	}
+	_, found, err := host.adopt(name, remembered.SecretNames)
+	return found, err
+}
 
 // adopt finds a unit a previous run of this application started, and answers whether it is there.
 //

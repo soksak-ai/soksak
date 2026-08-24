@@ -467,7 +467,21 @@ func (host *Host) Stop(name string) error {
 	delete(host.open, name)
 	host.mu.Unlock()
 	if held == nil {
-		return i18n.Errorf("sidecar.notOpen", map[string]string{"name": name})
+		found, err := host.adoptOwned(name)
+		if err != nil {
+			return err
+		}
+		if !found {
+			host.forget(name)
+			return nil
+		}
+		host.mu.Lock()
+		held = host.open[name]
+		delete(host.open, name)
+		host.mu.Unlock()
+		if held == nil {
+			return nil
+		}
 	}
 	host.forget(name)
 	return host.end(held)
