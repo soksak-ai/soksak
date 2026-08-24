@@ -41,7 +41,10 @@ environment.json에서 확인합니다.
 | soksak-specs/ | 공개 schema와 validator의 정본입니다. 공개 state 또는 command 모양을 바꾸면 consumer보다 먼저 수정합니다. |
 | soksak-plugin-registry/ | 공개된 plugin release 참조입니다. 구현과 release 이후 metadata를 받으며 terminal 동작을 소유하지 않습니다. |
 | wails-services/ | Wails host service입니다. Native compositor와 webview surface 책임이 있습니다. |
-| externals/ | 제3자 또는 비교용 source와 외부 system test입니다. Product build는 sibling path가 아니라 고정된 공개 dependency를 사용합니다. |
+| forks/ | 직접 유지하는 upstream fork입니다. `origin`은 소유 fork, `upstream`은 원본이며 유지 branch가 upstream version을 이름으로 가집니다. Product build는 이 path가 아니라 공개 repository와 exact commit을 사용합니다. |
+| libraries/ | xterm-addon-webkit-ime처럼 직접 만든 재사용 library입니다. Upstream fork가 아닙니다. |
+| externals/ | 수정하지 않는 제3자 비교 source입니다. |
+| tests/ | 제품 전용 system 및 acceptance repository입니다. |
 | local/ | 개발 전용 고정 runtime, source checkout, test input, work state입니다. Product code와 test가 dependency를 여기서 탐색하면 안 됩니다. |
 | evidence/ | 생성된 screenshot과 recording입니다. Product source가 아니며 구현으로 commit하지 않습니다. |
 | backup/ | 어떤 build나 gate도 참조할 수 없는 보존 source입니다. |
@@ -88,7 +91,9 @@ environment.json에서 확인합니다.
 ├── soksak-specs/soksak-spec/                     공개 schema 및 validator
 ├── wails-services/wails-service-native-compositor/ native composition 적용
 ├── soksak-plugin-registry/                       공개된 plugin 참조
-└── externals/soksak-terminal-tests/              설치 제품 system test
+├── forks/shitty/                                  upstream version 13 유지 fork
+├── libraries/xterm-addon-webkit-ime/              직접 만든 WebKit IME library
+└── tests/soksak-terminal-tests/                   설치 제품 system test
 ~~~
 
 Frame-provider plugin repository는 adapter이며 terminal 동작의 복제본 일곱 개가 아닙니다. 공유
@@ -221,18 +226,19 @@ metadata와 `.candidate-inputs`는 archive에 들어가지 않습니다.
 | 9 — macOS 신호등 닫기 | 실제 native close request의 집중 Core application gate는 GREEN입니다. 최종 누적 gate에 계속 포함됩니다. |
 | 10 — test 간섭 | Core capture-only identity와 application ownership은 구현됐습니다. 외부 system workflow의 Darwin runtime path는 아직 고정이며 test-owned process/window leak count가 0이 아닙니다. |
 
-Active spec, contract, 공유 kit, 일곱 renderer plugin, PTY, 결정적으로 build 가능한 다섯 frame
+Active spec, contract, 공유 kit, 일곱 renderer plugin, PTY, 결정적으로 build 가능한 여섯 frame
 sidecar, Core, Registry, terminal-tests, 두 Wails framework service의 build/release command ownership은
 Make로 통일했습니다. Tool version은 생태계 owner file에 남고 Actions는 이를 주입해 같은 Make target을
 호출합니다. 기록된 source-level arm64 gate는 GREEN이지만 Darwin arm64/x86_64/universal, Linux
 arm64/x86_64, Windows x86_64 전체 native matrix는 아직 실행하지 않았습니다.
 
-남은 build 차단점은 `soksak-sidecar-terminal-shitty`입니다. 최신 remote-tracking commit
-`c726e10f`을 포함한 upstream `pg83/shitty` source는 `date.today()`를 `SHITTY_VERSION`에
-컴파일합니다. 따라서 fixed source commit도 날짜가 다르면 다른 SDK byte를 만들 수 있습니다.
-Staging patch, clock 조작, 존재하지 않는 fork 선언은 금지합니다. Shitty SDK를
-`build-dependencies.json`과 sidecar candidate closure에 넣기 전에 명시적 reproducible-build input을
-소유하는 public upstream commit이 필요합니다.
+Shitty build dependency는 upstream version 13을 이름으로 가진 유지 fork branch
+`min-median-max/shitty:soksak-provider-13`입니다. Commit `a5f8785f`는 embedded version을 source
+commit epoch에서 만들고 deterministic static archive를 사용하며 debug data에서 node work path를
+제거합니다. Sidecar `build-dependencies.json`이 해당 exact commit과 Python/LLVM/Ragel version을
+소유합니다. 서로 다른 timezone의 독립 arm64 SDK build 두 번이 byte-identical이었고 canonical tree
+receipt `86f83d4c`, Sidecar build, 반복 stage, conformance 8개가 GREEN입니다. 다른 native target과 새
+owner-only benchmark contract closure는 아직 검증하지 않았습니다.
 
 구현 밖 release 차단점도 명시합니다. `soksak-terminal-tests`는 product-specific인데 아직
 `min-median-max` module/reusable-workflow identity에 있으므로 ref를 바꾸기 전에 실제 repository

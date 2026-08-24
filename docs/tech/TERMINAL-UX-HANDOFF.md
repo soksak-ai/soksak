@@ -42,7 +42,10 @@ components are resolved from environment.json.
 | soksak-specs/ | Canonical public schemas and validators. A public state or command shape changes here before consumers. |
 | soksak-plugin-registry/ | Published plugin release references. It receives release metadata after implementation and release; it owns no terminal behavior. |
 | wails-services/ | Wails host services. Native compositor and webview-surface ownership is here. |
-| externals/ | Third-party or comparison source and external system tests. Product builds use exact published dependencies, not these sibling paths. |
+| forks/ | Maintained upstream forks. `origin` is the owned fork, `upstream` is the original, and the maintained branch names the upstream version. Product builds still use the public repository and exact commit, never this path. |
+| libraries/ | Independently authored reusable libraries such as xterm-addon-webkit-ime. They are not upstream forks. |
+| externals/ | Unmodified third-party comparison source. |
+| tests/ | Product-specific system and acceptance repositories. |
 | local/ | Developer-only pinned runtimes, source checkouts, test inputs and work state. Product code and tests must not discover dependencies here. |
 | evidence/ | Generated screenshots and recordings. It is not product source and is not committed as implementation. |
 | backup/ | Retained source that no build or gate may reference. |
@@ -89,7 +92,9 @@ symlink. Cross-repository consumption uses published packages or the declared en
 ├── soksak-specs/soksak-spec/                     public schemas and validators
 ├── wails-services/wails-service-native-compositor/ native composition application
 ├── soksak-plugin-registry/                       released plugin references
-└── externals/soksak-terminal-tests/              installed-product system tests
+├── forks/shitty/                                  maintained upstream-version-13 provider fork
+├── libraries/xterm-addon-webkit-ime/              independently authored WebKit IME library
+└── tests/soksak-terminal-tests/                   installed-product system tests
 ~~~
 
 The frame-provider plugin repositories are adapters, not seven copies of terminal behavior. Shared
@@ -223,17 +228,19 @@ staged repository root. Staging metadata and `.candidate-inputs` do not enter th
 | 10 — test interference | Core capture-only identity and application ownership are implemented. External system workflows still use a fixed Darwin runtime path, and test-owned process/window leak count has not reached zero. |
 
 Build and release command ownership is now Make-based for the active spec, contracts, shared kits,
-seven renderer plugins, PTY, five deterministic frame sidecars, Core, Registry, terminal-tests and
+seven renderer plugins, PTY, six deterministic frame sidecars, Core, Registry, terminal-tests and
 the two Wails framework services. Tool versions remain in ecosystem owner files; Actions inject
 them and call the same Make targets. Source-level arm64 gates are GREEN where recorded, but the full
 Darwin arm64/x86_64/universal, Linux arm64/x86_64 and Windows x86_64 native matrices have not run.
 
-The remaining build blocker is `soksak-sidecar-terminal-shitty`. Its upstream `pg83/shitty` source,
-including current remote-tracking commit `c726e10f`, compiles `date.today()` into
-`SHITTY_VERSION`. A fixed source commit can therefore produce different SDK bytes on different
-dates. Do not patch staging, fake the clock or declare a nonexistent fork. A public upstream commit
-must own an explicit reproducible-build input before the Shitty SDK can enter
-`build-dependencies.json` and the sidecar candidate closure.
+The Shitty build dependency is the maintained fork branch
+`min-median-max/shitty:soksak-provider-13`, which names upstream version 13. Commit `a5f8785f`
+derives the embedded version from the source commit epoch, uses deterministic static archives and
+removes node-work paths from debug data. The Sidecar `build-dependencies.json` owns that exact
+commit and Python/LLVM/Ragel versions. Two independent arm64 SDK builds in different timezones were
+byte-identical; canonical tree receipt `86f83d4c` and the Sidecar build, repeated stage and eight
+conformance cases are GREEN. Other native targets and the new owner-only benchmark contract closure
+remain unverified.
 
 Release blockers outside implementation are also explicit: `soksak-terminal-tests` still lives
 under the product-specific `min-median-max` module/reusable-workflow identity and needs a real
