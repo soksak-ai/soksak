@@ -13,17 +13,23 @@ if [ -z "$node_expected" ] || [ -z "$node_declared" ] || [ "$node_expected" != "
   exit 78
 fi
 
-case "$(uname -s)" in
+host_system=$(uname -s)
+case "$host_system" in
   Darwin) host_platform=darwin ;;
   Linux) host_platform=linux ;;
   MINGW*|MSYS*|CYGWIN*) host_platform=win32 ;;
-  *) echo "TOOLCHAIN_MISMATCH: unsupported host platform $(uname -s)" >&2; exit 78 ;;
+  *) echo "TOOLCHAIN_MISMATCH: unsupported host platform $host_system" >&2; exit 78 ;;
 esac
-case "$(uname -m)" in
-  arm64|aarch64) host_arch=arm64 ;;
-  x86_64|amd64) host_arch=x64 ;;
-  *) echo "TOOLCHAIN_MISMATCH: unsupported host architecture $(uname -m)" >&2; exit 78 ;;
-esac
+host_machine=$(uname -m)
+if [ "$host_platform" = darwin ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then
+  host_arch=arm64
+else
+  case "$host_machine" in
+    arm64|aarch64) host_arch=arm64 ;;
+    x86_64|amd64) host_arch=x64 ;;
+    *) echo "TOOLCHAIN_MISMATCH: unsupported host architecture $host_machine" >&2; exit 78 ;;
+  esac
+fi
 
 node_actual=$(node --version 2>/dev/null || true)
 pnpm_actual=$(cd "$root/frontend" && pnpm --version 2>/dev/null || true)

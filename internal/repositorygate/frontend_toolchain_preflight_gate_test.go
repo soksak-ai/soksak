@@ -111,7 +111,9 @@ case "$PWD" in
   *) echo wrong-package-manager ;;
 esac
 `
-	for name, body := range map[string]string{"node": node, "pnpm": pnpm} {
+	for name, body := range map[string]string{
+		"node": node, "pnpm": pnpm, "sysctl": "#!/bin/sh\nexit 1\n",
+	} {
 		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o755); err != nil {
 			t.Fatal(err)
 		}
