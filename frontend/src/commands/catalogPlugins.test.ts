@@ -86,9 +86,11 @@ describe("plugin.conformance registration (discoverability)", () => {
 });
 
 describe("plugin installation observation", () => {
-  it("publishes a bounded timeout and a separate status command", () => {
-    expect(getSpec("plugin.install")?.params.timeoutMs).toMatchObject({ type: "number" });
+  it("starts a transaction without binding its lifetime to the renderer RPC", () => {
+    expect(getSpec("plugin.install")?.params.timeoutMs).toBeUndefined();
+    expect(getSpec("plugin.install")?.returns).toContain("phase");
     expect(getSpec("plugin.install.status")?.returns).toContain("completed");
+    expect(getSpec("plugin.install.wait")?.params.phase).toBeDefined();
   });
 });
 
