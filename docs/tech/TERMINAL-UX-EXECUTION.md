@@ -342,6 +342,23 @@ rerun an unchanged failure. Add a focused RED, fix it, repeat the local gates, t
 Publish jobs must depend on all build and test jobs, so a failed certification creates no tag or
 release asset.
 
+Native certification before publication uses owner-built, nonpublishing candidate artifacts:
+
+1. Each changed component repository builds its own candidate through its repository Make target
+   and canonical spec packager. It uploads an Actions artifact identified by source commit, target
+   and SHA-256, but creates no tag or release.
+2. The product configuration workflow declares those artifact identities and downloads only their
+   bytes. It must not check out, inspect or build a component repository's source.
+3. The product workflow constructs the candidate plan from those verified artifacts and runs the
+   unattended native matrices.
+4. Candidate-only metadata and artifact locators never enter source manifests, release archives or
+   Registry state. A failed candidate run is discarded, not published.
+
+Publishing a dependency first in order to make native certification possible reverses this order
+and is prohibited. At 2026-08-25 the existing component workflows publish immediately after their
+build path and do not yet expose this nonpublishing artifact boundary; that boundary must be added
+and tested before the release train.
+
 Publish only repositories whose source or declared dependency changed. Use this dependency order:
 
 1. Public specs and contracts, when their schemas or packages changed.

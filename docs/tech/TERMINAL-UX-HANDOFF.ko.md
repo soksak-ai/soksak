@@ -267,6 +267,11 @@ key window를 요구합니다. Local capture-only run은 사용자의 foreground
 따라서 native matrix는 unattended final Darwin runner가 소유하며 DOM-event 증거로 대체하거나 개발자
 desktop을 focus해서는 안 됩니다.
 
+Runner에는 먼저 공개하지 않은 candidate byte도 필요합니다. 현재 component release workflow는
+owner-built nonpublishing artifact를 제공하지 않으므로 다음 release-infrastructure increment는 이
+명시적 경계입니다. 제품 workflow는 선언된 identity와 digest로 해당 artifact를 조합할 수 있지만
+형제 component source를 build하면 안 됩니다.
+
 ## 기준점
 
 현재 Core 기준점은 release v0.0.3, commit

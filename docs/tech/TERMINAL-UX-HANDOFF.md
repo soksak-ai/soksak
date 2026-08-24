@@ -271,6 +271,11 @@ active key window for native keyboard delivery. Local capture-only runs must not
 foreground session. The native matrix therefore belongs to the unattended final Darwin runner and
 must not be replaced by DOM-event evidence or by focusing the developer's desktop.
 
+The runner also needs unpublished candidate bytes without publishing them first. Existing component
+release workflows do not expose owner-built nonpublishing artifacts, so the next release-infrastructure
+increment is that explicit boundary. The product workflow may compose those artifacts by declared
+identity and digest; it may not build sibling component source.
+
 ## Baseline
 
 The Core baseline is release v0.0.3 at commit 1d140596d9a0c54f14ecb998ae0cce2c4a156f7e.

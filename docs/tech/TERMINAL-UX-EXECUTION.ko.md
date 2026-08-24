@@ -325,6 +325,21 @@ composition 실패는 Actions 실행 전에 모두 제거해야 합니다. 변�
 job은 모든 build 및 test job에 의존해야 하므로 인증 실패 시 tag나 release asset을 만들면 안
 됩니다.
 
+공개 전 native 인증은 owner가 build한 nonpublishing candidate artifact를 사용합니다.
+
+1. 변경된 각 component repository가 자기 Make target과 canonical spec packager로 자기 candidate를
+   build합니다. Source commit, target, SHA-256으로 식별되는 Actions artifact를 올리되 tag나 release는
+   만들지 않습니다.
+2. 제품 구성을 소유한 workflow는 해당 artifact identity를 선언하고 byte만 download합니다. Component
+   repository source를 checkout, inspect, build하면 안 됩니다.
+3. 제품 workflow는 검증한 artifact로 candidate plan을 만들고 unattended native matrix를 실행합니다.
+4. Candidate 전용 metadata와 artifact locator는 source manifest, release archive, Registry state에
+   들어가지 않습니다. 실패한 candidate run은 폐기하며 공개하지 않습니다.
+
+Native 인증을 가능하게 하려고 dependency를 먼저 공개하면 순서가 뒤집히므로 금지합니다.
+2026-08-25 현재 component workflow는 build 경로 뒤에 곧바로 publish하며 이 nonpublishing artifact
+경계를 아직 제공하지 않습니다. Release train 전에 이 경계를 구현하고 test해야 합니다.
+
 Source 또는 선언된 dependency가 바뀐 repository만 다음 dependency 순서로 공개합니다.
 
 1. Public schema 또는 package가 바뀐 경우 spec과 contract
