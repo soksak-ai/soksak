@@ -100,5 +100,7 @@ func init() {
 		},
 		"sidecar.invalidAdoptedPID":  {EN: "adopted sidecar process id is invalid: {pid}", KO: "adopt된 sidecar process id가 올바르지 않습니다: {pid}"},
 		"sidecar.adoptedStopTimeout": {EN: "adopted sidecar process {pid} did not exit within {seconds}s", KO: "adopt된 sidecar process {pid}가 {seconds}초 안에 종료되지 않았습니다"},
+		"sidecar.recordNotRegular":   {EN: "sidecar ownership record is not a regular file: {path}", KO: "sidecar ownership record가 일반 파일이 아닙니다: {path}"},
+		"sidecar.recordInvalid":      {EN: "sidecar ownership record is invalid: {path}", KO: "sidecar ownership record가 올바르지 않습니다: {path}"},
 	})
 }

@@ -39,16 +39,11 @@ var relativeDirToTheApplication = regexp.MustCompile(`"(?:dir|path)="\+\s*filepa
 // loops. Both only go down. Lower them when a wait becomes an event; the failure names the new
 // floor.
 //
-// They are not zero and neither is claimed to be finished. What each remaining one is waiting for
-// is written where it is — and where it is a poll, why there is nothing to wait on instead.
-//
-// The two that remain are the harness starting a process and the polling loop itself. Four others
-// went when the region began declaring what it stands: a caller had been working that out from
-// which elements had a rectangle, and every one of them polled because an inference has no edge to
-// wait on.
+// Both are zero. A new clock wait or polling loop is therefore a new regression, not an accepted
+// baseline with a comment beside it.
 const (
-	clockWaits   = 2
-	pollingWaits = 2
+	clockWaits   = 0
+	pollingWaits = 0
 )
 
 func gateSources(t *testing.T) map[string]string {

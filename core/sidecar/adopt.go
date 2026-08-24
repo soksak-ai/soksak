@@ -3,7 +3,6 @@ package sidecar
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -82,7 +81,7 @@ func (host *Host) Recorded() ([]Open, error) {
 			continue
 		}
 		if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
-			return nil, fmt.Errorf("sidecar ownership record is not a regular file: %s", filepath.Join(directory, name))
+			return nil, i18n.Errorf("sidecar.recordNotRegular", map[string]string{"path": filepath.Join(directory, name)})
 		}
 		raw, err := os.ReadFile(filepath.Join(directory, name))
 		if err != nil {
@@ -91,7 +90,7 @@ func (host *Host) Recorded() ([]Open, error) {
 		var remembered record
 		if json.Unmarshal(raw, &remembered) != nil || remembered.Address == "" ||
 			remembered.Protocol < 1 || remembered.PID < 1 {
-			return nil, fmt.Errorf("sidecar ownership record is invalid: %s", filepath.Join(directory, name))
+			return nil, i18n.Errorf("sidecar.recordInvalid", map[string]string{"path": filepath.Join(directory, name)})
 		}
 		owned = append(owned, Open{
 			Name:    strings.TrimSuffix(strings.TrimPrefix(name, "sidecar-"), ".json"),
