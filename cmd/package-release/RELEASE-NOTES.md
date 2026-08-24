@@ -1,6 +1,6 @@
 # Soksak %s
 
-Multi-platform development release for Windows x86_64, macOS universal, Linux x86_64, and Linux arm64. Each archive contains the exact application and client bytes that passed its declared native system run.
+Multi-platform development release for Windows x86_64, macOS arm64, macOS x86_64, macOS universal, Linux x86_64, and Linux arm64. The universal application is composed only from the two tested macOS thin artifacts. Each archive contains the exact application and client bytes that passed its declared native system run.
 
 Native system runs: `%s`
 

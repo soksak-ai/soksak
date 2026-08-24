@@ -33,7 +33,15 @@ jobs:
           if-no-files-found: error
           compression-level: 0
   darwin-build:
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { path: soksak-core, persist-credentials: false }
@@ -45,7 +53,28 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
         with: { package_json_file: soksak-core/frontend/package.json }
       - working-directory: soksak-core
-        run: scripts/ci/darwin-release.sh
+        run: scripts/ci/darwin-release.sh ${{ matrix.architecture }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: core-darwin-${{ matrix.architecture }}-artifact
+          path: soksak-core/bin/release/darwin-${{ matrix.architecture }}/
+          if-no-files-found: error
+          compression-level: 0
+  darwin-compose:
+    needs: darwin-build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { path: soksak-core, persist-credentials: false }
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: core-darwin-arm64-artifact
+          path: soksak-core/bin/release/darwin-arm64
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: core-darwin-x86_64-artifact
+          path: soksak-core/bin/release/darwin-x86_64
+      - run: soksak-core/scripts/ci/darwin-universal.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-darwin-artifact
@@ -83,12 +112,42 @@ jobs:
           compression-level: 0
   windows-system:
     needs: windows-build
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@3803aec44de4db9c91973381b1e8cf8e9d7ff91c
-    with: { tests_ref: 3803aec44de4db9c91973381b1e8cf8e9d7ff91c }
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@a86aa86a80b48eed055ce81c76eb13f12851c76f
+    with: { tests_ref: a86aa86a80b48eed055ce81c76eb13f12851c76f }
   darwin-system:
-    needs: darwin-build
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/darwin-system.yml@3803aec44de4db9c91973381b1e8cf8e9d7ff91c
-    with: { tests_ref: 3803aec44de4db9c91973381b1e8cf8e9d7ff91c }
+    needs: [darwin-build, darwin-compose]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            artifact: core-darwin-arm64-artifact
+            architecture: arm64
+            target: aarch64-apple-darwin
+            variant: thin
+          - runner: macos-15-intel
+            artifact: core-darwin-x86_64-artifact
+            architecture: x86_64
+            target: x86_64-apple-darwin
+            variant: thin
+          - runner: macos-15
+            artifact: core-darwin-artifact
+            architecture: arm64
+            target: aarch64-apple-darwin
+            variant: universal
+          - runner: macos-15-intel
+            artifact: core-darwin-artifact
+            architecture: x86_64
+            target: x86_64-apple-darwin
+            variant: universal
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/darwin-system.yml@a86aa86a80b48eed055ce81c76eb13f12851c76f
+    with:
+      tests_ref: a86aa86a80b48eed055ce81c76eb13f12851c76f
+      runner: ${{ matrix.runner }}
+      artifact: ${{ matrix.artifact }}
+      architecture: ${{ matrix.architecture }}
+      target: ${{ matrix.target }}
+      variant: ${{ matrix.variant }}
   linux-system:
     needs: linux-build
     strategy:
@@ -101,9 +160,9 @@ jobs:
           - runner: ubuntu-24.04-arm
             architecture: arm64
             target: aarch64-unknown-linux-gnu
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/linux-system.yml@3803aec44de4db9c91973381b1e8cf8e9d7ff91c
+    uses: min-median-max/soksak-terminal-tests/.github/workflows/linux-system.yml@a86aa86a80b48eed055ce81c76eb13f12851c76f
     with:
-      tests_ref: 3803aec44de4db9c91973381b1e8cf8e9d7ff91c
+      tests_ref: a86aa86a80b48eed055ce81c76eb13f12851c76f
       runner: ${{ matrix.runner }}
       architecture: ${{ matrix.architecture }}
       target: ${{ matrix.target }}

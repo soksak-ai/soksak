@@ -2,17 +2,36 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-for architecture in arm64 amd64; do
-  "$root/scripts/ci/cross-build.sh" darwin "$architecture"
-done
+arm=$root/bin/release/darwin-arm64
+x86=$root/bin/release/darwin-x86_64
 output=$root/bin/release/darwin-universal
-bundle=$output/soksak.app
-mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
-lipo -create -output "$bundle/Contents/MacOS/soksak" "$root/bin/cross/darwin-arm64/soksak" "$root/bin/cross/darwin-amd64/soksak"
-lipo -create -output "$output/sok" "$root/bin/cross/darwin-arm64/sok" "$root/bin/cross/darwin-amd64/sok"
-cp "$root/build/darwin/Info.plist" "$bundle/Contents/Info.plist"
-cp "$root/build/darwin/icons.icns" "$bundle/Contents/Resources/icons.icns"
-if [ -f "$root/build/darwin/Assets.car" ]; then cp "$root/build/darwin/Assets.car" "$bundle/Contents/Resources/Assets.car"; fi
-for binary in "$bundle/Contents/MacOS/soksak" "$output/sok"; do
+stage=$root/bin/release/.darwin-universal.next
+for input in "$arm" "$x86"; do
+  test -d "$input/soksak.app" && test -x "$input/sok"
+done
+for relative in Contents/Info.plist Contents/Resources/icons.icns; do
+  cmp "$arm/soksak.app/$relative" "$x86/soksak.app/$relative"
+done
+if [ -f "$arm/soksak.app/Contents/Resources/Assets.car" ] || [ -f "$x86/soksak.app/Contents/Resources/Assets.car" ]; then
+  cmp "$arm/soksak.app/Contents/Resources/Assets.car" "$x86/soksak.app/Contents/Resources/Assets.car"
+fi
+
+rm -rf "$stage"
+mkdir -p "$stage/soksak.app/Contents/MacOS" "$stage/soksak.app/Contents/Resources"
+lipo -create -output "$stage/soksak.app/Contents/MacOS/soksak" \
+  "$x86/soksak.app/Contents/MacOS/soksak" "$arm/soksak.app/Contents/MacOS/soksak"
+lipo -create -output "$stage/sok" "$x86/sok" "$arm/sok"
+cp "$arm/soksak.app/Contents/Info.plist" "$stage/soksak.app/Contents/Info.plist"
+cp "$arm/soksak.app/Contents/Resources/icons.icns" "$stage/soksak.app/Contents/Resources/icons.icns"
+if [ -f "$arm/soksak.app/Contents/Resources/Assets.car" ]; then
+  cp "$arm/soksak.app/Contents/Resources/Assets.car" "$stage/soksak.app/Contents/Resources/Assets.car"
+fi
+for binary in "$stage/soksak.app/Contents/MacOS/soksak" "$stage/sok"; do
   test "$(lipo -archs "$binary")" = "x86_64 arm64"
 done
+codesign --force --sign - "$stage/sok"
+codesign --force --deep --sign - "$stage/soksak.app"
+codesign --verify --deep --strict "$stage/soksak.app"
+codesign --verify --strict "$stage/sok"
+rm -rf "$output"
+mv "$stage" "$output"

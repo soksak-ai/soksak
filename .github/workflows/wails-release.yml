@@ -36,10 +36,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for artifact in core-windows-artifact core-darwin-artifact core-linux-amd64-artifact core-linux-arm64-artifact; do
+          for artifact in core-windows-artifact core-darwin-arm64-artifact core-darwin-x86_64-artifact core-darwin-artifact core-linux-amd64-artifact core-linux-arm64-artifact; do
             gh run download "${{ steps.system-run.outputs.id }}" --repo "${{ github.repository }}" --name "$artifact" --dir "tested/$artifact"
           done
           chmod +x tested/core-darwin-artifact/sok tested/core-darwin-artifact/soksak.app/Contents/MacOS/soksak
+          chmod +x tested/core-darwin-arm64-artifact/sok tested/core-darwin-arm64-artifact/soksak.app/Contents/MacOS/soksak
+          chmod +x tested/core-darwin-x86_64-artifact/sok tested/core-darwin-x86_64-artifact/soksak.app/Contents/MacOS/soksak
           chmod +x tested/core-linux-amd64-artifact/sok tested/core-linux-amd64-artifact/soksak
           chmod +x tested/core-linux-arm64-artifact/sok tested/core-linux-arm64-artifact/soksak
       - name: Package and verify the application release
@@ -50,6 +52,8 @@ jobs:
             --arg root "$PWD" \
             '{targets:[
               {platform:"windows",architecture:"x86_64",systemRunId:$run,signing:"unsigned",application:($root+"/tested/core-windows-artifact/soksak.exe"),client:($root+"/tested/core-windows-artifact/sok.exe")},
+              {platform:"darwin",architecture:"arm64",systemRunId:$run,signing:"ad-hoc",application:($root+"/tested/core-darwin-arm64-artifact/soksak.app"),client:($root+"/tested/core-darwin-arm64-artifact/sok")},
+              {platform:"darwin",architecture:"x86_64",systemRunId:$run,signing:"ad-hoc",application:($root+"/tested/core-darwin-x86_64-artifact/soksak.app"),client:($root+"/tested/core-darwin-x86_64-artifact/sok")},
               {platform:"darwin",architecture:"universal",systemRunId:$run,signing:"ad-hoc",application:($root+"/tested/core-darwin-artifact/soksak.app"),client:($root+"/tested/core-darwin-artifact/sok")},
               {platform:"linux",architecture:"x86_64",systemRunId:$run,signing:"unsigned",application:($root+"/tested/core-linux-amd64-artifact/soksak"),client:($root+"/tested/core-linux-amd64-artifact/sok")},
               {platform:"linux",architecture:"arm64",systemRunId:$run,signing:"unsigned",application:($root+"/tested/core-linux-arm64-artifact/soksak"),client:($root+"/tested/core-linux-arm64-artifact/sok")}
@@ -61,7 +65,7 @@ jobs:
             --inputs ../release-inputs.json
           (cd dist-release && sha256sum --check SHA256SUMS)
           test "$(jq -r .sourceCommit dist-release/provenance.json)" = "${{ github.sha }}"
-          test "$(jq '.targets | length == 4' dist-release/provenance.json)" = true
+          test "$(jq '.targets | length == 6' dist-release/provenance.json)" = true
       - id: release-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -83,6 +87,8 @@ jobs:
           test -z "$(gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json tagName --jq .tagName 2>/dev/null || true)"
           gh release create "${{ github.ref_name }}" \
             dist-release/soksak-"$version"-windows-x86_64.zip \
+            dist-release/soksak-"$version"-darwin-arm64.tar.gz \
+            dist-release/soksak-"$version"-darwin-x86_64.tar.gz \
             dist-release/soksak-"$version"-darwin-universal.tar.gz \
             dist-release/soksak-"$version"-linux-x86_64.tar.gz \
             dist-release/soksak-"$version"-linux-arm64.tar.gz \

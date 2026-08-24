@@ -36,16 +36,33 @@ func inspectExecutable(path, platform, architecture string) error {
 			return architectureError(path, target)
 		}
 	case "darwin":
-		file, err := macho.OpenFat(path)
+		if architecture == "universal" {
+			file, err := macho.OpenFat(path)
+			if err != nil {
+				return executableError(path, target, err)
+			}
+			defer file.Close()
+			found := map[macho.Cpu]bool{}
+			for _, item := range file.Arches {
+				found[item.Cpu] = true
+			}
+			if !found[macho.CpuAmd64] || !found[macho.CpuArm64] || len(found) != 2 {
+				return architectureError(path, target)
+			}
+			break
+		}
+		file, err := macho.Open(path)
 		if err != nil {
 			return executableError(path, target, err)
 		}
 		defer file.Close()
-		found := map[macho.Cpu]bool{}
-		for _, item := range file.Arches {
-			found[item.Cpu] = true
+		want := macho.CpuAmd64
+		if architecture == "arm64" {
+			want = macho.CpuArm64
+		} else if architecture != "x86_64" {
+			return architectureError(path, target)
 		}
-		if architecture != "universal" || !found[macho.CpuAmd64] || !found[macho.CpuArm64] || len(found) != 2 {
+		if file.Cpu != want {
 			return architectureError(path, target)
 		}
 	default:
