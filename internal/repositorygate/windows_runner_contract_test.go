@@ -105,7 +105,7 @@ func TestCrossBuilderConsumesOnePinnedFrontendAndBuildsBothBinaries(t *testing.T
 		t.Fatal("frontend image does not disable the npm update notifier")
 	}
 	universal := readText(t, "scripts/ci/darwin-universal.sh")
-	for _, required := range []string{"bin/release/darwin-arm64", "bin/release/darwin-x86_64", "lipo -create", "soksak.app", `test "$(lipo -archs`} {
+	for _, required := range []string{"bin/release/darwin-arm64", "bin/release/darwin-x86_64", "lipo -create", "soksak.app", `test "$(lipo -archs`, "build-evidence.json", "sourceCommit", "NONDETERMINISTIC_BUILD"} {
 		if !strings.Contains(universal, required) {
 			t.Errorf("Darwin universal runner omits %q", required)
 		}
@@ -114,10 +114,17 @@ func TestCrossBuilderConsumesOnePinnedFrontendAndBuildsBothBinaries(t *testing.T
 		t.Fatal("Darwin universal runner recompiles instead of composing tested thin artifacts")
 	}
 	native := readText(t, "scripts/ci/darwin-release.sh")
-	for _, required := range []string{"usage: darwin-release.sh <arm64|x86_64>", "MACOSX_DEPLOYMENT_TARGET=10.15", "GOARCH=$go_arch", "uname -m", "cli_minimum", "vtool -show-build", "grep -F 'warning:'", "codesign --verify --deep --strict", "bin/release/darwin-$release_arch"} {
+	for _, required := range []string{"usage: darwin-release.sh <arm64|x86_64>", "MACOSX_DEPLOYMENT_TARGET=10.15", "GOARCH=$go_arch", "uname -m", "cli_minimum", "vtool -show-build", "grep -F 'warning:'", "codesign --verify --deep --strict", "bin/release/darwin-$release_arch", "git status --porcelain", "build-evidence.json", "sourceCommit", "NONDETERMINISTIC_BUILD"} {
 		if !strings.Contains(native, required) {
 			t.Errorf("native Darwin release runner omits %q", required)
 		}
+	}
+	workflow := readText(t, ".github/workflows/multiplatform-system.yml")
+	if strings.Count(workflow, "scripts/ci/darwin-release.sh ${{ matrix.architecture }}") != 2 {
+		t.Fatal("Darwin thin build is not repeated for byte-idempotence")
+	}
+	if strings.Count(workflow, "soksak-core/scripts/ci/darwin-universal.sh") != 2 {
+		t.Fatal("Darwin universal composition is not repeated for byte-idempotence")
 	}
 }
 
