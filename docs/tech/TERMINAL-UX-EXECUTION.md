@@ -159,6 +159,53 @@ For each phase:
 Store generated visual evidence outside repositories at ~/soksak/wails3beta/evidence/<gate>. Do not
 commit generated images or recordings.
 
+## Release gate and publication order
+
+The five phases are implementation and evidence boundaries, not release boundaries. Do not publish
+after an individual phase. Start one release train only after every phase is GREEN and the complete
+candidate passes all accumulated gates, direct screenshot and recording inspection, the macOS
+runtime gate, Linux checks, and the Windows cgo-free preflight.
+
+Before the release train:
+
+1. Build the final candidate bytes from the exact source revisions and source manifests.
+2. Validate archives, manifests, versions, dependency references, digests, sizes and target matrices
+   with the canonical validators.
+3. Install the candidate closure into an isolated environment without sibling-repository discovery.
+4. Run the provider matrix and installed-product tests against that exact closure.
+5. Merge only the verified commits to each repository's main branch and repeat the deterministic
+   source, manifest and candidate-byte gates from clean main checkouts.
+
+GitHub Actions is the final native-platform certification and publication mechanism. It is not the
+development loop. A native job may find a fact that macOS cannot execute, but all source-level,
+cross-build, release-byte and composition failures must be eliminated before triggering it. Do not
+rerun an unchanged failure. Add a focused RED, fix it, repeat the local gates, then start a new run.
+Publish jobs must depend on all build and test jobs, so a failed certification creates no tag or
+release asset.
+
+Publish only repositories whose source or declared dependency changed. Use this dependency order:
+
+1. Public specs and contracts, when their schemas or packages changed.
+2. Shared kits, when their distributed implementation changed.
+3. Sidecars, when their process or frame implementation changed.
+4. Terminal plugins, after every referenced kit and sidecar release exists and the plugin manifests
+   contain those exact immutable releases.
+5. Core, after the released component closure and the Core release candidate pass the complete
+   installed-product and visual gates together.
+6. Registry, after the released Core and component bytes pass a final clean installation and smoke
+   test through a validated unpublished registry candidate.
+
+The registry is the last public commit and release because publication makes an update discoverable
+to users. It must never expose a partial train. A development source remains update-blocked during
+the work and is removed only in the isolated clean-install verification. The archived Tauri source
+is not released.
+
+After Registry publication, install from the public registry in a new empty identity home and run
+the final smoke gate. This confirms publication integrity; it is not permission to repair the same
+release in place. An immutable release that fails remains unregistered where possible. Establish a
+RED and publish a new patch version. Never overwrite assets, move a tag, add a compatibility path or
+lower an acceptance threshold.
+
 ## Final acceptance
 
 The final gate reports these values mechanically for all seven providers and listed transitions:

@@ -148,6 +148,51 @@ docs commit 순서로 진행합니다.
 생성된 visual evidence는 repository 밖의 ~/soksak/wails3beta/evidence/<gate>에 저장합니다. 생성된
 image나 recording을 commit하지 않습니다.
 
+## Release gate 및 공개 순서
+
+다섯 단계는 구현 및 증거 경계이며 release 경계가 아닙니다. 개별 단계가 끝날 때 공개하지
+않습니다. 모든 단계가 GREEN이고 전체 candidate가 누적 gate, screenshot과 recording 직접 확인,
+macOS runtime gate, Linux 검사, Windows cgo-free preflight를 모두 통과한 뒤 한 번의 release
+train을 시작합니다.
+
+Release train 시작 전 순서:
+
+1. 정확한 source revision과 source manifest에서 최종 candidate byte를 build합니다.
+2. Canonical validator로 archive, manifest, version, dependency reference, digest, size, target
+   matrix를 검사합니다.
+3. Sibling repository 탐색 없이 candidate closure를 격리된 environment에 설치합니다.
+4. 정확히 그 closure를 대상으로 provider matrix와 설치 제품 test를 실행합니다.
+5. 검증된 commit만 각 repository의 main branch에 merge하고 clean main checkout에서 source,
+   manifest, candidate-byte gate를 다시 실행합니다.
+
+GitHub Actions는 최종 native-platform 인증 및 공개 수단이며 개발 반복 실행기가 아닙니다. macOS가
+실행할 수 없는 사실을 native job이 발견할 수는 있지만 source-level, cross-build, release-byte,
+composition 실패는 Actions 실행 전에 모두 제거해야 합니다. 변경 없이 실패한 run을 다시 실행하지
+않습니다. 집중된 RED를 추가하고 수정한 뒤 local gate를 반복하고 새 run을 시작합니다. Publish
+job은 모든 build 및 test job에 의존해야 하므로 인증 실패 시 tag나 release asset을 만들면 안
+됩니다.
+
+Source 또는 선언된 dependency가 바뀐 repository만 다음 dependency 순서로 공개합니다.
+
+1. Public schema 또는 package가 바뀐 경우 spec과 contract
+2. 배포하는 공유 구현이 바뀐 경우 kit
+3. Process 또는 frame 구현이 바뀐 경우 sidecar
+4. 참조하는 모든 kit와 sidecar release가 존재하고 plugin manifest가 정확한 immutable release를
+   포함한 뒤 terminal plugin
+5. 공개된 component closure와 Core release candidate가 전체 설치 제품 및 visual gate를 함께
+   통과한 뒤 Core
+6. 공개된 Core와 component byte가 검증된 미공개 registry candidate를 통한 최종 clean install 및
+   smoke test를 통과한 뒤 Registry
+
+Registry 공개는 update를 사용자에게 노출하므로 마지막 public commit 및 release입니다. 일부만
+완료된 train을 노출하면 안 됩니다. 개발 중 development source는 update-blocked 상태를 유지하며
+격리된 clean-install 검증에서만 제거합니다. 보관된 Tauri source는 release하지 않습니다.
+
+Registry 공개 후 새 empty identity home에서 public registry로 설치해 최종 smoke gate를
+실행합니다. 이는 공개 무결성 확인이며 같은 release를 수정할 권한이 아닙니다. 실패한 immutable
+release는 가능한 경우 registry에 등록하지 않습니다. RED를 세우고 새 patch version을 공개합니다.
+Asset 덮어쓰기, tag 이동, compatibility path 추가, 인수 기준 완화는 금지합니다.
+
 ## 최종 인수 조건
 
 최종 gate는 일곱 provider와 모든 전환에 대해 open to first visible frame, open to first focusable
