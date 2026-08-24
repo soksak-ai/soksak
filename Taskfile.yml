@@ -37,6 +37,7 @@ tasks:
       This repository runs only its own gates. Dependencies run their gates in
       their owner repositories.
     cmds:
+      - scripts/ci/require-frontend-toolchain.sh
       - |
         required=$(cat .task-version)
         test "$(task --version)" = "$required"
