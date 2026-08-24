@@ -62,6 +62,38 @@ func TestASecondRunFindsTheUnitTheFirstStarted(t *testing.T) {
 	}
 }
 
+func TestASecondRunCanIdempotentlyStopAnOwnedUnitWithoutStartingIt(t *testing.T) {
+	home := shortHome(t)
+	runtimeRoot := shortHome(t)
+	stageUnit(t, home, "probe", probeSource)
+	deps := Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+	}
+	first := NewHost(deps)
+	started, err := first.Start("probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Release("probe"); err != nil {
+		t.Fatal(err)
+	}
+
+	second := NewHost(deps)
+	if err := second.Stop("probe"); err != nil {
+		t.Fatalf("stopping the recorded unit: %v", err)
+	}
+	if err := waitUntilUnreachable(started.Address, 5*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Stop("probe"); err != nil {
+		t.Fatalf("repeated stop is not idempotent: %v", err)
+	}
+	if _, err := os.Stat(second.recordPath("probe")); !os.IsNotExist(err) {
+		t.Fatalf("owned record remains after stop: %v", err)
+	}
+}
+
 // A record left by a unit that has gone starts a new one rather than failing.
 //
 // The record is not evidence that anything is listening — a path exists both when someone is and
