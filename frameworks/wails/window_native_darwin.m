@@ -193,38 +193,14 @@ static SoksakNativeInputDelivery soksakNativeInputFailure(const char *message,
   return out;
 }
 
-typedef struct {
-  NSWindow *priorKeyWindow;
-  int frontmostProcessID;
-  BOOL applicationActive;
-  BOOL windowWasKey;
-} SoksakNativeInputTransaction;
-
-static SoksakNativeInputTransaction soksakBeginNativeInput(NSWindow *window) {
+static int soksakFrontmostApplicationPID(void) {
   NSRunningApplication *frontmost = [[NSWorkspace sharedWorkspace] frontmostApplication];
-  SoksakNativeInputTransaction transaction = {
-    NSApp.keyWindow,
-    frontmost == nil ? 0 : frontmost.processIdentifier,
-    NSApp.isActive,
-    window.isKeyWindow,
-  };
-  if (!transaction.windowWasKey) [window makeKeyWindow];
-  return transaction;
+  return frontmost == nil ? 0 : frontmost.processIdentifier;
 }
 
-static bool soksakFinishNativeInput(NSWindow *window,
-                                    SoksakNativeInputTransaction transaction) {
-  if (!transaction.windowWasKey) {
-    if (transaction.priorKeyWindow != nil && transaction.priorKeyWindow != window) {
-      [transaction.priorKeyWindow makeKeyWindow];
-    } else {
-      [window resignKeyWindow];
-    }
-  }
-  NSRunningApplication *frontmost = [[NSWorkspace sharedWorkspace] frontmostApplication];
-  int currentPID = frontmost == nil ? 0 : frontmost.processIdentifier;
-  return currentPID == transaction.frontmostProcessID &&
-         NSApp.isActive == transaction.applicationActive;
+static bool soksakForegroundPreserved(int processID, BOOL applicationActive) {
+  return soksakFrontmostApplicationPID() == processID &&
+         NSApp.isActive == applicationActive;
 }
 
 static NSEvent *soksakWindowMouseEvent(NSWindow *window,
@@ -270,24 +246,23 @@ SoksakNativeInputDelivery soksakClickWindowPointer(void *nsWindow,
   if (down == nil || up == nil) {
     return soksakNativeInputFailure("AppKit did not create the pointer events", window);
   }
-  SoksakNativeInputTransaction transaction = soksakBeginNativeInput(window);
-  if (!window.isKeyWindow) {
-    bool preserved = soksakFinishNativeInput(window, transaction);
+  int frontmostProcessID = soksakFrontmostApplicationPID();
+  BOOL applicationActive = NSApp.isActive;
+  if (!applicationActive || !window.isKeyWindow) {
     SoksakNativeInputDelivery out = soksakNativeInputFailure(
-        "AppKit refused the nonactivating key-window transaction", window);
-    out.foregroundPreserved = preserved;
+        "native WebKit input requires an already active application and key window", window);
+    out.foregroundPreserved = true;
     return out;
   }
   if (![window makeFirstResponder:target]) {
-    bool preserved = soksakFinishNativeInput(window, transaction);
     SoksakNativeInputDelivery out = soksakNativeInputFailure(
         "hit-tested WKWebView target refused the native responder role", window);
-    out.foregroundPreserved = preserved;
+    out.foregroundPreserved = soksakForegroundPreserved(frontmostProcessID, applicationActive);
     return out;
   }
   [target mouseDown:down];
   [target mouseUp:up];
-  bool preserved = soksakFinishNativeInput(window, transaction);
+  bool preserved = soksakForegroundPreserved(frontmostProcessID, applicationActive);
   SoksakNativeInputDelivery out = {true, window.isKeyWindow, preserved, NULL};
   if (!preserved) {
     out.delivered = false;
@@ -340,21 +315,20 @@ SoksakNativeInputDelivery soksakPressWindowKey(void *nsWindow,
   if (key == nil || !soksakKeyIdentity(key, &code, &characters)) {
     return soksakNativeInputFailure("key must be one character or a supported named key", window);
   }
-  SoksakNativeInputTransaction transaction = soksakBeginNativeInput(window);
-  if (!window.isKeyWindow) {
-    bool preserved = soksakFinishNativeInput(window, transaction);
+  int frontmostProcessID = soksakFrontmostApplicationPID();
+  BOOL applicationActive = NSApp.isActive;
+  if (!applicationActive || !window.isKeyWindow) {
     SoksakNativeInputDelivery out = soksakNativeInputFailure(
-        "AppKit refused the nonactivating key-window transaction", window);
-    out.foregroundPreserved = preserved;
+        "native WebKit input requires an already active application and key window", window);
+    out.foregroundPreserved = true;
     return out;
   }
   NSResponder *responder = window.firstResponder;
   if (![responder isKindOfClass:[NSView class]] ||
       ![(NSView *)responder isDescendantOf:webview]) {
-    bool preserved = soksakFinishNativeInput(window, transaction);
     SoksakNativeInputDelivery out = soksakNativeInputFailure(
         "WKWebView has no hit-tested native input responder", window);
-    out.foregroundPreserved = preserved;
+    out.foregroundPreserved = soksakForegroundPreserved(frontmostProcessID, applicationActive);
     return out;
   }
   NSEventModifierFlags flags = 0;
@@ -383,15 +357,14 @@ SoksakNativeInputDelivery soksakPressWindowKey(void *nsWindow,
                                  isARepeat:NO
                                    keyCode:code];
   if (down == nil || up == nil) {
-    bool preserved = soksakFinishNativeInput(window, transaction);
     SoksakNativeInputDelivery out = soksakNativeInputFailure(
         "AppKit did not create the keyboard events", window);
-    out.foregroundPreserved = preserved;
+    out.foregroundPreserved = soksakForegroundPreserved(frontmostProcessID, applicationActive);
     return out;
   }
   [responder keyDown:down];
   [responder keyUp:up];
-  bool preserved = soksakFinishNativeInput(window, transaction);
+  bool preserved = soksakForegroundPreserved(frontmostProcessID, applicationActive);
   SoksakNativeInputDelivery out = {true, window.isKeyWindow, preserved, NULL};
   if (!preserved) {
     out.delivered = false;
