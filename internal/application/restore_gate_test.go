@@ -376,14 +376,8 @@ func (gate *restoreGate) socket() string {
 	return filepath.Join(gate.runtime, gate.identifier+".sock")
 }
 
-// start runs the application against the gate's home and waits until its control
-// plane answers. Waiting on the answer rather than on a duration is what makes
-// this repeatable on a loaded machine.
-// startupPollInterval is the gap between one poll and the next. Two places have nothing to wait on
-// and use it: a process that has not answered yet, and the loop for a fact the window announces
-// nothing about. Each of those states its own reason where it is.
-const startupPollInterval = 250 * time.Millisecond
-
+// start runs the application against the gate's home and waits for the control
+// listener and renderer events owned by that exact process.
 func (gate *restoreGate) start() {
 	gate.t.Helper()
 	if gate.releaseApplicationOwnership == nil {
@@ -413,7 +407,8 @@ func (gate *restoreGate) start() {
 		gate.t.Fatalf("making the application's log: %v", err)
 	}
 	gate.log = log.Name()
-	cmd.Stdout, cmd.Stderr = log, log
+	ready := newGateControlReadyWriter()
+	cmd.Stdout, cmd.Stderr = io.MultiWriter(log, ready), log
 	// The channel the application reads to know this process is still here. Nothing is written on
 	// it; the far end closing is the message, and that happens on its own when this process dies by
 	// any route — including the ones that skip quit(): an interrupt, a timeout, a panic.
@@ -431,46 +426,17 @@ func (gate *restoreGate) start() {
 	gate.proc = cmd
 	gate.t.Cleanup(func() { _ = log.Close() })
 
-	// Polled, because there is nothing yet to wait on: a process that has not opened its socket
-	// publishes nothing, and the first thing this run can be told is an answer to a command. Every
-	// wait after this one is on an event the window announces.
-	deadline := time.Now().Add(45 * time.Second)
-	lastOutput := ""
-	var lastError error
-	for time.Now().Before(deadline) {
-		out, err := gate.try("window_list", "window=main")
-		lastOutput, lastError = out, err
-		if err == nil && strings.Contains(out, "win-") {
-			if window := firstWindow(out); window != "" {
-				gate.opened = append(gate.opened, window)
-				gate.awaitWindow(window)
-			}
-			return
-		}
-		time.Sleep(startupPollInterval)
+	var announcement controlReadyEvent
+	select {
+	case announcement = <-ready.events:
+	case <-time.After(45 * time.Second):
+		gate.t.Fatalf("the application did not announce control readiness within 45s%s", gate.lastWords())
 	}
-	gate.t.Fatalf("the application did not answer within 45s: %v\n%s%s", lastError, lastOutput, gate.lastWords())
-}
-
-func firstWindow(out string) string {
-	var response struct {
-		Data []string `json:"data"`
+	if announcement.Protocol != 1 || announcement.Socket != gate.socket() ||
+		announcement.Identifier != gate.identifier || announcement.PID != cmd.Process.Pid {
+		gate.t.Fatalf("control readiness does not own this gate: %+v", announcement)
 	}
-	if json.Unmarshal([]byte(out), &response) != nil || len(response.Data) == 0 {
-		return ""
-	}
-	for _, window := range response.Data {
-		if strings.HasPrefix(window, "win-") {
-			return window
-		}
-	}
-	return ""
-}
-
-func TestFirstWindowSelectsAWorkspaceRatherThanTheRetiringControlPlane(t *testing.T) {
-	if got := firstWindow(`{"data":["main","win-a"]}`); got != "win-a" {
-		t.Fatalf("first workspace window=%q", got)
-	}
+	gate.awaitWindow(gate.answeringWindow())
 }
 
 // quit ends the process through the command, never by killing it. A kill skips
@@ -522,29 +488,16 @@ func (gate *restoreGate) quit() {
 // awaitWindow waits until one window answers its own commands and its layout has
 // settled.
 //
-// Both waits end on an event inside the window; reaching the first takes a poll,
-// because a window that has not declared its commands has no command to
-// subscribe to and nothing outside the process publishes its arrival.
+// Both waits end on events inside the addressed renderer.
 func (gate *restoreGate) awaitWindow(label string) {
 	gate.t.Helper()
-	gate.until(45*time.Second, func() bool {
-		_, err := gate.try("app.boot.wait", "window="+label)
-		return err == nil
-	}, "window "+label+" never declared its commands")
-	gate.run("ui.layout.wait-settled", "window="+label)
-}
-
-// until waits for a condition, or fails by the name of what never happened.
-func (gate *restoreGate) until(limit time.Duration, ready func() bool, what string) {
-	gate.t.Helper()
-	deadline := time.Now().Add(limit)
-	for time.Now().Before(deadline) {
-		if ready() {
-			return
-		}
-		time.Sleep(startupPollInterval)
+	if out, err := gate.try("window_renderer_wait", "window=main", "targetWindow="+label, "timeoutMs=45000"); err != nil {
+		gate.t.Fatalf("window %s never declared its renderer: %v\n%s%s", label, err, out, gate.lastWords())
 	}
-	gate.t.Fatalf("%s within %s", what, limit)
+	gate.run("app.boot.wait", "window="+label, "timeoutMs=45000")
+	if label != "main" {
+		gate.run("ui.layout.wait-settled", "window="+label)
+	}
 }
 
 // lastWords is what the application said before it stopped, or nothing when it is still answering.
@@ -718,10 +671,7 @@ func (gate *restoreGate) answeringWindow() string {
 
 func (gate *restoreGate) openWorkspace() string {
 	gate.t.Helper()
-	gate.until(45*time.Second, func() bool {
-		_, err := gate.try("app.boot.wait", "window="+gate.answeringWindow())
-		return err == nil
-	}, "control-plane window never declared its commands")
+	gate.run("app.boot.wait", "window="+gate.answeringWindow(), "timeoutMs=45000")
 	root, err := filepath.Abs(".")
 	if err != nil {
 		gate.t.Fatalf("resolving a workspace root: %v", err)

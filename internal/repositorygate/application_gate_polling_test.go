@@ -8,11 +8,14 @@ import (
 )
 
 func TestApplicationGateStartupConsumesReadinessWithoutPolling(t *testing.T) {
-	body, err := os.ReadFile(filepath.Join(repositoryRoot, "internal", "application", "restore_gate_test.go"))
-	if err != nil {
-		t.Fatal(err)
+	var source string
+	for _, name := range []string{"restore_gate_test.go", "readiness_gate_test.go"} {
+		body, err := os.ReadFile(filepath.Join(repositoryRoot, "internal", "application", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		source += string(body)
 	}
-	source := string(body)
 	for _, forbidden := range []string{"startupPollInterval", "time.Sleep("} {
 		if strings.Contains(source, forbidden) {
 			t.Errorf("application gate startup retains %q", forbidden)
