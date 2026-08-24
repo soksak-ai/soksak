@@ -20,7 +20,6 @@ func init() {
 	i18n.Declare(map[string]i18n.Sentence{
 		"application.presentation.invalid": {
 			EN: "SOKSAK_PRESENTATION must be interactive or capture-only: {mode}",
-			KO: "SOKSAK_PRESENTATION은 interactive 또는 capture-only여야 합니다: {mode}",
 		},
 	})
 }
