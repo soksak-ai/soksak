@@ -2074,6 +2074,18 @@ describe("ui.input.key — drive surface for paths open only to the keyboard", (
     expect(empty.ok).toBe(false);
     expect(empty.code).toBe("INVALID_PARAMS");
   });
+
+  it("applies the browser text-input default for an unconsumed printable key", async () => {
+    mountNode(`<textarea data-node="btn"></textarea>`);
+    const input = document.querySelector("[data-node=btn]") as HTMLTextAreaElement;
+    const values: string[] = [];
+    input.addEventListener("input", () => values.push(input.value));
+
+    const result = await execute("ui.input.key", { address: ADDR, key: "x" }, {});
+    expect(result).toMatchObject({ ok: true, data: { defaultPrevented: false } });
+    expect(values).toEqual(["x"]);
+    expect(input.value).toBe("x");
+  });
 });
 
 describe("ui.input.scroll — bring an exposed node into its scroll viewport", () => {
