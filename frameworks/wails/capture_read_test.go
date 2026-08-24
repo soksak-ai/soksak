@@ -2,6 +2,7 @@ package wails
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -51,6 +52,33 @@ func TestACaptureDrawsNothingItDidNotRead(t *testing.T) {
 			if strings.Contains(string(source), reached) {
 				t.Errorf("%s names %q; a capture answers the window's own pixels and draws nothing into them",
 					name, reached)
+			}
+		}
+	}
+}
+
+func TestCaptureDoesNotChangeWebKitSchedulingThroughPrivateSPI(t *testing.T) {
+	files, err := filepath.Glob("capture*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = append(files, "window_host_wails.go", "../../frontend/src/commands/catalogWindow.ts")
+	for _, path := range files {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, forbidden := range []string{
+			"_setWindowOcclusionDetectionEnabled:",
+			"soksakSetWindowOcclusionDetection",
+			"window_occlusion",
+			"soksak:capture-prepare",
+		} {
+			if strings.Contains(string(body), forbidden) {
+				t.Errorf("%s changes capture scheduling through %q", path, forbidden)
 			}
 		}
 	}
