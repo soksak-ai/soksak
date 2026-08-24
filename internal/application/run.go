@@ -63,6 +63,10 @@ func Run(assets embed.FS) error {
 	if identifier == "" {
 		identifier = defaultIdentifier
 	}
+	presentation, err := presentationFromEnvironment(os.Getenv("SOKSAK_PRESENTATION"))
+	if err != nil {
+		return err
+	}
 
 	// The ambient is read here, once, and passed as values. Reading it deeper
 	// would let two parts of the process disagree about which home they are in.
@@ -191,12 +195,7 @@ func Run(assets embed.FS) error {
 			// Declared by whoever started this process. Unset is a person at the application, which
 			// is what a launch with nothing stated about it is. A measurement run declares the
 			// opposite and gets a window that draws without taking the front.
-			Presentation: func() wails.PresentationMode {
-				if os.Getenv("SOKSAK_UNATTENDED") != "" {
-					return wails.PresentationCaptureOnly
-				}
-				return wails.PresentationInteractive
-			}(),
+			Presentation:     presentation,
 			PluginAssetRoots: func() ([]string, error) { return installedPluginRoots(resolved.Home) },
 		})
 	})

@@ -404,7 +404,7 @@ func (gate *restoreGate) start() {
 		// Nobody is watching this one. Nine of these start over a verify run, and each took the
 		// front and a dock icon until 2026-08-20 — a person at the machine had nine windows arrive
 		// over what they were doing. It still draws and is still captured; it does not activate.
-		"SOKSAK_UNATTENDED=1",
+		"SOKSAK_PRESENTATION=capture-only",
 	)
 	// The application's own output, kept. Thrown away, a process that dies leaves the gate holding
 	// "connection refused" and nothing about why — measured 2026-08-18, the app died mid-run three
