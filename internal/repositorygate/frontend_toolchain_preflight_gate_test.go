@@ -62,12 +62,14 @@ func TestVerifyRejectsAnInvalidBuildToolchainBeforeProductTests(t *testing.T) {
 		t.Fatal(err)
 	}
 	buildScript := string(body)
+	if strings.Contains(buildScript, "2>&1") {
+		t.Fatal("build toolchain check merges dependency progress into the Wails version")
+	}
 	for _, required := range []string{
 		frontendCheck,
 		"go env GOVERSION",
 		"go env GOHOSTOS",
 		"go env GOHOSTARCH",
-		"go list -m",
 		"go tool wails3 version",
 		"go tool -n wails3",
 		"go version -m",
@@ -115,7 +117,7 @@ func TestBuildToolchainAcceptsArm64GoNodeAndWailsOnAppleSilicon(t *testing.T) {
 	}
 	if !strings.Contains(string(output), "BUILD_TOOLCHAIN_READY") ||
 		!strings.Contains(string(output), "goRuntime=darwin/arm64") ||
-		!strings.Contains(string(output), "wailsRuntime=darwin/arm64") ||
+		!strings.Contains(string(output), "wailsRuntime=deferred") ||
 		!strings.Contains(string(output), "nodeRuntime=darwin/arm64") {
 		t.Fatalf("aligned arm64 build toolchain was not reported: %s", output)
 	}
@@ -133,11 +135,37 @@ func TestBuildToolchainAcceptsNativeX86RuntimeAliasesOnIntel(t *testing.T) {
 		"required=darwin/x86_64",
 		"nodeRuntime=darwin/x64",
 		"goRuntime=darwin/amd64",
-		"wailsRuntime=darwin/amd64",
+		"wailsRuntime=deferred",
 	} {
 		if !strings.Contains(string(output), expected) {
 			t.Errorf("native Intel toolchain output omits %s: %s", expected, output)
 		}
+	}
+}
+
+func TestFullBuildToolchainKeepsWailsDownloadProgressOutOfTheVersion(t *testing.T) {
+	bin := buildToolchainFixture(t, "arm64", "arm64")
+	command := exec.Command("sh", "scripts/ci/check-build-toolchain.sh")
+	command.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "WAILS_PROGRESS=1")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Wails download progress corrupted the version: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "wailsRuntime=darwin/arm64") {
+		t.Fatalf("full toolchain check omitted Wails runtime: %s", output)
+	}
+}
+
+func TestBuildToolchainOnlyDoesNotExecuteOrMaterializeWails(t *testing.T) {
+	bin := buildToolchainFixture(t, "arm64", "arm64")
+	command := exec.Command("sh", "scripts/ci/check-build-toolchain.sh", "--toolchain-only")
+	command.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "FAIL_WAILS_TOOL=1")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("read-only toolchain check executed Wails: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "wailsRuntime=deferred") {
+		t.Fatalf("read-only toolchain check did not name deferred Wails runtime: %s", output)
 	}
 }
 
@@ -192,8 +220,9 @@ func buildToolchainFixture(t *testing.T, requiredArchitecture, goArch string) st
 		"node": `#!/bin/sh
 case "$1" in
   --version) echo v` + frontend.Engines.Node + ` ;;
-  -p) case "$2" in process.platform) echo darwin ;; process.arch) echo ` + nodeArch + ` ;; *) exit 1 ;; esac ;;
+  -p) case "$2" in process.platform) echo darwin ;; process.arch) echo ` + nodeArch + ` ;; *vite/package.json*) echo bin/vite.js ;; *) exit 1 ;; esac ;;
   -e) printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ;;
+  node_modules/vite/bin/vite.js) echo 'vite fixture darwin-` + nodeArch + ` node-v` + frontend.Engines.Node + `' ;;
   *) exit 1 ;;
 esac
 `,
@@ -204,8 +233,8 @@ case "$1:$2" in
   env:GOHOSTOS) echo darwin ;;
   env:GOHOSTARCH) echo ` + goArch + ` ;;
   list:*) echo ` + wailsVersion + ` ;;
-  tool:wails3) test "$3" = version && echo ` + wailsVersion + ` ;;
-  tool:-n) test "$3" = wails3 && echo /fixture/wails3 version ;;
+  tool:wails3) test -z "$FAIL_WAILS_TOOL" && test "$3" = version && { test -z "$WAILS_PROGRESS" || echo 'go: downloading Wails' >&2; echo ` + wailsVersion + `; } ;;
+  tool:-n) test -z "$FAIL_WAILS_TOOL" && test "$3" = wails3 && echo /fixture/wails3 version ;;
   version:-m) printf '\tbuild\tGOOS=darwin\n\tbuild\tGOARCH=` + goArch + `\n' ;;
   *) exit 1 ;;
 esac
