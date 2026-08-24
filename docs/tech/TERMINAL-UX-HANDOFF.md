@@ -187,6 +187,13 @@ The allowed local build-time verification path is defined in
 TERMINAL-UX-EXECUTION.md under “Local cross-repository candidate verification.” Direct consumer
 manifest or lockfile editing is not a development mode.
 
+A canonical build-time candidate materializer is under uncommitted RED-to-GREEN development in
+`soksak-spec` at this handoff. The current system-test candidate code starts after artifacts already
+exist. Do not use the materializer or its output until source immutability, staging confinement,
+canonical metadata restoration and archive rejection of local locators are committed and GREEN.
+The valid next integration step is to finish those gates, not to edit a consumer and not to publish
+an incomplete dependency train.
+
 Hypotheses that require RED evidence:
 
 - Frame DOM replacement may contribute to the reported latency; the candidate removes replacement,

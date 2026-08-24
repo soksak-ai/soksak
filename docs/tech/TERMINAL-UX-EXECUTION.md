@@ -97,6 +97,17 @@ Neither a developer nor an ad-hoc script edits dependency metadata to imitate th
 the canonical materializer cannot express a dependency edge, that is a missing product tool: add a
 RED and implement the materializer before continuing.
 
+As of 2026-08-24, the canonical materializer is under RED-to-GREEN development in `soksak-spec` and is
+not yet a usable contract. Its staging design copies digest-verified archives under the disposable
+checkout and may use a staging-local locator to run the package manager. That locator is not source
+metadata and must not leave staging. The candidate archive must restore canonical package and lock
+bytes, include only declared build outputs, and pass the canonical no-local-dependency archive gate.
+Until those exit invariants and source-before/source-after equality are GREEN and committed,
+cross-repository candidate build evidence cannot be claimed. The current system-test candidate code
+validates and installs already-built artifacts; it does not replace the materializer. Publishing
+every development iteration is not the replacement; the release train starts only after the
+complete candidate is GREEN.
+
 The canonical `soksak-spec` release builder rejects local dependency locators in source metadata,
 lockfiles and produced archives. The system-test candidate plan verifies candidate identity,
 digests and validation inputs independently. A downstream candidate is valid only when both gates

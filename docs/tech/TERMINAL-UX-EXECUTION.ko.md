@@ -97,6 +97,16 @@ content-addressed staging transport로 candidate artifact를 제공하고, build
 됩니다. Canonical materializer가 dependency edge를 표현하지 못하면 product tool이 누락된
 것입니다. 진행을 멈추고 RED를 추가한 뒤 materializer를 먼저 구현합니다.
 
+2026-08-24 현재 canonical materializer는 `soksak-spec`에서 RED→GREEN으로 구현 중이며 아직 사용할 수
+있는 계약이 아닙니다. Staging 설계는 digest를 검증한 archive를 폐기 가능한 checkout 내부로
+복사하고 package manager 실행을 위해 staging-local locator를 사용할 수 있습니다. 이 locator는
+source metadata가 아니며 staging 밖으로 나가면 안 됩니다. Candidate archive는 canonical package와
+lock byte를 복원하고 선언된 build output만 포함하며 canonical no-local-dependency archive gate를
+통과해야 합니다. 이 exit invariant와 source 실행 전후 동일성이 GREEN으로 commit되기 전에는
+cross-repository candidate build 증거를 주장할 수 없습니다. 현재 system-test candidate code는 이미
+만들어진 artifact를 검증하고 설치할 뿐 materializer를 대체하지 않습니다. 개발 반복마다 release하는
+방식으로 대체하지 않으며 release train은 전체 candidate가 GREEN인 뒤에만 시작합니다.
+
 Canonical `soksak-spec` release builder는 source metadata, lockfile, 생성 archive의 local dependency
 locator를 거부합니다. System-test candidate plan은 candidate identity, digest, validation input을
 독립적으로 검증합니다. 두 gate가 모두 통과해야 downstream candidate가 유효합니다.

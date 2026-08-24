@@ -186,6 +186,12 @@ plan이 다시 만든 closure digest를 기록해야 증거로 인정할 수 있
 candidate 검증”에 정의합니다. Consumer manifest 또는 lockfile 직접 편집은 development mode가
 아닙니다.
 
+인계 시점에 canonical build-time candidate materializer는 `soksak-spec`에서 미커밋 RED→GREEN으로
+구현 중입니다. 현재 system-test candidate code는 artifact가 이미 만들어진 이후부터 처리합니다.
+Source 불변, staging confinement, canonical metadata 복원, archive local-locator 거부가 commit되고
+GREEN이 되기 전에는 materializer와 결과물을 사용하면 안 됩니다. 다음으로 허용되는 통합 작업은
+이 gate를 완료하는 것이며 consumer 편집이나 미완성 dependency train 공개가 아닙니다.
+
 RED 증거가 필요한 가설:
 
 - Frame DOM 교체가 제보된 지연에 기여할 수 있습니다. Candidate가 교체를 제거했지만 installed provider
