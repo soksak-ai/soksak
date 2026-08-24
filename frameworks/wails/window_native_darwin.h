@@ -145,6 +145,5 @@ typedef struct {
 // down/up pair; it does not call performClose: or the application's window-close command.
 SoksakNativeCloseStatus soksakNativeCloseStatus(void *nsWindow);
 bool soksakClickNativeClose(void *nsWindow, unsigned long long sequence);
-void soksakMakeWindowTransparent(void *nsWindow);
 
 #endif

@@ -206,14 +206,6 @@ func (h *wailsHost) ClickNativeClose(name string) (NativeCloseClickReceipt, erro
 	h.inputMonitor.expectNativeClose(NativeCloseRequest{
 		Window: name, Sequence: sequence, AtUnixMs: float64(time.Now().UnixMilli()),
 	})
-	if h.presentation == PresentationCaptureOnly {
-		for _, candidate := range h.app.Window.GetAll() {
-			native := candidate.NativeWindow()
-			application.InvokeSync(func() { makeWindowTransparent(native) })
-			candidate.Show()
-		}
-		window.Show()
-	}
 	var posted bool
 	var failure error
 	application.InvokeSync(func() { posted, failure = clickNativeClose(window.NativeWindow(), sequence) })

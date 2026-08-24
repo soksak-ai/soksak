@@ -249,10 +249,6 @@ func clickNativeClose(window unsafe.Pointer, sequence uint64) (bool, error) {
 	return true, nil
 }
 
-func makeWindowTransparent(window unsafe.Pointer) {
-	C.soksakMakeWindowTransparent(window)
-}
-
 func freeWindowInputState(read C.SoksakWindowInputState) {
 	C.free(unsafe.Pointer(read.inputOwner))
 	C.free(unsafe.Pointer(read.errorMessage))

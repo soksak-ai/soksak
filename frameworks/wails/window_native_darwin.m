@@ -269,8 +269,3 @@ bool soksakClickNativeClose(void *nsWindow, unsigned long long sequence) {
   [NSApp postEvent:up atStart:NO];
   return true;
 }
-
-void soksakMakeWindowTransparent(void *nsWindow) {
-  NSWindow *window = (NSWindow *)nsWindow;
-  if (window != nil) window.alphaValue = 0;
-}
