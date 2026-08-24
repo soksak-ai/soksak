@@ -164,7 +164,9 @@ Verified facts:
   its parked pixels.
 - The clean installed-product candidate matrix covers all seven providers. Its capture-only parity
   path uses the public DOM input commands, reports `windowFocused=false`, and proves terminal-to-PTY
-  input, cursor state, timing and pixel palette parity without disturbing the foreground app.
+  input, cursor state and timing without disturbing the foreground app. Automated colour verdicts
+  read the public `terminal-screen` computed foreground/background, cursor/selection properties and
+  all 256 ANSI properties. Screenshots and recordings remain human-inspected observations.
 - `ui.input.click` and `ui.input.key` dispatch browser events through exposed DOM addresses. They are
   not operating-system input and must not be cited as native pointer or keyboard evidence.
 - AppKit does not deliver WebKit keyboard input to an inactive non-key window. Core therefore exposes
@@ -183,10 +185,11 @@ Verified facts:
 
 Current unpublished candidates:
 
-- The unpublished terminal contract package 0.0.7 defines terminal behavior interface 0.0.6, one
-  256-color palette and one presentation status for byte and frame renderers.
-- The kit candidate preserves row/run DOM nodes, exposes input/focus/cursor/render sequences and
-  timestamps, and maps bold ANSI foregrounds to the shared bright palette.
+- The unpublished terminal contract package 0.0.7 defines terminal behavior interface 0.0.7, five
+  semantic theme roles, one 256-color palette and one presentation status for byte and frame renderers.
+- The kit 0.0.19 candidate preserves row/run DOM nodes, exposes input/focus/cursor/render sequences
+  and timestamps, and solely owns host-theme resolution and the public computed-style surface for
+  both frame renderers and Xterm.
 - Xterm uses `@xterm/xterm` 6.0.0 and `@xterm/addon-fit` 0.11.0. Its WebKit IME dependency is one
   exact package.json/lockfile Git archive; the release workflow no longer checks out a conflicting
   older source commit.
@@ -203,24 +206,27 @@ parent-relative locator. Reverting the source files did not restore archives or 
 already created from the contaminated metadata.
 
 Do not reuse any candidate archive or parity, visibility, screenshot or recording result whose
-closure included that contaminated kit archive. The clean replacement renderer closure is:
+closure included that contaminated kit archive. The following clean renderer closure passed defect
+8 colour certification in run 32779972490. The later focus fix advances the kit to commit `075a31a`;
+do not describe this colour closure as the current focus closure.
 
 | Artifact | Source commit | SHA-256 |
 | --- | --- | --- |
-| contract-plugin-terminal 0.0.7 | 0f573cd | 1fd332609d141617372112b43827fc24f30a78f3b8118b3cb1ffe6e5b2bc228d |
-| kit-plugin-terminal 0.0.18 | 4620a35 | 32b204a8d48846c0e1b5568f438f49645b172f1f3baf3490369c952b61885f8c |
-| plugin-terminal-alacritty 0.0.15 | 16c71ce | d143716752d791395cf5e2e60c2bd190fc39419f051c1efda7992efa734ba914 |
-| plugin-terminal-ghostty 0.0.16 | 8bd4805 | 7615dc19649f6647db27c57ff29ed764341b29c0ef29ffcf9adfd60a5e87bbdd |
-| plugin-terminal-kitty 0.0.15 | ecb6479 | 38b8001cd610f1a8e6e5bb95f0d1404d42309983d4166501c58d015b05756264 |
-| plugin-terminal-shitty 0.0.15 | 8a30c15 | 174a121b6a1fcb84e3360fc40280aae79b06621316d4023145a8494da38eb78d |
-| plugin-terminal-vt100 0.0.15 | bc56b75 | 4ab5fbbea8b62b267ca25538b15eb0ebd8283d27dee6a1d0c5f68e4a0c4723e4 |
-| plugin-terminal-wezterm 0.0.15 | ba744e8 | b14d3211e6438f909f9af9eb293c60132f7dfcd944731165696d749e9a1d5ce3 |
-| plugin-terminal-xterm 0.0.22 | dd3febc | caec620c0cded48fb1082186a532995657a55b154684d4bdf077fdc989f2c30f |
+| contract-plugin-terminal 0.0.7 | 18c8261 | 3e9fd042b497cb7d44d736e597c56e0279412b134f098458d883277915733356 |
+| kit-plugin-terminal 0.0.19 | 017f63c | ddac758f0234d780ccd5a6e13c72f425e81e193000e9f2970dddfcf026703a7b |
+| plugin-terminal-alacritty 0.0.16 | e0f01ea | 7e22211b76a671f91596bd077529324a2923668178a7a90c2d6f47525c053c8c |
+| plugin-terminal-ghostty 0.0.17 | 46182d6 | 331f5deb89f5a31a58bb8d15599d0bbe19bb245041b6663f7228bb3249cdfd5c |
+| plugin-terminal-kitty 0.0.16 | 7a50962 | 781e9237632624912a9b1b548cfd18f93756568adb745baf177e09bc7f2e382f |
+| plugin-terminal-shitty 0.0.16 | 48ad712 | a2c469cde29ec54837d87d7a6ea0f811d52c07f80f3d2ac215269ce688b13240 |
+| plugin-terminal-vt100 0.0.16 | 40fb549 | b5956da65d10ba3d10bf5c70f2e1a01088c2981d7d729de9bb30f5d2105b4558 |
+| plugin-terminal-wezterm 0.0.16 | 24797a1 | 670e0af3e178398817d1184775d2c1dc827e488e4ca077d42be09f156be06e43 |
+| plugin-terminal-xterm 0.0.23 | 29d26a8 | 28a1bca790fc6835ec8a3e0c356f342d0ecedd5d935c0fe7ca0a43f06143ccf5 |
 
 The candidate plan SHA-256 is
-`ab94f623ad0e167ee396e91f69bd6249fb0fc98fcb9055c4c2369c9864da35d6`. It also pins PTY and the six
+`630486414dd0a83cdd7d4cb54d78c1f6a2a6d7295293d35f13fdf27836a5c51b`. It also pins PTY and the six
 frame-sidecar archives. This table and digest identify the closure; the installed-product reports,
-screenshots and recordings remain the behavioral evidence.
+public state/DOM assertions are automated verdict evidence, while screenshots and recordings are
+directly inspected observations.
 
 The allowed local build-time verification path is defined in
 TERMINAL-UX-EXECUTION.md under “Local cross-repository candidate verification.” Direct consumer
@@ -237,12 +243,12 @@ metadata and `.candidate-inputs` do not enter the archive.
 
 | Defect | State on 2026-08-25 |
 | --- | --- |
-| 1 — latency | Local Darwin candidate GREEN. Seven providers render within 1–3ms against a 16.67ms budget; input-to-PTY is 2–8ms against a 50ms budget. |
-| 2 — focus | Capture-only public DOM route GREEN for seven providers. Final AppKit native pointer matrix is implemented but not yet run on the unattended native runner, so native certification remains open. |
-| 3 — active cursor | Local candidate GREEN for exposed active/visible cursor state and inspected pixels. It remains coupled to the pending native pointer certification for user-input acceptance. |
-| 4 — keyboard input | Capture-only terminal-to-PTY round trip GREEN for seven providers. Final AppKit key-to-PTY matrix is implemented but not yet run on the unattended native runner. |
+| 1 — latency | Candidate parity is GREEN at 5–11ms render and 6–29ms input-to-PTY for all seven providers. Installed command throughput remains RED for Alacritty against 3MB/s, so the defect remains open. |
+| 2 — focus | Native RED was `focusSequence=1` followed by `focusedInput=false` on Alacritty. Common kit fix `075a31a` cancels WebKit's default mouse action and is GREEN in its owner candidate; final native recertification remains open. |
+| 3 — active cursor | Candidate public active/visible cursor state and inspected pixels are GREEN. Native post-pointer active-cursor acceptance follows defect 2. |
+| 4 — keyboard input | Capture-only terminal-to-PTY round trip GREEN for seven providers. Final AppKit key-to-PTY acceptance follows defects 2 and 3. |
 | 5–7 — picker/modal/sidebar blanking | Local Darwin candidate GREEN: 21 reports, 840 frames, blank 0, violations 0, with direct contact-sheet inspection. |
-| 8 — color parity | Local Darwin candidate GREEN. Exact base and bright RGB regions are present for all seven providers. |
+| 8 — color parity | Exact candidate run 32779972490 GREEN. All seven providers expose the same five theme roles, computed foreground/background and 256 ANSI values; all seven captures were inspected. Public releases and the user's current app are older, so the deployed product remains RED. |
 | 9 — macOS traffic-light close | Current accumulated Core gate GREEN for three actual AppKit close-button mouse down/up sequences. |
 | 10 — test interference | Local GREEN. Capture-only windows are transparent/non-key, readiness is event-driven with polling count zero, every run has unique ownership, cleanup reaches zero open/recorded sidecars, and the user app remains untouched. |
 
@@ -271,10 +277,9 @@ active key window for native keyboard delivery. Local capture-only runs must not
 foreground session. The native matrix therefore belongs to the unattended final Darwin runner and
 must not be replaced by DOM-event evidence or by focusing the developer's desktop.
 
-The runner also needs unpublished candidate bytes without publishing them first. Existing component
-release workflows do not expose owner-built nonpublishing artifacts, so the next release-infrastructure
-increment is that explicit boundary. The product workflow may compose those artifacts by declared
-identity and digest; it may not build sibling component source.
+The unpublished-candidate boundary is implemented. Each component owner workflow builds, verifies
+and seals its own clean exact commit; the product workflow composes only 17 artifacts named by
+declared identity and digest. The product workflow does not read or build sibling component source.
 
 ## Baseline
 

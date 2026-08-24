@@ -163,7 +163,9 @@ test application owner만 허용합니다.
   pixel을 분리합니다.
 - Clean installed-product candidate matrix는 일곱 provider를 모두 실행했습니다. Capture-only parity
   경로는 공개 DOM input command를 사용하고 `windowFocused=false`를 기록하며 foreground app을
-  방해하지 않고 terminal-to-PTY input, cursor 상태, timing, pixel palette parity를 증명합니다.
+  방해하지 않고 terminal-to-PTY input, cursor 상태, timing을 증명합니다. 색상 자동 판정은 screenshot
+  pixel이 아니라 공개 `terminal-screen`의 computed foreground/background, cursor/selection property와
+  ANSI 256개 property를 사용합니다. Screenshot과 recording은 사람이 직접 확인하는 관측 증거입니다.
 - `ui.input.click`과 `ui.input.key`는 노출된 DOM address를 통해 browser event를 dispatch합니다.
   운영체제 입력이 아니므로 native pointer 또는 keyboard 증거로 인용하면 안 됩니다.
 - AppKit은 inactive non-key window의 WebKit에 keyboard input을 전달하지 않습니다. Core의
@@ -181,10 +183,10 @@ test application owner만 허용합니다.
 
 현재 미공개 candidate:
 
-- 미공개 terminal contract package 0.0.7은 terminal behavior interface 0.0.6, 하나의 256색
-  palette, byte 및 frame renderer의 presentation status 하나를 정의합니다.
-- Kit candidate는 row/run DOM node를 유지하고 input/focus/cursor/render sequence와 timestamp를
-  공개하며 bold ANSI foreground를 공유 bright palette에 연결합니다.
+- 미공개 terminal contract package 0.0.7은 terminal behavior interface 0.0.7, 다섯 semantic theme
+  role, 하나의 256색 palette, byte 및 frame renderer의 presentation status 하나를 정의합니다.
+- Kit 0.0.19 candidate는 row/run DOM node를 유지하고 input/focus/cursor/render sequence와 timestamp를
+  공개하며 frame과 Xterm 양쪽의 host theme 해석 및 공개 computed-style surface를 단독 소유합니다.
 - Xterm은 `@xterm/xterm` 6.0.0과 `@xterm/addon-fit` 0.11.0을 사용합니다. WebKit IME dependency는
   package.json/lockfile의 정확한 Git archive 하나로만 소비하며 release workflow의 충돌하는 과거
   source checkout을 제거했습니다.
@@ -200,24 +202,26 @@ absolute locator와 parent-relative locator 두 형태로 기록했습니다. So
 metadata에서 이미 만든 archive와 downstream 증거는 복구되지 않습니다.
 
 해당 오염 kit archive가 closure에 포함된 candidate archive, parity, visibility, screenshot,
-recording 결과는 재사용하면 안 됩니다. 이를 대체한 clean renderer closure는 다음과 같습니다.
+recording 결과는 재사용하면 안 됩니다. 이를 대체하고 8번 색상 인증을 통과한 run 32779972490의
+clean renderer closure는 다음과 같습니다. 이후 focus 수정은 kit commit `075a31a`로 전진했으며
+아래 색상 closure를 현재 focus closure라고 기록하면 안 됩니다.
 
 | Artifact | Source commit | SHA-256 |
 | --- | --- | --- |
-| contract-plugin-terminal 0.0.7 | 0f573cd | 1fd332609d141617372112b43827fc24f30a78f3b8118b3cb1ffe6e5b2bc228d |
-| kit-plugin-terminal 0.0.18 | 4620a35 | 32b204a8d48846c0e1b5568f438f49645b172f1f3baf3490369c952b61885f8c |
-| plugin-terminal-alacritty 0.0.15 | 16c71ce | d143716752d791395cf5e2e60c2bd190fc39419f051c1efda7992efa734ba914 |
-| plugin-terminal-ghostty 0.0.16 | 8bd4805 | 7615dc19649f6647db27c57ff29ed764341b29c0ef29ffcf9adfd60a5e87bbdd |
-| plugin-terminal-kitty 0.0.15 | ecb6479 | 38b8001cd610f1a8e6e5bb95f0d1404d42309983d4166501c58d015b05756264 |
-| plugin-terminal-shitty 0.0.15 | 8a30c15 | 174a121b6a1fcb84e3360fc40280aae79b06621316d4023145a8494da38eb78d |
-| plugin-terminal-vt100 0.0.15 | bc56b75 | 4ab5fbbea8b62b267ca25538b15eb0ebd8283d27dee6a1d0c5f68e4a0c4723e4 |
-| plugin-terminal-wezterm 0.0.15 | ba744e8 | b14d3211e6438f909f9af9eb293c60132f7dfcd944731165696d749e9a1d5ce3 |
-| plugin-terminal-xterm 0.0.22 | dd3febc | caec620c0cded48fb1082186a532995657a55b154684d4bdf077fdc989f2c30f |
+| contract-plugin-terminal 0.0.7 | 18c8261 | 3e9fd042b497cb7d44d736e597c56e0279412b134f098458d883277915733356 |
+| kit-plugin-terminal 0.0.19 | 017f63c | ddac758f0234d780ccd5a6e13c72f425e81e193000e9f2970dddfcf026703a7b |
+| plugin-terminal-alacritty 0.0.16 | e0f01ea | 7e22211b76a671f91596bd077529324a2923668178a7a90c2d6f47525c053c8c |
+| plugin-terminal-ghostty 0.0.17 | 46182d6 | 331f5deb89f5a31a58bb8d15599d0bbe19bb245041b6663f7228bb3249cdfd5c |
+| plugin-terminal-kitty 0.0.16 | 7a50962 | 781e9237632624912a9b1b548cfd18f93756568adb745baf177e09bc7f2e382f |
+| plugin-terminal-shitty 0.0.16 | 48ad712 | a2c469cde29ec54837d87d7a6ea0f811d52c07f80f3d2ac215269ce688b13240 |
+| plugin-terminal-vt100 0.0.16 | 40fb549 | b5956da65d10ba3d10bf5c70f2e1a01088c2981d7d729de9bb30f5d2105b4558 |
+| plugin-terminal-wezterm 0.0.16 | 24797a1 | 670e0af3e178398817d1184775d2c1dc827e488e4ca077d42be09f156be06e43 |
+| plugin-terminal-xterm 0.0.23 | 29d26a8 | 28a1bca790fc6835ec8a3e0c356f342d0ecedd5d935c0fe7ca0a43f06143ccf5 |
 
 Candidate plan SHA-256은
-`ab94f623ad0e167ee396e91f69bd6249fb0fc98fcb9055c4c2369c9864da35d6`입니다. 이 plan은 PTY와 여섯
+`630486414dd0a83cdd7d4cb54d78c1f6a2a6d7295293d35f13fdf27836a5c51b`입니다. 이 plan은 PTY와 여섯
 frame-sidecar archive도 고정합니다. 표와 digest는 closure identity이며 설치 제품 report,
-screenshot, recording이 동작 증거입니다.
+공개 상태/DOM assertion이 자동 판정 증거이고 screenshot과 recording은 직접 관측 증거입니다.
 
 허용되는 local build-time 검증 경로는 TERMINAL-UX-EXECUTION.ko.md의 “Local cross-repository
 candidate 검증”에 정의합니다. Consumer manifest 또는 lockfile 직접 편집은 development mode가
@@ -234,12 +238,12 @@ archive에 들어가지 않습니다.
 
 | 결함 | 2026-08-25 상태 |
 | --- | --- |
-| 1 — 지연 | Local Darwin candidate GREEN. 일곱 provider render는 16.67ms 기준에 대해 1–3ms, input-to-PTY는 50ms 기준에 대해 2–8ms입니다. |
-| 2 — focus | Capture-only 공개 DOM 경로는 일곱 provider GREEN입니다. 최종 AppKit native pointer matrix를 구현했지만 unattended native runner에서 아직 실행하지 않았으므로 native 인증은 열려 있습니다. |
-| 3 — active cursor | 공개 active/visible cursor state와 직접 확인한 pixel은 local candidate GREEN입니다. 사용자 입력 acceptance는 남은 native pointer 인증과 함께 판정합니다. |
-| 4 — keyboard input | Capture-only terminal-to-PTY round trip은 일곱 provider GREEN입니다. 최종 AppKit key-to-PTY matrix는 구현됐지만 unattended native runner에서 아직 실행하지 않았습니다. |
+| 1 — 지연 | Candidate parity에서 일곱 provider render 5–11ms, input-to-PTY 6–29ms로 GREEN입니다. 그러나 installed command throughput은 Alacritty에서 3MB/s 기준 RED이므로 결함 전체는 열려 있습니다. |
+| 2 — focus | Native RED는 Alacritty에서 `focusSequence=1` 뒤 `focusedInput=false`였습니다. WebKit default mouse action을 취소하는 공통 kit fix `075a31a`가 owner candidate GREEN이며 최종 native 재검증은 열려 있습니다. |
+| 3 — active cursor | 공개 active/visible cursor state와 직접 확인한 pixel은 candidate GREEN입니다. Native pointer 직후 active cursor 판정은 2번 이후에 확정합니다. |
+| 4 — keyboard input | Capture-only terminal-to-PTY round trip은 일곱 provider GREEN입니다. 최종 AppKit key-to-PTY matrix는 2·3번 이후에 판정합니다. |
 | 5–7 — picker/modal/sidebar blanking | Local Darwin candidate GREEN. 21개 report, 840개 frame, blank 0, violation 0이며 contact sheet를 직접 확인했습니다. |
-| 8 — 색상 parity | Local Darwin candidate GREEN. 일곱 provider 모두 정확한 base/bright RGB region이 있습니다. |
+| 8 — 색상 parity | Exact candidate run 32779972490 GREEN. 일곱 provider 모두 같은 다섯 theme role, computed foreground/background와 ANSI 256개를 공개했고 7개 capture를 직접 확인했습니다. 공개 release와 현재 사용자 앱은 구버전이므로 deployed product는 아직 RED입니다. |
 | 9 — macOS 신호등 닫기 | 현재 Core 누적 gate에서 실제 AppKit close-button mouse down/up 세 번 GREEN입니다. |
 | 10 — test 간섭 | Local GREEN. Capture-only window는 transparent/non-key이고 readiness는 polling 0의 event 기반이며 run마다 고유 ownership을 가집니다. Cleanup은 open/recorded sidecar 0에 도달하고 사용자 app을 건드리지 않습니다. |
 
@@ -267,10 +271,9 @@ key window를 요구합니다. Local capture-only run은 사용자의 foreground
 따라서 native matrix는 unattended final Darwin runner가 소유하며 DOM-event 증거로 대체하거나 개발자
 desktop을 focus해서는 안 됩니다.
 
-Runner에는 먼저 공개하지 않은 candidate byte도 필요합니다. 현재 component release workflow는
-owner-built nonpublishing artifact를 제공하지 않으므로 다음 release-infrastructure increment는 이
-명시적 경계입니다. 제품 workflow는 선언된 identity와 digest로 해당 artifact를 조합할 수 있지만
-형제 component source를 build하면 안 됩니다.
+Runner의 unpublished candidate 경계는 구현됐습니다. 각 component owner workflow가 clean exact
+commit을 자기 저장소에서 build·검증·봉인하고, 제품 workflow는 선언된 identity와 digest의 artifact
+17개만 조합합니다. 제품 workflow는 형제 component source를 읽거나 build하지 않습니다.
 
 ## 기준점
 

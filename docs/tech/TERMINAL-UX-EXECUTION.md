@@ -186,6 +186,10 @@ must preserve the user's foreground application. It uses exposed DOM addresses a
 native-input matrix runs only on an unattended native runner with an isolated interactive test
 application.
 
+The active defect order is `color (8) → native focus (2) → active cursor immediately after the
+pointer (3) → native keyboard-to-PTY (4) → throughput (1)`. A candidate-workflow test fixes this
+order so a later RED cannot prevent an earlier certification.
+
 For each provider in the native-input matrix:
 
 1. Open one terminal tab for the provider.
@@ -210,8 +214,10 @@ Record existing Xterm and frame-provider timing distributions before selecting n
 thresholds. Commit thresholds to the RED test before changing implementation. Every provider must
 meet the same semantic contract. A renderer-specific numeric tolerance requires measured evidence.
 
-Inspect screenshots for cursor and color results. Convert each visual property to a pixel or token
-assertion. A screenshot supplements that assertion and never replaces it.
+Inspect screenshots for cursor and color results. Automated pass/fail comes from public status and
+DOM computed-style assertions. Default foreground/background, cursor/selection and all 256 ANSI
+values are read from the public `terminal-screen` surface. A screenshot is a human observation and
+never replaces the automated assertion.
 
 ## Phase 3 — view visibility transaction
 

@@ -183,6 +183,10 @@ foreground application을 보존해야 합니다. 노출된 DOM address를 사�
 `ui.input.key`가 운영체제 증거가 아닌 browser-event 경로임을 기록합니다. Native-input matrix는
 사람이 없는 native runner의 격리된 interactive test application에서만 실행합니다.
 
+현재 결함 실행 순서는 `색상(8) → native focus(2) → pointer 직후 active cursor(3) → native
+keyboard-to-PTY(4) → throughput(1)`입니다. Candidate workflow test가 이 순서를 고정하며 뒤 단계의
+RED가 앞 단계의 인증을 막을 수 없습니다.
+
 Native-input matrix의 각 provider에서:
 
 1. 대상 provider의 terminal tab 하나를 엽니다.
@@ -207,8 +211,10 @@ Native-input matrix의 각 provider에서:
 구현을 바꾸기 전에 threshold를 RED test에 commit합니다. 모든 provider가 동일한 semantic
 계약을 충족해야 합니다. Renderer별 숫자 허용치는 측정된 근거가 필요합니다.
 
-Cursor 및 color screenshot을 직접 확인합니다. 확인한 시각 특성은 pixel 또는 token assertion으로
-전환합니다. Screenshot은 assertion을 보충하며 대체하지 않습니다.
+Cursor 및 color screenshot을 직접 확인합니다. 자동 pass/fail은 공개 status와 DOM computed-style
+assertion으로 판정합니다. Default foreground/background, cursor/selection, ANSI 256개는
+`terminal-screen` 공개면에서 읽습니다. Screenshot은 사람이 보는 관측 증거이며 자동 assertion을
+대체하지 않습니다.
 
 ## 단계 3 — view visibility transaction
 
