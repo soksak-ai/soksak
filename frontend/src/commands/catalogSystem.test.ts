@@ -111,17 +111,20 @@ describe("app.environment — core identity and unit source mode are separate fi
       updaterEnabled: true,
       unitMode: "mixed",
       developmentUnits: [{ kind: "plugin", id: "weather", source: "/work/weather" }],
-    });
+    }).mockResolvedValueOnce({ mode: "capture-only", desktopVisible: false });
 
     const spec = getSpec("app.environment");
     expect(spec).toBeDefined();
     // Examples contain the command form only — the binary name is the identity of the presenter (CLI), not data.
     expect(spec!.examples).toEqual(["app.environment"]);
     const r = await execute("app.environment", {}, {});
-    expect(invoke).toHaveBeenCalledWith("app_environment");
+    expect(invoke).toHaveBeenNthCalledWith(1, "app_environment");
+    expect(invoke).toHaveBeenNthCalledWith(2, "app_presentation");
     expect(r).toMatchObject({
-      ok: true,
-      data: { coreBuild: "release", cli: "sok", loginShell: "/bin/zsh", unitMode: "mixed" },
+      ok: true, data: {
+        coreBuild: "release", cli: "sok", loginShell: "/bin/zsh", unitMode: "mixed",
+        presentation: { mode: "capture-only", desktopVisible: false },
+      },
     });
   });
 });
