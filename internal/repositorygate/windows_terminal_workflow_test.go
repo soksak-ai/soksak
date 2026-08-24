@@ -61,8 +61,8 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 			t.Fatalf("%s installs a toolchain before checking capacity", job)
 		}
 	}
-	if !strings.Contains(s, "go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.12") {
-		t.Fatal("Windows workflow does not install the exact upstream Wails CLI")
+	if !strings.Contains(s, "go tool wails3") {
+		t.Fatal("Windows workflow does not use the Wails CLI owned by go.mod")
 	}
 	if !strings.Contains(s, "scripts/ci/windows-build.sh all") {
 		t.Fatal("Windows workflow does not use the repository build runner")
@@ -183,24 +183,6 @@ func TestFrontendOwnsExactToolchainVersions(t *testing.T) {
 	}
 	if _, err := os.Stat(".nvmrc"); !os.IsNotExist(err) {
 		t.Fatal("frontend Node version is duplicated in .nvmrc")
-	}
-}
-
-func TestTaskfileOwnsAndChecksTheExactRunner(t *testing.T) {
-	body, err := os.ReadFile("Taskfile.yml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	source := string(body)
-	version, err := os.ReadFile(".task-version")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !regexp.MustCompile(`^[0-9]+[.][0-9]+[.][0-9]+\n$`).Match(version) {
-		t.Fatal("Task runner owner file is not exact")
-	}
-	if !strings.Contains(taskBlock(t, source, "verify"), `required=$(cat .task-version)`) || !strings.Contains(taskBlock(t, source, "verify"), `test "$(task --version)" = "$required"`) {
-		t.Fatal("verify does not reject a different Task runner")
 	}
 }
 

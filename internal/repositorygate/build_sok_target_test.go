@@ -35,15 +35,14 @@ func TestControlClientUsesTheApplicationTarget(t *testing.T) {
 	}
 }
 
-func TestBuildTasksUseThePublishedWailsCLIFromPath(t *testing.T) {
-	const declaration = `WAILS3: '{{.WAILS3 | default "wails3"}}'`
+func TestBuildTasksUseTheModuleOwnedWailsCLI(t *testing.T) {
 	for _, path := range []string{"Taskfile.yml", "build/Taskfile.yml"} {
 		body, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(body), declaration) {
-			t.Errorf("%s does not resolve the published Wails CLI from PATH", path)
+		if !strings.Contains(string(body), "go tool wails3") {
+			t.Errorf("%s does not execute the Wails CLI owned by go.mod", path)
 		}
 	}
 }

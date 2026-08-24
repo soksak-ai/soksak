@@ -24,10 +24,13 @@ func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 		}
 	}
 	dockerfile := readText(t, "build/docker/Dockerfile.windows-ci")
-	for _, required := range []string{"NODE_IMAGE=node:must-be-provided", "PNPM_VERSION=must-be-provided", "wails3@v3.0.0-beta.12", "COPY --from=node-runtime /usr/local/ /usr/local/"} {
+	for _, required := range []string{"NODE_IMAGE=node:must-be-provided", "PNPM_VERSION=must-be-provided", "COPY --from=node-runtime /usr/local/ /usr/local/"} {
 		if !strings.Contains(dockerfile, required) {
 			t.Errorf("Windows CI image does not pin %s", required)
 		}
+	}
+	if strings.Contains(dockerfile, "cmd/wails3@") {
+		t.Fatal("Windows CI image independently versions the Wails CLI")
 	}
 	if !strings.Contains(docker, "io.soksak.windows-ci.definition-sha") {
 		t.Fatal("Docker runner rebuilds the CI image without a definition hash")
@@ -38,7 +41,7 @@ func TestWindowsBuildRunnerIsSharedByDockerAndActions(t *testing.T) {
 		}
 	}
 	runner := readText(t, "scripts/ci/windows-build.sh")
-	for _, required := range []string{"go mod tidy -diff", "frontend/bindings", "generate syso"} {
+	for _, required := range []string{"go mod tidy -diff", "frontend/bindings", "go tool wails3 generate syso"} {
 		if !strings.Contains(runner, required) {
 			t.Errorf("Windows canonical source gate is missing %q", required)
 		}
