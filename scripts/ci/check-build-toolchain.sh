@@ -37,7 +37,8 @@ if [ "${1:-}" = "--toolchain-only" ]; then
   exit 0
 fi
 
-wails_actual=$(cd "$root" && go tool wails3 version 2>/dev/null || true)
+wails_output=$(cd "$root" && go tool wails3 version 2>&1 || true)
+wails_actual=$(printf '%s\n' "$wails_output" | awk '/^v[0-9]+[.][0-9]+[.][0-9]+(-[0-9A-Za-z.-]+)?$/ { value=$0; count++ } END { if (count == 1) print value; else exit 1 }' || true)
 wails_binary=$(cd "$root" && go tool -n wails3 2>/dev/null || true)
 wails_info=$([ -n "$wails_binary" ] && go version -m "$wails_binary" 2>/dev/null || true)
 wails_platform=$(printf '%s\n' "$wails_info" | sed -n 's/^[[:space:]]*build[[:space:]]*GOOS=//p')
