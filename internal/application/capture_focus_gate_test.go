@@ -1,3 +1,5 @@
+//go:build applicationgate
+
 package application
 
 import (

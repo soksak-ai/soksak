@@ -39,8 +39,7 @@ tasks:
       - scripts/ci/prepare-frontend-dependencies.sh
       - scripts/ci/check-build-toolchain.sh
       - task: verify:go
-      - task: verify:restore
-      - task: verify:native-close
+      - task: verify:application
       - task: verify:headless
       - task: verify:windows
       - task: verify:frontend
@@ -59,12 +58,12 @@ tasks:
     cmds:
       - scripts/ci/macos-link.sh
 
-  verify:restore:
-    summary: The digest before a restart equals the digest after (RESTORE V1)
+  verify:application:
+    summary: Builds current binaries before running capture-only application gates
     desc: |
-      Runs the real binaries against a home of its own, so it neither reads nor
-      disturbs the store a person is using. It builds them first because a gate
-      that skipped when they were stale would be a gate that never ran.
+      Generic Go tests never discover or execute bin/soksak. This gate builds the
+      current source first, then runs every real-application test against a unique
+      capture-only home, runtime, identifier and owner.
 
       It quits through `app.shutdown.commit` rather than killing the process. A
       kill skips the drain and the save, and what came back afterwards would be
@@ -72,20 +71,20 @@ tasks:
     cmds:
       - task: build
       - task: build:sok
-      - go test ./internal/application -run '^TestTheDigestSurvivesARestart$' -count=1
+      - go test -tags=applicationgate ./internal/application -count=1
+      - task: verify:native-close-repetition
+
+  verify:native-close-repetition:
+    summary: Repeats the macOS native close assertion to total three executions
+    internal: true
+    platforms: [darwin]
+    cmds:
+      - go test -tags=applicationgate ./internal/application -run '^TestNativeTrafficLightCloseEndsTheAddressedWindowWithoutTakingInput$' -count=2
 
   verify:headless:
     summary: The core answers with no window — the boundary a second host needs
     cmds:
       - go test ./core/...
-
-  verify:native-close:
-    summary: Proves a real macOS traffic-light click closes only its addressed window
-    platforms: [darwin]
-    cmds:
-      - task: build
-      - task: build:sok
-      - go test ./internal/application -run '^TestNativeTrafficLightCloseEndsTheAddressedWindowWithoutTakingInput$' -count=3
 
   verify:windows:
     summary: Windows stays cgo-free, so it cross-compiles from any host (N3)
