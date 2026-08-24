@@ -53,7 +53,9 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
         with: { package_json_file: soksak-core/frontend/package.json }
       - working-directory: soksak-core
-        run: scripts/ci/darwin-release.sh ${{ matrix.architecture }}
+        run: |
+          scripts/ci/darwin-release.sh ${{ matrix.architecture }}
+          scripts/ci/darwin-release.sh ${{ matrix.architecture }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-darwin-${{ matrix.architecture }}-artifact
@@ -74,7 +76,9 @@ jobs:
         with:
           name: core-darwin-x86_64-artifact
           path: soksak-core/bin/release/darwin-x86_64
-      - run: soksak-core/scripts/ci/darwin-universal.sh
+      - run: |
+          soksak-core/scripts/ci/darwin-universal.sh
+          soksak-core/scripts/ci/darwin-universal.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-darwin-artifact

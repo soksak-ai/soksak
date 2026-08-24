@@ -10,15 +10,23 @@ case "$release_arch" in
 esac
 cd "$root"
 test "$(uname -m)" = "$runner_arch" || { echo "native Darwin $runner_arch runner is required" >&2; exit 78; }
+source_commit=$(git rev-parse HEAD)
+test -n "$source_commit" && test -z "$(git status --porcelain --untracked-files=all)" || {
+  echo "PRECONDITION_INVALID: Darwin release requires a clean source commit" >&2
+  exit 78
+}
 scripts/ci/check-build-toolchain.sh --toolchain-only
 scripts/ci/frontend-build.sh
 scripts/ci/check-build-toolchain.sh
 
 output=bin/release/darwin-$release_arch
 stage=bin/release/.darwin-$release_arch.next
-rm -rf "$stage"
+cleanup() { if [ -e "$stage" ]; then rm -rf "$stage"; fi; }
+trap cleanup EXIT
+cleanup
 mkdir -p "$stage/soksak.app/Contents/MacOS" "$stage/soksak.app/Contents/Resources"
-log="$stage/build.log"
+mkdir -p .task/release
+log=.task/release/darwin-$release_arch.log
 if ! MACOSX_DEPLOYMENT_TARGET=10.15 \
   CGO_ENABLED=1 GOOS=darwin GOARCH=$go_arch CC=clang \
   CGO_CFLAGS="-mmacosx-version-min=10.15" \
@@ -45,5 +53,28 @@ codesign --force --sign - "$stage/sok"
 codesign --force --deep --sign - "$stage/soksak.app"
 codesign --verify --deep --strict "$stage/soksak.app"
 codesign --verify --strict "$stage/sok"
+app_sha=$(shasum -a 256 "$stage/soksak.app/Contents/MacOS/soksak" | awk '{print $1}')
+cli_sha=$(shasum -a 256 "$stage/sok" | awk '{print $1}')
+node -e '
+  const fs = require("fs");
+  const [out, sourceCommit, architecture, applicationSHA256, clientSHA256] = process.argv.slice(1);
+  fs.writeFileSync(out, JSON.stringify({
+    schema: "soksak-darwin-thin-build-v1", sourceCommit,
+    target: `darwin/${architecture}`, applicationSHA256, clientSHA256,
+  }, null, 2) + "\n", { flag: "wx" });
+' "$stage/build-evidence.json" "$source_commit" "$release_arch" "$app_sha" "$cli_sha"
+if [ -f "$output/build-evidence.json" ]; then
+  previous_commit=$(node -e 'const fs=require("fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).sourceCommit)' "$output/build-evidence.json")
+  if [ "$previous_commit" = "$source_commit" ]; then
+    if ! diff -qr "$output" "$stage" >/dev/null; then
+      echo "NONDETERMINISTIC_BUILD: darwin/$release_arch differs for source $source_commit" >&2
+      exit 1
+    fi
+    cleanup
+    printf 'DARWIN_THIN_REUSED sourceCommit=%s target=darwin/%s appSHA256=%s cliSHA256=%s\n' "$source_commit" "$release_arch" "$app_sha" "$cli_sha"
+    exit 0
+  fi
+fi
 rm -rf "$output"
 mv "$stage" "$output"
+printf 'DARWIN_THIN_READY sourceCommit=%s target=darwin/%s appSHA256=%s cliSHA256=%s\n' "$source_commit" "$release_arch" "$app_sha" "$cli_sha"
