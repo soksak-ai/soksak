@@ -115,6 +115,19 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 			t.Errorf("missing native system job %s", job)
 		}
 	}
+	candidateTestsRef := "1497af685e77125749381eaca12bb9becd01671b"
+	for _, required := range []string{
+		"darwin-candidate-native-input:",
+		"needs: darwin-build",
+		"min-median-max/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@" + candidateTestsRef,
+		"tests_ref: " + candidateTestsRef,
+		"core_artifact_name: core-darwin-arm64-artifact",
+		"core_source_commit: ${{ github.sha }}",
+	} {
+		if !strings.Contains(s, required) {
+			t.Errorf("candidate native workflow omits %s", required)
+		}
+	}
 	for _, v := range []string{"soksak-plugin-terminal", "soksak-sidecar-terminal"} {
 		if strings.Contains(s, v) {
 			t.Errorf("Core workflow names provider %s", v)
