@@ -6,6 +6,10 @@ describe("finite DOM transition trace", () => {
   it("records exposed nodes and their CSS animation clocks on the recorder frame clock", () => {
     const rail = document.createElement("div");
     const pane = document.createElement("div");
+    pane.dataset.contentVisible = "true";
+    pane.dataset.surfaceVisible = "false";
+    pane.dataset.visibilityReason = "layout-motion";
+    Object.assign(pane.style, { display: "block", visibility: "visible", opacity: "0.75" });
     vi.spyOn(rail, "getBoundingClientRect").mockReturnValue({
       x: 10, y: 20, width: 30, height: 40,
       left: 10, top: 20, right: 40, bottom: 60, toJSON: () => ({}),
@@ -33,7 +37,17 @@ describe("finite DOM transition trace", () => {
     expect(samples).toHaveLength(2);
     expect(samples[0].nodes).toEqual([
       expect.objectContaining({ address: "rail/left", connected: false, rect: { x: 10, y: 20, w: 30, h: 40 } }),
-      expect.objectContaining({ address: "layout/pane/a", connected: false, rect: { x: 50, y: 20, w: 100, h: 40 } }),
+      expect.objectContaining({
+        address: "layout/pane/a",
+        connected: false,
+        rect: { x: 50, y: 20, w: 100, h: 40 },
+        dataset: {
+          contentVisible: "true",
+          surfaceVisible: "false",
+          visibilityReason: "layout-motion",
+        },
+        style: { display: "block", visibility: "visible", opacity: "0.75" },
+      }),
     ]);
     expect(samples[0].nodes.map((node) => node.animations[0])).toEqual([
       expect.objectContaining({ name: "rail-flip-x", startTime: 100, currentTime: 25, progress: 0.25 }),
