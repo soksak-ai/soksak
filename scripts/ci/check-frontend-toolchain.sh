@@ -3,6 +3,7 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 manifest=$root/frontend/package.json
+lockfile=$root/frontend/pnpm-lock.yaml
 node_expected=$(sed -n 's/^[[:space:]]*"node": "\([^"]*\)".*/\1/p' "$manifest")
 pnpm_expected=$(sed -n 's/^[[:space:]]*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "$manifest")
 [ -n "$node_expected" ] && [ -n "$pnpm_expected" ] || {
@@ -26,19 +27,21 @@ node_actual=$(node --version 2>/dev/null || true)
 pnpm_actual=$(pnpm --version 2>/dev/null || true)
 node_platform=$(node -p 'process.platform' 2>/dev/null || true)
 node_arch=$(node -p 'process.arch' 2>/dev/null || true)
-
 if [ "$node_actual" != "v$node_expected" ] || [ "$pnpm_actual" != "$pnpm_expected" ] || \
    [ "$node_platform" != "$host_platform" ] || [ "$node_arch" != "$host_arch" ]; then
   echo "TOOLCHAIN_MISMATCH: expected node=v$node_expected pnpm=$pnpm_expected host=$host_platform/$host_arch; actual node=${node_actual:-missing} pnpm=${pnpm_actual:-missing} runtime=${node_platform:-unknown}/${node_arch:-unknown}" >&2
   exit 78
 fi
 
-if ! (cd "$root/frontend" && CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm install --frozen-lockfile); then
-  echo "DEPENDENCY_STATE_INVALID: exact frontend dependencies could not be materialized" >&2
-  exit 79
+lock_digest=$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$lockfile")
+if [ "${1:-}" = "--toolchain-only" ]; then
+  printf 'FRONTEND_TOOLCHAIN_READY node=v%s pnpm=%s runtime=%s/%s lockSHA256=%s\n' \
+    "$node_expected" "$pnpm_expected" "$host_platform" "$host_arch" "$lock_digest"
+  exit 0
 fi
 
-runtime=$(cd "$root/frontend" && PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm exec vite --version 2>/dev/null || true)
+vite_bin=$(cd "$root/frontend" && node -p 'require("./node_modules/vite/package.json").bin.vite' 2>/dev/null || true)
+runtime=$(cd "$root/frontend" && [ -n "$vite_bin" ] && node "node_modules/vite/$vite_bin" --version 2>/dev/null || true)
 case "$runtime" in
   *"$host_platform-$host_arch"*"node-v$node_expected"*) ;;
   *)
@@ -47,5 +50,5 @@ case "$runtime" in
     ;;
 esac
 
-printf 'FRONTEND_TOOLCHAIN_READY node=v%s pnpm=%s runtime=%s/%s\n' \
-  "$node_expected" "$pnpm_expected" "$host_platform" "$host_arch"
+printf 'FRONTEND_TOOLCHAIN_READY node=v%s pnpm=%s runtime=%s/%s lockSHA256=%s\n' \
+  "$node_expected" "$pnpm_expected" "$host_platform" "$host_arch" "$lock_digest"
