@@ -38,4 +38,13 @@ describe("plugin install progress", () => {
     setPluginInstallProgress({ pluginId: "demo", phase: "committing", completed: 2, total: 2 });
     await expect(waited).resolves.toMatchObject({ phase: "committing", completed: 2 });
   });
+
+  it("rejects immediately when the installation reaches failure before the requested phase", async () => {
+    beginPluginInstall("demo");
+    const waited = waitForPluginInstallPhase("demo", "installed", 1000);
+    setPluginInstallProgress({
+      pluginId: "demo", phase: "failed", completed: 1, total: 2, error: "archive rejected",
+    });
+    await expect(waited).rejects.toThrow("archive rejected");
+  });
 });

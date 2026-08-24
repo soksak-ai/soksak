@@ -51,10 +51,19 @@ export function pluginInstallActive(progress: PluginInstallProgress | undefined)
 export function waitForPluginInstallPhase(pluginId: string, phase: PluginInstallPhase, timeoutMs: number): Promise<PluginInstallProgress> {
   const current = usePluginInstallProgress.getState().installs[pluginId];
   if (current?.phase === phase) return Promise.resolve({ ...current });
+  if (current?.phase === "failed" && phase !== "failed") {
+    return Promise.reject(new Error(current.error ?? `plugin ${pluginId} installation failed`));
+  }
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { unsubscribe(); reject(new Error(`plugin ${pluginId} did not reach ${phase} within ${timeoutMs}ms`)); }, timeoutMs);
     const unsubscribe = usePluginInstallProgress.subscribe((state) => {
       const progress = state.installs[pluginId];
+      if (progress?.phase === "failed" && phase !== "failed") {
+        clearTimeout(timer);
+        unsubscribe();
+        reject(new Error(progress.error ?? `plugin ${pluginId} installation failed`));
+        return;
+      }
       if (progress?.phase !== phase) return;
       clearTimeout(timer);
       unsubscribe();

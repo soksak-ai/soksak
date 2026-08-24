@@ -5,6 +5,7 @@ import {
   resolveRegistryRelease,
   type QualifiedRegistryEntry,
 } from "./registry";
+import type { CertifiedRegistry } from "./spec";
 import {
   installCertifiedRegistryRelease,
   type RegistryInstallRuntimeResult,
@@ -22,6 +23,23 @@ function reportInstall(pluginId: string, progress: Omit<Parameters<typeof setPlu
 export async function installQualifiedRegistryEntry(
   entry: QualifiedRegistryEntry,
 ): Promise<RegistryInstallRuntimeResult> {
+  const started = startQualifiedRegistryInstall(entry);
+  if (!started.ok) return started;
+  return await started.completion;
+}
+
+export type RegistryInstallStartResult =
+  | {
+      ok: true;
+      id: string;
+      phase: "resolving";
+      completion: Promise<RegistryInstallRuntimeResult>;
+    }
+  | Extract<RegistryInstallRuntimeResult, { ok: false }>;
+
+export function startQualifiedRegistryInstall(
+  entry: QualifiedRegistryEntry,
+): RegistryInstallStartResult {
   const source = useRegistry.getState().registries[entry.registryId];
   if (!source?.certified) {
     return {
@@ -33,11 +51,23 @@ export async function installQualifiedRegistryEntry(
   if (!beginPluginInstall(entry.id)) {
     return { ok: false, code: "INSTALL_IN_PROGRESS", message: `plugin installation is already running: ${entry.id}` };
   }
+  const completion = completeQualifiedRegistryInstall(entry, source.certified).catch((cause) => {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    reportInstall(entry.id, { phase: "failed", completed: 0, total: 0, error: message });
+    return { ok: false as const, code: "INTERNAL", message, errors: [message] };
+  });
+  return { ok: true, id: entry.id, phase: "resolving", completion };
+}
+
+async function completeQualifiedRegistryInstall(
+  entry: QualifiedRegistryEntry,
+  certified: CertifiedRegistry,
+): Promise<RegistryInstallRuntimeResult> {
   let releases;
   try { releases = await loadReleaseClosure(entry, publicReleaseMetadataGet); }
   catch (cause) { const message = cause instanceof Error ? cause.message : String(cause); reportInstall(entry.id, { phase: "failed", completed: 0, total: 0, error: message }); return { ok: false, code: "RELEASE_VERIFICATION_FAILED", message, errors: [message] }; }
   const result = await installCertifiedRegistryRelease({
-    certified: source.certified, root: entry, releases,
+    certified, root: entry, releases,
     onProgress: (progress) => reportInstall(entry.id, progress),
   });
   if (result.ok) {

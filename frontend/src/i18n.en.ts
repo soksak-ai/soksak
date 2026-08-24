@@ -686,6 +686,7 @@ export const en: Record<MsgKey, string> = {
   "msg.plugin.implementers": "{n, plural, one {# plugin implement {contract}} other {# plugins implement {contract}}}",
   "msg.plugin.implementers.all": "{n, plural, one {# contract declared} other {# contracts declared}}",
   "msg.plugin.install": "Installed {id}",
+  "msg.plugin.install.started": "Started installing {id}",
   "msg.plugin.install.status": "{n, plural, one {# plugin installation} other {# plugin installations}}",
   "msg.plugin.install.wait": "{id} reached installation phase {phase}",
   "msg.plugin.list": "{n, plural, one {# plugin} other {# plugins}}",

@@ -691,6 +691,7 @@ export const ko = {
   "msg.plugin.implementers": "{contract} 구현 플러그인 {n}개",
   "msg.plugin.implementers.all": "선언된 계약 {n}개",
   "msg.plugin.install": "{id} 플러그인을 설치했습니다",
+  "msg.plugin.install.started": "{id} 플러그인 설치를 시작했습니다",
   "msg.plugin.install.status": "플러그인 설치 {n}개",
   "msg.plugin.install.wait": "{id} 설치가 {phase} 단계에 도달했습니다",
   "msg.plugin.list": "플러그인 {n}개",

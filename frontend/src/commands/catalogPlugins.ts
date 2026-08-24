@@ -47,7 +47,7 @@ import {
   type QualifiedRegistryEntry,
 } from "../plugins/registry";
 import {
-  installQualifiedRegistryEntry,
+  startQualifiedRegistryInstall,
   updateCertifiedRegistryPlugin,
 } from "../plugins/registryInstallService";
 import { publishActivity } from "../state/activityFeed";
@@ -597,11 +597,10 @@ export function registerPluginCatalog(): void {
       },
       registryId: { type: "string", description: key("cmd.plugin.install.param.registryId") },
       pluginId: { type: "string", description: key("cmd.plugin.install.param.pluginId") },
-      timeoutMs: { type: "number", description: key("cmd.plugin.install.param.timeoutMs") },
     },
     primary: "source",
-    returns: "{ id, generation }",
-    message: (d) => tmsg("msg.plugin.install", { id: String(d.id) }),
+    returns: "{ id, phase:'resolving' }",
+    message: (d) => tmsg("msg.plugin.install.started", { id: String(d.id) }),
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "AMBIGUOUS_TARGET", "INTERNAL"],
     examples: [
       "plugin.install activity",
@@ -668,7 +667,10 @@ export function registerPluginCatalog(): void {
             message: tmsg("msg.plugin.install.unknownName", { name: raw }),
           };
         }
-        return await installQualifiedRegistryEntry(resolved.entry);
+        const started = startQualifiedRegistryInstall(resolved.entry);
+        if (!started.ok) return started;
+        void started.completion;
+        return { id: started.id, phase: started.phase };
       }
       return {
         ok: false,
