@@ -44,8 +44,8 @@ export function PixelsAt(path: string, rect: $models.Rect): $CancellablePromise<
 /**
  * Record captures Frames frames of this service's window into Dir.
  * 
- * Each frame goes through the same path as a single capture: the window's own
- * pixels, with nothing drawn into them.
+ * Each frame goes through the same mode-owned source as a single capture, with
+ * nothing drawn into it and no scheduling or animation mutation.
  */
 export function Record(request: $models.RecordRequest): $CancellablePromise<$models.RecordReport> {
     return $Call.ByID(1275283255, request).then(($result: any) => {
