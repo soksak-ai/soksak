@@ -14,11 +14,13 @@ if [ -s "$root/frontend/dist/index.html" ] && [ "$(cat "$marker" 2>/dev/null || 
 fi
 image=soksak-frontend:latest
 build_frontend() {
-  pnpm --dir "$root/frontend" install --frozen-lockfile
-  pnpm --dir "$root/frontend" typecheck
-  pnpm --dir "$root/frontend" build
+  cd "$root/frontend"
+  pnpm install --frozen-lockfile
+  pnpm typecheck
+  pnpm build
 }
-if [ "$(node --version 2>/dev/null || true)" = "v$node_version" ] && [ "$(pnpm --version 2>/dev/null || true)" = "$pnpm_version" ]; then
+pnpm_actual=$(cd "$root/frontend" && pnpm --version 2>/dev/null || true)
+if [ "$(node --version 2>/dev/null || true)" = "v$node_version" ] && [ "$pnpm_actual" = "$pnpm_version" ]; then
   CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 build_frontend
   printf '%s\n' "$definition:$input" > "$marker"
   exit 0
