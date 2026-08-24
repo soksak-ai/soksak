@@ -169,6 +169,20 @@ func TestBuildToolchainOnlyDoesNotExecuteOrMaterializeWails(t *testing.T) {
 	}
 }
 
+func TestDarwinReleaseMaterializesGoModulesBetweenReadOnlyAndRuntimeChecks(t *testing.T) {
+	body, err := os.ReadFile("scripts/ci/darwin-release.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	readOnly := strings.Index(source, "check-build-toolchain.sh --toolchain-only")
+	materialize := strings.Index(source, "go mod download")
+	runtimeCheck := strings.Index(source, "check-build-toolchain.sh\n")
+	if readOnly < 0 || materialize < 0 || runtimeCheck < 0 || !(readOnly < materialize && materialize < runtimeCheck) {
+		t.Fatalf("Darwin release toolchain order readOnly=%d materialize=%d runtime=%d", readOnly, materialize, runtimeCheck)
+	}
+}
+
 func buildToolchainFixture(t *testing.T, requiredArchitecture, goArch string) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
