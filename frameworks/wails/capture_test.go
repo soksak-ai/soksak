@@ -14,7 +14,7 @@ func TestCaptureRefusesAMissingWindow(t *testing.T) {
 }
 
 func TestSnapshotNeedsAPath(t *testing.T) {
-	service := NewCaptureService("main", func() unsafe.Pointer { return nil })
+	service := NewCaptureService("main", func() unsafe.Pointer { return nil }, PresentationInteractive)
 
 	if _, err := service.Snapshot(""); err == nil {
 		t.Fatal("an empty path must fail rather than pick one")
@@ -22,7 +22,7 @@ func TestSnapshotNeedsAPath(t *testing.T) {
 }
 
 func TestCaptureWithoutAWindowSaysSo(t *testing.T) {
-	service := NewCaptureService("main", nil)
+	service := NewCaptureService("main", nil, PresentationInteractive)
 
 	_, err := service.Snapshot("<local-evidence>/soksak-capture-test.png")
 	if err == nil {
@@ -33,7 +33,7 @@ func TestCaptureWithoutAWindowSaysSo(t *testing.T) {
 func TestCaptureBeforeTheWindowExists(t *testing.T) {
 	// Capture can be requested during boot, before the window is created. That
 	// is a distinct failure from a capture that produced nothing.
-	service := NewCaptureService("main", func() unsafe.Pointer { return nil })
+	service := NewCaptureService("main", func() unsafe.Pointer { return nil }, PresentationInteractive)
 
 	if _, err := service.Pixels(Whole); err == nil {
 		t.Fatal("capture before the window exists must fail by name")
@@ -43,7 +43,6 @@ func TestCaptureBeforeTheWindowExists(t *testing.T) {
 func TestCaptureOnlyReadsTheDocumentAndDeclaresTheMissingNativeChildren(t *testing.T) {
 	handle := byte(1)
 	service := NewCaptureService("main", func() unsafe.Pointer { return unsafe.Pointer(&handle) }, PresentationCaptureOnly)
-	service.occlusion = func(unsafe.Pointer, bool) int { return 0 }
 	windowCaptures := 0
 	documentCaptures := 0
 	service.capture = func(unsafe.Pointer, Rect) ([]byte, error) {

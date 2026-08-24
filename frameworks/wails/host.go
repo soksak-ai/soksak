@@ -212,7 +212,7 @@ func Run(options Options) error {
 			webviewsurface.NewService(webviewBackend),
 			NewCaptureService(controlPlaneWindow, func() unsafe.Pointer {
 				return nativeWindow(controlPlaneWindow)
-			}),
+			}, options.Presentation),
 			NewControlService(options.Registry),
 		),
 		Assets: application.AssetOptions{
@@ -371,7 +371,7 @@ func Run(options Options) error {
 	if target := options.CaptureProbe; target != "" {
 		capture := NewCaptureService(controlPlaneWindow, func() unsafe.Pointer {
 			return nativeWindow(controlPlaneWindow)
-		})
+		}, options.Presentation)
 		go func() {
 			time.Sleep(3 * time.Second)
 			note, err := capture.Snapshot(target)

@@ -584,30 +584,6 @@ export function registerWindowCatalog(): void {
     },
   });
 
-  register("window.occlusion", {
-    description: key("cmd.window.occlusion.desc"),
-    params: {
-      enabled: {
-        type: "boolean",
-        description: key("cmd.window.occlusion.param.enabled"),
-        required: true,
-      },
-    },
-    returns: "{ occlusion, webviews }",
-    message: (d) =>
-      d.occlusion ? tmsg("msg.window.occlusion.on") : tmsg("msg.window.occlusion.off"),
-    examples: ['window.occlusion \'{"enabled":false}\''],
-    handler: async (p) => {
-      const enabled = !!p.enabled;
-      // The host's own switch. This invoked a command of the preceding implementation's plugin,
-      // which this host never served, so every call answered INTERNAL and the throttle stayed on
-      // (measured 2026-08-16). Every capture already holds it off for its own duration; this is
-      // for watching a covered window over time, where the throttle stops the updates being
-      // watched.
-      return await invoke<{ occlusion: boolean; webviews: number }>("window_occlusion", { enabled });
-    },
-  });
-
   register("window.layers", {
     description: key("cmd.window.layers.desc"),
     triggers: {

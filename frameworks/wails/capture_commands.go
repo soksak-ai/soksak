@@ -18,10 +18,10 @@ import (
 // Framework-owned: the pixels belong to a window, and a host without one
 // answers that rather than pretending.
 //
-// The image is the window's own pixels. Nothing is drawn into it here: a ScreenCaptureKit capture
-// of this process's window already holds every native child (docs/tech/NATIVE-LAYER.md, Capture),
-// re-measured 2026-08-16 with the compositing path off.
-func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamSink) {
+// Interactive mode reads the window's compositor pixels. Capture-only mode keeps an alpha-zero
+// window resident for its display clock and reads the main document, declaring documentOnly=true;
+// neither path changes WebKit scheduling or draws replacement pixels into the answer.
+func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamSink, presentation PresentationMode) {
 	if host == nil {
 		panic("wails: the capture commands need a WindowHost")
 	}
@@ -33,9 +33,6 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 	// Measured 2026-08-15: capture could only reach the window this host
 	// captured at registration, so a theme defect in a workspace window
 	// answered with a picture of the orchestrator.
-	type capturePreparer interface {
-		PrepareCapture(name string)
-	}
 	target := func(args control.Args) (*CaptureService, error) {
 		name, err := control.OptionalArg(args, "window", "")
 		if err != nil {
@@ -54,11 +51,7 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 		if handle == nil {
 			return nil, i18n.Errorf("wails.capture.noPixels", map[string]string{"window": name})
 		}
-		service := NewCaptureService(name, func() unsafe.Pointer { return handle })
-		if preparer, ok := host.(capturePreparer); ok {
-			service.prepare = func() { preparer.PrepareCapture(name) }
-		}
-		return service, nil
+		return NewCaptureService(name, func() unsafe.Pointer { return handle }, presentation), nil
 	}
 
 	registry.MustRegister(control.Command{
@@ -101,38 +94,6 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 				return nil, err
 			}
 			return service.PixelsAt(path, rect)
-		},
-	})
-
-	registry.MustRegister(control.Command{
-		Name:  "window_occlusion",
-		Owner: control.OwnerFramework,
-		// Every capture holds this off for its own duration and puts it back, so
-		// this command is for the case a capture cannot cover: a person or an
-		// agent watching a covered window over time, where the throttle would
-		// stop the very updates being watched.
-		//
-		// The answer is how many web views were reached, not whether it worked.
-		// A window holds the application's own view and one per native surface,
-		// and reaching the first alone leaves every browser pane throttled while
-		// the caller reads a clean result.
-		Handler: func(args control.Args) (any, error) {
-			enabled, err := control.Arg[bool](args, "enabled")
-			if err != nil {
-				return nil, err
-			}
-			service, err := target(args)
-			if err != nil {
-				return nil, err
-			}
-			handle, err := service.target()
-			if err != nil {
-				return nil, err
-			}
-			return map[string]any{
-				"occlusion": enabled,
-				"webviews":  service.occlusion(handle, enabled),
-			}, nil
 		},
 	})
 

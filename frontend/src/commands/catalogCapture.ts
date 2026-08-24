@@ -7,7 +7,6 @@
 
 import { invoke, frameworkPath } from "../framework";
 import { tmsg, key} from "../i18n";
-import { settleAnimationsForCapture } from "./captureSettle";
 import { contentViewHost, hasContentViewHost } from "../lib/contentViews";
 import { isLayoutMotionActive, onLayoutMotion } from "../lib/layoutMotion";
 import { resolveExposed } from "./catalogDom";
@@ -75,19 +74,6 @@ function settledLayout(): Promise<void> {
     });
   });
 }
-
-/**
- * "The final frame that should be showing" and "this exact instant" are different requests.
- *
- * The default is settling — a command must produce an exact result regardless of state. But settling
- * drives in-flight finite animations to their end, so **what drifts only mid-transition** can never
- * be seen through this path (real incident 2026-08-02: measuring by app capture a drift where several
- * layers followed different frames produced only post-settle pictures and read as "normal").
- */
-const SETTLE_PARAM = {
-  type: "boolean" as const,
-  description: key("cmd.capture.param.settle"),
-};
 
 /**
  * Statistics of painted pixels — numbers, not a picture.
@@ -222,7 +208,6 @@ async function resolveRegion(p: Record<string, unknown>): Promise<Region | Refus
       // 2026-07-31: a 30-second timeout, and even the restore did not run). A numeric timer is not
       // used either (whatever number is written has no basis). Layout motion announces its own start
       // and end, so the wait is on that end.
-      settleAnimationsForCapture();
       await settledLayout();
     }
     tabId = loc.tab.id;
@@ -385,7 +370,6 @@ export function registerCaptureCatalog(): void {
         type: "number",
         description: key("cmd.window.snapshot.param.margin"),
       },
-      settle: SETTLE_PARAM,
     },
     returns:
       "{ tabId?, saved, media:{kind,path} } when path is given (cropped or full) | { tabId?, media:{kind:'image/png',base64} } otherwise — tabId echoes the resolved tab when tab was passed",
@@ -436,11 +420,6 @@ export function registerCaptureCatalog(): void {
           message: tmsg("msg.window.snapshot.ambiguousHost", { hosts: ctx?.hosts ?? 0 }),
         };
       }
-      // Capture is a command — front or back, the window yields the exact final frame. A non-front
-      // window stops its timeline and traps the entry animation on an intermediate frame (undoing
-      // occlusion in arm_capture alone does not run the timeline), so finite animations are settled
-      // explicitly right before capture. Common front stage of every capture path.
-      if (p.settle !== false) settleAnimationsForCapture();
       // The crop axis resolves in one place (resolveRegion) — the same function as window.pixels.
       const region = await resolveRegion(p);
       if (isRefusal(region)) return region;
@@ -528,7 +507,6 @@ export function registerCaptureCatalog(): void {
         type: "string",
         description: key("cmd.window.pixels.param.tab"),
       },
-      settle: SETTLE_PARAM,
     },
     returns:
       "{ tabId?, w, h, samples, mean:{r,g,b}, luminance, min, max } — luminance is 0..1 on displayed (gamma-encoded) values; min/max are the darkest and brightest sampled luminance",
@@ -540,7 +518,6 @@ export function registerCaptureCatalog(): void {
       'window.pixels \'{"rect":{"x":100,"y":80,"w":400,"h":300}}\'',
     ],
     handler: async (p) => {
-      if (p.settle !== false) settleAnimationsForCapture();
       const region = await resolveRegion(p);
       if (isRefusal(region)) return region;
       const { rect, tabId, restore } = region;

@@ -97,6 +97,16 @@ func orderWindowFrontWithoutKey(window unsafe.Pointer) error {
 	return nil
 }
 
+// presentCaptureOnlyWindow keeps WebKit's public display clock alive while
+// AppKit keeps the window transparent, mouse-transparent and non-key.
+func presentCaptureOnlyWindow(window unsafe.Pointer) error {
+	if window == nil {
+		return i18n.Errorf("wails.window.noNativeLifetimeFront", nil)
+	}
+	C.soksakPresentCaptureOnlyWindow(window)
+	return nil
+}
+
 // activateApplication brings this application forward. The caller is on the
 // main thread.
 func activateApplication() error {

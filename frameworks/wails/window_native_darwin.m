@@ -23,6 +23,17 @@ void soksakOrderFrontRegardless(void *nsWindow) {
   [(NSWindow *)nsWindow orderFrontRegardless];
 }
 
+void soksakPresentCaptureOnlyWindow(void *nsWindow) {
+  NSWindow *window = (NSWindow *)nsWindow;
+  if (window == nil) return;
+  window.animationBehavior = NSWindowAnimationBehaviorNone;
+  window.hasShadow = NO;
+  window.opaque = NO;
+  window.alphaValue = 0.0;
+  window.ignoresMouseEvents = YES;
+  [window orderFrontRegardless];
+}
+
 bool soksakActivateApplication(void) {
   if (@available(macOS 14.0, *)) {
     [[NSApplication sharedApplication] activate];

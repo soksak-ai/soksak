@@ -62,20 +62,21 @@ type RecordRequest struct {
 // RecordReport is what a burst left behind.
 //
 // Frames is what landed on disk, which is not always what was asked for, and
-// Stopped is why when they differ. A count with no reason next to it makes a
-// short recording and a complete one the same answer.
+// Stopped is why when they differ. DocumentOnly declares that every frame came
+// from the main document and therefore excludes native child surfaces.
 type RecordReport struct {
-	Dir       string `json:"dir"`
-	Requested int    `json:"requested"`
-	Frames    int    `json:"frames"`
-	Bytes     int64  `json:"bytes"`
-	Stopped   string `json:"stopped,omitempty"`
+	Dir          string `json:"dir"`
+	Requested    int    `json:"requested"`
+	Frames       int    `json:"frames"`
+	Bytes        int64  `json:"bytes"`
+	Stopped      string `json:"stopped,omitempty"`
+	DocumentOnly bool   `json:"documentOnly,omitempty"`
 }
 
 // Record captures Frames frames of this service's window into Dir.
 //
-// Each frame goes through the same path as a single capture: the window's own
-// pixels, with nothing drawn into them.
+// Each frame goes through the same mode-owned source as a single capture, with
+// nothing drawn into it and no scheduling or animation mutation.
 func (service *CaptureService) Record(request RecordRequest) (RecordReport, error) {
 	if request.Dir == "" {
 		return RecordReport{}, i18n.Errorf("wails.record.noDir", nil)
@@ -106,12 +107,10 @@ func (service *CaptureService) Record(request RecordRequest) (RecordReport, erro
 	if err != nil {
 		return RecordReport{}, err
 	}
-	// Held once for the whole burst. Per frame, the resume wait is paid on every
-	// one of them and the window is handed back to the throttle between each
-	// pair — which is the gap a recording exists to look at.
-	defer service.holdRendering(handle)()
-
-	report := RecordReport{Dir: request.Dir, Requested: request.Frames}
+	report := RecordReport{
+		Dir: request.Dir, Requested: request.Frames,
+		DocumentOnly: service.presentation == PresentationCaptureOnly,
+	}
 	for frame := 0; frame < request.Frames; frame++ {
 		if frame > 0 && request.IntervalMs > 0 {
 			time.Sleep(time.Duration(request.IntervalMs) * time.Millisecond)

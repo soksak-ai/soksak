@@ -66,7 +66,6 @@ func TestCaptureDoesNotChangeWebKitSchedulingThroughPrivateSPI(t *testing.T) {
 		"window_host_wails.go",
 		"../../frontend/src/commands/catalogWindow.ts",
 		"../../frontend/src/commands/catalogCapture.ts",
-		"../../frontend/src/commands/captureSettle.ts",
 	)
 	for _, path := range files {
 		if strings.HasSuffix(path, "_test.go") {

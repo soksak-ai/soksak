@@ -19,6 +19,14 @@
 // Must be called on the main thread.
 void soksakOrderFrontRegardless(void *nsWindow);
 
+// Keep a capture-only window in the compositor without putting light or an
+// input target on the user's desktop. AppKit may consider a fully transparent
+// ordered window visible for occlusion purposes, so WebKit keeps delivering
+// display callbacks while the window remains non-key and mouse-transparent.
+//
+// Must be called on the main thread.
+void soksakPresentCaptureOnlyWindow(void *nsWindow);
+
 // Bring this application forward. Returns false where the supported request
 // does not exist, so "this OS cannot do it" stays distinct from "it was done".
 // The deprecated activateIgnoringOtherApps: is not used as a second attempt —

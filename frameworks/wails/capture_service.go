@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-	"time"
 	"unsafe"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
@@ -21,13 +20,13 @@ type CaptureService struct {
 	// name is the window this capture is of, and the handle below is the same
 	// window's.
 	//
-	// The image is that window's own pixels and nothing else. A capture that
-	// drew content into the picture from a ledger showed what should have been
-	// there rather than what was — measured 2026-08-16, a browser attached to
-	// the wrong window appeared in a picture of the right one while the pane a
-	// person was looking at was empty.
-	name   string
-	window func() unsafe.Pointer
+	// Interactive mode reads that window's compositor pixels. Capture-only mode
+	// reads that window's main document and marks native children absent. Both
+	// read sources owned by this exact window; neither reconstructs pixels from
+	// a ledger.
+	name         string
+	window       func() unsafe.Pointer
+	presentation PresentationMode
 	// size answers the window's content size in points. Injected so the rules
 	// above it are provable with no window.
 	size func(unsafe.Pointer) (float64, float64, error)
@@ -46,23 +45,19 @@ type CaptureService struct {
 	// frames announces one recorded frame once its file is complete. Nil sends nothing, which is
 	// what a caller that passed no receiver asked for.
 	frames func(index int)
-	// occlusion turns the window's rendering throttle off or on and answers how many web views the
-	// change covered. Injected so the hold-and-restore rule is provable with no window.
-	occlusion func(window unsafe.Pointer, enabled bool) int
-	// prepare announces to the document that a capture will read its next rendered
-	// frame. Renderers with their own retained surface use this event to redraw
-	// after the occlusion throttle has been removed.
-	prepare func()
 }
 
-func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureService {
+func NewCaptureService(name string, window func() unsafe.Pointer, presentation PresentationMode) *CaptureService {
+	if presentation != PresentationInteractive && presentation != PresentationCaptureOnly {
+		panic("wails: capture service requires an explicit presentation mode")
+	}
 	return &CaptureService{
 		name:            name,
 		window:          window,
+		presentation:    presentation,
 		size:            contentSize,
 		capture:         CaptureWindow,
 		captureDocument: CaptureDocument,
-		occlusion:       setWindowOcclusionDetection,
 	}
 }
 
@@ -72,9 +67,9 @@ func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureServic
 // landed instead of guessing it went where it asked.
 type CaptureNote struct {
 	Path string `json:"path"`
-	// DocumentOnly states that the native children are not in this image: the window capture
-	// was refused and the web view was asked for the document instead. A picture that leaves
-	// something out and does not say so is read as a window that had nothing there.
+	// DocumentOnly states that native children are not in this image. Capture-only reads the
+	// transparent window's main document by rule; interactive capture uses the same source only
+	// when compositor access is refused. A picture that leaves something out must say so.
 	DocumentOnly bool `json:"documentOnly,omitempty"`
 }
 
@@ -105,7 +100,6 @@ func (service *CaptureService) SnapshotRegion(path string, rect Rect) (CaptureNo
 	if err != nil {
 		return CaptureNote{}, err
 	}
-	defer service.holdRendering(handle)()
 	png, documentOnly, err := service.capturing(handle, rect)
 	if err != nil {
 		return CaptureNote{}, err
@@ -150,7 +144,6 @@ func (service *CaptureService) PixelsAt(path string, rect Rect) (CapturePixels, 
 	if err != nil {
 		return CapturePixels{}, err
 	}
-	defer service.holdRendering(handle)()
 	png, documentOnly, err := service.capturing(handle, rect)
 	if err != nil {
 		return CapturePixels{}, err
@@ -176,41 +169,7 @@ func writeCapture(path string, png []byte) error {
 	return nil
 }
 
-// occlusionResumeMillis is how long rendering is given to come back after the
-// throttle is lifted.
-//
-// A web view that was covered has not drawn since; captured in the same instant
-// the switch is flipped, the image is still the stale frame the throttle left
-// there. The value is the contract-conforming implementation's, which is runtime-verified
-// on this platform (tauri-plugin-webview-capture, "How occluded capture
-// works").
-const occlusionResumeMillis = 200
-
-// holdRendering turns the window's throttle off for the length of a capture and
-// answers the work to put it back.
-//
-// Always paired, and the caller defers the release: a capture that failed is
-// exactly the case where nobody is watching, and a window left with detection
-// off draws forever at a battery cost nobody asked for.
-//
-// A build that reached no web view waits for nothing. The wait is the price of
-// having actually changed something, and paying it where nothing changed makes
-// every capture on a platform with no such throttle 200ms slower.
-func (service *CaptureService) holdRendering(handle unsafe.Pointer) func() {
-	if service.occlusion == nil {
-		return func() {}
-	}
-	if service.occlusion(handle, false) == 0 {
-		return func() {}
-	}
-	if service.prepare != nil {
-		service.prepare()
-	}
-	time.Sleep(occlusionResumeMillis * time.Millisecond)
-	return func() { service.occlusion(handle, true) }
-}
-
-// capturing takes the window's picture, and the document's when the window's is refused.
+// capturing selects exactly one declared pixel source.
 //
 // Screen recording is granted per application identity on this platform. Measured 2026-08-17: the
 // same binary and window captured in 0.3s under the installation's identifier and waited out the
@@ -218,10 +177,17 @@ func (service *CaptureService) holdRendering(handle unsafe.Pointer) func() {
 // take a picture has no evidence, and evidence that stops at the first refusal is evidence nobody
 // has when it matters.
 //
-// So the document is asked instead, and the answer states that it is the document. The second
-// picture is not the first: a page is composited above the document by another process and is not
-// in it.
+// Capture-only has an alpha-zero compositor window, so its declared source is the main document.
+// Interactive mode reads compositor pixels and uses the document only for the named permission
+// refusal. The document is not the compositor picture: native child surfaces are absent.
 func (service *CaptureService) capturing(handle unsafe.Pointer, rect Rect) ([]byte, bool, error) {
+	if service.presentation == PresentationCaptureOnly {
+		if service.captureDocument == nil {
+			return nil, true, i18n.Errorf("wails.capture.unsupportedPlatform", nil)
+		}
+		document, err := service.captureDocument(handle, rect)
+		return document, true, err
+	}
 	if service.refused.Load() && service.captureDocument != nil {
 		document, documentErr := service.captureDocument(handle, rect)
 		if documentErr == nil {

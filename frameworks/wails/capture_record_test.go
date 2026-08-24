@@ -52,11 +52,8 @@ func TestAFrameDeadlineNeverLeavesCaptureUsingTheWindowAfterRecordReturns(t *tes
 func recorderOf(t *testing.T, dir string, frame func(int) []byte) *CaptureService {
 	t.Helper()
 	handle := byte(1)
-	service := NewCaptureService("win-a", func() unsafe.Pointer { return unsafe.Pointer(&handle) })
+	service := NewCaptureService("win-a", func() unsafe.Pointer { return unsafe.Pointer(&handle) }, PresentationInteractive)
 	service.size = func(unsafe.Pointer) (float64, float64, error) { return 100, 100, nil }
-	// No window means no throttle to lift. The real switch is a cgo call, and a
-	// fixture handle is a Go pointer it refuses.
-	service.occlusion = func(unsafe.Pointer, bool) int { return 0 }
 	taken := 0
 	service.capture = func(unsafe.Pointer, Rect) ([]byte, error) {
 		png := frame(taken)

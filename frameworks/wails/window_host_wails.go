@@ -360,7 +360,10 @@ func (h *wailsHost) Reveal(name string, key bool) error {
 		return i18n.Errorf("wails.host.cannotReveal", map[string]string{"window": name})
 	}
 	if h.presentation == PresentationCaptureOnly {
-		return nil
+		native := window.NativeWindow()
+		var failure error
+		application.InvokeSync(func() { failure = presentCaptureOnlyWindow(native) })
+		return failure
 	}
 	if key {
 		window.Show()
@@ -421,14 +424,6 @@ func (h *wailsHost) Reload(name string) error {
 	}
 	window.Reload()
 	return nil
-}
-
-func (h *wailsHost) PrepareCapture(name string) {
-	window, addressable := h.live(name)
-	if !addressable {
-		return
-	}
-	window.ExecJS(`window.dispatchEvent(new Event("soksak:capture-prepare"))`)
 }
 
 func (h *wailsHost) OpenInspector(name string) error {

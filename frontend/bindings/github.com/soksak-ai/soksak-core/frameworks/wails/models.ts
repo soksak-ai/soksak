@@ -15,9 +15,9 @@ export class CaptureNote {
     "path": string;
 
     /**
-     * DocumentOnly states that the native children are not in this image: the window capture
-     * was refused and the web view was asked for the document instead. A picture that leaves
-     * something out and does not say so is read as a window that had nothing there.
+     * DocumentOnly states that native children are not in this image. Capture-only reads the
+     * transparent window's main document by rule; interactive capture uses the same source only
+     * when compositor access is refused. A picture that leaves something out must say so.
      */
     "documentOnly"?: boolean;
 
@@ -80,8 +80,8 @@ export class CapturePixels {
  * RecordReport is what a burst left behind.
  * 
  * Frames is what landed on disk, which is not always what was asked for, and
- * Stopped is why when they differ. A count with no reason next to it makes a
- * short recording and a complete one the same answer.
+ * Stopped is why when they differ. DocumentOnly declares that every frame came
+ * from the main document and therefore excludes native child surfaces.
  */
 export class RecordReport {
     "dir": string;
@@ -89,6 +89,7 @@ export class RecordReport {
     "frames": number;
     "bytes": number;
     "stopped"?: string;
+    "documentOnly"?: boolean;
 
     /** Creates a new RecordReport instance. */
     constructor($$source: Partial<RecordReport> = {}) {
