@@ -38,3 +38,13 @@ describe("a component that draws a modal", () => {
 
 
 });
+
+describe("settings modal automation boundary", () => {
+  const settings = files.find((file) => file.name === "SettingsModal.tsx")!.body;
+
+  it("exposes its overlay, card, drag handle, and close action", () => {
+    for (const node of ["settings/modal", "settings/card", "settings/header", "settings/close"]) {
+      expect(settings, `SettingsModal.tsx does not expose ${node}`).toContain(`data-node="${node}"`);
+    }
+  });
+});
