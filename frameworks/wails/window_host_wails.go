@@ -204,7 +204,7 @@ func (h *wailsHost) ClickInputPointer(name string, x, y float64) (WindowPointerC
 	}
 	return WindowPointerClickReceipt{
 		Window: name, Sequence: sequence, Delivered: delivered,
-		InputRoute: "appkit-hit-tested-nsevent", CursorPositionMayChange: false,
+		InputRoute: "appkit-nsapplication-event", CursorPositionMayChange: false,
 		X: x, Y: y, WindowFocused: focused, ForegroundPreserved: foregroundPreserved,
 	}, nil
 }
@@ -228,7 +228,7 @@ func (h *wailsHost) PressInputKey(name, key string, ctrl, meta, shift, alt bool)
 	}
 	return WindowKeyPressReceipt{
 		Window: name, Sequence: sequence, Delivered: delivered,
-		InputRoute: "appkit-hit-tested-nsevent", Key: key, WindowFocused: focused,
+		InputRoute: "appkit-nsapplication-event", Key: key, WindowFocused: focused,
 		ForegroundPreserved: foregroundPreserved,
 	}, nil
 }

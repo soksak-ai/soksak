@@ -237,10 +237,6 @@ SoksakNativeInputDelivery soksakClickWindowPointer(void *nsWindow,
   }
   NSPoint local = NSMakePoint(x, webview.isFlipped ? y : NSHeight(bounds) - y);
   NSPoint location = [webview convertPoint:local toView:nil];
-  NSView *target = [webview hitTest:local];
-  if (target == nil) {
-    return soksakNativeInputFailure("WKWebView hit testing found no native input target", window);
-  }
   NSEvent *down = soksakWindowMouseEvent(window, location, NSEventTypeLeftMouseDown, sequence);
   NSEvent *up = soksakWindowMouseEvent(window, location, NSEventTypeLeftMouseUp, sequence);
   if (down == nil || up == nil) {
@@ -254,14 +250,8 @@ SoksakNativeInputDelivery soksakClickWindowPointer(void *nsWindow,
     out.foregroundPreserved = true;
     return out;
   }
-  if (![window makeFirstResponder:target]) {
-    SoksakNativeInputDelivery out = soksakNativeInputFailure(
-        "hit-tested WKWebView target refused the native responder role", window);
-    out.foregroundPreserved = soksakForegroundPreserved(frontmostProcessID, applicationActive);
-    return out;
-  }
-  [target mouseDown:down];
-  [target mouseUp:up];
+  [NSApp sendEvent:down];
+  [NSApp sendEvent:up];
   bool preserved = soksakForegroundPreserved(frontmostProcessID, applicationActive);
   SoksakNativeInputDelivery out = {true, window.isKeyWindow, preserved, NULL};
   if (!preserved) {
@@ -362,8 +352,8 @@ SoksakNativeInputDelivery soksakPressWindowKey(void *nsWindow,
     out.foregroundPreserved = soksakForegroundPreserved(frontmostProcessID, applicationActive);
     return out;
   }
-  [responder keyDown:down];
-  [responder keyUp:up];
+  [NSApp sendEvent:down];
+  [NSApp sendEvent:up];
   bool preserved = soksakForegroundPreserved(frontmostProcessID, applicationActive);
   SoksakNativeInputDelivery out = {true, window.isKeyWindow, preserved, NULL};
   if (!preserved) {
