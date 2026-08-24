@@ -44,7 +44,7 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 	client := filepath.Join("bin", "sok")
 	for _, binary := range []string{app, client} {
 		if _, err := os.Stat(binary); err != nil {
-			t.Skipf("%s is not built; run `wails3 task build` and `wails3 task build:sok` first", binary)
+			t.Skipf("%s is not built; run `go tool wails3 task build` and `go tool wails3 task build:sok` first", binary)
 		}
 	}
 	if os.Getenv("DISPLAY") == "" && os.Getenv("HOME") == "" {
@@ -286,7 +286,7 @@ func newGate(t *testing.T, homePrefix string, identifier string) *restoreGate {
 	client := filepath.Join("bin", "sok")
 	for _, binary := range []string{app, client} {
 		if _, err := os.Stat(binary); err != nil {
-			t.Skipf("%s is not built; run `wails3 task build` and `wails3 task build:sok` first", binary)
+			t.Skipf("%s is not built; run `go tool wails3 task build` and `go tool wails3 task build:sok` first", binary)
 		}
 		if err := requireHostBinary(binary); err != nil {
 			t.Fatalf("%s is not executable on this host: %v", binary, err)
