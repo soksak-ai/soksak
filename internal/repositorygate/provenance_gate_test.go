@@ -85,6 +85,21 @@ func TestTheRecordKeepsReasonsAndDropsSources(t *testing.T) {
 	}
 }
 
+func TestWorkspaceScopedRecordMayNameToolOwnersButNotHistoricalAttribution(t *testing.T) {
+	workspace := "---\nkind: guide\nscope: workspace\n---\nRust is owned by rust-toolchain.toml.\n"
+	if found := recordAttributions(workspace); len(found) != 0 {
+		t.Fatalf("workspace rule cannot name its cross-repository tool owner: %v", found)
+	}
+	ordinary := "---\nkind: guide\n---\nRust supplied this implementation.\n"
+	if found := recordAttributions(ordinary); len(found) == 0 {
+		t.Fatal("ordinary Core prose can attribute an implementation to a foreign toolchain")
+	}
+	historical := "---\nkind: guide\nscope: workspace\n---\nAn earlier build supplied this rule.\n"
+	if found := recordAttributions(historical); len(found) == 0 {
+		t.Fatal("workspace scope disables the historical-attribution rule")
+	}
+}
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"
