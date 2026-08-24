@@ -67,7 +67,7 @@ func TestWindowInputCommandsExposeNativeControlStatusAndClick(t *testing.T) {
 	for _, command := range registry.Describe().Commands {
 		served[command.Name] = true
 	}
-	for _, name := range []string{"window_native_control_status", "window_native_control_click"} {
+	for _, name := range []string{"window_native_close_status", "window_native_close_click"} {
 		if !served[name] {
 			t.Errorf("%s is not exposed", name)
 		}
