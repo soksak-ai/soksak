@@ -67,6 +67,8 @@ changelog에 기록합니다.
 | `CONTROL-PROTOCOL.md` | Control envelope와 version negotiation |
 | `CONTROL-PROTOCOL.CHANGELOG.md` | 하나의 응답 envelope가 필요한 이유 |
 | `COMMAND-LINE.md` | 공개 CLI command 형식 |
+| `TERMINAL-UX-HANDOFF.ko.md` | 해결되지 않은 터미널 UX 결함, workspace 소유권 지도, 확인된 기준점 |
+| `TERMINAL-UX-EXECUTION.ko.md` | Renderer parity, view visibility, native close, test isolation의 필수 RED-to-GREEN 순서 |
 | `MESSAGE-PROTOCOL.md` | Request, response, progress 상관관계 |
 | `SIDECARS.md` | Sidecar 배포, 선택, lifetime |
 | `PLUGIN-CONTRACT.md` | Plugin 선언과 계약 소유권 |

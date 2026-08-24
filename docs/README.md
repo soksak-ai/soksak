@@ -88,6 +88,8 @@ that on the same date and the gate landed against it.
 | [`tech/CONTROL-PROTOCOL.md`](tech/CONTROL-PROTOCOL.md) | One line of JSON, the envelope, the greeting that negotiates, the command table, the socket address |
 | [`tech/CONTROL-PROTOCOL.CHANGELOG.md`](tech/CONTROL-PROTOCOL.CHANGELOG.md) | Why the control plane requires one self-describing response shape |
 | [`tech/COMMAND-LINE.md`](tech/COMMAND-LINE.md) | Public dotted command names, name-value and JSON object parameter forms, discovery, output and quoting |
+| [`tech/TERMINAL-UX-HANDOFF.md`](tech/TERMINAL-UX-HANDOFF.md) | Unresolved terminal UX defects, workspace ownership map and verified baseline |
+| [`tech/TERMINAL-UX-EXECUTION.md`](tech/TERMINAL-UX-EXECUTION.md) | Required RED-to-GREEN order for renderer parity, view visibility, native close and test isolation |
 | [`tech/MESSAGE-PROTOCOL.md`](tech/MESSAGE-PROTOCOL.md) | Request and response shape, progress deltas, correlation by parent id |
 | [`tech/SIDECARS.md`](tech/SIDECARS.md) | A plugin in its own process: one envelope, lifetime, distribution, declaration |
 | [`tech/PLUGIN-CONTRACT.md`](tech/PLUGIN-CONTRACT.md) | What a plugin declares, who owns each definition, the generated contract.json, permissions, and contract ids |
