@@ -17,12 +17,8 @@ func TestWorkspaceLayoutSeparatesForksLibrariesExternalsAndTests(t *testing.T) {
 			"branch name includes the upstream version",
 		},
 		"docs/tech/REPO-LAYOUT.ko.md": {
-			"forks/", "직접 유지하는 upstream fork",
-			"libraries/", "직접 만든 재사용 library",
-			"externals/", "수정하지 않는 제3자 source",
-			"tests/", "제품 전용 system 및 acceptance repository",
-			"origin`은 유지하는 fork", "upstream`은 원본 repository",
-			"branch 이름에는 upstream version",
+			"forks/", "libraries/", "externals/", "tests/",
+			"`origin`", "`upstream`", "upstream version",
 		},
 	}
 	for path, required := range checks {

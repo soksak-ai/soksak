@@ -19,20 +19,30 @@ wails3beta/
 ├── soksak-sidecars/    plugin-owned processes, one repository each
 ├── soksak-contracts/   shared public contracts and acceptance suites
 ├── wails-services/     Wails services this project wrote
-├── externals/          third-party libraries
+├── forks/              maintained upstream forks
+├── libraries/          independently authored reusable libraries
+├── externals/          unmodified third-party source
+├── tests/              product-specific system and acceptance repositories
 └── backup/             removed material, referenced by no build
 ```
 
-Four rules produce this:
+These rules produce this:
 
-1. Ours and not-ours are separate. `externals/` holds source used for comparison or system tests;
-   product dependencies come from exact published releases.
+1. Ownership and modification policy are visible in the folder name. `forks/` contains upstream
+   source we intentionally maintain; `libraries/` contains reusable libraries we authored;
+   `externals/` contains unmodified third-party source; `tests/` contains Soksak-specific system and
+   acceptance repositories. Product dependencies still come from exact published releases.
 2. A plugin adds a feature and can be switched off (A8). Shared plugin code, public contracts and
    plugin processes remain independently versioned repositories. A Wails service extends the host and
    cannot be switched off as a plugin. These are different kinds, so they are different folders.
 3. An upstream release is pinned. Wails Go, CLI, and frontend runtime dependencies use exact release versions, and moving them is legislation with its
    own commit, not a side effect (see NATIVE-LAYER.md).
 4. `backup/` is invisible to every build and gate. Anything the build needs is not in it.
+
+A repository under `forks/` has one remote and branch contract: `origin` names the maintained fork,
+and `upstream` names the original repository. The branch name includes the upstream version it
+extends. A temporary feature branch is folded into that version branch after GREEN and removed; two
+branches must not carry the same maintained release line.
 
 The workspace layout is an authoring layout, not runtime discovery. The application resolves
 plugins, sidecars, kits, contracts, and specs from `environment.json` and never scans these sibling
@@ -60,18 +70,20 @@ purpose: this repository importing its own registry is what the registry is for.
 
 ## L1a. Material from another tree is copied in, and the copy decides where
 
-A repository that came from somewhere else is copied into this workspace and the original is never
-written to. Two reasons, and the second is the one that governs:
+A repository that came from somewhere else is copied into this workspace and the original upstream
+is never written to. A maintained fork is written only through its `origin`; an unmodified external
+is never written. Two reasons, and the second is the one that governs:
 
 - A source tree that another application is running is not still while it is read. What a reading
   found once, a second reading may not find, and neither reading states which one is the record.
 - A path that can be read is one keystroke from a path that can be written. A copy removes the
   write entirely, which no amount of care does.
 
-Where the copy lands is decided by one question — **does a build in this workspace reference it.**
-A repository that will be built, released or installed here goes in the folder for its kind, and from that
-moment every rule here applies to it. Material that is only read goes in `backup/`, which no build
-and no gate sees.
+Where the copy lands is decided by ownership. Product components go in the folder for their product
+kind. A maintained upstream fork goes in `forks/`, an independently authored reusable library in
+`libraries/`, unmodified comparison source in `externals/`, and product acceptance code in `tests/`.
+Material retained only as history goes in `backup/`, which no build and no gate sees. None of these
+workspace paths is a dependency locator.
 
 **A produced artefact is never copied.** A binary carried in from another tree makes this workspace
 appear to build something it cannot: the artefact runs, the gate that would have named the gap stays
