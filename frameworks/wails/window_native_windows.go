@@ -49,5 +49,12 @@ func windowInputState(unsafe.Pointer) (WindowInputState, error) {
 func setWindowMarkedText(unsafe.Pointer, string) (WindowInputState, error) {
 	return WindowInputState{}, ErrWindowInputUnsupported
 }
+func nativeCloseStatus(unsafe.Pointer) (NativeCloseStatus, error) {
+	return NativeCloseStatus{}, ErrWindowInputUnsupported
+}
+func clickNativeClose(unsafe.Pointer, uint64) (bool, error) {
+	return false, ErrWindowInputUnsupported
+}
+func makeWindowTransparent(unsafe.Pointer)          {}
 func installWindowInputMonitor(*windowInputMonitor) {}
 func removeWindowInputMonitor(*windowInputMonitor)  {}

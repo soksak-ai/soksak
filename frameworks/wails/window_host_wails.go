@@ -1,6 +1,8 @@
 package wails
 
 import (
+	"fmt"
+	"slices"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -53,7 +55,7 @@ func NewWindowHost(
 	template application.WebviewWindowOptions,
 	presentation PresentationMode,
 	identity string,
-) WindowHost {
+) *wailsHost {
 	if app == nil {
 		panic("wails: the window host needs an application")
 	}
@@ -169,6 +171,9 @@ func (h *wailsHost) InjectInputPointer(name string, x, y float64) (WindowPointer
 		return WindowPointerInjectionReceipt{}, i18n.Errorf("wails.host.noInputWindow", map[string]string{"window": name})
 	}
 	sequence := (uint64(1) << 40) + windowInputClickSequence.Add(1)
+	h.inputMonitor.expectNativeClose(NativeCloseRequest{
+		Window: name, Sequence: sequence, AtUnixMs: float64(time.Now().UnixMilli()),
+	})
 	now := float64(time.Now().UnixMilli())
 	native := uintptr(window.NativeWindow())
 	h.inputMonitor.enqueue(windowPointerEnvelope{native: native, sequence: sequence, phase: "down", source: "contract-injection", x: x, y: y, atUnixMs: now})
@@ -178,6 +183,68 @@ func (h *wailsHost) InjectInputPointer(name string, x, y float64) (WindowPointer
 		CursorPositionMayChange: false, X: x, Y: y,
 		WindowFocused: window.IsFocused(),
 	}, nil
+}
+
+func (h *wailsHost) NativeCloseStatus(name string) (NativeCloseStatus, error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return NativeCloseStatus{}, i18n.Errorf("wails.host.noInputWindow", map[string]string{"window": name})
+	}
+	var status NativeCloseStatus
+	var failure error
+	application.InvokeSync(func() { status, failure = nativeCloseStatus(window.NativeWindow()) })
+	status.Window = name
+	return status, failure
+}
+
+func (h *wailsHost) ClickNativeClose(name string) (NativeCloseClickReceipt, error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return NativeCloseClickReceipt{}, i18n.Errorf("wails.host.noInputWindow", map[string]string{"window": name})
+	}
+	sequence := (uint64(1) << 40) + windowInputClickSequence.Add(1)
+	h.inputMonitor.expectNativeClose(NativeCloseRequest{
+		Window: name, Sequence: sequence, AtUnixMs: float64(time.Now().UnixMilli()),
+	})
+	if h.presentation == PresentationCaptureOnly {
+		for _, candidate := range h.app.Window.GetAll() {
+			native := candidate.NativeWindow()
+			application.InvokeSync(func() { makeWindowTransparent(native) })
+			candidate.Show()
+		}
+		window.Show()
+	}
+	var posted bool
+	var failure error
+	application.InvokeSync(func() { posted, failure = clickNativeClose(window.NativeWindow(), sequence) })
+	_, tracked := h.inputMonitor.nativeCloseExpectation(sequence)
+	return NativeCloseClickReceipt{Window: name, Sequence: sequence, Posted: posted, Tracked: tracked}, failure
+}
+
+func (h *wailsHost) WaitNativeClose(sequence uint64, timeout time.Duration) (NativeCloseOutcome, error) {
+	started := time.Now()
+	outcome, expected := h.inputMonitor.nativeCloseExpectation(sequence)
+	if !expected {
+		return NativeCloseOutcome{}, i18n.Errorf("wails.input.nativeCloseExpectationMissing", map[string]string{
+			"sequence": fmt.Sprint(sequence),
+		})
+	}
+	// Wails v3 has WindowClosing but no post-destruction callback. Removal from the name registry is
+	// the completion fact; the vendor native pointer can remain non-nil after removal. Polling is
+	// bounded to the caller's remaining deadline and begins only
+	// after an exact pointer/click expectation exists; no timer runs before an actual close request.
+	deadline := started.Add(timeout)
+	for slices.Contains(h.Names(), outcome.Window) {
+		if time.Now().After(deadline) {
+			return NativeCloseOutcome{}, i18n.Errorf("wails.input.nativeCloseTimeout", map[string]string{
+				"sequence": fmt.Sprint(sequence), "timeout": timeout.String(),
+			})
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	outcome.Closed = true
+	h.inputMonitor.finishNativeClose(outcome)
+	return outcome, nil
 }
 
 func (h *wailsHost) DrainInputMonitor() int {

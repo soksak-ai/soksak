@@ -130,4 +130,21 @@ SoksakWindowInputState soksakSetWindowMarkedText(void *nsWindow, const char *tex
 void *soksakInstallWindowInputMonitor(void);
 void soksakRemoveWindowInputMonitor(void *token);
 
+typedef struct {
+  bool present;
+  bool enabled;
+  bool visible;
+  bool windowVisible;
+  double x;
+  double y;
+  double width;
+  double height;
+} SoksakNativeCloseStatus;
+
+// Read and click the standard AppKit close button. The click enters NSApplication as a mouse
+// down/up pair; it does not call performClose: or the application's window-close command.
+SoksakNativeCloseStatus soksakNativeCloseStatus(void *nsWindow);
+bool soksakClickNativeClose(void *nsWindow, unsigned long long sequence);
+void soksakMakeWindowTransparent(void *nsWindow);
+
 #endif

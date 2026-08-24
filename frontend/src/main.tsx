@@ -70,6 +70,7 @@ import { startActivityFeed } from "./state/activityFeed";
 import "./assets/fonts.css";
 import { applySavedWindowZoom } from "./lib/zoomIntent";
 import { tmsg } from "./i18n";
+import { initNativeCloseRequests } from "./lib/nativeCloseRequests";
 
 // Terminal spawn options (cwd/shell/autorun command) come from the terminal plugin, not the core —
 // the plugin view spawns directly on mount with PluginViewContext (root/command) and its own setting (shell).
@@ -366,6 +367,11 @@ async function boot(): Promise<void> {
   // Releases the boot readiness gate — unregistered (plugin) command requests that arrived earlier and waited now run.
   // Released even when exiting through a failure (a permanently locked gate kills remote requests by timeout only).
   markCommandHostReady();
+  try {
+    await initNativeCloseRequests();
+  } catch (e) {
+    console.error("native close input registration failed:", e);
+  }
   try {
     await declareCommandsToBackend();
     followRegistryWithDeclaration();

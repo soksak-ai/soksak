@@ -156,6 +156,26 @@ func init() {
 			EN: "a window with no native lifetime holds no view to fit",
 			KO: "네이티브 수명이 없는 창에는 맞출 뷰가 없습니다",
 		},
+		"wails.window.noNativeClose": {
+			EN: "the window has no native close button",
+			KO: "이 창에는 네이티브 닫기 버튼이 없습니다",
+		},
+		"wails.window.nativeCloseDisabled": {
+			EN: "the native close button is disabled or hidden",
+			KO: "네이티브 닫기 버튼이 비활성화되었거나 숨겨졌습니다",
+		},
+		"wails.window.nativeCloseClickFailed": {
+			EN: "AppKit rejected the native close-button mouse input",
+			KO: "AppKit이 네이티브 닫기 버튼 마우스 입력을 거부했습니다",
+		},
+		"wails.input.nativeCloseTimeout": {
+			EN: "native close did not destroy its window for sequence {sequence} within {timeout}",
+			KO: "네이티브 닫기 sequence {sequence}이(가) {timeout} 안에 창을 종료하지 않았습니다",
+		},
+		"wails.input.nativeCloseExpectationMissing": {
+			EN: "native close sequence {sequence} was never registered",
+			KO: "네이티브 닫기 sequence {sequence}이(가) 등록되지 않았습니다",
+		},
 	})
 }
 

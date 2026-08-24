@@ -33,6 +33,19 @@ func (h *inputHostFixture) InjectInputPointer(window string, x, y float64) (Wind
 	return WindowPointerInjectionReceipt{Sequence: 9, Posted: true, InputRoute: "contract-injection", X: x, Y: y}, nil
 }
 
+func (h *inputHostFixture) NativeCloseStatus(window string) (NativeCloseStatus, error) {
+	h.window = window
+	return NativeCloseStatus{Window: window, Present: true, Enabled: true, Visible: true}, nil
+}
+
+func (h *inputHostFixture) ClickNativeClose(window string) (NativeCloseClickReceipt, error) {
+	h.window = window
+	return NativeCloseClickReceipt{Window: window, Sequence: 10, Posted: true, Tracked: true}, nil
+}
+func (h *inputHostFixture) WaitNativeClose(sequence uint64, _ time.Duration) (NativeCloseOutcome, error) {
+	return NativeCloseOutcome{Window: h.window, Sequence: sequence, Closed: true}, nil
+}
+
 func TestWindowInputCommandsUseTheNamedWindowAndExposeDeliveryReceipts(t *testing.T) {
 	registry := control.NewRegistry()
 	host := &inputHostFixture{}
@@ -67,7 +80,7 @@ func TestWindowInputCommandsExposeNativeControlStatusAndClick(t *testing.T) {
 	for _, command := range registry.Describe().Commands {
 		served[command.Name] = true
 	}
-	for _, name := range []string{"window_native_close_status", "window_native_close_click"} {
+	for _, name := range []string{"window_native_close_status", "window_native_close_click", "window_native_close_wait"} {
 		if !served[name] {
 			t.Errorf("%s is not exposed", name)
 		}

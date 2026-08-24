@@ -11,6 +11,7 @@ import (
 )
 
 const windowInputPointerEvent = "window.input.pointer"
+const windowNativeCloseEvent = "window.native-close-requested"
 
 // WindowPointerReceipt records a pointer edge before WebKit processes DOM delivery.
 // Sequence identifies one down/up pair.
@@ -25,26 +26,42 @@ type WindowPointerReceipt struct {
 }
 
 type windowInputMonitor struct {
-	mu        sync.RWMutex
-	active    bool
-	last      *WindowPointerReceipt
-	delivered map[string]struct{}
-	lookup    func(native uintptr) string
-	dispatch  func(window, event string, payload any) error
-	queue     chan windowPointerEnvelope
-	worker    sync.WaitGroup
-	dropped   atomic.Uint64
-	waiters   map[uint64][]chan WindowPointerReceipt
+	mu             sync.RWMutex
+	active         bool
+	last           *WindowPointerReceipt
+	delivered      map[string]struct{}
+	lookup         func(native uintptr) string
+	dispatch       func(window, event string, payload any) error
+	queue          chan windowPointerEnvelope
+	worker         sync.WaitGroup
+	dropped        atomic.Uint64
+	waiters        map[uint64][]chan WindowPointerReceipt
+	closePending   map[string]NativeCloseRequest
+	closeExpected  map[uint64]NativeCloseRequest
+	closeCompleted map[uint64]NativeCloseOutcome
 }
 
 type windowPointerEnvelope struct {
-	native   uintptr
-	sequence uint64
-	phase    string
-	source   string
-	x        float64
-	y        float64
-	atUnixMs float64
+	native      uintptr
+	sequence    uint64
+	phase       string
+	source      string
+	x           float64
+	y           float64
+	atUnixMs    float64
+	nativeClose bool
+}
+
+type NativeCloseRequest struct {
+	Window   string  `json:"window"`
+	Sequence uint64  `json:"sequence"`
+	AtUnixMs float64 `json:"atUnixMs"`
+}
+
+type NativeCloseOutcome struct {
+	Window   string `json:"window"`
+	Sequence uint64 `json:"sequence"`
+	Closed   bool   `json:"closed"`
 }
 
 func newWindowInputMonitor(
@@ -55,11 +72,14 @@ func newWindowInputMonitor(
 		panic("wails: window input monitor needs lookup and dispatch")
 	}
 	return &windowInputMonitor{
-		delivered: map[string]struct{}{},
-		lookup:    lookup,
-		dispatch:  dispatch,
-		queue:     make(chan windowPointerEnvelope, 128),
-		waiters:   map[uint64][]chan WindowPointerReceipt{},
+		delivered:      map[string]struct{}{},
+		lookup:         lookup,
+		dispatch:       dispatch,
+		queue:          make(chan windowPointerEnvelope, 128),
+		waiters:        map[uint64][]chan WindowPointerReceipt{},
+		closePending:   map[string]NativeCloseRequest{},
+		closeExpected:  map[uint64]NativeCloseRequest{},
+		closeCompleted: map[uint64]NativeCloseOutcome{},
 	}
 }
 
@@ -80,7 +100,81 @@ func (monitor *windowInputMonitor) run() {
 	defer monitor.worker.Done()
 	for edge := range monitor.queue {
 		_ = monitor.deliverWithSource(edge.native, edge.sequence, edge.phase, edge.source, edge.x, edge.y, edge.atUnixMs)
+		if edge.nativeClose && edge.phase == "up" {
+			_ = monitor.requestNativeClose(edge.native, edge.sequence, edge.atUnixMs)
+		}
 	}
+}
+
+func (monitor *windowInputMonitor) enqueueNativeClose(edge windowPointerEnvelope) bool {
+	monitor.mu.RLock()
+	defer monitor.mu.RUnlock()
+	if !monitor.active {
+		return false
+	}
+	edge.nativeClose = true
+	select {
+	case monitor.queue <- edge:
+		return true
+	default:
+		monitor.dropped.Add(1)
+		return false
+	}
+}
+
+func (monitor *windowInputMonitor) requestNativeClose(native uintptr, sequence uint64, atUnixMs float64) error {
+	window := monitor.lookup(native)
+	if window == "" {
+		return i18n.Errorf("wails.input.windowUnknown", nil)
+	}
+	request := NativeCloseRequest{Window: window, Sequence: sequence, AtUnixMs: atUnixMs}
+	monitor.expectNativeClose(request)
+	return monitor.dispatch(window, windowNativeCloseEvent, request)
+}
+
+func (monitor *windowInputMonitor) expectNativeClose(request NativeCloseRequest) {
+	monitor.mu.Lock()
+	monitor.closePending[request.Window] = request
+	monitor.closeExpected[request.Sequence] = request
+	monitor.mu.Unlock()
+}
+
+func (monitor *windowInputMonitor) nativeCloseExpectation(sequence uint64) (NativeCloseOutcome, bool) {
+	monitor.mu.RLock()
+	defer monitor.mu.RUnlock()
+	if outcome, found := monitor.closeCompleted[sequence]; found {
+		return outcome, true
+	}
+	if request, found := monitor.closeExpected[sequence]; found {
+		return NativeCloseOutcome{Window: request.Window, Sequence: sequence}, true
+	}
+	for _, request := range monitor.closePending {
+		if request.Sequence == sequence {
+			return NativeCloseOutcome{Window: request.Window, Sequence: sequence}, true
+		}
+	}
+	return NativeCloseOutcome{}, false
+}
+
+func (monitor *windowInputMonitor) finishNativeClose(outcome NativeCloseOutcome) {
+	monitor.mu.Lock()
+	delete(monitor.closePending, outcome.Window)
+	delete(monitor.closeExpected, outcome.Sequence)
+	delete(monitor.closeCompleted, outcome.Sequence)
+	monitor.mu.Unlock()
+}
+
+func (monitor *windowInputMonitor) nativeCloseWindowGone(window string) {
+	monitor.mu.Lock()
+	request, found := monitor.closePending[window]
+	if !found {
+		monitor.mu.Unlock()
+		return
+	}
+	delete(monitor.closePending, window)
+	outcome := NativeCloseOutcome{Window: window, Sequence: request.Sequence, Closed: false}
+	monitor.closeCompleted[request.Sequence] = outcome
+	monitor.mu.Unlock()
 }
 
 func (monitor *windowInputMonitor) drain() int {

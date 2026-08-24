@@ -103,6 +103,9 @@ type WindowHost interface {
 	SetMarkedText(name, text string) (WindowInputState, error)
 	InjectInputPointer(name string, x, y float64) (WindowPointerInjectionReceipt, error)
 	WaitInputPointer(sequence uint64, timeout time.Duration) (WindowPointerReceipt, error)
+	NativeCloseStatus(name string) (NativeCloseStatus, error)
+	ClickNativeClose(name string) (NativeCloseClickReceipt, error)
+	WaitNativeClose(sequence uint64, timeout time.Duration) (NativeCloseOutcome, error)
 	// DrainInputMonitor removes this host's physical-input observer. It is a
 	// shutdown child with an explicit count, never a process-global leak.
 	DrainInputMonitor() int

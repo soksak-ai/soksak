@@ -41,6 +41,25 @@ func soksakWindowInputPointer(window unsafe.Pointer, sequence C.ulonglong, phase
 	})
 }
 
+//export soksakWindowNativeClosePointer
+func soksakWindowNativeClosePointer(window unsafe.Pointer, sequence C.ulonglong, phase C.int, x, y, atUnixMs C.double) C.bool {
+	windowInputMonitorOwner.RLock()
+	monitor := windowInputMonitorOwner.monitor
+	windowInputMonitorOwner.RUnlock()
+	if monitor == nil {
+		return C.bool(false)
+	}
+	edge := "down"
+	if phase == 1 {
+		edge = "up"
+	}
+	accepted := monitor.enqueueNativeClose(windowPointerEnvelope{
+		native: uintptr(window), sequence: uint64(sequence), phase: edge, source: "system",
+		x: float64(x), y: float64(y), atUnixMs: float64(atUnixMs), nativeClose: true,
+	})
+	return C.bool(accepted)
+}
+
 func installWindowInputMonitor(monitor *windowInputMonitor) {
 	windowInputMonitorOwner.Lock()
 	defer windowInputMonitorOwner.Unlock()
@@ -199,6 +218,39 @@ func setWindowMarkedText(window unsafe.Pointer, text string) (WindowInputState, 
 		InputOwner:      C.GoString(read.inputOwner),
 		ResponderMarked: bool(read.marked),
 	}, nil
+}
+
+func nativeCloseStatus(window unsafe.Pointer) (NativeCloseStatus, error) {
+	if window == nil {
+		return NativeCloseStatus{}, i18n.Errorf("wails.window.noNativeClose", nil)
+	}
+	read := C.soksakNativeCloseStatus(window)
+	if !bool(read.present) {
+		return NativeCloseStatus{}, i18n.Errorf("wails.window.noNativeClose", nil)
+	}
+	return NativeCloseStatus{
+		Present: true, Enabled: bool(read.enabled), Visible: bool(read.visible),
+		WindowVisible: bool(read.windowVisible), X: float64(read.x), Y: float64(read.y),
+		Width: float64(read.width), Height: float64(read.height),
+	}, nil
+}
+
+func clickNativeClose(window unsafe.Pointer, sequence uint64) (bool, error) {
+	status, err := nativeCloseStatus(window)
+	if err != nil {
+		return false, err
+	}
+	if !status.Enabled || !status.Visible {
+		return false, i18n.Errorf("wails.window.nativeCloseDisabled", nil)
+	}
+	if !bool(C.soksakClickNativeClose(window, C.ulonglong(sequence))) {
+		return false, i18n.Errorf("wails.window.nativeCloseClickFailed", nil)
+	}
+	return true, nil
+}
+
+func makeWindowTransparent(window unsafe.Pointer) {
+	C.soksakMakeWindowTransparent(window)
 }
 
 func freeWindowInputState(read C.SoksakWindowInputState) {

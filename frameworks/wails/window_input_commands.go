@@ -20,6 +20,25 @@ type WindowInputState struct {
 	PointerEventsDropped uint64                `json:"pointerEventsDropped"`
 }
 
+type NativeCloseStatus struct {
+	Window        string  `json:"window"`
+	Present       bool    `json:"present"`
+	Enabled       bool    `json:"enabled"`
+	Visible       bool    `json:"visible"`
+	WindowVisible bool    `json:"windowVisible"`
+	X             float64 `json:"x"`
+	Y             float64 `json:"y"`
+	Width         float64 `json:"width"`
+	Height        float64 `json:"height"`
+}
+
+type NativeCloseClickReceipt struct {
+	Window   string `json:"window"`
+	Sequence uint64 `json:"sequence"`
+	Posted   bool   `json:"posted"`
+	Tracked  bool   `json:"tracked"`
+}
+
 // WindowPointerInjectionReceipt identifies one test event request.
 type WindowPointerInjectionReceipt struct {
 	Sequence                uint64  `json:"sequence"`
@@ -38,6 +57,9 @@ type WindowInputHost interface {
 	SetMarkedText(window, text string) (WindowInputState, error)
 	InjectInputPointer(window string, x, y float64) (WindowPointerInjectionReceipt, error)
 	WaitInputPointer(sequence uint64, timeout time.Duration) (WindowPointerReceipt, error)
+	NativeCloseStatus(window string) (NativeCloseStatus, error)
+	ClickNativeClose(window string) (NativeCloseClickReceipt, error)
+	WaitNativeClose(sequence uint64, timeout time.Duration) (NativeCloseOutcome, error)
 }
 
 func RegisterWindowInput(registry *control.Registry, host WindowInputHost) {
@@ -107,6 +129,40 @@ func RegisterWindowInput(registry *control.Registry, host WindowInputHost) {
 				return nil, i18n.Errorf("wails.input.negativeCoordinates", map[string]string{"x": strconv.FormatFloat(x, 'f', -1, 64), "y": strconv.FormatFloat(y, 'f', -1, 64)})
 			}
 			return host.InjectInputPointer(name, x, y)
+		},
+	})
+	registry.MustRegister(control.Command{Name: "window_native_close_status", Owner: control.OwnerFramework,
+		Handler: func(args control.Args) (any, error) {
+			name, err := window(args)
+			if err != nil {
+				return nil, err
+			}
+			return host.NativeCloseStatus(name)
+		},
+	})
+	registry.MustRegister(control.Command{Name: "window_native_close_click", Owner: control.OwnerFramework,
+		Handler: func(args control.Args) (any, error) {
+			name, err := window(args)
+			if err != nil {
+				return nil, err
+			}
+			return host.ClickNativeClose(name)
+		},
+	})
+	registry.MustRegister(control.Command{Name: "window_native_close_wait", Owner: control.OwnerFramework,
+		Handler: func(args control.Args) (any, error) {
+			sequence, err := control.Arg[uint64](args, "sequence")
+			if err != nil {
+				return nil, err
+			}
+			timeoutMs, err := control.Arg[int](args, "timeoutMs")
+			if err != nil {
+				return nil, err
+			}
+			if timeoutMs < 1 || timeoutMs > 30000 {
+				return nil, i18n.Errorf("wails.input.invalidTimeout", map[string]string{"timeout": strconv.Itoa(timeoutMs)})
+			}
+			return host.WaitNativeClose(sequence, time.Duration(timeoutMs)*time.Millisecond)
 		},
 	})
 }

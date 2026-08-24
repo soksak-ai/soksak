@@ -98,6 +98,15 @@ func (h *fakeHost) WaitInputPointer(uint64, time.Duration) (WindowPointerReceipt
 func (h *fakeHost) InjectInputPointer(string, float64, float64) (WindowPointerInjectionReceipt, error) {
 	return WindowPointerInjectionReceipt{}, nil
 }
+func (h *fakeHost) NativeCloseStatus(name string) (NativeCloseStatus, error) {
+	return NativeCloseStatus{Window: name}, nil
+}
+func (h *fakeHost) ClickNativeClose(name string) (NativeCloseClickReceipt, error) {
+	return NativeCloseClickReceipt{Window: name}, nil
+}
+func (h *fakeHost) WaitNativeClose(sequence uint64, _ time.Duration) (NativeCloseOutcome, error) {
+	return NativeCloseOutcome{Sequence: sequence, Closed: true}, nil
+}
 func (h *fakeHost) DrainInputMonitor() int { return 0 }
 
 // ContentSize: this package has no application, so a window here has no content

@@ -85,3 +85,43 @@ func TestPhysicalInputCallbackQueuesBeforeAnyWebviewDispatch(t *testing.T) {
 	monitor.mu.Unlock()
 	monitor.worker.Wait()
 }
+
+func TestNativeClosePointerWaitsForWindowDestruction(t *testing.T) {
+	var monitor *windowInputMonitor
+	closed := make(chan struct{})
+	monitor = newWindowInputMonitor(
+		func(uintptr) string { return "win-a" },
+		func(window, event string, payload any) error {
+			if event == windowNativeCloseEvent {
+				request := payload.(NativeCloseRequest)
+				if window != request.Window || request.Sequence != 44 {
+					t.Fatalf("native close request=%+v window=%s", request, window)
+				}
+				monitor.nativeCloseWindowGone(window)
+				close(closed)
+			}
+			return nil
+		},
+	)
+	monitor.active = true
+	monitor.worker.Add(1)
+	go monitor.run()
+	if !monitor.enqueueNativeClose(windowPointerEnvelope{native: 1, sequence: 44, phase: "down", atUnixMs: 10}) ||
+		!monitor.enqueueNativeClose(windowPointerEnvelope{native: 1, sequence: 44, phase: "up", atUnixMs: 11}) {
+		t.Fatal("native close pointer was not queued")
+	}
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("native close request was not dispatched")
+	}
+	outcome, found := monitor.nativeCloseExpectation(44)
+	if !found || outcome.Closed || outcome.Window != "win-a" {
+		t.Fatalf("native close outcome=%+v found=%t", outcome, found)
+	}
+	monitor.mu.Lock()
+	monitor.active = false
+	close(monitor.queue)
+	monitor.mu.Unlock()
+	monitor.worker.Wait()
+}

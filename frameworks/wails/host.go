@@ -172,7 +172,7 @@ func Run(options Options) error {
 	// inside a 999×617 window — and the pane the person was looking at stayed
 	// empty while every reading reported the surface applied with zero drift.
 	var window application.Window
-	var windowHost WindowHost
+	var windowHost *wailsHost
 	nativeWindow := func(name string) unsafe.Pointer {
 		if windowHost == nil {
 			return nil
@@ -325,6 +325,9 @@ func Run(options Options) error {
 		}
 	})
 	app.Window.OnCreate(func(created application.Window) {
+		created.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+			windowHost.inputMonitor.nativeCloseWindowGone(created.Name())
+		})
 		created.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
 			if err := renderer.Withdraw(created.Name()); err != nil {
 				log.Printf("renderer commands: %v", err)

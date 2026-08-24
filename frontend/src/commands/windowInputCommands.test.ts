@@ -11,6 +11,9 @@ describe("window.input — discoverable native input diagnostics", () => {
     ["window.input.mark", ["text"]],
     ["window.input.pointer.wait", ["sequence", "timeoutMs"]],
     ["window.input.pointer.inject", ["x", "y"]],
+    ["window.native-close.status", []],
+    ["window.native-close.click", []],
+    ["window.native-close.wait", ["sequence", "timeoutMs"]],
   ])("publishes the exact help contract for %s", async (name, params) => {
     expect(Object.keys(getSpec(name)?.params ?? {})).toEqual(params);
     const result = await execute("command.docs", { name }, {});

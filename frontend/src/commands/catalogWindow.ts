@@ -723,4 +723,38 @@ export function registerWindowCatalog(): void {
     examples: ["window.input.pointer.inject window=win-example x=400 y=200"],
     handler: async (p) => invoke("window.input.pointer.inject", { x: p.x, y: p.y }),
   });
+
+  register("window.native-close.status", {
+    description: key("cmd.window.nativeClose.status.desc"),
+    params: {},
+    returns: "{ window, present, enabled, visible, windowVisible, x, y, width, height }",
+    message: (d) => tmsg("msg.window.nativeClose.status", { enabled: String(Boolean(d.enabled)) }),
+    examples: ["window.native-close.status window=win-example"],
+    handler: async () => invoke("window_native_close_status"),
+  });
+
+  register("window.native-close.click", {
+    description: key("cmd.window.nativeClose.click.desc"),
+    params: {},
+    returns: "{ window, sequence, posted:true, tracked:true }",
+    message: (d) => tmsg("msg.window.nativeClose.click", { sequence: String(d.sequence ?? "") }),
+    examples: ["window.native-close.click window=win-example"],
+    danger: "destructive",
+    handler: async () => invoke("window_native_close_click"),
+  });
+
+  register("window.native-close.wait", {
+    description: key("cmd.window.nativeClose.wait.desc"),
+    params: {
+      sequence: { type: "number", description: key("cmd.window.nativeClose.wait.param.sequence"), required: true },
+      timeoutMs: { type: "number", description: key("cmd.window.nativeClose.wait.param.timeoutMs"), required: true },
+    },
+    returns: "{ window, sequence, closed:true }",
+    message: (d) => tmsg("msg.window.nativeClose.wait", { sequence: String(d.sequence ?? "") }),
+    errors: ["INVALID_PARAMS", "TIMEOUT"],
+    examples: ["window.native-close.wait sequence=1099511627777 timeoutMs=5000"],
+    handler: async (p) => invoke("window_native_close_wait", {
+      sequence: p.sequence, timeoutMs: p.timeoutMs,
+    }),
+  });
 }
