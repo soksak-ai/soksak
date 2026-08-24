@@ -80,12 +80,24 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(testsRef) || string(refBody) != testsRef+"\n" {
 		t.Fatal("system-test owner ref must be one exact lowercase commit")
 	}
+	candidateRefBody, err := os.ReadFile(".candidate-system-tests-ref")
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidateTestsRef := strings.TrimSpace(string(candidateRefBody))
+	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(candidateTestsRef) || string(candidateRefBody) != candidateTestsRef+"\n" {
+		t.Fatal("candidate system-test owner ref must be one exact lowercase commit")
+	}
 	for _, platform := range []string{"windows", "darwin", "linux"} {
 		if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/"+platform+"-system.yml@"+testsRef) {
 			t.Errorf("%s fleet workflow is not pinned", platform)
 		}
 	}
-	if strings.Count(s, "tests_ref: "+testsRef) != 3 {
+	expectedRefUses := 3
+	if candidateTestsRef == testsRef {
+		expectedRefUses++
+	}
+	if strings.Count(s, "tests_ref: "+testsRef) != expectedRefUses {
 		t.Fatal("native fleet executions do not share one exact Acceptance commit")
 	}
 	for _, required := range []string{
@@ -114,14 +126,6 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 		if !strings.Contains(s, job) {
 			t.Errorf("missing native system job %s", job)
 		}
-	}
-	candidateRefBody, err := os.ReadFile(".candidate-system-tests-ref")
-	if err != nil {
-		t.Fatal(err)
-	}
-	candidateTestsRef := strings.TrimSpace(string(candidateRefBody))
-	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(candidateTestsRef) || string(candidateRefBody) != candidateTestsRef+"\n" {
-		t.Fatal("candidate system-test owner ref must be one exact lowercase commit")
 	}
 	for _, required := range []string{
 		"darwin-candidate-native-input:",
