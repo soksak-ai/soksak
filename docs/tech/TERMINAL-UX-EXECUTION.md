@@ -28,10 +28,12 @@ propose the corrected rule, and update the rule, RED and document together after
 
 ## Failure classification before RED
 
-Run scripts/ci/require-frontend-toolchain.sh before a baseline or product test. It derives the exact
-Node and pnpm versions from frontend/package.json, requires the Node runtime architecture to match
-the host, materializes the frozen lockfile in non-interactive CI mode, and verifies the selected
-native frontend package. task verify runs this preflight before any product test.
+Run scripts/ci/prepare-frontend-dependencies.sh and then
+scripts/ci/check-frontend-toolchain.sh before a baseline or product test. Prepare alone materializes
+the frozen lockfile under the cross-process dependency-owner lock. Check is read-only: it derives
+the exact Node and pnpm versions from frontend/package.json, requires the Node runtime architecture
+to match the host, verifies the selected native frontend package and prints the lock SHA-256. task
+verify runs prepare and check in that order before any product test.
 
 The preflight result determines whether product evidence exists:
 
@@ -117,7 +119,11 @@ For every frame, assert:
 - modal content blocks pointer input while underlying content remains visible and inactive;
 - sidebar motion produces one committed composition without a blank intermediate frame;
 - closing an overlay preserves renderer mount identity, session identity and previous pixels;
-- DOM and native-surface renderers use the same declared visibility result.
+- `contentVisible` keeps the active DOM slot mounted and visible;
+- `surfaceVisible` may be false while an overlay or layout motion occludes an out-of-document live
+  surface;
+- when `contentVisible` is true and `surfaceVisible` is false, a parked picture preserves the last
+  applied pixels until the live surface returns.
 
 One visibility transaction owns overlay occlusion and layout motion. Remove every older path that
 computes conflicting visibility. Do not retain a compatibility branch.
@@ -155,8 +161,10 @@ soksak-core/bin/sok and soksak-core/bin/soksak; do not use the obsolete CLI path
 skill text.
 
 An isolated run requires a distinct SOKSAK_HOME, a short runtime directory under <local-evidence> on Darwin, a
-unique identifier, an explicit --socket <local-evidence>/<run>.sock for every CLI call, an explicit window field
-for window-scoped requests, and targetWindow only for window_renderer_wait. Cleanup stops only
+unique identifier and owner, SOKSAK_PRESENTATION=capture-only, an explicit --socket for every CLI
+call, an explicit window field for window-scoped requests, and targetWindow only for
+window_renderer_wait. Test applications hold the repository-owned application lock for their whole
+lifetime because the current Wails runtime cannot host two GUI processes safely. Cleanup stops only
 test-owned sidecars and then calls app.shutdown.commit.
 
 Discover command schemas from the running binary. Do not infer them from old examples. Discover

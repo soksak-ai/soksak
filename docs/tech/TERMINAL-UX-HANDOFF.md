@@ -129,10 +129,10 @@ copies of focus, input, color or performance fixes are prohibited.
 
 The view visibility boundary spans soksak-core/frontend/src/state/ui.ts,
 soksak-core/frontend/src/lib/viewPark.ts, soksak-core/docs/tech/NATIVE-SURFACES.md and
-soksak-core/docs/tech/UI-GEOMETRY.md. UI-GEOMETRY.md requires underlying content to remain visible
-and inactive under a modal. The current surfaceShown expression returns false while an overlay is
-active. Defects 5–7 must resolve this contract and implementation mismatch as one visibility,
-occlusion and layout-transaction rule. Picker, modal and sidebar exceptions are prohibited.
+soksak-core/docs/tech/UI-GEOMETRY.md. It now separates active DOM content, live out-of-document
+surface visibility and parked pixels. Overlay and layout motion never hide active DOM content. A
+live native surface may be hidden while its parked picture preserves the last applied pixels.
+Picker, modal and sidebar exceptions are prohibited.
 
 The native close boundary spans soksak-core/frameworks/wails/host.go,
 window_host_wails.go, window_commands.go, frontend/src/commands/catalogWindow.ts and
@@ -140,8 +140,9 @@ frontend/src/state/windowBoot.ts. A successful window.close command does not pro
 macOS close request performs persistence, registry cleanup and window destruction.
 
 Test window ownership spans soksak-core/internal/application/restore_gate_test.go,
-capture_focus_gate_test.go and run.go. Isolated home, runtime and SOKSAK_UNATTENDED values do not
-prevent a rendered test window from disturbing the desktop.
+capture_focus_gate_test.go and run.go. Each run receives a unique home, runtime, identifier, socket
+and owner. SOKSAK_PRESENTATION=capture-only keeps test windows off the desktop. The current Wails
+runtime admits one test application owner at a time through a blocking file lock.
 
 ## Facts and hypotheses
 
@@ -149,7 +150,9 @@ Verified facts:
 
 - Xterm and the six frame providers use different presentation and input implementations.
 - The frame presenter replaces the presented frame DOM and uses a hidden textarea.
-- The overlay visibility contract and current surfaceShown expression disagree.
+- The previous visibility expression hid active DOM content during overlays and layout motion.
+- The Core visibility tests and Xterm/VT100 development captures pass, but no seven-provider
+  installed-product visibility matrix exists yet.
 - Existing system tests primarily exercise command-based send, read, status and restore paths.
 - Existing tests do not prove pointer focus, real keyboard entry, cursor pixels, overlay and sidebar
   motion, native traffic-light input, or an undisturbed user desktop.
@@ -159,7 +162,6 @@ Hypotheses that require RED evidence:
 - Full frame DOM replacement causes the reported latency.
 - Hidden-textarea focus transfer causes the focus, cursor and keyboard failures.
 - Separate default and named-color mappings cause the renderer color difference.
-- View parking during overlay and layout transitions causes the blank frames.
 
 Do not record a hypothesis as a cause before the corresponding RED measurement identifies it.
 

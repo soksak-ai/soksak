@@ -28,11 +28,12 @@ canonical: docs/tech/TERMINAL-UX-EXECUTION.md
 
 ## RED 이전 실패 분류
 
-Baseline 또는 product test 전에 scripts/ci/require-frontend-toolchain.sh를 실행합니다. 이
-preflight는 frontend/package.json에서 정확한 Node와 pnpm version을 읽고, Node runtime
-architecture와 host가 일치하는지 검사하고, 비대화형 CI mode에서 frozen lockfile을 materialize한
-뒤 선택된 native frontend package를 확인합니다. task verify는 모든 product test보다 먼저 이
-preflight를 실행합니다.
+Baseline 또는 product test 전에 scripts/ci/prepare-frontend-dependencies.sh를 실행한 뒤
+scripts/ci/check-frontend-toolchain.sh를 실행합니다. Prepare만 cross-process dependency owner
+lock 아래에서 frozen lockfile을 materialize합니다. Check는 read-only이며 frontend/package.json의
+정확한 Node와 pnpm version, host와 Node runtime architecture, 선택된 native frontend package를
+검사하고 lock SHA-256을 출력합니다. task verify는 모든 product test보다 먼저 prepare와 check를
+이 순서로 실행합니다.
 
 Preflight 결과로 product 증거의 존재 여부를 판정합니다.
 
@@ -114,8 +115,10 @@ Cursor 및 color screenshot을 직접 확인합니다. 확인한 시각 특성�
 모든 frame에서 유지 대상 terminal rectangle의 크기가 0보다 크고, display none, hidden
 visibility, opacity 0, empty frame이 아니며, modal 아래 content가 보이는 비활성 상태인지
 검사합니다. Sidebar motion에는 blank intermediate frame이 없어야 합니다. Overlay 종료 후
-renderer mount identity, session identity, 이전 pixel이 유지되어야 하며 DOM과 native surface가
-같은 declared visibility를 사용해야 합니다.
+renderer mount identity, session identity와 이전 pixel이 유지되어야 합니다. `contentVisible`은
+활성 DOM slot을 mount 및 visible 상태로 유지합니다. Overlay 또는 layout motion이 document 밖
+live surface를 가리면 `surfaceVisible`은 false일 수 있습니다. 이때 parked picture가 live surface가
+돌아올 때까지 마지막 applied pixel을 같은 slot에 유지합니다.
 
 하나의 visibility transaction이 overlay occlusion과 layout motion을 소유해야 합니다. 충돌하는
 visibility를 계산하는 이전 경로는 제거합니다. Compatibility branch를 유지하지 않습니다.
@@ -150,9 +153,11 @@ UI 작업에는 soksak-dev skill을 사용하고 결과 pixel을 직접 확인�
 soksak-core/bin/sok와 soksak-core/bin/soksak입니다. 이전 skill text의 오래된 CLI path를 사용하지
 않습니다.
 
-격리 실행에는 별도 SOKSAK_HOME, Darwin의 짧은 <local-evidence> runtime directory, 고유 identifier, 모든 CLI
-call의 명시적 --socket <local-evidence>/<run>.sock, window 범위 request의 명시적 window field가 필요합니다.
-targetWindow는 window_renderer_wait에서만 사용합니다. Cleanup은 테스트 소유 sidecar만 종료한 뒤
+격리 실행에는 별도 SOKSAK_HOME, Darwin의 짧은 <local-evidence> runtime directory, 고유 identifier와 owner,
+SOKSAK_PRESENTATION=capture-only, 모든 CLI call의 명시적 --socket, window 범위 request의 명시적
+window field가 필요합니다. 현재 Wails runtime은 GUI process 두 개를 안전하게 공존시키지 못하므로
+test application은 전체 lifetime 동안 repository-owned application lock을 소유합니다. targetWindow는
+window_renderer_wait에서만 사용합니다. Cleanup은 테스트 소유 sidecar만 종료한 뒤
 app.shutdown.commit을 호출합니다.
 
 실행 중인 binary에서 command schema를 확인합니다. 오래된 예시로 추정하지 않습니다. Git으로

@@ -128,10 +128,10 @@ input, color, performance 수정 복제는 금지합니다.
 
 View visibility 경계는 soksak-core/frontend/src/state/ui.ts,
 soksak-core/frontend/src/lib/viewPark.ts, soksak-core/docs/tech/NATIVE-SURFACES.md,
-soksak-core/docs/tech/UI-GEOMETRY.md에 걸쳐 있습니다. UI-GEOMETRY.md는 모달 아래 content가
-보이는 비활성 상태여야 한다고 규정합니다. 현재 surfaceShown 식은 overlay가 활성화되면 false를
-반환합니다. 결함 5–7은 이 계약과 구현의 불일치를 하나의 visibility, occlusion, layout
-transaction 규칙으로 해결해야 합니다. Picker, modal, sidebar별 예외는 금지합니다.
+soksak-core/docs/tech/UI-GEOMETRY.md에 걸쳐 있습니다. 현재 규칙은 활성 DOM content, document 밖
+live surface visibility, parked pixel을 분리합니다. Overlay와 layout motion은 활성 DOM content를
+숨기지 않습니다. Live native surface가 숨겨질 때 parked picture가 마지막 applied pixel을
+유지합니다. Picker, modal, sidebar별 예외는 금지합니다.
 
 Native close 경계는 soksak-core/frameworks/wails/host.go, window_host_wails.go,
 window_commands.go, frontend/src/commands/catalogWindow.ts, frontend/src/state/windowBoot.ts에
@@ -139,8 +139,10 @@ window_commands.go, frontend/src/commands/catalogWindow.ts, frontend/src/state/w
 registry cleanup, window destruction을 증명할 수 없습니다.
 
 Test window ownership 경계는 soksak-core/internal/application/restore_gate_test.go,
-capture_focus_gate_test.go, run.go에 걸쳐 있습니다. 격리된 home, runtime,
-SOKSAK_UNATTENDED만으로는 화면에 표시되는 테스트 창의 사용자 방해를 막지 못합니다.
+capture_focus_gate_test.go, run.go에 걸쳐 있습니다. 각 run은 고유 home, runtime, identifier,
+socket, owner를 받습니다. SOKSAK_PRESENTATION=capture-only는 test window를 desktop에 표시하지
+않습니다. 현재 Wails runtime은 blocking file lock을 통해 한 번에 하나의 test application owner만
+허용합니다.
 
 ## 사실과 가설
 
@@ -148,7 +150,9 @@ SOKSAK_UNATTENDED만으로는 화면에 표시되는 테스트 창의 사용자 
 
 - Xterm과 여섯 frame provider는 서로 다른 presentation 및 input 구현을 사용합니다.
 - Frame presenter는 표시할 frame DOM을 교체하며 숨겨진 textarea를 사용합니다.
-- Overlay visibility 계약과 현재 surfaceShown 식이 일치하지 않습니다.
+- 이전 visibility 식은 overlay와 layout motion 중 활성 DOM content를 숨겼습니다.
+- Core visibility test와 Xterm/VT100 개발 capture는 통과했지만 일곱 provider installed-product
+  visibility matrix는 아직 없습니다.
 - 기존 system test는 주로 command 기반 send, read, status, restore 경로를 검사합니다.
 - 기존 test는 pointer focus, 실제 keyboard entry, cursor pixel, overlay 및 sidebar motion,
   native traffic-light input, 사용자 desktop 비간섭을 증명하지 않습니다.
@@ -158,7 +162,6 @@ RED 증거가 필요한 가설:
 - 전체 frame DOM 교체가 제보된 지연을 일으킵니다.
 - Hidden textarea focus transfer가 focus, cursor, keyboard 결함을 일으킵니다.
 - 서로 다른 default 및 named color mapping이 renderer 색상 차이를 일으킵니다.
-- Overlay 및 layout transition 중 view parking이 blank frame을 일으킵니다.
 
 대응 RED 측정으로 확인하기 전에는 가설을 원인으로 기록하지 않습니다.
 

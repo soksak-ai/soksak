@@ -193,9 +193,12 @@ theme, accessibility, capture and renderer-failure behavior on its supported pla
 ## Wails application gates
 
 Real-window gates remain because they measure pixels, native-surface geometry and arrangement
-journals. An unattended launch uses the accessory activation policy, does not take focus and does
-not add a Dock icon. Normal and forcibly terminated gate runs leave zero gate-owned processes.
-Owner identity prevents cleanup from terminating a user's application.
+journals. A capture-only launch uses the accessory activation policy, creates hidden windows, does
+not take focus and does not add a Dock icon. SOKSAK_PRESENTATION accepts only `interactive` and
+`capture-only`; the removed SOKSAK_UNATTENDED name is not a fallback. Each gate run has a unique
+home, runtime, identifier, socket and owner. The current Wails runtime is protected by one
+repository-owned application lock for the full test process lifetime. Normal and forcibly
+terminated gate runs leave zero gate-owned processes.
 
 Captures and recordings are mandatory development observations but never the sole pass condition.
 Commands return the focus owner, Dock presence, process inventory, surface geometry, state cursor

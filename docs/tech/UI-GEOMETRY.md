@@ -248,30 +248,27 @@ registering the surface comes first.
 
 ---
 
-# L. The DOM is always on top
+# L. DOM content, live surfaces and parked pixels
 
-A native child webview competes with the main webview's DOM for z-order in the
-OS view hierarchy. Following the framework's default puts every DOM overlay —
-modals, menus, drop indicators, focus rings — underneath it. Hiding the browser
-while an overlay is open works around that and costs a repaint of the page every
-time a menu opens. The structure here is the inverse:
+A native child webview is composited outside the document. No DOM `z-index`
+orders a modal over that live surface. The visibility transaction therefore
+owns three facts rather than one:
 
-1. **Inverted z-order.** A child webview is placed *below* the main webview
-   immediately after creation.
-2. **A transparent hole.** The main webview does not paint its own background,
-   the root CSS chain is transparent, and each surface owns an opaque
-   background. Only the browser slot is transparent — that is the hole, and the
-   webview beneath shows through it. The colour of everything unpainted is the
-   native window's background, which the theme engine keeps equal to `bg`.
-3. **Delegated hit testing.** A pointer inside the hole is handed to the webview
-   below by the native hit test. The hole's single truth is the visible child
-   webview's frame itself; there is no registry. While an overlay is up,
-   delegation is blocked, so "click outside to close" holds — the browser is
-   visible and inactive, which is what a modal means.
+1. **Content visibility.** The active workspace, space and tab chain keeps the
+   DOM slot mounted and visible. Overlay and layout motion do not change it.
+2. **Live-surface visibility.** An out-of-document surface is hidden while an
+   overlay or declared motion occludes it. Inactive workspace, space and tab
+   states hide both content and surface.
+3. **Pixel continuity.** Before a live surface is hidden, its backend captures
+   the applied pixels. `ParkedPicture` draws those pixels in the still-visible
+   DOM slot and releases them only after the live surface is applied again.
 
-Corollaries: every DOM layer draws above the browser, so hiding it is never the
-answer. Restoring an opaque background anywhere on the root chain plugs the
-hole. A cell whose active view is a browser paints no background in its body.
+For an in-document terminal, content remains live and no parked picture is
+needed. For an out-of-document browser, the picture is visible and inactive
+under a modal; it is not a second live renderer. The tab slot exposes
+`contentVisible`, `surfaceVisible` and `visibilityReason`, and finite recording
+traces record those fields with display, visibility, opacity and rect on every
+captured frame.
 
 **Measured 2026-08-15, on this build.** The webview was opaque, because this
 framework's `MacBackdropNormal` leaves it drawing its own background and its
