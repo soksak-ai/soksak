@@ -113,7 +113,10 @@ func TestRecordedInventoryExposesOwnershipWithoutAdoptingOrLeakingToken(t *testi
 
 	second := NewHost(deps)
 	t.Cleanup(func() { _ = second.Stop("probe") })
-	recorded := second.Recorded()
+	recorded, err := second.Recorded()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(recorded) != 1 || recorded[0] != started {
 		t.Fatalf("recorded=%+v started=%+v", recorded, started)
 	}

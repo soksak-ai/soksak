@@ -3,10 +3,13 @@ package sidecar
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
@@ -60,6 +63,44 @@ func (host *Host) remember(name string, open Open, token, secretNames string) {
 }
 
 func (host *Host) forget(name string) { _ = os.Remove(host.recordPath(name)) }
+
+// Recorded reports the unit identities this home owns without connecting,
+// greeting, adopting, starting, or exposing their tokens.
+func (host *Host) Recorded() ([]Open, error) {
+	directory := filepath.Join(host.deps.Home, "run")
+	entries, err := os.ReadDir(directory)
+	if errors.Is(err, fs.ErrNotExist) {
+		return []Open{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	owned := make([]Open, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasPrefix(name, "sidecar-") || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
+			return nil, fmt.Errorf("sidecar ownership record is not a regular file: %s", filepath.Join(directory, name))
+		}
+		raw, err := os.ReadFile(filepath.Join(directory, name))
+		if err != nil {
+			return nil, err
+		}
+		var remembered record
+		if json.Unmarshal(raw, &remembered) != nil || remembered.Address == "" ||
+			remembered.Protocol < 1 || remembered.PID < 1 {
+			return nil, fmt.Errorf("sidecar ownership record is invalid: %s", filepath.Join(directory, name))
+		}
+		owned = append(owned, Open{
+			Name:    strings.TrimSuffix(strings.TrimPrefix(name, "sidecar-"), ".json"),
+			Address: remembered.Address, Protocol: remembered.Protocol, PID: remembered.PID,
+		})
+	}
+	sort.Slice(owned, func(left, right int) bool { return owned[left].Name < owned[right].Name })
+	return owned, nil
+}
 
 // adoptOwned verifies and attaches the unit named by this home's record without
 // starting anything. Stop uses it to reclaim work left by an earlier process.

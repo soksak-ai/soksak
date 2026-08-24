@@ -224,7 +224,13 @@ func Register(registry *control.Registry, deps Registration) {
 	})
 
 	serve("sidecar_status", func(control.Args) (any, error) {
-		return map[string]any{"open": deps.Host.Started(), "stderr": deps.Host.Complaints()}, nil
+		recorded, err := deps.Host.Recorded()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"open": deps.Host.Started(), "recorded": recorded, "stderr": deps.Host.Complaints(),
+		}, nil
 	})
 }
 
