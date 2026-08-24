@@ -127,6 +127,7 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 		"darwin-candidate-native-input:",
 		"needs: darwin-build",
 		"min-median-max/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@" + candidateTestsRef,
+		"tests_repository: min-median-max/soksak-terminal-tests",
 		"tests_ref: " + candidateTestsRef,
 		"core_artifact_name: core-darwin-arm64-artifact",
 		"core_source_commit: ${{ github.sha }}",
