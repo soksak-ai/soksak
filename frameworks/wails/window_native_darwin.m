@@ -227,16 +227,20 @@ SoksakNativeInputDelivery soksakClickWindowPointer(void *nsWindow,
   }
   NSPoint local = NSMakePoint(x, webview.isFlipped ? y : NSHeight(bounds) - y);
   NSPoint location = [webview convertPoint:local toView:nil];
+  NSView *target = [webview hitTest:local];
+  if (target == nil) {
+    return soksakNativeInputFailure("WKWebView hit testing found no native input target", window);
+  }
   NSEvent *down = soksakWindowMouseEvent(window, location, NSEventTypeLeftMouseDown, sequence);
   NSEvent *up = soksakWindowMouseEvent(window, location, NSEventTypeLeftMouseUp, sequence);
   if (down == nil || up == nil) {
     return soksakNativeInputFailure("AppKit did not create the pointer events", window);
   }
-  if (![window makeFirstResponder:webview]) {
-    return soksakNativeInputFailure("WKWebView refused the native responder role", window);
+  if (![window makeFirstResponder:target]) {
+    return soksakNativeInputFailure("hit-tested WKWebView target refused the native responder role", window);
   }
-  [webview mouseDown:down];
-  [webview mouseUp:up];
+  [target mouseDown:down];
+  [target mouseUp:up];
   SoksakNativeInputDelivery out = {true, window.isKeyWindow, NULL};
   return out;
 }
@@ -285,8 +289,10 @@ SoksakNativeInputDelivery soksakPressWindowKey(void *nsWindow,
   if (key == nil || !soksakKeyIdentity(key, &code, &characters)) {
     return soksakNativeInputFailure("key must be one character or a supported named key", window);
   }
-  if (![window makeFirstResponder:webview]) {
-    return soksakNativeInputFailure("WKWebView refused the native responder role", window);
+  NSResponder *responder = window.firstResponder;
+  if (![responder isKindOfClass:[NSView class]] ||
+      ![(NSView *)responder isDescendantOf:webview]) {
+    return soksakNativeInputFailure("WKWebView has no hit-tested native input responder", window);
   }
   NSEventModifierFlags flags = 0;
   if (ctrl) flags |= NSEventModifierFlagControl;
@@ -316,8 +322,8 @@ SoksakNativeInputDelivery soksakPressWindowKey(void *nsWindow,
   if (down == nil || up == nil) {
     return soksakNativeInputFailure("AppKit did not create the keyboard events", window);
   }
-  [webview keyDown:down];
-  [webview keyUp:up];
+  [responder keyDown:down];
+  [responder keyUp:up];
   SoksakNativeInputDelivery out = {true, window.isKeyWindow, NULL};
   return out;
 }
