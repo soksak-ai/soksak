@@ -42,6 +42,8 @@ func TestVerifyRejectsAnInvalidBuildToolchainBeforeProductTests(t *testing.T) {
 		"pnpm --version",
 		"process.platform",
 		"process.arch",
+		"required=",
+		"nodeRuntime=",
 		"uname -m",
 		"TOOLCHAIN_MISMATCH",
 		"DEPENDENCY_STATE_INVALID",
@@ -311,7 +313,8 @@ esac
 	if err != nil {
 		t.Fatalf("physical Apple Silicon was replaced by the translated process architecture: %v\n%s", err, output)
 	}
-	if !strings.Contains(string(output), "runtime=darwin/arm64") {
-		t.Fatalf("physical Apple Silicon architecture was not reported: %s", output)
+	if !strings.Contains(string(output), "required=darwin/arm64") ||
+		!strings.Contains(string(output), "nodeRuntime=darwin/arm64") {
+		t.Fatalf("required and actual Apple Silicon architectures were not reported separately: %s", output)
 	}
 }
