@@ -2043,8 +2043,28 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       if (el instanceof HTMLElement) el.focus();
       const down = new KeyboardEvent("keydown", init);
       el.dispatchEvent(down);
+      let textInput = false;
+      if (!down.defaultPrevented && key.length === 1 && p.ctrl !== true && p.meta !== true && p.alt !== true &&
+          (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
+        const before = new InputEvent("beforeinput", {
+          bubbles: true, composed: true, cancelable: true, inputType: "insertText", data: key,
+        });
+        if (el.dispatchEvent(before)) {
+          const start = el.selectionStart ?? el.value.length;
+          const end = el.selectionEnd ?? start;
+          const value = el.value.slice(0, start) + key + el.value.slice(end);
+          const proto = el instanceof HTMLTextAreaElement
+            ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+          Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, value);
+          el.setSelectionRange(start + key.length, start + key.length);
+          el.dispatchEvent(new InputEvent("input", {
+            bubbles: true, composed: true, inputType: "insertText", data: key,
+          }));
+          textInput = true;
+        }
+      }
       el.dispatchEvent(new KeyboardEvent("keyup", init));
-      return { key, address: addr, defaultPrevented: down.defaultPrevented };
+      return { key, address: addr, defaultPrevented: down.defaultPrevented, textInput };
     },
   });
 
