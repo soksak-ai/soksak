@@ -23,6 +23,8 @@ import {
   validWindowRecordMaxBytes,
 } from "./windowRecorder";
 import { runWindowResizeSequence } from "./windowResizeSequence";
+import { prepareInputFrameObservation } from "./inputFrameObservation";
+import { collectExposed } from "./catalogDom";
 import {
   RESIZE_TRANSACTION_PHASES,
   sampleWindowResizeProbe,
@@ -705,11 +707,26 @@ export function registerWindowCatalog(): void {
     params: {
       x: { type: "number", description: key("cmd.window.input.pointer.click.param.x"), required: true },
       y: { type: "number", description: key("cmd.window.input.pointer.click.param.y"), required: true },
+      recordDir: { type: "string", description: key("cmd.ui.input.click.param.recordDir") },
+      recordFrames: { type: "number", description: key("cmd.ui.input.click.param.recordFrames"), default: 40 },
+      recordIntervalMs: { type: "number", description: key("cmd.ui.input.click.param.recordIntervalMs"), default: 16 },
+      recordLeadMs: { type: "number", description: key("cmd.ui.input.click.param.recordLeadMs"), default: 0 },
+      recordMaxBytes: { type: "number", description: key("cmd.ui.input.click.param.recordMaxBytes") },
+      traceAddresses: { type: "json", description: key("cmd.ui.input.click.param.traceAddresses") },
     },
-    returns: "{ window, sequence, delivered:true, inputRoute, cursorPositionMayChange:false, x, y, windowFocused, foregroundPreserved:true }",
+    returns: "{ window, sequence, delivered:true, inputRoute, cursorPositionMayChange:false, x, y, windowFocused, foregroundPreserved:true, recording, trace? }",
     message: (d) => tmsg("msg.window.input.pointer.click", { sequence: String(d.sequence ?? "") }),
     examples: ["window.input.pointer.click window=win-example x=400 y=200"],
-    handler: async (p) => invoke("window.input.pointer.click", { x: p.x, y: p.y }),
+    handler: async (p) => {
+      const nodes = collectExposed();
+      const observation = await prepareInputFrameObservation(p, (address) => {
+        const found = nodes.find((node) => node.address === address);
+        return found ? { address, el: found.el } : null;
+      });
+      await observation.ready();
+      const receipt = await invoke<Record<string, unknown>>("window.input.pointer.click", { x: p.x, y: p.y });
+      return { ...receipt, ...(await observation.result()) };
+    },
   });
 
   register("window.input.key.press", {
