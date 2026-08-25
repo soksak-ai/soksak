@@ -40,8 +40,8 @@ contracts, and specs arrays and contain no install profiles or dependency closur
 ## Environment
 
 `environment.json` is the only local component state. It records exact selected versions, absolute
-local paths, source kinds, registry IDs, sidecar targets, plugin activation, and sidecar role
-bindings. Registry releases own repositories, source commits, dependency declarations, artifact
+local paths, source kinds, registry IDs, sidecar targets, and plugin activation. Plugin manifests and
+releases own exact runtime dependency references; the environment stores no role binding. Registry releases own repositories, source commits, dependency declarations, artifact
 URLs, sizes, and digests. A development source stops managed updates for only that plugin, sidecar,
 kit, contract, or spec and does not disable validation.
 

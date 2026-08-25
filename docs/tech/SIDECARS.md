@@ -73,6 +73,13 @@ uses the same process.
 Channel release does not remove the process from host status or prevent an explicit
 `sidecar_stop`; those operations address process lifetime, not channel lifetime.
 
+A saved announcement is ownership state, not disposable stale data. A later generation determines
+its state by connecting and greeting: a valid owner is adopted, an unreachable owner record is
+removed, and an invalid or unreadable record is reported without guessing. Normal shutdown and test
+cleanup use the public lifecycle operations and verify zero test-owned leaks. Moving sockets or
+records to another directory is incident-evidence preservation only; it is never a runtime recovery,
+cleanup, or development-source mechanism.
+
 sidecar.stop is the explicit operation that ends a sidecar. A plugin disable, view unmount or app
 restart is not a stop request. Streams have their own ids and can close independently.
 

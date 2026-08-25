@@ -47,6 +47,31 @@ A development source replaces the versioned source and absolute path for that ID
 updates for that ID. Its manifest still passes identity, app version, interface, permission, and path
 validation. No separate boolean is stored beside the source.
 
+## One component contract, three acquisition modes
+
+Development source, candidate artifact, and registry release differ only in how bytes are acquired and what evidence they provide.
+They do not define three installation or runtime contracts. In every mode, the component keeps the
+same ID, version, manifest schema, exact dependency declarations, permissions, entrypoints, and
+lifecycle. Validation never becomes optional.
+
+- A local runtime source is selected only through the kind-specific `source_set` command after its
+  owner repository has built the declared component directory. The command records its exact version,
+  absolute directory, and `development` source in `environment.json`; managed updates for that ID are
+  blocked. Plugin and sidecar sources use this same operation.
+- Candidate artifacts are installed into an isolated identity home through the same installer transaction used for releases.
+  They are content-addressed, nonpublishing certification inputs. They prove the exact candidate
+  closure, but they are not final publication evidence.
+- A registry release is the only input accepted as final publication evidence. It is installed from
+  immutable URLs, sizes, and digests into a fresh identity home before the registry is published.
+
+A source change never edits dependency metadata, copies files into another repository, or discovers a sibling checkout.
+Package-manager local locators are not a component source mechanism. Build-time unpublished
+dependencies are materialized only by the canonical isolated candidate builder and must not survive
+in source, lockfiles, artifacts, or release inputs. Runtime dependencies are still declared by the
+plugin and must exist at their exact versions in the same environment; selecting a development
+plugin does not silently select its sidecars, and selecting a development sidecar does not rewrite a
+plugin manifest.
+
 `environment.json` is the only local runtime discovery surface. Core and components do not discover
 another repository through `../`, an injected repository root, workspace checkout layout, PATH, or a
 symbolic link. Build relationships use package dependencies; runtime relationships use component IDs

@@ -49,6 +49,31 @@ Development source는 해당 ID의 versioned source와 절대 경로를 교체�
 Manifest는 identity, app version, interface, permission, path 검증을 그대로 통과해야 합니다. 별도
 boolean은 저장하지 않습니다.
 
+## 하나의 component 계약과 세 가지 획득 방식
+
+Development source, candidate artifact, registry release는 byte를 획득하는 방법과 제공하는 증거만
+다릅니다. 세 개의 설치 또는 runtime 계약을 만들지 않습니다. 모든 방식에서 component는 같은 ID,
+version, manifest schema, 정확한 dependency 선언, permission, entrypoint, lifecycle을 사용하며 검증을
+생략하지 않습니다.
+
+- 로컬 runtime source는 owner repository가 선언된 component directory를 build한 뒤 종류별
+  `source_set` command로만 선택합니다. Command는 정확한 version, 절대 directory, `development`
+  source를 `environment.json`에 기록하고 해당 ID의 managed update를 막습니다. Plugin과 sidecar는
+  같은 operation을 사용합니다.
+- Candidate artifact는 release와 같은 installer transaction으로 격리된 identity home에 설치합니다.
+  Candidate는 content-addressed nonpublishing 인증 input이며 정확한 candidate closure를 증명하지만
+  최종 공개 증거는 아닙니다.
+- Registry release만 최종 공개 증거로 인정합니다. Registry 공개 전에 immutable URL, size, digest로
+  새로운 identity home에 설치해 검증합니다.
+
+Source 변경은 dependency metadata를 편집하거나, 다른 repository에 file을 복사하거나, sibling
+checkout을 탐색하지 않습니다. Package manager의 local locator는 component source mechanism이
+아닙니다. Build-time 미공개 dependency는 canonical isolated candidate builder만 materialize하며
+source, lockfile, artifact, release input에 남으면 안 됩니다. Runtime dependency는 plugin이 계속
+선언하고 같은 environment에 정확한 version으로 존재해야 합니다. Development plugin을 선택한다고
+sidecar가 암묵적으로 선택되지 않으며, development sidecar를 선택한다고 plugin manifest를 다시 쓰지
+않습니다.
+
 `environment.json`만 runtime discovery에 사용합니다. Core와 component는 `../`, 주입된 repository
 root, checkout layout, PATH, symlink로 다른 repository를 찾지 않습니다. Build 관계는 package
 dependency, runtime 관계는 environment가 해석하는 component ID, 원격 byte는 registry release를
