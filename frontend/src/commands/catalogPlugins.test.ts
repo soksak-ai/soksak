@@ -389,4 +389,73 @@ describe("plugin.develop", () => {
     });
     expect(reload).toHaveBeenCalledTimes(1);
   });
+
+  // The response states the state the reload produced. Measured 2026-08-26: plugin.develop answered
+  // ok with { id, path, revision } while the reloaded plugin stayed disabled with a consent-required
+  // error, and the pane showed the placeholder; the response had no field for that.
+  it("returns the runtime status and error after the reload: consent required is status disabled", async () => {
+    usePlugins.setState({ plugins: {}, rejected: [] });
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "environment_get") return { revision: 1 };
+      if (cmd === "plugin_develop") return { previousRevision: 1, revision: 2 };
+      return null;
+    });
+    reload.mockImplementationOnce(async () => {
+      usePlugins.setState({
+        plugins: {
+          "soksak-plugin-demo": {
+            manifest: manifestOf("soksak-plugin-demo"),
+            dir: "/work/demo",
+            source: "development",
+            status: "disabled",
+            error: "consent required: permissions ui, commands",
+          },
+        },
+      });
+    });
+    const r = await execute("plugin.develop", { id: "soksak-plugin-demo", path: "/work/demo", callerLanguage: "en" }, {});
+    expect(r).toMatchObject({
+      ok: true,
+      data: { id: "soksak-plugin-demo", path: "/work/demo", revision: 2, status: "disabled", error: "consent required: permissions ui, commands" },
+    });
+    expect(r.message).toBe(
+      "Recorded development record for Plugin soksak-plugin-demo at /work/demo; status disabled: consent required: permissions ui, commands",
+    );
+  });
+
+  it("returns status rejected with the rejection errors joined when only the rejected list holds the id", async () => {
+    usePlugins.setState({ plugins: {}, rejected: [] });
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "environment_get") return { revision: 1 };
+      if (cmd === "plugin_develop") return { previousRevision: 1, revision: 2 };
+      return null;
+    });
+    reload.mockImplementationOnce(async () => {
+      usePlugins.setState({
+        rejected: [{ id: "soksak-plugin-demo", dir: "/work/demo", errors: ["permissions: empty", "entry: missing"] }],
+      });
+    });
+    const r = await execute("plugin.develop", { id: "soksak-plugin-demo", path: "/work/demo", callerLanguage: "en" }, {});
+    expect(r).toMatchObject({
+      ok: true,
+      data: { status: "rejected", error: "permissions: empty; entry: missing" },
+    });
+    expect(r.message).toContain("status rejected: permissions: empty; entry: missing");
+  });
+
+  it("returns status enabled without an error field when the reload enabled the plugin", async () => {
+    usePlugins.setState({ plugins: {}, rejected: [] });
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "environment_get") return { revision: 1 };
+      if (cmd === "plugin_develop") return { previousRevision: 1, revision: 2 };
+      return null;
+    });
+    reload.mockImplementationOnce(async () => {
+      usePlugins.setState({ plugins: { "soksak-plugin-demo": runtimeOf(manifestOf("soksak-plugin-demo")) } });
+    });
+    const r = await execute("plugin.develop", { id: "soksak-plugin-demo", path: "/work/demo", callerLanguage: "en" }, {});
+    expect(r).toMatchObject({ ok: true, data: { status: "enabled" } });
+    expect((r as { data: Record<string, unknown> }).data).not.toHaveProperty("error");
+    expect(r.message).toBe("Recorded development record for Plugin soksak-plugin-demo at /work/demo; status enabled");
+  });
 });

@@ -90,9 +90,14 @@ describe("sidecar.develop / sidecar.remove", () => {
   });
 
   it("writes the record at the current revision and reloads once", async () => {
+    let environmentReads = 0;
     invoke.mockImplementation(async (cmd: unknown) => {
       if (cmd === "sidecar_status") return { open: [], recorded: [] };
-      if (cmd === "environment_get") return { revision: 4 };
+      if (cmd === "environment_get") {
+        return environmentReads++ === 0
+          ? { revision: 4, plugins: {}, sidecars: {} }
+          : { revision: 5, plugins: {}, sidecars: { "soksak-sidecar-pty": { version: "0.4.0", path: "/work/pty", artifactSha256: "", source: "development", target: "darwin-arm64" } } };
+      }
       if (cmd === "sidecar_develop") return { previousRevision: 4, revision: 5 };
       return null;
     });
@@ -100,6 +105,50 @@ describe("sidecar.develop / sidecar.remove", () => {
     expect(result).toMatchObject({ ok: true, data: { id: "soksak-sidecar-pty", path: "/work/pty", revision: 5 } });
     expect(invoke).toHaveBeenCalledWith("sidecar_develop", { id: "soksak-sidecar-pty", path: "/work/pty", expectedRevision: 4 });
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  // The response states the record the host wrote: version is read from environment_get after the
+  // write. No status field — the pre-write SIDECAR_IN_USE guard leaves open and recorded unreachable
+  // after the write, so a post-write sidecar_status read has one answer.
+  it("answers with the version of the written record, read from environment_get after the write", async () => {
+    const written = {
+      revision: 5,
+      plugins: {},
+      sidecars: { "soksak-sidecar-pty": { version: "0.4.0", path: "/work/pty", artifactSha256: "", source: "development", target: "darwin-arm64" } },
+    };
+    let environmentReads = 0;
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "sidecar_status") return { open: [], recorded: [] };
+      if (cmd === "environment_get") return environmentReads++ === 0 ? { revision: 4, plugins: {}, sidecars: {} } : written;
+      if (cmd === "sidecar_develop") return { previousRevision: 4, revision: 5 };
+      return null;
+    });
+    const result = await execute("sidecar.develop", { sidecarId: "soksak-sidecar-pty", path: "/work/pty", callerLanguage: "en" }, {});
+    expect(result).toMatchObject({ ok: true, data: { id: "soksak-sidecar-pty", path: "/work/pty", revision: 5, version: "0.4.0" } });
+    expect(result.data).not.toHaveProperty("status");
+    expect(result.message).toBe("Recorded development record for Sidecar soksak-sidecar-pty at /work/pty (version 0.4.0)");
+    expect(environmentReads).toBe(2);
+    expect(invoke.mock.calls.filter(([cmd]) => cmd === "sidecar_status")).toHaveLength(1);
+    expect(getSpec("sidecar.develop")!.returns).toBe("{ id, path, revision, version }");
+  });
+
+  it("the ko message carries the same information in Korean", async () => {
+    let environmentReads = 0;
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "sidecar_status") return { open: [], recorded: [] };
+      if (cmd === "environment_get") {
+        return environmentReads++ === 0
+          ? { revision: 4, plugins: {}, sidecars: {} }
+          : { revision: 5, plugins: {}, sidecars: { "soksak-sidecar-pty": { version: "0.4.0", path: "/work/pty", artifactSha256: "", source: "development", target: "darwin-arm64" } } };
+      }
+      if (cmd === "sidecar_develop") return { previousRevision: 4, revision: 5 };
+      return null;
+    });
+    const result = await execute("sidecar.develop", { sidecarId: "soksak-sidecar-pty", path: "/work/pty", callerLanguage: "ko" }, {});
+    expect(result.message).not.toBe("Recorded development record for Sidecar soksak-sidecar-pty at /work/pty (version 0.4.0)");
+    expect(result.message).toContain("soksak-sidecar-pty");
+    expect(result.message).toContain("/work/pty");
+    expect(result.message).toContain("(version 0.4.0)");
   });
 
   it("sidecar.remove declares sidecarId, is destructive, and declares only the codes it returns", () => {

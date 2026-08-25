@@ -3,7 +3,7 @@ import { key, tmsg } from "../i18n";
 import { register } from "./registry";
 import { DependencyVersionConflict, installLocalSidecar, planLocalSidecar, sidecarInUse, sidecarInUseMessage } from "../plugins/localReleaseInstallService";
 import { writeDevelopRecord } from "./develop";
-import { writeEnvironmentRevision } from "../state/environmentEvents";
+import { writeEnvironmentRevision, type HostEnvironment } from "../state/environmentEvents";
 import { publishActivity } from "../state/activityFeed";
 
 export function registerSidecarCatalog(): void {
@@ -53,8 +53,9 @@ export function registerSidecarCatalog(): void {
       path: { type: "string", required: true, description: key("cmd.sidecar.develop.param.path") },
     },
     windowScoped: false,
-    returns: "{ id, path, revision }",
-    message: (data) => tmsg("msg.sidecar.develop", { id: String(data.id), path: String(data.path) }),
+    // version: the version of the record the host wrote, read from environment_get after the write.
+    returns: "{ id, path, revision, version }",
+    message: (data) => tmsg("msg.sidecar.develop", { id: String(data.id), path: String(data.path), version: String(data.version) }),
     // SIDECAR_IN_USE: sidecar_status lists the id as open or recorded (same rule as sidecar.install.local and
     // sidecar.remove); no auto-stop. The host refuses a relative path, a manifest that does not declare the id, a
     // missing dist/<id>, a stale revision, or a broken dependency; each refusal is returned as INTERNAL.
@@ -66,7 +67,9 @@ export function registerSidecarCatalog(): void {
       const path = String(params.path);
       if (await sidecarInUse(id)) return { ok: false, code: "SIDECAR_IN_USE", message: sidecarInUseMessage(id, "development") };
       const { revision } = await writeDevelopRecord("sidecar_develop", { id, path });
-      return { id, path, revision };
+      const record = (await invoke<HostEnvironment>("environment_get")).sidecars[id];
+      if (record === undefined) throw new Error(`environment revision ${revision} holds no sidecar record for ${id}`);
+      return { id, path, revision, version: record.version };
     },
   });
 

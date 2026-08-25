@@ -720,16 +720,29 @@ export function registerPluginCatalog(): void {
       path: { type: "string", required: true, description: key("cmd.plugin.develop.param.path") },
     },
     windowScoped: false,
-    returns: "{ id, path, revision }",
-    message: (d) => tmsg("msg.plugin.develop", { id: String(d.id), path: String(d.path) }),
+    // status: the runtime status after the reload (enabled|disabled|error), "rejected" when only the
+    // rejected list holds the id, "absent" when neither holds it. error: the runtime error or the
+    // rejection errors joined by "; "; omitted when there is none.
+    returns: "{ id, path, revision, status, error? }",
+    message: (d) =>
+      d.error === undefined
+        ? tmsg("msg.plugin.develop", { id: String(d.id), path: String(d.path), status: String(d.status) })
+        : tmsg("msg.plugin.develop.withError", { id: String(d.id), path: String(d.path), status: String(d.status), error: String(d.error) }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [`plugin.develop '{"id":"soksak-plugin-<id>","path":"/absolute/checkout"}'`],
     danger: "destructive",
     handler: async (p) => {
       const id = String(p.id);
       const path = String(p.path);
+      // writeDevelopRecord returns after the environment coordinator reloaded the plugins, so the
+      // store holds the state the record produced.
       const { revision } = await writeDevelopRecord("plugin_develop", { id, path });
-      return { id, path, revision };
+      const { plugins, rejected } = usePlugins.getState();
+      const runtime = plugins[id];
+      const rejection = rejected.find((r) => r.id === id);
+      const status = runtime?.status ?? (rejection ? "rejected" : "absent");
+      const error = runtime?.error ?? rejection?.errors.join("; ");
+      return error === undefined ? { id, path, revision, status } : { id, path, revision, status, error };
     },
   });
 
