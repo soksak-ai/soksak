@@ -1,6 +1,7 @@
 package install
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 
@@ -35,6 +36,53 @@ type publishArtifact struct {
 type publishedArtifact struct {
 	final  string
 	staged stagedState
+}
+
+type pluginRuntimeDependencies struct {
+	ID                  string `json:"id"`
+	Version             string `json:"version"`
+	RuntimeDependencies struct {
+		Plugins  []struct{ ID, Version string } `json:"plugins"`
+		Sidecars []struct{ ID, Version string } `json:"sidecars"`
+	} `json:"runtimeDependencies"`
+}
+
+func validateInstalledPluginDependencies(environment coreenvironment.Environment, stagedRoots map[string]string) error {
+	for id, plugin := range environment.Plugins {
+		root := plugin.Path
+		if staged := stagedRoots[id]; staged != "" {
+			root = staged
+		}
+		body, err := os.ReadFile(filepath.Join(root, "plugin.json"))
+		if err != nil {
+			return err
+		}
+		var manifest pluginRuntimeDependencies
+		if json.Unmarshal(body, &manifest) != nil || manifest.ID != id || manifest.Version != plugin.Version {
+			return i18n.Errorf("install.transaction.pluginManifestInvalid", map[string]string{"plugin": id})
+		}
+		for _, dependency := range manifest.RuntimeDependencies.Plugins {
+			selected, found := environment.Plugins[dependency.ID]
+			if !found || selected.Version != dependency.Version {
+				actual := "missing"
+				if found {
+					actual = selected.Version
+				}
+				return i18n.Errorf("install.transaction.dependencyVersionConflict", map[string]string{"plugin": id + "@" + plugin.Version, "kind": "Plugin", "dependency": dependency.ID, "required": dependency.Version, "requested": actual})
+			}
+		}
+		for _, dependency := range manifest.RuntimeDependencies.Sidecars {
+			selected, found := environment.Sidecars[dependency.ID]
+			if !found || selected.Version != dependency.Version {
+				actual := "missing"
+				if found {
+					actual = selected.Version
+				}
+				return i18n.Errorf("install.transaction.dependencyVersionConflict", map[string]string{"plugin": id + "@" + plugin.Version, "kind": "Sidecar", "dependency": dependency.ID, "required": dependency.Version, "requested": actual})
+			}
+		}
+	}
+	return nil
 }
 
 func installedComponent(value coreenvironment.Environment, kind, id string) (coreenvironment.Component, bool) {
@@ -91,6 +139,7 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		next = coreenvironment.Empty()
 	}
 	prepared := []publishedArtifact{}
+	stagedPluginRoots := map[string]string{}
 	seen := map[string]bool{}
 	for _, artifact := range artifacts {
 		key := artifact.kind + ":" + artifact.id + "@" + artifact.version
@@ -139,6 +188,12 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		prepared = append(prepared, publishedArtifact{final: final, staged: staged})
 		value := coreenvironment.Component{Version: artifact.version, Path: final, ArtifactSHA256: artifact.digest, Source: source, Registry: registryID, Target: artifact.target}
 		selectComponent(&next, artifact.kind, artifact.id, value)
+		if artifact.kind == "plugin" {
+			stagedPluginRoots[artifact.id] = staged.path
+		}
+	}
+	if err := validateInstalledPluginDependencies(next, stagedPluginRoots); err != nil {
+		return CommitResult{}, err
 	}
 	change, temporary, err := coreenvironment.PrepareWrite(request.Home, current, exists, next, request.ExpectedRevision, "next-"+request.TransactionID)
 	if err != nil {

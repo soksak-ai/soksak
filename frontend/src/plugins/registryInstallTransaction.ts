@@ -121,10 +121,6 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
     if (request.root.kind === "contract" || request.root.kind === "spec" || request.root.kind === "kit") {
       throw new InstallFailure("RELEASE_VERIFICATION_FAILED", [request.root.kind + " releases are validation inputs, not runtime installations"]);
     }
-    if (releaseMaterialized(request, root)) {
-      return { ok: true, registryId: request.sourceId, revision: request.environment.revision, releases: [] };
-    }
-
     const transaction = await request.artifacts.begin({ registryId: request.sourceId, root: request.root, ...(request.localStore ? { localStore: request.localStore } : {}) });
     transactionId = transaction.transactionId;
     const verified: VerifiedInstallRelease[] = [];
@@ -136,25 +132,28 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
       const release = queue.shift()!;
       const identity = releaseIdentity(release);
       const key = identity.kind + ":" + identity.id + "@" + identity.version;
-      if (seen.has(key) || releaseMaterialized(request, release)) continue;
+      if (seen.has(key)) continue;
       seen.add(key);
-      request.onProgress?.({ phase: "staging", completed: verified.length, total, componentId: identity.id });
-      const staged = await stageRelease(request, transactionId, release);
+      if (!releaseMaterialized(request, release)) {
+        request.onProgress?.({ phase: "staging", completed: verified.length, total, componentId: identity.id });
+        const staged = await stageRelease(request, transactionId, release);
 
-      if (identity.kind === "plugin") {
-        const manifest = pluginManifest(staged.raw, identity);
-        if (JSON.stringify(manifest.runtimeDependencies ?? null) !== JSON.stringify(release.runtimeDependencies ?? null)) throw new InstallFailure("RELEASE_VERIFICATION_FAILED", ["plugin runtime dependencies differ from its release"]);
-      } else if (identity.kind === "sidecar") {
-        const parsed = parseSidecarManifest(staged.raw);
-        if (!parsed.ok || parsed.value.id !== identity.id || parsed.value.version !== identity.version) {
-          throw new InstallFailure("RELEASE_VERIFICATION_FAILED", parsed.ok ? ["sidecar identity mismatch"] : parsed.errors);
+        if (identity.kind === "plugin") {
+          const manifest = pluginManifest(staged.raw, identity);
+          if (JSON.stringify(manifest.runtimeDependencies ?? null) !== JSON.stringify(release.runtimeDependencies ?? null)) throw new InstallFailure("RELEASE_VERIFICATION_FAILED", ["plugin runtime dependencies differ from its release"]);
+        } else if (identity.kind === "sidecar") {
+          const parsed = parseSidecarManifest(staged.raw);
+          if (!parsed.ok || parsed.value.id !== identity.id || parsed.value.version !== identity.version) {
+            throw new InstallFailure("RELEASE_VERIFICATION_FAILED", parsed.ok ? ["sidecar identity mismatch"] : parsed.errors);
+          }
         }
+        verified.push(staged.verified);
+        request.onProgress?.({ phase: "staging", completed: verified.length, total, componentId: identity.id });
       }
       for (const dependency of release.runtimeDependencies?.plugins ?? []) { const next = exactRelease(request.releases, { kind: "plugin", id: dependency.id, version: dependency.version }); if (!next) throw new InstallFailure("RELEASE_VERIFICATION_FAILED", ["plugin dependency is absent: " + dependency.id]); queue.push(next); }
       for (const dependency of release.runtimeDependencies?.sidecars ?? []) { const next = exactRelease(request.releases, { kind: "sidecar", id: dependency.id, version: dependency.version }); if (!next) throw new InstallFailure("RELEASE_VERIFICATION_FAILED", ["sidecar dependency is absent: " + dependency.id]); queue.push(next); }
-      verified.push(staged.verified);
-      request.onProgress?.({ phase: "staging", completed: verified.length, total, componentId: identity.id });
     }
+    if (verified.length === 0) return { ok: true, registryId: request.sourceId, revision: request.environment.revision, releases: [] };
 
     request.onProgress?.({ phase: "committing", completed: verified.length, total });
     const committed = await request.artifacts.commit(transactionId, request.environment.revision, verified, request.root);

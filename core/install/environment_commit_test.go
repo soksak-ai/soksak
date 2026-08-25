@@ -93,3 +93,40 @@ func TestCommitRejectsDifferentBytesAtOneInstalledVersion(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestCommitRejectsASidecarVersionThatBreaksAnInstalledPlugin(t *testing.T) {
+	home := t.TempDir()
+	pluginRoot := t.TempDir()
+	writeJSONFile(t, filepath.Join(pluginRoot, "plugin.json"), map[string]any{
+		"id": "terminal", "version": "0.0.23",
+		"runtimeDependencies": map[string]any{"sidecars": []map[string]any{{"id": "terminal-state", "version": "0.0.12"}}},
+	})
+	current := coreenvironment.Empty()
+	current.Plugins["terminal"] = coreenvironment.Plugin{Component: coreenvironment.Component{
+		Version: "0.0.23", Path: pluginRoot, ArtifactSHA256: strings.Repeat("a", 64), Source: "local",
+	}}
+	current.Sidecars["terminal-state"] = coreenvironment.Component{
+		Version: "0.0.12", Path: t.TempDir(), ArtifactSHA256: strings.Repeat("b", 64), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin",
+	}
+	writeJSONFile(t, filepath.Join(home, coreenvironment.File), current)
+
+	archive := tgz(t, archiveEntry{name: "sidecar.json", body: `{"id":"terminal-state","version":"0.0.13"}`})
+	manager := NewTransactionManager(filepath.Join(home, ".transactions"), memoryFetcher{body: archive}, nil)
+	identity := ArtifactIdentity{Kind: "sidecar", ID: "terminal-state", Version: "0.0.13"}
+	transaction, err := manager.Begin("official", identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: identity, Artifact: Artifact{URL: "https://example.invalid/state.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "sidecar.json", Entrypoints: []string{"sidecar.json"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = manager.Commit(CommitRequest{TransactionID: transaction.TransactionID, ExpectedRevision: 1, Home: home, Components: []VerifiedComponent{{Kind: "sidecar", ID: "terminal-state", Version: "0.0.13", Target: "aarch64-apple-darwin", RegistryID: "official", ArtifactURL: "https://example.invalid/state.tgz", ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle}}})
+	if err == nil || !strings.Contains(err.Error(), "DEPENDENCY_VERSION_CONFLICT") || !strings.Contains(err.Error(), "terminal@0.0.23") || !strings.Contains(err.Error(), "0.0.12") || !strings.Contains(err.Error(), "0.0.13") {
+		t.Fatalf("error = %v", err)
+	}
+	after, _, readErr := coreenvironment.Read(home)
+	if readErr != nil || after.Sidecars["terminal-state"].Version != "0.0.12" {
+		t.Fatalf("environment changed after conflict: %+v err=%v", after, readErr)
+	}
+}

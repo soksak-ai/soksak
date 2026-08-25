@@ -20,4 +20,15 @@ describe("atomic registry installation", () => {
     {phase:"committing",completed:2,total:2},
   ]); });
   it("rolls back when the staged manifest differs from the release", async () => { const a=artifacts({pluginDependencies:{sidecars:[]}}); const result=await installRegistryRelease({ sourceId:"official", root:{kind:"plugin",id:"demo",version:"0.0.1"}, releases:[plugin,sidecar] as never, target:"aarch64-apple-darwin", environment, artifacts:a.value }); expect(result).toMatchObject({ok:false,code:"RELEASE_VERIFICATION_FAILED"}); expect(a.rollback).toHaveBeenCalledWith("tx"); });
+  it("repairs a dependency mismatch even when the root Plugin artifact is already materialized", async () => {
+    const a = artifacts();
+    const installed = {
+      revision: 3,
+      plugins: { demo: { version: "0.0.1", path: "/installed/demo", artifactSha256: digest("c"), source: "registry" as const, registry: "official", enabled: true } },
+      sidecars: { state: { version: "0.0.0", path: "/installed/state", artifactSha256: digest("0"), source: "registry" as const, registry: "official", target: "aarch64-apple-darwin" } },
+    };
+    const result = await installRegistryRelease({ sourceId: "official", root: { kind: "plugin", id: "demo", version: "0.0.1" }, releases: [plugin, sidecar] as never, target: "aarch64-apple-darwin", environment: installed, artifacts: a.value });
+    expect(result).toMatchObject({ ok: true, revision: 2 });
+    expect(a.committed.map((value) => `${value.kind}:${value.id}@${value.version}`)).toEqual(["sidecar:state@0.0.1"]);
+  });
 });
