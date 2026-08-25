@@ -39,6 +39,7 @@ describe("finite DOM transition trace", () => {
       expect.objectContaining({ address: "rail/left", connected: false, rect: { x: 10, y: 20, w: 30, h: 40 } }),
       expect.objectContaining({
         address: "layout/pane/a",
+        nodeIdentity: expect.any(String),
         connected: false,
         rect: { x: 50, y: 20, w: 100, h: 40 },
         dataset: {
@@ -54,6 +55,9 @@ describe("finite DOM transition trace", () => {
       expect.objectContaining({ name: "rail-flip-x", startTime: 100, currentTime: 25, progress: 0.25 }),
     ]);
     expect(samples.map((sample) => sample.captureFrame)).toEqual([0, 1]);
+    expect(samples[0].nodes.map((node) => node.nodeIdentity)).toEqual(
+      samples[1].nodes.map((node) => node.nodeIdentity),
+    );
   });
 
   it("records the exposed-node paint stack at every positive intersection on the capture frame", () => {
