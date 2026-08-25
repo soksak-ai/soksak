@@ -4,6 +4,7 @@ import {
   type StackingComputedStyle,
   type StackingPathEntry,
 } from "../lib/stackingOrder";
+import { nodeIdentityOf } from "./domNodeIdentity";
 
 export type DomTraceTarget = { address: string; el: Element };
 
@@ -21,6 +22,7 @@ export type DomTraceSample = {
   unixMs: number;
   nodes: Array<{
     address: string;
+    nodeIdentity: string;
     connected: boolean;
     rect: { x: number; y: number; w: number; h: number };
     dataset: Record<string, string>;
@@ -94,6 +96,7 @@ export function createFiniteDomTraceSampler(
           : [];
         return {
           address,
+          nodeIdentity: nodeIdentityOf(el),
           connected: el.isConnected,
           rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
           dataset,

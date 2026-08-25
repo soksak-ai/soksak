@@ -36,6 +36,7 @@ import {
   validWindowRecordMaxBytes,
 } from "./windowRecorder";
 import { createFiniteDomTraceSampler } from "./finiteDomTrace";
+import { nodeIdentityOf } from "./domNodeIdentity";
 import { layoutSettlementStatus, waitLayoutSettled } from "./waitLayoutSettled";
 import { layoutDecorationMotionFacts } from "../lib/layoutDecorationPresentation";
 import { layoutDecorationClearanceFacts } from "../lib/layoutDecorationClearance";
@@ -86,9 +87,6 @@ const focusTrace = moduleState("commands/catalogDom#focusTrace", () => ({
 // that spot. The axis that observes instance replacement is keyed by the Element itself. Being a
 // WeakMap, this identity does not extend the DOM lifecycle, and the value excludes internal structure
 // such as address, tag, or dataset.
-const domNodeIdentity = moduleState("commands/catalogDom#domNodeIdentity", () => ({
-  byElement: new WeakMap<Element, string>(),
-}));
 
 type MultiDomTraceMotion = {
   producer: "web-animation";
@@ -655,14 +653,6 @@ export function __resetMultiDomTraceForTest(): void {
     if (session.evictionTimer !== null) clearTimeout(session.evictionTimer);
   }
   multiDomTraceSessions.clear();
-}
-
-function nodeIdentityOf(el: Element): string {
-  const existing = domNodeIdentity.byElement.get(el);
-  if (existing) return existing;
-  const identity = crypto.randomUUID();
-  domNodeIdentity.byElement.set(el, identity);
-  return identity;
 }
 
 const notExposed = (addr: string) => ({
