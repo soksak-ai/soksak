@@ -19,8 +19,7 @@ import {
   setRegistryInstallRuntime,
   type RegistryInstallRuntimeHandler,
 } from "./registryInstallRuntime";
-import { isArtifactTarget, type ArtifactTarget } from "./spec";
-import type { RuntimeEnvironment } from "./registryInstallTransaction";
+import { isArtifactTarget, parseEnvironmentDocument, type ArtifactTarget } from "./spec";
 
 async function hostTarget(): Promise<ArtifactTarget> {
   const value = await invoke<string>("host_artifact_target");
@@ -81,7 +80,9 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
     const message = cause instanceof Error ? cause.message : String(cause);
     return { ok: false, code: "ENVIRONMENT_UNAVAILABLE", message, errors: [message] };
   }
-  const environment = environmentRaw as RuntimeEnvironment;
+  const parsedEnvironment = parseEnvironmentDocument(environmentRaw);
+  if (!parsedEnvironment.ok) return { ok: false, code: "ENVIRONMENT_INVALID", message: parsedEnvironment.errors.join("; "), errors: parsedEnvironment.errors };
+  const environment = parsedEnvironment.value;
   const selectedSource = certified?.registry.id ?? sourceId;
   if (!selectedSource || (selectedSource === "local" && !localStore)) {
     return { ok: false, code: "INSTALL_SOURCE_INVALID", message: "installer source is incomplete" };

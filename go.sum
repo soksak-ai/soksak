@@ -353,8 +353,8 @@ github.com/soksak-ai/soksak-contract-control v0.0.0-20260823042834-6d1a1c8cbad7 
 github.com/soksak-ai/soksak-contract-control v0.0.0-20260823042834-6d1a1c8cbad7/go.mod h1:onYfujFaCchwifFz86roX8J7EkpiDEpSgNajcoiuBbw=
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9 h1:pgAA1NyDuK5daROyjR4aG5dPshemXlWu0XvOZkqS9tI=
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9/go.mod h1:ytm+dh2ShxYePv/d5xxSH7bDrd+pQzM5e2rGUyXeD9w=
-github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260825042407-de829bad3c6e h1:erc9CfOfMj/bfbeqCuvbe4oAcI8XTXTAIgDARGG1t/A=
-github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260825042407-de829bad3c6e/go.mod h1:IfcO4wTw2RDCPvUz+x92mqUt3J/5lkJe4rn9FiyINFI=
+github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260825052131-4cc71eee928f h1:pDGQ6yucifYCCEKXZFElpJEXA5jUjcVbbWONm7UkFAE=
+github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260825052131-4cc71eee928f/go.mod h1:IfcO4wTw2RDCPvUz+x92mqUt3J/5lkJe4rn9FiyINFI=
 github.com/spf13/cast v1.10.0 h1:h2x0u2shc1QuLHfxi+cTJvs30+ZAHOGRic8uyGTDWxY=
 github.com/spf13/cast v1.10.0/go.mod h1:jNfB8QC9IA6ZuY2ZjDp0KtFO2LZZlg4S/7bzP6qqeHo=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=

@@ -12,8 +12,8 @@ importers:
         specifier: github:min-median-max/wails-service-native-compositor#3530617b540f9d943e0926514c158cf08dee9d80
         version: https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/3530617b540f9d943e0926514c158cf08dee9d80
       '@soksak-ai/plugin-spec':
-        specifier: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.29/soksak-ai-plugin-spec-0.0.29.tgz
-        version: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.29/soksak-ai-plugin-spec-0.0.29.tgz
+        specifier: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.30/soksak-ai-plugin-spec-0.0.30.tgz
+        version: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.30/soksak-ai-plugin-spec-0.0.30.tgz
       '@wailsio/runtime':
         specifier: 3.0.0-beta.12
         version: 3.0.0-beta.12
@@ -527,9 +527,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.29/soksak-ai-plugin-spec-0.0.29.tgz':
-    resolution: {integrity: sha512-4vv16Bi+UpDHWPq9qUzLfuthUAGSv0ui3m3sKC7kDATxDF2q2pLaTKRfbPrrZIQf1WdqSUdIDG37LkZ8Z9pm+Q==, tarball: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.29/soksak-ai-plugin-spec-0.0.29.tgz}
-    version: 0.0.29
+  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.30/soksak-ai-plugin-spec-0.0.30.tgz':
+    resolution: {integrity: sha512-DX47erUlTyUJwcV0PkT09qIDDH78lsS1WK43LF4AbjrzUpa4wqOkxZTcFrIGdwZ8OQJIPJVKzTVYTuoZA4ATeA==, tarball: https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.30/soksak-ai-plugin-spec-0.0.30.tgz}
+    version: 0.0.30
     engines: {node: 26.7.0}
     hasBin: true
 
@@ -1353,7 +1353,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.4':
     optional: true
 
-  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.29/soksak-ai-plugin-spec-0.0.29.tgz': {}
+  '@soksak-ai/plugin-spec@https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.30/soksak-ai-plugin-spec-0.0.30.tgz': {}
 
   '@tabler/icons@3.46.0': {}
 
