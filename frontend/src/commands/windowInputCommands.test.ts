@@ -11,7 +11,9 @@ describe("window.input — discoverable native input diagnostics", () => {
     ["window.input.mark", ["text"]],
     ["window.input.pointer.wait", ["sequence", "timeoutMs"]],
     ["window.input.pointer.inject", ["x", "y"]],
-    ["window.input.pointer.click", ["x", "y"]],
+    ["window.input.pointer.click", [
+      "x", "y", "recordDir", "recordFrames", "recordIntervalMs", "recordLeadMs", "recordMaxBytes", "traceAddresses",
+    ]],
     ["window.input.key.press", ["key", "ctrl", "meta", "shift", "alt"]],
     ["window.native-close.status", []],
     ["window.native-close.click", []],
@@ -30,5 +32,10 @@ describe("window.input — discoverable native input diagnostics", () => {
         },
       },
     });
+  });
+
+  it("native pointer click exposes a frame-bound recording and DOM trace receipt", () => {
+    expect(getSpec("window.input.pointer.click")?.returns).toContain("recording");
+    expect(getSpec("window.input.pointer.click")?.returns).toContain("trace");
   });
 });
