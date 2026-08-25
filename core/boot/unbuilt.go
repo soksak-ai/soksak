@@ -49,7 +49,6 @@ var unbuilt = map[string]string{
 	"daemon_run_once": "this build was given no spawner that can run a declared command once",
 
 	// Installation and units.
-	"plugin_remove":   "this build has no environment transaction that removes a plugin record and its installed artifact together",
 	"verify_and_link": "this build verifies and links no downloaded artefacts",
 	"download_verify": "this build downloads no artefacts to verify",
 	"update_check":    "this build has no updater",

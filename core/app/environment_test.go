@@ -48,16 +48,3 @@ func TestUpdaterFollowsTheReleaseAxis(t *testing.T) {
 		t.Error("a release identity must enable the updater")
 	}
 }
-
-func TestUnitModeIsOfficialWithNoDevelopmentUnits(t *testing.T) {
-	env := Describe(resolved(t, "com.soksak.app"), "release", "/bin/zsh")
-
-	if env.UnitMode != "official" {
-		t.Errorf("unit mode = %q, want official", env.UnitMode)
-	}
-	// The frontend iterates these. A nil slice serialises as null and makes the
-	// consumer branch on absence instead of emptiness.
-	if env.DevelopmentUnits == nil || env.RejectedDevelopmentUnits == nil {
-		t.Error("unit lists must serialise as empty arrays, never null")
-	}
-}

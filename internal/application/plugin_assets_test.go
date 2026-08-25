@@ -12,7 +12,7 @@ import (
 func TestInstalledPluginAssetsAreReadableBeforeEnablement(t *testing.T) {
 	home := t.TempDir()
 	plugin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(plugin, "plugin.json"), []byte(`{"id":"demo"}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(plugin, "plugin.json"), []byte(`{"id":"demo","version":"0.0.1"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	environment := coreenvironment.Empty()

@@ -21,3 +21,7 @@ bin/
 # What passes or fails is the numbers the gate prints beside them.
 evidence/scenarios/
 /evidence/
+
+# Local iteration against an uncommitted spec module. Never committed.
+go.work
+go.work.sum

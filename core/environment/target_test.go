@@ -1,4 +1,4 @@
-package install
+package environment
 
 import (
 	"strings"
@@ -17,7 +17,7 @@ func TestEachHostNamesItsOwnTriple(t *testing.T) {
 		{"windows", "arm64", "aarch64-pc-windows-msvc"},
 		{"windows", "amd64", "x86_64-pc-windows-msvc"},
 	} {
-		got, err := hostArtifactTarget(want.goos, want.goarch)
+		got, err := HostArtifactTarget(want.goos, want.goarch)
 		if err != nil {
 			t.Errorf("%s/%s: %v", want.goos, want.goarch, err)
 			continue
@@ -38,7 +38,7 @@ func TestTheAnswerFollowsTheArgumentNotThisBuild(t *testing.T) {
 		{"linux", "arm64"}, {"linux", "amd64"},
 		{"windows", "arm64"}, {"windows", "amd64"},
 	} {
-		triple, err := hostArtifactTarget(pair[0], pair[1])
+		triple, err := HostArtifactTarget(pair[0], pair[1])
 		if err != nil {
 			t.Fatalf("%v: %v", pair, err)
 		}
@@ -59,7 +59,7 @@ func TestAnUnknownHostGetsNoInventedTriple(t *testing.T) {
 		{"freebsd", "amd64"},
 		{"darwin", "386"},
 	} {
-		triple, err := hostArtifactTarget(pair[0], pair[1])
+		triple, err := HostArtifactTarget(pair[0], pair[1])
 		if err == nil {
 			t.Errorf("%v was given the invented triple %q", pair, triple)
 			continue
@@ -75,12 +75,12 @@ func TestAnUnknownHostGetsNoInventedTriple(t *testing.T) {
 // build install one host's binaries.
 func TestAMissingPlatformIsRefusedByName(t *testing.T) {
 	for _, pair := range [][2]string{{"", "arm64"}, {"darwin", ""}, {"", ""}} {
-		_, err := hostArtifactTarget(pair[0], pair[1])
+		_, err := HostArtifactTarget(pair[0], pair[1])
 		if err == nil {
 			t.Errorf("%v was accepted", pair)
 			continue
 		}
-		if !strings.Contains(err.Error(), "install.Deps.OS") {
+		if !strings.Contains(err.Error(), "install.Deps") || !strings.Contains(err.Error(), "environment.Deps") {
 			t.Errorf("%v: the refusal does not name what to supply: %v", pair, err)
 		}
 	}

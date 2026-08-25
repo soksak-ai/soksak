@@ -1,7 +1,6 @@
 package install
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 
@@ -36,53 +35,6 @@ type publishArtifact struct {
 type publishedArtifact struct {
 	final  string
 	staged stagedState
-}
-
-type pluginRuntimeDependencies struct {
-	ID                  string `json:"id"`
-	Version             string `json:"version"`
-	RuntimeDependencies struct {
-		Plugins  []struct{ ID, Version string } `json:"plugins"`
-		Sidecars []struct{ ID, Version string } `json:"sidecars"`
-	} `json:"runtimeDependencies"`
-}
-
-func validateInstalledPluginDependencies(environment coreenvironment.Environment, stagedRoots map[string]string) error {
-	for id, plugin := range environment.Plugins {
-		root := plugin.Path
-		if staged := stagedRoots[id]; staged != "" {
-			root = staged
-		}
-		body, err := os.ReadFile(filepath.Join(root, "plugin.json"))
-		if err != nil {
-			return err
-		}
-		var manifest pluginRuntimeDependencies
-		if json.Unmarshal(body, &manifest) != nil || manifest.ID != id || manifest.Version != plugin.Version {
-			return i18n.Errorf("install.transaction.pluginManifestInvalid", map[string]string{"plugin": id})
-		}
-		for _, dependency := range manifest.RuntimeDependencies.Plugins {
-			selected, found := environment.Plugins[dependency.ID]
-			if !found || selected.Version != dependency.Version {
-				actual := "missing"
-				if found {
-					actual = selected.Version
-				}
-				return i18n.Errorf("install.transaction.dependencyVersionConflict", map[string]string{"plugin": id + "@" + plugin.Version, "kind": "Plugin", "dependency": dependency.ID, "required": dependency.Version, "requested": actual})
-			}
-		}
-		for _, dependency := range manifest.RuntimeDependencies.Sidecars {
-			selected, found := environment.Sidecars[dependency.ID]
-			if !found || selected.Version != dependency.Version {
-				actual := "missing"
-				if found {
-					actual = selected.Version
-				}
-				return i18n.Errorf("install.transaction.dependencyVersionConflict", map[string]string{"plugin": id + "@" + plugin.Version, "kind": "Sidecar", "dependency": dependency.ID, "required": dependency.Version, "requested": actual})
-			}
-		}
-	}
-	return nil
 }
 
 func installedComponent(value coreenvironment.Environment, kind, id string) (coreenvironment.Component, bool) {
@@ -155,12 +107,14 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		if staged.identity != expected || staged.sha256 != artifact.digest {
 			return CommitResult{}, i18n.Errorf("install.transaction.stagedArtifactMismatch", map[string]string{"artifact": key})
 		}
-		source := "registry"
+		source := coreenvironment.RegistrySource
 		registryID := transaction.registryID
 		if transaction.registryID == "local" {
-			source, registryID = "local", ""
+			source, registryID = coreenvironment.LocalSource, ""
 		}
+		// A development record is a slot, not an installed artifact: it is replaced by the install.
 		if installed, found := installedComponent(current, artifact.kind, artifact.id); found &&
+			installed.Source != coreenvironment.DevelopmentSource &&
 			installed.Version == artifact.version && installed.Target == artifact.target {
 			if installed.ArtifactSHA256 != artifact.digest {
 				return CommitResult{}, i18n.Errorf("install.transaction.versionArtifactConflict", map[string]string{
@@ -180,19 +134,23 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		}
 		parts = append(parts, artifact.digest)
 		final := filepath.Join(parts...)
-		if _, err := os.Lstat(final); err == nil {
-			return CommitResult{}, i18n.Errorf("install.transaction.destinationExists", map[string]string{"path": final})
-		} else if !os.IsNotExist(err) {
+		// The directory is content-addressed and a rename is atomic: an existing
+		// directory holds the same bytes and is complete. Reuse it; the staged copy
+		// is discarded with the transaction directory after publish.
+		_, err = os.Lstat(final)
+		if err != nil && !os.IsNotExist(err) {
 			return CommitResult{}, err
 		}
-		prepared = append(prepared, publishedArtifact{final: final, staged: staged})
+		if os.IsNotExist(err) {
+			prepared = append(prepared, publishedArtifact{final: final, staged: staged})
+		}
 		value := coreenvironment.Component{Version: artifact.version, Path: final, ArtifactSHA256: artifact.digest, Source: source, Registry: registryID, Target: artifact.target}
 		selectComponent(&next, artifact.kind, artifact.id, value)
 		if artifact.kind == "plugin" {
 			stagedPluginRoots[artifact.id] = staged.path
 		}
 	}
-	if err := validateInstalledPluginDependencies(next, stagedPluginRoots); err != nil {
+	if err := coreenvironment.ValidatePluginDependencies(next, stagedPluginRoots); err != nil {
 		return CommitResult{}, err
 	}
 	change, temporary, err := coreenvironment.PrepareWrite(request.Home, current, exists, next, request.ExpectedRevision, "next-"+request.TransactionID)

@@ -2,7 +2,6 @@ package environment
 
 import (
 	"os"
-	"path/filepath"
 )
 
 type PluginRef struct {
@@ -20,6 +19,10 @@ type ManifestRecord struct {
 	Error        *string `json:"error"`
 }
 
+// SetPluginsEnabled sets Enabled for every plugin in refs. Each ref must name
+// a record at its effective version (os.ErrNotExist otherwise). Enabling a
+// broken development record (readRecordManifest) is refused with
+// environment.develop.directoryUnavailable; disabling one requires no version.
 func SetPluginsEnabled(home string, refs []PluginRef, enabled bool, expected uint64) (Change, error) {
 	current, exists, err := Read(home)
 	if err != nil {
@@ -36,14 +39,28 @@ func SetPluginsEnabled(home string, refs []PluginRef, enabled bool, expected uin
 		}
 		seen[ref.ID] = true
 		value, found := next.Plugins[ref.ID]
-		if !found || value.Version != ref.Version {
+		if !found {
 			return Change{}, os.ErrNotExist
+		}
+		// Enable requires the effective version the caller read; disable only names the record.
+		if enabled {
+			version, err := recordVersion("plugin", ref.ID, value.Component)
+			if err != nil {
+				return Change{}, err
+			}
+			if version != ref.Version {
+				return Change{}, os.ErrNotExist
+			}
 		}
 		value.Enabled = enabled
 		next.Plugins[ref.ID] = value
 	}
 	return Write(home, current, true, next, expected)
 }
+
+// PluginManifests lists every plugin record with its manifest body. A record
+// whose manifest readRecordManifest refuses is listed with the refusal
+// sentence in Error and no Manifest.
 func PluginManifests(home string) ([]ManifestRecord, error) {
 	environment, exists, err := Read(home)
 	if err != nil {
@@ -57,13 +74,11 @@ func PluginManifests(home string) ([]ManifestRecord, error) {
 		value := environment.Plugins[id]
 		root := value.Path
 		record := ManifestRecord{ID: id, Version: value.Version, InstallPath: root, ManifestPath: "plugin.json", Source: value.Source, Enabled: value.Enabled}
-		body, readErr := os.ReadFile(filepath.Join(root, "plugin.json"))
+		manifest, readErr := readRecordManifest("plugin", id, value.Component)
 		if readErr != nil {
-			message := readErr.Error()
-			record.Error = &message
+			record.Error = stringPointer(readErr.Error())
 		} else {
-			manifest := string(body)
-			record.Manifest = &manifest
+			record.Manifest = stringPointer(string(manifest.Body))
 		}
 		records = append(records, record)
 	}

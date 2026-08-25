@@ -7,13 +7,6 @@ package app
 
 import "github.com/soksak-ai/soksak-core/core/identity"
 
-// DevelopmentUnit is a locally sourced plugin or sidecar.
-type DevelopmentUnit struct {
-	Kind   string `json:"kind"`
-	ID     string `json:"id"`
-	Source string `json:"source"`
-}
-
 // Environment is what the frontend requests first: which installation is this,
 // where does it live, and what is it allowed to do.
 type Environment struct {
@@ -27,15 +20,7 @@ type Environment struct {
 	BuildProfile string `json:"buildProfile"`
 	// UpdaterEnabled follows the release axis. A dev installation offering to
 	// update itself would replace it with the release one.
-	UpdaterEnabled bool   `json:"updaterEnabled"`
-	UnitMode       string `json:"unitMode"`
-	// DevelopmentUnits and RejectedDevelopmentUnits are never nil: the frontend
-	// iterates them, and null would make it branch on absence rather than
-	// emptiness.
-	DevelopmentUnits []DevelopmentUnit `json:"developmentUnits"`
-	// RejectedDevelopmentUnits are declarations refused at the read boundary,
-	// carried so the operator can clean up what was left behind.
-	RejectedDevelopmentUnits []DevelopmentUnit `json:"rejectedDevelopmentUnits"`
+	UpdaterEnabled bool `json:"updaterEnabled"`
 }
 
 // Describe builds the environment from one resolved identity.
@@ -44,24 +29,13 @@ type Environment struct {
 // drifting: there is no path here that could pair one installation's home with
 // another's name.
 func Describe(id identity.Resolved, buildProfile, loginShell string) Environment {
-	units := []DevelopmentUnit{}
-	rejected := []DevelopmentUnit{}
-
-	mode := "official"
-	if len(units) > 0 {
-		mode = "mixed"
-	}
-
 	return Environment{
-		Identity:                 id.Identifier,
-		Home:                     id.Home,
-		CoreBuild:                id.CoreBuild,
-		CLI:                      id.CLI,
-		LoginShell:               loginShell,
-		BuildProfile:             buildProfile,
-		UpdaterEnabled:           id.Release,
-		UnitMode:                 mode,
-		DevelopmentUnits:         units,
-		RejectedDevelopmentUnits: rejected,
+		Identity:       id.Identifier,
+		Home:           id.Home,
+		CoreBuild:      id.CoreBuild,
+		CLI:            id.CLI,
+		LoginShell:     loginShell,
+		BuildProfile:   buildProfile,
+		UpdaterEnabled: id.Release,
 	}
 }

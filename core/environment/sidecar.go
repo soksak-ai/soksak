@@ -4,8 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
 )
 
 type SidecarRuntime struct {
@@ -16,6 +14,9 @@ type SidecarRuntime struct {
 	Process          string
 }
 
+// ResolveSidecarForPlugin resolves sidecar for consumer. consumer must name an
+// installed plugin at its effective version; otherwise os.ErrNotExist. A broken
+// development consumer is refused with environment.develop.directoryUnavailable.
 func ResolveSidecarForPlugin(home string, consumer PluginRef, sidecar PluginRef) (SidecarRuntime, error) {
 	environment, exists, err := Read(home)
 	if err != nil {
@@ -28,11 +29,20 @@ func ResolveSidecarForPlugin(home string, consumer PluginRef, sidecar PluginRef)
 	if !found {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
-	if plugin.Version != consumer.Version {
+	version, err := recordVersion("plugin", consumer.ID, plugin.Component)
+	if err != nil {
+		return SidecarRuntime{}, err
+	}
+	if version != consumer.Version {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
 	return ResolveSidecarVersion(home, sidecar.ID, sidecar.Version)
 }
+
+// ResolveSidecarVersion resolves sidecar id at exactly version, the record's
+// effective version, from one read of sidecar.json. A broken development
+// record is refused with environment.develop.directoryUnavailable; an
+// installed manifest that does not confirm the record is os.ErrInvalid.
 func ResolveSidecarVersion(home, id, version string) (SidecarRuntime, error) {
 	environment, exists, err := Read(home)
 	if err != nil {
@@ -42,26 +52,22 @@ func ResolveSidecarVersion(home, id, version string) (SidecarRuntime, error) {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
 	value, found := environment.Sidecars[id]
-	if !found || value.Version != version {
+	if !found {
+		return SidecarRuntime{}, os.ErrNotExist
+	}
+	manifest, err := readRecordManifest("sidecar", id, value)
+	if err != nil {
+		return SidecarRuntime{}, err
+	}
+	if manifest.Version != version {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
 	root := value.Path
-	body, err := os.ReadFile(filepath.Join(root, "sidecar.json"))
-	if err != nil {
-		return SidecarRuntime{}, err
-	}
-	manifest, err := platformspec.ParseSidecarManifest(body)
-	if err != nil {
-		return SidecarRuntime{}, err
-	}
-	if manifest.ID != id || manifest.Version != value.Version {
-		return SidecarRuntime{}, os.ErrInvalid
-	}
-	process := filepath.Join(root, filepath.FromSlash(manifest.Process))
 	if err := validateRegularPath(root, manifest.Process); err != nil {
 		return SidecarRuntime{}, err
 	}
-	return SidecarRuntime{ID: id, Version: value.Version, InterfaceID: manifest.Interface.ID, InterfaceVersion: manifest.Interface.Version, Process: process}, nil
+	process := filepath.Join(root, filepath.FromSlash(manifest.Process))
+	return SidecarRuntime{ID: id, Version: version, InterfaceID: manifest.Interface.ID, InterfaceVersion: manifest.Interface.Version, Process: process}, nil
 }
 func validateRegularPath(root, relative string) error {
 	path := root

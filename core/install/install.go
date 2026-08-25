@@ -136,7 +136,7 @@ func Register(registry *control.Registry, deps Deps) {
 	registry.MustRegister(control.Command{
 		Name: "host_artifact_target",
 		Handler: func(control.Args) (any, error) {
-			return hostArtifactTarget(deps.OS, deps.Arch)
+			return environment.HostArtifactTarget(deps.OS, deps.Arch)
 		},
 	})
 

@@ -372,7 +372,7 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		Changed:    emit,
 	})
 
-	coreenvironment.Register(registry, coreenvironment.Deps{Home: boot.Identity.Home, Changed: emit})
+	coreenvironment.Register(registry, coreenvironment.Deps{Home: boot.Identity.Home, OS: boot.OS, Arch: boot.Arch, Changed: emit})
 	registrytrust.Register(registry, func() time.Time { return time.UnixMilli(boot.Now()) })
 
 	daemon.Register(registry, daemon.Deps{
