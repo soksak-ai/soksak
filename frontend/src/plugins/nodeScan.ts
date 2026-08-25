@@ -1,6 +1,7 @@
-// Node scan — collects DOM elements exposed with data-node inside a plugin view container as
-// absolute addresses. Scan root = .tab-viewer of PluginViewHost (single truth). Host chrome
-// follows the same data-node rule.
+// Node scan — collects DOM elements exposed with data-node inside a scan root as absolute
+// addresses. Two scan roots, both from PluginViewHost: the provider container
+// (.tab-viewer[data-view-addr]) and its overlay sibling ([data-view-overlay-addr]); each declares
+// the view address the nodes are listed under. Host chrome follows the same data-node rule.
 //
 // Exposure is explicit (the data-node attribute). An unexposed element is not collected → absent
 // from the address tree → NOT_EXPOSED on access.

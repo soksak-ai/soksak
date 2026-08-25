@@ -385,22 +385,51 @@ export const PluginViewHost = memo(function PluginViewHost({
   const pluginId = viewKey.slice(0, viewKey.indexOf("."));
   const refusal = usePlugins((s) => s.rejected.find((r) => r.id === pluginId));
   const installed = usePlugins((s) => !!s.plugins[pluginId]);
-  const absence = refusal
-    ? t("plugin.view.refused", { plugin: pluginId, reason: refusal.errors.join("; ") })
-    : installed
-      ? t("plugin.view.off", { plugin: pluginId })
-      : t("plugin.view.absent", { plugin: pluginId });
+  // One string for the refusal reason: the data-view-reason attribute and the sentence read it.
+  const refusalReason = refusal?.errors.join("; ");
+  const absenceState = refusalReason !== undefined ? "refused" : installed ? "off" : "absent";
+  const absence =
+    refusalReason !== undefined
+      ? t("plugin.view.refused", { plugin: pluginId, reason: refusalReason })
+      : installed
+        ? t("plugin.view.off", { plugin: pluginId })
+        : t("plugin.view.absent", { plugin: pluginId });
 
   // The container always renders (the ref stays) — error and absent states are drawn on top, so a
   // re-registration recovers.
+  //
+  // Each overlay is an exposed node under this view's address: it declares data-view-overlay-addr
+  // (a collector scan root) and data-node, so ui.tree lists the state that is on screen. Measured
+  // 2026-08-26: a disabled plugin's pane showed the sentence and ui.tree reported 0 nodes for it.
+  // The overlay is a sibling of the container, not a child — the container is provider-owned DOM
+  // (a shadow root once attached hides light-DOM children) and is display:none while an overlay
+  // shows. The attribute is not data-view-addr: ui.slot resolves that one, and A2 needs one element
+  // per address (the container).
   const overlay = !reg ? (
     bootPhase !== "ready" ? (
-      <div className="plugin-loading">{t("plugin.view.loading")}</div>
+      <div className="plugin-loading" data-view-overlay-addr={viewAddr} data-node="plugin-view-loading">
+        {t("plugin.view.loading")}
+      </div>
     ) : (
-      <div className="plugin-empty">{absence}</div>
+      <div
+        className="plugin-empty"
+        data-view-overlay-addr={viewAddr}
+        data-node="plugin-view-placeholder"
+        data-view-state={absenceState}
+        data-view-plugin={pluginId}
+        data-view-reason={refusalReason}
+      >
+        {absence}
+      </div>
     )
   ) : error ? (
-    <div className="plugin-error">
+    <div
+      className="plugin-error"
+      data-view-overlay-addr={viewAddr}
+      data-node="plugin-view-error"
+      data-view-plugin={pluginId}
+      data-view-error={error}
+    >
       <div className="plugin-error-title">{t("plugin.view.error")}</div>
       <div className="plugin-error-msg">{error}</div>
     </div>

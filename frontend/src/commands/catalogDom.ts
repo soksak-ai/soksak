@@ -661,10 +661,18 @@ const notExposed = (addr: string) => ({
   message: tmsg("msg.ui.address.notExposed", { address: addr }),
 });
 
-// Single selector for the view container — if the two traversals below (collect, exclude) do not see the
-// same set, a node is counted twice or silently dropped, and the address-uniqueness decision (A1) rests
-// on that. The file viewer container uses the same class, so the baseAddress attribute separates them.
+// Single selector for the view container — ui.slot resolves one element per view address
+// (A2), and only the container holds data-view-addr. The file viewer container uses the same class, so
+// the baseAddress attribute separates them.
 const VIEW_CONTAINER = ".tab-viewer[data-view-addr]";
+// The PluginViewHost overlays (loading, placeholder, error) are siblings of the container, not children,
+// and declare the same view address under data-view-overlay-addr. An overlay is a node-scan root under
+// that address and never a slot. Measured 2026-08-26: ui.tree reported 0 nodes for a disabled plugin's
+// pane while the placeholder was on screen — the overlay was outside every scan root.
+const VIEW_OVERLAY = "[data-view-overlay-addr]";
+// The scan roots — if the two traversals below (collect, exclude) do not see the same set, a node is
+// counted twice or silently dropped, and the address-uniqueness decision (A1) rests on that.
+const SCAN_ROOT = `${VIEW_CONTAINER}, ${VIEW_OVERLAY}`;
 
 // Collects every exposed node of the current window as an absolute address (view containers plus host
 // chrome). Direct DOM traversal.
@@ -676,21 +684,33 @@ export function collectExposed(): ScannedNode[] {
   // such address" and points at the address rather than at the missing label (measured 2026-08-15).
   const label = currentWindowLabel();
   const win = label ? `win/${label}/` : "";
-  // View containers — data-view-addr (<region>/view/<viewKey>) is the baseAddress. The win prefix is the
-  // current window.
-  for (const c of document.querySelectorAll<HTMLElement>(VIEW_CONTAINER)) {
-    const base = c.dataset.viewAddr ?? "";
+  // Scan roots — data-view-addr (container) or data-view-overlay-addr (overlay), both
+  // <region>/view/<viewKey>[/tab/<viewId>], is the baseAddress. The win prefix is the current window.
+  // A scan root inside a workspace plane exists once per workspace (every plane is mounted), so its
+  // canonical address includes the workspace axis like chrome; the active plane also gets the short
+  // alias. A scan root outside any plane (center content) is unique by its tab axis.
+  for (const c of document.querySelectorAll<HTMLElement>(SCAN_ROOT)) {
+    const base = c.dataset.viewAddr ?? c.dataset.viewOverlayAddr ?? "";
     if (!base) continue;
-    out.push(...scanNodes(c, `${win}${base}`));
+    const plane = c.closest<HTMLElement>("[data-workspace-plane]");
+    const proj = plane?.dataset.workspacePlane;
+    if (!proj) {
+      out.push(...scanNodes(c, `${win}${base}`));
+      continue;
+    }
+    const active = plane?.dataset.workspaceActive === "1";
+    for (const node of scanNodes(c, `${win}proj/${proj}/${base}`)) {
+      out.push(active ? { ...node, alias: `${win}${base}/node/${node.nodePath}` } : node);
+    }
   }
-  // Host chrome — [data-node] outside a view container.
+  // Host chrome — [data-node] outside a scan root.
   //
   // Every workspace plane is mounted (an inactive one only has its DOM visibility turned off). So a chrome
   // node inside a plane exists once per workspace, and without the workspace axis rail/left resolves to two
   // (measured). The canonical address includes the workspace, and only the active plane also gets the
   // short alias (the grammar's "omitted = active").
   for (const el of document.querySelectorAll<HTMLElement>("[data-node]")) {
-    if (el.closest(VIEW_CONTAINER)) continue; // view-container nodes are collected above
+    if (el.closest(SCAN_ROOT)) continue; // container and overlay nodes are collected above
     const nodePath = el.dataset.node ?? "";
     if (!nodePath) continue;
     const plane = el.closest<HTMLElement>("[data-workspace-plane]");
