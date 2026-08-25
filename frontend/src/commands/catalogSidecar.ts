@@ -1,7 +1,7 @@
 import { invoke } from "../framework";
 import { key, tmsg } from "../i18n";
 import { register } from "./registry";
-import { installLocalSidecar, planLocalSidecar } from "../plugins/localReleaseInstallService";
+import { DependencyVersionConflict, installLocalSidecar, planLocalSidecar } from "../plugins/localReleaseInstallService";
 
 export function registerSidecarCatalog(): void {
   register("sidecar.install.local.plan", {
@@ -14,7 +14,16 @@ export function registerSidecarCatalog(): void {
     returns: "{ digest,store,id,version,releases:[{kind,id,version,artifacts:[{target,size,sha256}]}] }",
     message: (data) => tmsg("msg.sidecar.install.local.plan", { id: String(data.id) }),
     examples: [`sidecar.install.local.plan '{"store":"/absolute/releases","sidecarId":"soksak-sidecar-<id>","version":"0.0.1"}'`],
-    handler: (params) => planLocalSidecar(String(params.store), String(params.sidecarId), String(params.version)),
+    errors: ["DEPENDENCY_VERSION_CONFLICT", "INTERNAL"],
+    handler: async (params) => {
+      try { return await planLocalSidecar(String(params.store), String(params.sidecarId), String(params.version)); }
+      catch (cause) {
+        if (cause instanceof DependencyVersionConflict) {
+          return { ok: false, code: cause.code, message: cause.message, conflict: cause.conflict };
+        }
+        throw cause;
+      }
+    },
   });
 
   register("sidecar.install.local", {
@@ -27,7 +36,7 @@ export function registerSidecarCatalog(): void {
     },
     returns: "{ id,version,revision }",
     message: (data) => tmsg("msg.sidecar.install.local", { id: String(data.id), version: String(data.version) }),
-    errors: ["SIDECAR_IN_USE", "LOCAL_INSTALL_PLAN_CHANGED", "VERSION_ARTIFACT_CONFLICT", "INTERNAL"],
+    errors: ["DEPENDENCY_VERSION_CONFLICT", "SIDECAR_IN_USE", "LOCAL_INSTALL_PLAN_CHANGED", "VERSION_ARTIFACT_CONFLICT", "INTERNAL"],
     examples: [`sidecar.install.local '{"store":"/absolute/releases","sidecarId":"soksak-sidecar-<id>","version":"0.0.1","planDigest":"<sha256>"}'`],
     danger: "destructive",
     handler: (params) => installLocalSidecar(String(params.store), String(params.sidecarId), String(params.version), String(params.planDigest)),

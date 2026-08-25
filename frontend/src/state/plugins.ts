@@ -365,6 +365,9 @@ async function execReach(
  */
 /** Bundles prefetched in this load — activation uses these first. */
 const prefetchedSources = new Map<string, string>();
+const activationFlights = moduleState("state/plugins#activationFlights", () =>
+  new Map<string, Promise<CmdResult<{ id: string; status: string }>>>(),
+);
 
 function reloadStep(step: string): void {
   void invoke("activity_publish", {
@@ -510,6 +513,39 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     });
     persist();
     return ok({ id });
+  };
+
+  const enableOnce = async (id: string): Promise<CmdResult<{ id: string; status: string }>> => {
+      const p = get().plugins[id];
+      if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
+      if (p.status === "enabled" && isActive(id)) return ok({ id, status: "enabled" });
+      const pending = pendingConsentChain(id, get().plugins, get().consents);
+      if (pending.length > 0) return err("CONSENT_REQUIRED", consentRequiredMessage(id, pending), { pendingConsent: pending });
+      const chain = activationChain(id, pluginDepNodes(get().plugins));
+      const activated: string[] = [];
+      for (const cid of chain) {
+        const cp = get().plugins[cid];
+        if (!cp || (cp.status === "enabled" && isActive(cid))) continue;
+        try { await activateRuntime(cp); }
+        catch (cause) {
+          setRuntime(cid, { status: "error", error: String(cause) });
+          for (const active of [...activated].reverse()) { await deactivateById(active); setRuntime(active, { status: "disabled", error: undefined }); }
+          return err("INTERNAL", tmsg("plugin.activate.failed", { id: cid, error: String(cause) }));
+        }
+        setRuntime(cid, { status: "enabled", error: undefined });
+        activated.push(cid);
+        void ensureProgramBinaries(cp.manifest);
+        void reconcileDependencies(cp.manifest, get().plugins, (command) => publishActivity("library.missing", "plugins", { plugin: cid, install: command, message: tmsg("plugin.library.missing", { install: command }) }));
+      }
+      try { await setEnabledInSettings(activated.map((cid) => ({ id: cid, version: get().plugins[cid]!.manifest.version })), true); }
+      catch (cause) {
+        for (const cid of [...activated].reverse()) { await deactivateById(cid); setRuntime(cid, { status: "disabled", error: undefined }); }
+        return err("INTERNAL", tmsg("plugin.enabled.writeFailed", { error: String(cause) }));
+      }
+      set((state) => ({ enabledIds: [...new Set([...state.enabledIds, ...activated])] }));
+      persist();
+      await get().syncLedger();
+      return ok({ id, status: "enabled" });
   };
 
   return {
@@ -691,68 +727,12 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       return ok({ id, removed });
     },
 
-    enable: async (id) => {
-      const p = get().plugins[id];
-      if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
-      if (p.status === "enabled" && isActive(id)) {
-        return ok({ id, status: "enabled" }); // idempotent
-      }
-      // Consent gate — checks transitive dependencies too (the user must see a dependency's strong permissions).
-      // dev sources are exempt (§0-5 exception — the load command is the gate). With an unconsented chain, return that
-      // list so the UI opens consent dialogs in dependency-first order (no half consent).
-      const pending = pendingConsentChain(id, get().plugins, get().consents);
-      if (pending.length > 0) {
-        return err("CONSENT_REQUIRED", consentRequiredMessage(id, pending), {
-          pendingConsent: pending,
-        });
-      }
-      // Activate dependencies first (cascade) — in activationChain order, only inactive and consented ones. Dependencies are ready first.
-      const chain = activationChain(id, pluginDepNodes(get().plugins));
-      const activated: string[] = [];
-      for (const cid of chain) {
-        const cp = get().plugins[cid];
-        if (!cp) continue; // uninstalled dependency (install flow is separate) — skipped
-        if (cp.status === "enabled" && isActive(cid)) continue; // already active
-        try {
-          await activateRuntime(cp);
-        } catch (e) {
-          setRuntime(cid, { status: "error", error: String(e) });
-          for (const active of [...activated].reverse()) {
-            await deactivateById(active);
-            setRuntime(active, { status: "disabled", error: undefined });
-          }
-          return err("INTERNAL", tmsg("plugin.activate.failed", { id: cid, error: String(e) }));
-        }
-        setRuntime(cid, { status: "enabled", error: undefined });
-        activated.push(cid);
-        // Program and library ensure (§2.6) — at activation time, exactly the command shown on the consent screen.
-        void ensureProgramBinaries(cp.manifest);
-        void reconcileDependencies(cp.manifest, get().plugins, (command) => {
-          // Same rule as ensureProgramBinaries: the fact and the command, published. Where it runs
-          // is not decided here.
-          publishActivity("library.missing", "plugins", {
-            plugin: cid,
-            install: command,
-            message: tmsg("plugin.library.missing", { install: command }),
-          });
-        });
-      }
-      try {
-        await setEnabledInSettings(
-          activated.map((cid) => ({ id: cid, version: get().plugins[cid]!.manifest.version })),
-          true,
-        );
-      } catch (cause) {
-        for (const cid of [...activated].reverse()) {
-          await deactivateById(cid);
-          setRuntime(cid, { status: "disabled", error: undefined });
-        }
-        return err("INTERNAL", tmsg("plugin.enabled.writeFailed", { error: String(cause) }));
-      }
-      set((s) => ({ enabledIds: [...new Set([...s.enabledIds, ...activated])] }));
-      persist();
-      await get().syncLedger();
-      return ok({ id, status: "enabled" });
+    enable: (id) => {
+      const existing = activationFlights.get(id);
+      if (existing) return existing;
+      const flight = enableOnce(id).finally(() => { if (activationFlights.get(id) === flight) activationFlights.delete(id); });
+      activationFlights.set(id, flight);
+      return flight;
     },
 
     disable: async (id) => {

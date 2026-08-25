@@ -9,7 +9,7 @@ vi.mock("../state/environmentEvents", () => ({ reconcileEnvironmentRevision: vi.
 vi.mock("../state/registry", () => ({ publicReleaseMetadataGet: (...args: unknown[]) => remote(...args) }));
 vi.mock("./registryInstallRuntime", () => ({ installCertifiedRegistryRelease: (...args: unknown[]) => install(...args) }));
 
-import { installLocalPlugin, installLocalSidecar, planLocalPlugin } from "./localReleaseInstallService";
+import { installLocalPlugin, installLocalSidecar, planLocalPlugin, planLocalSidecar } from "./localReleaseInstallService";
 import { pluginInstallProgress } from "./registryInstallProgress";
 
 const hash = async (body: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -24,7 +24,9 @@ describe("local release planning and installation", () => {
     const sidecar = { id: "soksak-sidecar-state", version: "0.0.1", url: `${sidecarRepo}/releases/download/v0.0.1/release.json`, size: sidecarBody.length, sha256: await hash(sidecarBody) };
     const pluginRepo = "https://github.com/example/soksak-plugin-demo";
     pluginBody = JSON.stringify({ kind: "plugin", id: "soksak-plugin-demo", version: "0.0.1", manifest: integrity(pluginRepo, "0.0.1", "plugin.json", "x"), source: { repository: pluginRepo, commit: "a".repeat(40) }, artifacts: [{ ...integrity(pluginRepo, "0.0.1", "demo.tgz", "x"), target: "any", format: "tgz", manifest: "plugin.json" }], runtimeDependencies: { sidecars: [sidecar] }, evidence: [integrity(pluginRepo, "0.0.1", "conformance-release.json", "x")] });
-    invoke.mockImplementation(async (_command: string, args: { id: string }) => {
+    invoke.mockImplementation(async (command: string, args: { id: string }) => {
+      if (command === "plugin_manifest_list") return [];
+      if (command === "sidecar_status") return { open: [], recorded: [] };
       const body = args.id === "soksak-plugin-demo" ? pluginBody : sidecarBody;
       return { found: true, body, size: body.length, sha256: await hash(body) };
     });
@@ -51,10 +53,22 @@ describe("local release planning and installation", () => {
   });
 
   it("refuses an in-use Sidecar without stopping it", async () => {
-    invoke.mockResolvedValueOnce({ open: [{ name: "soksak-sidecar-state" }], recorded: [] });
+    invoke.mockResolvedValueOnce([]).mockResolvedValueOnce({ open: [{ name: "soksak-sidecar-state" }], recorded: [] });
     const result = await installLocalSidecar("/store", "soksak-sidecar-state", "0.0.1", "0".repeat(64));
     expect(result).toMatchObject({ ok: false, code: "SIDECAR_IN_USE" });
     expect(invoke).not.toHaveBeenCalledWith("sidecar_stop", expect.anything());
+    expect(install).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Sidecar plan that would break an installed Plugin", async () => {
+    invoke.mockImplementationOnce(async () => [{
+      id: "soksak-plugin-demo", version: "0.0.23",
+      manifest: JSON.stringify({ runtimeDependencies: { sidecars: [{ id: "soksak-sidecar-state", version: "0.0.12" }] } }),
+    }]);
+    await expect(planLocalSidecar("/store", "soksak-sidecar-state", "0.0.13")).rejects.toMatchObject({
+      code: "DEPENDENCY_VERSION_CONFLICT",
+      conflict: { pluginId: "soksak-plugin-demo", pluginVersion: "0.0.23", sidecarId: "soksak-sidecar-state", requiredVersion: "0.0.12", requestedVersion: "0.0.13" },
+    });
     expect(install).not.toHaveBeenCalled();
   });
 });

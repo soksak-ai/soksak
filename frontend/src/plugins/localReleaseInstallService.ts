@@ -8,6 +8,30 @@ import { beginPluginInstall, setPluginInstallProgress } from "./registryInstallP
 import { publishActivity } from "../state/activityFeed";
 
 interface LocalReleaseRead { found: boolean; body?: string; size?: number; sha256?: string }
+interface InstalledPluginManifest { id: string; version: string; manifest: string | null }
+
+export class DependencyVersionConflict extends Error {
+  readonly code = "DEPENDENCY_VERSION_CONFLICT";
+  constructor(readonly conflict: { pluginId: string; pluginVersion: string; sidecarId: string; requiredVersion: string; requestedVersion: string }) {
+    super(`${conflict.pluginId}@${conflict.pluginVersion} requires Sidecar ${conflict.sidecarId} ${conflict.requiredVersion}; requested ${conflict.requestedVersion}`);
+  }
+}
+
+async function requireSidecarCompatibleWithInstalledPlugins(sidecarId: string, requestedVersion: string): Promise<void> {
+  const records = await invoke<InstalledPluginManifest[]>("plugin_manifest_list");
+  for (const record of records) {
+    if (record.manifest === null) continue;
+    let raw: { runtimeDependencies?: { sidecars?: Array<{ id?: unknown; version?: unknown }> } };
+    try { raw = JSON.parse(record.manifest); } catch { continue; }
+    const dependency = raw.runtimeDependencies?.sidecars?.find((value) => value.id === sidecarId);
+    if (typeof dependency?.version === "string" && dependency.version !== requestedVersion) {
+      throw new DependencyVersionConflict({
+        pluginId: record.id, pluginVersion: record.version, sidecarId,
+        requiredVersion: dependency.version, requestedVersion,
+      });
+    }
+  }
+}
 
 async function readLocal(store: string, reference: Pick<ReleaseReference, "id" | "version">, kind: "plugin" | "sidecar"): Promise<LocalReleaseRead> {
   return invoke<LocalReleaseRead>("local_release_read", { store, kind, id: reference.id, version: reference.version });
@@ -54,7 +78,10 @@ async function planLocalRelease(store: string, id: string, version: string, kind
 }
 
 export const planLocalPlugin = (store: string, id: string, version: string) => planLocalRelease(store, id, version, "plugin");
-export const planLocalSidecar = (store: string, id: string, version: string) => planLocalRelease(store, id, version, "sidecar");
+export const planLocalSidecar = async (store: string, id: string, version: string) => {
+  await requireSidecarCompatibleWithInstalledPlugins(id, version);
+  return planLocalRelease(store, id, version, "sidecar");
+};
 
 export async function installLocalPlugin(store: string, id: string, version: string, expectedPlanDigest: string): Promise<RegistryInstallRuntimeResult> {
   if (!beginPluginInstall(id)) return { ok: false, code: "INSTALL_IN_PROGRESS", message: `Plugin installation is already running: ${id}` };
@@ -81,6 +108,11 @@ export async function installLocalPlugin(store: string, id: string, version: str
 }
 
 export async function installLocalSidecar(store: string, id: string, version: string, expectedPlanDigest: string): Promise<RegistryInstallRuntimeResult> {
+  try { await requireSidecarCompatibleWithInstalledPlugins(id, version); }
+  catch (cause) {
+    if (cause instanceof DependencyVersionConflict) return { ok: false, code: cause.code, message: cause.message, errors: [JSON.stringify(cause.conflict)] };
+    throw cause;
+  }
   const status = await invoke<{ open: Array<{ name: string }>; recorded: Array<{ name: string }> }>("sidecar_status");
   if ([...status.open, ...status.recorded].some((entry) => entry.name === id)) return { ok: false, code: "SIDECAR_IN_USE", message: `Sidecar ${id} is running or recorded; stop it explicitly before installation` };
   const plan = await planLocalSidecar(store, id, version);

@@ -104,6 +104,21 @@ beforeEach(() => {
 });
 
 describe("reloadOne — a reload by id reads the manifest from disk again", () => {
+  it("joins concurrent enable calls into one activation", async () => {
+    activeIds.delete(ID);
+    usePlugins.setState({
+      plugins: { [ID]: runtimeOf(manifestJson(["thing.run"]), "disabled") },
+      enabledIds: [],
+    });
+    const [first, second] = await Promise.all([
+      usePlugins.getState().enable(ID),
+      usePlugins.getState().enable(ID),
+    ]);
+    expect(first).toMatchObject({ ok: true, id: ID, status: "enabled" });
+    expect(second).toEqual(first);
+    expect(activatedIds).toEqual([ID]);
+  });
+
   it("a command added to the file is in the declaration after reload", async () => {
     onDisk = manifestJson(["thing.run", "thing.head"]); // the author edited the file
 
