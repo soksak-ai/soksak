@@ -766,8 +766,6 @@ export const GroupArea = memo(function GroupArea({
       {displayCells.map(({ group, rect }) => {
         const isActiveGroup = group.id === content.activePaneId;
         const active = group.tabs.find((v) => v.id === group.activeTabId);
-        const presentation = presentationOf(group);
-        if (presentation.coreChrome !== "present") return null;
         return (
           <div
             key={`cell-${group.id}`}

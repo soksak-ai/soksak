@@ -64,13 +64,13 @@ describe("content view effective visibility", () => {
     expect(source).not.toMatch(/className=\{`pane-border\$\{[^\n]*flip-move/);
   });
 
-  it("a moving pane drops its chrome, and the nativeSurface slot takes no DOM FLIP", () => {
+  it("a moving pane keeps its chrome identity, and the nativeSurface slot takes no DOM FLIP", () => {
     const group = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
     const app = readFileSync(resolve(import.meta.dirname, "../App.tsx"), "utf8");
     expect(app).toContain("nativeSurfaceViewIds={nativeSurfaceViewIds(c)}");
     expect(group).toContain("nativeSurfaceViewIds?: readonly string[]");
     expect(group).toContain("viewTravelPresentation({");
-    expect(group).toContain('presentation.coreChrome !== "present"');
+    expect(group).not.toContain('presentation.coreChrome !== "present"');
     expect(group).toContain('presentation.domSurfaceMotion === "active"');
     expect(group).not.toMatch(/className=\{`pane\$\{flipMoves\(group\.id\) \? " flip-move"/);
   });

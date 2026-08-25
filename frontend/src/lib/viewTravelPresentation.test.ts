@@ -2,25 +2,23 @@ import { describe, expect, it } from "vitest";
 import { viewTravelPresentation } from "./viewTravelPresentation";
 
 describe("view travel presentation ownership", () => {
-  it("a nativeSurface move drops core chrome and DOM slot motion and owns the native surface alone", () => {
+  it("a nativeSurface move keeps core chrome and lets the native surface own content motion", () => {
     expect(viewTravelPresentation({
       traveling: true,
       moving: true,
       nativeSurface: true,
     })).toEqual({
-      coreChrome: "absent",
       domSurfaceMotion: "stationary",
       nativeSurfaceMotion: "active",
     });
   });
 
-  it("a pure DOM move drops core chrome and moves the DOM content surface alone", () => {
+  it("a pure DOM move keeps core chrome and moves the DOM content surface alone", () => {
     expect(viewTravelPresentation({
       traveling: true,
       moving: true,
       nativeSurface: false,
     })).toEqual({
-      coreChrome: "absent",
       domSurfaceMotion: "active",
       nativeSurfaceMotion: "absent",
     });
@@ -32,7 +30,6 @@ describe("view travel presentation ownership", () => {
       moving: false,
       nativeSurface: true,
     })).toEqual({
-      coreChrome: "present",
       domSurfaceMotion: "stationary",
       nativeSurfaceMotion: "stationary",
     });

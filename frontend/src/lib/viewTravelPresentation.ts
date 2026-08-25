@@ -1,5 +1,4 @@
 export type ViewTravelPresentation = Readonly<{
-  coreChrome: "present" | "absent";
   domSurfaceMotion: "active" | "stationary";
   nativeSurfaceMotion: "active" | "stationary" | "absent";
 }>;
@@ -7,10 +6,9 @@ export type ViewTravelPresentation = Readonly<{
 /**
  * One travel has exactly one owner of the visual coordinates.
  *
- * Core pane chrome is structure of the settled layout, not a traveling object. Remove it during travel and
- * rebuild it with a new DOM identity after landing. For a nativeSurface view the out-of-document surface owns
- * the travel, so the DOM slot is not FLIPped too. Only where there is no native surface does the DOM content
- * surface own the travel.
+ * Core pane chrome is persistent structure and keeps one DOM identity through travel. For a nativeSurface
+ * view the out-of-document surface owns content travel, so the DOM slot is not FLIPped too. Only where there
+ * is no native surface does the DOM content surface own content travel.
  */
 export function viewTravelPresentation({
   traveling,
@@ -23,19 +21,16 @@ export function viewTravelPresentation({
 }>): ViewTravelPresentation {
   if (!traveling || !moving) {
     return {
-      coreChrome: "present",
       domSurfaceMotion: "stationary",
       nativeSurfaceMotion: nativeSurface ? "stationary" : "absent",
     };
   }
   return nativeSurface
     ? {
-        coreChrome: "absent",
         domSurfaceMotion: "stationary",
         nativeSurfaceMotion: "active",
       }
     : {
-        coreChrome: "absent",
         domSurfaceMotion: "active",
         nativeSurfaceMotion: "absent",
       };
