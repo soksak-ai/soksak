@@ -67,12 +67,12 @@ func TestWindowInputCommandsUseTheNamedWindowAndExposeDeliveryReceipts(t *testin
 	RegisterWindowInput(registry, host)
 
 	caller := control.Args{control.CallerWindowArgument: jsonString("win-a")}
-	if answer, err := registry.Invoke("window.input.mark", mergeControlArgs(caller, control.Args{"text": jsonString("x")})); err != nil {
+	if answer, err := registry.Invoke("window_input_mark", mergeControlArgs(caller, control.Args{"text": jsonString("x")})); err != nil {
 		t.Fatalf("mark: %v", err)
 	} else if !answer.(WindowInputState).ResponderMarked {
 		t.Fatalf("marked state was not exposed: %+v", answer)
 	}
-	answer, err := registry.Invoke("window.input.pointer.inject", mergeControlArgs(caller, control.Args{"x": json.RawMessage("40"), "y": json.RawMessage("60")}))
+	answer, err := registry.Invoke("window_input_pointer_inject", mergeControlArgs(caller, control.Args{"x": json.RawMessage("40"), "y": json.RawMessage("60")}))
 	if err != nil {
 		t.Fatalf("inject: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestWindowInputCommandsUseTheNamedWindowAndExposeDeliveryReceipts(t *testin
 	if host.window != "win-a" || receipt.Sequence != 9 || !receipt.Posted || receipt.X != 40 || receipt.Y != 60 {
 		t.Fatalf("injection receipt lost request facts: window=%q receipt=%+v", host.window, receipt)
 	}
-	waited, err := registry.Invoke("window.input.pointer.wait", control.Args{
+	waited, err := registry.Invoke("window_input_pointer_wait", control.Args{
 		"sequence": json.RawMessage("9"), "timeoutMs": json.RawMessage("2000"),
 	})
 	if err != nil || waited.(WindowPointerReceipt).Phase != "up" {
@@ -96,8 +96,8 @@ func TestWindowInputCommandsExposeNativeControlStatusAndClick(t *testing.T) {
 		served[command.Name] = true
 	}
 	for _, name := range []string{
-		"window.input.pointer.click",
-		"window.input.key.press",
+		"window_input_pointer_click",
+		"window_input_key_press",
 		"window_native_close_status",
 		"window_native_close_click",
 		"window_native_close_wait",
@@ -113,7 +113,7 @@ func TestWindowInputCommandsExposeNativePointerAndKeyboardReceipts(t *testing.T)
 	RegisterWindowInput(registry, &inputHostFixture{})
 	caller := control.Args{control.CallerWindowArgument: jsonString("win-a")}
 
-	pointer, err := registry.Invoke("window.input.pointer.click", mergeControlArgs(caller, control.Args{
+	pointer, err := registry.Invoke("window_input_pointer_click", mergeControlArgs(caller, control.Args{
 		"x": json.RawMessage("40"), "y": json.RawMessage("60"),
 	}))
 	if err != nil {
@@ -124,7 +124,7 @@ func TestWindowInputCommandsExposeNativePointerAndKeyboardReceipts(t *testing.T)
 		t.Fatalf("pointer receipt = %+v", clicked)
 	}
 
-	keyboard, err := registry.Invoke("window.input.key.press", mergeControlArgs(caller, control.Args{
+	keyboard, err := registry.Invoke("window_input_key_press", mergeControlArgs(caller, control.Args{
 		"key": jsonString("x"), "shift": json.RawMessage("true"),
 	}))
 	if err != nil {

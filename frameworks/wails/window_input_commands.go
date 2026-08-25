@@ -101,7 +101,7 @@ func RegisterWindowInput(registry *control.Registry, host WindowInputHost) {
 		}
 		return name, nil
 	}
-	registry.MustRegister(control.Command{Name: "window.input.state", Owner: control.OwnerFramework,
+	registry.MustRegister(control.Command{Name: "window_input_state", Owner: control.OwnerFramework,
 		Handler: func(args control.Args) (any, error) {
 			name, err := window(args)
 			if err != nil {
@@ -110,7 +110,7 @@ func RegisterWindowInput(registry *control.Registry, host WindowInputHost) {
 			return host.InputState(name)
 		},
 	})
-	registry.MustRegister(control.Command{Name: "window.input.mark", Owner: control.OwnerFramework,
+	registry.MustRegister(control.Command{Name: "window_input_mark", Owner: control.OwnerFramework,
 		Handler: func(args control.Args) (any, error) {
 			name, err := window(args)
 			if err != nil {
@@ -123,7 +123,7 @@ func RegisterWindowInput(registry *control.Registry, host WindowInputHost) {
 			return host.SetMarkedText(name, text)
 		},
 	})
-	registry.MustRegister(control.Command{Name: "window.input.pointer.wait", Owner: control.OwnerFramework,
+	registry.MustRegister(control.Command{Name: "window_input_pointer_wait", Owner: control.OwnerFramework,
 		Handler: func(args control.Args) (any, error) {
 			sequence, err := control.Arg[uint64](args, "sequence")
 			if err != nil {
@@ -139,7 +139,7 @@ func RegisterWindowInput(registry *control.Registry, host WindowInputHost) {
 			return host.WaitInputPointer(sequence, time.Duration(timeoutMs)*time.Millisecond)
 		},
 	})
-	registry.MustRegister(control.Command{Name: "window.input.pointer.inject", Owner: control.OwnerFramework,
+	registry.MustRegister(control.Command{Name: "window_input_pointer_inject", Owner: control.OwnerFramework,
 		Handler: func(args control.Args) (any, error) {
 			name, err := window(args)
 			if err != nil {
@@ -159,7 +159,7 @@ func RegisterWindowInput(registry *control.Registry, host WindowInputHost) {
 			return host.InjectInputPointer(name, x, y)
 		},
 	})
-	registry.MustRegister(control.Command{Name: "window.input.pointer.click", Owner: control.OwnerFramework,
+	registry.MustRegister(control.Command{Name: "window_input_pointer_click", Owner: control.OwnerFramework,
 		Handler: func(args control.Args) (any, error) {
 			name, err := window(args)
 			if err != nil {
@@ -179,7 +179,7 @@ func RegisterWindowInput(registry *control.Registry, host WindowInputHost) {
 			return host.ClickInputPointer(name, x, y)
 		},
 	})
-	registry.MustRegister(control.Command{Name: "window.input.key.press", Owner: control.OwnerFramework,
+	registry.MustRegister(control.Command{Name: "window_input_key_press", Owner: control.OwnerFramework,
 		Handler: func(args control.Args) (any, error) {
 			name, err := window(args)
 			if err != nil {

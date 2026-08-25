@@ -657,7 +657,7 @@ export function registerWindowCatalog(): void {
       marked: String(Boolean(d.responderMarked)),
     }),
     examples: ["window.input.state window=win-example"],
-    handler: async () => invoke("window.input.state"),
+    handler: async () => invoke("window_input_state"),
   });
 
   register("window.input.mark", {
@@ -671,7 +671,7 @@ export function registerWindowCatalog(): void {
       marked: String(Boolean(d.responderMarked)),
     }),
     examples: ["window.input.mark window=win-example text=ㅎ", "window.input.mark window=win-example text="],
-    handler: async (p) => invoke("window.input.mark", { text: p.text ?? "" }),
+    handler: async (p) => invoke("window_input_mark", { text: p.text ?? "" }),
   });
 
   register("window.input.pointer.wait", {
@@ -684,7 +684,7 @@ export function registerWindowCatalog(): void {
     message: (d) => tmsg("msg.window.input.pointer.wait", { sequence: String(d.sequence ?? "") }),
     errors: ["INVALID_PARAMS", "TIMEOUT"],
     examples: ["window.input.pointer.wait window=win-example sequence=1099511627777 timeoutMs=2000"],
-    handler: async (p) => invoke("window.input.pointer.wait", {
+    handler: async (p) => invoke("window_input_pointer_wait", {
       sequence: p.sequence,
       timeoutMs: p.timeoutMs,
     }),
@@ -699,7 +699,7 @@ export function registerWindowCatalog(): void {
     returns: "{ sequence, posted:true, inputRoute:'contract-injection', cursorPositionMayChange:false, x, y }",
     message: (d) => tmsg("msg.window.input.pointer.inject", { sequence: String(d.sequence ?? "") }),
     examples: ["window.input.pointer.inject window=win-example x=400 y=200"],
-    handler: async (p) => invoke("window.input.pointer.inject", { x: p.x, y: p.y }),
+    handler: async (p) => invoke("window_input_pointer_inject", { x: p.x, y: p.y }),
   });
 
   register("window.input.pointer.click", {
@@ -724,7 +724,7 @@ export function registerWindowCatalog(): void {
         return found ? { address, el: found.el } : null;
       });
       await observation.ready();
-      const receipt = await invoke<Record<string, unknown>>("window.input.pointer.click", { x: p.x, y: p.y });
+      const receipt = await invoke<Record<string, unknown>>("window_input_pointer_click", { x: p.x, y: p.y });
       return { ...receipt, ...(await observation.result()) };
     },
   });
@@ -741,7 +741,7 @@ export function registerWindowCatalog(): void {
     returns: "{ window, sequence, delivered:true, inputRoute, key, windowFocused, foregroundPreserved:true }",
     message: (d) => tmsg("msg.window.input.key.press", { key: String(d.key ?? "") }),
     examples: ["window.input.key.press window=win-example key=Enter"],
-    handler: async (p) => invoke("window.input.key.press", {
+    handler: async (p) => invoke("window_input_key_press", {
       key: p.key,
       ctrl: p.ctrl ?? false,
       meta: p.meta ?? false,
