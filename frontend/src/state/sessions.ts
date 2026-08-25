@@ -79,6 +79,7 @@ export type CmdErrCode =
   // prevents dangling references.
   | "CASCADE_REQUIRED"
   | "LOCAL_INSTALL_PLAN_CHANGED"
+  | "LOCAL_RELEASE_INVALID"
   | "VERSION_ARTIFACT_CONFLICT"
   | "SIDECAR_IN_USE"
   // The DOM address is not on an exposed node (data-node) — no selector guessing, access only what

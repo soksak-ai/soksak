@@ -705,7 +705,7 @@ export function registerPluginCatalog(): void {
     },
     returns: "{ id,version,revision }",
     message: (d) => tmsg("msg.plugin.install.local", { id: String(d.id), version: String(d.version) }),
-    errors: ["INVALID_PARAMS", "LOCAL_INSTALL_PLAN_CHANGED", "VERSION_ARTIFACT_CONFLICT", "INTERNAL"],
+    errors: ["INVALID_PARAMS", "LOCAL_RELEASE_INVALID", "LOCAL_INSTALL_PLAN_CHANGED", "VERSION_ARTIFACT_CONFLICT", "INTERNAL"],
     examples: [`plugin.install.local '{"store":"/absolute/releases","pluginId":"soksak-plugin-<id>","version":"0.0.1","planDigest":"<sha256>"}'`],
     danger: "destructive",
     handler: async (p) => installLocalPlugin(String(p.store), String(p.pluginId), String(p.version), String(p.planDigest)),

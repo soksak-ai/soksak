@@ -63,15 +63,21 @@ export async function installLocalPlugin(store: string, id: string, version: str
     setPluginInstallProgress(value);
     publishActivity("plugin.install.progress", "core", value);
   };
-  const plan = await planLocalPlugin(store, id, version);
-  if (plan.digest !== expectedPlanDigest) { report({ phase: "failed", completed: 0, total: plan.releases.length, error: "local release closure changed after planning" }); return { ok: false, code: "LOCAL_INSTALL_PLAN_CHANGED", message: "local release closure changed after planning" }; }
-  const root = plan.releases[0];
-  if (!root || root.kind !== "plugin" || root.id !== id || root.version !== version) return { ok: false, code: "LOCAL_INSTALL_ROOT_INVALID", message: "local Plugin root is invalid" };
-  const rootReference = await localRoot(store, id, version, "plugin");
-  const result = await installCertifiedRegistryRelease({ sourceId: "local", localStore: store, root: rootReference.reference, releases: plan.releases, onProgress: (progress) => report(progress) });
-  if (result.ok) { await reconcileEnvironmentRevision(result.revision); report({ phase: "installed", completed: plan.releases.length, total: plan.releases.length }); }
-  else report({ phase: "failed", completed: 0, total: plan.releases.length, error: result.message });
-  return result;
+  try {
+    const plan = await planLocalPlugin(store, id, version);
+    if (plan.digest !== expectedPlanDigest) { report({ phase: "failed", completed: 0, total: plan.releases.length, error: "local release closure changed after planning" }); return { ok: false, code: "LOCAL_INSTALL_PLAN_CHANGED", message: "local release closure changed after planning" }; }
+    const root = plan.releases[0];
+    if (!root || root.kind !== "plugin" || root.id !== id || root.version !== version) { report({ phase: "failed", completed: 0, total: plan.releases.length, error: "local Plugin root is invalid" }); return { ok: false, code: "LOCAL_INSTALL_ROOT_INVALID", message: "local Plugin root is invalid" }; }
+    const rootReference = await localRoot(store, id, version, "plugin");
+    const result = await installCertifiedRegistryRelease({ sourceId: "local", localStore: store, root: rootReference.reference, releases: plan.releases, onProgress: (progress) => report(progress) });
+    if (result.ok) { await reconcileEnvironmentRevision(result.revision); report({ phase: "installed", completed: plan.releases.length, total: plan.releases.length }); }
+    else report({ phase: "failed", completed: 0, total: plan.releases.length, error: result.message });
+    return result;
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    report({ phase: "failed", completed: 0, total: 0, error: message });
+    return { ok: false, code: "LOCAL_RELEASE_INVALID", message, errors: [message] };
+  }
 }
 
 export async function installLocalSidecar(store: string, id: string, version: string, expectedPlanDigest: string): Promise<RegistryInstallRuntimeResult> {

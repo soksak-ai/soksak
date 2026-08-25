@@ -10,6 +10,7 @@ vi.mock("../state/registry", () => ({ publicReleaseMetadataGet: (...args: unknow
 vi.mock("./registryInstallRuntime", () => ({ installCertifiedRegistryRelease: (...args: unknown[]) => install(...args) }));
 
 import { installLocalPlugin, installLocalSidecar, planLocalPlugin } from "./localReleaseInstallService";
+import { pluginInstallProgress } from "./registryInstallProgress";
 
 const hash = async (body: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 const integrity = (repository: string, version: string, name: string, body: string) => ({ url: `${repository}/releases/download/v${version}/${name}`, size: body.length, sha256: "a".repeat(64) });
@@ -40,6 +41,13 @@ describe("local release planning and installation", () => {
     const result = await installLocalPlugin("/store", "soksak-plugin-demo", "0.0.1", "0".repeat(64));
     expect(result).toMatchObject({ ok: false, code: "LOCAL_INSTALL_PLAN_CHANGED" });
     expect(install).not.toHaveBeenCalled();
+  });
+
+  it("finishes progress as failed when plan revalidation throws", async () => {
+    invoke.mockRejectedValueOnce(new Error("store unreadable"));
+    const result = await installLocalPlugin("/store", "broken-plugin", "0.0.1", "0".repeat(64));
+    expect(result).toMatchObject({ ok: false, code: "LOCAL_RELEASE_INVALID" });
+    expect(pluginInstallProgress("broken-plugin")).toMatchObject([{ phase: "failed", error: "store unreadable" }]);
   });
 
   it("refuses an in-use Sidecar without stopping it", async () => {
