@@ -205,3 +205,25 @@ name no Go file declares. The refusal table has rows for `plugin_manifest_list` 
 `environment_get`: both return the non-key read or parse error of `environment.json`;
 `environment_get` returns `os.ErrNotExist` for a missing file where `plugin_manifest_list` returns
 an empty list; a per-record manifest error is data on the record, never a refusal.
+
+## 2026-08-26: Develop responses include the resulting status; overlays are exposed nodes
+
+`plugin.develop` answered `{ id, path, revision }` after the reload while the reloaded plugin stayed
+`disabled` with a consent-required error and the pane showed the placeholder; the response had no
+field for that state. The response now includes `status` and `error` read from the plugin store after
+the reload, with `rejected` for an id only the rejected list holds and `absent` for an id neither
+holds; the message names the status and the error. `sidecar.develop` answers
+`{ id, path, revision, version }`: `version` is the version of the record the host wrote, read from
+`environment_get` after the write. It has no status field — the pre-write `SIDECAR_IN_USE` guard
+refuses an id listed as `open` or `recorded`, so a post-write `sidecar_status` read has one answer.
+
+The PluginViewHost overlays (loading, placeholder, error) had no `data-node`, so `ui.tree`
+reported 0 nodes for a disabled plugin's pane while the sentence was on screen. Each overlay now
+declares the view address and a `data-node` (`plugin-view-loading`, `plugin-view-placeholder`,
+`plugin-view-error`) with the state in `data-view-state`, `data-view-plugin`, `data-view-reason`,
+and `data-view-error`. The overlay is a sibling of the provider container, not a child: the
+container is provider-owned DOM and is hidden while an overlay shows. The overlay declares the view
+address under `data-view-overlay-addr`, not `data-view-addr`: `ui.slot` resolves
+`.tab-viewer[data-view-addr]`, and address axiom A2 needs one element per address. The collector
+has two scan roots, `.tab-viewer[data-view-addr]` and `[data-view-overlay-addr]`; a `data-node`
+inside either is listed under that root's view address and is skipped by the chrome scan.

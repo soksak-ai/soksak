@@ -128,6 +128,31 @@ directory는 삭제하지 않습니다. 개발 record가 있는 id에 `registry`
 record를 교체합니다. 개발 record의 비어 있는 `artifactSha256`은 `VERSION_ARTIFACT_CONFLICT`를
 일으키지 않습니다.
 
+각 develop command의 응답은 결과 status를 포함합니다. `plugin.develop`은 environment coordinator가
+plugin을 reload한 뒤 반환하며 `{ id, path, revision, status, error? }`로 응답합니다. `status`는 runtime
+status(`enabled`, `disabled`, `error`)이고, rejected 목록만 그 id를 가지면 `rejected`, 어느 쪽도 가지지
+않으면 `absent`입니다. `error`는 runtime error 또는 `; `로 이은 rejection error이며 없으면 생략합니다.
+Message는 status를 적고 error가 있으면 그 error도 적습니다: `Plugin <id>의 development 레코드를
+<path>로 기록했습니다; status disabled: <error>`. `sidecar.develop`은 `{ id, path, revision, version }`으로
+응답하며 `version`은 host가 기록한 record의 version으로 write 뒤에 `environment_get`에서 읽습니다.
+Message는 `Sidecar <id>의 development 레코드를 <path>로 기록했습니다 (version <v>)`이며 영문 message와 같은
+정보를 담습니다.
+Status field는 없습니다. Write 전의 `SIDECAR_IN_USE` guard가 `open` 또는 `recorded`로 나열된 id를
+거부하므로 write 뒤의 `sidecar_status` 읽기는 답이 하나입니다.
+
+View의 provider가 없는 pane은 overlay 하나를 그리며, 그 overlay는 view address 아래의 노출된
+node입니다(`ui.tree`가 `<view address>/node/<data-node>`로 나열하고 `data-*` attribute는 `dataset`에
+있습니다). Overlay는 provider container의 sibling이며 view address를 `data-view-overlay-addr`에
+선언합니다. Container만 `data-view-addr`를 가지므로 `ui.slot`은 view address 하나에
+element 하나를 resolve합니다. Node collector의 scan root는 `.tab-viewer[data-view-addr]`와
+`[data-view-overlay-addr]` 둘이며, 어느 쪽 안의 `data-node`든 그 root의 view address 아래에
+나열되고 chrome으로는 나열되지 않습니다. Boot가 ready가 되기 전의 node는 `plugin-view-loading`입니다. Boot 뒤의 node는
+`plugin-view-placeholder`이며 `data-view-plugin`(plugin id)과 `data-view-state`를 가집니다. Plugin이
+설치되어 있고 disabled이면 `off`, 어떤 record도 그 id를 가지지 않으면 `absent`, manifest가 거부되었으면
+`refused`이고 이때 `data-view-reason`이 `; `로 이은 rejection error를 가집니다. Provider의 mount가
+throw했으면 node는 `plugin-view-error`이며 `data-view-plugin`과 `data-view-error`(throw된 message)를
+가집니다.
+
 `plugin.remove`와 `sidecar.remove`가 유일한 제거 command입니다. 개발 record는 environment에서만
 제거하며 source directory는 삭제하지 않습니다. `local` 또는 `registry` record는 environment에서
 제거하고 record의 `path`에 있는 artifact directory를 삭제하되, 실제 path가 `<home>/components/`

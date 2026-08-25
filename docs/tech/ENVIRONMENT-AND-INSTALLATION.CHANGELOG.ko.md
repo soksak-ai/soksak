@@ -195,3 +195,25 @@ record가 enabled이면 `enabled` `false`인 `plugin_enabled_set`으로 disable�
 `environment.json`의 non-key 읽기 또는 parse error를 반환하고, file이 없을 때 `environment_get`은
 `os.ErrNotExist`를 반환하며 `plugin_manifest_list`는 빈 목록을 반환합니다. Record별 manifest error는
 record의 data이며 거부가 아닙니다.
+
+## 2026-08-26: Develop 응답이 결과 status를 포함하고, overlay가 노출된 node가 됨
+
+`plugin.develop`은 reload 뒤 `{ id, path, revision }`으로 응답했고, reload된 plugin은 consent-required
+error와 함께 `disabled`로 남아 pane에 placeholder가 표시되었지만 응답에는 그 상태를 적을 field가
+없었습니다. 이제 응답은 reload 뒤 plugin store에서 읽은 `status`와 `error`를 포함하며, rejected
+목록만 가진 id는 `rejected`, 어느 쪽도 가지지 않은 id는 `absent`입니다. Message는 status와 error를
+적습니다. `sidecar.develop`은 `{ id, path, revision, version }`으로 응답하며 `version`은 host가
+기록한 record의 version으로 write 뒤에 `environment_get`에서 읽습니다. Status field는 없습니다.
+Write 전의 `SIDECAR_IN_USE` guard가 `open` 또는 `recorded`로 나열된 id를 거부하므로 write 뒤의
+`sidecar_status` 읽기는 답이 하나입니다.
+
+PluginViewHost의 overlay(loading, placeholder, error)에는 `data-node`가 없어서 문장이 화면에 있는
+동안 `ui.tree`는 disabled plugin의 pane에 node 0개를 보고했습니다. 이제 각 overlay는 view address와
+`data-node`(`plugin-view-loading`, `plugin-view-placeholder`, `plugin-view-error`)를 선언하고 상태를
+`data-view-state`, `data-view-plugin`, `data-view-reason`, `data-view-error`에 적습니다. Overlay는
+provider container의 child가 아니라 sibling입니다. Container는 provider가 소유한 DOM이고 overlay가
+표시되는 동안 숨겨집니다. Overlay는 view address를 `data-view-addr`가 아니라
+`data-view-overlay-addr`에 선언합니다. `ui.slot`은 `.tab-viewer[data-view-addr]`를
+resolve하며 address axiom A2는 address 하나에 element 하나를 요구합니다. Collector의 scan root는
+`.tab-viewer[data-view-addr]`와 `[data-view-overlay-addr]` 둘이며, 어느 쪽 안의 `data-node`든 그
+root의 view address 아래에 나열되고 chrome scan은 건너뜁니다.

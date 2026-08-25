@@ -126,6 +126,31 @@ artifact directories are not deleted. Installing a `registry` or `local` release
 a development record replaces that record; the empty `artifactSha256` of a development record never
 raises `VERSION_ARTIFACT_CONFLICT`.
 
+The response of each develop command includes the resulting status. `plugin.develop` returns after the
+environment coordinator reloaded the plugins and answers `{ id, path, revision, status, error? }`:
+`status` is the runtime status (`enabled`, `disabled`, `error`), `rejected` when only the rejected
+list holds the id, or `absent` when neither holds it; `error` is the runtime error or the rejection
+errors joined by `; `, and is omitted when there is none. The message names the status, and the
+error when there is one: `Recorded development record for Plugin <id> at <path>; status disabled:
+<error>`. `sidecar.develop` answers `{ id, path, revision, version }` where `version` is the
+version of the record the host wrote, read from `environment_get` after the write; the message is
+`Recorded development record for Sidecar <id> at <path> (version <v>)`; the Korean message carries the
+same information. There is
+no status field: the pre-write `SIDECAR_IN_USE` guard refuses an id listed as `open` or `recorded`,
+so a post-write `sidecar_status` read has one answer.
+
+A pane whose view has no provider renders one overlay, and the overlay is an exposed node under the
+view's address (`ui.tree` lists it as `<view address>/node/<data-node>`; its `data-*` attributes are
+in `dataset`). The overlay is a sibling of the provider container and declares the view address
+under `data-view-overlay-addr`; the container alone holds `data-view-addr`, so `ui.slot` resolves one element per view address. The node collector has two scan roots,
+`.tab-viewer[data-view-addr]` and `[data-view-overlay-addr]`, and a `data-node` inside either is
+listed under that root's view address, never as chrome. Before boot is ready the node is `plugin-view-loading`. After boot the node is
+`plugin-view-placeholder` with `data-view-plugin` (the plugin id) and `data-view-state`: `off` when
+the plugin is installed and disabled, `absent` when no record holds the id, `refused` when the
+manifest was rejected, in which case `data-view-reason` holds the rejection errors joined by `; `.
+When the provider's mount threw, the node is `plugin-view-error` with `data-view-plugin` and
+`data-view-error` (the thrown message).
+
 `plugin.remove` and `sidecar.remove` are the only removal commands. A development record is removed
 from the environment only; the source directory is never deleted. A `local` or `registry` record is
 removed from the environment and its artifact directory at the record's `path` is deleted, only
