@@ -378,7 +378,7 @@ Publish only repositories whose source or declared dependency changed. Use this 
    test through a validated unpublished registry candidate.
 
 The registry is the last public commit and release because publication makes an update discoverable
-to users. It must never expose a partial train. A development source remains update-blocked during
+to users. It must never expose a partial train. A Local release remains update-blocked during
 the work and is removed only in the isolated clean-install verification. The archived Tauri source
 is not released.
 

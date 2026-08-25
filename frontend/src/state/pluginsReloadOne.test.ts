@@ -83,7 +83,7 @@ function manifestJson(commands: string[]): Record<string, unknown> {
 function runtimeOf(json: Record<string, unknown>, status: PluginRuntime["status"]): PluginRuntime {
   const { manifest, validation } = parseManifest(json, ID);
   if (!manifest) throw new Error(`test manifest invalid: ${validation.errors.join(", ")}`);
-  return { manifest, dir: PATH, source: "dev", status };
+  return { manifest, dir: PATH, source: "local", status };
 }
 
 beforeEach(() => {
@@ -97,7 +97,7 @@ beforeEach(() => {
     appVersion: "0.0.1",
     plugins: { [ID]: runtimeOf(manifestJson(["thing.run"]), "enabled") },
     rejected: [],
-    consents: {},
+    consents: { [ID]: { version: "0.0.1", permissions: ["commands"] } },
     enabledIds: [ID],
   });
   activeIds.add(ID);

@@ -64,9 +64,9 @@ A second word for the same action splits the vocabulary — `new` alongside `cre
 measured on 2026-08-15.
 
 A command names its resource and action. Public commands use dotted names such as
-`plugin.source.set`; backend commands use snake case such as `plugin_source_set`. A generic
-resource name is not used when the resource is a plugin, sidecar, kit, contract, or spec. Source is
-one closed field in the environment, not a second development flag.
+`plugin.install.local`; backend commands use snake case such as `artifact_install_begin`. A generic
+resource name is not used when the resource is a Plugin or Sidecar. Local and registry name the
+release transport and installed selection, not a second implementation contract.
 
 ## N2. Natural keys
 

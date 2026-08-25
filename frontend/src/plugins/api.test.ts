@@ -328,7 +328,8 @@ describe("commands.execute — danger to permission mapping and management comma
     for (const name of [
       "plugin.enable",
       "plugin.install",
-      "plugin.source.set",
+      "plugin.install.local",
+      "sidecar.install.local",
       "sidecar.request",
       "registry.list",
       "registry.add",
@@ -903,7 +904,7 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register)", (
     expect(targetPluginId("plugin.foo-bar.baz.qux")).toBe("foo-bar"); // multi-segment cmd.
     expect(targetPluginId("notify.show")).toBeNull(); // core, no plugin. prefix.
     expect(targetPluginId("plugin.view.open")).toBeNull(); // view ops.
-    expect(targetPluginId("plugin.source.set")).toBeNull(); // management.
+    expect(targetPluginId("plugin.install.local")).toBeNull(); // management.
     expect(targetPluginId("plugin.list")).toBeNull(); // management, 2 segments.
   });
 

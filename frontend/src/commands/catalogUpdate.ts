@@ -31,7 +31,7 @@ export function registerUpdateCatalog(): void {
     handler: async () => {
       const app = await checkApp();
       const installed = Object.values(usePlugins.getState().plugins).filter(
-        (p) => p.source !== "dev",
+        (p) => p.source === "registry",
       ).length;
       // The daemon axis was this application's own PTY daemon. A sidecar owns each shell now, and
       // open sidecars are reported by `sidecar_status`. Whether one has a newer release is answered
@@ -80,7 +80,7 @@ export function registerUpdateCatalog(): void {
       // ① Plugins — verify and atomically install each owner release.
       if (want("plugins")) {
         const entries = Object.entries(usePlugins.getState().plugins).filter(
-          ([, pl]) => pl.source !== "dev",
+          ([, pl]) => pl.source === "registry",
         );
         for (const [id] of entries) {
           const r = await updateCertifiedRegistryPlugin(id);

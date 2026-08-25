@@ -20,7 +20,7 @@ import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 const CERTIFIED = { registry: { id: "fixture" } } as any;
 const ROOT = { kind: "plugin", id: "weather-plugin", version: "0.0.1" } as any;
 const RELEASES: any[] = [];
-const ENVIRONMENT = { revision: 4, plugins: {}, sidecars: {}, kits: {}, contracts: {}, specs: {} };
+const ENVIRONMENT = { revision: 4, plugins: {}, sidecars: {} };
 
 describe("native registry install wiring", () => {
   let restore = () => {};
@@ -49,7 +49,7 @@ describe("native registry install wiring", () => {
     const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT, releases: RELEASES });
     expect(result).toEqual({ ok: true, id: "weather-plugin", version: "0.0.1", revision: 7 });
     const req = closure.mock.calls[0]![0] as any;
-    expect(req.certified).toBe(CERTIFIED);
+    expect(req.sourceId).toBe("fixture");
     expect(req.root).toEqual(ROOT);
     expect(req.environment).toEqual(ENVIRONMENT);
     expect(req.artifacts.begin).toBeTypeOf("function");

@@ -74,6 +74,7 @@ type StagedArtifact struct {
 
 type transactionState struct {
 	registryID string
+	localStore string
 	root       ArtifactIdentity
 	handles    map[string]stagedState
 }
@@ -108,12 +109,22 @@ func NewTransactionManager(root string, fetcher Fetcher, changed func(event stri
 	}
 }
 
-func (manager *TransactionManager) Begin(registryID string, root ArtifactIdentity) (Transaction, error) {
+func (manager *TransactionManager) Begin(registryID string, root ArtifactIdentity, localStore ...string) (Transaction, error) {
 	if manager.fetcher == nil {
 		return Transaction{}, i18n.Errorf("install.transaction.noFetcher", nil)
 	}
 	if registryID == "" || root.Kind == "" || root.ID == "" || root.Version == "" {
 		return Transaction{}, i18n.Errorf("install.transaction.identityRequired", nil)
+	}
+	store := ""
+	if len(localStore) > 1 || (len(localStore) == 1 && !filepath.IsAbs(localStore[0])) {
+		return Transaction{}, i18n.Errorf("install.transaction.localStoreInvalid", nil)
+	}
+	if len(localStore) == 1 {
+		store = filepath.Clean(localStore[0])
+	}
+	if (registryID == "local") != (store != "") {
+		return Transaction{}, i18n.Errorf("install.transaction.localStoreInvalid", nil)
 	}
 	id, err := randomID()
 	if err != nil {
@@ -124,7 +135,7 @@ func (manager *TransactionManager) Begin(registryID string, root ArtifactIdentit
 		return Transaction{}, fmt.Errorf("create install transaction: %w", err)
 	}
 	manager.mu.Lock()
-	manager.transactions[id] = &transactionState{registryID: registryID, root: root, handles: map[string]stagedState{}}
+	manager.transactions[id] = &transactionState{registryID: registryID, localStore: store, root: root, handles: map[string]stagedState{}}
 	manager.mu.Unlock()
 	manager.recordProgress(ArtifactInstallProgress{
 		TransactionID: id, RegistryID: registryID, Root: root, Component: root, Phase: "begun",
@@ -152,7 +163,7 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 	if request.Artifact.Manifest != expectedManifest || !safeArchivePath(request.Artifact.Manifest) {
 		return StagedArtifact{}, i18n.Errorf("install.transaction.manifestPathMismatch", map[string]string{"manifest": request.Artifact.Manifest, "expected": expectedManifest})
 	}
-	body, err := manager.fetcher.Fetch(ctx, request.Artifact.URL, func(receivedBytes uint64) {
+	body, err := manager.fetchArtifact(ctx, transaction, request.Identity, request.Artifact.URL, func(receivedBytes uint64) {
 		manager.recordProgress(ArtifactInstallProgress{
 			TransactionID: request.TransactionID, RegistryID: request.RegistryID,
 			Root: transaction.root, Component: request.Identity, Phase: "downloading",

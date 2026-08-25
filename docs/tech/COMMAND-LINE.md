@@ -11,21 +11,15 @@ path.
 
 ## Command names
 
-Public commands use dotted domain names such as plugin.enable, window.snapshot and
-plugin.source.set. Native backend command names may use snake case internally and are not
+Public commands use dotted domain names such as plugin.enable, plugin.install.local and
+window.snapshot. Native backend command names may use snake case internally and are not
 public CLI vocabulary.
 
-Commands name the resource they change. There is no public generic resource type:
-
-- `plugin.source.list` and `plugin.source.set`;
-- `sidecar.source.list` and `sidecar.source.set`;
-- `kit.source.list` and `kit.source.set`;
-- `contract.source.list` and `contract.source.set`;
-- `spec.source.list` and `spec.source.set`.
-
-The set commands take `id`, `version`, `source` and an absolute `path`. Registry sources also take
-`registry`; sidecars take `target`. A development source disables managed updates. It does not
-change plugin enabled state.
+Local installation is a two-command transaction. `plugin.install.local.plan` or
+`sidecar.install.local.plan` receives an absolute store path, exact id, and exact version and returns
+the complete release closure plus a plan digest. The matching install command requires that digest.
+If any release byte changes after planning, installation fails before staging. Raw source paths and
+`file:` locators are not command parameters.
 
 `sidecar.request` is the operator and system-test relay for an installed sidecar control request.
 It accepts a sidecar name and one request object, forwards the object without interpreting its
@@ -38,11 +32,11 @@ Two forms produce the same parameter map.
 
 Name-value form:
 
-    sok plugin.source.set id=demo version=0.0.1 source=development path=/absolute/path
+    sok plugin.install.local.plan store=/absolute/releases pluginId=demo version=0.0.1
 
 JSON object form in POSIX shells and PowerShell:
 
-    sok plugin.source.set '{"id":"demo","version":"0.0.1","source":"development","path":"/absolute/path"}'
+    sok plugin.install.local.plan '{"store":"/absolute/releases","pluginId":"demo","version":"0.0.1"}'
 
 The JSON object must be the only argument after the command. Mixing an object and name-value
 arguments is rejected. A JSON array, scalar or null is rejected.

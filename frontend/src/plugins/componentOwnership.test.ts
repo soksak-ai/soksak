@@ -12,10 +12,10 @@ describe("component ownership standard", () => {
       "plugin, sidecar, kit, contract, and spec",
       "only source",
       "payloads do not repeat",
-      "registry documents keep separate plugins",
-      "contracts, and specs arrays",
+      "registry documents list current plugin roots",
+      "build receipts disclose kit",
       "environment.json",
-      "no install profiles or dependency closure",
+      "no install profiles or stored closure",
       "tests start red",
     ]) expect(document).toContain(phrase);
   });

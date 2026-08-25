@@ -14,7 +14,7 @@ type ManifestRecord struct {
 	Version      string  `json:"version"`
 	InstallPath  string  `json:"installPath"`
 	ManifestPath string  `json:"manifestPath"`
-	Development  bool    `json:"development"`
+	Source       string  `json:"source"`
 	Enabled      bool    `json:"enabled"`
 	Manifest     *string `json:"manifest"`
 	Error        *string `json:"error"`
@@ -44,39 +44,6 @@ func SetPluginsEnabled(home string, refs []PluginRef, enabled bool, expected uin
 	}
 	return Write(home, current, true, next, expected)
 }
-func SetSource(home, kind, id string, component Component, expected uint64) (Change, error) {
-	if !filepath.IsAbs(component.Path) {
-		return Change{}, os.ErrInvalid
-	}
-	current, exists, err := Read(home)
-	if err != nil {
-		return Change{}, err
-	}
-	next := current
-	if !exists {
-		next = Empty()
-	}
-	switch kind {
-	case "plugin":
-		value, found := next.Plugins[id]
-		if !found {
-			return Change{}, os.ErrNotExist
-		}
-		value.Component = component
-		next.Plugins[id] = value
-	case "sidecar":
-		next.Sidecars[id] = component
-	case "kit":
-		next.Kits[id] = component
-	case "contract":
-		next.Contracts[id] = component
-	case "spec":
-		next.Specs[id] = component
-	default:
-		return Change{}, os.ErrInvalid
-	}
-	return Write(home, current, exists, next, expected)
-}
 func PluginManifests(home string) ([]ManifestRecord, error) {
 	environment, exists, err := Read(home)
 	if err != nil {
@@ -89,7 +56,7 @@ func PluginManifests(home string) ([]ManifestRecord, error) {
 	for _, id := range sortedKeys(environment.Plugins) {
 		value := environment.Plugins[id]
 		root := value.Path
-		record := ManifestRecord{ID: id, Version: value.Version, InstallPath: root, ManifestPath: "plugin.json", Development: value.Source == "development", Enabled: value.Enabled}
+		record := ManifestRecord{ID: id, Version: value.Version, InstallPath: root, ManifestPath: "plugin.json", Source: value.Source, Enabled: value.Enabled}
 		body, readErr := os.ReadFile(filepath.Join(root, "plugin.json"))
 		if readErr != nil {
 			message := readErr.Error()

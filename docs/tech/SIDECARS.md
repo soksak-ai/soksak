@@ -48,9 +48,9 @@ transaction, and records the exact version, target, registry ID, source kind, an
 in `environment.json`. A
 managed installation never clones a repository or builds a sidecar locally.
 
-A development source is different: the owner repository builds and stages its own dist directory,
-and the environment records that exact version, absolute path, and source kind. The updater does not
-replace it.
+A Local Sidecar release uses the same manifest, target archive, digest validation, and installer
+transaction as a registry release. The environment records the materialized artifact digest and
+`local` source. Automatic registry update does not replace that explicit selection.
 
 ## S4. Runtime and protocol
 

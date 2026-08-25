@@ -4,19 +4,24 @@ import {
   parseSidecarManifest,
   releaseIdentity,
   type ArtifactTarget,
-  type CertifiedRegistry,
-  type EnvironmentDocument,
   type PluginManifest,
   type ReleaseArtifact,
   type ReleaseDocument,
   type ReleaseIdentity,
 } from "./spec";
 
+interface RuntimeComponent { version: string; artifactSha256: string }
+export interface RuntimeEnvironment {
+  revision: number;
+  plugins: Record<string, RuntimeComponent>;
+  sidecars: Record<string, RuntimeComponent>;
+}
+
 export interface RegistryInstallTransaction { transactionId: string }
 export interface StagedRegistryArtifact { handle: string; sha256: string; size: number; manifestSha256: string; extraction: "regular-files-only"; verifiedEntrypoints?: readonly string[] }
 export interface VerifiedInstallRelease extends ReleaseIdentity { registryId: string; sourceRepository: string; sourceCommit: string; artifactUrl: string; artifactSha256: string; target?: ArtifactTarget; manifestSha256: string; stagedHandle: string }
 export interface RegistryArtifactStager {
-  begin(input: { registryId: string; root: ReleaseIdentity }): Promise<RegistryInstallTransaction>;
+  begin(input: { registryId: string; root: ReleaseIdentity; localStore?: string }): Promise<RegistryInstallTransaction>;
   stage(input: { transactionId: string; registryId: string; release: ReleaseIdentity; artifact: ReleaseArtifact }): Promise<StagedRegistryArtifact>;
   readUtf8(transactionId: string, handle: string, path: string): Promise<string>;
   commit(transactionId: string, expectedRevision: number, releases: readonly VerifiedInstallRelease[], root: ReleaseIdentity): Promise<{ revision: number }>;
@@ -25,11 +30,12 @@ export interface RegistryArtifactStager {
 export type RegistryInstallFailureCode = "ROOT_NOT_FOUND" | "RELEASE_VERIFICATION_FAILED" | "TARGET_NOT_AVAILABLE" | "UNSAFE_EXTRACTION" | "ATOMIC_INSTALL_FAILED";
 export type RegistryInstallResult = { ok: true; registryId: string; revision: number; releases: VerifiedInstallRelease[] } | { ok: false; code: RegistryInstallFailureCode; errors: string[] };
 export interface RegistryInstallRequest {
-  certified: CertifiedRegistry;
+  sourceId: string;
+  localStore?: string;
   root: ReleaseIdentity;
   releases: ReleaseDocument[];
   target: ArtifactTarget;
-  environment: EnvironmentDocument;
+  environment: RuntimeEnvironment;
   artifacts: RegistryArtifactStager;
   onProgress?: (progress: { phase: "staging" | "committing"; completed: number; total: number; componentId?: string }) => void;
 }
@@ -66,18 +72,24 @@ function verifyEvidence(staged: StagedRegistryArtifact, artifact: ReleaseArtifac
   if (errors.length) throw new InstallFailure("UNSAFE_EXTRACTION", errors);
 }
 
-function materializedExactly(environment: EnvironmentDocument, identity: ReleaseIdentity): boolean {
+function materializedExactly(environment: RuntimeEnvironment, identity: ReleaseIdentity, digest: string): boolean {
   const records = identity.kind === "plugin" ? environment.plugins
-    : identity.kind === "sidecar" ? environment.sidecars
-      : identity.kind === "kit" ? environment.kits : {};
-  return records[identity.id]?.version === identity.version;
+    : identity.kind === "sidecar" ? environment.sidecars : {};
+  const record = records[identity.id];
+  return record?.version === identity.version && record.artifactSha256 === digest;
+}
+
+function releaseMaterialized(request: RegistryInstallRequest, release: ReleaseDocument): boolean {
+  const identity = releaseIdentity(release);
+  if (identity.kind !== "plugin" && identity.kind !== "sidecar") return false;
+  return materializedExactly(request.environment, identity, artifactFor(release, request.target).sha256);
 }
 
 function pendingReleaseCount(request: RegistryInstallRequest): number {
   const unique = new Set<string>();
   for (const release of request.releases) {
     const identity = releaseIdentity(release);
-    if ((identity.kind !== "plugin" && identity.kind !== "sidecar" && identity.kind !== "kit") || materializedExactly(request.environment, identity)) continue;
+    if ((identity.kind !== "plugin" && identity.kind !== "sidecar") || releaseMaterialized(request, release)) continue;
     unique.add(identity.kind + ":" + identity.id + "@" + identity.version);
   }
   return unique.size;
@@ -86,11 +98,11 @@ function pendingReleaseCount(request: RegistryInstallRequest): number {
 async function stageRelease(request: RegistryInstallRequest, transactionId: string, release: ReleaseDocument) {
   const identity = releaseIdentity(release);
   const artifact = artifactFor(release, request.target);
-  const staged = await request.artifacts.stage({ transactionId, registryId: request.certified.registry.id, release: identity, artifact });
+  const staged = await request.artifacts.stage({ transactionId, registryId: request.sourceId, release: identity, artifact });
   verifyEvidence(staged, artifact);
   const raw = JSON.parse(await request.artifacts.readUtf8(transactionId, staged.handle, artifact.manifest));
   const verified: VerifiedInstallRelease = Object.freeze({
-    ...identity, registryId: request.certified.registry.id,
+    ...identity, registryId: request.sourceId,
     sourceRepository: release.source.repository, sourceCommit: release.source.commit,
     artifactUrl: artifact.url, artifactSha256: artifact.sha256,
     ...(identity.kind === "sidecar" ? { target: artifact.target } : {}),
@@ -112,14 +124,14 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
   try {
     const root = exactRelease(request.releases, request.root);
     if (!root) throw new InstallFailure("ROOT_NOT_FOUND", ["release absent from certified registry"]);
-    if (request.root.kind === "contract" || request.root.kind === "spec") {
+    if (request.root.kind === "contract" || request.root.kind === "spec" || request.root.kind === "kit") {
       throw new InstallFailure("RELEASE_VERIFICATION_FAILED", [request.root.kind + " releases are validation inputs, not runtime installations"]);
     }
-    if (materializedExactly(request.environment, request.root)) {
-      return { ok: true, registryId: request.certified.registry.id, revision: request.environment.revision, releases: [] };
+    if (releaseMaterialized(request, root)) {
+      return { ok: true, registryId: request.sourceId, revision: request.environment.revision, releases: [] };
     }
 
-    const transaction = await request.artifacts.begin({ registryId: request.certified.registry.id, root: request.root });
+    const transaction = await request.artifacts.begin({ registryId: request.sourceId, root: request.root, ...(request.localStore ? { localStore: request.localStore } : {}) });
     transactionId = transaction.transactionId;
     const verified: VerifiedInstallRelease[] = [];
     const total = pendingReleaseCount(request);
@@ -130,7 +142,7 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
       const release = queue.shift()!;
       const identity = releaseIdentity(release);
       const key = identity.kind + ":" + identity.id + "@" + identity.version;
-      if (seen.has(key) || materializedExactly(request.environment, identity)) continue;
+      if (seen.has(key) || releaseMaterialized(request, release)) continue;
       seen.add(key);
       request.onProgress?.({ phase: "staging", completed: verified.length, total, componentId: identity.id });
       const staged = await stageRelease(request, transactionId, release);
@@ -153,7 +165,7 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
     request.onProgress?.({ phase: "committing", completed: verified.length, total });
     const committed = await request.artifacts.commit(transactionId, request.environment.revision, verified, request.root);
     transactionId = null;
-    return { ok: true, registryId: request.certified.registry.id, revision: committed.revision, releases: verified };
+    return { ok: true, registryId: request.sourceId, revision: committed.revision, releases: verified };
   } catch (cause) {
     if (transactionId !== null) await request.artifacts.rollback(transactionId).catch(() => {});
     if (cause instanceof InstallFailure) return { ok: false, code: cause.code, errors: cause.errors };

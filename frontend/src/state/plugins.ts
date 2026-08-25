@@ -61,7 +61,7 @@ import {
 export interface PluginRuntime {
   manifest: PluginManifest;
   dir: string;
-  source: "installed" | "dev";
+  source: "registry" | "local";
   status: "disabled" | "enabled" | "error";
   error?: string;
 }
@@ -84,7 +84,7 @@ interface PluginManifestRecord {
   version: string;
   installPath: string;
   manifestPath: string;
-  development: boolean;
+  source: "registry" | "local";
   enabled: boolean;
   manifest: string | null;
   error: string | null;
@@ -164,7 +164,7 @@ export function consentValid(
 
 // Unmet consent chain for activation — id plus transitive dependencies still needing consent, in topological order (dependencies first).
 // A dependency (core) can hold strong permissions (process etc.), so the UI opens a consent dialog per entry in
-// this order (no half consent §0-2). dev sources are exempt from the gate (§0-5). Already-consented and dev entries are excluded.
+// this order (no half consent §0-2). Local and registry releases use the same consent gate.
 export function pendingConsentChain(
   id: string,
   plugins: Record<string, PluginRuntime>,
@@ -172,7 +172,7 @@ export function pendingConsentChain(
 ): string[] {
   return activationChain(id, pluginDepNodes(plugins)).filter((cid) => {
     const p = plugins[cid];
-    return p && p.source !== "dev" && !consentValid(consents[cid], p.manifest);
+    return p && !consentValid(consents[cid], p.manifest);
   });
 }
 
@@ -356,11 +356,6 @@ async function execReach(
   }
 }
 
-function basename(path: string): string {
-  const parts = path.replace(/[\\/]+$/, "").split(/[\\/]/);
-  return parts[parts.length - 1] ?? path;
-}
-
 // The store is outside the module boundary — if hot swap replaces it, registration, subscription and view state all
 // become new, while the filling side treats them as already filled and never refills (empty forever).
 /** One load step — the machine answers where the time goes.
@@ -413,7 +408,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     rawText: string,
     dir: string,
     dirName: string,
-    source: "installed" | "dev",
+    source: "registry" | "local",
     rejected: RejectedPlugin[],
   ): PluginRuntime | null => {
     let raw: unknown;
@@ -506,9 +501,6 @@ export const usePlugins = moduleState("state/plugins#store", () =>
   const removeSingle = async (id: string): Promise<CmdResult<{ id: string }>> => {
     const p = get().plugins[id];
     if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
-    if (p.source === "dev") {
-      return err("INVALID_PARAMS", tmsg("plugin.source.removeUnavailable", { id }));
-    }
     if (isActive(id)) await get().disable(id);
     await invoke("plugin_remove", { id });
     set((s) => {
@@ -557,7 +549,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
           rejected.push({ id: e.id, dir: e.installPath, errors: [e.error ?? tmsg("plugin.manifest.missing")] });
           continue;
         }
-        const rt = parseRuntime(e.manifest, e.installPath, e.id, e.development ? "dev" : "installed", rejected);
+        const rt = parseRuntime(e.manifest, e.installPath, e.id, e.source, rejected);
         if (rt && rt.manifest.version !== e.version) {
           rejected.push({
             id: e.id, dir: e.installPath,
@@ -835,7 +827,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       const rejected: RejectedPlugin[] = [];
       // A development checkout's folder name is not identity. As with first selection and full reload, use the
       // existing unit id from config as the expected value for validation.
-      const expectedDirName = p.source === "dev" ? id : basename(p.dir);
+      const expectedDirName = id;
       const fresh = parseRuntime(content, p.dir, expectedDirName, p.source, rejected);
       if (!fresh) {
         set({ rejected: [...get().rejected.filter((x) => x.dir !== p.dir), ...rejected] });

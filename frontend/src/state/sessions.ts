@@ -78,6 +78,9 @@ export type CmdErrCode =
   // Plugin delete would cascade to dependents — blocked without consent (cascade:true), which
   // prevents dangling references.
   | "CASCADE_REQUIRED"
+  | "LOCAL_INSTALL_PLAN_CHANGED"
+  | "VERSION_ARTIFACT_CONFLICT"
+  | "SIDECAR_IN_USE"
   // The DOM address is not on an exposed node (data-node) — no selector guessing, access only what
   // is exposed (ui.tree).
   | "NOT_EXPOSED"

@@ -37,6 +37,30 @@ type publishedArtifact struct {
 	staged stagedState
 }
 
+func installedComponent(value coreenvironment.Environment, kind, id string) (coreenvironment.Component, bool) {
+	switch kind {
+	case "plugin":
+		plugin, found := value.Plugins[id]
+		return plugin.Component, found
+	case "sidecar":
+		component, found := value.Sidecars[id]
+		return component, found
+	default:
+		return coreenvironment.Component{}, false
+	}
+}
+
+func selectComponent(value *coreenvironment.Environment, kind, id string, component coreenvironment.Component) {
+	switch kind {
+	case "plugin":
+		plugin := value.Plugins[id]
+		plugin.Component = component
+		value.Plugins[id] = plugin
+	case "sidecar":
+		value.Sidecars[id] = component
+	}
+}
+
 func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, error) {
 	if !filepath.IsAbs(request.Home) {
 		return CommitResult{}, i18n.Errorf("install.transaction.homeAbsolute", nil)
@@ -82,6 +106,22 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		if staged.identity != expected || staged.sha256 != artifact.digest {
 			return CommitResult{}, i18n.Errorf("install.transaction.stagedArtifactMismatch", map[string]string{"artifact": key})
 		}
+		source := "registry"
+		registryID := transaction.registryID
+		if transaction.registryID == "local" {
+			source, registryID = "local", ""
+		}
+		if installed, found := installedComponent(current, artifact.kind, artifact.id); found &&
+			installed.Version == artifact.version && installed.Target == artifact.target {
+			if installed.ArtifactSHA256 != artifact.digest {
+				return CommitResult{}, i18n.Errorf("install.transaction.versionArtifactConflict", map[string]string{
+					"artifact": key, "installed": installed.ArtifactSHA256, "requested": artifact.digest,
+				})
+			}
+			installed.Source, installed.Registry = source, registryID
+			selectComponent(&next, artifact.kind, artifact.id, installed)
+			continue
+		}
 		parts := []string{request.Home, "components", artifact.kind, artifact.id, artifact.version}
 		if artifact.kind == "sidecar" {
 			if artifact.target == "" {
@@ -89,6 +129,7 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 			}
 			parts = append(parts, artifact.target)
 		}
+		parts = append(parts, artifact.digest)
 		final := filepath.Join(parts...)
 		if _, err := os.Lstat(final); err == nil {
 			return CommitResult{}, i18n.Errorf("install.transaction.destinationExists", map[string]string{"path": final})
@@ -96,17 +137,8 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 			return CommitResult{}, err
 		}
 		prepared = append(prepared, publishedArtifact{final: final, staged: staged})
-		value := coreenvironment.Component{Version: artifact.version, Path: final, Source: "registry", Registry: transaction.registryID, Target: artifact.target}
-		switch artifact.kind {
-		case "plugin":
-			plugin := next.Plugins[artifact.id]
-			plugin.Component = value
-			next.Plugins[artifact.id] = plugin
-		case "sidecar":
-			next.Sidecars[artifact.id] = value
-		case "kit":
-			next.Kits[artifact.id] = value
-		}
+		value := coreenvironment.Component{Version: artifact.version, Path: final, ArtifactSHA256: artifact.digest, Source: source, Registry: registryID, Target: artifact.target}
+		selectComponent(&next, artifact.kind, artifact.id, value)
 	}
 	change, temporary, err := coreenvironment.PrepareWrite(request.Home, current, exists, next, request.ExpectedRevision, "next-"+request.TransactionID)
 	if err != nil {

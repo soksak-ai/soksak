@@ -19,7 +19,8 @@ import {
   setRegistryInstallRuntime,
   type RegistryInstallRuntimeHandler,
 } from "./registryInstallRuntime";
-import { isArtifactTarget, parseEnvironmentDocument, type ArtifactTarget } from "./spec";
+import { isArtifactTarget, type ArtifactTarget } from "./spec";
+import type { RuntimeEnvironment } from "./registryInstallTransaction";
 
 async function hostTarget(): Promise<ArtifactTarget> {
   const value = await invoke<string>("host_artifact_target");
@@ -36,6 +37,7 @@ const artifactStager: RegistryArtifactStager = {
     invoke<RegistryInstallTransaction>("artifact_install_begin", {
       registryId: input.registryId,
       root: input.root,
+      ...(input.localStore ? { localStore: input.localStore } : {}),
     }),
   stage: (input) =>
     invoke<StagedRegistryArtifact>("artifact_install_stage", {
@@ -64,7 +66,7 @@ const artifactStager: RegistryArtifactStager = {
     invoke<void>("artifact_install_rollback", { transactionId }),
 };
 
-const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, root, releases, onProgress }) => {
+const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, sourceId, localStore, root, releases, onProgress }) => {
   let target: ArtifactTarget;
   try {
     target = await hostTarget();
@@ -79,14 +81,18 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
     const message = cause instanceof Error ? cause.message : String(cause);
     return { ok: false, code: "ENVIRONMENT_UNAVAILABLE", message, errors: [message] };
   }
-  const environment = parseEnvironmentDocument(environmentRaw);
-  if (!environment.ok) return { ok: false, code: "ENVIRONMENT_INVALID", message: environment.errors.join("; "), errors: environment.errors };
+  const environment = environmentRaw as RuntimeEnvironment;
+  const selectedSource = certified?.registry.id ?? sourceId;
+  if (!selectedSource || (selectedSource === "local" && !localStore)) {
+    return { ok: false, code: "INSTALL_SOURCE_INVALID", message: "installer source is incomplete" };
+  }
   const result = await installRegistryRelease({
-    certified,
-    root: { kind: "plugin", id: root.id, version: root.version },
+    sourceId: selectedSource,
+    ...(localStore ? { localStore } : {}),
+    root: { kind: root.kind ?? "plugin", id: root.id, version: root.version },
     releases,
     target,
-    environment: environment.value,
+    environment,
     artifacts: artifactStager,
     onProgress,
   });

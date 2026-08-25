@@ -359,7 +359,7 @@ Source 또는 선언된 dependency가 바뀐 repository만 다음 dependency 순
    smoke test를 통과한 뒤 Registry
 
 Registry 공개는 update를 사용자에게 노출하므로 마지막 public commit 및 release입니다. 일부만
-완료된 train을 노출하면 안 됩니다. 개발 중 development source는 update-blocked 상태를 유지하며
+완료된 train을 노출하면 안 됩니다. 개발 중 Local release는 update-blocked 상태를 유지하며
 격리된 clean-install 검증에서만 제거합니다. 보관된 Tauri source는 release하지 않습니다.
 
 Registry 공개 후 새 empty identity home에서 public registry로 설치해 최종 smoke gate를

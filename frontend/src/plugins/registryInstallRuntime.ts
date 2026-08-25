@@ -1,14 +1,16 @@
 import { moduleState } from "../lib/moduleState";
 import type {
   CertifiedRegistry,
-  RegistryPlugin,
   ReleaseDocument,
+  ReleaseReference,
 } from "./spec";
 import type { PluginInstallProgress } from "./registryInstallProgress";
 
 export interface RegistryInstallRuntimeInput {
-  certified: CertifiedRegistry;
-  root: RegistryPlugin;
+  certified?: CertifiedRegistry;
+  sourceId?: "local";
+  localStore?: string;
+  root: ReleaseReference & { kind?: "plugin" | "sidecar" };
   releases: ReleaseDocument[];
   onProgress?: (progress: Pick<PluginInstallProgress, "phase" | "completed" | "total" | "componentId">) => void;
 }

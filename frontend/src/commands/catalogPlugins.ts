@@ -1,4 +1,4 @@
-// plugin.* commands — plugin management (list/install/update/remove/enable/disable/reload/dev).
+// plugin.* commands — plugin management (list/install/update/remove/enable/disable/reload).
 // Consent (§0-5) is a human act only: remote enable without recorded consent is refused with
 // CONSENT_REQUIRED, and no consent-granting command exists (UI consent modal only).
 // plugin.view.* placement commands are registered in M_P5 (right sidebar).
@@ -54,6 +54,7 @@ import { publishActivity } from "../state/activityFeed";
 import { awaitViewMounted } from "../plugins/viewFocus";
 import { runtimePluginRequirements } from "../plugins/runtimeDependencies";
 import { pluginInstallProgress, waitForPluginInstallPhase, type PluginInstallPhase } from "../plugins/registryInstallProgress";
+import { installLocalPlugin, planLocalPlugin } from "../plugins/localReleaseInstallService";
 
 // Installed/dev runtime → dependency graph node (based on manifest dependencies).
 function depNodes(): DepNode[] {
@@ -680,6 +681,36 @@ export function registerPluginCatalog(): void {
     },
   });
 
+  register("plugin.install.local.plan", {
+    description: key("cmd.plugin.install.local.plan.desc"),
+    params: {
+      store: { type: "string", required: true, description: key("cmd.plugin.install.local.param.store") },
+      pluginId: { type: "string", required: true, description: key("cmd.plugin.install.param.pluginId") },
+      version: { type: "string", required: true, description: key("cmd.plugin.install.local.param.version") },
+    },
+    returns: "{ digest,store,id,version,releases:[{kind,id,version,artifacts:[{target,size,sha256}]}] }",
+    message: (d) => tmsg("msg.plugin.install.local.plan", { id: String(d.id), n: ((d.releases as unknown[]) ?? []).length }),
+    errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "INTERNAL"],
+    examples: [`plugin.install.local.plan '{"store":"/absolute/releases","pluginId":"soksak-plugin-<id>","version":"0.0.1"}'`],
+    handler: async (p) => planLocalPlugin(String(p.store), String(p.pluginId), String(p.version)),
+  });
+
+  register("plugin.install.local", {
+    description: key("cmd.plugin.install.local.desc"),
+    params: {
+      store: { type: "string", required: true, description: key("cmd.plugin.install.local.param.store") },
+      pluginId: { type: "string", required: true, description: key("cmd.plugin.install.param.pluginId") },
+      version: { type: "string", required: true, description: key("cmd.plugin.install.local.param.version") },
+      planDigest: { type: "string", required: true, description: key("cmd.plugin.install.local.param.planDigest") },
+    },
+    returns: "{ id,version,revision }",
+    message: (d) => tmsg("msg.plugin.install.local", { id: String(d.id), version: String(d.version) }),
+    errors: ["INVALID_PARAMS", "LOCAL_INSTALL_PLAN_CHANGED", "VERSION_ARTIFACT_CONFLICT", "INTERNAL"],
+    examples: [`plugin.install.local '{"store":"/absolute/releases","pluginId":"soksak-plugin-<id>","version":"0.0.1","planDigest":"<sha256>"}'`],
+    danger: "destructive",
+    handler: async (p) => installLocalPlugin(String(p.store), String(p.pluginId), String(p.version), String(p.planDigest)),
+  });
+
   register("plugin.install.status", {
     description: key("cmd.plugin.install.status.desc"),
     triggers: { ko: "플러그인 설치 진행 상태 프로그레스" },
@@ -1238,27 +1269,6 @@ export function registerPluginCatalog(): void {
         }
       }
       return { viewKey: key, projectId, closed, tabIds };
-    },
-  });
-
-
-  register("plugin.dev.create", {
-    description: key("cmd.plugin.dev.create.desc"),
-    triggers: { ko: "플러그인 개발 새로 만들기 스캐폴드 scaffold 생성" },
-    params: {
-      id: { type: "string", description: key("cmd.plugin.dev.create.param.id"), required: true },
-    },
-    returns: "{ ok, dir, pluginId }",
-    message: (d) => tmsg("msg.plugin.dev.create", { id: String(d.pluginId) }),
-    errors: ["INVALID_PARAMS"],
-    examples: ['plugin.dev.create \'{"id":"soksak-plugin-<id>"}\''],
-    danger: "inject",
-    handler: async (p) => {
-      const r = await invoke<{ dir: string; dir_name: string }>("plugin_scaffold", {
-        id: p.id as string,
-      });
-      await usePlugins.getState().reload();
-      return { ok: true, dir: r.dir, pluginId: r.dir_name };
     },
   });
 

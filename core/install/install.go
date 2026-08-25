@@ -87,6 +87,25 @@ func Register(registry *control.Registry, deps Deps) {
 
 	if transactions != nil {
 		registerInstallTransactions(registry, transactions, deps)
+		registry.MustRegister(control.Command{Name: "local_release_read", Handler: func(args control.Args) (any, error) {
+			store, err := control.Arg[string](args, "store")
+			if err != nil {
+				return nil, err
+			}
+			kind, err := control.Arg[string](args, "kind")
+			if err != nil {
+				return nil, err
+			}
+			id, err := control.Arg[string](args, "id")
+			if err != nil {
+				return nil, err
+			}
+			version, err := control.Arg[string](args, "version")
+			if err != nil {
+				return nil, err
+			}
+			return ReadLocalRelease(store, kind, id, version)
+		}})
 	}
 
 	registry.MustRegister(control.Command{
@@ -183,7 +202,14 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		if err != nil {
 			return nil, err
 		}
-		return manager.Begin(registryID, root)
+		localStore, err := control.OptionalArg[string](args, "localStore", "")
+		if err != nil {
+			return nil, err
+		}
+		if localStore == "" {
+			return manager.Begin(registryID, root)
+		}
+		return manager.Begin(registryID, root, localStore)
 	}})
 	registry.MustRegister(control.Command{Name: "artifact_install_stage", Handler: func(args control.Args) (any, error) {
 		transactionID, err := control.Arg[string](args, "transactionId")

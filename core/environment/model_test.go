@@ -2,11 +2,12 @@ package environment
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
 func TestEnvironmentRejectsRegistryProvenance(t *testing.T) {
-	raw := map[string]any{"revision": 1, "plugins": map[string]any{"demo": map[string]any{"version": "0.0.1", "path": "/installed", "source": "registry", "registry": "official", "repository": "https://github.com/example/demo", "enabled": true}}, "sidecars": map[string]any{}, "kits": map[string]any{}, "contracts": map[string]any{}, "specs": map[string]any{}}
+	raw := map[string]any{"revision": 1, "plugins": map[string]any{"demo": map[string]any{"version": "0.0.1", "path": "/installed", "artifactSha256": strings.Repeat("a", 64), "source": "registry", "registry": "official", "repository": "https://github.com/example/demo", "enabled": true}}, "sidecars": map[string]any{}}
 	body, _ := json.Marshal(raw)
 	if _, err := Parse(body); err == nil {
 		t.Fatal("environment accepted registry provenance")
@@ -14,7 +15,7 @@ func TestEnvironmentRejectsRegistryProvenance(t *testing.T) {
 }
 
 func TestEnvironmentAcceptsLocalMaterializationAndUserChoices(t *testing.T) {
-	raw := map[string]any{"revision": 1, "plugins": map[string]any{"demo": map[string]any{"version": "0.0.1", "path": "/installed", "source": "registry", "registry": "official", "enabled": true}}, "sidecars": map[string]any{}, "kits": map[string]any{}, "contracts": map[string]any{}, "specs": map[string]any{}}
+	raw := map[string]any{"revision": 1, "plugins": map[string]any{"demo": map[string]any{"version": "0.0.1", "path": "/installed", "artifactSha256": strings.Repeat("a", 64), "source": "registry", "registry": "official", "enabled": true}}, "sidecars": map[string]any{}}
 	body, _ := json.Marshal(raw)
 	if _, err := Parse(body); err != nil {
 		t.Fatal(err)

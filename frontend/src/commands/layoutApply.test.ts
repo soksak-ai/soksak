@@ -37,7 +37,7 @@ const terminalEnginePlugins: Record<string, PluginRuntime> = {
   [XTERM]: {
     manifest: { id: XTERM, implements: [{ id: "soksak-spec-plugin-terminal", version: "0.0.1" }] } as unknown as PluginManifest,
     dir: "",
-    source: "dev",
+    source: "local",
     status: "enabled",
   },
 };

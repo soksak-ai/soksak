@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -28,7 +29,7 @@ func TestPluginManifestsReadOneEnvironmentRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 	environment := Empty()
-	environment.Plugins["demo"] = Plugin{Component: Component{Version: "0.0.1", Path: root, Source: "registry", Registry: "official"}, Enabled: true}
+	environment.Plugins["demo"] = Plugin{Component: Component{Version: "0.0.1", Path: root, ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official"}, Enabled: true}
 	writeJSON(t, filepath.Join(home, File), environment)
 	records, err := PluginManifests(home)
 	if err != nil {
@@ -48,9 +49,6 @@ func TestInitializePublishesTheFirstEnvironmentRevision(t *testing.T) {
 	if err != nil || !exists || value.Revision != 1 {
 		t.Fatalf("environment=%+v exists=%v err=%v", value, exists, err)
 	}
-	if _, err := SetSource(home, "sidecar", "demo", Component{Version: "0.0.1", Path: t.TempDir(), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}, 1); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestExactSidecarReferenceResolvesEnvironmentSidecar(t *testing.T) {
@@ -66,8 +64,8 @@ func TestExactSidecarReferenceResolvesEnvironmentSidecar(t *testing.T) {
 	manifest := map[string]any{"id": "terminal-sidecar", "version": "0.0.1", "interface": map[string]string{"id": "terminal-state", "version": "0.0.1"}, "process": "dist/terminal-sidecar"}
 	writeJSON(t, filepath.Join(root, "sidecar.json"), manifest)
 	environment := Empty()
-	environment.Plugins["terminal-view"] = Plugin{Component: Component{Version: "0.0.1", Path: t.TempDir(), Source: "registry", Registry: "official"}, Enabled: true}
-	environment.Sidecars["terminal-sidecar"] = Component{Version: "0.0.1", Path: root, Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}
+	environment.Plugins["terminal-view"] = Plugin{Component: Component{Version: "0.0.1", Path: t.TempDir(), ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official"}, Enabled: true}
+	environment.Sidecars["terminal-sidecar"] = Component{Version: "0.0.1", Path: root, ArtifactSHA256: strings.Repeat("b", 64), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}
 	writeJSON(t, filepath.Join(home, File), environment)
 	runtime, err := ResolveSidecarForPlugin(home, PluginRef{ID: "terminal-view", Version: "0.0.1"}, PluginRef{ID: "terminal-sidecar", Version: "0.0.1"})
 	if err != nil {
@@ -94,7 +92,7 @@ func TestSidecarSelectionResolvesAWindowsSidecarExecutable(t *testing.T) {
 		"process":   "dist/terminal-sidecar.exe",
 	})
 	environment := Empty()
-	environment.Sidecars["terminal-sidecar"] = Component{Version: "0.0.1", Path: root, Source: "registry", Registry: "official", Target: "x86_64-pc-windows-msvc"}
+	environment.Sidecars["terminal-sidecar"] = Component{Version: "0.0.1", Path: root, ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official", Target: "x86_64-pc-windows-msvc"}
 	writeJSON(t, filepath.Join(home, File), environment)
 	runtime, err := ResolveSidecarVersion(home, "terminal-sidecar", "0.0.1")
 	if err != nil {
@@ -108,7 +106,7 @@ func TestSidecarSelectionResolvesAWindowsSidecarExecutable(t *testing.T) {
 func TestEnvironmentChangesAdvanceOneRevision(t *testing.T) {
 	home := t.TempDir()
 	value := Empty()
-	value.Plugins["demo"] = Plugin{Component: Component{Version: "0.0.1", Path: t.TempDir(), Source: "registry", Registry: "official"}}
+	value.Plugins["demo"] = Plugin{Component: Component{Version: "0.0.1", Path: t.TempDir(), ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official"}}
 	writeJSON(t, filepath.Join(home, File), value)
 	change, err := SetPluginsEnabled(home, []PluginRef{{ID: "demo", Version: "0.0.1"}}, true, 1)
 	if err != nil {
@@ -122,7 +120,7 @@ func TestEnvironmentChangesAdvanceOneRevision(t *testing.T) {
 func TestPluginEnablementUsesTheInstalledReleaseVersion(t *testing.T) {
 	home := t.TempDir()
 	value := Empty()
-	value.Plugins["demo"] = Plugin{Component: Component{Version: "0.0.3", Path: t.TempDir(), Source: "registry", Registry: "official"}}
+	value.Plugins["demo"] = Plugin{Component: Component{Version: "0.0.3", Path: t.TempDir(), ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official"}}
 	writeJSON(t, filepath.Join(home, File), value)
 	if _, err := SetPluginsEnabled(home, []PluginRef{{ID: "demo", Version: "0.0.3"}}, true, 1); err != nil {
 		t.Fatalf("installed version was refused: %v", err)

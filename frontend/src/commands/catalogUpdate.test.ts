@@ -118,11 +118,11 @@ describe("update.apply channel gate (HOME policy: a remote app body update is re
 });
 
 describe("update.apply axis order and selection", () => {
-  it("updates installed plugins and skips a development source", async () => {
+  it("updates registry plugins and skips a local release", async () => {
     pluginState.release = false;
     pluginState.plugins = {
-      "soksak-plugin-a": { source: "installed" },
-      "soksak-plugin-dev": { source: "dev" },
+      "soksak-plugin-a": { source: "registry" },
+      "soksak-plugin-dev": { source: "local" },
     };
     pluginUpdate.mockResolvedValue({
       ok: true,
@@ -150,7 +150,7 @@ describe("update.apply axis order and selection", () => {
 
   it("a failed plugin update is recorded as skipped and the other axes continue", async () => {
     pluginState.release = false;
-    pluginState.plugins = { "soksak-plugin-b": { source: "installed" } };
+    pluginState.plugins = { "soksak-plugin-b": { source: "registry" } };
     pluginUpdate.mockResolvedValue({ ok: false, code: "TARGET_NOT_FOUND", message: "x" });
     route({ pty_daemon_upgrade: { sessions: 1 } });
 
@@ -171,9 +171,9 @@ describe("update.check survey", () => {
   it("reports app body availability and installed plugin count, excluding dev", async () => {
     pluginState.release = false;
     pluginState.plugins = {
-      "soksak-plugin-a": { source: "installed" },
-      "soksak-plugin-b": { source: "installed" },
-      "soksak-plugin-dev": { source: "dev" },
+      "soksak-plugin-a": { source: "registry" },
+      "soksak-plugin-b": { source: "registry" },
+      "soksak-plugin-dev": { source: "local" },
     };
     route({ update_check: { available: false, channel: "local" } });
 

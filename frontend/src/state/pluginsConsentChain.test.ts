@@ -15,7 +15,7 @@ function rt(
   id: string,
   permissions: string[],
   dependencies: Record<string, string> = {},
-  opts: { source?: "installed" | "dev"; version?: string } = {},
+  opts: { source?: "registry" | "local"; version?: string } = {},
 ): PluginRuntime {
   const manifest = {
     spec: "soksak-spec-plugin@0.0.1",
@@ -29,7 +29,7 @@ function rt(
       views: [], commands: [], formatters: [], languages: [], iconSets: [], programs: [], events: [],
     },
   } as unknown as PluginManifest;
-  return { manifest, dir: "", source: opts.source ?? "installed", status: "disabled" } as PluginRuntime;
+  return { manifest, dir: "", source: opts.source ?? "registry", status: "disabled" } as PluginRuntime;
 }
 
 const consent = (version: string, permissions: string[]): ConsentRecord => ({
@@ -73,12 +73,12 @@ describe("pendingConsentChain — the pending consent chain, dependency first", 
     expect(pendingConsentChain("acp-studio", changed, consents)).toEqual(["acp-core"]);
   });
 
-  it("a dev-source dependency needs no consent and stays out of the chain", () => {
-    const devCore = {
-      "acp-core": rt("acp-core", ["process"], {}, { source: "dev" }),
+  it("a local dependency uses the same consent gate", () => {
+    const localCore = {
+      "acp-core": rt("acp-core", ["process"], {}, { source: "local" }),
       "acp-studio": rt("acp-studio", ["ui"], { "acp-core": "^0.1.0" }),
     };
-    expect(pendingConsentChain("acp-studio", devCore, {})).toEqual(["acp-studio"]);
+    expect(pendingConsentChain("acp-studio", localCore, {})).toEqual(["acp-core", "acp-studio"]);
   });
 
   it("consentRequiredMessage: the only target is itself — plain prose for that consent alone", () => {

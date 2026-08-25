@@ -3,6 +3,7 @@ package application
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	coreenvironment "github.com/soksak-ai/soksak-core/core/environment"
@@ -16,7 +17,7 @@ func TestInstalledPluginAssetsAreReadableBeforeEnablement(t *testing.T) {
 	}
 	environment := coreenvironment.Empty()
 	environment.Plugins["demo"] = coreenvironment.Plugin{
-		Component: coreenvironment.Component{Version: "0.0.1", Path: plugin, Source: "registry", Registry: "official"},
+		Component: coreenvironment.Component{Version: "0.0.1", Path: plugin, ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official"},
 		Enabled:   false,
 	}
 	if _, err := coreenvironment.Write(home, coreenvironment.Environment{}, false, environment, 0); err != nil {

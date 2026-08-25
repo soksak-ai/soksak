@@ -33,7 +33,7 @@ function mani(
 }
 
 function rt(manifest: PluginManifest): PluginRuntime {
-  return { manifest, dir: "", source: "installed", status: "disabled" } as PluginRuntime;
+  return { manifest, dir: "", source: "registry", status: "disabled" } as PluginRuntime;
 }
 
 describe("consentSummary — transitive dependency permissions", () => {

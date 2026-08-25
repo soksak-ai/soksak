@@ -40,7 +40,7 @@ function manifestOf(id: string, overrides: Record<string, unknown> = {}): Plugin
 }
 
 function runtimeOf(manifest: PluginManifest): PluginRuntime {
-  return { manifest, dir: "/d", source: "dev", status: "enabled" };
+  return { manifest, dir: "/d", source: "local", status: "enabled" };
 }
 
 // Minimal tab holding plugin view instances in one content area (fills only the paths the handler reads).
@@ -253,32 +253,6 @@ describe("plugin.conformance — C2 static rules (command-surface, view-nodes)",
     const data = (r as { data: Record<string, unknown> }).data;
     const c2 = data.c2 as { violations: { rule: string }[] };
     expect(c2.violations.map((v) => v.rule)).toContain("command-surface");
-  });
-});
-
-describe("plugin.dev.create — extension development independent of core build identity", () => {
-  it("creates the workspace and reloads on a release core too", async () => {
-    const previousReload = usePlugins.getState().reload;
-    const reload = vi.fn(async () => {});
-    usePlugins.setState({ release: true, reload });
-    invoke.mockResolvedValueOnce({
-      dir: "/Users/test/.soksak/workspaces/plugins/weather",
-      dir_name: "weather",
-    });
-
-    const r = await execute("plugin.dev.create", { id: "weather" }, {});
-
-    expect(invoke).toHaveBeenCalledWith("plugin_scaffold", { id: "weather" });
-    expect(reload).toHaveBeenCalledOnce();
-    expect(r).toMatchObject({
-      ok: true,
-      data: { pluginId: "weather", dir: "/Users/test/.soksak/workspaces/plugins/weather" },
-    });
-    // Examples hold the command form only — the binary name is prepended by the presenter (each env binary); multi-env listing removed.
-    expect(getSpec("plugin.dev.create")?.examples).toEqual([
-      'plugin.dev.create \'{"id":"soksak-plugin-<id>"}\'',
-    ]);
-    usePlugins.setState({ release: false, reload: previousReload });
   });
 });
 

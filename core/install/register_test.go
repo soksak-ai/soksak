@@ -153,7 +153,7 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 		"artifact_install_begin", "artifact_install_commit", "artifact_install_read_utf8",
 		"artifact_install_rollback", "artifact_install_stage", "artifact_install_status",
 		"artifact_install_wait", "binary_integrity",
-		"host_artifact_target", "npm_global_dirs", "probe_binary", "theme_install",
+		"host_artifact_target", "local_release_read", "npm_global_dirs", "probe_binary", "theme_install",
 	}
 	if strings.Join(served, ",") != strings.Join(want, ",") {
 		t.Errorf("served = %v, want %v", served, want)
@@ -164,7 +164,7 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 		refused = append(refused, entry.Name)
 	}
 	sort.Strings(refused)
-	wantRefused := []string{"plugin_scaffold"}
+	wantRefused := []string{}
 	if strings.Join(refused, ",") != strings.Join(wantRefused, ",") {
 		t.Errorf("refused = %v, want %v", refused, wantRefused)
 	}

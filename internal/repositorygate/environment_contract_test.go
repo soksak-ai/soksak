@@ -59,21 +59,16 @@ func TestExecutableSourceDoesNotDiscoverSiblingRepositories(t *testing.T) {
 	}
 }
 
-func TestEveryComponentKindHasAnEnvironmentSourceSurface(t *testing.T) {
-	body, err := os.ReadFile("frontend/src/commands/catalogSource.ts")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(body)
-	for _, kind := range []string{"plugin", "sidecar", "kit", "contract", "spec"} {
-		wanted := "registerKind(\"" + kind + "\")"
-		if !strings.Contains(text, wanted) {
-			t.Errorf("environment source catalogue does not register %s", kind)
+func TestEnvironmentHasNoRawSourcePathSurface(t *testing.T) {
+	for _, path := range []string{"core/environment/register.go", "frontend/src/commands/catalog.ts"} {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	for _, operation := range []string{"source.list", "source.set"} {
-		if !strings.Contains(text, operation) {
-			t.Errorf("environment source catalogue does not expose %s", operation)
+		for _, forbidden := range []string{"source_set", "source.set", "catalogSource"} {
+			if strings.Contains(string(body), forbidden) {
+				t.Errorf("%s exposes retired raw source operation %q", path, forbidden)
+			}
 		}
 	}
 }
@@ -85,12 +80,10 @@ func TestDevelopmentCandidateAndReleaseShareOneComponentContract(t *testing.T) {
 	}
 	text := string(body)
 	for _, rule := range []string{
-		"## One component contract, three acquisition modes",
-		"Development source, candidate artifact, and registry release differ only in how bytes are acquired and what evidence they provide.",
-		"A local runtime source is selected only through the kind-specific `source_set` command",
-		"Candidate artifacts are installed into an isolated identity home through the same installer transaction used for releases.",
-		"A registry release is the only input accepted as final publication evidence.",
-		"A source change never edits dependency metadata, copies files into another repository, or discovers a sibling checkout.",
+		"## One release contract, two transports",
+		"Local and registry releases use the same closure resolver and installer transaction.",
+		"Raw source paths are never installation inputs.",
+		"The environment records only Plugin and Sidecar runtime selections.",
 	} {
 		if !strings.Contains(text, rule) {
 			t.Errorf("environment contract lacks %q", rule)

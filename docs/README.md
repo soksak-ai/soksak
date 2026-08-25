@@ -84,7 +84,7 @@ that on the same date and the gate landed against it.
 | [`tech/REPOSITORY-GOVERNANCE.md`](tech/REPOSITORY-GOVERNANCE.md) | Canonical branches, fork improvement lines, historical archives, and the no-source-loss rule |
 | [`tech/BUILD-TOOLCHAIN.md`](tech/BUILD-TOOLCHAIN.md) | Tool version owners, discovery, preparation, upgrades and precondition failures |
 | [`tech/IDENTITY.md`](tech/IDENTITY.md) | One derivation for home, socket, CLI name and axis; the core reads no ambient; one backend per home |
-| [`tech/ENVIRONMENT-AND-INSTALLATION.md`](tech/ENVIRONMENT-AND-INSTALLATION.md) | Component environment, development sources and installer ownership |
+| [`tech/ENVIRONMENT-AND-INSTALLATION.md`](tech/ENVIRONMENT-AND-INSTALLATION.md) | Runtime component environment, local/registry release transport, and installer ownership |
 | [`tech/ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md`](tech/ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md) | Why local component state became one atomic environment |
 | [`tech/CONTROL-PROTOCOL.md`](tech/CONTROL-PROTOCOL.md) | One line of JSON, the envelope, the greeting that negotiates, the command table, the socket address |
 | [`tech/CONTROL-PROTOCOL.CHANGELOG.md`](tech/CONTROL-PROTOCOL.CHANGELOG.md) | Why the control plane requires one self-describing response shape |

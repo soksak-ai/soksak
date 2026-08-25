@@ -14,11 +14,6 @@ package install
 // state than the feature being absent, because it looks like a plugin defect.
 var unbuilt = []struct{ name, blockedBy string }{
 	{
-		"plugin_scaffold",
-		"plugin.source.set declares a working tree, but the plugin manifest, entry file and " +
-			"build files are not generated. Port plugin_scaffold",
-	},
-	{
 		"artifact_install_begin",
 		installTransactionBlocked,
 	},

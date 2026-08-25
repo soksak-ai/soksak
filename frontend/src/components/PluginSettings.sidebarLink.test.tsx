@@ -44,7 +44,7 @@ describe("the plugin settings sidebar link", () => {
     const { manifest, validation } = parseManifest(MANIFEST, PLUGIN);
     if (!manifest) throw new Error(`the test manifest does not parse: ${validation.errors.join(", ")}`);
     usePlugins.setState({
-      plugins: { [PLUGIN]: { manifest, dir: "/p", source: "dev", status: "enabled" } },
+      plugins: { [PLUGIN]: { manifest, dir: "/p", source: "local", status: "enabled" } },
     });
     host = document.createElement("div");
     document.body.append(host);

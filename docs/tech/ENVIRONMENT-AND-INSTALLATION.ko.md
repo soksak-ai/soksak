@@ -6,89 +6,63 @@ canonical: docs/tech/ENVIRONMENT-AND-INSTALLATION.md
 
 # Environment와 설치
 
-이 문서는 [영어 정본](./ENVIRONMENT-AND-INSTALLATION.md)의 한국어 번역입니다. 공개 JSON
-형식은 `soksak-spec`이 소유하며, 이 문서는 Core 동작을 정의합니다. Release identity와
-archive 검증은 `RELEASE-INTEGRITY.md`가 정의합니다.
+공개 JSON 형식은 `soksak-spec`이 소유합니다. 이 문서는 Core runtime 상태와 installer transaction을
+정의합니다. Canonical build, local store, GitHub 공개 규칙은 spec package의
+`docs/BUILD-AND-RELEASE.md`가 정의합니다.
 
 ## Environment
 
-`<identity-home>/environment.json`은 유일한 로컬 component 상태입니다. Plugin, sidecar, kit,
-contract, spec은 선택된 정확한 version, 절대 로컬 경로, source 종류, managed content의 registry
-ID를 기록하며 target은 Sidecar에만 기록합니다. Plugin은 활성화 상태도 기록합니다. Runtime dependency는
-plugin manifest와 release에 남으며 environment는 역할 binding을 저장하지 않습니다.
-하나의 단조 증가 `revision`이 전체 environment를 포함하며, 변경은 compare-and-swap 후 하나의
-`environment.changed` event를 발행합니다. Polling은 사용하지 않습니다.
-Core는 identity home 소유권을 얻은 직후 revision 1을 원자적으로 생성합니다. 따라서 파일 부재는
-가상의 빈 environment로 대체되지 않고 boot 실패가 됩니다. 첫 compare-and-swap도 이후 write와
-동일하게 `environment_get`이 반환한 revision을 사용합니다.
+`<identity-home>/environment.json`은 유일한 영구 runtime-component 상태입니다. 하나의 단조 증가
+`revision`, Plugin record, Sidecar record를 포함합니다. Plugin record에는 exact version, materialized
+절대 경로, source(`local` 또는 `registry`), artifact SHA-256, enabled 상태가 있습니다. Sidecar record는
+enabled 상태 대신 target triple을 추가합니다.
 
-원격 repository, source commit, dependency, URL, size, digest는 registry release가 소유합니다.
-Environment는 이 정보를 복제하지 않습니다. 다른 영구 component 문서나 dependency lock은 없습니다.
+Kit, Contract, Spec은 build 또는 validation input입니다. 이들의 exact release reference는 release
+document와 candidate build receipt에 남으며 Core는 runtime 상태로 복사하지 않습니다. Runtime
+dependency는 Plugin release에 남습니다. Environment는 repository, source commit, URL, size, dependency
+closure, role binding을 저장하지 않습니다.
 
-## Installer
+Core는 identity home을 얻은 뒤 revision 1을 생성합니다. 상태가 없거나 올바르지 않으면 boot error이며
+가상의 empty state를 만들지 않습니다. 모든 변경은 compare-and-swap을 사용하고
+`environment.changed` event 하나를 발행합니다. File polling은 없습니다.
 
-Core installer는 검증된 plugin, sidecar 또는 직접 요청된 kit release를 읽고 현재 target artifact를
-선택합니다. 선언된 크기만큼 내려받고 SHA-256을 검증한 뒤 regular file만 추출하고 manifest를
-검증합니다. Component directory와 environment는 하나의 transaction으로 공개합니다.
+## 하나의 release 계약과 두 transport
 
-Plugin 설치는 각 plugin release의 정확한 `runtimeDependencies.plugins`와
-`runtimeDependencies.sidecars` release reference를 재귀적으로 검증하고 전체 closure를 같은
-transaction에서 설치합니다. 이미 materialize된 동일 version은 공유합니다. 실패하면 이전 environment는 변하지
-않습니다. Write lock은 transaction 동안만 존재합니다.
-Artifact `target`은 내려받을 byte를 선택합니다. `environment.json`에는 Sidecar target만 남으며
-portable plugin과 kit의 materialize된 component record에는 target이 없습니다.
+Local release와 registry release는 같은 closure resolver와 installer transaction을 사용합니다. 두
+release 모두 동일한 공개 release document, manifest, permission, entrypoint, size, SHA-256을 가집니다.
+HTTPS와 명시적으로 주소를 받은 local release store는 승인된 byte를 읽는 방법만 다릅니다. Raw source
+path는 설치 input이 아닙니다. Core는 `../`, 주입된 workspace root, `PATH`, checkout layout, symlink로
+repository를 찾지 않습니다.
 
-Kit은 재사용 구현 source이며 암묵적인 plugin runtime dependency가 아닙니다. Contract와 spec
-release는 validation input이고 runtime 설치 directory에 복사되지 않습니다. 각 plugin release는
-별도로 설치되는 runtime component를 투명하게 선언합니다. Plugin 설치는 plugin을 자동
-활성화하지 않으며 environment 수준의 sidecar 선택이나 역할 binding은 없습니다.
+Exact dependency version이 주소를 받은 local store에 있으면 release와 asset byte가 parent의 URL, size,
+SHA-256과 같아야 합니다. Local release가 손상됐거나 다르면 error이며 network로 fallback하지
+않습니다. Local에 dependency가 없으면 parent release가 선언한 exact HTTPS reference를 사용할 수
+있습니다.
 
-## Development source
+## Installer transaction
 
-Development source는 해당 ID의 versioned source와 절대 경로를 교체하고 managed update를 막습니다.
-Manifest는 identity, app version, interface, permission, path 검증을 그대로 통과해야 합니다. 별도
-boolean은 저장하지 않습니다.
+Installer는 complete Plugin/Sidecar runtime closure를 해석하고 host target을 고르며 모든 size와
+SHA-256을 검증하고 regular file만 추출하며 manifest를 확인합니다. 모든 component를 stage한 뒤
+component directory와 `environment.json`을 transaction 하나로 공개합니다. 실패하면 이전 environment와
+component directory가 그대로 유지됩니다.
 
-## 하나의 component 계약과 세 가지 획득 방식
+같은 id, version, target, artifact digest는 멱등입니다. 같은 id, version, target의 digest가 다르면
+`VERSION_ARTIFACT_CONFLICT`로 실패하며 설치 byte를 덮어쓰지 않습니다. Local record는 자동 registry
+교체 대상이 아닙니다. Registry update는 표시할 수 있지만 Local 선택을 바꾸려면 명시적인 registry
+install transaction이 필요합니다.
 
-Development source, candidate artifact, registry release는 byte를 획득하는 방법과 제공하는 증거만
-다릅니다. 세 개의 설치 또는 runtime 계약을 만들지 않습니다. 모든 방식에서 component는 같은 ID,
-version, manifest schema, 정확한 dependency 선언, permission, entrypoint, lifecycle을 사용하며 검증을
-생략하지 않습니다.
-
-- 로컬 runtime source는 owner repository가 선언된 component directory를 build한 뒤 종류별
-  `source_set` command로만 선택합니다. Command는 정확한 version, 절대 directory, `development`
-  source를 `environment.json`에 기록하고 해당 ID의 managed update를 막습니다. Plugin과 sidecar는
-  같은 operation을 사용합니다.
-- Candidate artifact는 release와 같은 installer transaction으로 격리된 identity home에 설치합니다.
-  Candidate는 content-addressed nonpublishing 인증 input이며 정확한 candidate closure를 증명하지만
-  최종 공개 증거는 아닙니다.
-- Registry release만 최종 공개 증거로 인정합니다. Registry 공개 전에 immutable URL, size, digest로
-  새로운 identity home에 설치해 검증합니다.
-
-Source 변경은 dependency metadata를 편집하거나, 다른 repository에 file을 복사하거나, sibling
-checkout을 탐색하지 않습니다. Package manager의 local locator는 component source mechanism이
-아닙니다. Build-time 미공개 dependency는 canonical isolated candidate builder만 materialize하며
-source, lockfile, artifact, release input에 남으면 안 됩니다. Runtime dependency는 plugin이 계속
-선언하고 같은 environment에 정확한 version으로 존재해야 합니다. Development plugin을 선택한다고
-sidecar가 암묵적으로 선택되지 않으며, development sidecar를 선택한다고 plugin manifest를 다시 쓰지
+Installer는 실행 중이거나 기록된 Sidecar를 종료하지 않습니다. 다른 Sidecar byte를 선택하려면 명시적
+lifecycle operation이 필요합니다. Core는 update 완료를 위해 사용자의 복구 가능한 process를 종료하지
 않습니다.
 
-`environment.json`만 runtime discovery에 사용합니다. Core와 component는 `../`, 주입된 repository
-root, checkout layout, PATH, symlink로 다른 repository를 찾지 않습니다. Build 관계는 package
-dependency, runtime 관계는 environment가 해석하는 component ID, 원격 byte는 registry release를
-사용합니다.
+## Command와 event
 
-미래 기능을 미리 구현하지는 않지만 규칙, 상태 축, 소유권 경계, command/status/event/DOM 공개면은
-구현이 의존하기 전에 확정합니다. Plugin, sidecar, kit, contract, spec source 공개면은 추측성 기능이
-아니라 platform 상태입니다.
+- `environment_get`: complete runtime 선택 조회
+- `plugin_enabled_set`: compare-and-swap으로 Plugin 활성화 변경
+- `artifact_install_begin`, `artifact_install_stage`, `artifact_install_read_utf8`,
+  `artifact_install_commit`, `artifact_install_rollback`: shared transaction
+- `artifact_install_status`, `artifact_install_wait`: event-driven progress 공개
+- `artifact.install.progress`: phase 변경, `environment.changed`: commit된 revision 하나
 
-## Commands
-
-- `environment_get`: environment 조회
-- `plugin_enabled_set`: plugin 활성화 변경
-- 종류별 `source_set`: component의 정확한 source와 로컬 경로 교체
-- `artifact_install_begin/stage/read_utf8/commit/rollback`: atomic 설치 transaction
-
-공개 unit, install profile, dependency closure, composition graph, execution graph, deployment graph는
-존재하지 않습니다.
+`source_set`, raw-path install, compatibility reader, fallback transport, install profile, 저장된 dependency
+closure, 두 번째 installer는 존재하지 않습니다.

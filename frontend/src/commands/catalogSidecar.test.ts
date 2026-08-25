@@ -11,7 +11,7 @@ import { execute, unregister } from "./registry";
 
 describe("sidecar.request", () => {
   beforeEach(() => invoke.mockReset());
-  afterEach(() => unregister("sidecar.request"));
+  afterEach(() => { for (const name of ["sidecar.request", "sidecar.install.local.plan", "sidecar.install.local"]) unregister(name); });
 
   it("relays one opaque control request without interpreting its command", async () => {
     registerSidecarCatalog();
