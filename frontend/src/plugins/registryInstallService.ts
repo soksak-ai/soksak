@@ -87,11 +87,11 @@ export async function updateCertifiedRegistryPlugin(
   if (!installed) {
     return { ok: false, code: "TARGET_NOT_FOUND", message: `plugin not found: ${id}` };
   }
-  if (installed.source === "local") {
+  if (installed.source !== "registry") {
     return {
       ok: false,
       code: "INVALID_PARAMS",
-      message: "a local release is pinned; install a registry release explicitly to replace it",
+      message: "a local or development record is pinned; install a registry release explicitly to replace it",
     };
   }
   const resolved = resolveRegistryRelease(useRegistry.getState().entries, {

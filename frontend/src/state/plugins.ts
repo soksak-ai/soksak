@@ -38,6 +38,7 @@ import {
   type DepNode,
 } from "../plugins/dependencyGraph";
 import { publishActivity } from "./activityFeed";
+import { reconcileEnvironmentRevision, type EnvironmentChange, type HostEnvironment } from "./environmentEvents";
 import { err, ok, type CmdResult } from "./sessions";
 import { tmsg } from "../i18n";
 
@@ -61,14 +62,14 @@ import {
 export interface PluginRuntime {
   manifest: PluginManifest;
   dir: string;
-  source: "registry" | "local";
+  source: "registry" | "local" | "development";
   status: "disabled" | "enabled" | "error";
   error?: string;
 }
 
 export interface RejectedPlugin {
-  /** The directory's name, which is the id the manifest had to declare. Carried so a reader asking
-   *  "was this plugin refused" matches on the id it already holds rather than parsing a path. */
+  /** The directory's name, which is the id the manifest had to declare. A reader matches a refused
+   *  plugin on the id it already holds rather than parsing a path. */
   id: string;
   dir: string;
   errors: string[];
@@ -84,7 +85,7 @@ interface PluginManifestRecord {
   version: string;
   installPath: string;
   manifestPath: string;
-  source: "registry" | "local";
+  source: "registry" | "local" | "development";
   enabled: boolean;
   manifest: string | null;
   error: string | null;
@@ -398,7 +399,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     plugins: Array<{ id: string; version: string }>,
     enabled: boolean,
   ): Promise<void> => {
-    const settings = await invoke<{ revision: number }>("environment_get");
+    const settings = await invoke<HostEnvironment>("environment_get");
     await invoke("plugin_enabled_set", {
       plugins,
       enabled,
@@ -411,7 +412,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     rawText: string,
     dir: string,
     dirName: string,
-    source: "registry" | "local",
+    source: "registry" | "local" | "development",
     rejected: RejectedPlugin[],
   ): PluginRuntime | null => {
     let raw: unknown;
@@ -499,20 +500,63 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     setActive(p.manifest.id, instance);
   };
 
-  // Single removal — dev from the list only, installed from disk as well. Clears consent/enabled. The unit of cascade.
-  // No reload here (the cascade caller runs one at the end of the loop) — so the graph does not shift mid-loop.
-  const removeSingle = async (id: string): Promise<CmdResult<{ id: string }>> => {
-    const p = get().plugins[id];
-    if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
-    if (isActive(id)) await get().disable(id);
-    await invoke("plugin_remove", { id });
+  // Single removal — host first: plugin_remove at the current revision (compare-and-swap). The host applies the
+  // record rule: a development record is removed from the environment only; a local/registry record is removed
+  // and its artifact directory under <home>/components/ is deleted. A host refusal returns INTERNAL with the host
+  // message and changes nothing here. Only after the host accepted: the in-memory instance is deactivated (no
+  // enabled write — the record is already gone), consent/enabled state is cleared. Reconciliation is the
+  // caller's step (once per remove call). The unit of cascade. A change with artifactDeleteFailed is a success
+  // whose artifact directory remains on disk: one activity names the path; nothing else differs.
+  // A rejected record (listed by the host, refused by the frontend) is a host record: it is removed the same way
+  // and dropped from the rejected list after the host accepted.
+  const isHostRecord = (id: string): boolean => get().plugins[id] !== undefined || get().rejected.some((x) => x.id === id);
+
+  const removeSingle = async (id: string): Promise<CmdResult<{ id: string; revision: number }>> => {
+    if (!isHostRecord(id)) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
+    let change: EnvironmentChange;
+    try {
+      const environment = await invoke<HostEnvironment>("environment_get");
+      change = await invoke<EnvironmentChange>("plugin_remove", { id, expectedRevision: environment.revision });
+    } catch (cause) {
+      return err("INTERNAL", tmsg("plugin.remove.failed", { id, error: String(cause) }));
+    }
+    if (change.artifactDeleteFailed) {
+      const { path, error } = change.artifactDeleteFailed;
+      publishActivity("plugin.remove.artifactLeft", "plugins", { id, path, error, message: tmsg("plugin.remove.artifactLeft", { id, path }) });
+    }
+    if (isActive(id)) {
+      await deactivateById(id);
+      setRuntime(id, { status: "disabled", error: undefined });
+    }
     set((s) => {
       const consents = { ...s.consents };
       delete consents[id];
-      return { consents, enabledIds: s.enabledIds.filter((x) => x !== id) };
+      return { consents, enabledIds: s.enabledIds.filter((x) => x !== id), rejected: s.rejected.filter((x) => x.id !== id) };
     });
     persist();
-    return ok({ id });
+    return ok({ id, revision: change.revision });
+  };
+
+  // Disable of a rejected record: nothing is active for it, so the only step is the host write, and only when
+  // the host record is enabled. The host disables a broken development record without its manifest version.
+  const disableRejected = async (id: string): Promise<CmdResult<{ id: string; status: string }>> => {
+    let change: EnvironmentChange | null = null;
+    try {
+      const environment = await invoke<HostEnvironment>("environment_get");
+      const record = environment.plugins[id];
+      if (!record) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
+      if (record.enabled) {
+        change = await invoke<EnvironmentChange>("plugin_enabled_set", {
+          plugins: [{ id, version: record.version }],
+          enabled: false,
+          expectedRevision: environment.revision,
+        });
+      }
+    } catch (cause) {
+      return err("INTERNAL", tmsg("plugin.enabled.writeFailed", { error: String(cause) }));
+    }
+    if (change !== null) await reconcileEnvironmentRevision(change.revision);
+    return ok({ id, status: "disabled" });
   };
 
   const enableOnce = async (id: string): Promise<CmdResult<{ id: string; status: string }>> => {
@@ -586,14 +630,17 @@ export const usePlugins = moduleState("state/plugins#store", () =>
           continue;
         }
         const rt = parseRuntime(e.manifest, e.installPath, e.id, e.source, rejected);
-        if (rt && rt.manifest.version !== e.version) {
+        if (!rt) continue;
+        // A development directory is the truth: plugin.json in that directory is the version identity, and the
+        // environment record only stores the version read at plugin.develop time. Registry and local records
+        // are immutable and must match the artifact's plugin.json.
+        if (e.source !== "development" && rt.manifest.version !== e.version) {
           rejected.push({
             id: e.id, dir: e.installPath,
             errors: [`settings version ${e.version} does not match plugin.json version ${rt.manifest.version}`],
           });
           continue;
         }
-        if (!rt) continue;
         next[rt.manifest.id] = rt;
         if (e.enabled) enabledIds.push(rt.manifest.id);
       }
@@ -699,8 +746,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     },
 
     remove: async (id, opts) => {
-      const p = get().plugins[id];
-      if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
+      if (!isHostRecord(id)) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
       // Transitive dependent check — what loses its reference once this plugin is gone. Blocked without cascade consent.
       const nodes = pluginDepNodes(get().plugins);
       const dependents = transitiveDependents(id, nodes);
@@ -713,17 +759,21 @@ export const usePlugins = moduleState("state/plugins#store", () =>
           }),
         );
       }
-      // Removal order — farthest (leaf) dependents first, the target last. Safe with dev mixed in (removeSingle branches).
+      // Removal order — farthest (leaf) dependents first, the target last; the order is fixed before the first
+      // step. Each step writes at the host's current revision; one reconcile through the environment coordinator
+      // follows the last published revision — also after a refusal, for the records already removed.
       const order = opts?.cascade ? cascadeRemovalSet(id, nodes) : [id];
       const removed: string[] = [];
+      let published: number | null = null;
+      let failure: CmdResult<{ id: string }> | null = null;
       for (const rid of order) {
         const res = await removeSingle(rid);
-        if (!res.ok) return res; // partial progress — return the structured reason (no silence)
+        if (!res.ok) { failure = res; break; } // partial progress — return the structured reason (no silence)
         removed.push(rid);
+        published = res.revision;
       }
-      // Both installed removal and development deselection rescan once. The latter must return immediately to the
-      // separately kept official install, and the workspace itself is not deleted.
-      await get().reload();
+      if (published !== null) await reconcileEnvironmentRevision(published);
+      if (failure !== null) return failure;
       return ok({ id, removed });
     },
 
@@ -737,7 +787,10 @@ export const usePlugins = moduleState("state/plugins#store", () =>
 
     disable: async (id) => {
       const p = get().plugins[id];
-      if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
+      if (!p) {
+        if (!get().rejected.some((x) => x.id === id)) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
+        return disableRejected(id);
+      }
       try {
         await setEnabledInSettings([{ id, version: p.manifest.version }], false);
       } catch (cause) {

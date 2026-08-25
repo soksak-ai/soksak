@@ -107,14 +107,23 @@ export async function installLocalPlugin(store: string, id: string, version: str
   }
 }
 
+// A Sidecar listed by sidecar_status as open or recorded is in use. Installation, removal, and development
+// registration refuse it with SIDECAR_IN_USE; none of them stops it.
+export async function sidecarInUse(id: string): Promise<boolean> {
+  const status = await invoke<{ open: Array<{ name: string }>; recorded: Array<{ name: string }> }>("sidecar_status");
+  return [...status.open, ...status.recorded].some((entry) => entry.name === id);
+}
+export function sidecarInUseMessage(id: string, operation: "installation" | "removal" | "development"): string {
+  return `Sidecar ${id} is running or recorded; stop it explicitly before ${operation}`;
+}
+
 export async function installLocalSidecar(store: string, id: string, version: string, expectedPlanDigest: string): Promise<RegistryInstallRuntimeResult> {
   try { await requireSidecarCompatibleWithInstalledPlugins(id, version); }
   catch (cause) {
     if (cause instanceof DependencyVersionConflict) return { ok: false, code: cause.code, message: cause.message, errors: [JSON.stringify(cause.conflict)] };
     throw cause;
   }
-  const status = await invoke<{ open: Array<{ name: string }>; recorded: Array<{ name: string }> }>("sidecar_status");
-  if ([...status.open, ...status.recorded].some((entry) => entry.name === id)) return { ok: false, code: "SIDECAR_IN_USE", message: `Sidecar ${id} is running or recorded; stop it explicitly before installation` };
+  if (await sidecarInUse(id)) return { ok: false, code: "SIDECAR_IN_USE", message: sidecarInUseMessage(id, "installation") };
   const plan = await planLocalSidecar(store, id, version);
   if (plan.digest !== expectedPlanDigest) return { ok: false, code: "LOCAL_INSTALL_PLAN_CHANGED", message: "local release closure changed after planning" };
   const root = await localRoot(store, id, version, "sidecar");

@@ -8,7 +8,7 @@ import { startPluginHooks } from "./hooks";
 import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 import { usePlugins } from "../state/plugins";
 import { useRegistry } from "../state/registry";
-import { createEnvironmentEventHandler, setEnvironmentEventHandler, type EnvironmentChange } from "../state/environmentEvents";
+import { createEnvironmentEventHandler, setEnvironmentEventHandler, type EnvironmentChange, type HostEnvironment } from "../state/environmentEvents";
 
 let stopEnvironmentEvents = () => {};
 let stopEnvironmentReconciliation = () => {};
@@ -58,7 +58,7 @@ export async function initPluginHost(): Promise<void> {
         console.error("plugin environment reload failed:", error);
       });
     });
-    const environment = await invoke<{ revision: number }>("environment_get");
+    const environment = await invoke<HostEnvironment>("environment_get");
     await usePlugins.getState().reload();
     onChange = createEnvironmentEventHandler(
       () => usePlugins.getState().reload(),

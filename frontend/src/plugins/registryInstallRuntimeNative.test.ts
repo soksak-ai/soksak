@@ -56,6 +56,26 @@ describe("native registry install wiring", () => {
     expect(req.target).toBeTypeOf("string");
   });
 
+  it("passes the host-validated environment to the installer without a second validation", async () => {
+    // A development record: source "development", empty artifactSha256, no registry. The host validated it.
+    const withDevelopment = {
+      revision: 4,
+      plugins: { demo: { version: "0.0.1", path: "/work/demo", artifactSha256: "", source: "development", enabled: true } },
+      sidecars: {},
+    };
+    invoke.mockImplementation(async (command: string) => {
+      if (command === "host_artifact_target") return "aarch64-apple-darwin";
+      if (command === "environment_get") return withDevelopment;
+      return undefined;
+    });
+    closure.mockResolvedValue({ ok: true, registryId: "fixture", revision: 5, releases: [] });
+    restore = wireNativeRegistryInstall();
+    const result = await installCertifiedRegistryRelease({ certified: CERTIFIED, root: ROOT, releases: RELEASES });
+    expect(result).toEqual({ ok: true, id: "weather-plugin", version: "0.0.1", revision: 5 });
+    const req = closure.mock.calls[0]![0] as any;
+    expect(req.environment).toBe(withDevelopment);
+  });
+
   it("maps a fail-closed closure error to a runtime error result", async () => {
     closure.mockResolvedValue({ ok: false, code: "RELEASE_VERIFICATION_FAILED", errors: ["bad sha", "x"] });
     restore = wireNativeRegistryInstall();

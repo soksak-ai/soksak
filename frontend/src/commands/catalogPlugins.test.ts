@@ -21,6 +21,7 @@ import { useSessions, type Workspace, type Tab } from "../state/sessions";
 import { parseManifest, type PluginManifest } from "../plugins/spec";
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { text, withReaderLanguage } from "../i18n";
+import { createEnvironmentEventHandler, setEnvironmentEventHandler } from "../state/environmentEvents";
 
 function manifestOf(id: string, overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
@@ -339,5 +340,53 @@ describe("plugin.list — contract discovery", () => {
     expect(plugins.find((plugin) => plugin.id === "consumer")?.consumes).toEqual([
       { id: "soksak-spec-plugin-terminal-renderer", requirement: "0.0.1" },
     ]);
+  });
+});
+
+// plugin.develop — one environment write that pins a source directory as the plugin's record.
+// The reload runs through the environment revision coordinator once; the environment.changed event
+// for the same revision is then a no-op. The host validates the path; the frontend passes it through.
+describe("plugin.develop", () => {
+  const reload = vi.fn(async () => {});
+  let restore: () => void = () => {};
+  beforeEach(() => {
+    reload.mockClear();
+    restore = setEnvironmentEventHandler(createEnvironmentEventHandler(reload, 1));
+  });
+  afterEach(() => restore());
+
+  it("declares id and path, and is destructive because it replaces the existing record", () => {
+    const spec = getSpec("plugin.develop");
+    expect(spec).toBeDefined();
+    expect(spec!.params.id.required).toBe(true);
+    expect(spec!.params.path.required).toBe(true);
+    expect(spec!.danger).toBe("destructive");
+    expect(spec!.windowScoped).toBe(false);
+  });
+
+  it("passes a relative path to the host unchanged; the host validates the path", async () => {
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "environment_get") return { revision: 1 };
+      if (cmd === "plugin_develop") throw new Error("path must be absolute: plugins/demo");
+      return null;
+    });
+    const r = await execute("plugin.develop", { id: "soksak-plugin-demo", path: "plugins/demo" }, {});
+    expect(r).toMatchObject({ ok: false, code: "INTERNAL" });
+    expect(invoke).toHaveBeenCalledWith("plugin_develop", { id: "soksak-plugin-demo", path: "plugins/demo", expectedRevision: 1 });
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("writes the record at the current revision and reloads once", async () => {
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "environment_get") return { revision: 1 };
+      if (cmd === "plugin_develop") return { previousRevision: 1, revision: 2 };
+      return null;
+    });
+    const r = await execute("plugin.develop", { id: "soksak-plugin-demo", path: "/work/demo" }, {});
+    expect(r).toMatchObject({ ok: true, data: { id: "soksak-plugin-demo", path: "/work/demo", revision: 2 } });
+    expect(invoke).toHaveBeenCalledWith("plugin_develop", {
+      id: "soksak-plugin-demo", path: "/work/demo", expectedRevision: 1,
+    });
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });

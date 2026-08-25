@@ -4,12 +4,12 @@ import {
   parseSidecarManifest,
   releaseIdentity,
   type ArtifactTarget,
-  type EnvironmentDocument,
   type PluginManifest,
   type ReleaseArtifact,
   type ReleaseDocument,
   type ReleaseIdentity,
 } from "./spec";
+import type { HostEnvironment } from "../state/environmentEvents";
 
 export interface RegistryInstallTransaction { transactionId: string }
 export interface StagedRegistryArtifact { handle: string; sha256: string; size: number; manifestSha256: string; extraction: "regular-files-only"; verifiedEntrypoints?: readonly string[] }
@@ -29,7 +29,7 @@ export interface RegistryInstallRequest {
   root: ReleaseIdentity;
   releases: ReleaseDocument[];
   target: ArtifactTarget;
-  environment: EnvironmentDocument;
+  environment: HostEnvironment;
   artifacts: RegistryArtifactStager;
   onProgress?: (progress: { phase: "staging" | "committing"; completed: number; total: number; componentId?: string }) => void;
 }
@@ -66,7 +66,7 @@ function verifyEvidence(staged: StagedRegistryArtifact, artifact: ReleaseArtifac
   if (errors.length) throw new InstallFailure("UNSAFE_EXTRACTION", errors);
 }
 
-function materializedExactly(environment: EnvironmentDocument, identity: ReleaseIdentity, digest: string): boolean {
+function materializedExactly(environment: HostEnvironment, identity: ReleaseIdentity, digest: string): boolean {
   const records = identity.kind === "plugin" ? environment.plugins
     : identity.kind === "sidecar" ? environment.sidecars : {};
   const record = records[identity.id];

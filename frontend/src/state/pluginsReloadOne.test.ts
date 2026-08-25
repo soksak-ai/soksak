@@ -33,7 +33,11 @@ const PATH = "<local-evidence>/arbitrary-checkout";
 let onDisk: Record<string, unknown> = {};
 const fetchOptions: (RequestInit | undefined)[] = [];
 
+// plugin_manifest_list answer — reload() builds every runtime from these records.
+let manifestList: Array<Record<string, unknown>> = [];
+
 const invoke = vi.fn(async (cmd: string, args?: { path?: string }) => {
+  if (cmd === "plugin_manifest_list") return manifestList;
   if (cmd === "read_text_file") {
     const path = args?.path ?? "";
     if (path.endsWith("/plugin.json")) return { content: JSON.stringify(onDisk) };
@@ -91,6 +95,7 @@ beforeEach(() => {
   activeIds.clear();
   invoke.mockClear();
   fetchOptions.length = 0;
+  manifestList = [];
   onDisk = manifestJson(["thing.run"]);
   usePlugins.setState({
     release: false,
@@ -156,5 +161,70 @@ describe("reloadOne — a reload by id reads the manifest from disk again", () =
   it("an unknown id is TARGET_NOT_FOUND", async () => {
     const r = await usePlugins.getState().reloadOne("soksak-plugin-nope");
     expect(r).toMatchObject({ ok: false, code: "TARGET_NOT_FOUND" });
+  });
+});
+
+describe("reload — a development record is a runtime source", () => {
+  it("keeps source development on the runtime built from the environment record", async () => {
+    manifestList = [{
+      id: ID,
+      version: "0.0.1",
+      installPath: PATH,
+      manifestPath: `${PATH}/plugin.json`,
+      source: "development",
+      enabled: false,
+      manifest: JSON.stringify(manifestJson(["thing.run"])),
+      error: null,
+    }];
+    usePlugins.setState({ plugins: {}, enabledIds: [], rejected: [] });
+
+    await usePlugins.getState().reload();
+
+    const runtime = usePlugins.getState().plugins[ID];
+    expect(runtime).toBeDefined();
+    expect(runtime.source).toBe("development");
+    expect(runtime.dir).toBe(PATH);
+    expect(usePlugins.getState().rejected).toEqual([]);
+  });
+
+  it("uses the plugin.json version as identity when the environment record version differs", async () => {
+    manifestList = [{
+      id: ID,
+      version: "0.0.1",
+      installPath: PATH,
+      manifestPath: `${PATH}/plugin.json`,
+      source: "development",
+      enabled: false,
+      manifest: JSON.stringify({ ...manifestJson(["thing.run"]), version: "0.0.2" }),
+      error: null,
+    }];
+    usePlugins.setState({ plugins: {}, enabledIds: [], rejected: [] });
+
+    await usePlugins.getState().reload();
+
+    const runtime = usePlugins.getState().plugins[ID];
+    expect(runtime).toBeDefined();
+    expect(runtime.manifest.version).toBe("0.0.2");
+    expect(usePlugins.getState().rejected).toEqual([]);
+  });
+
+  it("rejects a registry record whose environment version differs from plugin.json", async () => {
+    manifestList = [{
+      id: ID,
+      version: "0.0.1",
+      installPath: PATH,
+      manifestPath: `${PATH}/plugin.json`,
+      source: "registry",
+      enabled: false,
+      manifest: JSON.stringify({ ...manifestJson(["thing.run"]), version: "0.0.2" }),
+      error: null,
+    }];
+    usePlugins.setState({ plugins: {}, enabledIds: [], rejected: [] });
+
+    await usePlugins.getState().reload();
+
+    expect(usePlugins.getState().plugins[ID]).toBeUndefined();
+    expect(usePlugins.getState().rejected).toHaveLength(1);
+    expect(usePlugins.getState().rejected[0].errors[0]).toContain("0.0.2");
   });
 });

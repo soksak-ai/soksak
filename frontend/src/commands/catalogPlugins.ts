@@ -55,6 +55,7 @@ import { awaitViewMounted } from "../plugins/viewFocus";
 import { runtimePluginRequirements } from "../plugins/runtimeDependencies";
 import { pluginInstallProgress, waitForPluginInstallPhase, type PluginInstallPhase } from "../plugins/registryInstallProgress";
 import { installLocalPlugin, planLocalPlugin } from "../plugins/localReleaseInstallService";
+import { writeDevelopRecord } from "./develop";
 
 // Installed/dev runtime → dependency graph node (based on manifest dependencies).
 function depNodes(): DepNode[] {
@@ -211,10 +212,10 @@ export function registerPluginCatalog(): void {
   // registry entry. null when neither is found.
   const resolveShortId = (raw: string): string | null => {
     const cands = raw.startsWith("soksak-plugin-") ? [raw] : [`soksak-plugin-${raw}`, raw];
-    const installed = usePlugins.getState().plugins;
+    const { plugins: installed, rejected } = usePlugins.getState();
     const entries = useRegistry.getState().entries;
     for (const c of cands) {
-      if (installed[c] || entries.some((e) => e.id === c)) return c;
+      if (installed[c] || rejected.some((r) => r.id === c) || entries.some((e) => e.id === c)) return c;
     }
     return null;
   };
@@ -709,6 +710,27 @@ export function registerPluginCatalog(): void {
     examples: [`plugin.install.local '{"store":"/absolute/releases","pluginId":"soksak-plugin-<id>","version":"0.0.1","planDigest":"<sha256>"}'`],
     danger: "destructive",
     handler: async (p) => installLocalPlugin(String(p.store), String(p.pluginId), String(p.version), String(p.planDigest)),
+  });
+
+  register("plugin.develop", {
+    description: key("cmd.plugin.develop.desc"),
+    triggers: { ko: "플러그인 개발 소스 디렉터리 기록" },
+    params: {
+      id: { type: "string", required: true, description: key("cmd.plugin.develop.param.id") },
+      path: { type: "string", required: true, description: key("cmd.plugin.develop.param.path") },
+    },
+    windowScoped: false,
+    returns: "{ id, path, revision }",
+    message: (d) => tmsg("msg.plugin.develop", { id: String(d.id), path: String(d.path) }),
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: [`plugin.develop '{"id":"soksak-plugin-<id>","path":"/absolute/checkout"}'`],
+    danger: "destructive",
+    handler: async (p) => {
+      const id = String(p.id);
+      const path = String(p.path);
+      const { revision } = await writeDevelopRecord("plugin_develop", { id, path });
+      return { id, path, revision };
+    },
   });
 
   register("plugin.install.status", {

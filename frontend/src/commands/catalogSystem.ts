@@ -8,6 +8,14 @@ import { engineProvision, framework, frameworkName, invoke } from "../framework"
 import { tmsg, key} from "../i18n";
 import { register } from "./registry";
 import { persistWindowNow } from "../state/windowPersistRequest";
+import type { HostEnvironment } from "../state/environmentEvents";
+
+// unitMode — "mixed" when any plugin or sidecar record has source development, else "official".
+// Derived from environment records; app_environment does not report it.
+function unitModeOf(records: Pick<HostEnvironment, "plugins" | "sidecars">): "official" | "mixed" {
+  const all = [...Object.values(records.plugins), ...Object.values(records.sidecars)];
+  return all.some((record) => record.source === "development") ? "mixed" : "official";
+}
 
 export function registerSystemCatalog(): void {
   register("system.hello", {
@@ -116,17 +124,19 @@ export function registerSystemCatalog(): void {
     // The owner defines the answer — identical from any window (registry.ts windowScoped).
     windowScoped: false,
     returns:
-      "{ coreBuild, identity, cli, home, loginShell, buildProfile, updaterEnabled, unitMode, developmentUnits[], presentation:{ mode:'interactive'|'capture-only', desktopVisible:boolean } }",
+      "{ coreBuild, identity, cli, home, loginShell, buildProfile, updaterEnabled, unitMode:'official'|'mixed', presentation:{ mode:'interactive'|'capture-only', desktopVisible:boolean } }",
     message: (d) =>
       tmsg("msg.app.environment", {
         core: String(d.coreBuild),
         mode: String(d.unitMode),
       }),
     examples: ["app.environment"],
-    handler: async () => ({
-      ...await invoke<Record<string, unknown>>("app_environment"),
-      presentation: await invoke("app_presentation"),
-    }),
+    handler: async () => {
+      const environment = await invoke<Record<string, unknown>>("app_environment");
+      const records = await invoke<HostEnvironment>("environment_get");
+      const presentation = await invoke("app_presentation");
+      return { ...environment, unitMode: unitModeOf(records), presentation };
+    },
   });
 
   // What the framework provides — the deciding side must be **able to query it**.

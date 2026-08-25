@@ -1,7 +1,10 @@
 import { invoke } from "../framework";
 import { key, tmsg } from "../i18n";
 import { register } from "./registry";
-import { DependencyVersionConflict, installLocalSidecar, planLocalSidecar } from "../plugins/localReleaseInstallService";
+import { DependencyVersionConflict, installLocalSidecar, planLocalSidecar, sidecarInUse, sidecarInUseMessage } from "../plugins/localReleaseInstallService";
+import { writeDevelopRecord } from "./develop";
+import { writeEnvironmentRevision } from "../state/environmentEvents";
+import { publishActivity } from "../state/activityFeed";
 
 export function registerSidecarCatalog(): void {
   register("sidecar.install.local.plan", {
@@ -40,6 +43,59 @@ export function registerSidecarCatalog(): void {
     examples: [`sidecar.install.local '{"store":"/absolute/releases","sidecarId":"soksak-sidecar-<id>","version":"0.0.1","planDigest":"<sha256>"}'`],
     danger: "destructive",
     handler: (params) => installLocalSidecar(String(params.store), String(params.sidecarId), String(params.version), String(params.planDigest)),
+  });
+
+  register("sidecar.develop", {
+    description: key("cmd.sidecar.develop.desc"),
+    params: {
+      // sidecarId, not id — the S6 gate (noAlias.test.ts) refuses the plugin.develop signature under a second name.
+      sidecarId: { type: "string", required: true, description: key("cmd.sidecar.develop.param.id") },
+      path: { type: "string", required: true, description: key("cmd.sidecar.develop.param.path") },
+    },
+    windowScoped: false,
+    returns: "{ id, path, revision }",
+    message: (data) => tmsg("msg.sidecar.develop", { id: String(data.id), path: String(data.path) }),
+    // SIDECAR_IN_USE: sidecar_status lists the id as open or recorded (same rule as sidecar.install.local and
+    // sidecar.remove); no auto-stop. The host refuses a relative path, a manifest that does not declare the id, a
+    // missing dist/<id>, a stale revision, or a broken dependency; each refusal is returned as INTERNAL.
+    errors: ["INVALID_PARAMS", "SIDECAR_IN_USE", "INTERNAL"],
+    examples: [`sidecar.develop '{"sidecarId":"soksak-sidecar-<id>","path":"/absolute/checkout"}'`],
+    danger: "destructive",
+    handler: async (params) => {
+      const id = String(params.sidecarId);
+      const path = String(params.path);
+      if (await sidecarInUse(id)) return { ok: false, code: "SIDECAR_IN_USE", message: sidecarInUseMessage(id, "development") };
+      const { revision } = await writeDevelopRecord("sidecar_develop", { id, path });
+      return { id, path, revision };
+    },
+  });
+
+  register("sidecar.remove", {
+    description: key("cmd.sidecar.remove.desc"),
+    params: {
+      sidecarId: { type: "string", required: true, description: key("cmd.sidecar.remove.param.id") },
+    },
+    windowScoped: false,
+    returns: "{ id, revision }",
+    message: (data) => tmsg("msg.sidecar.remove", { id: String(data.id) }),
+    // SIDECAR_IN_USE: sidecar_status lists the id as open or recorded (same rule as sidecar.install.local); no
+    // auto-stop. The host refuses an unknown id, a stale revision, a broken dependency, or a path outside
+    // <home>/components/; each refusal is a thrown host error and is returned as INTERNAL with the host message.
+    // A change with artifactDeleteFailed is a success: the record is removed; one activity names the directory
+    // that remains.
+    errors: ["SIDECAR_IN_USE", "INTERNAL"],
+    examples: [`sidecar.remove '{"sidecarId":"soksak-sidecar-<id>"}'`],
+    danger: "destructive",
+    handler: async (params) => {
+      const id = String(params.sidecarId);
+      if (await sidecarInUse(id)) return { ok: false, code: "SIDECAR_IN_USE", message: sidecarInUseMessage(id, "removal") };
+      const change = await writeEnvironmentRevision("sidecar_remove", { id });
+      if (change.artifactDeleteFailed) {
+        const { path, error } = change.artifactDeleteFailed;
+        publishActivity("sidecar.remove.artifactLeft", "core", { id, path, error, message: tmsg("sidecar.remove.artifactLeft", { id, path }) });
+      }
+      return { id, revision: change.revision };
+    },
   });
 
   register("sidecar.request", {

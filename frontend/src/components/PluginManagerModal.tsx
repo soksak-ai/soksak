@@ -316,6 +316,7 @@ function PluginManager() {
             <span className="plugin-row-name">{localize(p.manifest.name)}</span>
             <span className="plugin-row-ver">v{p.manifest.version}</span>
             {p.source === "local" && <span className="plugin-badge dev">local</span>}
+            {p.source === "development" && <span className="plugin-badge dev">development</span>}
             {/* Source: listed in the official registry vs manual/third party (unlisted). */}
             {p.source === "registry" && (
               <span

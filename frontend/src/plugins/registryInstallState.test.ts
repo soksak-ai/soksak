@@ -8,7 +8,8 @@ describe("registry current release install state", () => {
     expect(installState({ version: "1.2.2" }, "1.2.3", "registry")).toBe("installed");
   });
 
-  it("blocks automatic managed update for a local release", () => {
+  it("blocks automatic managed update for a local or development record", () => {
     expect(installState({ version: "9.0.0" }, "1.0.0", "local")).toBe("installed");
+    expect(installState({ version: "9.0.0" }, "1.0.0", "development")).toBe("installed");
   });
 });

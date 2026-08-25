@@ -19,7 +19,8 @@ import {
   setRegistryInstallRuntime,
   type RegistryInstallRuntimeHandler,
 } from "./registryInstallRuntime";
-import { isArtifactTarget, parseEnvironmentDocument, type ArtifactTarget } from "./spec";
+import { isArtifactTarget, type ArtifactTarget } from "./spec";
+import type { HostEnvironment } from "../state/environmentEvents";
 
 async function hostTarget(): Promise<ArtifactTarget> {
   const value = await invoke<string>("host_artifact_target");
@@ -73,16 +74,14 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
     const message = cause instanceof Error ? cause.message : String(cause);
     return { ok: false, code: "HOST_TARGET_UNAVAILABLE", message, errors: [message] };
   }
-  let environmentRaw: unknown;
+  // environment_get returns the document the host parsed and validated; the frontend does not validate it again.
+  let environment: HostEnvironment;
   try {
-    environmentRaw = await invoke<unknown>("environment_get");
+    environment = await invoke<HostEnvironment>("environment_get");
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     return { ok: false, code: "ENVIRONMENT_UNAVAILABLE", message, errors: [message] };
   }
-  const parsedEnvironment = parseEnvironmentDocument(environmentRaw);
-  if (!parsedEnvironment.ok) return { ok: false, code: "ENVIRONMENT_INVALID", message: parsedEnvironment.errors.join("; "), errors: parsedEnvironment.errors };
-  const environment = parsedEnvironment.value;
   const selectedSource = certified?.registry.id ?? sourceId;
   if (!selectedSource || (selectedSource === "local" && !localStore)) {
     return { ok: false, code: "INSTALL_SOURCE_INVALID", message: "installer source is incomplete" };

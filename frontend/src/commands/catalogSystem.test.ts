@@ -99,33 +99,64 @@ describe("app.shutdown.commit — the native quit runs after the reply", () => {
   });
 });
 
-describe("app.environment — core identity and unit source mode are separate fields", () => {
+describe("app.environment — unit source mode is derived from environment records", () => {
+  const appEnvironment = {
+    coreBuild: "release",
+    identity: "com.soksak.app",
+    cli: "sok",
+    home: "/Users/test/.soksak",
+    loginShell: "/bin/zsh",
+    buildProfile: "release",
+    updaterEnabled: true,
+  };
+  const registryRecord = { version: "0.0.1", path: "/home/plugins/a/0.0.1", artifactSha256: "ab", source: "registry", registry: "official" };
+  const developmentRecord = { version: "0.0.1", path: "/work/weather", artifactSha256: "", source: "development", registry: "" };
+
   it("is one status command across the three CLIs and delegates to the single core source", async () => {
-    invoke.mockResolvedValueOnce({
-      coreBuild: "release",
-      identity: "com.soksak.app",
-      cli: "sok",
-      home: "/Users/test/.soksak",
-      loginShell: "/bin/zsh",
-      buildProfile: "release",
-      updaterEnabled: true,
-      unitMode: "mixed",
-      developmentUnits: [{ kind: "plugin", id: "weather", source: "/work/weather" }],
-    }).mockResolvedValueOnce({ mode: "capture-only", desktopVisible: false });
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "app_environment") return appEnvironment;
+      if (cmd === "environment_get") return { revision: 3, plugins: { "soksak-plugin-weather": { ...developmentRecord, enabled: true } }, sidecars: {} };
+      if (cmd === "app_presentation") return { mode: "capture-only", desktopVisible: false };
+      return null;
+    });
 
     const spec = getSpec("app.environment");
     expect(spec).toBeDefined();
     // Examples contain the command form only — the binary name is the identity of the presenter (CLI), not data.
     expect(spec!.examples).toEqual(["app.environment"]);
+    expect(spec!.returns).not.toContain("developmentUnits");
     const r = await execute("app.environment", {}, {});
-    expect(invoke).toHaveBeenNthCalledWith(1, "app_environment");
-    expect(invoke).toHaveBeenNthCalledWith(2, "app_presentation");
+    expect(invoke).toHaveBeenCalledWith("app_environment");
+    expect(invoke).toHaveBeenCalledWith("environment_get");
+    expect(invoke).toHaveBeenCalledWith("app_presentation");
     expect(r).toMatchObject({
       ok: true, data: {
         coreBuild: "release", cli: "sok", loginShell: "/bin/zsh", unitMode: "mixed",
         presentation: { mode: "capture-only", desktopVisible: false },
       },
     });
+  });
+
+  it("a development sidecar record alone makes the mode mixed", async () => {
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "app_environment") return appEnvironment;
+      if (cmd === "environment_get") return { revision: 3, plugins: { "soksak-plugin-a": { ...registryRecord, enabled: true } }, sidecars: { "soksak-sidecar-pty": developmentRecord } };
+      if (cmd === "app_presentation") return { mode: "interactive", desktopVisible: true };
+      return null;
+    });
+    const r = await execute("app.environment", {}, {});
+    expect(r).toMatchObject({ ok: true, data: { unitMode: "mixed" } });
+  });
+
+  it("registry and local records only make the mode official", async () => {
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "app_environment") return appEnvironment;
+      if (cmd === "environment_get") return { revision: 3, plugins: { "soksak-plugin-a": { ...registryRecord, enabled: true } }, sidecars: { "soksak-sidecar-pty": { ...registryRecord, source: "local", registry: undefined } } };
+      if (cmd === "app_presentation") return { mode: "interactive", desktopVisible: true };
+      return null;
+    });
+    const r = await execute("app.environment", {}, {});
+    expect(r).toMatchObject({ ok: true, data: { unitMode: "official" } });
   });
 });
 
