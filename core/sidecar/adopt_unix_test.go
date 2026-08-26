@@ -161,3 +161,41 @@ func TestARecordWithNothingBehindItStartsAUnit(t *testing.T) {
 		t.Fatal("the stale record was adopted, so this run is talking to a process that is gone")
 	}
 }
+
+// The record names the program the unit was started from. A later run whose record resolves to
+// another program (the sidecar was reinstalled at another version) ends the unit it finds and
+// starts the recorded one; adopting it would keep the old program serving under the new record.
+func TestASecondRunReplacesAUnitWhoseRecordedProgramChanged(t *testing.T) {
+	home := shortHome(t)
+	runtimeRoot := shortHome(t)
+	stageUnit(t, home, "probe", probeSource)
+	first := NewHost(Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+	})
+	started, err := first.Start("probe")
+	if err != nil {
+		t.Fatalf("starting the unit: %v", err)
+	}
+	if err := first.Release("probe"); err != nil {
+		t.Fatalf("releasing the unit: %v", err)
+	}
+
+	reinstalled := shortHome(t)
+	stageUnit(t, reinstalled, "probe", probeSource)
+	second := NewHost(Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(reinstalled),
+	})
+	t.Cleanup(func() { second.StopAll() })
+	found, err := second.Start("probe")
+	if err != nil {
+		t.Fatalf("the second run could not start the recorded program: %v", err)
+	}
+	if found.PID == started.PID {
+		t.Fatalf("the second run adopted the old program (pid %d) although the record names another", started.PID)
+	}
+	if err := signalPID(started.PID); err == nil {
+		t.Fatalf("the old program (pid %d) is still running", started.PID)
+	}
+}

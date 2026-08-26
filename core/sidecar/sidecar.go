@@ -283,7 +283,7 @@ func (host *Host) startResolvedWithSecrets(
 func (host *Host) startResolved(
 	name, path, namespace string, secretEnv map[string]string, fingerprint string,
 ) (Open, error) {
-	if adopted, found, err := host.adopt(name, fingerprint); err != nil {
+	if adopted, found, err := host.adopt(name, fingerprint, path); err != nil {
 		return Open{}, err
 	} else if found {
 		return adopted, nil
@@ -337,7 +337,7 @@ func (host *Host) startResolved(
 	// The token stays here rather than on Open. Open is what a caller reads, and a caller that could
 	// read the token could greet the unit itself — which is the one thing this relay exists to be.
 	held.token = announced.token
-	host.remember(name, held.open, announced.token, fingerprint)
+	host.remember(name, held.open, announced.token, fingerprint, path)
 	host.mu.Lock()
 	// Another caller may have started the same unit while this one waited. The first one holds it;
 	// this one ends what it started rather than leaving a second process nobody has a handle to.
