@@ -465,6 +465,26 @@ describe("readiness window", () => {
 });
 
 describe("close intent", () => {
+  it("awaits the mounted provider before a view is permanently removed", async () => {
+    const { coordinator } = fixture();
+    const container = document.createElement("section");
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const closeView = vi.fn(async () => pending);
+    coordinator.registerMountedView("view-a", container, provider({ closeView } as never), () => context);
+    const closing = (coordinator as unknown as { closeView(viewId: string): Promise<void> }).closeView("view-a");
+
+    await Promise.resolve();
+    expect(closeView).toHaveBeenCalledWith(container, context);
+    let closed = false;
+    void closing.then(() => { closed = true; });
+    await Promise.resolve();
+    expect(closed).toBe(false);
+    release();
+    await closing;
+    expect(closed).toBe(true);
+  });
+
   it("lets a mounted view consume the close", () => {
     const { coordinator } = fixture();
     const container = document.createElement("section");
@@ -489,4 +509,3 @@ describe("close intent", () => {
     expect(failing.closeIntent("broken")).toBe("pass");
   });
 });
-
