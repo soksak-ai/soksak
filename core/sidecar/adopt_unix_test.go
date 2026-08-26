@@ -9,6 +9,7 @@ import (
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/process"
+	"path/filepath"
 )
 
 // A second host finds the unit the first one started, and starts nothing.
@@ -197,5 +198,46 @@ func TestASecondRunReplacesAUnitWhoseRecordedProgramChanged(t *testing.T) {
 	}
 	if err := signalPID(started.PID); err == nil {
 		t.Fatalf("the old program (pid %d) is still running", started.PID)
+	}
+}
+
+// A record whose process has ended is not a unit. Reading the inventory forgets it, so a caller
+// that refuses to act while something is recorded is not held by a run that died without stopping.
+func TestRecordedInventoryForgetsARecordWhoseProcessHasEnded(t *testing.T) {
+	home := shortHome(t)
+	runtimeRoot := shortHome(t)
+	stageUnit(t, home, "probe", probeSource)
+	deps := Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+	}
+	first := NewHost(deps)
+	if _, err := first.Start("probe"); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Stop("probe"); err != nil {
+		t.Fatal(err)
+	}
+	// Stop removed the record with the unit. Put one back to stand for the record a run that died
+	// without stopping leaves behind.
+	record := filepath.Join(home, "run", "sidecar-probe.json")
+	if err := os.MkdirAll(filepath.Dir(record), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"address":"` + filepath.Join(home, "run", "gone.sock") + `","protocol":1,"pid":999999,"secretNames":""}`
+	if err := os.WriteFile(record, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	second := NewHost(deps)
+	recorded, err := second.Recorded()
+	if err != nil {
+		t.Fatalf("reading the inventory: %v", err)
+	}
+	if len(recorded) != 0 {
+		t.Fatalf("a record whose process has ended was reported: %+v", recorded)
+	}
+	if _, err := os.Stat(record); !os.IsNotExist(err) {
+		t.Fatalf("the stale record survived the read: %v", err)
 	}
 }

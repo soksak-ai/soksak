@@ -69,6 +69,10 @@ func (host *Host) forget(name string) { _ = os.Remove(host.recordPath(name)) }
 
 // Recorded reports the unit identities this home owns without connecting,
 // greeting, adopting, starting, or exposing their tokens.
+//
+// A record whose process has ended is not an identity this home owns: it is what a run that died
+// without stopping left behind. Reading the inventory forgets it, so a caller that refuses to act
+// while a name is recorded is held by units that are running and by nothing else.
 func (host *Host) Recorded() ([]Open, error) {
 	directory := filepath.Join(host.deps.Home, "run")
 	entries, err := os.ReadDir(directory)
@@ -96,8 +100,13 @@ func (host *Host) Recorded() ([]Open, error) {
 			remembered.Protocol < 1 || remembered.PID < 1 {
 			return nil, i18n.Errorf("sidecar.recordInvalid", map[string]string{"path": filepath.Join(directory, name)})
 		}
+		identity := strings.TrimSuffix(strings.TrimPrefix(name, "sidecar-"), ".json")
+		if processGone(remembered.PID) {
+			host.forget(identity)
+			continue
+		}
 		owned = append(owned, Open{
-			Name:    strings.TrimSuffix(strings.TrimPrefix(name, "sidecar-"), ".json"),
+			Name:    identity,
 			Address: remembered.Address, Protocol: remembered.Protocol, PID: remembered.PID,
 		})
 	}
