@@ -21,11 +21,12 @@ vi.mock("../framework", async (importOriginal) => ({
   createStream: vi.fn(),
 }));
 
-const readyStream = { onmessage: (_message: number) => {} };
+const readyStream = { onmessage: (_message: number) => {}, close: vi.fn() };
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(createStream).mockClear();
+  readyStream.close.mockClear();
   vi.mocked(createStream).mockReturnValue(readyStream as never);
   vi.mocked(invoke).mockImplementation(async (command, args) => {
     if (command !== "window_record") return undefined;
@@ -58,6 +59,7 @@ it("one shared record contract stores a finite frame sequence", async () => {
     frameTimeoutMs: WINDOW_RECORD_DEFAULT_FRAME_TIMEOUT_MS,
     onFrame: readyStream,
   });
+  expect(readyStream.close).toHaveBeenCalledOnce();
 });
 
 it("the storage budget reaches the producer unchanged, with no framework branch, and readiness is preserved", async () => {

@@ -96,6 +96,7 @@ describe("a stream receiver", () => {
     const before = openStreamCount();
     const stream = createWailsStream<unknown>();
     expect(openStreamCount()).toBe(before + 1);
+    expect(document.documentElement.dataset.openStreamReceivers).toBe(String(before + 1));
 
     const received: unknown[] = [];
     stream.onmessage = (frame) => received.push(frame);
@@ -104,6 +105,7 @@ describe("a stream receiver", () => {
     deliver(idOf(stream), { value: 1 });
     expect(received).toEqual([]);
     expect(openStreamCount()).toBe(before);
+    expect(document.documentElement.dataset.openStreamReceivers).toBe(String(before));
   });
 
   it("subscribes to the delivery event once, not once per receiver", () => {
