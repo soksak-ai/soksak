@@ -54,7 +54,7 @@ Local 사이드카 릴리즈는 registry 릴리즈와 같은 manifest, target �
 
 ## S4. 런타임과 프로토콜
 
-사이드카는 application command 를 등록하지 않습니다. 공개 명령은 그 플러그인이 소유합니다. 사이드카
+사이드카는 애플리케이션 명령을 등록하지 않습니다. 공개 명령은 그 플러그인이 소유합니다. 사이드카
 트래픽은 버전이 있는 control envelope 를 사용하며, 코어는 correlation 과 framing 만 검사하고 요청·응답
 데이터는 불투명하게 다룹니다. 운영자와 시스템 테스트는 sidecar.request 를 쓸 수 있고, 플러그인 코드는
 선언한 app.sidecar 권한을 사용해야 합니다.

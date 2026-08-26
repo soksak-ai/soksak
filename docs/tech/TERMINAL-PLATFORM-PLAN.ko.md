@@ -189,7 +189,7 @@ accessory activation policy 를 쓰고 alpha 0, 마우스 투과, non-key 인 �
 애플리케이션을 활성화하지 않고 Dock 아이콘도 추가하지 않습니다. `window.snapshot` 이 그 창들에서 문서
 픽셀을 읽습니다. SOKSAK_PRESENTATION 은 `interactive` 와 `capture-only` 만 받습니다. 제거된
 SOKSAK_UNATTENDED 이름은 대체가 아닙니다. 각 검사 실행은 고유한 home, runtime, identifier, socket,
-owner 를 갖습니다. 현재 Wails 런타임은 테스트 프로세스 수명 전체 동안 저장소가 소유한 애플리케이션 잠금
+소유자를 갖습니다. 현재 Wails 런타임은 테스트 프로세스 수명 전체 동안 저장소가 소유한 애플리케이션 잠금
 하나로 보호합니다. 정상 종료와 강제 종료 어느 쪽이든 검사 실행이 남기는 검사 소유 프로세스는 0개입니다.
 
 캡처와 녹화는 필수 개발 관측이지만 그것만으로 통과 조건이 되지는 않습니다. 명령이 포커스 소유자, Dock
