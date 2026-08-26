@@ -189,7 +189,9 @@ does not stop the Sidecar.
 
 `plugin.reload {id}` re-reads `<path>/plugin.json` and the entry it declares. An enabled record
 replaces its active generation without writing `plugin_enabled_set`; a disabled record stays
-disabled. `unitMode` in `app.environment` is derived from development records.
+disabled. An unchanged entry reuses its module graph; changed entry bytes dispose that graph before
+loading the replacement. `state.health.plugins.modules` reports both paths. `unitMode` in
+`app.environment` is derived from development records.
 
 ## Refusals
 
