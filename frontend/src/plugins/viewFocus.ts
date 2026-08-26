@@ -245,6 +245,17 @@ export class ViewFocusCoordinator {
     return true;
   }
 
+  closeIntent(viewId: string): "handled" | "pass" {
+    const mounted = this.mounted.get(viewId);
+    if (!mounted?.provider.closeIntent) return "pass";
+    try {
+      return mounted.provider.closeIntent(mounted.container, mounted.context());
+    } catch (error) {
+      this.onError(error);
+      return "pass";
+    }
+  }
+
   snapshot(): {
     requestedViewId: string | null;
     mounted: boolean;
@@ -476,4 +487,10 @@ export function zoomFocusedView(
   action: "in" | "out" | "reset",
 ): boolean {
   return coordinator.zoomView(viewId, action);
+}
+
+/** Close intent delegation — a mounted view may consume ⌘W before the core closes it. "pass" when
+ * the hook is absent, the view is not mounted, or the hook threw. */
+export function closeIntentOfView(viewId: string): "handled" | "pass" {
+  return coordinator.closeIntent(viewId);
 }

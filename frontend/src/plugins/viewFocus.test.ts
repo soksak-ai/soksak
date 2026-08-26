@@ -463,3 +463,30 @@ describe("readiness window", () => {
     expect(document.activeElement).toBe(outside);
   });
 });
+
+describe("close intent", () => {
+  it("lets a mounted view consume the close", () => {
+    const { coordinator } = fixture();
+    const container = document.createElement("section");
+    const closeIntent = vi.fn((): "handled" | "pass" => "handled");
+    coordinator.registerMountedView("view-a", container, provider({ closeIntent }), () => context);
+    expect(coordinator.closeIntent("view-a")).toBe("handled");
+    expect(closeIntent).toHaveBeenCalledWith(container, context);
+  });
+
+  it("passes when the hook is absent, the view is unmounted, or the hook threw", () => {
+    const { coordinator } = fixture();
+    coordinator.registerMountedView("plain", document.createElement("section"), provider({}), () => context);
+    expect(coordinator.closeIntent("plain")).toBe("pass");
+    expect(coordinator.closeIntent("missing")).toBe("pass");
+    const failing = new ViewFocusCoordinator({ onError: () => {} });
+    failing.registerMountedView(
+      "broken",
+      document.createElement("section"),
+      provider({ closeIntent: () => { throw new Error("no"); } }),
+      () => context,
+    );
+    expect(failing.closeIntent("broken")).toBe("pass");
+  });
+});
+

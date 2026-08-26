@@ -24,7 +24,7 @@ import { startWindowPointerActivation } from "./lib/windowPointerActivation";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
 import { beginLayoutMotion, endLayoutMotion } from "./lib/layoutMotion";
 import { writePreference } from "./lib/preferenceStore";
-import { startSurfaceActivationSync, startViewFocusSync } from "./plugins/viewFocus";
+import { closeIntentOfView, startSurfaceActivationSync, startViewFocusSync } from "./plugins/viewFocus";
 import { safeListen } from "./lib/safeListen";
 import { SectionSetHost } from "./components/SectionSetHost";
 import { RailGridSurface, type RailGridSurfaceHandle } from "./components/RailGridSurface";
@@ -1137,7 +1137,7 @@ function App() {
   // own view's xterm theme and cleans up the PTY session itself on view unmount (PluginViewHost).
 
   // Keyboard shortcuts (capture phase → ahead of xterm). Relative to the active view of the active workspace.
-  // ⌘D split left/right / ⌘⇧D split top/bottom / ⌘W close view (pane→view) / ⌘T new terminal / ⌘B sidebar.
+  // ⌘W close view (the view may consume it first) / ⌘T new terminal / ⌘B sidebar.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
@@ -1178,9 +1178,10 @@ function App() {
         groups.find((g) => g.id === content.activePaneId) ?? groups[0];
       const view = grp?.tabs.find((v) => v.id === grp.activeTabId);
       if (key === "w" && !e.shiftKey) {
-        // ⌘W closes the active view (core terminal pane splitting removed — view-level close only).
+        // ⌘W asks the active view first: a view holding several panes closes one of them and stays.
+        // What "close" means inside a view is the view's; which view is active stays the core's.
         e.preventDefault();
-        if (view) closeView(workspace.id, view.id);
+        if (view && closeIntentOfView(view.id) === "pass") closeView(workspace.id, view.id);
       } else if (key === "t" && !e.shiftKey) {
         e.preventDefault();
         // ⌘T opens the add-tab menu on the active pane, and the person picks.
