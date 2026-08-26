@@ -422,10 +422,10 @@ func TestDevelopRefusesAnUnavailableManifestByName(t *testing.T) {
 	}
 }
 
-// unparseableSidecar writes a sidecar.json for id that parses as JSON and fails the spec parse.
+// unparseableSidecar writes a sidecar.json whose top-level identity parses before strict validation fails.
 func unparseableSidecar(t *testing.T, id string) string {
 	t.Helper()
 	root := t.TempDir()
-	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": id, "version": "0.2.0", "interface": map[string]string{"id": "terminal-state", "version": "0.0.2"}, "process": "dist/" + id})
+	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": id, "version": "0.2.0", "interface": map[string]string{"id": "terminal-state", "version": "v0.0.2"}, "process": "dist/" + id})
 	return root
 }

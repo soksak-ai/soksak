@@ -94,8 +94,8 @@ func TestADevelopmentSidecarWhoseManifestFailsTheSpecParseIsBroken(t *testing.T)
 	if err := ValidatePluginDependencies(value, nil); err != nil {
 		t.Fatalf("valid sidecar manifest refused: %v", err)
 	}
-	// id and version parse; the interface version is outside the spec.
-	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": "terminal-state", "version": "0.2.0", "interface": map[string]string{"id": "terminal-state", "version": "0.0.2"}, "process": "dist/terminal-state"})
+	// id and version parse; the interface version is not strict SemVer.
+	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": "terminal-state", "version": "0.2.0", "interface": map[string]string{"id": "terminal-state", "version": "v0.0.2"}, "process": "dist/terminal-state"})
 	_, err := ResolveSidecarVersion(home, "terminal-state", "0.2.0")
 	assertRefusalKey(t, err, "environment.develop.directoryUnavailable", "sidecar", "terminal-state", root)
 	err = ValidatePluginDependencies(value, nil)
