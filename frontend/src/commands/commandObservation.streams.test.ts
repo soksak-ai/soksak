@@ -4,9 +4,15 @@ vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
   openStreamCount: () => 7,
 }));
+vi.mock("../plugins/pluginModuleRealm", () => ({
+  pluginModuleRealmStats: () => ({ open: 2, created: 3, disposed: 1 }),
+}));
 
 import { commandHealth } from "./commandObservation";
 
 it("reports the current frontend stream receiver count", () => {
-  expect(commandHealth(1)).toMatchObject({ streams: { open: 7 } });
+  expect(commandHealth(1)).toMatchObject({
+    streams: { open: 7 },
+    plugins: { realms: { open: 2, created: 3, disposed: 1 } },
+  });
 });
