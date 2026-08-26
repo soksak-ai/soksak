@@ -339,20 +339,14 @@ date it was measured.
 
 Code is not explained with personification, metaphor or rhetoric.
 
-**Korean** — 산다 · 말한다 · 돈다 · 센다 · 싣는다 · 싣고 · 흘린다 · 흘려보낸 · 꽂으면 ·
-달고 · 가리킨다 · 밝힌다 · 고아 · 물어야 · 1급
+The lists live in `internal/repositorygate/prose_gate_test.go`; that file is the rule and this
+paragraph points at it. Korean holds 48 entries as of 2026-08-26 and English 13. The lists are
+examples. Personification or poetry is forbidden whether or not it is listed. The test: does this
+sentence state a fact, or set a mood?
 
-**English** — lives · sits · says · tells · knows · asks · reaches · carries · belongs ·
-watches · learns · decides · reflects
-
-The lists are examples. Personification or poetry is forbidden whether or not it is listed. The
-test: does this sentence state a fact, or set a mood?
-
-Three words this list used to hold are domain terms here and are not banned: **회수** is the
-reclaim of a run generation or a backup working file, **투영** is the projection of a bound view
-into the rail, and **낸다** is what a command does with its answer. Measured 2026-08-15: banning
-them flagged 22 lines across the contract documents and 9 resource bundle values, every one of
-them stating a fact. A word that names a thing this product has is not rhetoric.
+A word that names a mechanism replaces the one that was banned: a check, not a transliterated
+gate; a divider or a demarcation, not a boundary that acts; an event, not an incident; a
+measurement, not a verb of sensing.
 
 Where Korean is left, the register still holds: bundle values and `.ko.md` translations follow
 the same exact prose standard as their English sources.

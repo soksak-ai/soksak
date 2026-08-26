@@ -108,7 +108,11 @@ var koreanReading = regexp.MustCompile(`withReaderLanguage\(\s*"ko"`)
 // exempts.
 //
 // 2026-08-26: 44 to 43. Same table, packed onto fewer lines when it grew again.
-const koreanDebt = 43
+//
+// 2026-08-26: 43 to 38. AGENTS.md 6-3 stopped restating the banned-word table and
+// points at the gate that holds it, which removed five lines of Hangul that were
+// a copy of the rule's own data.
+const koreanDebt = 38
 
 func TestKoreanStaysInTheBundles(t *testing.T) {
 	type finding struct {
