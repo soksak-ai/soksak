@@ -10,6 +10,7 @@ import (
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/process"
 	"path/filepath"
+	"syscall"
 )
 
 // A second host finds the unit the first one started, and starts nothing.
@@ -239,5 +240,91 @@ func TestRecordedInventoryForgetsARecordWhoseProcessHasEnded(t *testing.T) {
 	}
 	if _, err := os.Stat(record); !os.IsNotExist(err) {
 		t.Fatalf("the stale record survived the read: %v", err)
+	}
+}
+
+// A unit this host adopted is one another run started, so nothing here watches it end. When its
+// process goes the address refuses, and starting again has to begin a new one rather than answer
+// with an address nobody is listening at — otherwise every caller after the first keeps getting it.
+func TestStartingAgainReplacesAnAdoptedUnitNothingAnswersAt(t *testing.T) {
+	home := shortHome(t)
+	runtimeRoot := shortHome(t)
+	stageUnit(t, home, "probe", probeSource)
+	deps := Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+	}
+	first := NewHost(deps)
+	started, err := first.Start("probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Release("probe"); err != nil {
+		t.Fatal(err)
+	}
+
+	// A second run adopts what the first left running, as an application coming back does.
+	second := NewHost(deps)
+	t.Cleanup(func() { _ = second.Stop("probe") })
+	adopted, err := second.Start("probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adopted.PID != started.PID {
+		t.Fatalf("the running unit was not adopted: %d vs %d", adopted.PID, started.PID)
+	}
+
+	// The adopted process goes without this host being told.
+	if err := syscall.Kill(-adopted.PID, syscall.SIGKILL); err != nil {
+		t.Fatalf("ending the unit: %v", err)
+	}
+	second.awaitGone(adopted.Address)
+
+	again, err := second.Start("probe")
+	if err != nil {
+		t.Fatalf("starting again: %v", err)
+	}
+	if again.PID == adopted.PID {
+		t.Fatalf("the same dead unit was answered with: pid=%d", again.PID)
+	}
+	conn, err := dialUnix(again.Address)
+	if err != nil {
+		t.Fatalf("nothing is listening at the answered address: %v", err)
+	}
+	_ = conn.Close()
+}
+
+// The inventory answers what is there. A held unit whose address refuses is not running, and a
+// caller that refuses to act while something is running must not be held by one that has gone.
+func TestStartedInventoryDropsAHeldUnitNothingAnswersAt(t *testing.T) {
+	home := shortHome(t)
+	runtimeRoot := shortHome(t)
+	stageUnit(t, home, "probe", probeSource)
+	deps := Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+	}
+	first := NewHost(deps)
+	started, err := first.Start("probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Release("probe"); err != nil {
+		t.Fatal(err)
+	}
+	second := NewHost(deps)
+	t.Cleanup(func() { _ = second.Stop("probe") })
+	if _, err := second.Start("probe"); err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Started()) != 1 {
+		t.Fatalf("the adopted unit is not reported: %+v", second.Started())
+	}
+	if err := syscall.Kill(-started.PID, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	second.awaitGone(started.Address)
+	if open := second.Started(); len(open) != 0 {
+		t.Fatalf("a unit nothing answers at was reported open: %+v", open)
 	}
 }

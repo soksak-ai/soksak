@@ -168,12 +168,30 @@ func NewHost(deps Deps) *Host {
 }
 
 // Started reports every unit this host holds open.
+// Started reports the units this host holds open. Open means something answers there: a unit whose
+// address refuses has gone, and reading the inventory forgets it, so a caller that refuses to act
+// while something is running is held by units that are running and by nothing else.
 func (host *Host) Started() []Open {
 	host.mu.Lock()
-	defer host.mu.Unlock()
-	out := make([]Open, 0, len(host.open))
-	for _, held := range host.open {
-		out = append(out, held.open)
+	candidates := make([]struct {
+		name string
+		held *unit
+	}, 0, len(host.open))
+	for name, held := range host.open {
+		candidates = append(candidates, struct {
+			name string
+			held *unit
+		}{name, held})
+	}
+	host.mu.Unlock()
+
+	out := make([]Open, 0, len(candidates))
+	for _, candidate := range candidates {
+		if !host.answers(candidate.held.open.Address) {
+			host.drop(candidate.name, candidate.held)
+			continue
+		}
+		out = append(out, candidate.held.open)
 	}
 	return out
 }
@@ -258,7 +276,14 @@ func (host *Host) startResolvedWithSecrets(
 			return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
 		}
 		host.mu.Unlock()
-		return held.open, nil
+		// Open means something answers there. A unit this host adopted has no one here watching it
+		// end, so its going is only visible at its address — and answering with an address nobody is
+		// listening at hands the same failure to every caller after the first.
+		if host.answers(held.open.Address) {
+			return held.open, nil
+		}
+		host.drop(name, held)
+		host.mu.Lock()
 	}
 	if pending, starting := host.starting[name]; starting {
 		if pending.secretNames != fingerprint {
@@ -525,6 +550,32 @@ func (host *Host) end(held *unit) error {
 		return signalPID(held.open.PID)
 	}
 	return nil
+}
+
+// answers reports whether a greeting could reach that address at all. Nothing is sent: a connection
+// that opens is a unit that is there, and a connection refused is one that is not.
+func (host *Host) answers(address string) bool {
+	if host.deps.Dial == nil || address == "" {
+		return true
+	}
+	conn, err := host.deps.Dial(address)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+// drop forgets a unit whose address no longer answers, so the next Start begins a new one. Called
+// with host.mu unlocked; it takes and releases the lock itself.
+func (host *Host) drop(name string, held *unit) {
+	host.mu.Lock()
+	if host.open[name] == held {
+		delete(host.open, name)
+	}
+	host.closeLinkLocked(name)
+	host.mu.Unlock()
+	host.forget(name)
 }
 
 // forgetWhenGone drops a unit that ended on its own, so the next Start begins a new one rather than
