@@ -3,7 +3,10 @@ package sidecar
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"io"
+	"strconv"
+	"sync"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
@@ -16,11 +19,39 @@ import (
 // would need editing for every unit anyone writes — which is the lock-in the substrate exists to
 // prevent.
 //
-// One connection per exchange rather than one held open per unit. A held connection is state this
-// host would have to keep correct across a unit that restarts, a caller that goes away and a request
-// that never answers, and every one of those is a way to leave a caller waiting on a socket nobody
-// is on. Opening costs a connect on a local address, which is what the announcement already proved
-// is there.
+// One greeted connection per unit, reused by every send. A connect and a greeting per request is a
+// round trip on every keystroke a plugin relays, and it is paid twice by a plugin that writes and
+// then reads. Answers are matched to requests by an id this relay puts on the wire, so callers may
+// overlap and keep their own ids.
+//
+// A connection the unit closes is dropped and the next send opens another; a request already on the
+// wire when that happened is answered with the failure rather than repeated, because the unit may
+// have acted on it. Streams keep a connection of their own: the bytes after their one answer belong
+// to them.
+
+var errLinkEnded = errors.New("connection ended")
+
+// link is one greeted connection held open for a unit.
+type link struct {
+	name   string
+	conn   io.ReadWriteCloser
+	reader *bufio.Reader
+	// write serializes request lines; answers arrive on one reader goroutine.
+	write sync.Mutex
+
+	mu      sync.Mutex
+	pending map[string]pendingCall
+	next    uint64
+	closed  bool
+	failure error
+}
+
+// pendingCall is one request waiting for its answer. id is the caller's own, restored on the way
+// back so a caller never sees the wire id this relay used.
+type pendingCall struct {
+	id    string
+	reply chan controlwire.Response
+}
 
 // Send takes one request to a unit and answers with what came back.
 //
@@ -28,12 +59,168 @@ import (
 // checked — that the caller declared this unit, and that the unit implements the contract that was
 // declared — and a send that started one would be a way past both checks.
 func (host *Host) Send(name string, request controlwire.Request) (controlwire.Response, error) {
+	for attempt := 0; ; attempt++ {
+		held, err := host.heldLink(name)
+		if err != nil {
+			return controlwire.Response{}, err
+		}
+		answer, written, err := held.call(request)
+		if err == nil {
+			return answer, nil
+		}
+		host.dropLink(held, err)
+		// A request that never left is safe to send again on a fresh connection: the unit did not
+		// see it. One that did leave is not, so its failure is the answer.
+		if !written && attempt == 0 {
+			continue
+		}
+		return controlwire.Response{}, i18n.Errorf("sidecar.noAnswer", map[string]string{
+			"name": name, "reason": err.Error(),
+		})
+	}
+}
+
+// heldLink answers the unit's open connection, greeting a new one when none is held.
+func (host *Host) heldLink(name string) (*link, error) {
+	host.mu.Lock()
+	held := host.links[name]
+	host.mu.Unlock()
+	if held != nil && !held.isClosed() {
+		return held, nil
+	}
 	conn, reader, _, err := host.connect(name)
 	if err != nil {
-		return controlwire.Response{}, err
+		return nil, err
 	}
-	defer func() { _ = conn.Close() }()
-	return exchange(conn, reader, name, request)
+	fresh := &link{name: name, conn: conn, reader: reader, pending: map[string]pendingCall{}}
+	host.mu.Lock()
+	if host.links == nil {
+		host.links = map[string]*link{}
+	}
+	// Another caller may have greeted one while this connection was being made. Theirs stays; this
+	// one is closed rather than left open with nobody reading it.
+	if existing := host.links[name]; existing != nil && !existing.isClosed() {
+		host.mu.Unlock()
+		_ = conn.Close()
+		return existing, nil
+	}
+	host.links[name] = fresh
+	host.mu.Unlock()
+	go host.readAnswers(fresh)
+	return fresh, nil
+}
+
+// readAnswers delivers every answer line to the request that owns its wire id, until the connection
+// ends.
+func (host *Host) readAnswers(held *link) {
+	for {
+		line, err := held.reader.ReadBytes('\n')
+		if err != nil {
+			host.dropLink(held, err)
+			return
+		}
+		var answer controlwire.Response
+		if err := json.Unmarshal(line, &answer); err != nil {
+			host.dropLink(held, err)
+			return
+		}
+		held.mu.Lock()
+		call, found := held.pending[answer.ID]
+		delete(held.pending, answer.ID)
+		held.mu.Unlock()
+		if found {
+			answer.ID = call.id
+			call.reply <- answer
+		}
+	}
+}
+
+// dropLink ends a connection and forgets it if it is still the unit's.
+func (host *Host) dropLink(held *link, reason error) {
+	held.shutdown(reason)
+	host.mu.Lock()
+	if host.links[held.name] == held {
+		delete(host.links, held.name)
+	}
+	host.mu.Unlock()
+}
+
+// closeLinkLocked ends the held connection of a unit that left. Called with host.mu held; the
+// link's own shutdown takes no host lock.
+func (host *Host) closeLinkLocked(name string) {
+	held := host.links[name]
+	if held == nil {
+		return
+	}
+	delete(host.links, name)
+	held.shutdown(errLinkEnded)
+}
+
+func (held *link) isClosed() bool {
+	held.mu.Lock()
+	defer held.mu.Unlock()
+	return held.closed
+}
+
+// shutdown closes the connection and fails every request still waiting on it. A caller left waiting
+// on a socket nobody is on is the failure a held connection has to answer for.
+func (held *link) shutdown(reason error) {
+	held.mu.Lock()
+	if held.closed {
+		held.mu.Unlock()
+		return
+	}
+	held.closed = true
+	if reason == nil {
+		reason = errLinkEnded
+	}
+	held.failure = reason
+	pending := held.pending
+	held.pending = nil
+	held.mu.Unlock()
+	_ = held.conn.Close()
+	for _, call := range pending {
+		close(call.reply)
+	}
+}
+
+// call writes one request under a relay-owned wire id and waits for its answer. written reports
+// whether the request reached the connection.
+func (held *link) call(request controlwire.Request) (answer controlwire.Response, written bool, err error) {
+	held.mu.Lock()
+	if held.closed {
+		failure := held.failure
+		held.mu.Unlock()
+		return controlwire.Response{}, false, failure
+	}
+	held.next++
+	wire := "relay-" + strconv.FormatUint(held.next, 10)
+	call := pendingCall{id: request.ID, reply: make(chan controlwire.Response, 1)}
+	held.pending[wire] = call
+	held.mu.Unlock()
+
+	onWire := request
+	onWire.ID = wire
+	held.write.Lock()
+	err = json.NewEncoder(held.conn).Encode(onWire)
+	held.write.Unlock()
+	if err != nil {
+		held.mu.Lock()
+		delete(held.pending, wire)
+		held.mu.Unlock()
+		return controlwire.Response{}, false, err
+	}
+	answer, ok := <-call.reply
+	if !ok {
+		held.mu.Lock()
+		failure := held.failure
+		held.mu.Unlock()
+		if failure == nil {
+			failure = errLinkEnded
+		}
+		return controlwire.Response{}, true, failure
+	}
+	return answer, true, nil
 }
 
 // exchange writes one request and reads one answer on an already greeted connection.

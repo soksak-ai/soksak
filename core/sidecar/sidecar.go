@@ -120,6 +120,9 @@ type Host struct {
 	// streams are the live stream connections, under the labels their callers chose. Held so one
 	// can be ended without ending the unit it is on.
 	streams map[string]io.Closer
+	// links are the greeted connections Send reuses, one per unit. A link ends with its unit or when
+	// the unit closes it, and the next send opens another.
+	links   map[string]*link
 	secrets process.SecretSource
 	ended   map[string][]string
 }
@@ -465,6 +468,7 @@ func (host *Host) Stop(name string) error {
 	host.mu.Lock()
 	held := host.open[name]
 	delete(host.open, name)
+	host.closeLinkLocked(name)
 	host.mu.Unlock()
 	if held == nil {
 		found, err := host.adoptOwned(name)
@@ -478,6 +482,7 @@ func (host *Host) Stop(name string) error {
 		host.mu.Lock()
 		held = host.open[name]
 		delete(host.open, name)
+		host.closeLinkLocked(name)
 		host.mu.Unlock()
 		if held == nil {
 			return nil
@@ -495,6 +500,7 @@ func (host *Host) StopAll() int {
 		held = append(held, one)
 		host.forget(name)
 		delete(host.open, name)
+		host.closeLinkLocked(name)
 	}
 	host.mu.Unlock()
 	for _, one := range held {
@@ -532,6 +538,7 @@ func (host *Host) forgetWhenGone(name string, held *unit, ended <-chan childExit
 	if host.open[name] == held {
 		host.recordEndedComplaintLocked(name, held)
 		delete(host.open, name)
+		host.closeLinkLocked(name)
 	}
 	host.mu.Unlock()
 	host.forget(name)
@@ -612,6 +619,9 @@ func (host *Host) ServiceShutdown() error {
 	host.mu.Lock()
 	for name := range host.open {
 		delete(host.open, name)
+	}
+	for name := range host.links {
+		host.closeLinkLocked(name)
 	}
 	streams := host.streams
 	host.streams = nil
