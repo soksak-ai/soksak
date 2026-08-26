@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
+	"time"
 )
 
 // memoryUnit answers every request on a connection under the id it arrived with. closeAfter > 0
@@ -19,6 +20,8 @@ type memoryUnit struct {
 	dials      atomic.Int32
 	greetings  atomic.Int32
 	closeAfter int
+	// silent answers the greeting and then nothing, as a unit that took the request and stopped.
+	silent bool
 }
 
 func (fake *memoryUnit) dial(string) (io.ReadWriteCloser, error) {
@@ -43,6 +46,10 @@ func (fake *memoryUnit) serve(conn net.Conn) {
 		}
 		if request.Command == controlwire.HelloCommand {
 			fake.greetings.Add(1)
+		}
+		if fake.silent && request.Command != controlwire.HelloCommand {
+			// Takes the request and answers nothing.
+			continue
 		}
 		answer, _ := json.Marshal(controlwire.Response{
 			ID: request.ID, Ok: true, Result: map[string]any{"command": request.Command},
@@ -142,5 +149,23 @@ func TestReconnectsAfterTheUnitCloses(t *testing.T) {
 	}
 	if _, err := host.Send("unit", controlwire.Request{ID: "3", Command: "fake-unit.echo"}); err == nil {
 		t.Fatal("a send after stop was answered")
+	}
+}
+
+// A unit that takes a request and answers nothing must not hold the caller. Waiting without end is
+// how one silent unit stops every caller behind it: the plugin that asked, the queue behind that
+// plugin, and the person typing into it.
+func TestARequestThatIsNeverAnsweredEnds(t *testing.T) {
+	fake := &memoryUnit{silent: true}
+	host := relayHost(fake)
+	host.answerWithin = 300 * time.Millisecond
+
+	started := time.Now()
+	_, err := host.Send("unit", controlwire.Request{ID: "1", Command: "probe"})
+	if err == nil {
+		t.Fatal("a request nobody answered was reported as answered")
+	}
+	if waited := time.Since(started); waited > 3*time.Second {
+		t.Fatalf("the caller waited %v", waited)
 	}
 }

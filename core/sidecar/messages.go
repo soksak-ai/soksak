@@ -17,6 +17,10 @@ func init() {
 			EN: "sidecar requirement id is required",
 			KO: "사이드카 요구사항 ID가 필요합니다",
 		},
+		"sidecar.noAnswerInTime": {
+			EN: "sidecar {name} took the request and answered nothing within {seconds}s",
+			KO: "사이드카 {name} 이(가) 요청을 받고 {seconds}초 안에 답하지 않았습니다",
+		},
 		"sidecar.connectionEnded": {
 			EN: "sidecar {name} closed the connection before answering",
 			KO: "사이드카 {name} 이(가) 응답 전에 연결을 닫았습니다",

@@ -9,6 +9,7 @@ import (
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
+	"time"
 )
 
 // The relay. What crosses it is opaque.
@@ -66,7 +67,7 @@ func (host *Host) Send(name string, request controlwire.Request) (controlwire.Re
 		if err != nil {
 			return controlwire.Response{}, err
 		}
-		answer, written, err := held.call(request)
+		answer, written, err := held.call(request, host.answerWithin)
 		if err == nil {
 			return answer, nil
 		}
@@ -188,7 +189,7 @@ func (held *link) shutdown(reason error) {
 
 // call writes one request under a relay-owned wire id and waits for its answer. written reports
 // whether the request reached the connection.
-func (held *link) call(request controlwire.Request) (answer controlwire.Response, written bool, err error) {
+func (held *link) call(request controlwire.Request, within time.Duration) (answer controlwire.Response, written bool, err error) {
 	held.mu.Lock()
 	if held.closed {
 		failure := held.failure
@@ -212,7 +213,22 @@ func (held *link) call(request controlwire.Request) (answer controlwire.Response
 		held.mu.Unlock()
 		return controlwire.Response{}, false, err
 	}
-	answer, ok := <-call.reply
+	if within <= 0 {
+		within = defaultAnswerWithin
+	}
+	deadline := time.NewTimer(within)
+	defer deadline.Stop()
+	var ok bool
+	select {
+	case answer, ok = <-call.reply:
+	case <-deadline.C:
+		held.mu.Lock()
+		delete(held.pending, wire)
+		held.mu.Unlock()
+		return controlwire.Response{}, true, i18n.Errorf("sidecar.noAnswerInTime", map[string]string{
+			"name": held.name, "seconds": strconv.Itoa(int(within / time.Second)),
+		})
+	}
 	if !ok {
 		held.mu.Lock()
 		failure := held.failure

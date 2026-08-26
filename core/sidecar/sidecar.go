@@ -128,7 +128,12 @@ type Host struct {
 	// grants are the arguments a unit was last started with, kept under its name. A host that cannot
 	// resolve a path of its own starts the unit again from what started it the first time.
 	grants map[string]grant
+	// answerWithin bounds how long a caller waits for one request. A unit that took the request and
+	// answered nothing must not hold the caller, and every caller behind it.
+	answerWithin time.Duration
 }
+
+const defaultAnswerWithin = 20 * time.Second
 
 // grant is what starting one unit took: the program, the secret namespace and the values, and the
 // fingerprint those values answer to.
