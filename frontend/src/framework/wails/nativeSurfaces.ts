@@ -151,7 +151,7 @@ export async function clearNativeSurfaces(): Promise<void> {
 }
 
 /**
- * Destroys the children this window holds and watches the document again.
+ * Destroys the children this window holds and observes the document again.
  *
  * Boot calls this before the restore render: the previous session's surfaces are backend-owned and
  * survive a renderer reload, so without it the old browser stays over an empty pre-restore screen

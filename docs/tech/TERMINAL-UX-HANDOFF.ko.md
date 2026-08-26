@@ -178,7 +178,7 @@ test application owner만 허용합니다.
 - 실제 macOS 신호등 닫기 gate는 현재 Core 누적 검증에서 세 번 GREEN입니다.
 - 모든 system run은 process, home, runtime, identifier, socket, window, input state 및 open/recorded
   sidecar ownership을 기록합니다. Cleanup 뒤 두 sidecar set이 비고 application이 정상 종료됩니다.
-  오래 남았던 test-owned sidecar 두 개는 기록된 identity로 회수했고 사용자 application은 변경하지
+  오래 남았던 test-owned sidecar 두 개는 기록된 identity로 정리했고 사용자 application은 변경하지
   않았습니다.
 
 현재 미공개 candidate:
@@ -229,7 +229,7 @@ candidate 검증”에 정의합니다. Consumer manifest 또는 lockfile 직접
 
 `soksak-spec` commit `9de8149`부터 `25c58b7`까지가 complete candidate transaction을 소유합니다.
 Clean exact source staging, dependency SHA-256 검증, staging-only workspace override, repository-owned
-Make 검증, canonical package/lock byte 복원, 선언된 generated output 투영, local-locator 거부,
+Make 검증, canonical package/lock byte 복원, 선언된 generated output 생성, local-locator 거부,
 `candidate-build.json`을 포함한 verified archive exit를 수행합니다. 현재 spec source `0a1e217`은
 해당 경계를 지키면서 긴 ustar path도 지원합니다. Staging metadata와 `.candidate-inputs`는
 archive에 들어가지 않습니다.

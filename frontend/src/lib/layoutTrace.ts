@@ -8,7 +8,7 @@
 // This records inside the window instead: once per animation frame, before the paint, the document
 // half of the alignment — every declared surface's box, every region, every pane. The native half is
 // the latest bridge receipt held by the page, so no round trip is made for it and the recorder does
-// not slow the window it watches. That receipt is a diagnostic cache, not the native timing oracle:
+// not slow the window it observes. That receipt is a diagnostic cache, not the native timing oracle:
 // `layout.trace.native` joins these DOM frames to compositor-owned Apply timestamps afterwards.
 // Nothing here judges anything; it writes down what each frame held.
 import { lastAppliedSurfaces } from "./contentViews";

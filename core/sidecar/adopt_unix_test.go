@@ -243,7 +243,7 @@ func TestRecordedInventoryForgetsARecordWhoseProcessHasEnded(t *testing.T) {
 	}
 }
 
-// A unit this host adopted is one another run started, so nothing here watches it end. When its
+// A unit this host adopted is one another run started, so nothing here observes its end. When its
 // process goes the address refuses, and starting again has to begin a new one rather than answer
 // with an address nobody is listening at — otherwise every caller after the first keeps getting it.
 func TestStartingAgainReplacesAnAdoptedUnitNothingAnswersAt(t *testing.T) {

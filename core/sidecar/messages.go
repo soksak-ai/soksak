@@ -68,7 +68,7 @@ func init() {
 		},
 		"sidecar.announcedNoProtocol": {
 			EN: "sidecar {name} announced an address and no protocol — there is no way to tell which envelope it speaks",
-			KO: "사이드카 {name} 이(가) 주소만 알리고 프로토콜을 알리지 않았습니다 — 어떤 봉투를 말하는지 알 수 없습니다",
+			KO: "사이드카 {name} 의 announcement 에 프로토콜이 없습니다. 주소만으로는 프로토콜을 결정할 수 없습니다",
 		},
 		"sidecar.announcedNoAddress": {
 			EN: "sidecar {name} announced a protocol and no address — there is nowhere to reach it",
@@ -80,7 +80,7 @@ func init() {
 		},
 		"sidecar.protocolMismatch": {
 			EN: "sidecar {name} speaks envelope protocol {theirs} and this build speaks {ours} — refused at the announcement rather than at the first command that would behave differently",
-			KO: "사이드카 {name} 은(는) 봉투 프로토콜 {theirs} 을(를) 말하고 이 빌드는 {ours} 를 말합니다 — 다르게 동작할 첫 명령이 아니라 announcement 에서 거절합니다",
+			KO: "사이드카 {name} 의 프로토콜은 {theirs}, 이 빌드는 {ours} 입니다. announcement 단계에서 거절합니다",
 		},
 		"sidecar.dialFailed": {
 			EN: "sidecar {name} announced {address} and nothing is listening there: {reason}",

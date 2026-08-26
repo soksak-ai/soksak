@@ -7,7 +7,7 @@
 ## 하나의 식별자 정본
 
 - `plugin.json`, `sidecar.json`, `kit.json`만 컴포넌트 ID와 버전의 정본이다.
-- 빌드 스크립트는 사이드카 process에 `.exe`를 추가하는 것처럼 target별 필드만 투영할 수 있다.
+- 빌드 스크립트는 사이드카 process에 `.exe`를 추가하는 것처럼 target별 필드만 생성할 수 있다.
 - 빌드 스크립트와 workflow는 ID, 버전, 인터페이스, archive 버전, tag를 중복 선언하지 않는다.
 - archive 이름, tag, conformance subject, `release.json` 식별자는 소스 매니페스트에서 파생한다.
 

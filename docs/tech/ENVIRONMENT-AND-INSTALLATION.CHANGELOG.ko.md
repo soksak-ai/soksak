@@ -35,7 +35,7 @@ Transaction test는 설치 실패가 partial environment를 공개하지 못하�
 첫 구현은 `environment.json`이 없을 때 memory의 revision 1을 반환했지만 compare-and-swap은 저장된
 revision을 올바르게 0으로 보았습니다. 따라서 첫 설치는 `expected 1, actual 0`으로 실패할 수밖에
 없었습니다. 이제 Core가 identity home을 소유한 뒤 실제 revision 1을 공개합니다. 조회와 write가
-하나의 상태를 사용하며 파일 부재에 두 의미를 부여하지 않습니다.
+하나의 상태를 사용하며 파일 부재에 두 의미를 두지 않습니다.
 
 ## 2026-08-25: 개발 source와 종류별 제거 command 하나
 

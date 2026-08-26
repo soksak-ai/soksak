@@ -22,7 +22,7 @@ func init() {
 		},
 		"process.reclaimByWindow.needsLabel": {
 			EN: "process_reclaim_by_window needs a window label: an empty label matches nothing, and a caller that does not know its own label must not spell 'reap everything unowned'",
-			KO: "process_reclaim_by_window 에는 창 라벨이 필요합니다 — 빈 라벨은 아무것도 일치시키지 않으며, 자기 라벨을 모르는 호출자가 '주인 없는 자식 전부 회수'를 뜻하게 해서는 안 됩니다",
+			KO: "process_reclaim_by_window 에는 창 라벨이 필요합니다. 빈 라벨은 아무것도 일치시키지 않습니다. 라벨을 지정하십시오",
 		},
 	})
 }

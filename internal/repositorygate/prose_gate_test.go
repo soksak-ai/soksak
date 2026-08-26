@@ -24,13 +24,16 @@ import (
 var bannedKorean = []string{
 	"산다", "말한다", "돈다", "센다", "싣는다", "싣고", "흘린다", "흘려보낸",
 	"꽂으면", "달고", "가리킨다", "밝힌다", "고아", "물어야", "1급",
+	"답한다", "나간다", "보낸다", "투영", "침묵", "소속은",
+	"뺃다", "뺃기", "흉내", "봉투", "무는지", "못 박다", "죽이나", "죽이다", "놓으라",
+	"죽은", "부여", "안다", "회수",
 }
 
 // English words are matched on a word boundary. Without it a longer word that
 // ends in a banned one fails, and a plural noun spelled like a banned verb
 // fails too.
 var bannedEnglish = regexp.MustCompile(
-	`\b(lives|sits|says|tells|knows|asks|reaches|carries|belongs|learns|decides|reflects)\b`)
+	`\b(lives|sits|says|tells|knows|asks|reaches|carries|belongs|watches|learns|decides|reflects)\b`)
 
 // scannedCode is every extension whose comments this repository authors.
 var scannedCode = map[string]bool{

@@ -103,7 +103,7 @@ func (watch *watchers) Watch(path string, home string) (int, error) {
 	// The count and the OS watch move together, under one lock. Measured here
 	// with eight consumers arriving at once and a 20 ms arm: releasing the lock
 	// around the Arm let all eight read the count at zero and arm the same path
-	// eight times, and a refcount only ever disarms once — so seven OS watches
+	// eight times, and a refcount only ever disarms once — so seven OS watchers
 	// would have outlived every consumer.
 	watch.mu.Lock()
 	defer watch.mu.Unlock()

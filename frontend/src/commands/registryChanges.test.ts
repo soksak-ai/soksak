@@ -73,7 +73,7 @@ describe("the registry says when it changed", () => {
   });
 
   it("one listener throwing does not silence the others", async () => {
-    // The declaration and whatever else watches are independent. A throw in one that stopped the
+    // The declaration and whatever else observes it are independent. A throw in one that stopped the
     // other would make the second failure depend on the first, with nothing saying so.
     const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
     let second = 0;

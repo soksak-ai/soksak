@@ -280,7 +280,7 @@ func init() {
 		},
 		"wails.host.cannotWithdraw": {
 			EN: "window {window} cannot be withdrawn; this process does not hold it",
-			KO: "창 {window} 을(를) 회수할 수 없습니다 — 이 프로세스가 보유하고 있지 않습니다",
+			KO: "창 {window} 을(를) 정리할 수 없습니다. 이 프로세스가 보유하고 있지 않습니다",
 		},
 		"wails.host.cannotPlace": {
 			EN: "window {window} cannot be placed; it has no native lifetime",

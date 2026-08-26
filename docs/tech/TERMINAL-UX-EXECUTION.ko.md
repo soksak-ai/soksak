@@ -104,7 +104,7 @@ Build-time composition은 하나의 canonical materializer와 폐기 가능한 s
 사용합니다. Materializer는 plan과 digest를 검증하고, clean source commit을 snapshot하고,
 content-addressed staging transport로 candidate artifact를 제공하고, build 후 staging state를
 finalize합니다. Staging metadata는 source가 아니며 commit하지 않고 candidate archive에 복사하지
-않습니다. 개발자나 일회성 script가 이 동작을 흉내 내기 위해 dependency metadata를 편집하면 안
+않습니다. 개발자나 일회성 script가 같은 결과를 만들려고 dependency metadata를 편집하면 안
 됩니다. Canonical materializer가 dependency edge를 표현하지 못하면 product tool이 누락된
 것입니다. 진행을 멈추고 RED를 추가한 뒤 materializer를 먼저 구현합니다.
 
