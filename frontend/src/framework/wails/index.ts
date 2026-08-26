@@ -14,7 +14,7 @@ import { wailsEngineProvision } from "./engineProvision";
 // The route this host serves plugin files on. It is stated in one place on each
 // side; frameworks/wails/unitassets.go holds the other, and unitFileRoute.test
 // compares the two.
-import { createWailsStream } from "./streams";
+import { createWailsStream, openStreamCount as wailsOpenStreamCount } from "./streams";
 import { tmsg } from "../../i18n";
 
 const PLUGIN_FILE_ROUTE = "/-/plugin-file";
@@ -158,6 +158,7 @@ export const wailsFramework: AppFramework = {
   commands: async () => ControlService.Commands(),
 
   createStream: <T,>(): Stream<T> => createWailsStream<T>(),
+  openStreamCount: () => wailsOpenStreamCount(),
 
   listen: async <T,>(event: string, cb: (e: FrameworkEvent<T>) => void): Promise<Unlisten> =>
     Events.On(event, (received) => cb({ payload: received.data as T })),

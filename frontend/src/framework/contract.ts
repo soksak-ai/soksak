@@ -259,6 +259,8 @@ export interface AppFramework {
 
   /** Create a stream sink — pass it through as an invoke argument unchanged. */
   createStream<T>(): Stream<T>;
+  /** Current frontend stream receivers. */
+  openStreamCount(): number;
 
   /** Global (broadcast) event subscription. Window-targeted signals use currentWindow().listen. */
   listen<T>(event: string, cb: (e: FrameworkEvent<T>) => void): Promise<Unlisten>;

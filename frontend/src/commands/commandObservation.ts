@@ -12,6 +12,7 @@
 import { dataChangeHealth } from "../state/dataChangeHealth";
 import { activityHealth } from "../state/activityHealth";
 import { tmsg } from "../i18n";
+import { openStreamCount } from "../framework";
 import { moduleState } from "../lib/moduleState";
 import { preferenceWriteFailures } from "../lib/preferenceStore";
 import type { CommandTrace } from "./registry";
@@ -199,6 +200,7 @@ export function commandHealth(registeredCount: number): Record<string, unknown> 
     },
     activity: activityHealth(),
     dataChange: dataChangeHealth(),
+    streams: { open: openStreamCount() },
     degradedAxes: degradedAxes(registeredCount) ?? [],
   };
 }

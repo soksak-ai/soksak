@@ -29,6 +29,12 @@ interface StreamFrame {
 const receivers = new Map<string, (frame: unknown) => void>();
 let subscribed = false;
 
+function publishReceiverCount(): void {
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.openStreamReceivers = String(receivers.size);
+  }
+}
+
 /**
  * Mints a receiver id — the stream receiver prefix and an N1 body.
  *
@@ -99,6 +105,7 @@ export function createWailsStream<T>(): Stream<T> & { close(): void } {
       pending.length = 0;
       handler = null;
       receivers.delete(id);
+      publishReceiverCount();
     },
   };
   receivers.set(id, (frame) => {
@@ -106,6 +113,7 @@ export function createWailsStream<T>(): Stream<T> & { close(): void } {
     if (handler) handler(value);
     else pending.push(value);
   });
+  publishReceiverCount();
   return stream;
 }
 

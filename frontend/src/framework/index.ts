@@ -67,6 +67,7 @@ export function clearNativeSurfaces(): Promise<void> {
 export const invoke: AppFramework["invoke"] = (cmd, args) => framework.invoke(cmd, args);
 export const commandTable: AppFramework["commands"] = () => framework.commands();
 export const createStream: AppFramework["createStream"] = () => framework.createStream();
+export const openStreamCount: AppFramework["openStreamCount"] = () => framework.openStreamCount();
 export const listen: AppFramework["listen"] = (event, cb) => framework.listen(event, cb);
 export const currentWindow: AppFramework["currentWindow"] = () => framework.currentWindow();
 export const windowByLabel: AppFramework["windowByLabel"] = (label) => framework.windowByLabel(label);

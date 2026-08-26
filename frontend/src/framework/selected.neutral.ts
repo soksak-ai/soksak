@@ -61,6 +61,7 @@ export const selectedFramework: AppFramework = {
   invoke: unsupported,
   commands: async () => ({ commands: [], unserved: [] }),
   createStream: () => ({ onmessage: () => {}, close() {} }),
+  openStreamCount: () => 0,
   listen: unsupported,
   currentWindow: () => testWindow,
   windowByLabel: unsupported,

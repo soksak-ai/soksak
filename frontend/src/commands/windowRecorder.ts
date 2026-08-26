@@ -245,6 +245,7 @@ export function recordWindowFrames({
     }
     throw error;
   });
+  void finished.then(() => frameEvents.close(), () => frameEvents.close());
   // Some diagnostic commands start the recorder, wait until the stimulus time, then await final. To
   // keep a producer failure in that window from becoming an unhandledrejection, the original final
   // is kept and only a rejection consumer is attached immediately.
