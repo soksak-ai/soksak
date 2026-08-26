@@ -22,6 +22,7 @@ import { parseManifest, type PluginManifest } from "../plugins/spec";
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { text, withReaderLanguage } from "../i18n";
 import { createEnvironmentEventHandler, setEnvironmentEventHandler } from "../state/environmentEvents";
+import { usePluginSettings } from "../state/pluginSettings";
 
 function manifestOf(id: string, overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
@@ -92,6 +93,32 @@ describe("plugin installation observation", () => {
     expect(getSpec("plugin.install")?.returns).toContain("phase");
     expect(getSpec("plugin.install.status")?.returns).toContain("completed");
     expect(getSpec("plugin.install.wait")?.params.phase).toBeDefined();
+  });
+});
+
+describe("plugin.settings.set durability", () => {
+  it("does not answer before the authority write completes", async () => {
+    const plugin = manifestOf("settings-plugin", {
+      configuration: [{
+        key: "renderer", type: "enum", enum: ["canvas", "dom"], default: "canvas",
+        title: { en: "Renderer", ko: "렌더러" },
+      }],
+    });
+    usePlugins.setState({ plugins: { "settings-plugin": runtimeOf(plugin) } });
+    let release!: () => void;
+    const saveNow = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    usePluginSettings.setState({ saveNow } as never);
+    let answered = false;
+
+    const pending = execute("plugin.settings.set", {
+      id: "settings-plugin", key: "renderer", value: "dom",
+    }, {}).then((result) => { answered = true; return result; });
+    await Promise.resolve();
+
+    expect(saveNow).toHaveBeenCalledOnce();
+    expect(answered).toBe(false);
+    release();
+    await expect(pending).resolves.toMatchObject({ ok: true, data: { value: "dom" } });
   });
 });
 
