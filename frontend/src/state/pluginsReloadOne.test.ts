@@ -124,7 +124,7 @@ describe("reloadOne — a reload by id reads the manifest from disk again", () =
     expect(activatedIds).toEqual([ID]);
   });
 
-  it("a command added to the file is in the declaration after reload", async () => {
+  it("restarts the active generation without rewriting its enabled setting", async () => {
     onDisk = manifestJson(["thing.run", "thing.head"]); // the author edited the file
 
     const r = await usePlugins.getState().reloadOne(ID);
@@ -135,12 +135,8 @@ describe("reloadOne — a reload by id reads the manifest from disk again", () =
     expect(declared).toContain("thing.head");
     expect(after.status).toBe("enabled");
     expect(activatedIds).toContain(ID); // fresh code was actually activated again
-    expect(invoke).toHaveBeenCalledWith("plugin_enabled_set", {
-      plugins: [{ id: ID, version: "0.0.1" }], enabled: false, expectedRevision: 1,
-    });
-    expect(invoke).toHaveBeenCalledWith("plugin_enabled_set", {
-      plugins: [{ id: ID, version: "0.0.1" }], enabled: true, expectedRevision: 1,
-    });
+    expect(invoke.mock.calls.filter(([command]) => command === "plugin_enabled_set")).toEqual([]);
+    expect(usePlugins.getState().enabledIds).toContain(ID);
   });
 
   it("bypasses the engine resource cache when it reloads the bundle", async () => {
