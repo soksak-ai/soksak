@@ -64,6 +64,7 @@ vi.mock("../framework", async (importOriginal) => ({
 }));
 
 import { usePlugins, type PluginRuntime } from "./plugins";
+import { pluginModuleCache } from "../plugins/pluginModuleCache";
 import { parseManifest } from "../plugins/spec";
 
 function manifestJson(commands: string[]): Record<string, unknown> {
@@ -90,7 +91,8 @@ function runtimeOf(json: Record<string, unknown>, status: PluginRuntime["status"
   return { manifest, dir: PATH, source: "local", status };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await pluginModuleCache.releaseAll();
   activatedIds.length = 0;
   activeIds.clear();
   invoke.mockClear();
@@ -143,6 +145,19 @@ describe("reloadOne — a reload by id reads the manifest from disk again", () =
     const result = await usePlugins.getState().reloadOne(ID);
     expect(result.ok).toBe(true);
     expect(fetchOptions).toContainEqual({ cache: "no-store" });
+  });
+
+  it("keeps the active generation when both manifest and entry are unchanged", async () => {
+    const first = await usePlugins.getState().reloadOne(ID);
+    expect(first.ok).toBe(true);
+    activatedIds.length = 0;
+    invoke.mockClear();
+
+    const second = await usePlugins.getState().reloadOne(ID);
+
+    expect(second).toMatchObject({ ok: true, id: ID, status: "enabled", unchanged: true });
+    expect(activatedIds).toEqual([]);
+    expect(invoke.mock.calls.filter(([command]) => command === "plugin_enabled_set")).toEqual([]);
   });
 
   it("a malformed file answers with the refusal reason instead of silently starting on the old manifest", async () => {
