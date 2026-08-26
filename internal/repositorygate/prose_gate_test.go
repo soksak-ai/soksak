@@ -1,6 +1,7 @@
 package repositorygate
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -183,5 +184,28 @@ func TestBundleValuesAreWrittenDry(t *testing.T) {
 		t.Errorf("these bundle values use the banned register in %d places:\n%s\n"+
 			"State the fact. A sentence a person reads is held to the same rule as a comment.",
 			len(found), strings.Join(found, "\n"))
+	}
+}
+
+// The English message table is prose the reader sees; its sentences follow the same register as
+// the documents. Only the quoted values are scanned, not keys or code.
+func TestEnglishMessagesAreWrittenDry(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("frontend", "src", "i18n.en.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found []string
+	for number, line := range strings.Split(string(body), "\n") {
+		colon := strings.Index(line, `": "`)
+		if colon < 0 {
+			continue
+		}
+		value := line[colon+4:]
+		if match := bannedEnglish.FindString(value); match != "" {
+			found = append(found, fmt.Sprintf("frontend/src/i18n.en.ts:%d %s", number+1, match))
+		}
+	}
+	if len(found) > 0 {
+		t.Fatalf("these messages use the banned register in %d places:\n%s\nState what a thing is, what is missing, and what to do about it.", len(found), strings.Join(found, "\n"))
 	}
 }
