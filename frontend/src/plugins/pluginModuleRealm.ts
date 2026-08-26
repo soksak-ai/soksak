@@ -11,6 +11,13 @@ export interface LoadedPluginModule {
 export type PluginModuleRealmFactory = () => PluginModuleRealm;
 
 let realmSequence = 0;
+let realmsCreated = 0;
+let realmsDisposed = 0;
+let realmsOpen = 0;
+
+export function pluginModuleRealmStats(): { open: number; created: number; disposed: number } {
+  return { open: realmsOpen, created: realmsCreated, disposed: realmsDisposed };
+}
 
 const PARENT_REALM_BINDINGS = `
 const window = parent;
@@ -117,19 +124,24 @@ export async function loadPluginModule(
   createRealm: PluginModuleRealmFactory = createBrowserPluginModuleRealm,
 ): Promise<LoadedPluginModule> {
   const realm = createRealm();
+  realmsCreated += 1;
+  realmsOpen += 1;
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    realmsOpen = Math.max(0, realmsOpen - 1);
+    realmsDisposed += 1;
+    realm.dispose();
+  };
   try {
     const module = await realm.evaluate(code);
-    let disposed = false;
     return {
       module,
-      dispose() {
-        if (disposed) return;
-        disposed = true;
-        realm.dispose();
-      },
+      dispose,
     };
   } catch (error) {
-    realm.dispose();
+    dispose();
     throw error;
   }
 }
