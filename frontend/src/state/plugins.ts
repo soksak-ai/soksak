@@ -565,7 +565,10 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     return ok({ id, status: "disabled" });
   };
 
-  const enableOnce = async (id: string): Promise<CmdResult<{ id: string; status: string }>> => {
+  const enableOnce = async (
+    id: string,
+    writeEnabledSetting = true,
+  ): Promise<CmdResult<{ id: string; status: string }>> => {
       const p = get().plugins[id];
       if (!p) return err("TARGET_NOT_FOUND", tmsg("plugin.notFound", { id }));
       if (p.status === "enabled" && isActive(id)) return ok({ id, status: "enabled" });
@@ -587,10 +590,12 @@ export const usePlugins = moduleState("state/plugins#store", () =>
         void ensureProgramBinaries(cp.manifest);
         void reconcileDependencies(cp.manifest, get().plugins, (command) => publishActivity("library.missing", "plugins", { plugin: cid, install: command, message: tmsg("plugin.library.missing", { install: command }) }));
       }
-      try { await setEnabledInSettings(activated.map((cid) => ({ id: cid, version: get().plugins[cid]!.manifest.version })), true); }
-      catch (cause) {
-        for (const cid of [...activated].reverse()) { await deactivateById(cid); setRuntime(cid, { status: "disabled", error: undefined }); }
-        return err("INTERNAL", tmsg("plugin.enabled.writeFailed", { error: String(cause) }));
+      if (writeEnabledSetting) {
+        try { await setEnabledInSettings(activated.map((cid) => ({ id: cid, version: get().plugins[cid]!.manifest.version })), true); }
+        catch (cause) {
+          for (const cid of [...activated].reverse()) { await deactivateById(cid); setRuntime(cid, { status: "disabled", error: undefined }); }
+          return err("INTERNAL", tmsg("plugin.enabled.writeFailed", { error: String(cause) }));
+        }
       }
       set((state) => ({ enabledIds: [...new Set([...state.enabledIds, ...activated])] }));
       persist();
@@ -888,8 +893,14 @@ export const usePlugins = moduleState("state/plugins#store", () =>
         plugins: { ...s.plugins, [id]: { ...fresh, status: p.status } },
         rejected: s.rejected.filter((x) => x.dir !== p.dir),
       }));
-      await get().disable(id);
-      return get().enable(id);
+      const selected = get().enabledIds.includes(id);
+      if (isActive(id)) await deactivateById(id);
+      setRuntime(id, { status: "disabled", error: undefined });
+      if (!selected) {
+        await get().syncLedger();
+        return ok({ id, status: "disabled" });
+      }
+      return enableOnce(id, false);
     },
 
   };
