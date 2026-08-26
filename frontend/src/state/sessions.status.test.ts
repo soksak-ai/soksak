@@ -48,6 +48,27 @@ describe("setViewStatus — the view status channel (R1 report / R4 withdraw)", 
       .setViewStatus(WORKSPACE, "no-such-view", { code: "busy" });
     expect(r.ok).toBe(false);
   });
+
+  it("does not publish or clone state when the status value is unchanged", () => {
+    const opened = useSessions.getState().openPluginView(WORKSPACE, "p", "v", "T");
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    let notifications = 0;
+    const stop = useSessions.subscribe(() => { notifications += 1; });
+
+    const beforeEmpty = useSessions.getState().workspaces;
+    useSessions.getState().setViewStatus(WORKSPACE, opened.viewId, null);
+    expect(useSessions.getState().workspaces).toBe(beforeEmpty);
+    expect(notifications).toBe(0);
+
+    useSessions.getState().setViewStatus(WORKSPACE, opened.viewId, { code: "busy", message: "syncing" });
+    expect(notifications).toBe(1);
+    const beforeRepeat = useSessions.getState().workspaces;
+    useSessions.getState().setViewStatus(WORKSPACE, opened.viewId, { code: "busy", message: "syncing" });
+    expect(useSessions.getState().workspaces).toBe(beforeRepeat);
+    expect(notifications).toBe(1);
+    stop();
+  });
 });
 
 describe("setFileDirty — file dirty folded into status.code dirty (one legacy path)", () => {
