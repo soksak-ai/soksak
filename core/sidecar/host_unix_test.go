@@ -102,8 +102,8 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	if err := host.Stop("fake-unit"); err != nil {
 		t.Fatalf("stopping the unit: %v", err)
 	}
-	if err := waitUntilUnreachable(open.Address, 5*time.Second); err != nil {
-		t.Fatalf("unit process %d is still answering after the host stopped it: %v", pid, err)
+	if !processGone(pid) {
+		t.Fatalf("unit process %d still exists after Stop returned", pid)
 	}
 }
 

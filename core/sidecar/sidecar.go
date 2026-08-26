@@ -160,6 +160,7 @@ func (host *Host) SetSecrets(source process.SecretSource) {
 type unit struct {
 	open  Open
 	child process.Child
+	gone  <-chan struct{}
 	// stderr is drained into a ring so a unit that fails later can be asked why, rather than
 	// filling a pipe nobody reads until it blocks and the unit stops.
 	stderr *ring
@@ -371,6 +372,8 @@ func (host *Host) startResolved(
 	// this child's life, which is what the spawner's contract requires and what keeps two callers
 	// off one wait status.
 	ended := make(chan childExit, 1)
+	gone := make(chan struct{})
+	held.gone = gone
 	go func() {
 		code, waitErr := child.Wait()
 		ended <- childExit{code: code, err: waitErr}
@@ -397,7 +400,7 @@ func (host *Host) startResolved(
 	}
 	host.open[name] = held
 	host.mu.Unlock()
-	go host.forgetWhenGone(name, held, ended)
+	go host.forgetWhenGone(name, held, ended, gone)
 	return held.open, nil
 }
 
@@ -565,7 +568,17 @@ func (host *Host) StopAll() int {
 // nothing here to wait on and ending it is a signal to the pid the record named.
 func (host *Host) end(held *unit) error {
 	if held.child != nil {
-		return held.child.Signal()
+		if err := held.child.Signal(); err != nil {
+			return err
+		}
+		timer := time.NewTimer(host.deps.ReadyWithin)
+		defer timer.Stop()
+		select {
+		case <-held.gone:
+			return nil
+		case <-timer.C:
+			return fmt.Errorf("sidecar %s did not end within %s", held.open.Name, host.deps.ReadyWithin)
+		}
 	}
 	if held.open.PID > 0 {
 		return signalPID(held.open.PID)
@@ -619,7 +632,7 @@ func (host *Host) drop(name string, held *unit) {
 //
 // It waits on the watcher's channel rather than calling Wait itself. Two callers of Wait race on one
 // wait status, and the spawner's contract states there is exactly one.
-func (host *Host) forgetWhenGone(name string, held *unit, ended <-chan childExit) {
+func (host *Host) forgetWhenGone(name string, held *unit, ended <-chan childExit, gone chan<- struct{}) {
 	<-ended
 	host.mu.Lock()
 	if host.open[name] == held {
@@ -629,6 +642,7 @@ func (host *Host) forgetWhenGone(name string, held *unit, ended <-chan childExit
 	}
 	host.mu.Unlock()
 	host.forget(name)
+	close(gone)
 }
 
 // Complaint answers what a unit last printed to stderr.
