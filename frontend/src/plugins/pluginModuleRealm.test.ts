@@ -102,12 +102,14 @@ describe("plugin module realm lifetime", () => {
       open: before.open + 1,
       created: before.created + 1,
       disposed: before.disposed,
+      frames: before.frames,
     });
     await loaded.dispose();
     expect(pluginModuleRealmStats()).toEqual({
       open: before.open,
       created: before.created + 1,
       disposed: before.disposed + 1,
+      frames: before.frames,
     });
   });
 });
