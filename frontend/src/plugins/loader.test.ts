@@ -310,6 +310,43 @@ describe("activatePlugin — lifecycle and disposal", () => {
     error.mockRestore();
   });
 
+  it("disposes the module realm exactly once after deactivation", async () => {
+    const disposeRealm = vi.fn();
+    const activateWithRealm = activatePlugin as unknown as (
+      module: unknown,
+      manifest: PluginManifest,
+      dir: string,
+      deps: PluginApiDeps,
+      source: string | undefined,
+      dispose: () => void,
+    ) => ReturnType<typeof activatePlugin>;
+    const active = await activateWithRealm(
+      { activate: () => {} }, manifestOf(), "/d", fakeDeps(), undefined, disposeRealm,
+    );
+
+    await active.deactivate();
+    await active.deactivate();
+    expect(disposeRealm).toHaveBeenCalledOnce();
+  });
+
+  it("disposes the module realm when activation fails", async () => {
+    const disposeRealm = vi.fn();
+    const activateWithRealm = activatePlugin as unknown as (
+      module: unknown,
+      manifest: PluginManifest,
+      dir: string,
+      deps: PluginApiDeps,
+      source: string | undefined,
+      dispose: () => void,
+    ) => ReturnType<typeof activatePlugin>;
+
+    await expect(activateWithRealm(
+      { activate: () => { throw new Error("activation failed"); } },
+      manifestOf(), "/d", fakeDeps(), undefined, disposeRealm,
+    )).rejects.toThrow("activation failed");
+    expect(disposeRealm).toHaveBeenCalledOnce();
+  });
+
   it("reclaims every registration (declarative ones included) and rethrows when activate throws", async () => {
     // A conforming manifest that passes the C2 blocking gate (before activation) — this aims at the disposal path itself.
     const m = manifestOf({
