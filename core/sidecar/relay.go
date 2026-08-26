@@ -309,7 +309,7 @@ func (host *Host) connect(name string) (io.ReadWriteCloser, *bufio.Reader, Open,
 		// A unit this host held and lost is a unit that has to be there again for the caller that was
 		// granted it. Starting it here is the same start that granted it, on the same settings; a name
 		// the settings no longer carry fails at that start and the caller reads why.
-		if _, err := host.Start(name); err != nil {
+		if _, err := host.restart(name); err != nil {
 			return nil, nil, Open{}, err
 		}
 		host.mu.Lock()

@@ -125,6 +125,18 @@ type Host struct {
 	links   map[string]*link
 	secrets process.SecretSource
 	ended   map[string][]string
+	// grants are the arguments a unit was last started with, kept under its name. A host that cannot
+	// resolve a path of its own starts the unit again from what started it the first time.
+	grants map[string]grant
+}
+
+// grant is what starting one unit took: the program, the secret namespace and the values, and the
+// fingerprint those values answer to.
+type grant struct {
+	path        string
+	namespace   string
+	secretEnv   map[string]string
+	fingerprint string
 }
 
 type startAttempt struct {
@@ -270,6 +282,10 @@ func (host *Host) startResolvedWithSecrets(
 ) (Open, error) {
 	host.mu.Lock()
 	delete(host.ended, name)
+	if host.grants == nil {
+		host.grants = make(map[string]grant)
+	}
+	host.grants[name] = grant{path: path, namespace: namespace, secretEnv: secretEnv, fingerprint: fingerprint}
 	if held, running := host.open[name]; running {
 		if held.secretNames != fingerprint {
 			host.mu.Unlock()
@@ -550,6 +566,21 @@ func (host *Host) end(held *unit) error {
 		return signalPID(held.open.PID)
 	}
 	return nil
+}
+
+// restart starts a unit again from the arguments it was last started with. A host with no resolver
+// of its own has no other way back to a unit whose process went, and the caller was granted the
+// name rather than one process.
+func (host *Host) restart(name string) (Open, error) {
+	host.mu.Lock()
+	remembered, known := host.grants[name]
+	host.mu.Unlock()
+	if !known {
+		return host.Start(name)
+	}
+	return host.startResolvedWithSecrets(
+		name, remembered.path, remembered.namespace, remembered.secretEnv, remembered.fingerprint,
+	)
 }
 
 // answers reports whether a greeting could reach that address at all. Nothing is sent: a connection
