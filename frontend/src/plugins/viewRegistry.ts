@@ -124,6 +124,8 @@ export interface PluginViewProvider {
   // several panes closed one of them and stays open. "pass" means the core closes the view. An
   // absent hook is "pass", so a view that holds one thing needs no opinion.
   closeIntent?(container: HTMLElement, ctx: PluginViewContext): "handled" | "pass";
+  // Permanent view removal. Unlike unmount, this ends resources that must not survive restore.
+  closeView?(container: HTMLElement, ctx: PluginViewContext): void | Promise<void>;
   // Applies the core's latest focus intent to the view's own canonical input. If async preparation
   // is needed, keep request.signal and never focus after it is aborted.
   focus?(

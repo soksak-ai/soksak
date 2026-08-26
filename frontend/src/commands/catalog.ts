@@ -61,6 +61,7 @@ import { addWorkspaceClaimed, closeWorkspaceReleased } from "../state/workspaceR
 import { getRegisteredProgram, listPrograms } from "../plugins/programRegistry";
 import {
   activeSessionViewId,
+  closeMountedView,
   transferViewFocus,
 } from "../plugins/viewFocus";
 import { useSettings, EDGE_SIDEBAR_MODES, type EdgeSidebarMode } from "../state/settings";
@@ -2347,9 +2348,10 @@ export function registerCatalog(): void {
     message: () => tmsg("msg.tab.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
     examples: ['tab.close \'{"tab":"tab-k5m6n7"}\''],
-    handler: (p) => {
+    handler: async (p) => {
       const loc = locateTab(p.tab as string);
       if (!loc) return notFound("msg.tab.notFoundId", { id: String(p.tab) });
+      await closeMountedView(p.tab as string);
       return withTargets(S().closeView(loc.workspace.id, p.tab as string), {
         tabId: p.tab as string,
       });

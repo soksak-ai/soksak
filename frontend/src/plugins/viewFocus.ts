@@ -256,6 +256,17 @@ export class ViewFocusCoordinator {
     }
   }
 
+  async closeView(viewId: string): Promise<void> {
+    const mounted = this.mounted.get(viewId);
+    if (!mounted?.provider.closeView) return;
+    try {
+      await mounted.provider.closeView(mounted.container, mounted.context());
+    } catch (error) {
+      this.onError(error);
+      throw error;
+    }
+  }
+
   snapshot(): {
     requestedViewId: string | null;
     mounted: boolean;
@@ -493,4 +504,8 @@ export function zoomFocusedView(
  * the hook is absent, the view is not mounted, or the hook threw. */
 export function closeIntentOfView(viewId: string): "handled" | "pass" {
   return coordinator.closeIntent(viewId);
+}
+
+export function closeMountedView(viewId: string): Promise<void> {
+  return coordinator.closeView(viewId);
 }
