@@ -347,6 +347,33 @@ describe("activatePlugin — lifecycle and disposal", () => {
     expect(disposeRealm).toHaveBeenCalledOnce();
   });
 
+  it("awaits async subscription cleanup before disposing the module realm", async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const active = await activatePlugin(
+      {
+        activate: (ctx: PluginContext) => {
+          ctx.subscriptions.push({
+            async dispose() {
+              order.push("subscription.start");
+              await pending;
+              order.push("subscription.done");
+            },
+          });
+        },
+      },
+      manifestOf(), "/d", fakeDeps(), undefined, () => { order.push("realm.dispose"); },
+    );
+
+    const deactivating = active.deactivate();
+    await Promise.resolve();
+    expect(order).toEqual(["subscription.start"]);
+    release();
+    await deactivating;
+    expect(order).toEqual(["subscription.start", "subscription.done", "realm.dispose"]);
+  });
+
   it("reclaims every registration (declarative ones included) and rethrows when activate throws", async () => {
     // A conforming manifest that passes the C2 blocking gate (before activation) — this aims at the disposal path itself.
     const m = manifestOf({
