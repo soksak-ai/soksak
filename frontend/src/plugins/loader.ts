@@ -320,18 +320,17 @@ export async function activatePlugin(
   dir: string,
   deps: PluginApiDeps,
   entrySource?: string,
-  disposeModuleRealm?: () => void | Promise<void>,
+  disposeModuleRealm?: () => void,
 ): Promise<ActivePlugin> {
-  let moduleRealmDisposal: Promise<void> | null = null;
+  let moduleRealmDisposed = false;
   const disposeRealm = () => {
-    if (moduleRealmDisposal === null) {
-      moduleRealmDisposal = Promise.resolve(disposeModuleRealm?.());
-    }
-    return moduleRealmDisposal;
+    if (moduleRealmDisposed) return;
+    moduleRealmDisposed = true;
+    disposeModuleRealm?.();
   };
   const entry = resolveEntry(module);
   if (!entry) {
-    await disposeRealm();
+    disposeRealm();
     throw new Error(tmsg("plugin.entry.noActivate"));
   }
 
@@ -401,7 +400,7 @@ export async function activatePlugin(
   } catch (e) {
     await disposeSubscriptions();
     tracker.disposeAll();
-    await disposeRealm();
+    disposeRealm();
     throw new Error(tmsg("plugin.activate.failed", { id: manifest.id, error: String(e) }));
   } finally {
     publishActivateCost(manifest.id, performance.now() - activateAt);
@@ -427,7 +426,7 @@ export async function activatePlugin(
         await disposeSubscriptions();
         tracker.disposeAll();
       } finally {
-        await disposeRealm();
+        disposeRealm();
       }
     },
   };

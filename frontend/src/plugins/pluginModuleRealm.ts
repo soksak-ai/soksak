@@ -1,11 +1,11 @@
 export interface PluginModuleRealm {
   evaluate(code: string): Promise<unknown>;
-  dispose(): void | Promise<void>;
+  dispose(): void;
 }
 
 export interface LoadedPluginModule {
   module: unknown;
-  dispose(): Promise<void>;
+  dispose(): void;
 }
 
 export type PluginModuleRealmFactory = () => PluginModuleRealm;
@@ -15,37 +15,8 @@ let realmsCreated = 0;
 let realmsDisposed = 0;
 let realmsOpen = 0;
 
-export interface PluginModuleFramePool<T> {
-  acquire(): T;
-  release(frame: T): Promise<void>;
-  stats(): { created: number; idle: number; retired: number; reused: number };
-}
-
-export function createPluginModuleFramePool<T>(
-  create: () => T,
-  retire: (frame: T) => Promise<void>,
-): PluginModuleFramePool<T> {
-  const idle: T[] = [];
-  let created = 0;
-  let retired = 0;
-  let reused = 0;
-  return {
-    acquire() {
-      const frame = idle.pop();
-      if (frame !== undefined) {
-        reused += 1;
-        return frame;
-      }
-      created += 1;
-      return create();
-    },
-    async release(frame) {
-      await retire(frame);
-      retired += 1;
-      idle.push(frame);
-    },
-    stats: () => ({ created, idle: idle.length, retired, reused }),
-  };
+export function pluginModuleRealmStats(): { open: number; created: number; disposed: number } {
+  return { open: realmsOpen, created: realmsCreated, disposed: realmsDisposed };
 }
 
 const PARENT_REALM_BINDINGS = `
@@ -92,56 +63,13 @@ export function pluginModuleSource(code: string): string {
   return `${PARENT_REALM_BINDINGS}\n${code}`;
 }
 
-let retiredDocumentSequence = 0;
-
-function createBrowserPluginModuleFrame(): HTMLIFrameElement {
+function createBrowserPluginModuleRealm(): PluginModuleRealm {
   const frame = document.createElement("iframe");
   frame.hidden = true;
   frame.tabIndex = -1;
   frame.setAttribute("aria-hidden", "true");
   frame.style.display = "none";
   (document.body ?? document.documentElement).append(frame);
-  return frame;
-}
-
-function retireBrowserPluginModuleFrame(frame: HTMLIFrameElement): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const finish = () => {
-      frame.removeEventListener("error", fail);
-      resolve();
-    };
-    const fail = () => {
-      frame.removeEventListener("load", finish);
-      frame.remove();
-      reject(new Error("plugin module frame retirement failed"));
-    };
-    frame.addEventListener("load", finish, { once: true });
-    frame.addEventListener("error", fail, { once: true });
-    frame.srcdoc = `<!doctype html><meta data-retired-plugin-module="${++retiredDocumentSequence}">`;
-  });
-}
-
-const browserPluginModuleFrames = createPluginModuleFramePool(
-  createBrowserPluginModuleFrame,
-  retireBrowserPluginModuleFrame,
-);
-
-export function pluginModuleRealmStats(): {
-  open: number;
-  created: number;
-  disposed: number;
-  frames: { created: number; idle: number; retired: number; reused: number };
-} {
-  return {
-    open: realmsOpen,
-    created: realmsCreated,
-    disposed: realmsDisposed,
-    frames: browserPluginModuleFrames.stats(),
-  };
-}
-
-function createBrowserPluginModuleRealm(): PluginModuleRealm {
-  const frame = browserPluginModuleFrames.acquire();
   const realmWindow = frame.contentWindow;
   const realmDocument = frame.contentDocument;
   if (!realmWindow || !realmDocument) {
@@ -183,10 +111,10 @@ function createBrowserPluginModuleRealm(): PluginModuleRealm {
         realmDocument.head.append(script);
       });
     },
-    async dispose() {
+    dispose() {
       if (disposed) return;
       disposed = true;
-      await browserPluginModuleFrames.release(frame);
+      frame.remove();
     },
   };
 }
@@ -198,12 +126,13 @@ export async function loadPluginModule(
   const realm = createRealm();
   realmsCreated += 1;
   realmsOpen += 1;
-  let disposal: Promise<void> | null = null;
+  let disposed = false;
   const dispose = () => {
-    if (disposal !== null) return disposal;
+    if (disposed) return;
+    disposed = true;
     realmsOpen = Math.max(0, realmsOpen - 1);
-    disposal = Promise.resolve(realm.dispose()).then(() => { realmsDisposed += 1; });
-    return disposal;
+    realmsDisposed += 1;
+    realm.dispose();
   };
   try {
     const module = await realm.evaluate(code);
@@ -212,7 +141,7 @@ export async function loadPluginModule(
       dispose,
     };
   } catch (error) {
-    await dispose();
+    dispose();
     throw error;
   }
 }
