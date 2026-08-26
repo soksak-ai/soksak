@@ -27,7 +27,7 @@ import (
 func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 
 	host := NewHost(Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
@@ -37,7 +37,7 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	})
 	t.Cleanup(func() { host.StopAll() })
 
-	open, err := host.Start("probe")
+	open, err := host.Start("fake-unit")
 	if err != nil {
 		t.Fatalf("starting the unit: %v", err)
 	}
@@ -49,26 +49,26 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	}
 	// The address is what the unit said, never what this process derived. A unit that binds
 	// somewhere else stays reachable because it said so.
-	if open.Address != filepath.Join(runtimeRoot, "probe.sock") {
+	if open.Address != filepath.Join(runtimeRoot, "fake-unit.sock") {
 		t.Fatalf("the unit announced %q, which is not where it says it bound", open.Address)
 	}
 
 	// Starting again answers with the same process rather than a second one behind one name.
-	again, err := host.Start("probe")
+	again, err := host.Start("fake-unit")
 	if err != nil {
 		t.Fatalf("starting an already open unit: %v", err)
 	}
 	if again.PID != open.PID {
 		t.Fatalf("a second start made a second process: %d then %d", open.PID, again.PID)
 	}
-	if err := host.Release("probe"); err != nil {
+	if err := host.Release("fake-unit"); err != nil {
 		t.Fatalf("releasing a channel: %v", err)
 	}
 	started := host.Started()
 	if len(started) != 1 || started[0].PID != open.PID {
 		t.Fatalf("channel release removed the process from the host: %+v", started)
 	}
-	answer, err := host.Send("probe", controlwire.Request{ID: "1", Command: "probe.echo"})
+	answer, err := host.Send("fake-unit", controlwire.Request{ID: "1", Command: "fake-unit.echo"})
 	if err != nil {
 		t.Fatalf("sending to the unit: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 		t.Fatalf("the unit refused or lost the correlation id: %+v", answer)
 	}
 
-	streamed, bytes, err := host.Stream("probe", controlwire.Request{ID: "2", Command: "probe.stream"})
+	streamed, bytes, err := host.Stream("fake-unit", controlwire.Request{ID: "2", Command: "fake-unit.stream"})
 	if err != nil {
 		t.Fatalf("opening a stream: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	// timer would report a zombie as alive and a reaped one as gone at whatever moment the loop
 	// happened to look.
 	pid := open.PID
-	if err := host.Stop("probe"); err != nil {
+	if err := host.Stop("fake-unit"); err != nil {
 		t.Fatalf("stopping the unit: %v", err)
 	}
 	if err := waitUntilUnreachable(open.Address, 5*time.Second); err != nil {
@@ -110,7 +110,7 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 func TestConcurrentStartsShareOneProcess(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	host := NewHost(Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
@@ -125,7 +125,7 @@ func TestConcurrentStartsShareOneProcess(t *testing.T) {
 	for range 7 {
 		go func() {
 			<-start
-			open, err := host.Start("probe")
+			open, err := host.Start("fake-unit")
 			results <- result{open: open, err: err}
 		}()
 	}
@@ -262,7 +262,7 @@ func stageUnit(t *testing.T, home, name, source string) {
 	if len(goDirective) != 2 {
 		t.Fatal("root go.mod must contain one exact Go version")
 	}
-	if err := os.WriteFile(filepath.Join(build, "go.mod"), []byte("module probe\n\ngo "+string(goDirective[1])+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(build, "go.mod"), []byte("module fake-unit\n\ngo "+string(goDirective[1])+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	// The layout is written out here rather than taken from SidecarPath, because SidecarPath checks
@@ -310,7 +310,7 @@ func alive(pid int) bool {
 
 // The programs below are units, not fakes. Each is compiled and run.
 
-const probeSource = `package main
+const fakeUnitSource = `package main
 
 import (
 	"bufio"
@@ -328,7 +328,7 @@ func main() {
 	flag.Parse()
 	run := *runtimeRoot
 	os.MkdirAll(run, 0o700)
-	address := filepath.Join(run, "probe.sock")
+	address := filepath.Join(run, "fake-unit.sock")
 	os.Remove(address)
 	listener, err := net.Listen("unix", address)
 	if err != nil {
@@ -360,7 +360,7 @@ func main() {
 				json.Unmarshal(raw, &request)
 				answer, _ := json.Marshal(map[string]any{"id": request.ID, "ok": true, "result": map[string]any{"code": "OK"}})
 				conn.Write(append(answer, '\n'))
-				if request.Command == "probe.stream" {
+				if request.Command == "fake-unit.stream" {
 					conn.Write([]byte("STREAMED-BYTES"))
 					return
 				}

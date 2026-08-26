@@ -72,7 +72,7 @@ func TestTwoRequestsReuseOneConnection(t *testing.T) {
 	t.Cleanup(func() { _ = host.ServiceShutdown() })
 
 	for _, id := range []string{"first", "second"} {
-		answer, err := host.Send("unit", controlwire.Request{ID: id, Command: "probe.echo"})
+		answer, err := host.Send("unit", controlwire.Request{ID: id, Command: "fake-unit.echo"})
 		if err != nil {
 			t.Fatalf("send %s: %v", id, err)
 		}
@@ -95,7 +95,7 @@ func TestTwoRequestsReuseOneConnection(t *testing.T) {
 		go func() {
 			defer wait.Done()
 			id := fmt.Sprintf("overlap-%d", index)
-			answer, err := host.Send("unit", controlwire.Request{ID: id, Command: "probe.echo"})
+			answer, err := host.Send("unit", controlwire.Request{ID: id, Command: "fake-unit.echo"})
 			if err != nil {
 				failures <- err
 				return
@@ -120,13 +120,13 @@ func TestReconnectsAfterTheUnitCloses(t *testing.T) {
 	host := relayHost(fake)
 	t.Cleanup(func() { _ = host.ServiceShutdown() })
 
-	first, err := host.Send("unit", controlwire.Request{ID: "1", Command: "probe.echo"})
+	first, err := host.Send("unit", controlwire.Request{ID: "1", Command: "fake-unit.echo"})
 	if err != nil || !first.Ok || first.ID != "1" {
 		t.Fatalf("first send: answer=%+v err=%v", first, err)
 	}
 	// The unit closed its side after answering. The next request opens and greets a new connection
 	// rather than waiting on the one nobody is on.
-	second, err := host.Send("unit", controlwire.Request{ID: "2", Command: "probe.echo"})
+	second, err := host.Send("unit", controlwire.Request{ID: "2", Command: "fake-unit.echo"})
 	if err != nil || !second.Ok || second.ID != "2" {
 		t.Fatalf("send after the unit closed: answer=%+v err=%v", second, err)
 	}
@@ -140,7 +140,7 @@ func TestReconnectsAfterTheUnitCloses(t *testing.T) {
 	if err := host.Stop("unit"); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
-	if _, err := host.Send("unit", controlwire.Request{ID: "3", Command: "probe.echo"}); err == nil {
+	if _, err := host.Send("unit", controlwire.Request{ID: "3", Command: "fake-unit.echo"}); err == nil {
 		t.Fatal("a send after stop was answered")
 	}
 }

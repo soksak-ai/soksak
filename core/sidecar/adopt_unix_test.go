@@ -24,7 +24,7 @@ import (
 func TestASecondRunFindsTheUnitTheFirstStarted(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := func() Deps {
 		return Deps{
 			Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
@@ -33,19 +33,19 @@ func TestASecondRunFindsTheUnitTheFirstStarted(t *testing.T) {
 	}
 
 	first := NewHost(deps())
-	started, err := first.Start("probe")
+	started, err := first.Start("fake-unit")
 	if err != nil {
 		t.Fatalf("starting the unit: %v", err)
 	}
 
 	// The first run lets go without ending anything, which is what a release is.
-	if err := first.Release("probe"); err != nil {
+	if err := first.Release("fake-unit"); err != nil {
 		t.Fatalf("releasing the unit: %v", err)
 	}
 
 	second := NewHost(deps())
 	t.Cleanup(func() { second.StopAll() })
-	found, err := second.Start("probe")
+	found, err := second.Start("fake-unit")
 	if err != nil {
 		t.Fatalf("the second run could not find the unit: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestASecondRunFindsTheUnitTheFirstStarted(t *testing.T) {
 	}
 
 	// And it can drive what it found, which is what adopting is for.
-	answer, err := second.Send("probe", controlwire.Request{ID: "1", Command: "probe.echo"})
+	answer, err := second.Send("fake-unit", controlwire.Request{ID: "1", Command: "fake-unit.echo"})
 	if err != nil || !answer.Ok {
 		t.Fatalf("the adopted unit did not answer: %v %+v", err, answer)
 	}
@@ -67,31 +67,31 @@ func TestASecondRunFindsTheUnitTheFirstStarted(t *testing.T) {
 func TestASecondRunCanIdempotentlyStopAnOwnedUnitWithoutStartingIt(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
-	started, err := first.Start("probe")
+	started, err := first.Start("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := first.Release("probe"); err != nil {
+	if err := first.Release("fake-unit"); err != nil {
 		t.Fatal(err)
 	}
 
 	second := NewHost(deps)
-	if err := second.Stop("probe"); err != nil {
+	if err := second.Stop("fake-unit"); err != nil {
 		t.Fatalf("stopping the recorded unit: %v", err)
 	}
 	if err := waitUntilUnreachable(started.Address, 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
-	if err := second.Stop("probe"); err != nil {
+	if err := second.Stop("fake-unit"); err != nil {
 		t.Fatalf("repeated stop is not idempotent: %v", err)
 	}
-	if _, err := os.Stat(second.recordPath("probe")); !os.IsNotExist(err) {
+	if _, err := os.Stat(second.recordPath("fake-unit")); !os.IsNotExist(err) {
 		t.Fatalf("owned record remains after stop: %v", err)
 	}
 }
@@ -99,22 +99,22 @@ func TestASecondRunCanIdempotentlyStopAnOwnedUnitWithoutStartingIt(t *testing.T)
 func TestRecordedInventoryExposesOwnershipWithoutAdoptingOrLeakingToken(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
-	started, err := first.Start("probe")
+	started, err := first.Start("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := first.Release("probe"); err != nil {
+	if err := first.Release("fake-unit"); err != nil {
 		t.Fatal(err)
 	}
 
 	second := NewHost(deps)
-	t.Cleanup(func() { _ = second.Stop("probe") })
+	t.Cleanup(func() { _ = second.Stop("fake-unit") })
 	recorded, err := second.Recorded()
 	if err != nil {
 		t.Fatal(err)
@@ -134,19 +134,19 @@ func TestRecordedInventoryExposesOwnershipWithoutAdoptingOrLeakingToken(t *testi
 func TestARecordWithNothingBehindItStartsAUnit(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 	}
 
 	first := NewHost(deps)
-	started, err := first.Start("probe")
+	started, err := first.Start("fake-unit")
 	if err != nil {
 		t.Fatalf("starting the unit: %v", err)
 	}
 	// Ended, so the record now names a process that is not there.
-	if err := first.Stop("probe"); err != nil {
+	if err := first.Stop("fake-unit"); err != nil {
 		t.Fatalf("stopping the unit: %v", err)
 	}
 	if err := waitUntilUnreachable(started.Address, 5*time.Second); err != nil {
@@ -155,7 +155,7 @@ func TestARecordWithNothingBehindItStartsAUnit(t *testing.T) {
 
 	second := NewHost(deps)
 	t.Cleanup(func() { second.StopAll() })
-	fresh, err := second.Start("probe")
+	fresh, err := second.Start("fake-unit")
 	if err != nil {
 		t.Fatalf("a run with a stale record could not start a unit: %v", err)
 	}
@@ -170,27 +170,27 @@ func TestARecordWithNothingBehindItStartsAUnit(t *testing.T) {
 func TestASecondRunReplacesAUnitWhoseRecordedProgramChanged(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	first := NewHost(Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 	})
-	started, err := first.Start("probe")
+	started, err := first.Start("fake-unit")
 	if err != nil {
 		t.Fatalf("starting the unit: %v", err)
 	}
-	if err := first.Release("probe"); err != nil {
+	if err := first.Release("fake-unit"); err != nil {
 		t.Fatalf("releasing the unit: %v", err)
 	}
 
 	reinstalled := shortHome(t)
-	stageUnit(t, reinstalled, "probe", probeSource)
+	stageUnit(t, reinstalled, "fake-unit", fakeUnitSource)
 	second := NewHost(Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(reinstalled),
 	})
 	t.Cleanup(func() { second.StopAll() })
-	found, err := second.Start("probe")
+	found, err := second.Start("fake-unit")
 	if err != nil {
 		t.Fatalf("the second run could not start the recorded program: %v", err)
 	}
@@ -207,21 +207,21 @@ func TestASecondRunReplacesAUnitWhoseRecordedProgramChanged(t *testing.T) {
 func TestRecordedInventoryForgetsARecordWhoseProcessHasEnded(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
-	if _, err := first.Start("probe"); err != nil {
+	if _, err := first.Start("fake-unit"); err != nil {
 		t.Fatal(err)
 	}
-	if err := first.Stop("probe"); err != nil {
+	if err := first.Stop("fake-unit"); err != nil {
 		t.Fatal(err)
 	}
 	// Stop removed the record with the unit. Put one back to stand for the record a run that died
 	// without stopping leaves behind.
-	record := filepath.Join(home, "run", "sidecar-probe.json")
+	record := filepath.Join(home, "run", "sidecar-fake-unit.json")
 	if err := os.MkdirAll(filepath.Dir(record), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -249,24 +249,24 @@ func TestRecordedInventoryForgetsARecordWhoseProcessHasEnded(t *testing.T) {
 func TestStartingAgainReplacesAnAdoptedUnitNothingAnswersAt(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
-	started, err := first.Start("probe")
+	started, err := first.Start("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := first.Release("probe"); err != nil {
+	if err := first.Release("fake-unit"); err != nil {
 		t.Fatal(err)
 	}
 
 	// A second run adopts what the first left running, as an application coming back does.
 	second := NewHost(deps)
-	t.Cleanup(func() { _ = second.Stop("probe") })
-	adopted, err := second.Start("probe")
+	t.Cleanup(func() { _ = second.Stop("fake-unit") })
+	adopted, err := second.Start("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func TestStartingAgainReplacesAnAdoptedUnitNothingAnswersAt(t *testing.T) {
 	}
 	second.awaitGone(adopted.Address)
 
-	again, err := second.Start("probe")
+	again, err := second.Start("fake-unit")
 	if err != nil {
 		t.Fatalf("starting again: %v", err)
 	}
@@ -299,22 +299,22 @@ func TestStartingAgainReplacesAnAdoptedUnitNothingAnswersAt(t *testing.T) {
 func TestStartedInventoryDropsAHeldUnitNothingAnswersAt(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
-	started, err := first.Start("probe")
+	started, err := first.Start("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := first.Release("probe"); err != nil {
+	if err := first.Release("fake-unit"); err != nil {
 		t.Fatal(err)
 	}
 	second := NewHost(deps)
-	t.Cleanup(func() { _ = second.Stop("probe") })
-	if _, err := second.Start("probe"); err != nil {
+	t.Cleanup(func() { _ = second.Stop("fake-unit") })
+	if _, err := second.Start("fake-unit"); err != nil {
 		t.Fatal(err)
 	}
 	if len(second.Started()) != 1 {
@@ -335,18 +335,18 @@ func TestStartedInventoryDropsAHeldUnitNothingAnswersAt(t *testing.T) {
 func TestSendStartsAUnitWhoseProcessIsGone(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
-	stageUnit(t, home, "probe", probeSource)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
 	}
 	host := NewHost(deps)
-	t.Cleanup(func() { _ = host.Stop("probe") })
-	started, err := host.Start("probe")
+	t.Cleanup(func() { _ = host.Stop("fake-unit") })
+	started, err := host.Start("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := host.Send("probe", controlwire.Request{ID: "one", Command: "probe.echo"}); err != nil {
+	if _, err := host.Send("fake-unit", controlwire.Request{ID: "one", Command: "fake-unit.echo"}); err != nil {
 		t.Fatalf("first request: %v", err)
 	}
 
@@ -355,7 +355,7 @@ func TestSendStartsAUnitWhoseProcessIsGone(t *testing.T) {
 	}
 	host.awaitGone(started.Address)
 
-	if _, err := host.Send("probe", controlwire.Request{ID: "two", Command: "probe.echo"}); err != nil {
+	if _, err := host.Send("fake-unit", controlwire.Request{ID: "two", Command: "fake-unit.echo"}); err != nil {
 		t.Fatalf("the request did not reach a unit: %v", err)
 	}
 	if open := host.Started(); len(open) != 1 || open[0].PID == started.PID {
