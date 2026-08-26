@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadPluginModule, pluginModuleSource, type PluginModuleRealm } from "./pluginModuleRealm";
+import {
+  loadPluginModule,
+  pluginModuleRealmStats,
+  pluginModuleSource,
+  type PluginModuleRealm,
+} from "./pluginModuleRealm";
 
 function realmFixture(evaluate: PluginModuleRealm["evaluate"] = async (code) => ({ code })) {
   const dispose = vi.fn();
@@ -49,5 +54,23 @@ describe("plugin module realm lifetime", () => {
     expect(create).toHaveBeenCalledTimes(2);
     expect(first.dispose).toHaveBeenCalledOnce();
     expect(second.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("reports open, created, and disposed generations", async () => {
+    const before = pluginModuleRealmStats();
+    const fixture = realmFixture();
+    const loaded = await loadPluginModule("observed", () => fixture.realm);
+
+    expect(pluginModuleRealmStats()).toEqual({
+      open: before.open + 1,
+      created: before.created + 1,
+      disposed: before.disposed,
+    });
+    loaded.dispose();
+    expect(pluginModuleRealmStats()).toEqual({
+      open: before.open,
+      created: before.created + 1,
+      disposed: before.disposed + 1,
+    });
   });
 });
