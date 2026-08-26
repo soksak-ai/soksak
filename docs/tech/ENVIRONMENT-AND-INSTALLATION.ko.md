@@ -7,54 +7,54 @@ canonical: docs/tech/ENVIRONMENT-AND-INSTALLATION.md
 # Environment와 설치
 
 공개 JSON 형식은 `soksak-spec`이 소유합니다. 이 문서는 Core runtime 상태와 installer transaction을
-정의합니다. Canonical build, local store, GitHub 공개 규칙은 spec package의
+정의합니다. 정본 빌드, 로컬 저장소, GitHub 공개 규칙은 spec package의
 `docs/BUILD-AND-RELEASE.md`가 정의합니다.
 
 ## Environment
 
-Environment는 Plugin과 Sidecar runtime 선택만 기록합니다.
+environment 는 Plugin과 Sidecar runtime 선택만 기록합니다.
 `<identity-home>/environment.json`은 유일한 영구 runtime-component 상태입니다. 하나의 단조 증가
 `revision`, Plugin record, Sidecar record를 포함합니다. Plugin record에는 exact version, materialized
 절대 경로, source(`local`, `registry` 또는 `development`), artifact SHA-256, enabled 상태가 있습니다.
-Sidecar record는 enabled 상태 대신 target triple을 추가합니다.
+Sidecar record 는 enabled 상태 대신 target triple을 추가합니다.
 
-Kit, Contract, Spec은 build 또는 validation input입니다. 이들의 exact release reference는 release
-document와 candidate build receipt에 남으며 Core는 runtime 상태로 복사하지 않습니다. Runtime
-dependency는 Plugin release에 남습니다. Environment는 repository, source commit, URL, size, dependency
-closure, role binding을 저장하지 않습니다.
+Kit, Contract, Spec은 빌드 입력이거나 검증 입력입니다. 이들의 정확한 릴리즈 참조는 릴리즈
+문서와 후보 빌드 receipt에 남으며 Core는 runtime 상태로 복사하지 않습니다. 실행 시점
+의존은 Plugin 릴리즈에 남습니다. environment 는 저장소, 소스 commit, URL, 크기, 의존
+closure, 역할 binding 을 저장하지 않습니다.
 
-Core는 identity home을 얻은 뒤 revision 1을 생성합니다. 상태가 없거나 올바르지 않으면 boot error이며
-가상의 empty state를 만들지 않습니다. 모든 변경은 compare-and-swap을 사용하고
+Core는 identity home을 얻은 뒤 revision 1을 생성합니다. 상태가 없거나 올바르지 않으면 부팅 오류이며
+가상의 빈 상태를 만들지 않습니다. 모든 변경은 compare-and-swap을 사용하고
 `environment.changed` event 하나를 발행합니다. File polling은 없습니다.
 
-Host는 `environment.json`을 한 번 검증합니다. `environment_get`은 parse와 검증을 마친 document를
+호스트는 `environment.json`을 한 번 검증합니다. `environment_get`은 parse와 검증을 마친 document를
 반환하며 Core frontend는 이를 typed data로 사용하고 다시 검증하지 않습니다.
 
-## 하나의 release 계약과 두 transport
+## 릴리즈 계약 하나와 전송 둘
 
-Local release와 registry release는 같은 closure resolver와 installer transaction을 사용합니다. 두
-release 모두 동일한 공개 release document, manifest, permission, entrypoint, size, SHA-256을 가집니다.
-HTTPS와 명시적으로 주소를 받은 local release store는 승인된 byte를 읽는 방법만 다릅니다. Raw source
-path는 설치 input이 아닙니다. 개발 record의 `path`는 `plugin.develop` 또는 `sidecar.develop`이 선언한
-source directory이며 installer input이 아닙니다. Core는 `../`, 주입된 workspace root, `PATH`, checkout
+로컬 릴리즈와 registry 릴리즈는 같은 closure resolver 와 설치 트랜잭션을 씁니다. 두
+릴리즈 모두 같은 공개 릴리즈 문서, manifest, 권한, entrypoint, 크기, SHA-256 을 가집니다.
+HTTPS와 명시적으로 주소를 받은 로컬 릴리즈 저장소는 승인된 바이트를 읽는 방법만 다릅니다. 원시 소스
+경로는 설치 입력이 아닙니다. 개발 record의 `path`는 `plugin.develop` 또는 `sidecar.develop`이 선언한
+소스 디렉터리이며 설치 입력이 아닙니다. Core는 `../`, 주입된 workspace root, `PATH`, checkout
 layout, symlink로 repository를 찾지 않습니다.
 
-어떤 release 문서도 위치를 기록하지 않습니다. Release directory는 kind, id, version에서 도출합니다.
-공개본은 `https://github.com/soksak-ai/<id>/releases/download/v<version>/`, local store는
+어떤 릴리즈 문서도 위치를 기록하지 않습니다. 릴리즈 디렉터리는 kind, id, version 에서 도출합니다.
+공개본은 `https://github.com/soksak-ai/<id>/releases/download/v<version>/`, 로컬 저장소는
 `<store>/<kind>s/<id>/<version>/`이며 그 안의 모든 file은 bare name으로 가리킵니다. Parent release는
 각 dependency의 `release.json`을 size와 SHA-256으로 고정하고, 그것을 읽는 resolver는 그 byte를
-돌려줘야 합니다. Local install은 closure의 모든 release를 주소를 받은 store에서 읽습니다. Store에
-없는 dependency나 고정값과 byte가 다른 dependency는 도출한 위치를 명시한 error이며 network로
+돌려줘야 합니다. 로컬 설치은 closure 의 모든 릴리즈를 주소를 받은 저장소에서 읽습니다. 저장소에
+없는 의존이나 고정값과 바이트가 다른 의존은 도출한 위치를 명시한 오류이며 네트워크로
 fallback하지 않습니다.
 
-## Installer transaction
+## 설치기 transaction
 
-Installer는 complete Plugin/Sidecar runtime closure를 해석하고 host target을 고르며 모든 size와
+설치기는 완전한 Plugin·Sidecar 실행 closure 를 해석하고 host target 을 고르며 모든 크기와
 SHA-256을 검증하고 regular file만 추출하며 manifest를 확인합니다. 모든 component를 stage한 뒤
 component directory와 `environment.json`을 transaction 하나로 공개합니다. 실패하면 이전 environment와
 component directory가 그대로 유지됩니다.
 
-같은 id, version, target, artifact digest는 멱등입니다. Content-addressed directory
+같은 id, version, target, 산출물 digest 는 멱등입니다. 내용 주소 디렉터리
 `<home>/components/<kind>/<id>/<version>[/<target>]/<sha256>`가 이미 있으면 설치는 그 directory를
 재사용하고 stage된 복사본을 폐기합니다. 같은 SHA-256은 같은 byte이며 directory는 atomic rename으로
 공개되므로 이미 있는 directory는 완전합니다. 이 경우 실패하지 않습니다. 같은
@@ -62,11 +62,11 @@ id, version, target의 digest가 다르면 `VERSION_ARTIFACT_CONFLICT`로 실패
 않습니다. Local record는 자동 registry 교체 대상이 아닙니다. Registry update는 표시할 수 있지만 Local 선택을 바꾸려면 명시적인 registry
 install transaction이 필요합니다.
 
-Installer는 실행 중이거나 기록된 Sidecar를 종료하지 않습니다. 다른 Sidecar byte를 선택하려면 명시적
-lifecycle operation이 필요합니다. Core는 update 완료를 위해 사용자의 복구 가능한 process를 종료하지
+설치기는 실행 중이거나 기록된 Sidecar를 종료하지 않습니다. 다른 Sidecar byte를 선택하려면 명시적
+수명주기 연산이 필요합니다. Core는 update 를 끝내려고 사용자의 복구 가능한 프로세스를 종료하지
 않습니다.
 
-## 개발 source
+## 개발 소스
 
 개발 record는 Plugin 또는 Sidecar record와 같은 형식이며 `source`가 `development`입니다. `path`는
 절대 경로이자 clean한 source directory입니다. Plugin directory는 `plugin.json`과 manifest가 선언한
@@ -75,22 +75,22 @@ entry(entry `null`: entry file 없음)를 포함하고 Sidecar directory는 `sid
 manifest 규칙과 같습니다. key가 없으면 `main.js`, `null`이면 entry file 없음(순수 contract Plugin),
 문자열이면 trim한 뒤 비어 있지 않고 상대 경로(선행 separator 금지, drive letter 금지)이며 `..`
 segment가 없고 `.js` 또는 `.mjs`로 끝나야 합니다. 그 외의 값은
-`environment.develop.entryInvalid`로 거부합니다. Host가 path를 검증하고, entry가 `null`이 아닐 때만
+`environment.develop.entryInvalid`로 거부합니다. 호스트가 path를 검증하고, entry가 `null`이 아닐 때만
 entry file(regular file, path 구성 요소에 symlink 없음)을 검증하며, frontend는 사전 검증하지
 않습니다. 상대 경로이거나 clean하지 않은 path는 `environment.develop.pathAbsolute`로 거부합니다.
-Manifest는 operation당 한 번 읽고 parse하며 `id`, `version`, `entry`(Plugin) 또는
-`process`(Sidecar)는 그 parse 하나에서 가져옵니다. Manifest를 읽거나 parse할 수 없거나 manifest가 다른 id를 선언하는 directory는
+manifest 는 operation당 한 번 읽고 parse하며 `id`, `version`, `entry`(Plugin) 또는
+`process`(Sidecar)는 그 parse 하나에서 가져옵니다. manifest 를 읽거나 parse할 수 없거나 manifest가 다른 id를 선언하는 directory는
 `environment.develop.directoryUnavailable`(`kind`, `id`, `path`, `error`)로 거부합니다. `error`는
 `<file>: <os error 또는 parse error>` 또는 `<file> declares id <id>`이며, os error 또는 parse error는
 단독으로는 호출자에게 반환되지 않습니다. `version`은
 `plugin.develop` 또는 `sidecar.develop` 시점에 그 parse에서 복사하며 strict semver여야 합니다. `registry`와 `local`
 record는 immutable이며 `version`은 artifact의 manifest와 같아야 합니다. `artifactSha256`은 존재하며
-비어 있고 `registry`는 없습니다. Artifact는 없습니다. Sidecar record의 `target`은 host build OS와
-architecture에서 도출한 host artifact target triple이며 environment variable에서 가져오지 않습니다.
-Validation은 digest 또는 registry가 비어 있지 않은 `development` record를 거부합니다. `local`과
+비어 있고 `registry`는 없습니다. 산출물은 없습니다. Sidecar record의 `target`은 host build OS와
+아키텍처에서 도출한 host 산출물 target triple 이며 환경변수에서 가져오지 않습니다.
+검증은 digest 또는 registry가 비어 있지 않은 `development` record를 거부합니다. `local`과
 `registry` record의 validation은 변경 없으며 digest가 필요합니다.
 
-Record의 effective version은 host 규칙 하나(`core/environment/manifest.go`의 `recordVersion`,
+record 의 effective version은 host 규칙 하나(`core/environment/manifest.go`의 `recordVersion`,
 단일 manifest reader `readRecordManifest` 위에 있음)입니다.
 `registry` 또는 `local` record는 record의 `version`입니다. `development` record는 Plugin과 Sidecar
 모두 directory manifest(`<path>/plugin.json` 또는 `<path>/sidecar.json`)의 version입니다. Host
@@ -102,7 +102,7 @@ version을 사용합니다. `plugin_enabled_set`, Plugin requirement와 요청�
 `sidecar_open`의 Sidecar resolution, dependency invariant(모든 Plugin manifest의
 `runtimeDependencies` `{id, version}`을 Plugin과 Sidecar record에 대해 검사하며 record를 바꾸는 모든
 environment write 전과 installer에서 수행), install commit의 개발 record 검사가 여기에 해당합니다.
-Manifest를 읽거나 parse할 수 없거나 manifest가 다른 id를 선언하는 개발 record는 broken입니다.
+manifest 를 읽거나 parse할 수 없거나 manifest가 다른 id를 선언하는 개발 record는 broken입니다.
 Effective version이 없고 어떤 dependent도 충족하지 않습니다. 그 effective version이 필요한 모든
 operation은 `environment.develop.directoryUnavailable`(`kind`, `id`, `path`, `error`)로
 거부합니다. `enabled`가 `true`인 `plugin_enabled_set`, broken consumer Plugin 또는 broken Sidecar에
@@ -111,12 +111,12 @@ operation은 `environment.develop.directoryUnavailable`(`kind`, `id`, `path`, `e
 없이 disable됩니다. Dependency invariant는 broken record를 dependent에 대해 없는 record로
 취급합니다. 그 record를 요구하는 dependent는
 `install.transaction.dependencyVersionConflict`(`requested`는 `missing`)로 거부하고, 어떤 dependent도
-broken record를 요구하지 않으면 write는 진행합니다. Validation은 broken record의 identity 검사를
+broken record를 요구하지 않으면 write는 진행합니다. 검증은 broken record의 identity 검사를
 건너뜁니다. Core frontend는 같은 disk의 manifest로 runtime을 구성하고 그 version을 dependent의 `{id,
 version}` requirement와 reload identity에 사용합니다.
 
 `plugin_manifest_list`는 모든 record의 manifest를 다른 모든 operation이 사용하는 reader인
-`readRecordManifest`로 읽습니다. Manifest를 읽거나 parse할 수 없거나 다른 id를 선언하는 record는
+`readRecordManifest`로 읽습니다. manifest 를 읽거나 parse할 수 없거나 다른 id를 선언하는 record는
 `manifest`가 `null`이고 `error`가 `development` record에서는
 `environment.develop.directoryUnavailable` 문장, `registry` 또는 `local` record에서는
 `install.transaction.pluginManifestInvalid` 문장으로 나열됩니다. Raw os 문자열은 보고하지 않습니다.
@@ -135,24 +135,24 @@ record를 교체합니다. 개발 record의 비어 있는 `artifactSha256`은 `V
 plugin을 reload한 뒤 반환하며 `{ id, path, revision, status, error? }`로 응답합니다. `status`는 runtime
 status(`enabled`, `disabled`, `error`)이고, rejected 목록만 그 id를 가지면 `rejected`, 어느 쪽도 가지지
 않으면 `absent`입니다. `error`는 runtime error 또는 `; `로 이은 rejection error이며 없으면 생략합니다.
-Message는 status를 적고 error가 있으면 그 error도 적습니다: `Plugin <id>의 development 레코드를
+메시지는 상태를 적고 오류가 있으면 그 오류도 적습니다: `Plugin <id>의 development 레코드를
 <path>로 기록했습니다; status disabled: <error>`. `sidecar.develop`은 `{ id, path, revision, version }`으로
 응답하며 `version`은 host가 기록한 record의 version으로 write 뒤에 `environment_get`에서 읽습니다.
-Message는 `Sidecar <id>의 development 레코드를 <path>로 기록했습니다 (version <v>)`이며 영문 message와 같은
+메시지는 `Sidecar <id>의 development 레코드를 <path>로 기록했습니다 (version <v>)`이며 영문 message와 같은
 정보를 담습니다.
 Status field는 없습니다. Write 전의 `SIDECAR_IN_USE` guard가 `open` 또는 `recorded`로 나열된 id를
 거부하므로 write 뒤의 `sidecar_status` 읽기는 답이 하나입니다.
 
-View의 provider가 없는 pane은 overlay 하나를 그리며, 그 overlay는 view address 아래의 노출된
+뷰의 제공자가 없는 pane 은 오버레이 하나를 그리며, 그 오버레이는 뷰 주소 아래의 노출된
 node입니다(`ui.tree`가 `<view address>/node/<data-node>`로 나열하고 `data-*` attribute는 `dataset`에
-있습니다). Overlay는 provider container의 sibling이며 view address를 `data-view-overlay-addr`에
+있습니다). 오버레이는 제공자 컨테이너의 형제이며 뷰 주소를 `data-view-overlay-addr`에
 선언합니다. Container만 `data-view-addr`를 가지므로 `ui.slot`은 view address 하나에
 element 하나를 resolve합니다. Node collector의 scan root는 `.tab-viewer[data-view-addr]`와
 `[data-view-overlay-addr]` 둘이며, 어느 쪽 안의 `data-node`든 그 root의 view address 아래에
-나열되고 chrome으로는 나열되지 않습니다. Boot가 ready가 되기 전의 node는 `plugin-view-loading`입니다. Boot 뒤의 node는
+나열되고 chrome 으로는 나열되지 않습니다. 부팅이 ready가 되기 전의 node는 `plugin-view-loading`입니다. 부팅 뒤의 node는
 `plugin-view-placeholder`이며 `data-view-plugin`(plugin id)과 `data-view-state`를 가집니다. Plugin이
 설치되어 있고 disabled이면 `off`, 어떤 record도 그 id를 가지지 않으면 `absent`, manifest가 거부되었으면
-`refused`이고 이때 `data-view-reason`이 `; `로 이은 rejection error를 가집니다. Provider의 mount가
+`refused`이고 이때 `data-view-reason`이 `; `로 이은 거부 오류를 가집니다. 제공자의 mount 가
 throw했으면 node는 `plugin-view-error`이며 `data-view-plugin`과 `data-view-error`(throw된 message)를
 가집니다.
 
@@ -171,16 +171,16 @@ symlink를 검사한 결과입니다. `RemoveAll(<dir>.removing)`은 `<dir>` 자
 environment write 사이의 crash는 그 record의 다음 제거 뒤에 아무것도 남기지 않습니다. 여기서
 실패하면 `environment.remove.artifactDeleteFailed`(`path`는 `<dir>.removing`, `error`)로 거부하며
 아무것도 바꾸지 않습니다. `<dir>`이 있으면 같은 parent 안의 `<dir>.removing`으로 rename합니다.
-Environment write(compare-and-swap)를 수행합니다. Write가 실패하면 directory 이름을 원래대로
-되돌리고 거부합니다. Write가 성공하면 `<dir>.removing`을 삭제합니다. 마지막 삭제의 실패는 error가
-아닙니다. Command는 `{ previousRevision, revision, artifactDeleteFailed: { path, error } }`로
-성공하며 `path`는 `.removing` path입니다. Record는 제거된 상태이고 `environment.changed`는
+environment write(compare-and-swap)를 수행합니다. 쓰기가 실패하면 directory 이름을 원래대로
+되돌리고 거부합니다. 쓰기가 성공하면 `<dir>.removing`을 삭제합니다. 마지막 삭제의 실패는 오류가
+아닙니다. 명령은 `{ previousRevision, revision, artifactDeleteFailed: { path, error } }`로
+성공하며 `path`는 `.removing` path입니다. record 는 제거된 상태이고 `environment.changed`는
 발행됩니다. Content-addressed path는 partial 상태가 되지 않으며, 그래서 설치가 그 path의 기존
 directory를 재사용합니다.
 
 Core frontend는 Plugin을 host 먼저 제거합니다. 현재 revision에서 `plugin_remove`를 호출하고, host가
 수락한 뒤에만 memory의 instance를 enabled write 없이 비활성화하고 consent와 enabled 상태를 지우며
-environment coordinator를 통해 revision을 한 번 reconcile합니다. Host가 거부하면 frontend는 아무것도
+environment coordinator를 통해 revision을 한 번 reconcile합니다. 호스트가 거부하면 frontend는 아무것도
 바꾸지 않습니다. Change의 `artifactDeleteFailed`는 성공입니다. Frontend는 path를 담은 activity
 하나(Plugin store에서는 `plugin.remove.artifactLeft`, `sidecar.remove`에서는
 `sidecar.remove.artifactLeft`)를 발행하고, consent를 지우며, cascade는 계속합니다.
@@ -193,7 +193,7 @@ environment coordinator를 통해 revision을 한 번 reconcile합니다. Host�
 
 ## 거부
 
-표는 host command별로 호출자가 environment module에서 받을 수 있는 모든 error를 나열합니다. 거부
+표는 host 명령마다 호출자가 environment 모듈에서 받을 수 있는 모든 오류를 나열합니다. 거부
 key는 `core/environment`에 선언된 i18n key이며 아래의 `install.*` key도 거기에 선언되어 있습니다.
 Non-key로 표시한 error는 그대로 반환됩니다. Go `os` error, `ErrRevisionConflict`, 그리고
 `control.Arg`, `environment.json` reader, `platformspec` validator의 raw error입니다.
@@ -219,10 +219,10 @@ host error가 아닙니다. `sidecar_open` row는 Sidecar resolution 중 environ
 | `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove`, `plugin_enabled_set`, `sidecar_open` | Non-key `os.ErrNotExist` | `environment.json`이 없음. 위 row와 같은 위치. |
 | `environment_get`, `plugin_manifest_list` | Non-key `environment.json` 읽기 또는 parse error | `environment.json`을 읽을 수 없거나(not-exist 외의 error), 내용을 `platformspec` parser 또는 validator가 거부함. 이 두 command의 유일한 거부. |
 | `environment_get` | Non-key `os.ErrNotExist` | `environment.json`이 없음. `plugin_manifest_list`는 대신 빈 목록을 반환함. |
-| `plugin_manifest_list` | 없음. Record의 `error` | Manifest를 읽거나 parse할 수 없거나 다른 id를 선언하는 record는 `manifest`가 `null`이고 `error`가 `readRecordManifest`의 `environment.develop.directoryUnavailable` 문장(`development`) 또는 `install.transaction.pluginManifestInvalid` 문장(`registry`, `local`)으로 나열됨. 거부가 아니며 raw os 문자열도 아님. |
+| `plugin_manifest_list` | 없음. record 의 `error` | manifest 를 읽거나 parse할 수 없거나 다른 id를 선언하는 record는 `manifest`가 `null`이고 `error`가 `readRecordManifest`의 `environment.develop.directoryUnavailable` 문장(`development`) 또는 `install.transaction.pluginManifestInvalid` 문장(`registry`, `local`)으로 나열됨. 거부가 아니며 raw os 문자열도 아님. |
 | `plugin_remove`, `sidecar_remove` | `environment.remove.notFound`(`kind`, `id`) | `id`의 record가 없음. |
-| `plugin_remove`, `sidecar_remove` | `environment.remove.pathOutsideHome`(`path`, `home`) | 개발 record가 아닌 record의 `path`가 `<home>/components/`의 strict descendant가 아니거나, 그 `<dir>`이 해석된 components root의 strict descendant가 아님. 두 번째 경우 `path`는 `<dir>`. Record는 유지. |
-| `plugin_remove`, `sidecar_remove` | `environment.remove.pathSymlink`(`path`, `link`) | Components root 아래의 path 구성 요소가, leaf를 포함하여, symlink임. Record는 유지. |
+| `plugin_remove`, `sidecar_remove` | `environment.remove.pathOutsideHome`(`path`, `home`) | 개발 record가 아닌 record의 `path`가 `<home>/components/`의 strict descendant가 아니거나, 그 `<dir>`이 해석된 components root의 strict descendant가 아님. 두 번째 경우 `path`는 `<dir>`. record 는 유지. |
+| `plugin_remove`, `sidecar_remove` | `environment.remove.pathSymlink`(`path`, `link`) | Components root 아래의 path 구성 요소가, leaf를 포함하여, symlink임. record 는 유지. |
 | `plugin_remove`, `sidecar_remove` | Path 검사의 non-key os error | Path 구성 요소의 `Lstat`, 또는 parent나 components root의 `EvalSymlinks`가 not-exist 외의 error로 실패함. |
 | `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove` | `install.transaction.pluginManifestInvalid`(`plugin`) | 결과 environment의 dependency validation: `registry` 또는 `local` Plugin record의 `plugin.json`이 없거나, 읽거나 parse할 수 없거나, record의 id와 version을 선언하지 않음. `plugin_remove`와 `sidecar_remove`에서는 path 검사 뒤, 어떤 file 작업보다 먼저. |
 | `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove` | `install.transaction.dependencyVersionConflict`(`plugin`, `kind`, `dependency`, `required`, `requested`) | 결과 environment의 dependency validation: Plugin manifest의 `runtimeDependencies` 항목에 정확히 그 version의 record가 없음. `plugin_remove`와 `sidecar_remove`에서는 남은 Plugin이 제거된 record를 요구함. 없거나 broken인 record는 `requested`가 `missing`, 그 밖에는 찾은 effective version. |
@@ -245,7 +245,7 @@ host error가 아닙니다. `sidecar_open` row는 Sidecar resolution 중 environ
 rename error)`입니다. `plugin_enabled_set`은 dependency validation을 수행하지 않습니다. Enabled
 상태는 dependency invariant의 일부가 아닙니다.
 
-## Command와 event
+## 명령과 이벤트
 
 - `environment_get`: complete runtime 선택 조회
 - `plugin_manifest_list`: 모든 Plugin record를 manifest 본문과 함께, broken record는 `error`와 함께
