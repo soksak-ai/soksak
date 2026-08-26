@@ -24,7 +24,7 @@ function rt(
     version: opts.version ?? "0.1.0",
     entry: "main.js",
     permissions,
-    runtimeDependencies: Object.keys(dependencies).length ? { plugins: Object.entries(dependencies).map(([depId, version]) => ({ id: depId, version: version.replace(/^\^/, ""), url: `https://github.com/example/${depId}/releases/download/v${version.replace(/^\^/, "")}/release.json`, size: 1, sha256: "a".repeat(64) })) } : undefined,
+    runtimeDependencies: Object.keys(dependencies).length ? { plugins: Object.entries(dependencies).map(([depId, version]) => ({ id: depId, version: version.replace(/^\^/, "") })) } : undefined,
     contributes: {
       views: [], commands: [], formatters: [], languages: [], iconSets: [], programs: [], events: [],
     },

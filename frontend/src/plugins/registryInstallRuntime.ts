@@ -4,13 +4,14 @@ import type {
   ReleaseDocument,
   ReleaseReference,
 } from "./spec";
+import type { ReleaseCoordinates } from "./registryReleaseClosure";
 import type { PluginInstallProgress } from "./registryInstallProgress";
 
 export interface RegistryInstallRuntimeInput {
   certified?: CertifiedRegistry;
   sourceId?: "local";
   localStore?: string;
-  root: ReleaseReference & { kind?: "plugin" | "sidecar" };
+  root: ReleaseCoordinates & ReleaseReference;
   releases: ReleaseDocument[];
   onProgress?: (progress: Pick<PluginInstallProgress, "phase" | "completed" | "total" | "componentId">) => void;
 }

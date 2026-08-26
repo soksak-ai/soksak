@@ -11,8 +11,8 @@ import {
   resolveText,
   serviceOps,
   type ContributedSchedule,
+  type ExactReference,
   type PluginManifest,
-  type ReleaseReference,
 } from "./spec";
 import type { ContractRequirement } from "./spec";
 import { runtimePluginRequirements } from "./runtimeDependencies";
@@ -134,7 +134,7 @@ interface LedgerSchedule {
 
 export interface LedgerServiceBinding {
   plugin: string;
-  sidecar: ReleaseReference;
+  sidecar: ExactReference;
   interface: ContractRequirement;
   ops: string[];
   subscribe: string[];

@@ -1,46 +1,71 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { invoke, install, remote } = vi.hoisted(() => ({ invoke: vi.fn(), install: vi.fn(), remote: vi.fn() }));
+const { invoke, install } = vi.hoisted(() => ({ invoke: vi.fn(), install: vi.fn() }));
 vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
   invoke: (...args: unknown[]) => invoke(...args),
 }));
 vi.mock("../state/environmentEvents", () => ({ reconcileEnvironmentRevision: vi.fn() }));
-vi.mock("../state/registry", () => ({ publicReleaseMetadataGet: (...args: unknown[]) => remote(...args) }));
 vi.mock("./registryInstallRuntime", () => ({ installCertifiedRegistryRelease: (...args: unknown[]) => install(...args) }));
 
 import { installLocalPlugin, installLocalSidecar, planLocalPlugin, planLocalSidecar } from "./localReleaseInstallService";
 import { pluginInstallProgress } from "./registryInstallProgress";
 
 const hash = async (body: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-const integrity = (repository: string, version: string, name: string, body: string) => ({ url: `${repository}/releases/download/v${version}/${name}`, size: body.length, sha256: "a".repeat(64) });
+const integrity = (file: string, body: string) => ({ file, size: body.length, sha256: "a".repeat(64) });
+const PLUGIN = "soksak-plugin-demo";
+const SIDECAR = "soksak-sidecar-state";
 
 describe("local release planning and installation", () => {
   let pluginBody = ""; let sidecarBody = "";
+  const reads = () => invoke.mock.calls.filter(([command]) => command === "local_release_read").map(([, args]) => args);
   beforeEach(async () => {
-    invoke.mockReset(); install.mockReset(); remote.mockReset();
-    const sidecarRepo = "https://github.com/example/soksak-sidecar-state";
-    sidecarBody = JSON.stringify({ kind: "sidecar", id: "soksak-sidecar-state", version: "0.0.1", manifest: integrity(sidecarRepo, "0.0.1", "sidecar.json", "x"), source: { repository: sidecarRepo, commit: "b".repeat(40) }, artifacts: [{ ...integrity(sidecarRepo, "0.0.1", "state.tgz", "x"), target: "aarch64-apple-darwin", format: "tgz", manifest: "sidecar.json" }], evidence: [integrity(sidecarRepo, "0.0.1", "conformance-release.json", "x")] });
-    const sidecar = { id: "soksak-sidecar-state", version: "0.0.1", url: `${sidecarRepo}/releases/download/v0.0.1/release.json`, size: sidecarBody.length, sha256: await hash(sidecarBody) };
-    const pluginRepo = "https://github.com/example/soksak-plugin-demo";
-    pluginBody = JSON.stringify({ kind: "plugin", id: "soksak-plugin-demo", version: "0.0.1", manifest: integrity(pluginRepo, "0.0.1", "plugin.json", "x"), source: { repository: pluginRepo, commit: "a".repeat(40) }, artifacts: [{ ...integrity(pluginRepo, "0.0.1", "demo.tgz", "x"), target: "any", format: "tgz", manifest: "plugin.json" }], runtimeDependencies: { sidecars: [sidecar] }, evidence: [integrity(pluginRepo, "0.0.1", "conformance-release.json", "x")] });
+    invoke.mockReset(); install.mockReset();
+    sidecarBody = JSON.stringify({ kind: "sidecar", id: SIDECAR, version: "0.0.1", manifest: integrity("sidecar.json", "x"), source: { repository: `https://github.com/soksak-ai/${SIDECAR}`, commit: "b".repeat(40) }, artifacts: [{ ...integrity("state.tgz", "x"), target: "aarch64-apple-darwin", format: "tgz", manifest: "sidecar.json" }], evidence: [integrity("conformance-release.json", "x")] });
+    const sidecar = { id: SIDECAR, version: "0.0.1", size: sidecarBody.length, sha256: await hash(sidecarBody) };
+    pluginBody = JSON.stringify({ kind: "plugin", id: PLUGIN, version: "0.0.1", manifest: integrity("plugin.json", "x"), source: { repository: `https://github.com/soksak-ai/${PLUGIN}`, commit: "a".repeat(40) }, artifacts: [{ ...integrity("demo.tgz", "x"), target: "any", format: "tgz", manifest: "plugin.json" }], runtimeDependencies: { sidecars: [sidecar] }, evidence: [integrity("conformance-release.json", "x")] });
     invoke.mockImplementation(async (command: string, args: { id: string }) => {
       if (command === "plugin_manifest_list") return [];
       if (command === "sidecar_status") return { open: [], recorded: [] };
-      const body = args.id === "soksak-plugin-demo" ? pluginBody : sidecarBody;
+      const body = args.id === PLUGIN ? pluginBody : sidecarBody;
       return { found: true, body, size: body.length, sha256: await hash(body) };
     });
   });
 
-  it("plans a complete local closure without remote fallback", async () => {
-    const plan = await planLocalPlugin("/store", "soksak-plugin-demo", "0.0.1");
+  it("reads every release of the closure from the addressed store by kind, id, and version", async () => {
+    const plan = await planLocalPlugin("/store", PLUGIN, "0.0.1");
     expect(plan.releases.map((release) => release.kind)).toEqual(["plugin", "sidecar"]);
     expect(plan.digest).toMatch(/^[a-f0-9]{64}$/);
-    expect(remote).not.toHaveBeenCalled();
+    expect(reads()).toEqual([
+      { store: "/store", kind: "plugin", id: PLUGIN, version: "0.0.1" },
+      { store: "/store", kind: "sidecar", id: SIDECAR, version: "0.0.1" },
+    ]);
+    expect(invoke).not.toHaveBeenCalledWith("net_http_request", expect.anything());
+  });
+
+  it("refuses a dependency absent from the store by its derived location", async () => {
+    invoke.mockImplementation(async (command: string, args: { id: string }) => {
+      if (command === "plugin_manifest_list") return [];
+      if (args.id === PLUGIN) return { found: true, body: pluginBody, size: pluginBody.length, sha256: await hash(pluginBody) };
+      return { found: false };
+    });
+    await expect(planLocalPlugin("/store", PLUGIN, "0.0.1")).rejects.toThrow(`unresolved release ${SIDECAR}@0.0.1: /store/sidecars/${SIDECAR}/0.0.1/release.json`);
+    expect(invoke).not.toHaveBeenCalledWith("net_http_request", expect.anything());
+  });
+
+  it("hands the installer the store and a root reference pinned to the stored release.json", async () => {
+    install.mockResolvedValue({ ok: true, id: PLUGIN, version: "0.0.1", revision: 2 });
+    const plan = await planLocalPlugin("/store", PLUGIN, "0.0.1");
+    const result = await installLocalPlugin("/store", PLUGIN, "0.0.1", plan.digest);
+    expect(result).toMatchObject({ ok: true, revision: 2 });
+    expect(install).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: "local", localStore: "/store",
+      root: { kind: "plugin", id: PLUGIN, version: "0.0.1", size: pluginBody.length, sha256: await hash(pluginBody) },
+    }));
   });
 
   it("refuses a stale plan before invoking the installer", async () => {
-    const result = await installLocalPlugin("/store", "soksak-plugin-demo", "0.0.1", "0".repeat(64));
+    const result = await installLocalPlugin("/store", PLUGIN, "0.0.1", "0".repeat(64));
     expect(result).toMatchObject({ ok: false, code: "LOCAL_INSTALL_PLAN_CHANGED" });
     expect(install).not.toHaveBeenCalled();
   });
@@ -53,8 +78,8 @@ describe("local release planning and installation", () => {
   });
 
   it("refuses an in-use Sidecar without stopping it", async () => {
-    invoke.mockResolvedValueOnce([]).mockResolvedValueOnce({ open: [{ name: "soksak-sidecar-state" }], recorded: [] });
-    const result = await installLocalSidecar("/store", "soksak-sidecar-state", "0.0.1", "0".repeat(64));
+    invoke.mockResolvedValueOnce([]).mockResolvedValueOnce({ open: [{ name: SIDECAR }], recorded: [] });
+    const result = await installLocalSidecar("/store", SIDECAR, "0.0.1", "0".repeat(64));
     expect(result).toMatchObject({ ok: false, code: "SIDECAR_IN_USE" });
     expect(invoke).not.toHaveBeenCalledWith("sidecar_stop", expect.anything());
     expect(install).not.toHaveBeenCalled();
@@ -62,12 +87,12 @@ describe("local release planning and installation", () => {
 
   it("refuses a Sidecar plan that would break an installed Plugin", async () => {
     invoke.mockImplementationOnce(async () => [{
-      id: "soksak-plugin-demo", version: "0.0.23",
-      manifest: JSON.stringify({ runtimeDependencies: { sidecars: [{ id: "soksak-sidecar-state", version: "0.0.12" }] } }),
+      id: PLUGIN, version: "0.0.23",
+      manifest: JSON.stringify({ runtimeDependencies: { sidecars: [{ id: SIDECAR, version: "0.0.12" }] } }),
     }]);
-    await expect(planLocalSidecar("/store", "soksak-sidecar-state", "0.0.13")).rejects.toMatchObject({
+    await expect(planLocalSidecar("/store", SIDECAR, "0.0.13")).rejects.toMatchObject({
       code: "DEPENDENCY_VERSION_CONFLICT",
-      conflict: { pluginId: "soksak-plugin-demo", pluginVersion: "0.0.23", sidecarId: "soksak-sidecar-state", requiredVersion: "0.0.12", requestedVersion: "0.0.13" },
+      conflict: { pluginId: PLUGIN, pluginVersion: "0.0.23", sidecarId: SIDECAR, requiredVersion: "0.0.12", requestedVersion: "0.0.13" },
     });
     expect(install).not.toHaveBeenCalled();
   });

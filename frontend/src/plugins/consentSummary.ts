@@ -6,7 +6,7 @@
 // plus external libraries (libraries, collected transitively). Listing library and plugin deps is the core of
 // this function (dependencies on the consent screen = rule).
 
-import type { LibraryDep, LocalizedText, PluginManifest, ReleaseReference } from "./spec";
+import type { ExactReference, LibraryDep, LocalizedText, PluginManifest } from "./spec";
 import { runtimePluginRequirements, runtimeSidecarReferences } from "./runtimeDependencies";
 import { transitiveLibraries, type PluginRuntime } from "../state/plugins";
 import { activationChain, type DepNode } from "./dependencyGraph";
@@ -47,7 +47,7 @@ export interface ConsentSummary {
   dependencies: {
     plugins: DepPluginSummary[];
     libraries: LibraryDep[];
-    sidecars: ReleaseReference[];
+    sidecars: ExactReference[];
   };
 }
 

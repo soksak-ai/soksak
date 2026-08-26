@@ -18,7 +18,7 @@ function mani(
     version,
     entry: "main.js",
     permissions: permissions as PluginManifest["permissions"],
-    runtimeDependencies: Object.keys(dependencies).length ? { plugins: Object.entries(dependencies).map(([depId, depVersion]) => ({ id: depId, version: depVersion.replace(/^\^/, ""), url: `https://github.com/example/${depId}/releases/download/v${depVersion.replace(/^\^/, "")}/release.json`, size: 1, sha256: "a".repeat(64) })) } : undefined,
+    runtimeDependencies: Object.keys(dependencies).length ? { plugins: Object.entries(dependencies).map(([depId, depVersion]) => ({ id: depId, version: depVersion.replace(/^\^/, "") })) } : undefined,
     contributes: {
       views: [],
       commands: [],

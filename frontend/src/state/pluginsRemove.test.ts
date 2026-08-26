@@ -177,7 +177,7 @@ describe("usePlugins.remove", () => {
   });
 
   it("cascade continues past a dependent whose artifact was left behind", async () => {
-    const dependency = [{ id: ID, version: "0.0.1", url: `https://github.com/example/${ID}/releases/download/v0.0.1/release.json`, size: 1, sha256: "a".repeat(64) }];
+    const dependency = [{ id: ID, version: "0.0.1" }];
     usePlugins.setState({
       plugins: {
         [ID]: runtime("local"),
@@ -208,7 +208,7 @@ describe("usePlugins.remove", () => {
   });
 
   it("cascade removes the dependent first, each at the host's current revision, and reloads once at the end", async () => {
-    const dependency = [{ id: ID, version: "0.0.1", url: `https://github.com/example/${ID}/releases/download/v0.0.1/release.json`, size: 1, sha256: "a".repeat(64) }];
+    const dependency = [{ id: ID, version: "0.0.1" }];
     usePlugins.setState({
       plugins: {
         [ID]: runtime("local"),
@@ -231,7 +231,7 @@ describe("usePlugins.remove", () => {
   });
 
   it("cascade stops at the first host refusal and reconciles the records already removed", async () => {
-    const dependency = [{ id: ID, version: "0.0.1", url: `https://github.com/example/${ID}/releases/download/v0.0.1/release.json`, size: 1, sha256: "a".repeat(64) }];
+    const dependency = [{ id: ID, version: "0.0.1" }];
     usePlugins.setState({
       plugins: {
         [ID]: runtime("local"),

@@ -468,7 +468,7 @@ export function registerPluginCatalog(): void {
       },
     },
     returns:
-      "{ status, registries, plugins: [{registryId,pluginId,id,kind,version,manifest,reports,installed,runtimeStatus?}] }",
+      "{ status, registries, plugins: [{registryId,pluginId,id,version,size,sha256,installed,runtimeStatus}] }",
     message: (d) =>
       tmsg("msg.plugin.catalog", { n: ((d.plugins as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
@@ -501,13 +501,14 @@ export function registerPluginCatalog(): void {
         registries: st.descriptors
           .filter((descriptor) => !registryId || descriptor.id === registryId)
           .map((descriptor) => serializeRegistrySource(descriptor.id)),
+        // An entry pins release.json by size and sha256; the location is derived from id and
+        // version, and the dependency closure is read from release.json at install time.
         plugins: pluginReleases.map((e) => ({
           registryId: e.registryId,
           pluginId: e.id,
           id: e.id,
           version: e.version,
-          url: e.url, size: e.size, sha256: e.sha256,
-          runtimeDependencies: e.runtimeDependencies ?? null,
+          size: e.size, sha256: e.sha256,
           installed: e.id in installed,
           runtimeStatus: installed[e.id]?.status ?? null,
         })),
@@ -581,8 +582,7 @@ export function registerPluginCatalog(): void {
           pluginId: e.id,
           id: e.id,
           version: e.version,
-          url: e.url, size: e.size, sha256: e.sha256,
-          runtimeDependencies: e.runtimeDependencies ?? null,
+          size: e.size, sha256: e.sha256,
           installed: e.id in installed,
         })),
       };
@@ -689,7 +689,7 @@ export function registerPluginCatalog(): void {
       pluginId: { type: "string", required: true, description: key("cmd.plugin.install.param.pluginId") },
       version: { type: "string", required: true, description: key("cmd.plugin.install.local.param.version") },
     },
-    returns: "{ digest,store,id,version,releases:[{kind,id,version,artifacts:[{target,size,sha256}]}] }",
+    returns: "{ digest,store,id,version,releases:[{kind,id,version,artifacts:[{target,file,size,sha256}]}] }",
     message: (d) => tmsg("msg.plugin.install.local.plan", { id: String(d.id), n: ((d.releases as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "INTERNAL"],
     examples: [`plugin.install.local.plan '{"store":"/absolute/releases","pluginId":"soksak-plugin-<id>","version":"0.0.1"}'`],

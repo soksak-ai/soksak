@@ -45,7 +45,7 @@ const artifactStager: RegistryArtifactStager = {
       registryId: input.registryId,
       identity: input.release,
       artifact: {
-        url: input.artifact.url,
+        file: input.artifact.file,
         size: input.artifact.size,
         sha256: input.artifact.sha256,
         format: input.artifact.format,
@@ -89,7 +89,7 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
   const result = await installRegistryRelease({
     sourceId: selectedSource,
     ...(localStore ? { localStore } : {}),
-    root: { kind: root.kind ?? "plugin", id: root.id, version: root.version },
+    root: { kind: root.kind, id: root.id, version: root.version },
     releases,
     target,
     environment,

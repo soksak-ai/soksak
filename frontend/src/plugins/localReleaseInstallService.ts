@@ -1,14 +1,14 @@
 import { invoke } from "../framework";
 import { reconcileEnvironmentRevision } from "../state/environmentEvents";
-import { publicReleaseMetadataGet } from "../state/registry";
-import { loadReleaseClosure, type ReleaseMetadataGet } from "./registryReleaseClosure";
+import { loadReleaseClosure, type ReleaseCoordinates, type ReleaseRead } from "./registryReleaseClosure";
+import { localReleaseFile, localStoreReleaseResolver, type LocalReleaseRead } from "./releaseResolver";
 import { installCertifiedRegistryRelease, type RegistryInstallRuntimeResult } from "./registryInstallRuntime";
-import { parseReleaseManifest, releaseIdentity, type ReleaseDocument, type ReleaseReference } from "./spec";
+import { releaseIdentity, type ReleaseDocument, type ReleaseReference } from "./spec";
 import { beginPluginInstall, setPluginInstallProgress } from "./registryInstallProgress";
 import { publishActivity } from "../state/activityFeed";
 
-interface LocalReleaseRead { found: boolean; body?: string; size?: number; sha256?: string }
 interface InstalledPluginManifest { id: string; version: string; manifest: string | null }
+type LocalRoot = ReleaseCoordinates & ReleaseReference;
 
 export class DependencyVersionConflict extends Error {
   readonly code = "DEPENDENCY_VERSION_CONFLICT";
@@ -33,54 +33,40 @@ async function requireSidecarCompatibleWithInstalledPlugins(sidecarId: string, r
   }
 }
 
-async function readLocal(store: string, reference: Pick<ReleaseReference, "id" | "version">, kind: "plugin" | "sidecar"): Promise<LocalReleaseRead> {
-  return invoke<LocalReleaseRead>("local_release_read", { store, kind, id: reference.id, version: reference.version });
-}
+const readLocal = ({ store, kind, id, version }: { store: string } & ReleaseCoordinates) => invoke<LocalReleaseRead>("local_release_read", { store, kind, id, version });
 
-async function localRoot(store: string, id: string, version: string, kind: "plugin" | "sidecar"): Promise<{ reference: ReleaseReference; body: string }> {
-  const result = await readLocal(store, { id, version }, kind);
-  if (!result.found || result.body === undefined || result.size === undefined || result.sha256 === undefined) throw new Error(`local ${kind} release is missing: ${id}@${version}`);
-  const parsed = parseReleaseManifest(JSON.parse(result.body));
-  if (!parsed.ok || parsed.value.kind !== kind || parsed.value.id !== id || parsed.value.version !== version) throw new Error(`local ${kind} release is invalid: ${id}@${version}`);
-  return { reference: { id, version, url: `${parsed.value.source.repository}/releases/download/v${version}/release.json`, size: result.size, sha256: result.sha256 }, body: result.body };
+// The root has no reference that pins it: the host validates the stored document and returns its
+// bytes, and the size and sha256 of those bytes become the root reference.
+async function localRoot(store: string, kind: ReleaseCoordinates["kind"], id: string, version: string): Promise<{ reference: LocalRoot; body: string }> {
+  const result = await readLocal({ store, kind, id, version });
+  if (!result.found || result.body === undefined || result.size === undefined || result.sha256 === undefined) {
+    throw new Error(`unresolved release ${id}@${version}: ${localReleaseFile(store, kind, id, version, "release.json")}`);
+  }
+  return { reference: { kind, id, version, size: result.size, sha256: result.sha256 }, body: result.body };
 }
 
 export interface LocalInstallPlan { digest: string; store: string; id: string; version: string; releases: ReleaseDocument[] }
 
 async function digestPlan(releases: ReleaseDocument[]): Promise<string> {
-  const projection = releases.map((release) => ({ identity: releaseIdentity(release), artifacts: release.artifacts.map(({ target, size, sha256 }) => ({ target, size, sha256 })) }));
+  const projection = releases.map((release) => ({ identity: releaseIdentity(release), artifacts: release.artifacts.map(({ target, file, size, sha256 }) => ({ target, file, size, sha256 })) }));
   const bytes = new TextEncoder().encode(JSON.stringify(projection));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function planLocalRelease(store: string, id: string, version: string, kind: "plugin" | "sidecar"): Promise<LocalInstallPlan> {
-  const root = await localRoot(store, id, version, kind);
-  let rootRead = false;
-  const get: ReleaseMetadataGet = async (url) => {
-    if (!rootRead && url === root.reference.url) { rootRead = true; return { status: 200, body: root.body }; }
-    const match = /^https:\/\/github[.]com\/[^/]+\/([^/]+)\/releases\/download\/v([^/]+)\/release[.]json$/.exec(url);
-    if (match) {
-      const kind = match[1].startsWith("soksak-plugin-") ? "plugin" : "sidecar";
-      const local = await readLocal(store, { id: match[1], version: match[2] }, kind);
-      if (local.found) return { status: 200, body: local.body ?? "" };
-    }
-    return publicReleaseMetadataGet(url);
-  };
-  let releases: ReleaseDocument[];
-  if (kind === "plugin") releases = await loadReleaseClosure(root.reference, get);
-  else {
-    const parsed = parseReleaseManifest(JSON.parse(root.body));
-    if (!parsed.ok || parsed.value.kind !== "sidecar") throw new Error(`local Sidecar release is invalid: ${id}@${version}`);
-    releases = [parsed.value];
-  }
-  return { digest: await digestPlan(releases), store, id, version, releases };
+// The root bytes are read once; every dependency is read from the same store by its coordinates.
+async function resolveLocal(store: string, id: string, version: string, kind: ReleaseCoordinates["kind"]): Promise<{ plan: LocalInstallPlan; root: LocalRoot }> {
+  const root = await localRoot(store, kind, id, version);
+  const resolve = localStoreReleaseResolver(store, readLocal);
+  const read: ReleaseRead = (release) => release.kind === kind && release.id === id && release.version === version ? Promise.resolve(root.body) : resolve(release);
+  const releases = await loadReleaseClosure(root.reference, read, kind);
+  return { plan: { digest: await digestPlan(releases), store, id, version, releases }, root: root.reference };
 }
 
-export const planLocalPlugin = (store: string, id: string, version: string) => planLocalRelease(store, id, version, "plugin");
+export const planLocalPlugin = async (store: string, id: string, version: string) => (await resolveLocal(store, id, version, "plugin")).plan;
 export const planLocalSidecar = async (store: string, id: string, version: string) => {
   await requireSidecarCompatibleWithInstalledPlugins(id, version);
-  return planLocalRelease(store, id, version, "sidecar");
+  return (await resolveLocal(store, id, version, "sidecar")).plan;
 };
 
 export async function installLocalPlugin(store: string, id: string, version: string, expectedPlanDigest: string): Promise<RegistryInstallRuntimeResult> {
@@ -91,12 +77,9 @@ export async function installLocalPlugin(store: string, id: string, version: str
     publishActivity("plugin.install.progress", "core", value);
   };
   try {
-    const plan = await planLocalPlugin(store, id, version);
+    const { plan, root } = await resolveLocal(store, id, version, "plugin");
     if (plan.digest !== expectedPlanDigest) { report({ phase: "failed", completed: 0, total: plan.releases.length, error: "local release closure changed after planning" }); return { ok: false, code: "LOCAL_INSTALL_PLAN_CHANGED", message: "local release closure changed after planning" }; }
-    const root = plan.releases[0];
-    if (!root || root.kind !== "plugin" || root.id !== id || root.version !== version) { report({ phase: "failed", completed: 0, total: plan.releases.length, error: "local Plugin root is invalid" }); return { ok: false, code: "LOCAL_INSTALL_ROOT_INVALID", message: "local Plugin root is invalid" }; }
-    const rootReference = await localRoot(store, id, version, "plugin");
-    const result = await installCertifiedRegistryRelease({ sourceId: "local", localStore: store, root: rootReference.reference, releases: plan.releases, onProgress: (progress) => report(progress) });
+    const result = await installCertifiedRegistryRelease({ sourceId: "local", localStore: store, root, releases: plan.releases, onProgress: (progress) => report(progress) });
     if (result.ok) { await reconcileEnvironmentRevision(result.revision); report({ phase: "installed", completed: plan.releases.length, total: plan.releases.length }); }
     else report({ phase: "failed", completed: 0, total: plan.releases.length, error: result.message });
     return result;
@@ -124,10 +107,9 @@ export async function installLocalSidecar(store: string, id: string, version: st
     throw cause;
   }
   if (await sidecarInUse(id)) return { ok: false, code: "SIDECAR_IN_USE", message: sidecarInUseMessage(id, "installation") };
-  const plan = await planLocalSidecar(store, id, version);
+  const { plan, root } = await resolveLocal(store, id, version, "sidecar");
   if (plan.digest !== expectedPlanDigest) return { ok: false, code: "LOCAL_INSTALL_PLAN_CHANGED", message: "local release closure changed after planning" };
-  const root = await localRoot(store, id, version, "sidecar");
-  const result = await installCertifiedRegistryRelease({ sourceId: "local", localStore: store, root: { ...root.reference, kind: "sidecar" }, releases: plan.releases });
+  const result = await installCertifiedRegistryRelease({ sourceId: "local", localStore: store, root, releases: plan.releases });
   if (result.ok) await reconcileEnvironmentRevision(result.revision);
   return result;
 }

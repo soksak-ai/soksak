@@ -1,8 +1,9 @@
-import { parseRegistryPublicKey, semverCompare, type CertifiedRegistry, type LocalizedText, type RegistryPlugin, type RegistryPublicKey } from "./spec";
+import { parseRegistryPublicKey, semverCompare, type CertifiedRegistry, type LocalizedText, type ReleaseReference, type RegistryPublicKey } from "./spec";
 export const OFFICIAL_REGISTRY_ID = "official";
 export interface RegistryDescriptor { id: string; name: string; indexUrl: string; visibility: "public" | "private"; trustedPublicKey: RegistryPublicKey; credentialRef?: string }
 export interface RegistryCredentialSlot { namespace: string; key: "http-authorization"; ref: string }
-export interface QualifiedRegistryEntry extends RegistryPlugin { registryId: string }
+// An index entry pins one plugin release by {id, version, size, sha256}; the location is derived.
+export interface QualifiedRegistryEntry extends ReleaseReference { registryId: string }
 export type RegistryEntry = QualifiedRegistryEntry;
 const REGISTRY_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);

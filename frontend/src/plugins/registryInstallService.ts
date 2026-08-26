@@ -11,6 +11,7 @@ import {
   type RegistryInstallRuntimeResult,
 } from "./registryInstallRuntime";
 import { loadReleaseClosure } from "./registryReleaseClosure";
+import { githubReleaseResolver } from "./releaseResolver";
 import { beginPluginInstall, setPluginInstallProgress } from "./registryInstallProgress";
 import { publishActivity } from "../state/activityFeed";
 
@@ -63,11 +64,12 @@ async function completeQualifiedRegistryInstall(
   entry: QualifiedRegistryEntry,
   certified: CertifiedRegistry,
 ): Promise<RegistryInstallRuntimeResult> {
+  const root = { kind: "plugin" as const, id: entry.id, version: entry.version, size: entry.size, sha256: entry.sha256 };
   let releases;
-  try { releases = await loadReleaseClosure(entry, publicReleaseMetadataGet); }
+  try { releases = await loadReleaseClosure(root, githubReleaseResolver(publicReleaseMetadataGet)); }
   catch (cause) { const message = cause instanceof Error ? cause.message : String(cause); reportInstall(entry.id, { phase: "failed", completed: 0, total: 0, error: message }); return { ok: false, code: "RELEASE_VERIFICATION_FAILED", message, errors: [message] }; }
   const result = await installCertifiedRegistryRelease({
-    certified, root: entry, releases,
+    certified, root, releases,
     onProgress: (progress) => reportInstall(entry.id, progress),
   });
   if (result.ok) {

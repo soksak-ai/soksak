@@ -22,7 +22,7 @@ function demoManifest(): PluginManifest {
       description: "Test fixture",
       entry: null,
       permissions: ["commands", "sidecar", "service"],
-      runtimeDependencies: { sidecars: [{ id: "demo-svc", version: "0.0.1", url: "https://github.com/example/demo-svc/releases/download/v0.0.1/release.json", size: 1, sha256: "a".repeat(64) }] },
+      runtimeDependencies: { sidecars: [{ id: "demo-svc", version: "0.0.1" }] },
       service: {
         interface: { id: "soksak-spec-service-vault", requirement: SERVICE_CONTRACT_REQUIREMENT.requirement },
         subscribe: ["bus:kanban:changed"],
@@ -130,7 +130,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
       services: [
         {
           plugin: "demo",
-          sidecar: { id: "demo-svc", version: "0.0.1", url: "https://github.com/example/demo-svc/releases/download/v0.0.1/release.json", size: 1, sha256: "a".repeat(64) },
+          sidecar: { id: "demo-svc", version: "0.0.1" },
           interface: { id: "soksak-spec-service-vault", requirement: SERVICE_CONTRACT_REQUIREMENT.requirement },
           ops: ["run"],
           subscribe: ["bus:kanban:changed"],
@@ -155,7 +155,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
         description: "Test fixture",
         entry: null,
         permissions: ["commands", "sidecar", "service", "secrets"],
-        runtimeDependencies: { sidecars: [{ id: "vaulted-svc", version: "0.0.1", url: "https://github.com/example/vaulted-svc/releases/download/v0.0.1/release.json", size: 1, sha256: "a".repeat(64) }] },
+        runtimeDependencies: { sidecars: [{ id: "vaulted-svc", version: "0.0.1" }] },
         service: { interface: { id: "soksak-spec-service-vault", requirement: SERVICE_CONTRACT_REQUIREMENT.requirement }, subscribe: [] },
         contributes: {
           commands: [

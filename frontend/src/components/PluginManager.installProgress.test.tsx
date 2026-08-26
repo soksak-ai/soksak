@@ -10,7 +10,7 @@ import { usePluginInstallProgress } from "../plugins/registryInstallProgress";
 
 const entry = {
   registryId: "official", id: "soksak-plugin-terminal-kitty", version: "0.0.11",
-  url: "https://example.invalid/release.json", size: 1, sha256: "a".repeat(64),
+  size: 1, sha256: "a".repeat(64),
 } as never;
 
 describe("plugin manager installation progress", () => {

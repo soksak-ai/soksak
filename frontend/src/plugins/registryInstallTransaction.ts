@@ -13,9 +13,11 @@ import type { HostEnvironment } from "../state/environmentEvents";
 
 export interface RegistryInstallTransaction { transactionId: string }
 export interface StagedRegistryArtifact { handle: string; sha256: string; size: number; manifestSha256: string; extraction: "regular-files-only"; verifiedEntrypoints?: readonly string[] }
-export interface VerifiedInstallRelease extends ReleaseIdentity { registryId: string; sourceRepository: string; sourceCommit: string; artifactUrl: string; artifactSha256: string; target?: ArtifactTarget; manifestSha256: string; stagedHandle: string }
+export interface VerifiedInstallRelease extends ReleaseIdentity { registryId: string; sourceRepository: string; sourceCommit: string; artifactSha256: string; target?: ArtifactTarget; manifestSha256: string; stagedHandle: string }
 export interface RegistryArtifactStager {
   begin(input: { registryId: string; root: ReleaseIdentity; localStore?: string }): Promise<RegistryInstallTransaction>;
+  // The stager derives the artifact location from the release identity and artifact.file: the
+  // published directory, or the store addressed at begin.
   stage(input: { transactionId: string; registryId: string; release: ReleaseIdentity; artifact: ReleaseArtifact }): Promise<StagedRegistryArtifact>;
   readUtf8(transactionId: string, handle: string, path: string): Promise<string>;
   commit(transactionId: string, expectedRevision: number, releases: readonly VerifiedInstallRelease[], root: ReleaseIdentity): Promise<{ revision: number }>;
@@ -98,7 +100,7 @@ async function stageRelease(request: RegistryInstallRequest, transactionId: stri
   const verified: VerifiedInstallRelease = Object.freeze({
     ...identity, registryId: request.sourceId,
     sourceRepository: release.source.repository, sourceCommit: release.source.commit,
-    artifactUrl: artifact.url, artifactSha256: artifact.sha256,
+    artifactSha256: artifact.sha256,
     ...(identity.kind === "sidecar" ? { target: artifact.target } : {}),
     manifestSha256: staged.manifestSha256, stagedHandle: staged.handle,
   });
@@ -111,6 +113,19 @@ function pluginManifest(raw: unknown, identity: ReleaseIdentity): PluginManifest
     throw new InstallFailure("RELEASE_VERIFICATION_FAILED", parsed.validation.errors);
   }
   return parsed.manifest;
+}
+
+// The manifest declares intent {id, version}; the release records the fact {id, version, size, sha256}.
+// Per group, the two sets of {id, version} are equal: nothing declared is missing, nothing undeclared is recorded.
+function dependencyMismatches(manifest: PluginManifest, release: ReleaseDocument): string[] {
+  const errors: string[] = [];
+  for (const group of ["plugins", "sidecars"] as const) {
+    const declared = new Set((manifest.runtimeDependencies?.[group] ?? []).map((value) => `${value.id}@${value.version}`));
+    const recorded = new Set((release.runtimeDependencies?.[group] ?? []).map((value) => `${value.id}@${value.version}`));
+    for (const value of declared) if (!recorded.has(value)) errors.push(`plugin.json declares ${group} dependency ${value} that release.json does not record`);
+    for (const value of recorded) if (!declared.has(value)) errors.push(`release.json records ${group} dependency ${value} that plugin.json does not declare`);
+  }
+  return errors;
 }
 
 export async function installRegistryRelease(request: RegistryInstallRequest): Promise<RegistryInstallResult> {
@@ -139,8 +154,8 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
         const staged = await stageRelease(request, transactionId, release);
 
         if (identity.kind === "plugin") {
-          const manifest = pluginManifest(staged.raw, identity);
-          if (JSON.stringify(manifest.runtimeDependencies ?? null) !== JSON.stringify(release.runtimeDependencies ?? null)) throw new InstallFailure("RELEASE_VERIFICATION_FAILED", ["plugin runtime dependencies differ from its release"]);
+          const mismatches = dependencyMismatches(pluginManifest(staged.raw, identity), release);
+          if (mismatches.length) throw new InstallFailure("RELEASE_VERIFICATION_FAILED", mismatches);
         } else if (identity.kind === "sidecar") {
           const parsed = parseSidecarManifest(staged.raw);
           if (!parsed.ok || parsed.value.id !== identity.id || parsed.value.version !== identity.version) {
