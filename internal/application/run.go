@@ -117,7 +117,7 @@ func Run(assets embed.FS) error {
 	registry := control.NewRegistry()
 	sidecar.Register(registry, sidecar.Registration{
 		Host: units,
-		Resolve: func(consumer sidecar.Consumer, reference sidecar.ReleaseReference) (sidecar.Resolved, error) {
+		Resolve: func(consumer sidecar.Consumer, reference sidecar.DependencyReference) (sidecar.Resolved, error) {
 			runtime, err := coreenvironment.ResolveSidecarForPlugin(resolved.Home, coreenvironment.PluginRef{ID: consumer.ID, Version: consumer.Version}, coreenvironment.PluginRef{ID: reference.ID, Version: reference.Version})
 			if err != nil {
 				return sidecar.Resolved{}, err

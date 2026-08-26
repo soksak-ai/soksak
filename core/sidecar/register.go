@@ -22,7 +22,7 @@ import (
 // Deps for registration. Each field is something this package refuses to derive.
 type Registration struct {
 	Host    *Host
-	Resolve func(consumer Consumer, sidecar ReleaseReference) (Resolved, error)
+	Resolve func(consumer Consumer, sidecar DependencyReference) (Resolved, error)
 	// Sink is where a unit's stream bytes arrive for the caller. Nil means this host has no stream,
 	// and `sidecar_stream` is declared unserved rather than opening a connection whose output has
 	// nowhere to go — a unit writing into nothing blocks, and what that looks like is a unit that
@@ -40,12 +40,11 @@ type Consumer struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
 }
-type ReleaseReference struct {
+
+// DependencyReference is the manifest's runtimeDependencies entry for a sidecar: id and version.
+type DependencyReference struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
-	URL     string `json:"url"`
-	Size    uint64 `json:"size"`
-	SHA256  string `json:"sha256"`
 }
 type Resolved struct{ Name, Version, Path string }
 
@@ -89,7 +88,7 @@ func Register(registry *control.Registry, deps Registration) {
 		if err != nil {
 			return nil, err
 		}
-		sidecar, err := control.Arg[ReleaseReference](args, "sidecar")
+		sidecar, err := control.Arg[DependencyReference](args, "sidecar")
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +233,7 @@ func Register(registry *control.Registry, deps Registration) {
 	})
 }
 
-func (deps Registration) openWithSecrets(consumer Consumer, sidecar ReleaseReference, namespace string, secretEnv map[string]string) (Open, error) {
+func (deps Registration) openWithSecrets(consumer Consumer, sidecar DependencyReference, namespace string, secretEnv map[string]string) (Open, error) {
 	resolved, err := deps.Resolve(consumer, sidecar)
 	if err != nil {
 		return Open{}, err

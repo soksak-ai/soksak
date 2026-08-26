@@ -3,11 +3,11 @@ package install
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"os"
 	"path/filepath"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
+	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
 )
 
 type LocalRelease struct {
@@ -19,8 +19,12 @@ type LocalRelease struct {
 
 func ReadLocalRelease(store, kind, id, version string) (LocalRelease, error) {
 	directory := localKindDirectory[kind]
-	if !filepath.IsAbs(store) || directory == "" || id == "" || version == "" {
+	// id and version are path segments of the derived location; the spec grammars bound them.
+	if !filepath.IsAbs(store) || directory == "" {
 		return LocalRelease{}, i18n.Errorf("install.transaction.localStoreInvalid", nil)
+	}
+	if !platformspec.IsComponentID(id) || !platformspec.IsStrictSemver(version) {
+		return LocalRelease{}, i18n.Errorf("install.fetch.localIdentityInvalid", map[string]string{"artifact": kind + ":" + id + "@" + version})
 	}
 	root := filepath.Join(filepath.Clean(store), directory, id, version)
 	info, err := os.Lstat(root)
@@ -39,8 +43,9 @@ func ReadLocalRelease(store, kind, id, version string) (LocalRelease, error) {
 	if err != nil {
 		return LocalRelease{}, err
 	}
-	var identity struct{ Kind, ID, Version string }
-	if json.Unmarshal(body, &identity) != nil || identity.Kind != kind || identity.ID != id || identity.Version != version {
+	// The document is validated as the spec defines it: a url key, or any other unknown key, is refused.
+	release, err := platformspec.ParseReleaseManifest(body)
+	if err != nil || release.Kind != kind || release.ID != id || release.Version != version {
 		return LocalRelease{}, i18n.Errorf("install.fetch.localReleaseInvalid", map[string]string{"artifact": kind + ":" + id + "@" + version})
 	}
 	digest := sha256.Sum256(body)

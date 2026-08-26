@@ -16,7 +16,6 @@ type VerifiedComponent struct {
 	RegistryID       string `json:"registryId"`
 	SourceRepository string `json:"sourceRepository"`
 	SourceCommit     string `json:"sourceCommit"`
-	ArtifactURL      string `json:"artifactUrl"`
 	ArtifactSHA256   string `json:"artifactSha256"`
 	StagedHandle     string `json:"stagedHandle"`
 }
@@ -30,7 +29,7 @@ type CommitResult struct {
 	Revision uint64 `json:"revision"`
 }
 type publishArtifact struct {
-	kind, id, version, target, repository, commit, url, digest, handle string
+	kind, id, version, target, repository, commit, digest, handle string
 }
 type publishedArtifact struct {
 	final  string
@@ -77,7 +76,7 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 	})
 	artifacts := []publishArtifact{}
 	for _, value := range request.Components {
-		artifacts = append(artifacts, publishArtifact{kind: value.Kind, id: value.ID, version: value.Version, target: value.Target, repository: value.SourceRepository, commit: value.SourceCommit, url: value.ArtifactURL, digest: value.ArtifactSHA256, handle: value.StagedHandle})
+		artifacts = append(artifacts, publishArtifact{kind: value.Kind, id: value.ID, version: value.Version, target: value.Target, repository: value.SourceRepository, commit: value.SourceCommit, digest: value.ArtifactSHA256, handle: value.StagedHandle})
 	}
 	if len(artifacts) == 0 {
 		return CommitResult{}, i18n.Errorf("install.transaction.commitArtifactsRequired", nil)
@@ -116,14 +115,19 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		if installed, found := installedComponent(current, artifact.kind, artifact.id); found &&
 			installed.Source != coreenvironment.DevelopmentSource &&
 			installed.Version == artifact.version && installed.Target == artifact.target {
-			if installed.ArtifactSHA256 != artifact.digest {
+			if installed.ArtifactSHA256 == artifact.digest {
+				installed.Source, installed.Registry = source, registryID
+				selectComponent(&next, artifact.kind, artifact.id, installed)
+				continue
+			}
+			// A local record is the development slot: an install of the same id replaces it whatever
+			// the bytes (a registry install arrives here only by the explicit request the frontend
+			// gates). An install over a registry record refuses different bytes at one version.
+			if installed.Source != coreenvironment.LocalSource {
 				return CommitResult{}, i18n.Errorf("install.transaction.versionArtifactConflict", map[string]string{
 					"artifact": key, "installed": installed.ArtifactSHA256, "requested": artifact.digest,
 				})
 			}
-			installed.Source, installed.Registry = source, registryID
-			selectComponent(&next, artifact.kind, artifact.id, installed)
-			continue
 		}
 		parts := []string{request.Home, "components", artifact.kind, artifact.id, artifact.version}
 		if artifact.kind == "sidecar" {

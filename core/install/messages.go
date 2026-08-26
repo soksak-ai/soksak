@@ -12,6 +12,10 @@ func init() {
 			EN: "artifact kind {kind} is not installable",
 			KO: "{kind} 유형의 아티팩트는 설치할 수 없습니다",
 		},
+		"install.transaction.artifactFileInvalid": {
+			EN: "artifact file name is invalid: {file}",
+			KO: "아티팩트 파일 이름이 올바르지 않습니다: {file}",
+		},
 		"install.transaction.manifestPathMismatch": {
 			EN: "artifact manifest {manifest} must be {expected}",
 			KO: "아티팩트 매니페스트 {manifest}은(는) {expected}이어야 합니다",
@@ -55,6 +59,7 @@ func init() {
 	i18n.Declare(map[string]i18n.Sentence{
 		"install.transaction.noFetcher":                {EN: "installer requires a fetcher", KO: "인스톨러에 fetcher 가 필요합니다"},
 		"install.transaction.identityRequired":         {EN: "installer requires registry and root identity", KO: "인스톨러에 registry 와 root identity 가 필요합니다"},
+		"install.fetch.localIdentityInvalid":           {EN: "local release identity is outside the spec grammar: {artifact}", KO: "local release 식별자가 spec grammar 밖입니다: {artifact}"},
 		"install.transaction.localStoreInvalid":        {EN: "local install requires registryId local and one absolute local release store", KO: "local install에는 registryId local과 절대 local release store 하나가 필요합니다"},
 		"install.transaction.notFound":                 {EN: "install transaction not found: {id}", KO: "설치 트랜잭션이 없습니다: {id}"},
 		"install.transaction.registryMismatch":         {EN: "registry does not match the install transaction", KO: "registry 가 설치 트랜잭션과 일치하지 않습니다"},

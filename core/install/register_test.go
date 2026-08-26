@@ -62,7 +62,7 @@ func TestArtifactInstallProgressHasStatusAndAnEventCursor(t *testing.T) {
 	}()
 	if _, err := registry.Invoke("artifact_install_stage", arguments(t, map[string]any{
 		"transactionId": transaction.TransactionID, "registryId": "official", "identity": identity,
-		"artifact": Artifact{URL: "https://example.invalid/view.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}},
+		"artifact": Artifact{File: "view.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}},
 	})); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestArtifactInstallCommandsCommitAndPublishEnvironmentChange(t *testing.T) 
 		t.Fatal(err)
 	}
 	transaction := beginValue.(Transaction)
-	stageValue, err := registry.Invoke("artifact_install_stage", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "registryId": "official", "identity": identity, "artifact": Artifact{URL: "https://example.invalid/view.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}}))
+	stageValue, err := registry.Invoke("artifact_install_stage", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "registryId": "official", "identity": identity, "artifact": Artifact{File: "view.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestArtifactInstallCommandsCommitAndPublishEnvironmentChange(t *testing.T) 
 	if _, err := registry.Invoke("artifact_install_read_utf8", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "handle": staged.Handle, "path": "plugin.json"})); err != nil {
 		t.Fatal(err)
 	}
-	verified := VerifiedComponent{Kind: "plugin", ID: "view", Version: "0.0.1", RegistryID: "official", SourceRepository: "https://github.com/example/view", SourceCommit: "0123456789abcdef0123456789abcdef01234567", ArtifactURL: "https://example.invalid/view.tgz", ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle}
+	verified := VerifiedComponent{Kind: "plugin", ID: "view", Version: "0.0.1", RegistryID: "official", SourceRepository: "https://github.com/example/view", SourceCommit: "0123456789abcdef0123456789abcdef01234567", ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle}
 	commitValue, err := registry.Invoke("artifact_install_commit", arguments(t, map[string]any{"transactionId": transaction.TransactionID, "expectedRevision": uint64(0), "components": []VerifiedComponent{verified}}))
 	if err != nil {
 		t.Fatal(err)

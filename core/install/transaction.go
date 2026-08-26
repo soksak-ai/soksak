@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
+	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
 )
 
 const (
@@ -43,8 +44,10 @@ func (artifact ArtifactIdentity) key() string {
 	return artifact.Kind + ":" + artifact.ID + "@" + artifact.Version
 }
 
+// Artifact is one release artifact by its bare file name; the location is derived from the
+// identity it is staged for.
 type Artifact struct {
-	URL         string   `json:"url"`
+	File        string   `json:"file"`
 	Size        uint64   `json:"size"`
 	SHA256      string   `json:"sha256"`
 	Format      string   `json:"format"`
@@ -163,7 +166,12 @@ func (manager *TransactionManager) Stage(ctx context.Context, request StageReque
 	if request.Artifact.Manifest != expectedManifest || !safeArchivePath(request.Artifact.Manifest) {
 		return StagedArtifact{}, i18n.Errorf("install.transaction.manifestPathMismatch", map[string]string{"manifest": request.Artifact.Manifest, "expected": expectedManifest})
 	}
-	body, err := manager.fetchArtifact(ctx, transaction, request.Identity, request.Artifact.URL, func(receivedBytes uint64) {
+	// The name is joined under the release directory and appended to the published location.
+	// The spec's file grammar is the only one: it has no separator and no dot segment.
+	if !platformspec.IsReleaseFile(request.Artifact.File) {
+		return StagedArtifact{}, i18n.Errorf("install.transaction.artifactFileInvalid", map[string]string{"file": request.Artifact.File})
+	}
+	body, err := manager.fetchArtifact(ctx, transaction, request.Identity, request.Artifact.File, func(receivedBytes uint64) {
 		manager.recordProgress(ArtifactInstallProgress{
 			TransactionID: request.TransactionID, RegistryID: request.RegistryID,
 			Root: transaction.root, Component: request.Identity, Phase: "downloading",

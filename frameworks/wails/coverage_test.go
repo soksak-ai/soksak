@@ -70,7 +70,7 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	// difference between the two lists.
 	sidecar.Register(registry, sidecar.Registration{
 		Host: sidecar.NewHost(sidecar.Deps{Home: home, Spawner: process.OSSpawner{}}),
-		Resolve: func(sidecar.Consumer, sidecar.ReleaseReference) (sidecar.Resolved, error) {
+		Resolve: func(sidecar.Consumer, sidecar.DependencyReference) (sidecar.Resolved, error) {
 			return sidecar.Resolved{Name: "fixture", Version: "0.0.1", Path: "/fixture"}, nil
 		},
 		Sink: discardSidecarOutput{},
