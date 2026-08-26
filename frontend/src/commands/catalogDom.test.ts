@@ -2292,3 +2292,29 @@ describe("ui.input.click — projected realm coordinates use the producer's surf
     ]);
   });
 });
+
+// A node that scrolls is a node whose content does not fit. Answering only the visible box leaves
+// that unprovable by number, and the only path left is a person looking at the screen — which is
+// how the terminal pane that ran past its box was found.
+describe("ui.measure — the scroll axis", () => {
+  it("answers what the node clips and how far its content runs", async () => {
+    mountNode('<div data-node="btn" style="overflow-x:auto;overflow-y:auto;width:100px;height:50px"><div style="width:300px;height:400px"></div></div>');
+    const node = document.querySelector<HTMLElement>('[data-node="btn"]')!;
+    Object.defineProperties(node, {
+      clientWidth: { value: 100, configurable: true },
+      clientHeight: { value: 50, configurable: true },
+      scrollWidth: { value: 300, configurable: true },
+      scrollHeight: { value: 400, configurable: true },
+    });
+    node.scrollTop = 12;
+    const answer = await execute("ui.measure", { address: ADDR }, {});
+    expect(answer.ok).toBe(true);
+    const data = answer.data as { scroll: Record<string, number>; style: Record<string, string> };
+    expect(data.scroll).toMatchObject({
+      top: 12, left: 0, width: 300, height: 400, clientWidth: 100, clientHeight: 50,
+    });
+    expect(data.style.overflowX).toBe("auto");
+    expect(data.style.overflowY).toBe("auto");
+    expect(data.style.position).toBe("static");
+  });
+});

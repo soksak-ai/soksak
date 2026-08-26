@@ -1016,7 +1016,7 @@ export function registerDomCatalog(): void {
       },
     },
     returns:
-      "{ address, nodeIdentity, dataset, value?:string, rect:{x,y,w,h}, inlineStyle:{height,flexBasis}, style, occlusion?:{ reachable, topTag, topNode }, screen?:{ x, y, cx, cy }, stacking?:[{ identity, node, zIndex, positioned, order }] } — nodeIdentity is the opaque live Element identity shared with ui.tree; dataset contains every declared data-* field on the exposed node; value is the current public value of an exposed input, textarea, or select; stacking entries carry zIndex null for an undeclared layer",
+      "{ address, nodeIdentity, dataset, value?:string, rect:{x,y,w,h}, inlineStyle:{height,flexBasis}, scroll:{top,left,width,height,clientWidth,clientHeight}, style, occlusion?:{ reachable, topTag, topNode }, screen?:{ x, y, cx, cy }, stacking?:[{ identity, node, zIndex, positioned, order }] } — nodeIdentity is the opaque live Element identity shared with ui.tree; dataset contains every declared data-* field on the exposed node; value is the current public value of an exposed input, textarea, or select; stacking entries carry zIndex null for an undeclared layer",
     message: (d) =>
       tmsg("msg.ui.measure", {
         w: Number((d.rect as { w?: number })?.w ?? 0),
@@ -1068,6 +1068,11 @@ export function registerDomCatalog(): void {
         pointerEvents: cs.pointerEvents,
         opacity: cs.opacity,
         visibility: cs.visibility,
+        // Clipping axis — a node that scrolls is a node whose content does not fit, and the rect
+        // alone cannot say so.
+        overflowX: cs.overflowX,
+        overflowY: cs.overflowY,
+        position: cs.position,
       };
       // props[] — request arbitrary computed properties (lifts the hardcoded field set).
       if (Array.isArray(p.props)) {
@@ -1106,6 +1111,17 @@ export function registerDomCatalog(): void {
         inlineStyle: {
           height: (el as HTMLElement).style?.height ?? "",
           flexBasis: (el as HTMLElement).style?.flexBasis ?? "",
+        },
+        // How far the content runs and where the node is scrolled to. content larger than the client
+        // box is a node whose content does not fit; with the overflow rule in style it says whether
+        // that content is clipped, scrolled, or spilling into an ancestor.
+        scroll: {
+          top: Math.round(el.scrollTop ?? 0),
+          left: Math.round(el.scrollLeft ?? 0),
+          width: Math.round(el.scrollWidth ?? 0),
+          height: Math.round(el.scrollHeight ?? 0),
+          clientWidth: Math.round(el.clientWidth ?? 0),
+          clientHeight: Math.round(el.clientHeight ?? 0),
         },
         style,
       };
