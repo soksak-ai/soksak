@@ -106,10 +106,13 @@ func (monitor *windowInputMonitor) run() {
 	}
 }
 
+// enqueueNativeClose queues a close-button click. False means the click is not consumed: the
+// monitor is not running, the queue is full, or the native handle is no window this host knows.
+// A window this host did not open — the application's own panels — keeps its own close button.
 func (monitor *windowInputMonitor) enqueueNativeClose(edge windowPointerEnvelope) bool {
 	monitor.mu.RLock()
 	defer monitor.mu.RUnlock()
-	if !monitor.active {
+	if !monitor.active || monitor.lookup(edge.native) == "" {
 		return false
 	}
 	edge.nativeClose = true
