@@ -7,7 +7,7 @@ canonical: self
 # Message protocol
 
 
-The shape of every command exchange, whichever transport carries it. The wire itself is
+The shape of every command exchange, whichever transport includes it. The wire itself is
 CONTROL-PROTOCOL.md; this is what travels on it.
 
 An agent and a remote client are first-class callers here, not an afterthought. That is the whole
@@ -41,7 +41,7 @@ Success and failure share the shape; only `data` and `hint` are optional.
 - `window` names the window that answered. Without it, an answer from a multi-window process cannot
   be attributed.
 - `hint` offers follow-up commands. It is a suggestion, never an instruction: the receiver — person
-  or agent — decides.
+  or agent — determines.
 
 ## M3. Progress, for streaming commands only
 
@@ -49,7 +49,7 @@ Success and failure share the shape; only `data` and `hint` are optional.
 { kind: "command.progress", command, seq, ts, delta }
 ```
 
-A long command reports what it is doing rather than only what it produced. `delta` carries the
+A long command reports what it is doing rather than only what it produced. `delta` includes the
 content alone — a URL, a node title — and no framing words, because the feed renders
 `<command>: <delta>` and the command name already supplies the context.
 
@@ -58,14 +58,14 @@ streaming.
 
 ## M4. Correlation
 
-Everything that follows from one turn carries that turn's id as `parentId`. The spawn environment
-(`SOKSAK_PARENT`) carries it through `sok` → socket → registry, so a command executed by a child
+Everything that follows from one turn includes that turn's id as `parentId`. The spawn environment
+(`SOKSAK_PARENT`) includes it through `sok` → socket → registry, so a command executed by a child
 process is folded into the turn that caused it.
 
 Without a parent id, a consumer folds by window, command name and time window — a heuristic, and
 documented as one.
 
-## M5. The message belongs to the command
+## M5. The message is owned by the command
 
 A message is written by the command that answers, not by the transport and not by the consumer. A
 consumer that writes its own sentence for a result it did not produce will be wrong the first time

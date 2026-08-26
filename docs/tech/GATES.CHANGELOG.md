@@ -26,7 +26,7 @@ section motion remains explicitly not done until that suite implements it.
 ## Evidence
 
 - `TestEveryNamedGoTestTargetExists` fails when Taskfile or CI names a missing Go test.
-- `task verify:restore` targets `internal/application` where the lifecycle gate now lives.
+- `task verify:restore` targets `internal/application` where the lifecycle gate now is defined.
 - `scripts/ci/macos-link.sh` targets the existing repository release-workflow test.
 
 ## Unanswered compositor commit

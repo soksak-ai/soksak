@@ -4,7 +4,7 @@ status: active
 canonical: self
 ---
 
-# G0–G5 — which criteria stand, and the number that says so
+# G0–G5 — which criteria stand, and the number that states it
 
 G0 to G5 are completion criteria, not implementation steps. Each names a point
 where a working product stands. **This records which of them stand today, the
@@ -29,7 +29,7 @@ contract is in its own canonical document, linked below.
 | `go test ./...` · `go vet ./...` | clean |
 | `CGO_ENABLED=0 GOOS=windows go build ./...` | builds — Windows stays pure Go (NATIVE-LAYER N3) |
 | `go test ./core/...` | the core answers commands with no window |
-| `sok ui.tree` | every reachable node carries `data-node` |
+| `sok ui.tree` | every reachable node includes `data-node` |
 | `sok window.snapshot` | writes a PNG without taking focus |
 | `min-median-max/soksak-terminal-tests` installed UI suite | released plugins are installed through Core; steady-state alignment, coverage, capture, and recording are verified |
 
@@ -82,8 +82,8 @@ The application has no shell to leave behind: since 2026-08-20 the shell is a
 child of the PTY sidecar, which is a separate process precisely so a shell survives
 an application generation. Closing a window therefore ends nothing by itself.
 The window publishes that it is going, the surviving plugin instances hear it,
-and the terminal plugin asks its PTY sidecar to let that window's sessions go — which
-is where "no child process" now lives, one process further out.
+and the terminal plugin requests its PTY sidecar to let that window's sessions go — which
+is where "no child process" now is defined, one process further out.
 
 ## G2 — n-ary recursive split
 
@@ -149,7 +149,7 @@ has watched fail is a claim, not a gate.
 | `reader_language_gate_test.go` | a refusal from a window is a key, rendered where the caller is known |
 | `plural_gate_test.go` | an English sentence that counts declares both forms; a Korean one declares none |
 | `contentview_gate_test.go` | the core and the page name content view events identically |
-| `bindings_gate_test.go` | the generated bindings say what the Go says |
+| `bindings_gate_test.go` | the generated bindings say what the Go states |
 | `internal/repositorygate/provenance_gate_test.go` | the record names no preceding implementation |
 | `sweep_gate_test.go` | a translation sweep changes no code |
 | `internal/repositorygate/observation_gate_test.go` | what the build claims to observe, it serves |
@@ -193,14 +193,14 @@ Written here so it is not rediscovered (L2).
   a sidecar that answers a command it declared and does nothing for, an address one binds and the other
   cannot reach.
 
-  Such a test belongs in `min-median-max/soksak-terminal-tests`, which owns the installed host and sidecar
+  Such a test is placed in `min-median-max/soksak-terminal-tests`, which owns the installed host and sidecar
   pair without making either owner repository depend on the other.
 
-- **The i18n ownership rule is stated and unenforced.** `REPO-LAYOUT.md` L1b says a message is owned
+- **The i18n ownership rule is stated and unenforced.** `REPO-LAYOUT.md` L1b states a message is owned
   by whatever it is about, and no gate holds it. Each plugin or sidecar owner test must enforce it.
 
 - **Whether a distributed build may load a third-party module is unmeasured.**
-  This build ad-hoc signs and carries no entitlements, so nothing stops a load
+  This build ad-hoc signs and includes no entitlements, so nothing stops a load
   today. A distributed one is notarised, notarisation wants the hardened
   runtime, and the hardened runtime validates what a process loads — there is an
   entitlement named for turning that off, which is a decision about the whole
@@ -257,11 +257,11 @@ Written here so it is not rediscovered (L2).
 
   Read rather than guessed at, 2026-08-18: Wails catches the scheme-task
   exception whose reason is exactly `"This task has already been stopped"` and
-  re-throws every other one — its own comment there says "this is very bad to
+  re-throws every other one — its own comment there states "this is very bad to
   detect a stopped schemeTask". An ObjC exception leaving cgo is a fatal signal,
   which is the register dump that was captured. The task is retained and
   released around the call, so it is not a dead object. That is where the crash
-  is; which exception reaches it is not established. A probe that logged the
+  is; which exception arrives at it is not established. A probe that logged the
   reason before re-throwing ran six full suites and never fired, so the probe is
   gone: it measured nothing and a modification to the pinned checkout that
   measures nothing is not kept.
@@ -272,7 +272,7 @@ Written here so it is not rediscovered (L2).
   an empty string. Both halves are named now — the ObjC side substitutes a
   sentence rather than passing nothing on, and the Go side refuses to build an
   error out of no words. Why that path produced an empty message is not
-  established; what is fixed is that the next one says so.
+  established; what is fixed is that the next one states it.
 
 - **A blank browser after a restart is reported and not reproduced.** A person
   reported 2026-08-17 that a restart comes up with the page empty until
@@ -280,7 +280,7 @@ Written here so it is not rediscovered (L2).
   t+7s and out to t+16s, had every browser surface declared and applied visible
   and the page painted. The first attempt to reproduce it did fail — against a
   reading that parsed the wrong answer shape, before `CONTROL-PROTOCOL.md` C2a —
-  so that attempt says nothing. It stays open with no reproduction.
+  so that attempt reports nothing. It stays open with no reproduction.
 - **A command that answers nothing** — found and fixed 2026-08-17.
   `workspace.region.toggle` was silent past the client's 20 seconds, one run in
   three. Its deadline was already there; what could not be reached was the check.
@@ -297,7 +297,7 @@ Written here so it is not rediscovered (L2).
 - **A pane holding a page is drawn by a picture while the layout moves.** The
   page steps aside so the document can draw over its place, and what travels is
   its picture — one instant old, no scrolling, no click. A page that changes while
-  a layout moves is a page a person watches change a beat later. Nothing measures
+  a layout moves is a page a person observes change a beat later. Nothing measures
   how stale it looks; what is measured is that the pane is never blank.
 - **A covered window is not drawn at the display's rate, and that is not this
   application.** Measured 2026-08-17 with `layout.trace` in the named window,

@@ -15,7 +15,7 @@ the focus. **Everything below is judged by numbers from `layout.arrangement`,
 
 ## Scope
 
-This says which places there are, which one a sidebar stands in, and what the
+This states which places there are, which one a sidebar stands in, and what the
 screen does while the rail moves. A section's body is a plugin surface; a build
 with no plugin installed has empty places (S3 below).
 
@@ -47,24 +47,24 @@ a person opens and closes; `side` stands beside the work. A view that named a
 place would be arranging the window from inside the plugin, and the same `side`
 view stands in all three places without knowing which one it is in.
 
-Unknown view fields are **refused by name**. The check tells that kind of refusal
+Unknown view fields are **refused by name**. The check reports to that kind of refusal
 from any other by reading the manifest rather than a
 list somebody keeps up to date.
 
 ## P3. A set names no place, and a link names no set twice
 
-A **set** is an ordered list of section keys with a title. It says what stands
+A **set** is an ordered list of section keys with a title. It states what stands
 together, not where.
 
 A **link** ties one plugin to one set in one place — `rail` or `right`, the two
 that follow the focus. The left edge takes `sections.left` instead, because it
-holds one set for the installation and belongs to no plugin.
+holds one set for the installation and is owned by no plugin.
 
 `sections.list` answers **one** list of available sections rather than one per
 place: a `side` view is standable in every place, so a list per place would be
 three copies of the same answer.
 
-Refusal is by name. A set holding a view that lives only on a tab is refused
+Refusal is by name. A set holding a view that is defined only on a tab is refused
 with that view named — dropped silently, the person reads it as the plugin
 failing rather than as the set being wrong.
 
@@ -129,7 +129,7 @@ mean brightness of 184.7 whether its pane was focused or not, while the CSS abov
 painted "over a native child outside the document".
 
 One strength, computed once per pane, read by three: the cell, the slot, and the view. A view drawn
-on a surface applies it to that surface's alpha — the compositor carries alpha per surface already,
+on a surface applies it to that surface's alpha — the compositor includes alpha per surface already,
 so nothing new is declared for it.
 
 The strength travels in the same object as the view's visibility. They are one fact about one
@@ -204,7 +204,7 @@ only when the render did what it was told.
 A pane that did not move is left out of `moved`, so "nothing moved" is read
 rather than computed — which is the whole of the PIN judgement. A pane with a
 rectangle on one side only is named in `appeared` or `gone`: there is no delta
-against a rectangle that did not exist, and one measured against zero says a
+against a rectangle that did not exist, and one measured against zero states a
 pane moved the width of the window.
 
 Measured 2026-08-16, three splits deep: settled/1, settled/1, traveling/0,
@@ -239,7 +239,7 @@ document-side dim leaves it at full brightness while everything around it dims.
 | `exempt[]` | bands the veil does not cover, such as the rail |
 | `blocked[]` | panes dimmed harder for being between the rail and a focus it could not reach |
 
-Each carries `{ node, target, rect }`. **GREEN: the aperture's `target` is the
+Each includes `{ node, target, rect }`. **GREEN: the aperture's `target` is the
 focused pane.** Measured 2026-08-16 — one pane, aperture on the active pane;
 after a split, aperture on the new pane with the station at its left clean line.
 
@@ -271,7 +271,7 @@ and none lit is a real state.
   whether a departing rail was left behind, with no verdict mid-journey. The
   check of that name inside `ui.verify` reads the same function, so the two
   cannot disagree.
-- **A record carries the frame it opened on.** `window.record` numbers every
+- **A record includes the frame it opened on.** `window.record` numbers every
   frame it writes and that number is the common clock across journals. A layout
   record stamps `recordingFrame` when a recording is running and omits it when
   none is — absent is not frame zero, and a number from a finished burst would

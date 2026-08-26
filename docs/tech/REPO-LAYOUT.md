@@ -68,7 +68,7 @@ a single sentence declared into its registry.
 `i18n_ownership_gate_test.go` reads the sibling trees for that import. It is one-directional on
 purpose: this repository importing its own registry is what the registry is for.
 
-## L1a. Material from another tree is copied in, and the copy decides where
+## L1a. Material from another tree is copied in, and the copy determines where
 
 A repository that came from somewhere else is copied into this workspace and the original upstream
 is never written to. A maintained fork is written only through its `origin`; an unmodified external
@@ -87,7 +87,7 @@ workspace paths is a dependency locator.
 
 **A produced artefact is never copied.** A binary carried in from another tree makes this workspace
 appear to build something it cannot: the artefact runs, the gate that would have named the gap stays
-green, and the producer is somewhere no clone reaches. What is copied is what produces the artefact,
+green, and the producer is somewhere no clone arrives at. What is copied is what produces the artefact,
 or nothing.
 
 **No symbolic link, in either direction.** A declared path is resolved as declared, and a failure

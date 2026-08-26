@@ -55,7 +55,7 @@ All of these are hard.
 - **A1.** The core renders no concrete content. A slot is an empty container.
   A window has three regions — `left`, `center`, `right` — and a plugin declares
   which of them its view is placed in, one or several. The region is a place, not
-  a role: the core neither knows nor asks what a view is for.
+  a role: the core has no notion of what a view is for.
 - **A2.** View context is the only channel into a view. No core store, no layout tree.
 - **A2a.** A section is a plugin. A file tree, a daemon list, bookmarks, a
   terminal — each is its own plugin declaring the region it is placed in, and no
@@ -81,7 +81,7 @@ All of these are hard.
 
 ## Coupling law
 
-- **C1.** The core knows no specific plugin and no specific feature.
+- **C1.** The core has no specific plugin and no specific feature.
   Gate: `coupling_gate_test.go` scans core sources — `frameworks/` included —
   for a plugin id, a rendering engine, and a **domain concept**. A name and a
   concept are two separate readings, because a core that writes no plugin id and
@@ -137,10 +137,10 @@ All of these are hard.
   The window's own webview is such a kind: the core is built on it and there is
   one of it. Anything else a pane draws arrives as an engine module.
 
-  **The test that decides: can a second implementation of the same thing be
+  **The test: can a second implementation of the same thing be
   installed with no core edit.** Where the answer is no, the core is holding a
   content kind rather than a capability, and it goes out. The test is not an
-  opinion — it is what says which day that is, and the day is not hypothetical:
+  opinion — it states which day that is, and the day is not hypothetical:
   the implementation this one succeeds shipped three browsers, one on the
   platform's webview and two on an engine of their own.
 
@@ -201,7 +201,7 @@ All of these are hard.
   that holds an opinion about what content means or how it should behave.** That
   is the whole test, and the three questions below are how it is applied.
 
-  Two are necessary — fail either and it belongs to a plugin:
+  Two are necessary — fail either and it is owned by a plugin:
 
   1. **It is named after no domain.** `app.data`, `app.process`, `ui.input` name
      a mechanism. `bookmark`, `favicon`, `tabstrip` name one kind of content, and
@@ -216,7 +216,7 @@ All of these are hard.
      window's pixels; the process that owns the window owns them — **or every
      plugin would otherwise reinvent it**, and reinvent it differently. A
      byte-stream parser for OSC 7/133/633 crosses fine and is still the core's:
-     it decodes a protocol and decides nothing, and three plugins reading a
+     it decodes a protocol and determines nothing, and three plugins reading a
      terminal byte stream would each write it again.
 
      A PTY is a shared **capability**, never a reason to put terminal semantics
@@ -231,7 +231,7 @@ All of these are hard.
   a url and a title" is an opinion. "A file tab has a code mode and a preview
   mode" is an opinion. Opinions are what a plugin exists to have.
 
-  The failure mode this closes is the pleasant one. A feature reaches the core
+  The failure mode this closes is the pleasant one. A feature arrives at the core
   because the core is where it is easiest to write — one store, one command
   table, one stylesheet already there — and nothing about the result looks
   wrong. Then the second plugin of that kind cannot use any of it, because it

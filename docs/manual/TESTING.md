@@ -44,7 +44,7 @@ A defect gets a test that reproduces it before the fix. The commit order is `tes
 so the record shows the defect existed and that this change is what closed it.
 
 A gate is also planted and removed once, to show it bites. A gate nobody has seen fail is a gate
-nobody knows the shape of.
+nobody records the shape of.
 
 ## T5. Tests are files beside what they check
 

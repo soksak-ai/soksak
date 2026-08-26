@@ -16,7 +16,7 @@ The framework compiles with cgo on macOS and Linux — its own window and webvie
 are written that way. A build on those platforms is a cgo build whether or not we
 add a line of it, so "no cgo" is not an available goal there.
 
-Windows is different: the framework reaches WebView2 through COM in pure Go, so
+Windows is different: the framework arrives at WebView2 through COM in pure Go, so
 that target cross-compiles from any host with no toolchain.
 
 That is the whole shape of the concern. Cross-compilation is the reason to avoid
@@ -25,12 +25,12 @@ cgo, and Windows is the only place avoiding it changes anything.
 ## N1. The cgo surface is small and fixed
 
 Everything that can be pure Go is pure Go: inventory validation, sequencing,
-batch planning, and receipts hold no platform call. cgo carries one layer —
+batch planning, and receipts hold no platform call. cgo includes one layer —
 "apply this batch on the main thread and report the frames that resulted."
 
 The set of files that import `"C"` is fixed. A new one needs a stated reason.
 
-## N2. Native source lives in its own files
+## N2. Native source is defined in its own files
 
 Objective-C, C, and C++ go in `.m`, `.h`, and `.c` files. The cgo preamble holds
 only `#cgo` directives and an `#include` of our own header.
@@ -99,7 +99,7 @@ capture" and "the window was blank" one answer, and nothing downstream could tel
 ## Native surfaces
 
 The application declares surfaces in the DOM and never positions them. One
-delivery carries a complete inventory; a stale sequence, a partial inventory, or
+delivery includes a complete inventory; a stale sequence, a partial inventory, or
 a second writer is refused before anything mutates; and one receipt reports what
 was actually applied.
 
@@ -107,6 +107,6 @@ The coordinate contract is CSS points with a top-left origin, shared by the
 declaration and the receipt so a compositing verdict is a subtraction rather than
 a conversion.
 
-The declaration vocabulary carries no framework name. The core writes these
+The declaration vocabulary includes no framework name. The core writes these
 attributes, so a framework name in them would make the core spell a framework it
 otherwise never names.

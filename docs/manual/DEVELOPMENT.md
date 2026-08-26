@@ -11,8 +11,8 @@ How work proceeds here. The contracts are in `docs/tech`; this is the procedure 
 
 ## D1. Before changing anything
 
-Read the canonical document for the area (`docs/README.md` says which), then the code it points at.
-A rule usually carries the measurement that produced it, with a date.
+Read the canonical document for the area (`docs/README.md` states which), then the code it points at.
+A rule usually includes the measurement that produced it, with a date.
 
 ## D2. Order of a change
 
@@ -42,7 +42,7 @@ what the library actually does before assuming it lacks a feature.
 
 ## D6. Delete failed attempts
 
-An attempt that did not reach its standard is removed with a commit that says so. The next attempt
+An attempt that did not reach its standard is removed with a commit that states it. The next attempt
 starts from the last verified point, not on top of the failure.
 
 ## D7. Reverting
@@ -67,7 +67,7 @@ Comments are English; only text shown to a person is Korean.
 
 ## D10. The record keeps reasons and drops sources
 
-A comment says why a rule exists and what was measured. It does not say which other codebase the
+A comment states why a rule exists and what was measured. It does not say which other codebase the
 measurement came from.
 
 **Gate.** `internal/repositorygate/provenance_gate_test.go`.

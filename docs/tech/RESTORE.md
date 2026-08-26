@@ -12,7 +12,7 @@ before and after, and the two are equal.
 
 ## Scope
 
-This says what is stored, what comes back, and what is deliberately not carried
+This states what is stored, what comes back, and what is deliberately not carried
 across. The store itself is `core/store`; this is the shape written into it and
 the boot that reads it.
 

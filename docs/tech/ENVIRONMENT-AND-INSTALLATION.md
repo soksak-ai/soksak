@@ -137,7 +137,7 @@ errors joined by `; `, and is omitted when there is none. The message names the 
 error when there is one: `Recorded development record for Plugin <id> at <path>; status disabled:
 <error>`. `sidecar.develop` answers `{ id, path, revision, version }` where `version` is the
 version of the record the host wrote, read from `environment_get` after the write; the message is
-`Recorded development record for Sidecar <id> at <path> (version <v>)`; the Korean message carries the
+`Recorded development record for Sidecar <id> at <path> (version <v>)`; the Korean message includes the
 same information. There is
 no status field: the pre-write `SIDECAR_IN_USE` guard refuses an id listed as `open` or `recorded`,
 so a post-write `sidecar_status` read has one answer.

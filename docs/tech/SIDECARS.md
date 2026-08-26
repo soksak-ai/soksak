@@ -87,13 +87,13 @@ restart is not a stop request. Streams have their own ids and can close independ
 
 Open means something answers there. A held unit whose address refuses a connection has gone: reading
 the inventory forgets it, and the next request starts the unit again from the arguments that started
-it the first time. A caller was granted the name, not one process, so a request reaches whichever
+it the first time. A caller was granted the name, not one process, so a request arrives at whichever
 process serves that name now. A run record naming a process that has ended is forgotten when the
 inventory is read, so an operation that refuses while a name is recorded is held by units that are
 running and by nothing else.
 
 A request that is never answered ends rather than holding the caller. A unit that takes a request
-and says nothing — a process alive but unable to serve, a disk with no room left to write — would
+and reports nothing — a process alive but unable to serve, a disk with no room left to write — would
 otherwise hold the plugin that asked, the queue behind that plugin, and the person typing into it.
 The wait is bounded and the refusal names the unit and the bound.
 

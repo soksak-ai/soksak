@@ -104,7 +104,7 @@ change. Tests read those declarations and therefore do not change merely because
   closure; local tasks, CI and container execution continue to use `go tool wails3`.
 - A Go upgrade changes the `go` directive and reruns every host and cross-compilation gate.
 
-An upgrade is incomplete while a script, workflow, Dockerfile, test fixture or document carries an
+An upgrade is incomplete while a script, workflow, Dockerfile, test fixture or document includes an
 independent version literal.
 
 ## Gates

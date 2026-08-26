@@ -7,7 +7,7 @@ canonical: self
 # Control protocol
 
 
-How something outside the application reaches it. `cmd/sok` is one such client; nothing about the
+How something outside the application connects to it. `cmd/sok` is one such client; nothing about the
 protocol is specific to it.
 
 ## C1. One line of JSON, both directions
@@ -27,7 +27,7 @@ Request: `id`, `command`, `args`.
 
 - `id` is echoed and never interpreted, so a client may pipeline and match on its own terms.
 - `command` names a registry entry. Nothing outside the registry exists.
-- `args` stay encoded until the command decodes them, so this boundary never learns their shapes.
+- `args` stay encoded until the command decodes them, so this boundary never receives their shapes.
 
 Response: `id`, `ok`, `result`, `error`.
 
@@ -53,7 +53,7 @@ installation identity, and the full command table.
 A version mismatch is refused during the greeting, not at the first command that behaves
 differently: a mismatch found halfway through has already produced answers the caller trusted.
 
-The identity is in the greeting so a client that connected to the wrong socket learns that there,
+The identity is in the greeting so a client that connected to the wrong socket is told there,
 rather than from surprising answers later.
 
 The command table is in the greeting for the same reason: a client that has to ask separately will
@@ -61,13 +61,13 @@ act on a name it has not checked.
 
 ## C4. The command table answers for itself
 
-`Table` carries what this build serves and what it refuses, and every refusal carries the reason
+`Table` includes what this build serves and what it refuses, and every refusal includes the reason
 that blocks it. "Unknown command" and "not built here" send a caller to two different places, and
-only the second tells them to stop looking.
+only the second ends the search.
 
 **Gate.** `frameworks/wails/coverage_test.go` reads the table from the registry and fails when the
 frontend calls a name that is neither served nor refused, when a refusal has no caller, or when a
-refusal carries no reason.
+refusal includes no reason.
 
 A native window creation receipt does not mean its renderer has registered commands.
 `window_renderer_wait` waits for the declaration event for one exact window with a finite deadline.
@@ -93,7 +93,7 @@ crash need a manual cleanup, and the file is not the lock — a live owner still
 the bind fails and names it.
 
 The path limit is 104 bytes, the lower of darwin's and linux's, so a home that works here works
-everywhere this builds. Overrunning it fails with "invalid argument", which says nothing about
+everywhere this builds. Overrunning it fails with "invalid argument", which reports nothing about
 paths.
 
 ## C6. Windows

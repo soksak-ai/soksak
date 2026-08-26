@@ -11,14 +11,14 @@ How an agent drives this application, and which surface answers what.
 
 ## A1. The registry is the single source
 
-The command table decides what exists, what its schema is, what its danger class is, and how it
+The command table determines what exists, what its schema is, what its danger class is, and how it
 runs. No channel keeps its own list. CLI help, an MCP tool, skill material and documentation are all
 derived from the table; none of them is a copy.
 
-## A2. A transport carries, teaching teaches
+## A2. A transport includes, teaching teaches
 
 `sok` and an MCP server are transports: they call the registry and pass results back. Teaching
-material tells an agent how to discover commands, and never contains a command list — a list in
+material reports to an agent how to discover commands, and never contains a command list — a list in
 teaching material is wrong the first time a plugin registers something.
 
 ## A3. Discovery beats injection
@@ -28,7 +28,7 @@ meta tools (`commands`, `help`, `run`) keep the tool count fixed while the comma
 
 ## A4. One permission gate, in the registry
 
-The danger gate lives with the registry and applies to remote callers (CLI, MCP, socket). A person
+The danger gate is defined with the registry and applies to remote callers (CLI, MCP, socket). A person
 acting in the UI is not a remote caller. No channel re-implements the check; a plugin's command
 flows through the same gate.
 
@@ -40,7 +40,7 @@ and identifier matching are the registry's. A thick channel grows its own bugs, 
 ## A6. The environment is the binary's identity
 
 A binary's installation is fixed when it is built. There is no `--env` flag and no environment
-variable that changes it: that switch is how a command reaches the wrong installation silently.
+variable that changes it: that switch is how a command arrives at the wrong installation silently.
 The only authority above it is `SOKSAK_SOCKET`, which the application injects into the terminals it
 owns. When that installation is not running, the answer is an error, not a fallback to another one.
 
@@ -70,7 +70,7 @@ remote.
 
 ## A10. The development MCP is not a gate
 
-Wails carries an MCP server behind a build tag, and its documentation marks it experimental. It is
+Wails includes an MCP server behind a build tag, and its documentation marks it experimental. It is
 useful for looking and clicking during development. A verdict comes from this application's own
 surfaces — the control plane and the test suites — because the MCP server does not exist in a
 production build.

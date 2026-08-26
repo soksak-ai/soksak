@@ -18,14 +18,14 @@ An independently owned product repository has one development line, main. Every 
 audited patch by patch, verified against its owner's gate, and then either fast-forwarded to main
 or rejected with its reason. A merged branch is deleted only after its tip is reachable from main.
 An independently released library may retain a version maintenance branch when that branch is a
-supported source line rather than a completed change branch. Its name carries the library version,
+supported source line rather than a completed change branch. Its name includes the library version,
 and its tip remains reachable from a permanent local and remote ref.
 
 ## G3. Forks
 
 A fork keeps the upstream default branch for upstream synchronization. Soksak improvements remain on
 a separate branch and are never merged into that default branch merely to simplify branch lists. The
-branch name carries the upstream component version; when upstream publishes no version, it carries the
+branch name includes the upstream component version; when upstream publishes no version, it includes the
 exact source commit. Consumers pin the exact improvement commit. An upstream version change creates a
 newly verified improvement line, and an upstreamable change is proposed upstream.
 

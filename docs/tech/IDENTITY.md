@@ -7,7 +7,7 @@ canonical: self
 # Identity
 
 
-Which installation a process belongs to, and everything that follows from it.
+Which installation a process is owned by, and everything that follows from it.
 
 ## I1. One input, one derivation
 

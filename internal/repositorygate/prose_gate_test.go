@@ -65,6 +65,9 @@ func TestDocumentsAreWrittenDry(t *testing.T) {
 			}
 			scanned++
 			for index, line := range strings.Split(string(body), "\n") {
+				if word := bannedEnglish.FindString(line); word != "" {
+					found = append(found, path+":"+itoa(index+1)+" "+word)
+				}
 				for _, word := range bannedKorean {
 					if strings.Contains(line, word) {
 						found = append(found, path+":"+itoa(index+1)+" "+word)

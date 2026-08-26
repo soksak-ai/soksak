@@ -301,7 +301,7 @@ owner file read by the addressed repository:
 | pnpm | the addressed `package.json#packageManager` |
 | Go and Wails | `go.mod`; invoke Wails with `go tool wails3` |
 | Rust | `rust-toolchain.toml` |
-| Python | `.python-version` when the repository directly owns Python operations; external SDK Python belongs in `build-dependencies.json` |
+| Python | `.python-version` when the repository directly owns Python operations; external SDK Python is placed in `build-dependencies.json` |
 | Native target | explicit `TARGET=<target-triple>` Make command and the Actions runner matrix |
 
 An Apple Silicon source-level gate requires the actual Node, Go, Rust and Python processes it uses

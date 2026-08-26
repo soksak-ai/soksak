@@ -35,7 +35,7 @@ components are resolved from environment.json.
 
 | Path from workspace root | Responsibility |
 | --- | --- |
-| soksak-core/ | Current Wails application, control CLI, renderer, framework adapters, application lifecycle and Core gates. This handoff belongs here. |
+| soksak-core/ | Current Wails application, control CLI, renderer, framework adapters, application lifecycle and Core gates. This handoff is owned here. |
 | soksak-plugins/ | One repository per installable plugin. The seven terminal provider repositories are here. |
 | soksak-kits/ | Shared component implementation. soksak-kit-plugin-terminal owns the common terminal lifecycle and frame presenter; soksak-kit-sidecar-terminal owns the recovery-sidecar runtime. The old terminal-common and engine-as-judge conformance repositories have no consumers and are retired. |
 | soksak-sidecars/ | One repository per plugin process. PTY and six frame-producing terminal sidecars are here. |
@@ -101,7 +101,7 @@ symlink. Cross-repository consumption uses published packages or the declared en
 The frame-provider plugin repositories are adapters, not seven copies of terminal behavior. Shared
 behavior first enters the appropriate kit or contract. A provider repository changes only when its
 adapter has a measured provider-specific defect. A sidecar repository changes only when timing or
-frame evidence identifies the producer or transport. Installed-product behavior belongs in the
+frame evidence identifies the producer or transport. Installed-product behavior is placed in the
 external system tests only after the owning repository has a focused RED.
 
 ## Defect ownership
@@ -250,7 +250,7 @@ metadata and `.candidate-inputs` do not enter the archive.
 | 5–7 — picker/modal/sidebar blanking | Local Darwin candidate GREEN: 21 reports, 840 frames, blank 0, violations 0, with direct contact-sheet inspection. |
 | 8 — color parity | Exact candidate run 32779972490 GREEN. All seven providers expose the same five theme roles, computed foreground/background and 256 ANSI values; all seven captures were inspected. Public releases and the user's current app are older, so the deployed product remains RED. |
 | 9 — macOS traffic-light close | Current accumulated Core gate GREEN for three actual AppKit close-button mouse down/up sequences. |
-| 10 — test interference | Local GREEN. Capture-only windows are transparent/non-key, readiness is event-driven with polling count zero, every run has unique ownership, cleanup reaches zero open/recorded sidecars, and the user app remains untouched. |
+| 10 — test interference | Local GREEN. Capture-only windows are transparent/non-key, readiness is event-driven with polling count zero, every run has unique ownership, cleanup arrives at zero open/recorded sidecars, and the user app remains untouched. |
 
 Build and release command ownership is now Make-based for the active spec, contracts, shared kits,
 seven renderer plugins, PTY, six deterministic frame sidecars, Core, Registry, terminal-tests and
@@ -267,14 +267,14 @@ byte-identical; canonical tree receipt `86f83d4c` and the Sidecar build, repeate
 conformance cases are GREEN. Other native targets and the new owner-only benchmark contract closure
 remain unverified.
 
-Release blockers outside implementation are also explicit: `soksak-terminal-tests` still lives
+Release blockers outside implementation are also explicit: `soksak-terminal-tests` still is defined
 under the product-specific `min-median-max` module/reusable-workflow identity and needs a real
 repository ownership decision before changing refs; `soksak-contract-registry` has no LICENSE and
 requires an owner-selected license. Do not invent either value locally.
 
 The remaining acceptance blocker is not a timeout or implementation fallback: WebKit requires an
 active key window for native keyboard delivery. Local capture-only runs must not violate the user's
-foreground session. The native matrix therefore belongs to the unattended final Darwin runner and
+foreground session. The native matrix therefore is owned by the unattended final Darwin runner and
 must not be replaced by DOM-event evidence or by focusing the developer's desktop.
 
 The unpublished-candidate boundary is implemented. Each component owner workflow builds, verifies

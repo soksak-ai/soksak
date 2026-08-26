@@ -6,7 +6,7 @@ canonical: self
 
 # UI geometry — bands, boxes, and who draws which line
 
-Free, and exact. A theme decides sizes; a one-pixel misalignment is structurally
+Free, and exact. A theme determines sizes; a one-pixel misalignment is structurally
 impossible. That is the whole claim, and it is held by machines: the static gate
 `frontend/src/ui/cssContract.test.ts`, the contract table
 `frontend/src/ui/borderContract.ts`, and the live checks `ui.validate` and
@@ -18,7 +18,7 @@ document forbids outright.
 
 ## Scope
 
-Each rule below carries the measurement that produced it. A rule holds only
+Each rule below includes the measurement that produced it. A rule holds only
 while its reason holds on this build; two rules are recorded as changed at the
 end, with what changed and why.
 
@@ -28,7 +28,7 @@ end, with what changed and why.
 
 ## R1. A band's padding is the band's
 
-The vertical space inside a horizontal band belongs to the strip's
+The vertical space inside a horizontal band is owned by the strip's
 `padding-block` variable, and nothing else. Items — chips, buttons, controls —
 stretch to fill what is left.
 
@@ -47,7 +47,7 @@ follow, and both are the point:
 
 The rejected alternative was giving strips and items their own heights. When
 their parities disagreed the item landed on a half pixel — a 28 chip centred in
-37 sits at y=48.5, and the top and bottom antialias differently.
+37 is placed at y=48.5, and the top and bottom antialias differently.
 
 A theme sets sizes through the padding variable only. `height:` on an item
 selector is refused by the gate (`auto` excepted). The exceptions are the places
@@ -65,7 +65,7 @@ Bands that stand side by side horizontally are a single row: the left header,
 the space tabs, the right header, the left host tabs. One pixel of difference
 between any two of them and the rule between them steps.
 
-The height belongs to one rule — `--chrome-row-h` — and no individual block
+The height is owned by one rule — `--chrome-row-h` — and no individual block
 declares its own.
 
 **The same applies vertically between the sidebar and the content.** The sidebar
@@ -101,11 +101,11 @@ A theme's freedom is the approved slots: the colour tokens, and the structural
 knobs — `--tab-pad`, `--ws-pad`, the radii. **When a knob is missing, the right
 move is to add a slot**, not to let a theme reach past the slots.
 
-## R4. Coordinate arithmetic belongs to one CSS rule
+## R4. Coordinate arithmetic is owned by one CSS rule
 
 Assembling `calc(...)` strings in JSX and scattering them inline is forbidden.
 A layer that needs placing receives four variables — `--l`, `--t`, `--w`, `--h`
-— and the arithmetic lives in one App.css rule.
+— and the arithmetic is defined in one App.css rule.
 
 Dimension constants (`--header-h`, `--status-h`, `--pane-inset`) are injected
 once, from a single TypeScript source.
@@ -124,7 +124,7 @@ cannot be measured, and that is the point.
 
 ## R5b. A node that scrolls is a node whose content does not fit
 
-The rect is the box the screen gives a node; it says nothing about what the node
+The rect is the box the screen gives a node; it reports nothing about what the node
 holds. `ui.measure` answers `scroll` beside it — `top`, `left`, `width`,
 `height`, `clientWidth`, `clientHeight` — and `overflowX`, `overflowY` and
 `position` in `style`. Content larger than the client box is a node whose
@@ -155,7 +155,7 @@ with the renderer about everything, including its mistakes.
 
 **Read `settled` first.** A pane in a layout transition is interpolated toward
 where it is going, so during one every number describes a frame and not the
-layout. The answer carries `settled` and the open transaction ids rather than
+layout. The answer includes `settled` and the open transaction ids rather than
 leaving that to memory — measured 2026-08-16, verifying between rapid splits
 gave differences above 100px and 32 panes counted as missing, all of which came
 to 0.013px and 0 once the transitions closed. Wait with
@@ -309,12 +309,12 @@ to exist only when a plugin declared a footer view, and took its height from
 that plugin's content. A frame that depends on its content is not a frame: a
 build with no plugins had no sidebar footer at all, so that window's skeleton
 differed from every other window's. The place is the theme's; a plugin puts text
-or an icon into it and never decides how tall it is.
+or an icon into it and never determines how tall it is.
 
-**A contradiction, recorded rather than resolved.** `App.css` says the chrome row
-heights are "owned by the theme"; R4 says dimension constants are injected once
+**A contradiction, recorded rather than resolved.** `App.css` states the chrome row
+heights are "owned by the theme"; R4 states dimension constants are injected once
 from a single TypeScript source. Both cannot be true. R4 is the rule this build
 follows, because R1 derives heights from the padding knobs a theme *does* own —
-so a theme still decides the size, through the slot, and the derivation is what
+so a theme still determines the size, through the slot, and the derivation is what
 keeps the two sides equal. The comment is the outlier and is corrected where it
-sits.
+is placed.

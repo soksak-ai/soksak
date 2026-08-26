@@ -14,7 +14,7 @@ The socket carried both bare values and window response envelopes. A generic cli
 which shape it had received without already knowing which process owned the command. That made valid
 screen state appear as a failed command when the client chose the wrong parser.
 
-Every control-plane response now carries one self-describing envelope. The relay preserves a
+Every control-plane response now includes one self-describing envelope. The relay preserves a
 window's envelope, and Core-served commands receive the same outer shape at the socket boundary.
 In-process typed callers may still use direct values because they already know the command type.
 

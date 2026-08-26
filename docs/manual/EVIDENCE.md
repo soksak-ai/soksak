@@ -9,7 +9,7 @@ canonical: self
 
 How a visual claim is settled.
 
-## E1. A number decides, a picture does not
+## E1. A number determines, a picture does not
 
 "It looks right" is not evidence, and neither is "it looks wrong". A capture shows what happened;
 the verdict comes from a command that returns numbers.
@@ -52,7 +52,7 @@ become source files. One directory per gate run.
 ## E5. The frame number is the shared clock
 
 `window.record` reports a frame number as each PNG finishes writing, starting at zero. Every journal
-entry carries that number, so a stored pixel and a recorded measurement refer to the same instant.
+entry includes that number, so a stored pixel and a recorded measurement refer to the same instant.
 Two reads taken at two moments produce a frame that was never on screen.
 
 ## E6. An instrument that shares a source with its subject cannot fail
@@ -76,7 +76,7 @@ Measured 2026-08-16, three of them in one day:
   for the shape it judges, so a change that renamed every id on restore passed it while breaking
   the terminal reattach key. The gate now asserts the names beside the digest.
 
-So: **an observation surface reads the thing, and where it cannot, it says which claim it is not
+So: **an observation surface reads the thing, and where it cannot, it states which claim it is not
 making.** `surface.composition` names `misparented` from the native object; a capture note names
 what it did not draw; `window.monitors` answers presence and states in GATES.md that it does not
 answer whether a rectangle is in front of the person.
