@@ -64,3 +64,17 @@ describe("choosing a form", () => {
       .toBe("{n, plural, one {# pane other {# panes}}");
   });
 });
+
+describe("counted messages of the catalog", () => {
+  it("renders the local install plan count as a sentence in both languages", async () => {
+    const { tmsg } = await import("./i18n");
+    const { useSettings } = await import("./state/settings");
+    for (const language of ["en", "ko"] as const) {
+      useSettings.setState({ language });
+      const sentence = tmsg("msg.plugin.install.local.plan", { id: "soksak-plugin-example", n: 3 });
+      expect(sentence).not.toContain("plural");
+      expect(sentence).toContain("3");
+      expect(sentence).toContain("soksak-plugin-example");
+    }
+  });
+});
