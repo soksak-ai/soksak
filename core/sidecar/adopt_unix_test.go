@@ -329,9 +329,9 @@ func TestStartedInventoryDropsAHeldUnitNothingAnswersAt(t *testing.T) {
 	}
 }
 
-// A caller that was granted a unit keeps reaching it across the unit's own life. When the process
-// this host held is gone, the next request starts the unit the settings name and reaches that one —
-// otherwise every caller granted the unit is left holding a name nothing serves.
+// A caller granted a unit is granted the name, not one process. When the process this host held is
+// gone, the next request starts the unit the settings name and is served by that one. Without this
+// every caller granted the unit holds a name nothing serves.
 func TestSendStartsAUnitWhoseProcessIsGone(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
