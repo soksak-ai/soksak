@@ -53,7 +53,7 @@ func TestFrontendInstallsThePublishedWailsRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(body)
-	if !strings.Contains(source, "pnpm install --frozen-lockfile") {
+	if !strings.Contains(source, "pnpm {{.PNPM_FLAGS}} install --frozen-lockfile") {
 		t.Error("frontend dependency preparation does not use the workspace install contract")
 	}
 	workspace, err := os.ReadFile("frontend/pnpm-workspace.yaml")

@@ -139,9 +139,9 @@ func TestFrontendBuildResolvesPnpmFromTheFrontendPackage(t *testing.T) {
 	for _, required := range []string{
 		`pnpm_actual=$(cd "$root/frontend" && pnpm --version`,
 		`cd "$root/frontend"`,
-		"pnpm install --frozen-lockfile",
-		"pnpm typecheck",
-		"pnpm build",
+		`pnpm "$@" install --frozen-lockfile`,
+		`pnpm "$@" typecheck`,
+		`pnpm "$@" build`,
 	} {
 		if !strings.Contains(text, required) {
 			t.Errorf("frontend build does not resolve its owner through %q", required)

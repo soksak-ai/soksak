@@ -27,7 +27,7 @@ func TestGoAndFrontendSpecsAcceptSidecarPatchVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "/v" + selection.Version + "/soksak-ai-plugin-spec-" + selection.Version + ".tgz"
+	want := `"@soksak-ai/plugin-spec": "` + selection.Version + `"`
 	if !strings.Contains(string(packageJSON), want) {
 		t.Fatal("frontend and Go do not use the same sidecar parser release")
 	}

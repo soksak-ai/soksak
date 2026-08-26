@@ -30,11 +30,24 @@ module and Wails CLI; `.node-version` and `frontend/package.json` own the fronte
 ## Reproducible commands
 
 ```sh
-scripts/ci/prepare-frontend-dependencies.sh
-scripts/ci/check-build-toolchain.sh
-go tool wails3 task verify
+make prepare REGISTRY=http://host:port/
+make preflight
+make verify REGISTRY=http://host:port/
+make build TARGET=aarch64-apple-darwin REGISTRY=http://host:port/
 go tool wails3 dev
 ```
+
+The frontend depends on `@soksak-ai/plugin-spec`, so every `make` invocation that installs requires
+`REGISTRY` on the make command line, `https://registry.npmjs.org/` included once the package is
+published there. A value from the environment is refused. The Makefile reads the requirement from
+`frontend/package.json` and refuses `REGISTRY required: this package depends on @soksak-ai/...` when
+it is absent. No `.npmrc` takes part.
+
+The build input is identified by the `frontend/pnpm-lock.yaml` integrity, not by `REGISTRY`. pnpm
+fetches from `REGISTRY` only a package whose integrity its content-addressable store does not already
+hold, so a second install of the same lockfile on the same machine reads the store and never contacts
+`REGISTRY`. `go tool wails3 dev` installs without registry flags and therefore runs after
+`make prepare REGISTRY=http://host:port/` has filled the store.
 
 The version owners, upgrade transaction and precondition classes are defined in
 [`docs/tech/BUILD-TOOLCHAIN.md`](docs/tech/BUILD-TOOLCHAIN.md).

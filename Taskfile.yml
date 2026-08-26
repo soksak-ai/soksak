@@ -19,6 +19,11 @@ vars:
   # by `go tool wails3 build GOOS=...` (or the GOOS env var) for cross-compilation. The
   # tasks below dispatch to the matching platform Taskfile via this variable.
   GOOS: '{{.GOOS | default OS}}'
+  # pnpm options forwarded verbatim from `make … REGISTRY=<url>` (the scoped registry flags):
+  # `go tool wails3 task verify PNPM_FLAGS='--@soksak:registry=<url> …'`. Every pnpm invocation
+  # repeats them with the install environment: pnpm 11 compares the settings recorded by the
+  # install before every script run and reinstalls without them on any difference.
+  PNPM_FLAGS: '{{.PNPM_FLAGS | default ""}}'
 
 includes:
   common: ./build/Taskfile.yml
@@ -36,13 +41,19 @@ tasks:
       This repository runs only its own gates. Dependencies run their gates in
       their owner repositories.
     cmds:
-      - scripts/ci/prepare-frontend-dependencies.sh
+      - scripts/ci/prepare-frontend-dependencies.sh {{.PNPM_FLAGS}}
       - scripts/ci/check-build-toolchain.sh
+      - task: verify:build-input
       - task: verify:go
       - task: verify:application
       - task: verify:headless
       - task: verify:windows
       - task: verify:frontend
+
+  verify:build-input:
+    summary: Build input comes from a registry by name, integrity, and command-line REGISTRY
+    cmds:
+      - node --test scripts/check-registry-install.mjs
 
   verify:go:
     summary: Go build, vet, and tests for this module
@@ -95,8 +106,8 @@ tasks:
     summary: Frontend types and tests, including the seam and coupling gates
     dir: frontend
     cmds:
-      - "{{.PACKAGE_MANAGER}} typecheck"
-      - "{{.PACKAGE_MANAGER}} test"
+      - "CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 {{.PACKAGE_MANAGER}} {{.PNPM_FLAGS}} typecheck"
+      - "CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 {{.PACKAGE_MANAGER}} {{.PNPM_FLAGS}} test"
 
   build:
     summary: Builds the application

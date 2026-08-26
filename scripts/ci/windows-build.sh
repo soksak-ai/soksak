@@ -2,7 +2,10 @@
 set -eu
 trap 'rm -f wails_windows_amd64.syso' EXIT
 
+# Usage: windows-build.sh [generate|frontend|compile|all] [pnpm option ...]
+# The options are forwarded to every pnpm invocation verbatim; make passes the scoped registry flags.
 phase=${1:-all}
+[ $# -eq 0 ] || shift
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$root"
 
@@ -24,9 +27,9 @@ frontend() {
   pnpm_version=$(node -p "require('./frontend/package.json').packageManager.split('@')[1]")
   [ "$(node --version)" = "v$node_version" ] || { echo "Node v$node_version is required" >&2; exit 1; }
   [ "$(pnpm --version)" = "$pnpm_version" ] || { echo "pnpm $pnpm_version is required" >&2; exit 1; }
-  pnpm --dir frontend install --frozen-lockfile
-  pnpm --dir frontend typecheck
-  pnpm --dir frontend build
+  CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm --dir frontend "$@" install --frozen-lockfile
+  CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm --dir frontend "$@" typecheck
+  CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm --dir frontend "$@" build
   test -f frontend/dist/index.html
 }
 
@@ -46,8 +49,8 @@ compile() {
 
 case "$phase" in
   generate) generate ;;
-  frontend) frontend ;;
+  frontend) frontend "$@" ;;
   compile) compile ;;
-  all) generate; frontend; compile ;;
-  *) echo "usage: windows-build.sh [generate|frontend|compile|all]" >&2; exit 2 ;;
+  all) generate; frontend "$@"; compile ;;
+  *) echo "usage: windows-build.sh [generate|frontend|compile|all] [pnpm option ...]" >&2; exit 2 ;;
 esac

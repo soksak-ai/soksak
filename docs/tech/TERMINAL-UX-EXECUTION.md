@@ -29,8 +29,8 @@ propose the corrected rule, and update the rule, RED and document together after
 
 ## Failure classification before RED
 
-Run `make prepare` and then `make preflight` before a baseline or product test; `make verify` owns
-the full Core gate. The commands delegate to scripts/ci/prepare-frontend-dependencies.sh and
+Run `make prepare REGISTRY=http://host:port/` and then `make preflight` before a baseline or product
+test; `make verify REGISTRY=http://host:port/` owns the full Core gate. The commands delegate to scripts/ci/prepare-frontend-dependencies.sh and
 scripts/ci/check-build-toolchain.sh. Prepare alone materializes
 the frozen lockfile under the cross-process dependency-owner lock. Check is read-only: it derives
 the Node selector from `.node-version`, verifies its `frontend/package.json` projection and pnpm
@@ -130,8 +130,8 @@ verifies and copies dependency artifacts under the disposable checkout, and writ
 `pnpm.overrides`. It refuses a dirty source, digest mismatch, path escape, symlink and nonempty output.
 It does not edit the canonical source. Both output directories must already exist and be empty.
 
-The exit command installs only inside staging, invokes the repository's `make verify` from the
-staged repository root, restores canonical package and lock bytes, rejects every undeclared source
+The exit command installs only inside staging, invokes the repository's
+`make verify REGISTRY=http://host:port/` from the staged repository root, restores canonical package and lock bytes, rejects every undeclared source
 change, retains only declared generated outputs, removes `.candidate-inputs` and staging control
 metadata, rejects local locators, builds and validates the candidate archive, and writes
 `candidate-build.json`. A staging-local locator is not source metadata but is invalid if it survives

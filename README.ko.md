@@ -23,11 +23,23 @@ Wails CLI를 소유하고 `.node-version`과 `frontend/package.json`이 frontend
 ## 재현 가능한 명령
 
 ```sh
-scripts/ci/prepare-frontend-dependencies.sh
-scripts/ci/check-build-toolchain.sh
-go tool wails3 task verify
+make prepare REGISTRY=http://host:port/
+make preflight
+make verify REGISTRY=http://host:port/
+make build TARGET=aarch64-apple-darwin REGISTRY=http://host:port/
 go tool wails3 dev
 ```
+
+Frontend가 `@soksak-ai/plugin-spec`에 의존하므로 install하는 모든 `make` 호출은 make 명령줄의
+`REGISTRY`가 필요합니다. 패키지가 공개된 뒤의 `https://registry.npmjs.org/`도 같습니다. 환경변수로
+들어온 값은 거부합니다. Makefile은 `frontend/package.json`에서 이 요구를 읽고, 값이 없으면
+`REGISTRY required: this package depends on @soksak-ai/...`로 거부합니다. `.npmrc`는 관여하지 않습니다.
+
+빌드 입력은 `REGISTRY`가 아니라 `frontend/pnpm-lock.yaml`의 integrity로 식별합니다. pnpm은
+content-addressable store에 없는 integrity의 패키지만 `REGISTRY`에서 받으므로, 같은 기계에서 같은
+lockfile을 다시 install하면 store를 읽고 `REGISTRY`에 접속하지 않습니다. `go tool wails3 dev`는
+registry 플래그 없이 install하므로 `make prepare REGISTRY=http://host:port/`가 store를 채운 뒤에
+실행합니다.
 
 Version 소유권, 업그레이드 transaction, precondition 분류는
 [`docs/tech/BUILD-TOOLCHAIN.ko.md`](docs/tech/BUILD-TOOLCHAIN.ko.md)에 정의합니다.

@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+# Usage: frontend-build.sh [pnpm option ...]
+# The options are forwarded to every pnpm invocation verbatim; make passes the scoped registry flags.
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 node_version=$(cat "$root/.node-version")
 pnpm_version=$(sed -n 's/^[[:space:]]*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "$root/frontend/package.json")
@@ -15,13 +17,13 @@ fi
 image=soksak-frontend:latest
 build_frontend() {
   cd "$root/frontend"
-  pnpm install --frozen-lockfile
-  pnpm typecheck
-  pnpm build
+  pnpm "$@" install --frozen-lockfile
+  pnpm "$@" typecheck
+  pnpm "$@" build
 }
 pnpm_actual=$(cd "$root/frontend" && pnpm --version 2>/dev/null || true)
 if [ "$(node --version 2>/dev/null || true)" = "v$node_version" ] && [ "$pnpm_actual" = "$pnpm_version" ]; then
-  CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 build_frontend
+  CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 build_frontend "$@"
   printf '%s\n' "$definition:$input" > "$marker"
   exit 0
 fi
@@ -38,5 +40,5 @@ docker run --rm \
   -v "$root:/app" \
   -v soksak-frontend-node-modules:/app/frontend/node_modules \
   -v soksak-frontend-pnpm-store:/app/.pnpm-store \
-  "$image" /bin/sh -c 'pnpm install --frozen-lockfile && pnpm typecheck && pnpm build'
+  "$image" /bin/sh -c 'pnpm "$@" install --frozen-lockfile && pnpm "$@" typecheck && pnpm "$@" build' sh "$@"
 printf '%s\n' "$definition:$input" > "$marker"

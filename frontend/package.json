@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@min-median-max/wails-service-native-compositor": "github:min-median-max/wails-service-native-compositor#3530617b540f9d943e0926514c158cf08dee9d80",
-    "@soksak-ai/plugin-spec": "https://github.com/soksak-ai/soksak-spec/releases/download/v0.0.30/soksak-ai-plugin-spec-0.0.30.tgz",
+    "@soksak-ai/plugin-spec": "0.0.33",
     "@wailsio/runtime": "3.0.0-beta.12",
     "pngjs": "^7.0.0",
     "react": "^19.2.8",

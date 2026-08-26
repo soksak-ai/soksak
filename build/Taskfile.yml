@@ -27,7 +27,7 @@ tasks:
       - sh: npm version
         msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
     cmds:
-      - pnpm install --frozen-lockfile
+      - CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm {{.PNPM_FLAGS}} install --frozen-lockfile
 
   build:frontend:
     label: build:frontend (DEV={{.DEV}})
@@ -44,7 +44,7 @@ tasks:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
     cmds:
-      - pnpm run {{.BUILD_COMMAND}}
+      - CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm {{.PNPM_FLAGS}} run {{.BUILD_COMMAND}}
     env:
       PRODUCTION: '{{if eq .DEV "true"}}false{{else}}true{{end}}'
     vars:
@@ -131,7 +131,7 @@ tasks:
       # localhost hostname to ::1 first, but the wails3 dev proxy dials tcp4
       # (to dodge IPv6 issues on Windows), so an IPv6-only vite causes
       # "connection refused" in the WebView.
-      - pnpm run dev -- --port {{.VITE_PORT}} --strictPort --host 127.0.0.1
+      - CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm {{.PNPM_FLAGS}} run dev -- --port {{.VITE_PORT}} --strictPort --host 127.0.0.1
 
   update:build-assets:
     summary: Updates the build assets

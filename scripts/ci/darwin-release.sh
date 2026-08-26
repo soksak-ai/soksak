@@ -6,8 +6,9 @@ release_arch=${1:-}
 case "$release_arch" in
   arm64) go_arch=arm64; runner_arch=arm64; minimum=11.0 ;;
   x86_64) go_arch=amd64; runner_arch=x86_64; minimum=10.15 ;;
-  *) echo "usage: darwin-release.sh <arm64|x86_64>" >&2; exit 2 ;;
+  *) echo "usage: darwin-release.sh <arm64|x86_64> [pnpm option ...]" >&2; exit 2 ;;
 esac
+shift
 cd "$root"
 test "$(uname -m)" = "$runner_arch" || { echo "native Darwin $runner_arch runner is required" >&2; exit 78; }
 source_commit=$(git rev-parse HEAD)
@@ -17,7 +18,7 @@ test -n "$source_commit" && test -z "$(git status --porcelain --untracked-files=
 }
 scripts/ci/check-build-toolchain.sh --toolchain-only
 go mod download
-scripts/ci/frontend-build.sh
+scripts/ci/frontend-build.sh "$@"
 scripts/ci/check-build-toolchain.sh
 
 output=bin/release/darwin-$release_arch

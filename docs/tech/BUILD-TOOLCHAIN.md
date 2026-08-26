@@ -62,11 +62,16 @@ platform. Physical arm64 alone never permits an x64 process or package.
 Wails is not discovered from `PATH`. Go builds and executes the tool registered by `go.mod`:
 
 ```sh
-scripts/ci/prepare-frontend-dependencies.sh
-scripts/ci/check-build-toolchain.sh
-go tool wails3 task verify
+make prepare REGISTRY=http://host:port/
+make preflight
+make verify REGISTRY=http://host:port/
 go tool wails3 dev
 ```
+
+`REGISTRY` is accepted from the make command line only; the frontend depends on `@soksak-ai/plugin-spec`,
+so the `prepare`, `verify` and `build` targets refuse to run without it. Make forwards it as pnpm's
+scoped registry flags: the `scripts/ci` scripts take pnpm options as trailing arguments and the
+Taskfile takes them as `PNPM_FLAGS`. No `.npmrc` takes part.
 
 `WAILS3` overrides, a global `wails3`, a separately installed Task binary and versioned tool paths
 in scripts are forbidden. An absolute workstation path may appear in an evidence record as the

@@ -29,8 +29,8 @@ scope: workspace
 
 ## RED 이전 실패 분류
 
-Baseline 또는 product test 전에 `make prepare`를 실행한 뒤 `make preflight`를 실행합니다.
-`make verify`가 Core 전체 gate를 소유합니다. 이 명령은
+Baseline 또는 product test 전에 `make prepare REGISTRY=http://host:port/`를 실행한 뒤
+`make preflight`를 실행합니다. `make verify REGISTRY=http://host:port/`가 Core 전체 gate를 소유합니다. 이 명령은
 scripts/ci/prepare-frontend-dependencies.sh와 scripts/ci/check-build-toolchain.sh에 위임합니다.
 Prepare만 cross-process dependency owner lock 아래에서 frozen lockfile을 materialize합니다.
 Check는 read-only이며 `.node-version`의 Node
@@ -131,7 +131,7 @@ dependency artifact를 검증해 폐기 가능한 checkout 내부로 복사한 �
 source는 수정하지 않습니다. 두 output directory는 미리 존재하는 빈 directory여야 합니다.
 
 Exit command는 staging 내부에서만 install하고 staged repository root에서 repository의
-`make verify`를 실행합니다. Canonical package와 lock byte를 복원하고, 선언되지 않은 source 변경을
+`make verify REGISTRY=http://host:port/`를 실행합니다. Canonical package와 lock byte를 복원하고, 선언되지 않은 source 변경을
 거부하고, 선언된 generated output만 유지하고, `.candidate-inputs`와 staging control metadata를
 제거하고, local locator를 거부한 뒤 candidate archive를 build·검증하고 `candidate-build.json`을
 기록합니다. Staging-local locator도 finalization 뒤 남으면 실패입니다. Caller는 증거를 추출한 뒤

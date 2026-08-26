@@ -88,7 +88,7 @@ func TestVerifyRejectsAnInvalidBuildToolchainBeforeProductTests(t *testing.T) {
 		t.Fatal(err)
 	}
 	materialize := string(body)
-	for _, required := range []string{"pnpm install --frozen-lockfile", "frontend-dependencies-owner", "--locked"} {
+	for _, required := range []string{`pnpm "$@" install --frozen-lockfile`, "frontend-dependencies-owner", `--locked "$@"`} {
 		if !strings.Contains(materialize, required) {
 			t.Errorf("frontend dependency prepare is missing %q", required)
 		}

@@ -4,12 +4,13 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$root"
 architecture=${1:-}
-case "$architecture" in amd64|arm64) ;; *) echo "usage: linux-release.sh <amd64|arm64>" >&2; exit 2 ;; esac
+case "$architecture" in amd64|arm64) ;; *) echo "usage: linux-release.sh <amd64|arm64> [pnpm option ...]" >&2; exit 2 ;; esac
+shift
 required=$(awk '$1 == "go" { print "go" $2; count++ } END { if (count != 1) exit 1 }' go.mod)
 actual=$(go env GOVERSION)
 [ "$actual" = "$required" ] || { echo "$required is required; found $actual" >&2; exit 1; }
 case "$(uname -m)/$architecture" in x86_64/amd64|aarch64/arm64|arm64/arm64) ;; *) echo "native Linux $architecture runner is required" >&2; exit 1 ;; esac
-scripts/ci/frontend-build.sh
+scripts/ci/frontend-build.sh "$@"
 output=bin/release/linux-$architecture
 mkdir -p "$output"
 log=$output/build.log

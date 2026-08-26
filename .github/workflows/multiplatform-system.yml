@@ -25,7 +25,7 @@ jobs:
         run: go tool wails3 version
       - shell: bash
         working-directory: soksak-core
-        run: make build TARGET=x86_64-pc-windows-msvc
+        run: make build TARGET=x86_64-pc-windows-msvc REGISTRY=https://registry.npmjs.org/
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-windows-artifact
@@ -58,8 +58,8 @@ jobs:
         with: { package_json_file: soksak-core/frontend/package.json }
       - working-directory: soksak-core
         run: |
-          make build TARGET="${{ matrix.target }}"
-          make build TARGET="${{ matrix.target }}"
+          make build TARGET="${{ matrix.target }}" REGISTRY=https://registry.npmjs.org/
+          make build TARGET="${{ matrix.target }}" REGISTRY=https://registry.npmjs.org/
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-darwin-${{ matrix.architecture }}-artifact
@@ -122,7 +122,7 @@ jobs:
         with: { package_json_file: soksak-core/frontend/package.json }
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev binutils
       - working-directory: soksak-core
-        run: make build TARGET="${{ matrix.target }}"
+        run: make build TARGET="${{ matrix.target }}" REGISTRY=https://registry.npmjs.org/
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: core-linux-${{ matrix.architecture }}-artifact
