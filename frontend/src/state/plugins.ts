@@ -501,7 +501,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       );
       setActive(p.manifest.id, instance);
     } catch (error) {
-      loaded.dispose();
+      await loaded.dispose();
       throw error;
     }
   };
