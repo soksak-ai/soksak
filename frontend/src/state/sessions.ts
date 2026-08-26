@@ -1661,6 +1661,14 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = err("TARGET_NOT_FOUND", tmsg("view.notFound", { viewId }));
         return s;
       }
+      const current = t.spaces
+        .flatMap((content) => allViews(content.layout))
+        .find((view) => view.id === viewId)?.status;
+      const next = status ?? undefined;
+      if (current?.code === next?.code && current?.message === next?.message) {
+        r = ok({});
+        return s;
+      }
       r = ok({});
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
