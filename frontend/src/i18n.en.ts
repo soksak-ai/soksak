@@ -1289,7 +1289,7 @@ export const en: Record<MsgKey, string> = {
   "cmd.plugin.settings.reset.param.workspace": "Workspace id. Defaults to active workspace. Applies when scope=workspace.",
   "cmd.plugin.settings.open.desc": "Open the unified settings modal. With a plugin id, navigates directly to that plugin's settings section. Omit id for the general preferences section. Pass an empty string to close the modal. Idempotent.",
   "cmd.plugin.settings.open.param.id": "Plugin id (omit for general preferences, empty string to close)",
-  "cmd.plugin.reload.desc": "Rescan and reactivate plugins with valid consent. Rejected manifests are returned with reasons. With id, reload and validate only that plugin without scanning other directories.",
+  "cmd.plugin.reload.desc": "Rescan and reactivate plugins with valid consent. Rejected manifests are returned with reasons. With id, reload and validate only that plugin without scanning other directories or rewriting its enabled setting.",
   "cmd.plugin.view.open.desc": "Open a plugin tab view in the active or named workspace. Side views are arranged through section commands.",
   "cmd.plugin.view.open.param.workspace": "Workspace id. Defaults to the active workspace.",
   "cmd.plugin.view.close.desc": "Close a plugin view. Sidebar placements are deselected and revert to the file tree. Content placements close the tab in every pane where the view is open.",

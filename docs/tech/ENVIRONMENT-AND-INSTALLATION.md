@@ -187,8 +187,9 @@ cascade continues. `sidecar.develop` and `sidecar.remove` refuse `SIDECAR_IN_USE
 `sidecar_status` lists the id as open or recorded, the same rule as `sidecar.install.local`; Core
 does not stop the Sidecar.
 
-`plugin.reload {id}` re-reads `<path>/plugin.json` and the entry it declares. `unitMode` in
-`app.environment` is derived from development records.
+`plugin.reload {id}` re-reads `<path>/plugin.json` and the entry it declares. An enabled record
+replaces its active generation without writing `plugin_enabled_set`; a disabled record stays
+disabled. `unitMode` in `app.environment` is derived from development records.
 
 ## Refusals
 
