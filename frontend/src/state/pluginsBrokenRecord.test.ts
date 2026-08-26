@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../plugins/loader", () => ({
   activateContractPlugin: vi.fn(async () => ({ deactivate: async () => {} })),
-  importPluginModule: vi.fn(async () => ({})),
+  importPluginModule: vi.fn(async () => ({ module: {}, dispose: vi.fn() })),
   activatePlugin: vi.fn(async () => ({ deactivate: async () => {} })),
   isActive: () => false,
   setActive: () => {},

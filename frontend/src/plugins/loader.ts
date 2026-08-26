@@ -1,8 +1,5 @@
-// Plugin loader — module loading (Blob import) is separate from lifecycle. The entry is evaluated in
-// the window realm (v1).
-//   - importPluginModule: external code string → ESM module. A blob URL is new every time, so there
-//     is no ESM cache problem (reload is free). jsdom cannot execute blob ESM, so only this function
-//     needs real-environment verification; the lifecycle is fully tested by module injection.
+// Plugin loader — module loading is separate from lifecycle. Each code generation is evaluated in
+// a disposable child realm so deactivation can reclaim its ESM graph.
 //   - activatePlugin: verified manifest + module → active instance. Every registration is collected
 //     by the tracker automatically — no leak on deactivation (§0-4).
 //   - The entry module accepts both forms: legacy ({activate,deactivate}) and SDK static
@@ -40,6 +37,7 @@ import { engineProvision } from "../framework";
 import { useSettings } from "../state/settings";
 import { tmsg } from "../i18n";
 import type { PluginManifest } from "./spec";
+import { loadPluginModule } from "./pluginModuleRealm";
 
 // Minimum deps for proxy composition — a subset of PluginApiDeps plus locale (label fallback resolution).
 function serviceProxyDeps(deps: PluginApiDeps): ServiceProxyDeps {
@@ -60,16 +58,7 @@ function wireService(manifest: PluginManifest, deps: PluginApiDeps, tracker: { w
   }
 }
 
-// Entry code string → ESM module. Relative imports are not possible (spec: single bundle required).
-export async function importPluginModule(code: string): Promise<unknown> {
-  const blob = new Blob([code], { type: "text/javascript" });
-  const url = URL.createObjectURL(blob);
-  try {
-    return await import(/* @vite-ignore */ url);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
+export const importPluginModule = loadPluginModule;
 
 interface EntryFns {
   activate: (ctx: PluginContext) => void | Promise<void>;
@@ -331,9 +320,17 @@ export async function activatePlugin(
   dir: string,
   deps: PluginApiDeps,
   entrySource?: string,
+  disposeModuleRealm?: () => void,
 ): Promise<ActivePlugin> {
+  let moduleRealmDisposed = false;
+  const disposeRealm = () => {
+    if (moduleRealmDisposed) return;
+    moduleRealmDisposed = true;
+    disposeModuleRealm?.();
+  };
   const entry = resolveEntry(module);
   if (!entry) {
+    disposeRealm();
     throw new Error(tmsg("plugin.entry.noActivate"));
   }
 
@@ -403,6 +400,7 @@ export async function activatePlugin(
   } catch (e) {
     disposeSubscriptions();
     tracker.disposeAll();
+    disposeRealm();
     throw new Error(tmsg("plugin.activate.failed", { id: manifest.id, error: String(e) }));
   } finally {
     publishActivateCost(manifest.id, performance.now() - activateAt);
@@ -419,13 +417,17 @@ export async function activatePlugin(
       if (deactivated) return; // Idempotent.
       deactivated = true;
       try {
-        await entry.deactivate?.();
-      } catch (e) {
-        // §0-4: a plugin's cleanup failure does not block host cleanup either.
-        console.error(`deactivate failed (${manifest.id}):`, e);
+        try {
+          await entry.deactivate?.();
+        } catch (e) {
+          // §0-4: a plugin's cleanup failure does not block host cleanup either.
+          console.error(`deactivate failed (${manifest.id}):`, e);
+        }
+        disposeSubscriptions();
+        tracker.disposeAll();
+      } finally {
+        disposeRealm();
       }
-      disposeSubscriptions();
-      tracker.disposeAll();
     },
   };
 }

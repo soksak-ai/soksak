@@ -488,16 +488,22 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       }
     }
     const moduleAt = performance.now();
-    const module = await importPluginModule(data.content);
+    const loaded = await importPluginModule(data.content);
     reloadStep(`module:${p.manifest.id}:${Math.round(performance.now() - moduleAt)}ms`);
-    const instance = await activatePlugin(
-      module,
-      p.manifest,
-      p.dir,
-      apiDeps(),
-      data.content,
-    );
-    setActive(p.manifest.id, instance);
+    try {
+      const instance = await activatePlugin(
+        loaded.module,
+        p.manifest,
+        p.dir,
+        apiDeps(),
+        data.content,
+        loaded.dispose,
+      );
+      setActive(p.manifest.id, instance);
+    } catch (error) {
+      loaded.dispose();
+      throw error;
+    }
   };
 
   // Single removal — host first: plugin_remove at the current revision (compare-and-swap). The host applies the

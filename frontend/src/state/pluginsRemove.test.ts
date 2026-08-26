@@ -11,7 +11,7 @@ const { active, deactivateById } = vi.hoisted(() => ({
 
 vi.mock("../plugins/loader", () => ({
   activateContractPlugin: vi.fn(async () => ({ deactivate: async () => {} })),
-  importPluginModule: vi.fn(async () => ({})),
+  importPluginModule: vi.fn(async () => ({ module: {}, dispose: vi.fn() })),
   activatePlugin: vi.fn(async () => ({ deactivate: async () => {} })),
   isActive: (id: string) => active.has(id),
   setActive: (id: string) => { active.add(id); },

@@ -7,7 +7,7 @@ const activatedIds: string[] = [];
 const activeIds = new Set<string>();
 vi.mock("../plugins/loader", () => ({
   activateContractPlugin: vi.fn(async () => ({ deactivate: async () => {} })),
-  importPluginModule: vi.fn(async () => ({})),
+  importPluginModule: vi.fn(async () => ({ module: {}, dispose: vi.fn() })),
   activatePlugin: vi.fn(async (_m: unknown, manifest: { id: string }, dir: string) => {
     activatedIds.push(manifest.id);
     return { manifest, dir, deactivate: async () => {} };

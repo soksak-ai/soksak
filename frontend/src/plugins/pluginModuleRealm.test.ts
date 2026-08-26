@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadPluginModule, type PluginModuleRealm } from "./pluginModuleRealm";
+import { loadPluginModule, pluginModuleSource, type PluginModuleRealm } from "./pluginModuleRealm";
 
 function realmFixture(evaluate: PluginModuleRealm["evaluate"] = async (code) => ({ code })) {
   const dispose = vi.fn();
@@ -7,6 +7,15 @@ function realmFixture(evaluate: PluginModuleRealm["evaluate"] = async (code) => 
 }
 
 describe("plugin module realm lifetime", () => {
+  it("binds browser globals to the visible parent document", () => {
+    const source = pluginModuleSource("export const value = document.body");
+
+    expect(source).toContain("const window = parent;");
+    expect(source).toContain("const document = parent.document;");
+    expect(source).toContain("const HTMLElement = parent.HTMLElement;");
+    expect(source).toContain("const setTimeout = parent.setTimeout.bind(parent);");
+  });
+
   it("owns one evaluated module until its loaded generation is disposed", async () => {
     const fixture = realmFixture();
     const create = vi.fn(() => fixture.realm);
