@@ -11,9 +11,9 @@
 - 빌드 스크립트와 workflow는 ID, 버전, 인터페이스, archive 버전, tag를 중복 선언하지 않는다.
 - archive 이름, tag, conformance subject, `release.json` 식별자는 소스 매니페스트에서 파생한다.
 
-## 두 경계에서 모두 검증
+## 두 지점에서 모두 검증
 
-발행과 설치는 같은 식별자를 강제하며 어느 쪽도 다른 경계를 신뢰하지 않는다.
+발행과 설치는 같은 식별자를 강제하며 어느 쪽도 다른 지점을 신뢰하지 않는다.
 
 1. 정식 publisher는 tag 생성 전에 모든 archive의 manifest ID, 버전, 인터페이스, process 경로,
    target 실행 파일, digest, 크기, 안전한 일반 파일 목록을 검증한다.
@@ -24,7 +24,7 @@
    검증한다. Renderer engine은 공개 형식을 parse하지만 암호학적 trust를 소유하지 않는다.
 
 잘못된 바이트가 포함된 immutable release는 덮어쓰거나 마이그레이션하지 않는다. registry에
-등록하지 않으며, 책임 경계에 RED 테스트와 GREEN 수정이 생긴 뒤 새 patch 버전을 발행한다.
+등록하지 않으며, 책임 구분에 RED 테스트와 GREEN 수정이 생긴 뒤 새 patch 버전을 발행한다.
 
 ## 실행 전 조건
 
@@ -42,7 +42,7 @@
   검증한다. Windows runtime 성공을 주장하지 않는다. WebView2, ConPTY, named pipe, Windows
   창 동작은 GitHub `windows-2025` runner에서만 판정한다.
 - 터미널 크기 변경 실패는 DOM pixel, 요청 크기, PTY 관측, 복원 관측, 렌더된 frame 중
-  처음 진행하지 않은 경계를 기록한다. 일반 timeout만으로는 완료 근거가 되지 않는다.
+  처음 진행하지 않은 지점을 기록한다. 일반 timeout만으로는 완료 근거가 되지 않는다.
 - toolchain 설치나 multi-target build 전에 디스크 용량을 확인한다. 재생성 가능한 cache와 build
   output만 명시적으로 정리하며 source file과 사용자 데이터는 용량 확보에 사용하지 않는다.
 - 명시적 sidecar stop은 adopt된 process가 종료된 뒤 반환한다. Application shutdown은 stop이 아니라

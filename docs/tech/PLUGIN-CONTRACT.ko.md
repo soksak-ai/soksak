@@ -10,7 +10,7 @@ canonical: ./PLUGIN-CONTRACT.md
 
 `soksak-spec` 이 공개 플러그인 manifest, release, registry, conformance, settings, 설치 상태 문법을
 소유합니다. 코어는 `@soksak-ai/plugin-spec` 패키지와 Go `platformspec` 모듈을 그대로 소비합니다.
-파서 사본을 두지 않습니다.
+파서 사본을 갖지 않습니다.
 
 규범적 버전 규칙과 예시는 `soksak-ai/soksak-spec` 릴리즈에 있습니다.
 

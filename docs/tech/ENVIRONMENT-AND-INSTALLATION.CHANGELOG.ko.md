@@ -35,7 +35,7 @@ Transaction test는 설치 실패가 partial environment를 공개하지 못하�
 첫 구현은 `environment.json`이 없을 때 memory의 revision 1을 반환했지만 compare-and-swap은 저장된
 revision을 올바르게 0으로 보았습니다. 따라서 첫 설치는 `expected 1, actual 0`으로 실패할 수밖에
 없었습니다. 이제 Core가 identity home을 소유한 뒤 실제 revision 1을 공개합니다. 조회와 write가
-하나의 상태를 사용하며 파일 부재에 두 의미를 두지 않습니다.
+하나의 상태를 사용하며 파일 부재를 두 가지로 해석하지 않습니다.
 
 ## 2026-08-25: 개발 source와 종류별 제거 command 하나
 
@@ -70,7 +70,7 @@ environment에 대해 검사합니다.
 
 Artifact 제거는 content-addressed path에 대해 atomic입니다. Environment write 전에 directory를 같은
 parent 안의 `<dir>.removing`으로 rename하고, write는 compare-and-swap이며, write가 실패하면 directory를
-원래 이름으로 되돌리고, write가 성공하면 `<dir>.removing`을 삭제합니다. 삭제가 실패하면
+원래 이름을 복원하고, write가 성공하면 `<dir>.removing`을 삭제합니다. 삭제가 실패하면
 `.removing` path를 담은 `environment.remove.artifactDeleteFailed`를 change와 함께 반환합니다. 따라서
 content-addressed path는 partial 상태가 되지 않으며, 이 조건 아래에서 설치가 그 path의 기존
 directory를 재사용합니다.
@@ -117,7 +117,7 @@ segment가 없고 선행 separator나 drive letter가 없으며 `.js` 또는 `.m
 제거 순서. Rename 전에 `<dir>.removing`이 있으면 record가 이미 사라진 이전 제거의 잔여물이며 먼저
 삭제합니다. 여기서 실패하면 `<dir>.removing`을 담은 `environment.remove.artifactDeleteFailed`로
 거부하고 아무것도 바꾸지 않습니다. 그 다음 `<dir>.removing`으로 rename, environment
-write(compare-and-swap), write 실패 시 원래 이름으로 되돌림, 성공 시 `<dir>.removing` 삭제 순서입니다.
+write(compare-and-swap), write 실패 시 원래 이름을 복원, 성공 시 `<dir>.removing` 삭제 순서입니다.
 마지막 삭제의 실패는 더 이상 Go error가 아닙니다. Command는 `{ previousRevision, revision,
 artifactDeleteFailed: { path, error } }`로 성공합니다. Core frontend는 그 change를 성공으로
 처리하고(consent 삭제, cascade 계속) path를 담은 activity 하나(`plugin.remove.artifactLeft`,

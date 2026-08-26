@@ -173,7 +173,7 @@ digest로 다시 생성합니다.
 schema는 domain state를 표현하며 provider 구현 이름을 포함하지 않습니다. 이후 인수 검사에서
 사용하지 않는 정보는 만들지 않습니다.
 
-RED는 각 matrix row에서 누락되거나 잘못된 정보를 이름으로 식별하며 실패해야 합니다. 빈 값,
+RED는 각 matrix row에서 누락되거나 잘못된 정보를 이름과 함께 식별하며 실패해야 합니다. 빈 값,
 조용한 누락, 추정값은 실패입니다.
 
 ## 단계 2 — renderer parity
@@ -243,7 +243,7 @@ visibility를 계산하는 이전 경로는 제거합니다. Compatibility branc
 
 Native request 한 번이 대상 window 하나를 닫고, 문서화된 마지막 window 정책을 적용하며,
 workspace claim 및 native surface cleanup을 완료해야 합니다. Native와 command input 경로는 input
-경계 이후 하나의 cleanup 계약을 사용해야 합니다. 다른 window는 변하지 않아야 하며 request와
+구분 이후 하나의 cleanup 계약을 사용해야 합니다. 다른 window는 변하지 않아야 하며 request와
 cleanup sequence를 외부에서 확인할 수 있어야 합니다. 전후 screenshot과 window inventory를
 확인합니다.
 
@@ -309,7 +309,7 @@ image나 recording을 commit하지 않습니다.
 
 ## Release gate 및 공개 순서
 
-다섯 단계는 구현 및 증거 경계이며 release 경계가 아닙니다. 개별 단계가 끝날 때 공개하지
+다섯 단계는 구현 및 증거 구분이며 release 구분이 아닙니다. 개별 단계가 끝날 때 공개하지
 않습니다. 모든 단계가 GREEN이고 전체 candidate가 누적 gate, screenshot과 recording 직접 확인,
 macOS runtime gate, Linux 검사, Windows cgo-free preflight를 모두 통과한 뒤 한 번의 release
 train을 시작합니다.
@@ -344,7 +344,7 @@ job은 모든 build 및 test job에 의존해야 하므로 인증 실패 시 tag
 
 Native 인증을 가능하게 하려고 dependency를 먼저 공개하면 순서가 뒤집히므로 금지합니다.
 2026-08-25 현재 component workflow는 build 경로 뒤에 곧바로 publish하며 이 nonpublishing artifact
-경계를 아직 제공하지 않습니다. Release train 전에 이 경계를 구현하고 test해야 합니다.
+구분을 아직 제공하지 않습니다. Release train 전에 이 구분을 구현하고 test해야 합니다.
 
 Source 또는 선언된 dependency가 바뀐 repository만 다음 dependency 순서로 공개합니다.
 

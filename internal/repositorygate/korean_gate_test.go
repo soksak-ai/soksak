@@ -106,7 +106,9 @@ var koreanReading = regexp.MustCompile(`withReaderLanguage\(\s*"ko"`)
 // table, which grew when the register rules did. That table is a list of what
 // the gate looks for, not prose, and it is the one category this floor already
 // exempts.
-const koreanDebt = 44
+//
+// 2026-08-26: 44 to 43. Same table, packed onto fewer lines when it grew again.
+const koreanDebt = 43
 
 func TestKoreanStaysInTheBundles(t *testing.T) {
 	type finding struct {

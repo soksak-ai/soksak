@@ -35,7 +35,7 @@ wails3beta/
    version repository입니다. Wails service는 host를 확장하며 plugin처럼 끌 수 없습니다.
 3. Upstream release는 정확히 pin합니다. Wails Go, CLI, frontend runtime dependency 변경은 별도
    근거와 commit을 갖습니다.
-4. `backup/`은 모든 build와 gate에서 보이지 않습니다. Build에 필요한 것은 이곳에 두지 않습니다.
+4. `backup/`은 모든 build와 gate에서 보이지 않습니다. Build에 필요한 것은 이곳에 넣지 않습니다.
 
 `forks/` repository의 remote와 branch 계약은 하나입니다. `origin`은 유지하는 fork,
 `upstream`은 원본 repository를 가리킵니다. 유지 branch 이름에는 upstream version을 포함합니다.
@@ -87,7 +87,7 @@ soksak-core/
 └── bin/                product binary인 soksak과 sok
 ```
 
-`core/`는 framework나 특정 plugin을 이름으로 알지 않습니다. `frameworks/wails/`만 Wails host를
+`core/`는 framework나 특정 plugin 의 이름을 담지 않습니다. `frameworks/wails/`만 Wails host를
 알 수 있습니다.
 
 Repository root의 Go file은 `main.go` 하나뿐입니다. Embed path는 선언 file의 상위로 갈 수 없으므로

@@ -22,19 +22,19 @@ canonical: ./DEVELOPMENT.md
 commit 접두사: `test:`, `fix:`, `feat:`, `docs:`, `chore:`. commit 하나는 검증된 계약 하나이지 작업의
 한 단계가 아닙니다.
 
-## D3. 모든 commit 이 모든 게이트를 통과한다
+## D3. 모든 commit 이 모든 검사를 통과한다
 
-`go tool wails3 task verify` (TESTING.md 참조). 게이트는 늘어나기만 하며, 통과하지 못한 commit 은
+`go tool wails3 task verify` (TESTING.md 참조). 검사는 늘어나기만 하며, 통과하지 못한 commit 은
 들어가지 않습니다.
 
 ## D4. 호환 계층 없음
 
-배포된 사용자가 없습니다. 옛 경로는 새 경로 옆에 두지 않고 삭제합니다. 마이그레이션 코드, 대체 경로,
+배포된 사용자가 없습니다. 옛 경로는 새 경로 옆에 남기지 않고 삭제합니다. 마이그레이션 코드, 대체 경로,
 이중 경로는 한 빌드에 두 동작이 들어가고 어느 쪽이 실행됐는지 아무도 말할 수 없게 되는 방식입니다.
 
 ## D5. 지금 요구를 만족하는 가장 단순한 것
 
-아직 오지 않은 미래를 위한 추상화, 설정, 간접 계층을 두지 않습니다. 새 의존보다 이미 있는 의존을,
+아직 오지 않은 미래를 위한 추상화, 설정, 간접 계층을 만들지 않습니다. 새 의존보다 이미 있는 의존을,
 직접 다시 쓰는 것보다 유지되는 라이브러리를 택합니다. 다만 기능이 없다고 단정하기 전에 그 라이브러리가
 실제로 무엇을 하는지 확인합니다.
 
@@ -59,7 +59,7 @@ commit 합니다. 무관한 변경을 이 작업의 것으로 귀속한 기록�
 주석, commit 메시지, 사용자에게 보이는 문구: 건조하게, 짧게, 정확하게. 비유 없이, 의인화 없이.
 주석은 영어로 쓰고, 사람에게 보이는 문구만 한국어입니다.
 
-**게이트.** `prose_gate_test.go`(문서), `frontend/src/commands/refusalMessages.test.ts`(사용자에게
+**검사.** `prose_gate_test.go`(문서), `frontend/src/commands/refusalMessages.test.ts`(사용자에게
 보이는 문자열: 내부 어휘 금지, 비유 금지, 막다른 길 금지).
 
 ## D10. 기록은 이유를 남기고 출처는 남기지 않는다
@@ -67,4 +67,4 @@ commit 합니다. 무관한 변경을 이 작업의 것으로 귀속한 기록�
 주석은 규칙이 존재하는 이유와 무엇을 측정했는지 적습니다. 그 측정이 어느 다른 코드베이스에서 왔는지는
 적지 않습니다.
 
-**게이트.** `internal/repositorygate/provenance_gate_test.go`.
+**검사.** `internal/repositorygate/provenance_gate_test.go`.

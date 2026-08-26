@@ -6,7 +6,7 @@ canonical: ./NATIVE-LAYER.md
 
 # 네이티브 계층
 
-플랫폼을 직접 다루는 코드의 규칙과, 나머지 애플리케이션을 그것에서 떨어뜨려 두는 경계의 규칙입니다.
+플랫폼을 직접 다루는 코드의 규칙과, 나머지 애플리케이션을 그것에서 떨어뜨려 두는 구분의 규칙입니다.
 
 ## cgo 가 여기 있는 이유
 
@@ -38,7 +38,7 @@ Objective-C, C, C++ 는 `.m`, `.h`, `.c` 파일에 둡니다. cgo 서문에는 `
 
 ## N3. Windows 는 cgo 없이 유지한다
 
-게이트: `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...` 가 `task verify` 에서 실행됩니다.
+검사: `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...` 가 `task verify` 에서 실행됩니다.
 Windows 경로로 cgo 를 끌어들이는 것은 즉시 RED 가 됩니다. 이것이 크로스 컴파일 관심사를 선호가 아니라
 측정된 사실로 유지합니다.
 
@@ -77,7 +77,7 @@ macOS 는 ScreenCaptureKit 으로 이 프로세스 자신의 공유 가능 콘�
 `CGWindowListCreateImage` 는 macOS 15 에서 폐기되었고 렌더링 중 블로킹하므로 쓰지 않습니다. Linux 는
 GTK 메인 스레드에서 GTK4 render node 를 스냅샷하고 그 텍스처를 인코딩합니다. X11 루트 창을 읽지
 않으므로 가려진 창도 포커스 변경 없이 캡처됩니다. Windows 는 [CAPTURE.md](CAPTURE.md) 에 정의된 HWND
-백엔드를 씁니다. 공유 픽셀 파이프라인과 그 로컬 크로스 빌드 게이트가 거기에 문서화되어 있습니다.
+백엔드를 씁니다. 공유 픽셀 파이프라인과 그 로컬 크로스 빌드 검사가 거기에 문서화되어 있습니다.
 
 출력 크기는 필터 스냅샷 **하나**에서 나옵니다: `contentRect` × `pointPixelScale`. 먼저 읽은 창 프레임을
 나중에 캡처한 픽셀과 섞으면 나중 순간을 이전 크기로 리샘플하게 되고, 실시간 resize 중에는 화면에 있은

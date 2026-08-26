@@ -7,7 +7,7 @@ scope: workspace
 
 # 터미널 UX 결함 인계
 
-이 문서는 2026-08-25 현재 제보된 열 결함, 현재 증거, 남은 release 경계를 기록합니다. 필수 실행
+이 문서는 2026-08-25 현재 제보된 열 결함, 현재 증거, 남은 release 구분를 기록합니다. 필수 실행
 순서와 증거는 TERMINAL-UX-EXECUTION.ko.md에 정의합니다. Local candidate GREEN을 immutable
 release 또는 실행하지 않은 native-platform GREEN으로 확대해서는 안 됩니다.
 
@@ -38,11 +38,11 @@ environment.json에서 확인합니다.
 | soksak-plugins/ | 설치 가능한 plugin별 repository. 일곱 terminal provider repository가 있습니다. |
 | soksak-kits/ | 공유 component 구현. soksak-kit-plugin-terminal은 공통 terminal lifecycle과 frame presenter를, soksak-kit-sidecar-terminal은 recovery-sidecar runtime을 소유합니다. 예전 terminal-common과 engine-as-judge conformance repository는 consumer가 없으며 폐기 대상입니다. |
 | soksak-sidecars/ | Plugin process별 repository. PTY 및 여섯 frame-producing terminal sidecar가 있습니다. |
-| soksak-contracts/ | Composition, control, PTY, registry, terminal 경계의 공개 contract와 acceptance package입니다. |
+| soksak-contracts/ | Composition, control, PTY, registry, terminal 구분의 공개 contract와 acceptance package입니다. |
 | soksak-specs/ | 공개 schema와 validator의 정본입니다. 공개 state 또는 command 모양을 바꾸면 consumer보다 먼저 수정합니다. |
 | soksak-plugin-registry/ | 공개된 plugin release 참조입니다. 구현과 release 이후 metadata를 받으며 terminal 동작을 소유하지 않습니다. |
 | wails-services/ | Wails host service입니다. Native compositor와 webview surface 책임이 있습니다. |
-| forks/ | 직접 유지하는 upstream fork입니다. `origin`은 소유 fork, `upstream`은 원본이며 유지 branch가 upstream version을 이름으로 가집니다. Product build는 이 path가 아니라 공개 repository와 exact commit을 사용합니다. |
+| forks/ | 직접 유지하는 upstream fork입니다. `origin`은 소유 fork, `upstream`은 원본이며 유지 branch가 upstream version을 이름에 포함합니다. Product build는 이 path가 아니라 공개 repository와 exact commit을 사용합니다. |
 | libraries/ | xterm-addon-webkit-ime처럼 직접 만든 재사용 library입니다. Upstream fork가 아닙니다. |
 | externals/ | 수정하지 않는 제3자 비교 source입니다. |
 | tests/ | 제품 전용 system 및 acceptance repository입니다. |
@@ -53,7 +53,7 @@ environment.json에서 확인합니다.
 | worktrees/ | 임시 Git worktree입니다. Automation은 Git으로 발견해야 하며 이 path에 의존하면 안 됩니다. |
 | bin/ | Workspace local executable 편의 directory이며 현재 Wails tool이 있습니다. Product binary는 soksak-core/bin/이 소유합니다. |
 | frameworks/ | 현재 비어 있으며 REPO-LAYOUT.md의 ownership category가 아닙니다. Ownership 정의 없이 product code를 넣지 않습니다. |
-| .task/ 및 .claude/ | Local tool state와 local agent setting입니다. Product source 경계가 아닙니다. |
+| .task/ 및 .claude/ | Local tool state와 local agent setting입니다. Product source 구분가 아닙니다. |
 
 어떤 repository도 parent-relative path, 주입된 workspace root, symlink로 다른 repository를
 찾으면 안 됩니다. Repository 간 사용은 공개 package 또는 선언된 environment를 통합니다.
@@ -109,7 +109,7 @@ RED가 생긴 후에만 외부 system test에 반영합니다.
 | --- | --- | --- |
 | 1–4, 8: 속도, focus, cursor, input, color | soksak-kits/soksak-kit-plugin-terminal | Xterm plugin은 비교 renderer입니다. 측정 결과 frame 생성 또는 transport가 원인이어야 sidecar를 수정합니다. 필요한 공개 관측면만 contract 또는 spec을 수정합니다. |
 | 5–7: picker, modal, sidebar blanking | soksak-core frontend visibility 및 layout state | Native surface 적용이 선언된 Core state와 다를 때만 wails-service-native-compositor를 수정합니다. |
-| 9: macOS close button | soksak-core/frameworks/wails 및 Core window lifecycle | Native event 경계를 Wails service가 소유하는 경우에만 해당 service를 수정합니다. |
+| 9: macOS close button | soksak-core/frameworks/wails 및 Core window lifecycle | Native event 구분를 Wails service가 소유하는 경우에만 해당 service를 수정합니다. |
 | 10: test interference | soksak-core/internal/application gate 및 application ownership | Core가 소유한 격리 runner 밖에서 user-visible application을 실행하는 경우에만 외부 system test를 수정합니다. |
 
 Terminal plugin repository에 focus, input, theme, performance 수정을 복제하면 안 됩니다. 공통
@@ -131,19 +131,19 @@ soksak-kits/soksak-kit-plugin-terminal/src/provider-terminal-plugin.ts가 공통
 소유합니다. 따라서 결함 1–4와 8에는 하나의 renderer parity 계약이 필요합니다. Provider별 focus,
 input, color, performance 수정 복제는 금지합니다.
 
-View visibility 경계는 soksak-core/frontend/src/state/ui.ts,
+View visibility 구분는 soksak-core/frontend/src/state/ui.ts,
 soksak-core/frontend/src/lib/viewPark.ts, soksak-core/docs/tech/NATIVE-SURFACES.md,
 soksak-core/docs/tech/UI-GEOMETRY.md에 걸쳐 있습니다. 현재 규칙은 활성 DOM content, document 밖
 live surface visibility, parked pixel을 분리합니다. Overlay와 layout motion은 활성 DOM content를
 숨기지 않습니다. Live native surface가 숨겨질 때 parked picture가 마지막 applied pixel을
 유지합니다. Picker, modal, sidebar별 예외는 금지합니다.
 
-Native close 경계는 soksak-core/frameworks/wails/host.go, window_host_wails.go,
+Native close 구분는 soksak-core/frameworks/wails/host.go, window_host_wails.go,
 window_commands.go, frontend/src/commands/catalogWindow.ts, frontend/src/state/windowBoot.ts에
 걸쳐 있습니다. window.close command 성공만으로 실제 macOS close request의 persistence,
 registry cleanup, window destruction을 증명할 수 없습니다.
 
-Test window ownership 경계는 soksak-core/internal/application/restore_gate_test.go,
+Test window ownership 구분는 soksak-core/internal/application/restore_gate_test.go,
 capture_focus_gate_test.go, run.go에 걸쳐 있습니다. 각 run은 고유 home, runtime, identifier,
 socket, owner를 받습니다. Darwin의 `SOKSAK_PRESENTATION=capture-only` window는 compositor에
 남아 있으면서 투명하고 mouse-transparent이며 non-key입니다. Capture는 application을 활성화하지
@@ -231,7 +231,7 @@ candidate 검증”에 정의합니다. Consumer manifest 또는 lockfile 직접
 Clean exact source staging, dependency SHA-256 검증, staging-only workspace override, repository-owned
 Make 검증, canonical package/lock byte 복원, 선언된 generated output 생성, local-locator 거부,
 `candidate-build.json`을 포함한 verified archive exit를 수행합니다. 현재 spec source `0a1e217`은
-해당 경계를 지키면서 긴 ustar path도 지원합니다. Staging metadata와 `.candidate-inputs`는
+해당 구분를 지키면서 긴 ustar path도 지원합니다. Staging metadata와 `.candidate-inputs`는
 archive에 들어가지 않습니다.
 
 ## 현재 진행 상태와 차단점
@@ -253,7 +253,7 @@ Make로 통일했습니다. Tool version은 생태계 owner file에 남고 Actio
 호출합니다. 기록된 source-level arm64 gate는 GREEN이지만 Darwin arm64/x86_64/universal, Linux
 arm64/x86_64, Windows x86_64 전체 native matrix는 아직 실행하지 않았습니다.
 
-Shitty build dependency는 upstream version 13을 이름으로 가진 유지 fork branch
+Shitty build dependency는 upstream version 13을 이름에 포함한 유지 fork branch
 `min-median-max/shitty:soksak-provider-13`입니다. Commit `a5f8785f`는 embedded version을 source
 commit epoch에서 만들고 deterministic static archive를 사용하며 debug data에서 node work path를
 제거합니다. Sidecar `build-dependencies.json`이 해당 exact commit과 Python/LLVM/Ragel version을
@@ -271,7 +271,7 @@ key window를 요구합니다. Local capture-only run은 사용자의 foreground
 따라서 native matrix는 unattended final Darwin runner가 소유하며 DOM-event 증거로 대체하거나 개발자
 desktop을 focus해서는 안 됩니다.
 
-Runner의 unpublished candidate 경계는 구현됐습니다. 각 component owner workflow가 clean exact
+Runner의 unpublished candidate 구분는 구현됐습니다. 각 component owner workflow가 clean exact
 commit을 자기 저장소에서 build·검증·봉인하고, 제품 workflow는 선언된 identity와 digest의 artifact
 17개만 조합합니다. 제품 workflow는 형제 component source를 읽거나 build하지 않습니다.
 
@@ -309,7 +309,7 @@ identity는 이 번호로 추정하지 말고 다시 확인해야 합니다.
 모든 테스트 소유 sidecar와 application process는 성공 및 실패 시 종료되어야 합니다. Cleanup은
 executable name만으로 process를 선택하면 안 됩니다.
 
-## 완료 경계
+## 완료 구분
 
 모든 provider matrix RED가 GREEN이 되고, 모든 정량 visibility 및 ownership 검사가 통과하며,
 screenshot과 motion recording을 직접 확인해야 완료입니다. Build, command 응답, 과거 CI run만으로

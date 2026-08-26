@@ -8,11 +8,11 @@ canonical: ./COMPONENT-OWNERSHIP.md
 
 ## 직접적인 컴포넌트 종류
 
-플랫폼은 plugin, sidecar, kit, contract, spec 을 직접 이름으로 부릅니다. 일반화된 unit, 컴포넌트
+플랫폼은 plugin, sidecar, kit, contract, spec 을 그 이름을 직접 씁니다. 일반화된 unit, 컴포넌트
 종류, `{kind,id,version}` 식별자는 없습니다. 명령, 설정, registry 기록, 릴리즈 문서, 상태, 오류는
 직접적인 종류 이름을 사용합니다.
 
-## 소유 경계
+## 소유 구분
 
 - `soksak-spec` 이 공개 플랫폼 JSON Schema, 파서, 정본 fixture, validator CLI 동작, 소유자 릴리즈
   템플릿의 유일한 출처입니다.
@@ -52,7 +52,7 @@ digest 를 소유합니다.
 ## 변경 규율
 
 - 호환 리더, 별칭, 마이그레이션, 대체 필드, 옛 경로를 남기지 않습니다.
-- 공개 경계가 바뀌면 schema, 파서, 정본 corpus, validator, 소유자 템플릿, 소비자 테스트, 문서를 한
+- 공개 구분이 바뀌면 schema, 파서, 정본 corpus, validator, 소유자 템플릿, 소비자 테스트, 문서를 한
   번의 검증된 순서로 갱신합니다.
 - 테스트는 최종 규칙에 대해 RED 로 시작합니다. 실패한 구현은 규칙을 약화하지 않고 고칩니다.
 - 코드 주석과 Git 메시지는 간결한 영어로 씁니다. 사용자에게 보이는 한국어와 영어 메시지는 같은 정보를

@@ -44,7 +44,7 @@ layout, symlink로 repository를 찾지 않습니다.
 `<store>/<kind>s/<id>/<version>/`이며 그 안의 모든 file은 bare name으로 가리킵니다. Parent release는
 각 dependency의 `release.json`을 size와 SHA-256으로 고정하고, 그것을 읽는 resolver는 그 byte를
 돌려줘야 합니다. Local install은 closure의 모든 release를 주소를 받은 store에서 읽습니다. Store에
-없는 dependency나 고정값과 byte가 다른 dependency는 도출한 위치를 이름으로 든 error이며 network로
+없는 dependency나 고정값과 byte가 다른 dependency는 도출한 위치를 명시한 error이며 network로
 fallback하지 않습니다.
 
 ## Installer transaction
@@ -171,7 +171,7 @@ symlink를 검사한 결과입니다. `RemoveAll(<dir>.removing)`은 `<dir>` 자
 environment write 사이의 crash는 그 record의 다음 제거 뒤에 아무것도 남기지 않습니다. 여기서
 실패하면 `environment.remove.artifactDeleteFailed`(`path`는 `<dir>.removing`, `error`)로 거부하며
 아무것도 바꾸지 않습니다. `<dir>`이 있으면 같은 parent 안의 `<dir>.removing`으로 rename합니다.
-Environment write(compare-and-swap)를 수행합니다. Write가 실패하면 directory를 원래 이름으로
+Environment write(compare-and-swap)를 수행합니다. Write가 실패하면 directory 이름을 원래대로
 되돌리고 거부합니다. Write가 성공하면 `<dir>.removing`을 삭제합니다. 마지막 삭제의 실패는 error가
 아닙니다. Command는 `{ previousRevision, revision, artifactDeleteFailed: { path, error } }`로
 성공하며 `path`는 `.removing` path입니다. Record는 제거된 상태이고 `environment.changed`는

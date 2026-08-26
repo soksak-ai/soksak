@@ -77,7 +77,7 @@ Taskfile은 `PNPM_FLAGS`로 받습니다. `.npmrc`는 관여하지 않습니다.
 경로는 금지합니다. Workstation absolute path는 관측된 executable을 나타내는 evidence record에는
 들어갈 수 있지만 source, lockfile, workflow, release artifact에는 들어갈 수 없습니다.
 
-## 준비 경계
+## 준비 구분
 
 Toolchain 검사와 dependency 준비는 별도 작업입니다.
 

@@ -355,7 +355,7 @@ func init() {
 		"wails.capture.noPNG":               {EN: "native capture encoded no PNG bytes", KO: "네이티브 캡처가 PNG 바이트를 인코딩하지 못했습니다"},
 		"wails.capture.invalidExtent":       {EN: "invalid capture extent or scale", KO: "캡처 범위 또는 배율이 잘못되었습니다"},
 		"wails.capture.invalidRegion":       {EN: "capture region must have positive width and height", KO: "캡처 영역의 너비와 높이는 양수여야 합니다"},
-		"wails.capture.emptyRegion":         {EN: "capture region is empty after clamping", KO: "경계를 적용한 뒤 캡처 영역이 비었습니다"},
+		"wails.capture.emptyRegion":         {EN: "capture region is empty after clamping", KO: "범위를 적용한 뒤 캡처 영역이 비었습니다"},
 		"wails.capture.windowsEmptyExtent":  {EN: "Windows capture received an empty window extent", KO: "Windows 캡처가 빈 창 범위를 받았습니다"},
 		"wails.capture.windowsDC":           {EN: "Windows capture could not create a device context: {reason}", KO: "Windows 캡처가 device context를 만들지 못했습니다: {reason}"},
 		"wails.capture.windowsBitmap":       {EN: "Windows capture could not create a bitmap", KO: "Windows 캡처가 bitmap을 만들지 못했습니다"},
@@ -420,7 +420,7 @@ func init() {
 		},
 		"wails.analyze.regionUnnamed": {
 			EN: "a region has no name; the answer is read by name, not by position",
-			KO: "이름 없는 영역이 있습니다 — 답은 위치가 아니라 이름으로 읽습니다",
+			KO: "이름 없는 영역이 있습니다 — 답은 위치가 아니라 이름을 기준으로 읽습니다",
 		},
 		"wails.analyze.regionNameRepeated": {
 			EN: "two regions are named {name}; one name answers with one series",

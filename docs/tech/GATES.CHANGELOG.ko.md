@@ -25,7 +25,7 @@ Commit `fde267ac5860b4e9ed7dc4e2abd16bdcc576610f`는 installed-product 검증을
 
 ## 증거
 
-- `TestEveryNamedGoTestTargetExists`는 Taskfile이나 CI가 없는 Go test를 이름으로 호출하면 실패합니다.
+- `TestEveryNamedGoTestTargetExists`는 Taskfile이나 CI가 없는 Go test를 이름을 지정해 호출하면 실패합니다.
 - `task verify:restore`는 lifecycle gate가 있는 `internal/application`을 대상으로 합니다.
 - `scripts/ci/macos-link.sh`는 실제 존재하는 repository release-workflow test를 대상으로 합니다.
 
