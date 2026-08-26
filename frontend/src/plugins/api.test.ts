@@ -1147,6 +1147,64 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
   });
 });
 
+describe("process and WebSocket stream receiver lifetime", () => {
+  it("closes process receivers once after kill and plugin disposal", async () => {
+    const invoke = vi.fn<PluginApiDeps["invoke"]>(async (command) => command === "process_spawn" ? 7 : null);
+    const { api, tracker } = buildPluginApi(
+      manifestOf({ permissions: ["process"] }), "/d", fakeDeps({ invoke }),
+    );
+
+    const handle = await api.process!.spawn("worker", []);
+    expect(streamState.closes).toHaveLength(3);
+    await api.process!.kill(handle);
+    tracker.disposeAll();
+    await Promise.resolve();
+    for (const close of streamState.closes) expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("closes process receivers when spawn fails", async () => {
+    const invoke = vi.fn<PluginApiDeps["invoke"]>(async (command) => {
+      if (command === "process_spawn") throw new Error("spawn refused");
+      return null;
+    });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["process"] }), "/d", fakeDeps({ invoke }),
+    );
+
+    await expect(api.process!.spawn("worker", [])).rejects.toThrow("spawn refused");
+    expect(streamState.closes).toHaveLength(3);
+    for (const close of streamState.closes) expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("closes WebSocket receivers once after close and plugin disposal", async () => {
+    const invoke = vi.fn<PluginApiDeps["invoke"]>(async (command) => command === "ws_connect" ? 9 : null);
+    const { api, tracker } = buildPluginApi(
+      manifestOf({ permissions: ["network"] }), "/d", fakeDeps({ invoke }),
+    );
+
+    const handle = await api.ws!.connect("ws://127.0.0.1:9000");
+    expect(streamState.closes).toHaveLength(2);
+    await api.ws!.close(handle);
+    tracker.disposeAll();
+    await Promise.resolve();
+    for (const close of streamState.closes) expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("closes WebSocket receivers when connect fails", async () => {
+    const invoke = vi.fn<PluginApiDeps["invoke"]>(async (command) => {
+      if (command === "ws_connect") throw new Error("connect refused");
+      return null;
+    });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["network"] }), "/d", fakeDeps({ invoke }),
+    );
+
+    await expect(api.ws!.connect("ws://127.0.0.1:9000")).rejects.toThrow("connect refused");
+    expect(streamState.closes).toHaveLength(2);
+    for (const close of streamState.closes) expect(close).toHaveBeenCalledOnce();
+  });
+});
+
 // The window realm declares its own identity too. With only one side declaring, a plugin has to
 // probe again for whether a realm exists at all, and that probing is what killed offscreen in the
 // first place.
