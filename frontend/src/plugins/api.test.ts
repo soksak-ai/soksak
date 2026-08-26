@@ -2,6 +2,8 @@
 // All deps are fake injections — fixes the surface rules with no real Tauri/registry.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const streamState = vi.hoisted(() => ({ closes: [] as Array<ReturnType<typeof vi.fn>> }));
+
 // Mock the framework **at the boundary** — not the vendor. Stubbing the vendor global
 // (__TAURI_INTERNALS__) runs the real Tauri adapter in that test, and swapping the framework tears
 // the test out with it. The contract states this (framework/contract.ts header).
@@ -12,9 +14,12 @@ vi.mock("../framework", async (orig) => {
     // The stream is a contract surface, so shape alone suffices — this file measures the permission gate.
     createStream: <T,>() => {
       const subs: ((v: T) => void)[] = [];
+      const close = vi.fn();
+      streamState.closes.push(close);
       return {
         onmessage: (cb: (v: T) => void) => subs.push(cb),
         toJSON: () => ({ __channel__: 0 }),
+        close,
       };
     },
   };
@@ -76,6 +81,7 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
 }
 
 beforeEach(() => {
+  streamState.closes.length = 0;
   useViewRegistry.setState({ views: {}, version: 0 });
   __resetContentViewHostForTest();
 });
@@ -1103,14 +1109,41 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
     const { api } = buildPluginApi(manifest, "/d", fakeDeps({ invoke }));
     const channel = await api.sidecar!.open("soksak-sidecar-chromium");
     const stream = await channel.stream({}, { onBytes() {} });
+    expect(streamState.closes).toHaveLength(3);
     let settled = false;
     void stream.close.settled.then(() => { settled = true; });
     stream.close.dispose();
+    expect(streamState.closes[1]).toHaveBeenCalledOnce();
+    expect(streamState.closes[2]).toHaveBeenCalledOnce();
+    expect(streamState.closes[0]).not.toHaveBeenCalled();
     await Promise.resolve();
     expect(settled).toBe(false);
     finishClose();
     await stream.close.settled;
     expect(settled).toBe(true);
+    await channel.close();
+    expect(streamState.closes[0]).toHaveBeenCalledOnce();
+  });
+
+  it("closes stream receivers when opening the Core stream fails", async () => {
+    const invoke = vi.fn<PluginApiDeps["invoke"]>(async (command) => {
+      if (command === "sidecar_open") return { name: "soksak-sidecar-chromium" };
+      if (command === "sidecar_stream") throw new Error("stream refused");
+      return {};
+    });
+    const manifest = manifestOf({
+      permissions: ["sidecar"],
+      runtimeDependencies: { sidecars: [{ id: "soksak-sidecar-chromium", version: "0.0.1" }] },
+    });
+    const { api } = buildPluginApi(manifest, "/d", fakeDeps({ invoke }));
+    const channel = await api.sidecar!.open("soksak-sidecar-chromium");
+
+    await expect(channel.stream({}, { onBytes() {} })).rejects.toThrow("stream refused");
+    expect(streamState.closes).toHaveLength(3);
+    expect(streamState.closes[1]).toHaveBeenCalledOnce();
+    expect(streamState.closes[2]).toHaveBeenCalledOnce();
+    await channel.close();
+    expect(streamState.closes[0]).toHaveBeenCalledOnce();
   });
 });
 
