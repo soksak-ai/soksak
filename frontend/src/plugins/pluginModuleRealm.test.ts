@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createPluginModuleFramePool,
   loadPluginModule,
   pluginModuleRealmStats,
   pluginModuleSource,
@@ -12,6 +13,42 @@ function realmFixture(evaluate: PluginModuleRealm["evaluate"] = async (code) => 
 }
 
 describe("plugin module realm lifetime", () => {
+  it("reuses a retired frame only after its document reset completes", async () => {
+    const frames = [{ id: 1 }, { id: 2 }];
+    let finishReset!: () => void;
+    const reset = vi.fn(() => new Promise<void>((resolve) => { finishReset = resolve; }));
+    const pool = createPluginModuleFramePool(() => frames.shift()!, reset);
+    const first = pool.acquire();
+    const retiring = pool.release(first);
+
+    const second = pool.acquire();
+    expect(second).toEqual({ id: 2 });
+    finishReset();
+    await retiring;
+    expect(pool.acquire()).toBe(first);
+    expect(pool.stats()).toEqual({ created: 2, idle: 0, retired: 1, reused: 1 });
+  });
+
+  it("reports disposal only after the realm document retires", async () => {
+    let finishRetirement!: () => void;
+    const retirement = new Promise<void>((resolve) => { finishRetirement = resolve; });
+    const realm = {
+      evaluate: async (code: string) => ({ code }),
+      dispose: () => retirement,
+    } as unknown as PluginModuleRealm;
+    const before = pluginModuleRealmStats();
+    const loaded = await loadPluginModule("export const n = 1", () => realm);
+    let finished = false;
+    const disposing = Promise.resolve(loaded.dispose()).then(() => { finished = true; });
+
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    expect(pluginModuleRealmStats().disposed).toBe(before.disposed);
+    finishRetirement();
+    await disposing;
+    expect(pluginModuleRealmStats().disposed).toBe(before.disposed + 1);
+  });
+
   it("binds browser globals to the visible parent document", () => {
     const source = pluginModuleSource("export const value = document.body");
 
