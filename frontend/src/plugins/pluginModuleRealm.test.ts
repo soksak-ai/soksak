@@ -65,8 +65,8 @@ describe("plugin module realm lifetime", () => {
 
     expect(loaded.module).toEqual({ code: "export const n = 1" });
     expect(create).toHaveBeenCalledOnce();
-    loaded.dispose();
-    loaded.dispose();
+    await loaded.dispose();
+    await loaded.dispose();
     expect(fixture.dispose).toHaveBeenCalledOnce();
   });
 
@@ -85,8 +85,8 @@ describe("plugin module realm lifetime", () => {
 
     const one = await loadPluginModule("same", create);
     const two = await loadPluginModule("same", create);
-    one.dispose();
-    two.dispose();
+    await one.dispose();
+    await two.dispose();
 
     expect(create).toHaveBeenCalledTimes(2);
     expect(first.dispose).toHaveBeenCalledOnce();
@@ -103,7 +103,7 @@ describe("plugin module realm lifetime", () => {
       created: before.created + 1,
       disposed: before.disposed,
     });
-    loaded.dispose();
+    await loaded.dispose();
     expect(pluginModuleRealmStats()).toEqual({
       open: before.open,
       created: before.created + 1,
