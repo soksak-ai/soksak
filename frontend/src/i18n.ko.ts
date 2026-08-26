@@ -1294,7 +1294,7 @@ export const ko = {
   "cmd.plugin.settings.reset.param.workspace": "워크스페이스 id. 기본은 활성 워크스페이스입니다. scope=workspace 일 때 적용됩니다.",
   "cmd.plugin.settings.open.desc": "통합 설정 모달을 엽니다. 플러그인 id 를 주면 그 플러그인의 설정 구역으로 바로 갑니다. id 를 생략하면 일반 환경설정 구역입니다. 빈 문자열을 주면 모달을 닫습니다. 멱등합니다.",
   "cmd.plugin.settings.open.param.id": "플러그인 id (생략하면 일반 환경설정, 빈 문자열이면 닫기)",
-  "cmd.plugin.reload.desc": "플러그인 디렉터리를 다시 훑고 동의가 아직 유효한 모든 플러그인을 재활성화합니다. 답은 다시 훑는 동안 어떤 매니페스트가 왜 거절됐는지 보고합니다. id를 주면 다른 디렉터리를 훑거나 활성 설정을 다시 쓰지 않고 해당 플러그인의 plugin.json과 entry만 다시 읽고 검증합니다. 활성 플러그인은 세대를 교체하며 비활성 플러그인은 비활성 상태를 유지합니다. 더 이상 검증되지 않는 매니페스트는 사유와 함께 거절합니다.",
+  "cmd.plugin.reload.desc": "플러그인 디렉터리를 다시 훑고 동의가 아직 유효한 모든 플러그인을 재활성화합니다. 답은 다시 훑는 동안 어떤 매니페스트가 왜 거절됐는지 보고합니다. id를 주면 다른 디렉터리를 훑거나 활성 설정을 다시 쓰지 않고 해당 플러그인의 plugin.json과 entry만 다시 읽고 검증합니다. manifest와 entry bytes가 같으면 현재 runtime 세대를 유지하고, 달라진 활성 플러그인만 세대를 교체합니다. 비활성 플러그인은 비활성 상태를 유지합니다. 더 이상 검증되지 않는 매니페스트는 사유와 함께 거절합니다.",
   "cmd.plugin.view.open.desc": "활성 또는 지정 workspace에 plugin tab view를 엽니다. Side view는 section command로 배치합니다.",
   "cmd.plugin.view.open.param.workspace": "워크스페이스 id. 기본은 활성 워크스페이스입니다.",
   "cmd.plugin.view.close.desc": "플러그인 뷰를 닫습니다. 사이드바 자리는 선택이 풀려 파일 트리로 돌아갑니다. 콘텐츠 자리는 그 뷰가 열려 있는 모든 판에서 탭을 닫습니다.",

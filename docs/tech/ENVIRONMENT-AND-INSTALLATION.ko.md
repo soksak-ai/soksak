@@ -188,11 +188,11 @@ environment coordinator를 통해 revision을 한 번 reconcile합니다. 호스
 `SIDECAR_IN_USE`로 거부합니다. `sidecar.install.local`과 같은 규칙이며 Core는 Sidecar를 종료하지
 않습니다.
 
-`plugin.reload {id}`는 `<path>/plugin.json`과 manifest가 선언한 entry를 다시 읽습니다. 활성 record는
-`plugin_enabled_set`을 쓰지 않고 활성 세대를 교체하며, 비활성 record는 비활성 상태를 유지합니다.
-entry가 같으면 module graph를 재사용하고, entry bytes가 바뀌면 기존 graph를 해제한 뒤 교체합니다.
-`state.health.plugins.modules`가 두 경로를 보고합니다. `app.environment`의 `unitMode`는 개발 record에서
-도출합니다.
+`plugin.reload {id}`는 `<path>/plugin.json`과 manifest가 선언한 entry를 다시 읽습니다. manifest와
+entry bytes가 같으면 현재 runtime 세대를 유지합니다. bytes가 달라지면 `plugin_enabled_set`을 쓰지
+않고 활성 세대를 교체하며, 비활성 record는 비활성 상태를 유지합니다.
+`state.health.plugins.modules`가 graph 재사용과 교체를 보고합니다. `app.environment`의 `unitMode`는
+개발 record에서 도출합니다.
 
 ## 거부
 
