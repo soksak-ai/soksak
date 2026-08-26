@@ -577,7 +577,9 @@ func (host *Host) end(held *unit) error {
 		case <-held.gone:
 			return nil
 		case <-timer.C:
-			return fmt.Errorf("sidecar %s did not end within %s", held.open.Name, host.deps.ReadyWithin)
+			return i18n.Errorf("sidecar.ownedStopTimeout", map[string]string{
+				"name": held.open.Name, "seconds": host.deps.ReadyWithin.String(),
+			})
 		}
 	}
 	if held.open.PID > 0 {
