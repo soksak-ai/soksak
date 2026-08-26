@@ -895,8 +895,15 @@ function createProcessApi(
     stdoutBuf: Uint8Array[];
     stderrBuf: Uint8Array[];
     exitCode: number | null;
+    receivers: Array<{ close(): void }>;
+    receiversClosed: boolean;
   }
   const procs = new Map<number, ProcState>();
+  const closeProcessReceivers = (state: ProcState) => {
+    if (state.receiversClosed) return;
+    state.receiversClosed = true;
+    for (const receiver of state.receivers) receiver.close();
+  };
   const dispatch = (set: Set<Bytes>, buf: Uint8Array[], b: Uint8Array) => {
     if (set.size) set.forEach((f) => f(b));
     else buf.push(b);
@@ -924,36 +931,49 @@ function createProcessApi(
         stdoutBuf: [],
         stderrBuf: [],
         exitCode: null,
+        receivers: [],
+        receiversClosed: false,
       };
       const onStdout = createStream<ArrayBuffer>();
       onStdout.onmessage = (m) => dispatch(st.stdout, st.stdoutBuf, new Uint8Array(m));
       const onStderr = createStream<ArrayBuffer>();
       onStderr.onmessage = (m) => dispatch(st.stderr, st.stderrBuf, new Uint8Array(m));
       const onExit = createStream<number>();
+      st.receivers = [onStdout, onStderr, onExit];
       onExit.onmessage = (code) => {
         if (st.exit.size) st.exit.forEach((f) => f(code));
         else st.exitCode = code;
+        closeProcessReceivers(st);
       };
       // JS never touches plaintext — pass key names only (secretEnv: envVar → secretKey). ns = plugin
       // id. Plaintext resolution and child env injection happen only at the core boundary
       // (process_spawn) (R2). Without secretEnv, null.
-      const id = (await deps.invoke("process_spawn", {
-        cmd,
-        args,
-        cwd: opts?.cwd ?? null,
-        env: opts?.env ?? null,
-        envRemove: opts?.envRemove ?? null,
-        ns,
-        secretEnv: opts?.secretEnv ?? null,
-        onStdout,
-        onStderr,
-        onExit,
-      })) as number;
+      let id: number;
+      try {
+        id = (await deps.invoke("process_spawn", {
+          cmd,
+          args,
+          cwd: opts?.cwd ?? null,
+          env: opts?.env ?? null,
+          envRemove: opts?.envRemove ?? null,
+          ns,
+          secretEnv: opts?.secretEnv ?? null,
+          onStdout,
+          onStderr,
+          onExit,
+        })) as number;
+      } catch (error) {
+        closeProcessReceivers(st);
+        throw error;
+      }
       procs.set(id, st);
       // A plugin lifetime also owns its processes. On deactivation/unload, reclaim the children instead
       // of waiting for the app generation to end. process_kill is idempotent and safe for an
       // already-exited handle.
       tracker.wrap(() => {
+        const state = procs.get(id);
+        if (!state) return;
+        closeProcessReceivers(state);
         procs.delete(id);
         void deps.invoke("process_kill", { id }).catch(() => {});
       });
@@ -985,6 +1005,8 @@ function createProcessApi(
     },
     kill: async (handle: number): Promise<void> => {
       await deps.invoke("process_kill", { id: handle });
+      const state = procs.get(handle);
+      if (state) closeProcessReceivers(state);
       procs.delete(handle);
     },
   };
@@ -1169,23 +1191,49 @@ function createWsApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     close: Set<() => void>;
     msgBuf: string[];
     closed: boolean;
+    released: boolean;
+    receivers: Array<{ close(): void }>;
+    receiversClosed: boolean;
   }
   const conns = new Map<number, WsState>();
+  const closeWsReceivers = (state: WsState) => {
+    if (state.receiversClosed) return;
+    state.receiversClosed = true;
+    for (const receiver of state.receivers) receiver.close();
+  };
   return {
     async connect(url: string): Promise<number> {
-      const st: WsState = { msg: new Set(), close: new Set(), msgBuf: [], closed: false };
+      const st: WsState = {
+        msg: new Set(), close: new Set(), msgBuf: [], closed: false, released: false,
+        receivers: [], receiversClosed: false,
+      };
       const onMessage = createStream<string>();
       onMessage.onmessage = (t) => {
         if (st.msg.size) st.msg.forEach((f) => f(t));
         else st.msgBuf.push(t);
       };
       const onClose = createStream<null>();
+      st.receivers = [onMessage, onClose];
       onClose.onmessage = () => {
         st.closed = true;
         st.close.forEach((f) => f());
+        closeWsReceivers(st);
       };
-      const id = (await deps.invoke("ws_connect", { url, onMessage, onClose })) as number;
+      let id: number;
+      try {
+        id = (await deps.invoke("ws_connect", { url, onMessage, onClose })) as number;
+      } catch (error) {
+        closeWsReceivers(st);
+        throw error;
+      }
       conns.set(id, st);
+      tracker.wrap(() => {
+        if (st.released) return;
+        st.released = true;
+        closeWsReceivers(st);
+        conns.delete(id);
+        if (!st.closed) void deps.invoke("ws_close", { id }).catch(() => {});
+      });
       return id;
     },
     send: async (handle: number, text: string): Promise<void> => {
@@ -1209,7 +1257,13 @@ function createWsApi(deps: PluginApiDeps, tracker: DisposableTracker) {
       return tracker.wrap(() => st.close.delete(cb));
     },
     close: async (handle: number): Promise<void> => {
+      const state = conns.get(handle);
+      if (state?.released) return;
       await deps.invoke("ws_close", { id: handle });
+      if (state) {
+        state.released = true;
+        closeWsReceivers(state);
+      }
       conns.delete(handle);
     },
   };
