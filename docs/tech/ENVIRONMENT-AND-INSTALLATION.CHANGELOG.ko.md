@@ -18,11 +18,11 @@ content를 선택할 수 있었습니다. “정확히 무엇이 실행되는가
 ## 하나의 atomic environment
 
 `environment.json`이 유일한 영구 로컬 component 상태가 되었습니다. 하나의 revision에 정확한 version,
-절대 경로, source 종류, activation, target, plugin-to-sidecar role binding이 들어갑니다. 설치는 byte를
+절대 경로, 소스 종류, 활성화, target, plugin 과 sidecar 의 역할 binding 이 들어갑니다. 설치는 바이트를
 먼저 stage하고 component directory와 environment를 하나의 transaction으로 교체합니다. 실패하면 이전
 environment가 유지됩니다.
 
-Registry는 원격 provenance와 immutable release metadata를 소유합니다. 로컬 environment는 이 설치가
+Registry 는 원격 provenance 와 불변 릴리즈 metadata 를 소유합니다. 로컬 environment 는 이 설치가
 선택한 내용과 검증된 byte의 위치만 기록합니다.
 
 ## 검증
@@ -37,9 +37,9 @@ revision을 올바르게 0으로 보았습니다. 따라서 첫 설치는 `expec
 없었습니다. 이제 Core가 identity home을 소유한 뒤 실제 revision 1을 공개합니다. 조회와 write가
 하나의 상태를 사용하며 파일 부재를 두 가지로 해석하지 않습니다.
 
-## 2026-08-25: 개발 source와 종류별 제거 command 하나
+## 2026-08-25: 개발 소스와 종류별 제거 명령 하나
 
-개발 record는 `source`가 `development`, `path`가 source directory, `artifactSha256`이 존재하며 비어
+개발 record 는 `source` 가 `development`, `path` 가 소스 디렉터리, `artifactSha256` 이 존재하며 비어
 있고, `registry`가 없으며, `version`은 `plugin_develop` 시점에 manifest에서 읽습니다. `plugin_develop`과
 `sidecar_develop`이 compare-and-swap으로 등록합니다. 개발 record 위에 `registry` 또는 `local`
 release를 설치하면 record를 교체합니다. 비어 있는 `artifactSha256`은 `VERSION_ARTIFACT_CONFLICT`를
@@ -59,7 +59,7 @@ Content-addressed directory `<home>/components/<kind>/<id>/<version>[/<target>]/
 있으면 설치는 그 directory를 재사용하고 stage된 복사본을 폐기합니다. 같은 digest는 같은 byte이며
 directory를 공개한 rename은 atomic이었습니다. 이 경우 `destinationExists`를 반환하지 않습니다.
 
-`plugin_remove`와 `sidecar_remove`(`id`, `expectedRevision`)가 종류별 제거 command 하나입니다.
+`plugin_remove`와 `sidecar_remove`(`id`, `expectedRevision`)가 종류별 제거 명령 하나입니다.
 `plugin_remove`는 이 변경 전에는 unbuilt stub이었고 `sidecar_remove`는 새로 추가되었습니다. 개발
 record는 environment에서만 제거합니다. `local` 또는 `registry` record는 environment에서 제거하고
 실제 path가 `<home>/components/` 바로 아래 깊이 이상일 때만 artifact directory를 삭제합니다.
@@ -119,7 +119,7 @@ segment가 없고 선행 separator나 drive letter가 없으며 `.js` 또는 `.m
 거부하고 아무것도 바꾸지 않습니다. 그 다음 `<dir>.removing`으로 rename, environment
 write(compare-and-swap), write 실패 시 원래 이름을 복원, 성공 시 `<dir>.removing` 삭제 순서입니다.
 마지막 삭제의 실패는 더 이상 Go error가 아닙니다. Command는 `{ previousRevision, revision,
-artifactDeleteFailed: { path, error } }`로 성공합니다. Core frontend는 그 change를 성공으로
+artifactDeleteFailed: { path, error } }`로 성공합니다. Core 프론트엔드는 그 변경을 성공으로
 처리하고(consent 삭제, cascade 계속) path를 담은 activity 하나(`plugin.remove.artifactLeft`,
 `sidecar.remove.artifactLeft`)를 발행합니다. 이전 frontend는 모든 throw를 거부로 처리했으므로, 삭제
 실패 시 host가 이미 제거한 record의 consent와 enabled 상태가 그대로 남았습니다.
@@ -158,19 +158,19 @@ record의 다음 제거 뒤에 아무것도 남기지 않습니다.
 ## 2026-08-26: Code에서 도출한 거부 표
 
 계약 문서의 거부 표는 `core/environment`에서 도출하며 각 host command가 반환하는 모든 error를
-나열합니다. 이전 표는 non-key error 둘만 적고 나머지는 산문에 두었습니다. 추가된 row: command별
+나열합니다. 이전 표는 키가 없는 오류 둘만 적고 나머지는 산문에 남겼습니다. 추가된 행: 명령마다
 argument decoding(`control.arg.missing`, `control.arg.nullValue`, JSON type이 틀릴 때의 raw
-`argument "<name>": <json error>`); `environment.json`의 raw 읽기 또는 parse error;
-`environment.home.absolute`; write 시점 결과 environment의 raw `platformspec` validation error;
-publish 중 `MkdirAll`, `WriteFile`, `Rename`의 raw os error; `plugin_remove` 또는 `sidecar_remove`가
+`argument "<name>": <json error>`); `environment.json`의 원시 읽기 오류 또는 파싱 오류;
+`environment.home.absolute`; write 시점 결과 environment 의 원시 `platformspec` 검증 오류;
+publish 중 `MkdirAll`, `WriteFile`, `Rename`의 원시 os 오류; `plugin_remove` 또는 `sidecar_remove` 가
 실패한 write 뒤 `<dir>.removing`을 되돌리지 못할 때의 `errors.Join(write error, rename error)`;
 not-exist 외의 error로 실패한 `Lstat(<dir>)`. 정확하게 고친 항목:
-`environment.develop.directoryUnavailable`은 없는 manifest도 포함하며 `error`는 `<file>: <os error
+`environment.develop.directoryUnavailable`은 없는 manifest 도 포함하며 `error` 는 `<file>: <os error
 또는 parse error>` 또는 `<file> declares id <id>`; `sidecar.json`의 spec parser 조건;
 `environment.remove.pathOutsideHome`은 해석된 parent가 `<dir>`을 해석된 root 밖에 둘 때 `<dir>`을
 적음; `plugin_enabled_set`이 비교하는 effective version과 `enabled`가 `false`인 broken 개발
 record의 version 검사 생략. `sidecar_open`의 Sidecar resolution에는 `sidecar.json`이 record를
-확인하지 않는 `registry` 또는 `local` Sidecar의 `os.ErrInvalid`와 `dist/<id>`의 process file 검사를
+확인하지 않는 `registry` 또는 `local` Sidecar 의 `os.ErrInvalid` 와 `dist/<id>` 의 프로세스 파일 검사를
 추가했습니다.
 
 ## 2026-08-26: `plugin_manifest_list`의 broken record, rejected record의 제거와 disable
@@ -207,13 +207,13 @@ error와 함께 `disabled`로 남아 pane에 placeholder가 표시되었지만 �
 Write 전의 `SIDECAR_IN_USE` guard가 `open` 또는 `recorded`로 나열된 id를 거부하므로 write 뒤의
 `sidecar_status` 읽기는 답이 하나입니다.
 
-PluginViewHost의 overlay(loading, placeholder, error)에는 `data-node`가 없어서 문장이 화면에 있는
-동안 `ui.tree`는 disabled plugin의 pane에 node 0개를 보고했습니다. 이제 각 overlay는 view address와
+PluginViewHost 의 오버레이(loading, placeholder, error)에는 `data-node` 가 없어서 문장이 화면에 있는
+동안 `ui.tree` 는 disabled plugin 의 pane 에 노드 0개를 보고했습니다. 이제 각 오버레이는 뷰 주소와
 `data-node`(`plugin-view-loading`, `plugin-view-placeholder`, `plugin-view-error`)를 선언하고 상태를
 `data-view-state`, `data-view-plugin`, `data-view-reason`, `data-view-error`에 적습니다. Overlay는
 provider container의 child가 아니라 sibling입니다. Container는 provider가 소유한 DOM이고 overlay가
-표시되는 동안 숨겨집니다. Overlay는 view address를 `data-view-addr`가 아니라
+표시되는 동안 숨겨집니다. 오버레이는 뷰 주소를 `data-view-addr` 가 아니라
 `data-view-overlay-addr`에 선언합니다. `ui.slot`은 `.tab-viewer[data-view-addr]`를
 resolve하며 address axiom A2는 address 하나에 element 하나를 요구합니다. Collector의 scan root는
 `.tab-viewer[data-view-addr]`와 `[data-view-overlay-addr]` 둘이며, 어느 쪽 안의 `data-node`든 그
-root의 view address 아래에 나열되고 chrome scan은 건너뜁니다.
+root 의 뷰 주소 아래에 나열되고 chrome 스캔은 건너뜁니다.

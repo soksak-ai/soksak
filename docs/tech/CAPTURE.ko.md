@@ -24,5 +24,5 @@ chrome이 포함된 다른 사각형이므로 content size fallback으로 사용
 로컬 테스트는 native frame을 주입하여 decode한 PNG pixel, padding stride, DPI crop, 빈 crop,
 잘못된 frame, 실패, resource release를 검증합니다. `GOOS=windows`의 `go list`는 Windows
 backend를 선택하고 unsupported stub을 제외해야 합니다. M1 Docker는 Windows amd64 package
-test, 앱, CLI, system-test binary를 cross-build합니다. HWND와 WebView2 동작의 최종 판정은
+테스트, 앱, CLI, 시스템 테스트 바이너리를 크로스 빌드합니다. HWND 와 WebView2 동작의 최종 판정은
 GitHub `windows-2025` system suite가 수행합니다.

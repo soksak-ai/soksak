@@ -21,7 +21,7 @@ canonical: ./COMPONENT-OWNERSHIP.md
 - `soksak-kit-*` 는 재사용 구현 코드를 소유합니다. kit 은 공개 계약 문법을 소유하지 않습니다.
 - plugin, sidecar, kit, contract, spec 저장소는 자기 구현, 직접 manifest, 테스트, 라이선스, 정확한
   의존 선언을 소유합니다.
-- 코어는 공개 spec 패키지를 그대로 소비합니다. release, registry, conformance, plugin, sidecar,
+- 코어는 공개 spec 패키지를 그대로 소비합니다. 릴리즈, registry, 적합성, plugin, sidecar,
   kit, contract, spec 파서를 복사하지 않습니다.
 
 ## Schema 메타데이터와 payload 식별자
@@ -41,7 +41,7 @@ closure 를 공개하고, 빌드 receipt 가 Kit·Contract·Spec 입력을 공�
 ## Environment
 
 `environment.json` 이 유일한 런타임 컴포넌트 상태입니다. 정확한 Plugin·Sidecar 버전, 실체화된 절대
-경로, artifact SHA-256 값, 소스 종류, registry ID, Sidecar target, Plugin 활성화를 기록합니다.
+경로, 산출물 SHA-256 값, 소스 종류, registry ID, Sidecar target, Plugin 활성화를 기록합니다.
 Plugin 릴리즈가 정확한 런타임 의존 참조를 소유하며, environment 는 역할 결합을 저장하지 않습니다.
 릴리즈 문서와 빌드 receipt 가 Kit·Contract·Spec 입력의 저장소, 소스 commit, 의존 선언, URL, 크기,
 digest 를 소유합니다.

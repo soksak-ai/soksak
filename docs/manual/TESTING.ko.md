@@ -15,14 +15,14 @@ canonical: docs/manual/TESTING.md
 | Gate | Command |
 | --- | --- |
 | `verify:go` | `go build ./...`, `go vet ./...`, `go test ./...` |
-| `verify:application` | 현재 `soksak`과 `sok`을 build한 뒤 capture-only restore, capture-focus, native-close gate 실행 |
+| `verify:application` | 현재 `soksak` 과 `sok` 을 빌드한 뒤 capture-only restore, capture-focus, native-close 검사 실행 |
 | `verify:headless` | `go test ./core/...` |
 | `verify:windows` | `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...` |
 | `verify:frontend` | `pnpm typecheck`, `pnpm test` |
 | installed fleet | `min-median-max/soksak-terminal-tests`가 소유하며 Core로 immutable release를 설치 |
 
 Owner test는 각 repository에서 실행합니다. Core는 형제 source를 실행하거나 checkout 위치를 추론하지
-않습니다. Cross-repository product 검증은 installer와 `environment.json`을 통해 release artifact를
+않습니다. 저장소를 넘는 제품 검증은 설치기와 `environment.json` 을 지나 릴리즈 산출물을
 사용합니다.
 
 ## T2. Gate는 누적됩니다
@@ -51,7 +51,7 @@ command를 만드는 것이 작업의 일부입니다.
 ## T7. Capture-only와 native input은 서로 다른 gate입니다
 
 Local visual 및 parity gate는 compositor에 남아 있는 alpha-zero non-key window를 사용하며 사용자의
-foreground process를 보존해야 합니다. 이 gate의 `ui.input.*` command는 노출된 browser-event
+전면 프로세스를 보존해야 합니다. 이 검사의 `ui.input.*` 명령은 노출된 브라우저 이벤트
 경로를 증명하지만 운영체제 입력이라고 주장하지 않습니다.
 
 WebKit은 native keyboard 전달에 active key window를 요구합니다. 따라서 terminal system
@@ -60,6 +60,6 @@ repository의 `make system-native-input TARGET=<darwin-target>`은 사람이 없
 `window.input.key.press`를 사용해 terminal-to-PTY 전달과 native route를 기록합니다. 두 matrix가
 모두 필요하며 한쪽의 이름을 바꿔 다른 쪽을 대신하면 안 됩니다.
 
-모든 application gate는 polling 대신 `soksak.host.ready`를 기다리고 process, window, socket, home,
+모든 애플리케이션 검사는 폴링 대신 `soksak.host.ready` 를 기다리고 프로세스, 창, socket, home,
 runtime 및 open/recorded sidecar ownership을 기록합니다. GREEN cleanup은 application 정상 종료와
-남은 test-owned sidecar 0을 뜻합니다.
+테스트가 소유한 사이드카가 0개 남았다는 뜻입니다.
