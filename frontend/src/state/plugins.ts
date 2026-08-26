@@ -28,6 +28,7 @@ import {
   setActive,
 } from "../plugins/loader";
 import { syncServiceLedger } from "../plugins/serviceProxy";
+import { pluginModuleCache } from "../plugins/pluginModuleCache";
 import { defaultPluginDeps } from "../plugins/deps";
 import { runtimePluginRequirements } from "../plugins/runtimeDependencies";
 import {
@@ -453,6 +454,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     // Pure contract plugin (PS4, docs/PLUGIN-SERVICE.md) — activates without an entry. No code load and no chrome
     // scan (parseManifest enforces zero code-requiring contributions) — gate + data contributions + service proxy.
     if (p.manifest.entry === null) {
+      await pluginModuleCache.release(p.manifest.id);
       const instance = await activateContractPlugin(
         p.manifest,
         p.dir,
@@ -488,20 +490,23 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       }
     }
     const moduleAt = performance.now();
-    const loaded = await importPluginModule(data.content);
+    const module = await pluginModuleCache.load(
+      p.manifest.id,
+      data.content,
+      importPluginModule,
+    );
     reloadStep(`module:${p.manifest.id}:${Math.round(performance.now() - moduleAt)}ms`);
     try {
       const instance = await activatePlugin(
-        loaded.module,
+        module,
         p.manifest,
         p.dir,
         apiDeps(),
         data.content,
-        loaded.dispose,
       );
       setActive(p.manifest.id, instance);
     } catch (error) {
-      loaded.dispose();
+      await pluginModuleCache.release(p.manifest.id);
       throw error;
     }
   };
@@ -534,6 +539,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       await deactivateById(id);
       setRuntime(id, { status: "disabled", error: undefined });
     }
+    await pluginModuleCache.release(id);
     set((s) => {
       const consents = { ...s.consents };
       delete consents[id];
@@ -678,6 +684,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
         }
         ready.push(id);
       }
+      await pluginModuleCache.retain(new Set(ready));
       // The webview fetches bundles directly.
       //
       // The wait equals the bytes moved. Measured 2026-08-08: batching 34 reads into one call left 818ms
@@ -808,6 +815,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
         return err("INTERNAL", tmsg("plugin.enabled.writeFailed", { error: String(cause) }));
       }
       await deactivateById(id);
+      await pluginModuleCache.release(id);
       setRuntime(id, { status: "disabled", error: undefined });
       set((s) => ({ enabledIds: s.enabledIds.filter((x) => x !== id) }));
       persist();
@@ -839,6 +847,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       const affected = [...transitiveDependents(id, pluginDepNodes(get().plugins)), id];
       for (const aid of affected) {
         if (isActive(aid)) await deactivateById(aid);
+        await pluginModuleCache.release(aid);
         setRuntime(aid, { status: "disabled", error: undefined });
       }
       set((s) => {
@@ -897,6 +906,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       if (isActive(id)) await deactivateById(id);
       setRuntime(id, { status: "disabled", error: undefined });
       if (!selected) {
+        await pluginModuleCache.release(id);
         await get().syncLedger();
         return ok({ id, status: "disabled" });
       }
