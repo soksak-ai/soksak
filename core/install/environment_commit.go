@@ -85,7 +85,7 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 	if err != nil {
 		return CommitResult{}, err
 	}
-	next := current
+	next := coreenvironment.Clone(current)
 	if !exists {
 		next = coreenvironment.Empty()
 	}
@@ -154,7 +154,7 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 			stagedPluginRoots[artifact.id] = staged.path
 		}
 	}
-	if err := coreenvironment.ValidatePluginDependencies(next, stagedPluginRoots); err != nil {
+	if err := coreenvironment.ValidateDependencyTransition(current, next, stagedPluginRoots); err != nil {
 		return CommitResult{}, err
 	}
 	change, temporary, err := coreenvironment.PrepareWrite(request.Home, current, exists, next, request.ExpectedRevision, "next-"+request.TransactionID)

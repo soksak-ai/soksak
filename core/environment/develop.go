@@ -40,10 +40,10 @@ func SetPluginDevelopment(home, id, path string, expected uint64) (Change, error
 	if !exists {
 		return Change{}, os.ErrNotExist
 	}
-	next := current
+	next := Clone(current)
 	record.Version = manifest.Version
 	next.Plugins[id] = Plugin{Component: record, Enabled: current.Plugins[id].Enabled}
-	if err := validateDependencies(next, nil, map[recordKey]recordManifest{{"plugin", id}: manifest}); err != nil {
+	if err := validateDependencies(current, next, nil, map[recordKey]recordManifest{{"plugin", id}: manifest}); err != nil {
 		return Change{}, err
 	}
 	return Write(home, current, true, next, expected)
@@ -71,10 +71,10 @@ func SetSidecarDevelopment(home, id, path, target string, expected uint64) (Chan
 	if !exists {
 		return Change{}, os.ErrNotExist
 	}
-	next := current
+	next := Clone(current)
 	record.Version = manifest.Version
 	next.Sidecars[id] = record
-	if err := validateDependencies(next, nil, map[recordKey]recordManifest{{"sidecar", id}: manifest}); err != nil {
+	if err := validateDependencies(current, next, nil, map[recordKey]recordManifest{{"sidecar", id}: manifest}); err != nil {
 		return Change{}, err
 	}
 	return Write(home, current, true, next, expected)

@@ -114,3 +114,43 @@ func TestReadRecordManifestNeverAnswersARawFileError(t *testing.T) {
 		}
 	}
 }
+
+// A conflict the environment already holds (a development manifest edited on disk after its record
+// was written) is reported by the runtime; it does not block an unrelated write. A write that
+// introduces a conflict is refused.
+func TestDependencyTransitionRefusesOnlyTheConflictItIntroduces(t *testing.T) {
+	before := Empty()
+	before.Sidecars["terminal-state"] = Component{Version: "0.0.7", Path: "/installed/terminal-state", Source: "local", Target: "aarch64-apple-darwin"}
+	before.Plugins["terminal"] = Plugin{Component: Component{Version: "0.1.0", Path: pluginSource(t, map[string]any{
+		"id": "terminal", "version": "0.1.0",
+		"runtimeDependencies": map[string]any{"sidecars": []map[string]any{{"id": "terminal-state", "version": "0.0.8"}}},
+	}), Source: "development"}}
+	before.Plugins["other"] = Plugin{Component: Component{Version: "1.0.0", Path: pluginSource(t, map[string]any{"id": "other", "version": "1.0.0"}), ArtifactSHA256: strings.Repeat("a", 64), Source: "local"}}
+	after := before
+	after.Plugins = map[string]Plugin{"terminal": before.Plugins["terminal"]}
+	if err := ValidateDependencyTransition(before, after, nil); err != nil {
+		t.Fatalf("removing an unrelated plugin was refused for a conflict the environment already held: %v", err)
+	}
+	if err := ValidatePluginDependencies(after, nil); err == nil {
+		t.Fatal("the conflict itself is not reported")
+	}
+	introduced := before
+	introduced.Sidecars = map[string]Component{}
+	introduced.Plugins = map[string]Plugin{"other": before.Plugins["other"], "viewer": {Component: Component{Version: "0.2.0", Path: pluginSource(t, map[string]any{
+		"id": "viewer", "version": "0.2.0",
+		"runtimeDependencies": map[string]any{"plugins": []map[string]any{{"id": "other", "version": "2.0.0"}}},
+	}), ArtifactSHA256: strings.Repeat("b", 64), Source: "local"}}}
+	err := ValidateDependencyTransition(before, introduced, nil)
+	assertRefusalKey(t, err, "install.transaction.dependencyVersionConflict", "viewer", "other")
+}
+
+func TestCloneSharesNoMapWithItsSource(t *testing.T) {
+	value := Empty()
+	value.Plugins["a"] = Plugin{Component: Component{Version: "1.0.0"}}
+	next := Clone(value)
+	delete(next.Plugins, "a")
+	next.Sidecars["s"] = Component{Version: "1.0.0"}
+	if _, kept := value.Plugins["a"]; !kept || len(value.Sidecars) != 0 {
+		t.Fatalf("source changed through the clone: %+v", value)
+	}
+}

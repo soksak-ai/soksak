@@ -40,7 +40,7 @@ func RemovePlugin(home, id string, expected uint64) (RemoveResult, error) {
 	if !found {
 		return RemoveResult{}, i18n.Errorf("environment.remove.notFound", map[string]string{"kind": "plugin", "id": id})
 	}
-	next := current
+	next := Clone(current)
 	delete(next.Plugins, id)
 	return remove(home, current, next, record.Component, expected)
 }
@@ -59,7 +59,7 @@ func RemoveSidecar(home, id string, expected uint64) (RemoveResult, error) {
 	if !found {
 		return RemoveResult{}, i18n.Errorf("environment.remove.notFound", map[string]string{"kind": "sidecar", "id": id})
 	}
-	next := current
+	next := Clone(current)
 	delete(next.Sidecars, id)
 	return remove(home, current, next, record, expected)
 }
@@ -83,7 +83,7 @@ func remove(home string, current, next Environment, record Component, expected u
 		}
 		candidate = resolved
 	}
-	if err := ValidatePluginDependencies(next, nil); err != nil {
+	if err := ValidateDependencyTransition(current, next, nil); err != nil {
 		return RemoveResult{}, err
 	}
 	removing := ""

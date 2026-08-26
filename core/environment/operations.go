@@ -31,7 +31,7 @@ func SetPluginsEnabled(home string, refs []PluginRef, enabled bool, expected uin
 	if !exists {
 		return Change{}, os.ErrNotExist
 	}
-	next := current
+	next := Clone(current)
 	seen := map[string]bool{}
 	for _, ref := range refs {
 		if ref.ID == "" || ref.Version == "" || seen[ref.ID] {
