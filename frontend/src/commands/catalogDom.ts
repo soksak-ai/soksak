@@ -1112,9 +1112,9 @@ export function registerDomCatalog(): void {
           height: (el as HTMLElement).style?.height ?? "",
           flexBasis: (el as HTMLElement).style?.flexBasis ?? "",
         },
-        // How far the content runs and where the node is scrolled to. content larger than the client
-        // box is a node whose content does not fit; with the overflow rule in style it says whether
-        // that content is clipped, scrolled, or spilling into an ancestor.
+        // How far the content runs and where the node is scrolled to. Content larger than the client
+        // box is a node whose content does not fit; with the overflow rule in style, that is the
+        // difference between clipped, scrolled, and spilling into an ancestor.
         scroll: {
           top: Math.round(el.scrollTop ?? 0),
           left: Math.round(el.scrollLeft ?? 0),
