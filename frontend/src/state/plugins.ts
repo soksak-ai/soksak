@@ -100,8 +100,8 @@ interface PluginsState {
   consents: Record<string, ConsentRecord>; // persisted to localStorage
   enabledIds: string[]; // runtime cache loaded from installation settings
   reload: () => Promise<void>;
-  // Reload by id — re-reads that plugin's manifest from disk and enables it with fresh code.
-  reloadOne: (id: string) => Promise<CmdResult<{ id: string; status: string }>>;
+  // Reload by id — re-reads the manifest and entry; unchanged bytes keep the active generation.
+  reloadOne: (id: string) => Promise<CmdResult<{ id: string; status: string; unchanged?: boolean }>>;
   // cascade:true removes transitive dependents too. Omitted while dependents exist is blocked with CASCADE_REQUIRED.
   remove: (
     id: string,
@@ -898,6 +898,27 @@ export const usePlugins = moduleState("state/plugins#store", () =>
           tmsg("plugin.manifest.idChanged", { id, freshId: fresh.manifest.id }),
         );
       }
+      let entrySource: string | null = null;
+      if (fresh.manifest.entry !== null) {
+        try {
+          const response = await fetch(
+            await pluginFileUrl(`${fresh.dir}/${fresh.manifest.entry}`),
+            { cache: "no-store" },
+          );
+          entrySource = await response.text();
+        } catch (cause) {
+          return err("INTERNAL", tmsg("plugin.activate.failed", { id, error: String(cause) }));
+        }
+      }
+      const manifestUnchanged = JSON.stringify(fresh.manifest) === JSON.stringify(p.manifest);
+      const entryUnchanged = entrySource === null
+        ? p.manifest.entry === null
+        : manifestUnchanged && pluginModuleCache.reuse(id, entrySource);
+      if (manifestUnchanged && entryUnchanged && p.status === "enabled" && isActive(id)) {
+        set((s) => ({ rejected: s.rejected.filter((x) => x.dir !== p.dir) }));
+        return ok({ id, status: "enabled", unchanged: true });
+      }
+      if (entrySource !== null) prefetchedSources.set(id, entrySource);
       set((s) => ({
         plugins: { ...s.plugins, [id]: { ...fresh, status: p.status } },
         rejected: s.rejected.filter((x) => x.dir !== p.dir),

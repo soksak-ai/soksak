@@ -5,6 +5,7 @@ export type PluginModuleLoader = (source: string) => Promise<LoadedPluginModule>
 
 export interface PluginModuleCache {
   load(id: string, source: string, loader: PluginModuleLoader): Promise<unknown>;
+  reuse(id: string, source: string): boolean;
   release(id: string): Promise<boolean>;
   retain(ids: ReadonlySet<string>): Promise<void>;
   releaseAll(): Promise<void>;
@@ -26,14 +27,19 @@ export function createPluginModuleCache(): PluginModuleCache {
     released += 1;
     return true;
   };
+  const reuse = (id: string, source: string): boolean => {
+    const current = entries.get(id);
+    if (current?.source !== source) return false;
+    reused += 1;
+    return true;
+  };
 
   return {
     async load(id, source, loader) {
-      const current = entries.get(id);
-      if (current?.source === source) {
-        reused += 1;
-        return current.loaded.module;
+      if (reuse(id, source)) {
+        return entries.get(id)!.loaded.module;
       }
+      const current = entries.get(id);
       if (current) {
         entries.delete(id);
         await current.loaded.dispose();
@@ -44,6 +50,7 @@ export function createPluginModuleCache(): PluginModuleCache {
       loaded += 1;
       return next.module;
     },
+    reuse,
     release,
     async retain(ids) {
       for (const id of [...entries.keys()]) {
