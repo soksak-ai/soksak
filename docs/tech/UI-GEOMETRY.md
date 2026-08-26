@@ -122,6 +122,19 @@ margins are symmetric, and only then say it is done. Addresses come from
 `sok ui.tree`, never from a guessed selector — an element that is not exposed
 cannot be measured, and that is the point.
 
+## R5b. A node that scrolls is a node whose content does not fit
+
+The rect is the box the screen gives a node; it says nothing about what the node
+holds. `ui.measure` answers `scroll` beside it — `top`, `left`, `width`,
+`height`, `clientWidth`, `clientHeight` — and `overflowX`, `overflowY` and
+`position` in `style`. Content larger than the client box is a node whose
+content does not fit; with the overflow rule that is the difference between
+clipped, scrolled, and spilling into an ancestor.
+
+Without those fields the only way to see a pane running past its box was a
+person looking at the screen (measured 2026-08-26: a terminal pane painted 384
+of the 932 pixels it was given, and the report came as a screenshot).
+
 ## R5a. The whole layout is one number
 
 `ui.measure` reads one node. A split layout is many, and reading them one at a
