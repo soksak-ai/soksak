@@ -328,3 +328,37 @@ func TestStartedInventoryDropsAHeldUnitNothingAnswersAt(t *testing.T) {
 		t.Fatalf("a unit nothing answers at was reported open: %+v", open)
 	}
 }
+
+// A caller that was granted a unit keeps reaching it across the unit's own life. When the process
+// this host held is gone, the next request starts the unit the settings name and reaches that one —
+// otherwise every caller granted the unit is left holding a name nothing serves.
+func TestSendStartsAUnitWhoseProcessIsGone(t *testing.T) {
+	home := shortHome(t)
+	runtimeRoot := shortHome(t)
+	stageUnit(t, home, "probe", probeSource)
+	deps := Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+	}
+	host := NewHost(deps)
+	t.Cleanup(func() { _ = host.Stop("probe") })
+	started, err := host.Start("probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.Send("probe", controlwire.Request{ID: "one", Command: "probe.echo"}); err != nil {
+		t.Fatalf("first request: %v", err)
+	}
+
+	if err := syscall.Kill(-started.PID, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	host.awaitGone(started.Address)
+
+	if _, err := host.Send("probe", controlwire.Request{ID: "two", Command: "probe.echo"}); err != nil {
+		t.Fatalf("the request did not reach a unit: %v", err)
+	}
+	if open := host.Started(); len(open) != 1 || open[0].PID == started.PID {
+		t.Fatalf("no new unit is serving the name: %+v", open)
+	}
+}
