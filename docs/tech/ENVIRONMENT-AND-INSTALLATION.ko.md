@@ -25,7 +25,7 @@ closure, 역할 binding 을 저장하지 않습니다.
 
 Core는 identity home을 얻은 뒤 revision 1을 생성합니다. 상태가 없거나 올바르지 않으면 부팅 오류이며
 가상의 빈 상태를 만들지 않습니다. 모든 변경은 compare-and-swap을 사용하고
-`environment.changed` event 하나를 발행합니다. File polling은 없습니다.
+`environment.changed` event 하나를 발행합니다. 파일 폴링은 없습니다.
 
 호스트는 `environment.json`을 한 번 검증합니다. `environment_get`은 parse와 검증을 마친 document를
 반환하며 Core frontend는 이를 typed data로 사용하고 다시 검증하지 않습니다.
@@ -69,7 +69,7 @@ install transaction이 필요합니다.
 ## 개발 소스
 
 개발 record는 Plugin 또는 Sidecar record와 같은 형식이며 `source`가 `development`입니다. `path`는
-절대 경로이자 clean한 source directory입니다. Plugin directory는 `plugin.json`과 manifest가 선언한
+절대 경로이자 깨끗한 소스 디렉터리입니다. Plugin 디렉터리는 `plugin.json`과 manifest가 선언한
 entry(entry `null`: entry file 없음)를 포함하고 Sidecar directory는 `sidecar.json`과 `dist/<id>`를
 포함합니다. Entry 규칙은 `parseManifest`(`soksak-spec`, `packages/plugin-spec/src/spec.ts`)의
 manifest 규칙과 같습니다. key가 없으면 `main.js`, `null`이면 entry file 없음(순수 contract Plugin),
@@ -134,7 +134,7 @@ record를 교체합니다. 개발 record의 비어 있는 `artifactSha256`은 `V
 각 develop command의 응답은 결과 status를 포함합니다. `plugin.develop`은 environment coordinator가
 plugin을 reload한 뒤 반환하며 `{ id, path, revision, status, error? }`로 응답합니다. `status`는 runtime
 status(`enabled`, `disabled`, `error`)이고, rejected 목록만 그 id를 가지면 `rejected`, 어느 쪽도 가지지
-않으면 `absent`입니다. `error`는 runtime error 또는 `; `로 이은 rejection error이며 없으면 생략합니다.
+않으면 `absent`입니다. `error` 는 실행 오류 또는 `; ` 로 이은 거부 오류이며 없으면 생략합니다.
 메시지는 상태를 적고 오류가 있으면 그 오류도 적습니다: `Plugin <id>의 development 레코드를
 <path>로 기록했습니다; status disabled: <error>`. `sidecar.develop`은 `{ id, path, revision, version }`으로
 응답하며 `version`은 host가 기록한 record의 version으로 write 뒤에 `environment_get`에서 읽습니다.
@@ -146,9 +146,9 @@ Status field는 없습니다. Write 전의 `SIDECAR_IN_USE` guard가 `open` 또�
 뷰의 제공자가 없는 pane 은 오버레이 하나를 그리며, 그 오버레이는 뷰 주소 아래의 노출된
 node입니다(`ui.tree`가 `<view address>/node/<data-node>`로 나열하고 `data-*` attribute는 `dataset`에
 있습니다). 오버레이는 제공자 컨테이너의 형제이며 뷰 주소를 `data-view-overlay-addr`에
-선언합니다. Container만 `data-view-addr`를 가지므로 `ui.slot`은 view address 하나에
+선언합니다. 컨테이너만 `data-view-addr` 를 가지므로 `ui.slot` 은 뷰 주소 하나에
 element 하나를 resolve합니다. Node collector의 scan root는 `.tab-viewer[data-view-addr]`와
-`[data-view-overlay-addr]` 둘이며, 어느 쪽 안의 `data-node`든 그 root의 view address 아래에
+`[data-view-overlay-addr]` 둘이며, 어느 쪽 안의 `data-node`든 그 root 의 뷰 주소 아래에
 나열되고 chrome 으로는 나열되지 않습니다. 부팅이 ready가 되기 전의 node는 `plugin-view-loading`입니다. 부팅 뒤의 node는
 `plugin-view-placeholder`이며 `data-view-plugin`(plugin id)과 `data-view-state`를 가집니다. Plugin이
 설치되어 있고 disabled이면 `off`, 어떤 record도 그 id를 가지지 않으면 `absent`, manifest가 거부되었으면
@@ -157,7 +157,7 @@ throw했으면 node는 `plugin-view-error`이며 `data-view-plugin`과 `data-vie
 가집니다.
 
 `plugin.remove`와 `sidecar.remove`가 유일한 제거 command입니다. 개발 record는 environment에서만
-제거하며 source directory는 삭제하지 않습니다. `local` 또는 `registry` record는 environment에서
+제거하며 소스 디렉터리는 삭제하지 않습니다. `local` 또는 `registry` record는 environment에서
 제거하고 record의 `path`에 있는 artifact directory를 삭제하되, 실제 path가 `<home>/components/`
 바로 아래 깊이 이상일 때만 삭제합니다. Components root와 record path 양쪽의 symlink를 해석합니다.
 Strict descendant가 아닌 path는 `environment.remove.pathOutsideHome`(`path`, `home`)으로 거부하고,
@@ -195,7 +195,7 @@ environment coordinator를 통해 revision을 한 번 reconcile합니다. 호스
 
 표는 host 명령마다 호출자가 environment 모듈에서 받을 수 있는 모든 오류를 나열합니다. 거부
 key는 `core/environment`에 선언된 i18n key이며 아래의 `install.*` key도 거기에 선언되어 있습니다.
-Non-key로 표시한 error는 그대로 반환됩니다. Go `os` error, `ErrRevisionConflict`, 그리고
+키가 없다고 표시한 오류는 그대로 반환됩니다. Go `os` 오류, `ErrRevisionConflict`, 그리고
 `control.Arg`, `environment.json` reader, `platformspec` validator의 raw error입니다.
 `sidecar.develop`과 `sidecar.remove`의 `SIDECAR_IN_USE`는 host 호출 전의 Core frontend 거부이며
 host error가 아닙니다. `sidecar_open` row는 Sidecar resolution 중 environment가 소유한 error만
@@ -213,36 +213,36 @@ host error가 아닙니다. `sidecar_open` row는 Sidecar resolution 중 environ
 | `plugin_develop` | `environment.develop.directoryUnavailable`(`kind` `plugin`, `id`, `path`, `error`) | `<path>/plugin.json`이 없거나, 읽거나 parse할 수 없거나, 다른 id를 선언함. `error`는 `plugin.json: <os error 또는 parse error>` 또는 `plugin.json declares id <id>`. |
 | `sidecar_develop` | `environment.develop.directoryUnavailable`(`kind` `sidecar`, `id`, `path`, `error`) | `<path>/sidecar.json`이 없거나, 읽을 수 없거나, spec parser가 거부하거나(알 수 없는 field 또는 trailing data, id pattern 밖의 `id` 또는 `interface.id`, strict SemVer가 아닌 `version`, `0.0.1`이 아닌 `interface.version`, `dist/<id>` 또는 `dist/<id>.exe`가 아닌 `process`), 다른 id를 선언함. `error`는 `sidecar.json: <os error 또는 parse error>` 또는 `sidecar.json declares id <id>`. |
 | `plugin_develop` | `environment.develop.entryInvalid`(`id`, `entry`) | Manifest `entry`가 entry 규칙을 위반함. |
-| `plugin_develop` | Non-key `os.ErrNotExist`, `os.ErrInvalid`, 또는 그 밖의 `Lstat` error | Entry file 검사, entry가 `null`이 아닐 때(없으면 `main.js`): entry 또는 그 path 구성 요소가 없음(`os.ErrNotExist`); 구성 요소가 symlink이거나 entry가 regular file이 아님(`os.ErrInvalid`); 그 밖의 `Lstat` 실패(그 os error). |
-| `sidecar_develop` | Non-key `os.ErrNotExist`, `os.ErrInvalid`, 또는 그 밖의 `Lstat` error | Manifest `process`(`dist/<id>`)의 process file 검사: process 또는 그 path 구성 요소가 없음(`os.ErrNotExist`); 구성 요소가 symlink이거나 process가 regular file이 아님(`os.ErrInvalid`); 그 밖의 `Lstat` 실패(그 os error). |
-| `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove`, `plugin_enabled_set`, `sidecar_open` | Non-key `environment.json` 읽기 또는 parse error | `environment.json`을 읽을 수 없거나(not-exist 외의 error), 내용을 `platformspec` parser 또는 validator가 거부함. `plugin_remove`, `sidecar_remove`, `plugin_enabled_set`에서는 첫 검사이고 `plugin_develop`과 `sidecar_develop`에서는 directory 검사 뒤. |
+| `plugin_develop` | Non-key `os.ErrNotExist`, `os.ErrInvalid`, 또는 그 밖의 `Lstat` error | entry 파일 검사, entry가 `null`이 아닐 때(없으면 `main.js`): entry 또는 그 path 구성 요소가 없음(`os.ErrNotExist`); 구성 요소가 symlink이거나 entry가 regular file이 아님(`os.ErrInvalid`); 그 밖의 `Lstat` 실패(그 os error). |
+| `sidecar_develop` | Non-key `os.ErrNotExist`, `os.ErrInvalid`, 또는 그 밖의 `Lstat` error | manifest `process`(`dist/<id>`)의 process file 검사: process 또는 그 path 구성 요소가 없음(`os.ErrNotExist`); 구성 요소가 symlink이거나 process가 regular file이 아님(`os.ErrInvalid`); 그 밖의 `Lstat` 실패(그 os error). |
+| `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove`, `plugin_enabled_set`, `sidecar_open` | 키 없는 `environment.json` 읽기 또는 파싱 오류 | `environment.json`을 읽을 수 없거나(not-exist 외의 error), 내용을 `platformspec` parser 또는 validator가 거부함. `plugin_remove`, `sidecar_remove`, `plugin_enabled_set`에서는 첫 검사이고 `plugin_develop`과 `sidecar_develop`에서는 directory 검사 뒤. |
 | `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove`, `plugin_enabled_set`, `sidecar_open` | Non-key `os.ErrNotExist` | `environment.json`이 없음. 위 row와 같은 위치. |
-| `environment_get`, `plugin_manifest_list` | Non-key `environment.json` 읽기 또는 parse error | `environment.json`을 읽을 수 없거나(not-exist 외의 error), 내용을 `platformspec` parser 또는 validator가 거부함. 이 두 command의 유일한 거부. |
+| `environment_get`, `plugin_manifest_list` | 키 없는 `environment.json` 읽기 또는 파싱 오류 | `environment.json`을 읽을 수 없거나(not-exist 외의 error), 내용을 `platformspec` parser 또는 validator가 거부함. 이 두 command의 유일한 거부. |
 | `environment_get` | Non-key `os.ErrNotExist` | `environment.json`이 없음. `plugin_manifest_list`는 대신 빈 목록을 반환함. |
 | `plugin_manifest_list` | 없음. record 의 `error` | manifest 를 읽거나 parse할 수 없거나 다른 id를 선언하는 record는 `manifest`가 `null`이고 `error`가 `readRecordManifest`의 `environment.develop.directoryUnavailable` 문장(`development`) 또는 `install.transaction.pluginManifestInvalid` 문장(`registry`, `local`)으로 나열됨. 거부가 아니며 raw os 문자열도 아님. |
 | `plugin_remove`, `sidecar_remove` | `environment.remove.notFound`(`kind`, `id`) | `id`의 record가 없음. |
 | `plugin_remove`, `sidecar_remove` | `environment.remove.pathOutsideHome`(`path`, `home`) | 개발 record가 아닌 record의 `path`가 `<home>/components/`의 strict descendant가 아니거나, 그 `<dir>`이 해석된 components root의 strict descendant가 아님. 두 번째 경우 `path`는 `<dir>`. record 는 유지. |
 | `plugin_remove`, `sidecar_remove` | `environment.remove.pathSymlink`(`path`, `link`) | Components root 아래의 path 구성 요소가, leaf를 포함하여, symlink임. record 는 유지. |
-| `plugin_remove`, `sidecar_remove` | Path 검사의 non-key os error | Path 구성 요소의 `Lstat`, 또는 parent나 components root의 `EvalSymlinks`가 not-exist 외의 error로 실패함. |
+| `plugin_remove`, `sidecar_remove` | 경로 검사의 키 없는 os 오류 | Path 구성 요소의 `Lstat`, 또는 parent나 components root의 `EvalSymlinks`가 not-exist 외의 error로 실패함. |
 | `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove` | `install.transaction.pluginManifestInvalid`(`plugin`) | 결과 environment의 dependency validation: `registry` 또는 `local` Plugin record의 `plugin.json`이 없거나, 읽거나 parse할 수 없거나, record의 id와 version을 선언하지 않음. `plugin_remove`와 `sidecar_remove`에서는 path 검사 뒤, 어떤 file 작업보다 먼저. |
 | `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove` | `install.transaction.dependencyVersionConflict`(`plugin`, `kind`, `dependency`, `required`, `requested`) | 결과 environment의 dependency validation: Plugin manifest의 `runtimeDependencies` 항목에 정확히 그 version의 record가 없음. `plugin_remove`와 `sidecar_remove`에서는 남은 Plugin이 제거된 record를 요구함. 없거나 broken인 record는 `requested`가 `missing`, 그 밖에는 찾은 effective version. |
 | `plugin_remove`, `sidecar_remove` | `environment.remove.artifactDeleteFailed`(`path`, `error`) | Rename 전의 `RemoveAll(<dir>.removing)`이 실패함. `path`는 `<dir>.removing`. 아무것도 바뀌지 않음. 마지막 삭제의 실패는 거부가 아니라 result의 data. |
-| `plugin_remove`, `sidecar_remove` | Rename의 non-key os error | `Lstat(<dir>)`이 not-exist 외의 error로 실패했거나 `<dir>`에서 `<dir>.removing`으로의 rename이 실패함. |
+| `plugin_remove`, `sidecar_remove` | rename 의 키 없는 os 오류 | `Lstat(<dir>)`이 not-exist 외의 error로 실패했거나 `<dir>`에서 `<dir>.removing`으로의 rename이 실패함. |
 | `plugin_enabled_set` | Non-key `os.ErrInvalid` | `id` 또는 `version`이 빈 ref, 또는 `plugins`에 같은 `id`가 두 번 있음. |
 | `plugin_enabled_set` | Non-key `os.ErrNotExist` | Ref `id`의 record가 없거나 ref `version`이 effective version(`registry`와 `local`은 record의 `version`, `development`는 지금 읽은 manifest version)과 다름. `enabled`가 `false`인 broken 개발 record는 version 검사를 건너뜀. |
 | `plugin_enabled_set` | `environment.develop.directoryUnavailable`(`kind` `plugin`, `id`, `path`, `error`) | `enabled`가 `true`이고 개발 Plugin의 `plugin.json`이 없거나, 읽거나 parse할 수 없거나, 다른 id를 선언함. 그 record에 `enabled` `false`는 성공함. |
 | `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove`, `plugin_enabled_set` | Non-key `ErrRevisionConflict`(`Expected`, `Actual`) | `expectedRevision`이 현재 revision과 다름. |
 | `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove`, `plugin_enabled_set` | Non-key `platformspec` validation error | `Validate`가 결과 environment를 거부함. 예: 개발 `plugin.json`의 `version`이 strict SemVer가 아닐 때 `plugin <id>: component requires exact version and absolute path`. |
 | `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove`, `plugin_enabled_set` | `environment.home.absolute` | Environment home이 절대 경로가 아님. |
-| `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove`, `plugin_enabled_set` | Publish의 non-key os error | `environment.json`을 publish하는 동안 `MkdirAll`, `WriteFile`, 또는 `Rename`이 실패함. |
+| `plugin_develop`, `sidecar_develop`, `plugin_remove`, `sidecar_remove`, `plugin_enabled_set` | publish 의 키 없는 os error | `environment.json`을 publish하는 동안 `MkdirAll`, `WriteFile`, 또는 `Rename`이 실패함. |
 | `sidecar_open`(Sidecar resolution) | Non-key `os.ErrNotExist` | Consumer Plugin 또는 Sidecar id의 record가 없거나 요청된 version이 effective version과 다름. |
 | `sidecar_open`(Sidecar resolution) | `environment.develop.directoryUnavailable`(`kind`, `id`, `path`, `error`) | Consumer Plugin record 또는 Sidecar record가 broken 개발 record임. |
 | `sidecar_open`(Sidecar resolution) | Non-key `os.ErrInvalid` | `registry` 또는 `local` Sidecar record의 `sidecar.json`이 없거나, 읽을 수 없거나, spec parser가 거부하거나, record의 id와 version을 선언하지 않음. |
 | `sidecar_open`(Sidecar resolution) | Non-key `os.ErrNotExist`, `os.ErrInvalid`, 또는 그 밖의 `Lstat` error | `sidecar_develop`과 같은 `dist/<id>`의 process file 검사. |
 
 `plugin_remove`와 `sidecar_remove`는 위 write row 넷의 어떤 error를 반환하기 전에도
-`<dir>.removing`을 `<dir>`로 되돌립니다. 그 rename이 실패하면 error는 `errors.Join(write error,
-rename error)`입니다. `plugin_enabled_set`은 dependency validation을 수행하지 않습니다. Enabled
+`<dir>.removing`을 `<dir>`로 되돌립니다. 그 rename 이 실패하면 오류는 `errors.Join(write error,
+rename error)`입니다. `plugin_enabled_set`은 의존 검증을 하지 않습니다. enabled
 상태는 dependency invariant의 일부가 아닙니다.
 
 ## 명령과 이벤트
@@ -258,7 +258,7 @@ rename error)`입니다. `plugin_enabled_set`은 dependency validation을 수행
   제거하고 위의 제거 규칙 적용
 - `artifact_install_begin`, `artifact_install_stage`, `artifact_install_read_utf8`,
   `artifact_install_commit`, `artifact_install_rollback`: shared transaction
-- `artifact_install_status`, `artifact_install_wait`: event-driven progress 공개
+- `artifact_install_status`, `artifact_install_wait`: 이벤트 기반 진행 공개
 - `artifact.install.progress`: phase 변경, `environment.changed`: commit된 revision 하나
 
 `source_set`, raw-path install, compatibility reader, fallback transport, install profile, 저장된 dependency
