@@ -7,206 +7,204 @@ scope: workspace
 
 # 터미널 UX 결함 인계
 
-이 문서는 2026-08-25 현재 제보된 열 결함, 현재 증거, 남은 release 구분를 기록합니다. 필수 실행
-순서와 증거는 TERMINAL-UX-EXECUTION.ko.md에 정의합니다. Local candidate GREEN을 immutable
-release 또는 실행하지 않은 native-platform GREEN으로 확대해서는 안 됩니다.
+이 문서는 2026-08-25 현재 제보된 결함 열 개, 지금까지의 증거, 남은 릴리즈 구분을 기록합니다. 필수
+실행 순서와 증거는 TERMINAL-UX-EXECUTION.ko.md 가 정의합니다. 로컬 후보의 GREEN 을 불변 릴리즈의
+GREEN 이나 실행하지 않은 네이티브 플랫폼의 GREEN 으로 확대해서는 안 됩니다.
 
 ## 제보된 결함
 
-열 항목 모두 인수 조건입니다. 특정 provider나 특정 발생 조건만 고친 결과는 미완료입니다.
+열 항목 모두 인수 조건입니다. 제공자 하나나 발생 조건 하나만 고친 결과는 미완입니다.
 
-1. Xterm 이외의 모든 터미널이 느립니다.
-2. Xterm 이외의 모든 터미널이 포커스를 받지 못합니다.
-3. Xterm 이외의 모든 터미널에서 입력 커서가 활성화되지 않습니다.
-4. Xterm 이외의 모든 터미널에서 키보드 입력이 되지 않습니다.
+1. xterm 이외의 모든 터미널이 느립니다.
+2. xterm 이외의 모든 터미널이 포커스를 받지 못합니다.
+3. xterm 이외의 모든 터미널에서 입력 커서가 활성화되지 않습니다.
+4. xterm 이외의 모든 터미널에서 키보드 입력이 되지 않습니다.
 5. 탭 plus 선택 창을 열면 닫을 때까지 각 탭 화면이 사라집니다.
 6. 설정이나 다른 모달을 열면 닫을 때까지 각 탭 화면이 사라집니다.
-7. 사이드바가 이동하는 동안 각 탭 화면이 사라집니다.
-8. 같은 터미널 킷을 사용하지만 Xterm과 다른 터미널의 색상이 다릅니다.
+7. 사이드바가 움직이는 동안 각 탭 화면이 사라집니다.
+8. 같은 터미널 kit 을 쓰는데 xterm 과 다른 터미널의 색이 다릅니다.
 9. macOS 신호등 닫기 버튼으로 창을 닫을 수 없습니다.
 10. 테스트가 보이는 앱 창을 반복해서 열고 닫아 사용자 작업을 방해합니다.
 
-## Workspace 지도
+## workspace 지도
 
-개발 workspace root는 ~/soksak/wails3beta입니다. 아래 component directory에는 독립된
-repository가 들어 있습니다. Workspace 배치는 runtime 탐색 수단이 아니며 설치 component는
-environment.json에서 확인합니다.
+개발 workspace root 는 ~/soksak/wails3beta 입니다. 아래 컴포넌트 디렉터리 각각에 독립된 저장소가
+들어 있습니다. workspace 배치는 실행 시점의 탐색 수단이 아니며, 설치된 컴포넌트는
+environment.json 에서 확인합니다.
 
-| Workspace root 기준 path | 책임 |
+| workspace root 기준 경로 | 책임 |
 | --- | --- |
-| soksak-core/ | 현재 Wails application, control CLI, renderer, framework adapter, application lifecycle, Core gate. 이 인계 문서의 소유 repository입니다. |
-| soksak-plugins/ | 설치 가능한 plugin별 repository. 일곱 terminal provider repository가 있습니다. |
-| soksak-kits/ | 공유 component 구현. soksak-kit-plugin-terminal은 공통 terminal lifecycle과 frame presenter를, soksak-kit-sidecar-terminal은 recovery-sidecar runtime을 소유합니다. 예전 terminal-common과 engine-as-judge conformance repository는 consumer가 없으며 폐기 대상입니다. |
-| soksak-sidecars/ | Plugin process별 repository. PTY 및 여섯 frame-producing terminal sidecar가 있습니다. |
-| soksak-contracts/ | Composition, control, PTY, registry, terminal 구분의 공개 contract와 acceptance package입니다. |
-| soksak-specs/ | 공개 schema와 validator의 정본입니다. 공개 state 또는 command 모양을 바꾸면 consumer보다 먼저 수정합니다. |
-| soksak-plugin-registry/ | 공개된 plugin release 참조입니다. 구현과 release 이후 metadata를 받으며 terminal 동작을 소유하지 않습니다. |
-| wails-services/ | Wails host service입니다. Native compositor와 webview surface 책임이 있습니다. |
-| forks/ | 직접 유지하는 upstream fork입니다. `origin`은 소유 fork, `upstream`은 원본이며 유지 branch가 upstream version을 이름에 포함합니다. Product build는 이 path가 아니라 공개 repository와 exact commit을 사용합니다. |
-| libraries/ | xterm-addon-webkit-ime처럼 직접 만든 재사용 library입니다. Upstream fork가 아닙니다. |
-| externals/ | 수정하지 않는 제3자 비교 source입니다. |
-| tests/ | 제품 전용 system 및 acceptance repository입니다. |
-| local/ | 개발 전용 고정 runtime, source checkout, test input, work state입니다. Product code와 test가 dependency를 여기서 탐색하면 안 됩니다. |
-| evidence/ | 생성된 screenshot과 recording입니다. Product source가 아니며 구현으로 commit하지 않습니다. |
-| backup/ | 어떤 build나 gate도 참조할 수 없는 보존 source입니다. |
-| soksak-tauri/ | 보관된 Tauri application source history입니다. 현재 Wails build와 release의 입력이 아닙니다. |
-| worktrees/ | 임시 Git worktree입니다. Automation은 Git으로 발견해야 하며 이 path에 의존하면 안 됩니다. |
-| bin/ | Workspace local executable 편의 directory이며 현재 Wails tool이 있습니다. Product binary는 soksak-core/bin/이 소유합니다. |
-| frameworks/ | 현재 비어 있으며 REPO-LAYOUT.md의 ownership category가 아닙니다. Ownership 정의 없이 product code를 넣지 않습니다. |
-| .task/ 및 .claude/ | Local tool state와 local agent setting입니다. Product source 구분가 아닙니다. |
+| soksak-core/ | 현재 Wails 애플리케이션, control CLI, renderer, 프레임워크 어댑터, 애플리케이션 수명주기, Core 검사. 이 인계 문서를 소유한 저장소입니다. |
+| soksak-plugins/ | 설치 가능한 plugin 저장소들. 터미널 제공자 저장소 일곱 개가 있습니다. |
+| soksak-kits/ | 공유 컴포넌트 구현. soksak-kit-plugin-terminal 은 공통 터미널 수명주기와 프레임 presenter 를, soksak-kit-sidecar-terminal 은 복구 사이드카 런타임을 소유합니다. 예전 terminal-common 과 engine-as-judge 적합성 저장소는 소비자가 없으며 폐기 대상입니다. |
+| soksak-sidecars/ | plugin 프로세스 저장소들. PTY 하나와 프레임을 만드는 터미널 사이드카 여섯 개가 있습니다. |
+| soksak-contracts/ | 합성, control, PTY, registry, 터미널 구분의 공개 계약과 인수 패키지입니다. |
+| soksak-specs/ | 공개 schema 와 validator 의 정본입니다. 공개 상태나 명령 모양을 바꾸면 소비자보다 먼저 고칩니다. |
+| soksak-plugin-registry/ | 공개된 plugin 릴리즈 참조입니다. 구현과 릴리즈 뒤의 metadata 를 받으며 터미널 동작을 소유하지 않습니다. |
+| wails-services/ | Wails 호스트 서비스입니다. 네이티브 컴포지터와 webview 표면을 책임집니다. |
+| forks/ | 직접 유지하는 upstream fork 입니다. `origin` 은 소유 fork, `upstream` 은 원본이며, 유지 branch 이름에 upstream 버전이 들어갑니다. 제품 빌드는 이 경로가 아니라 공개 저장소와 정확한 commit 을 씁니다. |
+| libraries/ | xterm-addon-webkit-ime 처럼 직접 만든 재사용 라이브러리입니다. upstream fork 가 아닙니다. |
+| externals/ | 고치지 않는 제3자 비교 소스입니다. |
+| tests/ | 제품 전용 시스템·인수 저장소입니다. |
+| local/ | 개발 전용으로 고정한 런타임, 소스 체크아웃, 테스트 입력, 작업 상태입니다. 제품 코드와 테스트가 여기서 의존을 탐색해서는 안 됩니다. |
+| evidence/ | 생성된 스크린샷과 녹화입니다. 제품 소스가 아니며 구현과 함께 commit 하지 않습니다. |
+| backup/ | 어떤 빌드나 검사도 참조할 수 없는 보존 소스입니다. |
+| soksak-tauri/ | 보관된 Tauri 애플리케이션 소스 이력입니다. 현재 Wails 빌드와 릴리즈의 입력이 아닙니다. |
+| worktrees/ | 임시 Git worktree 입니다. 자동화는 Git 으로 찾아야 하며 이 경로에 의존해서는 안 됩니다. |
+| bin/ | workspace 로컬 실행 파일 편의 디렉터리이며 현재 Wails 도구가 있습니다. 제품 바이너리는 soksak-core/bin/ 이 소유합니다. |
+| frameworks/ | 지금은 비어 있으며 REPO-LAYOUT.md 의 소유 범주가 아닙니다. 소유를 정의하지 않은 채 제품 코드를 넣지 않습니다. |
+| .task/ 와 .claude/ | 로컬 도구 상태와 로컬 에이전트 설정입니다. 제품 소스 구분이 아닙니다. |
 
-어떤 repository도 parent-relative path, 주입된 workspace root, symlink로 다른 repository를
-찾으면 안 됩니다. Repository 간 사용은 공개 package 또는 선언된 environment를 통합니다.
+어떤 저장소도 상위 상대 경로, 주입된 workspace root, 심볼릭 링크로 다른 저장소를 찾아서는 안
+됩니다. 저장소 사이의 사용은 공개 패키지나 선언된 환경을 지납니다.
 
-### 작업 대상 terminal repository
+### 작업 대상 터미널 저장소
 
 ~~~text
 ~/soksak/wails3beta/
-├── soksak-core/                                  application 및 host integration
+├── soksak-core/                                  애플리케이션과 호스트 통합
 ├── soksak-plugins/
-│   ├── soksak-plugin-terminal-xterm/             byte renderer 및 비교 기준
-│   ├── soksak-plugin-terminal-alacritty/         frame-provider adapter
-│   ├── soksak-plugin-terminal-ghostty/           frame-provider adapter
-│   ├── soksak-plugin-terminal-kitty/             frame-provider adapter
-│   ├── soksak-plugin-terminal-shitty/            frame-provider adapter
-│   ├── soksak-plugin-terminal-vt100/             frame-provider adapter
-│   └── soksak-plugin-terminal-wezterm/           frame-provider adapter
+│   ├── soksak-plugin-terminal-xterm/             바이트 renderer, 비교 기준
+│   ├── soksak-plugin-terminal-alacritty/         프레임 제공자 어댑터
+│   ├── soksak-plugin-terminal-ghostty/           프레임 제공자 어댑터
+│   ├── soksak-plugin-terminal-kitty/             프레임 제공자 어댑터
+│   ├── soksak-plugin-terminal-shitty/            프레임 제공자 어댑터
+│   ├── soksak-plugin-terminal-vt100/             프레임 제공자 어댑터
+│   └── soksak-plugin-terminal-wezterm/           프레임 제공자 어댑터
 ├── soksak-kits/
-│   ├── soksak-kit-plugin-terminal/               공유 plugin lifecycle 및 frame presenter
-│   └── soksak-kit-sidecar-terminal/              공유 terminal-sidecar 구현
+│   ├── soksak-kit-plugin-terminal/               공유 plugin 수명주기와 프레임 presenter
+│   └── soksak-kit-sidecar-terminal/              공유 터미널 사이드카 구현
 ├── soksak-sidecars/
-│   ├── soksak-sidecar-pty/                       PTY process
-│   ├── soksak-sidecar-terminal-alacritty/        Alacritty frame producer
-│   ├── soksak-sidecar-terminal-ghostty/          Ghostty frame producer
-│   ├── soksak-sidecar-terminal-kitty/            Kitty frame producer
-│   ├── soksak-sidecar-terminal-shitty/           Shitty frame producer
-│   ├── soksak-sidecar-terminal-vt100/            VT100 frame producer
-│   └── soksak-sidecar-terminal-wezterm/          WezTerm frame producer
+│   ├── soksak-sidecar-pty/                       PTY 프로세스
+│   ├── soksak-sidecar-terminal-alacritty/        Alacritty 프레임 생성기
+│   ├── soksak-sidecar-terminal-ghostty/          Ghostty 프레임 생성기
+│   ├── soksak-sidecar-terminal-kitty/            Kitty 프레임 생성기
+│   ├── soksak-sidecar-terminal-shitty/           Shitty 프레임 생성기
+│   ├── soksak-sidecar-terminal-vt100/            VT100 프레임 생성기
+│   └── soksak-sidecar-terminal-wezterm/          WezTerm 프레임 생성기
 ├── soksak-contracts/
-│   ├── soksak-contract-plugin-terminal/          plugin behavior contract package
-│   ├── soksak-contract-terminal/                 terminal data contract
-│   ├── soksak-contract-pty/                      PTY contract
-│   ├── soksak-contract-contentview/              content-view contract
-│   ├── soksak-contract-control/                  command 및 event envelope contract
-│   └── soksak-contract-registry/                 Registry 인증 및 연속성 contract
-├── soksak-specs/soksak-spec/                     공개 schema 및 validator
-├── wails-services/wails-service-native-compositor/ native composition 적용
+│   ├── soksak-contract-plugin-terminal/          plugin 동작 계약 패키지
+│   ├── soksak-contract-terminal/                 터미널 데이터 계약
+│   ├── soksak-contract-pty/                      PTY 계약
+│   ├── soksak-contract-contentview/              content-view 계약
+│   ├── soksak-contract-control/                  명령·이벤트 envelope 계약
+│   └── soksak-contract-registry/                 Registry 인증과 연속성 계약
+├── soksak-specs/soksak-spec/                     공개 schema 와 validator
+├── wails-services/wails-service-native-compositor/ 네이티브 합성 적용
 ├── soksak-plugin-registry/                       공개된 plugin 참조
-├── forks/shitty/                                  upstream version 13 유지 fork
-├── libraries/xterm-addon-webkit-ime/              직접 만든 WebKit IME library
-└── tests/soksak-terminal-tests/                   설치 제품 system test
+├── forks/shitty/                                  upstream 버전 13 유지 fork
+├── libraries/xterm-addon-webkit-ime/              직접 만든 WebKit IME 라이브러리
+└── tests/soksak-terminal-tests/                   설치 제품 시스템 테스트
 ~~~
 
-Frame-provider plugin repository는 adapter이며 terminal 동작의 복제본 일곱 개가 아닙니다. 공유
-동작은 먼저 해당 kit 또는 contract에 반영합니다. Provider repository는 측정으로 provider 고유
-adapter 결함이 확인된 경우에만 수정합니다. Sidecar repository는 timing 또는 frame 증거가 producer
-또는 transport를 원인으로 식별한 경우에만 수정합니다. 설치 제품 동작은 소유 repository에 집중된
-RED가 생긴 후에만 외부 system test에 반영합니다.
+프레임 제공자 plugin 저장소는 어댑터이며 터미널 동작의 복제본 일곱 개가 아닙니다. 공유 동작은 먼저
+해당 kit 이나 계약에 반영합니다. 제공자 저장소는 제공자 고유의 어댑터 결함이 측정으로 확인된
+경우에만 고칩니다. 사이드카 저장소는 타이밍이나 프레임 증거가 생성기 또는 전송을 원인으로 지목한
+경우에만 고칩니다. 설치 제품 동작은 소유 저장소에 집중된 RED 가 생긴 뒤에만 외부 시스템 테스트에
+반영합니다.
 
-## 결함 소유권
+## 결함 소유
 
 | 결함 | 주 소유자 | 조건부 소유자 |
 | --- | --- | --- |
-| 1–4, 8: 속도, focus, cursor, input, color | soksak-kits/soksak-kit-plugin-terminal | Xterm plugin은 비교 renderer입니다. 측정 결과 frame 생성 또는 transport가 원인이어야 sidecar를 수정합니다. 필요한 공개 관측면만 contract 또는 spec을 수정합니다. |
-| 5–7: picker, modal, sidebar blanking | soksak-core frontend visibility 및 layout state | Native surface 적용이 선언된 Core state와 다를 때만 wails-service-native-compositor를 수정합니다. |
-| 9: macOS close button | soksak-core/frameworks/wails 및 Core window lifecycle | Native event 구분를 Wails service가 소유하는 경우에만 해당 service를 수정합니다. |
-| 10: test interference | soksak-core/internal/application gate 및 application ownership | Core가 소유한 격리 runner 밖에서 user-visible application을 실행하는 경우에만 외부 system test를 수정합니다. |
+| 1–4, 8: 속도, 포커스, 커서, 입력, 색 | soksak-kits/soksak-kit-plugin-terminal | xterm plugin 은 비교 renderer 입니다. 측정 결과 프레임 생성이나 전송이 원인일 때만 사이드카를 고칩니다. 계약이나 spec 은 필요한 공개 관측면만 고칩니다. |
+| 5–7: picker·모달·사이드바에서 화면이 사라짐 | soksak-core 프론트엔드의 표시·레이아웃 상태 | 네이티브 표면 적용이 선언된 Core 상태와 다를 때만 wails-service-native-compositor 를 고칩니다. |
+| 9: macOS 닫기 버튼 | soksak-core/frameworks/wails 와 Core 창 수명주기 | 네이티브 이벤트 구분을 Wails 서비스가 소유하는 경우에만 그 서비스를 고칩니다. |
+| 10: 테스트 간섭 | soksak-core/internal/application 의 검사와 애플리케이션 소유 | Core 가 소유한 격리 runner 밖에서 사용자에게 보이는 애플리케이션을 실행하는 경우에만 외부 시스템 테스트를 고칩니다. |
 
-Terminal plugin repository에 focus, input, theme, performance 수정을 복제하면 안 됩니다. 공통
-matrix로 필요성이 입증된 provider adapter 변경과 공통 구현 release 이후의 정확한 dependency 및
-release metadata만 반영합니다. Registry 갱신은 마지막 공개 단계이며 runtime 동작 수정 수단이
-아닙니다.
+터미널 plugin 저장소에 포커스·입력·테마·성능 수정을 복제해서는 안 됩니다. 공통 매트릭스로 필요성이
+증명된 제공자 어댑터 변경과, 공통 구현 릴리즈 뒤의 정확한 의존·릴리즈 metadata 만 반영합니다.
+Registry 갱신은 마지막 공개 단계이며 실행 동작을 고치는 수단이 아닙니다.
 
 ## 확인된 구조
 
-Terminal kit는 lifecycle, session, status 동작을 공유합니다. Presentation 구현은 하나가
-아닙니다.
+터미널 kit 은 수명주기·세션·status 동작을 공유합니다. 표현 구현은 하나가 아닙니다.
 
-| Provider | 입력 및 presentation 경로 |
+| 제공자 | 입력과 표현 경로 |
 | --- | --- |
-| Xterm | PTY byte가 soksak-plugins/soksak-plugin-terminal-xterm/frontend/src/xterm-renderer.ts의 Xterm parser, presentation, textarea, IME, theme으로 전달됩니다. |
-| Alacritty, Ghostty, Kitty, Shitty, VT100, WezTerm | Recovery sidecar frame이 soksak-kits/soksak-kit-plugin-terminal/src/provider-frame-presenter.ts의 pre 및 cell-span presenter와 숨겨진 1px textarea로 전달됩니다. |
+| xterm | PTY 바이트가 soksak-plugins/soksak-plugin-terminal-xterm/frontend/src/xterm-renderer.ts 의 xterm 파서, 표현, textarea, IME, 테마로 전달됩니다. |
+| Alacritty, Ghostty, Kitty, Shitty, VT100, WezTerm | 복구 사이드카 프레임이 soksak-kits/soksak-kit-plugin-terminal/src/provider-frame-presenter.ts 의 pre·cell-span presenter 와 숨겨진 1px textarea 로 전달됩니다. |
 
-soksak-kits/soksak-kit-plugin-terminal/src/provider-terminal-plugin.ts가 공통 provider lifecycle을
-소유합니다. 따라서 결함 1–4와 8에는 하나의 renderer parity 계약이 필요합니다. Provider별 focus,
-input, color, performance 수정 복제는 금지합니다.
+공통 제공자 수명주기는
+soksak-kits/soksak-kit-plugin-terminal/src/provider-terminal-plugin.ts 가 소유합니다. 따라서 결함
+1–4 와 8 에는 renderer parity 계약 하나가 필요합니다. 제공자마다 포커스·입력·색·성능 수정을
+복제하는 것은 금지합니다.
 
-View visibility 구분는 soksak-core/frontend/src/state/ui.ts,
-soksak-core/frontend/src/lib/viewPark.ts, soksak-core/docs/tech/NATIVE-SURFACES.md,
-soksak-core/docs/tech/UI-GEOMETRY.md에 걸쳐 있습니다. 현재 규칙은 활성 DOM content, document 밖
-live surface visibility, parked pixel을 분리합니다. Overlay와 layout motion은 활성 DOM content를
-숨기지 않습니다. Live native surface가 숨겨질 때 parked picture가 마지막 applied pixel을
-유지합니다. Picker, modal, sidebar별 예외는 금지합니다.
+뷰 표시 구분은 soksak-core/frontend/src/state/ui.ts, soksak-core/frontend/src/lib/viewPark.ts,
+soksak-core/docs/tech/NATIVE-SURFACES.md, soksak-core/docs/tech/UI-GEOMETRY.md 에 걸쳐 있습니다.
+현재 규칙은 활성 DOM 내용, 문서 밖 live surface 의 표시 상태, parked 픽셀을 분리합니다. 오버레이와
+레이아웃 움직임은 활성 DOM 내용을 숨기지 않습니다. live 네이티브 표면이 숨겨질 때는 parked picture
+가 마지막으로 적용된 픽셀을 유지합니다. picker·모달·사이드바마다 예외를 두는 것은 금지합니다.
 
-Native close 구분는 soksak-core/frameworks/wails/host.go, window_host_wails.go,
-window_commands.go, frontend/src/commands/catalogWindow.ts, frontend/src/state/windowBoot.ts에
-걸쳐 있습니다. window.close command 성공만으로 실제 macOS close request의 persistence,
-registry cleanup, window destruction을 증명할 수 없습니다.
+네이티브 close 구분은 soksak-core/frameworks/wails/host.go, window_host_wails.go,
+window_commands.go, frontend/src/commands/catalogWindow.ts, frontend/src/state/windowBoot.ts 에
+걸쳐 있습니다. window.close 명령이 성공했다는 것만으로는 실제 macOS close 요청의 지속, registry
+정리, 창 파괴를 증명할 수 없습니다.
 
-Test window ownership 구분는 soksak-core/internal/application/restore_gate_test.go,
-capture_focus_gate_test.go, run.go에 걸쳐 있습니다. 각 run은 고유 home, runtime, identifier,
-socket, owner를 받습니다. Darwin의 `SOKSAK_PRESENTATION=capture-only` window는 compositor에
-남아 있으면서 투명하고 mouse-transparent이며 non-key입니다. Capture는 application을 활성화하지
-않고 document pixel을 읽습니다. 현재 Wails runtime은 blocking file lock을 통해 한 번에 하나의
-test application owner만 허용합니다.
+테스트 창 소유 구분은 soksak-core/internal/application/restore_gate_test.go,
+capture_focus_gate_test.go, run.go 에 걸쳐 있습니다. 각 실행은 고유한 home, runtime, identifier,
+socket, 소유자를 받습니다. Darwin 의 `SOKSAK_PRESENTATION=capture-only` 창은 컴포지터에 남아 있으며
+투명하고, 마우스 입력을 통과시키고, non-key 상태입니다. 캡처는 애플리케이션을 활성화하지 않고 문서
+픽셀을 읽습니다. 현재 Wails 런타임은 파일 잠금으로 한 번에 테스트 애플리케이션 소유자 하나만
+허용합니다.
 
 ## 사실과 가설
 
 확인된 사실:
 
-- Xterm과 여섯 frame provider는 하나의 terminal behavior contract 및 공유 provider lifecycle
-  뒤에서 서로 다른 presentation 구현을 사용합니다.
-- 정정된 frame presenter는 row/run DOM identity를 보존하고 input, focus, cursor, render,
-  PTY-write sequence와 timestamp를 공개합니다.
-- 이전 visibility 식은 overlay와 layout motion 중 활성 DOM content를 숨겼습니다. 현재 하나의
-  visibility transaction이 DOM content를 mount 상태로 유지하고 live surface visibility와 parked
-  pixel을 분리합니다.
-- Clean installed-product candidate matrix는 일곱 provider를 모두 실행했습니다. Capture-only parity
-  경로는 공개 DOM input command를 사용하고 `windowFocused=false`를 기록하며 foreground app을
-  방해하지 않고 terminal-to-PTY input, cursor 상태, timing을 증명합니다. 색상 자동 판정은 screenshot
-  pixel이 아니라 공개 `terminal-screen`의 computed foreground/background, cursor/selection property와
-  ANSI 256개 property를 사용합니다. Screenshot과 recording은 사람이 직접 확인하는 관측 증거입니다.
-- `ui.input.click`과 `ui.input.key`는 노출된 DOM address를 통해 browser event를 dispatch합니다.
-  운영체제 입력이 아니므로 native pointer 또는 keyboard 증거로 인용하면 안 됩니다.
-- AppKit은 inactive non-key window의 WebKit에 keyboard input을 전달하지 않습니다. Core의
-  `window.input.pointer.click`과 `window.input.key.press`는 이미 active key window를 요구하며
-  application을 스스로 활성화하지 않습니다. 별도 `system-native-input` gate가 사람이 없는 native
-  runner에서 AppKit NSEvent부터 terminal과 PTY까지의 전달을 증명합니다.
-- Capture-only visibility matrix는 picker, settings, sidebar transition에 대해 21개 report와 840개
-  frame을 만들었고 blank frame과 violation이 모두 0입니다. 직접 확인한 contact sheet에서도 모든
-  terminal image가 유지됩니다.
-- 실제 macOS 신호등 닫기 gate는 현재 Core 누적 검증에서 세 번 GREEN입니다.
-- 모든 system run은 process, home, runtime, identifier, socket, window, input state 및 open/recorded
-  sidecar ownership을 기록합니다. Cleanup 뒤 두 sidecar set이 비고 application이 정상 종료됩니다.
-  오래 남았던 test-owned sidecar 두 개는 기록된 identity로 정리했고 사용자 application은 변경하지
-  않았습니다.
+- xterm 과 프레임 제공자 여섯 개는 터미널 동작 계약 하나와 공유 제공자 수명주기 뒤에서 서로 다른
+  표현 구현을 씁니다.
+- 정정된 프레임 presenter 는 행·run 의 DOM identity 를 보존하고 입력·포커스·커서·렌더·PTY write
+  sequence 와 시각을 공개합니다.
+- 이전 표시 계산식은 오버레이와 레이아웃 움직임 중에 활성 DOM 내용을 숨겼습니다. 지금은 표시
+  트랜잭션 하나가 DOM 내용을 mount 상태로 유지하고 live surface 의 표시 상태와 parked 픽셀을
+  분리합니다.
+- 깨끗한 설치 제품 후보 매트릭스가 제공자 일곱 개를 모두 실행했습니다. capture-only parity 경로는
+  공개 DOM 입력 명령을 쓰고 `windowFocused=false` 를 기록하며, 전면 앱을 방해하지 않고 터미널에서
+  PTY 까지의 입력, 커서 상태, 타이밍을 증명합니다. 색 자동 판정은 스크린샷 픽셀이 아니라 공개
+  `terminal-screen` 의 계산된 전경·배경, 커서·선택 속성, ANSI 256개 속성을 씁니다. 스크린샷과
+  녹화는 사람이 직접 확인하는 관측 증거입니다.
+- `ui.input.click` 과 `ui.input.key` 는 노출된 DOM 주소로 브라우저 이벤트를 발행합니다. 운영체제
+  입력이 아니므로 네이티브 포인터나 키보드의 증거로 인용해서는 안 됩니다.
+- AppKit 은 비활성 non-key 창의 WebKit 에 키보드 입력을 전달하지 않습니다. Core 의
+  `window.input.pointer.click` 과 `window.input.key.press` 는 이미 활성 key 창을 요구하며
+  애플리케이션을 스스로 활성화하지 않습니다. 별도의 `system-native-input` 검사가 사람이 없는
+  네이티브 runner 에서 AppKit NSEvent 부터 터미널과 PTY 까지의 전달을 증명합니다.
+- capture-only 표시 매트릭스는 picker·설정·사이드바 전환에 대해 보고서 21개와 프레임 840개를
+  만들었고, 빈 프레임과 위반이 모두 0입니다. 직접 확인한 대조 시트에서도 모든 터미널 이미지가
+  유지됩니다.
+- 실제 macOS 신호등 닫기 검사는 현재 Core 누적 검증에서 세 번 GREEN 입니다.
+- 모든 시스템 실행은 프로세스, home, runtime, identifier, socket, 창, 입력 상태와 open·recorded
+  사이드카 소유를 기록합니다. 정리 뒤에는 두 사이드카 집합이 비고 애플리케이션이 정상
+  종료됩니다. 오래 남아 있던 테스트 소유 사이드카 두 개는 기록된 identity 로 정리했고 사용자
+  애플리케이션은 건드리지 않았습니다.
 
-현재 미공개 candidate:
+현재 미공개 후보:
 
-- 미공개 terminal contract package 0.0.7은 terminal behavior interface 0.0.7, 다섯 semantic theme
-  role, 하나의 256색 palette, byte 및 frame renderer의 presentation status 하나를 정의합니다.
-- Kit 0.0.19 candidate는 row/run DOM node를 유지하고 input/focus/cursor/render sequence와 timestamp를
-  공개하며 frame과 Xterm 양쪽의 host theme 해석 및 공개 computed-style surface를 단독 소유합니다.
-- Xterm은 `@xterm/xterm` 6.0.0과 `@xterm/addon-fit` 0.11.0을 사용합니다. WebKit IME dependency는
-  package.json/lockfile의 정확한 Git archive 하나로만 소비하며 release workflow의 충돌하는 과거
-  source checkout을 제거했습니다.
-- Contract, kit, 일곱 renderer plugin의 clean candidate closure가 존재합니다. Source manifest와
-  lockfile은 공개 HTTPS dependency를 유지하며 local locator가 없습니다. Candidate provenance는
-  정확한 source commit과 dependency archive digest를 기록합니다.
-- Clean candidate closure는 capture-only parity 및 visibility matrix를 통과했습니다. Native AppKit
-  pointer/keyboard 인증은 unattended runner를 활성화해야 하므로 별도 gate입니다.
+- 미공개 터미널 계약 패키지 0.0.7 은 터미널 동작 인터페이스 0.0.7, 의미 테마 역할 다섯 개, 256색
+  팔레트 하나, 바이트 renderer 와 프레임 renderer 공통의 표현 status 하나를 정의합니다.
+- kit 0.0.19 후보는 행·run DOM 노드를 유지하고 input·focus·cursor·render sequence 와 시각을
+  공개하며, 프레임과 xterm 양쪽의 호스트 테마 해석과 공개 계산 스타일 표면을 단독으로 소유합니다.
+- xterm 은 `@xterm/xterm` 6.0.0 과 `@xterm/addon-fit` 0.11.0 을 씁니다. WebKit IME 의존은
+  package.json 과 lockfile 의 정확한 Git archive 하나로만 소비하며, 릴리즈 워크플로에 있던 충돌하는
+  과거 소스 체크아웃은 제거했습니다.
+- 계약, kit, renderer plugin 일곱 개의 깨끗한 후보 closure 가 존재합니다. 소스 manifest 와 lockfile
+  은 공개 HTTPS 의존을 유지하며 로컬 위치 표기가 없습니다. 후보 provenance 는 정확한 소스 commit
+  과 의존 archive digest 를 기록합니다.
+- 깨끗한 후보 closure 는 capture-only parity 매트릭스와 표시 매트릭스를 통과했습니다. 네이티브
+  AppKit 포인터·키보드 인증은 사람이 없는 runner 를 켜야 하므로 별도 검사입니다.
 
-임시 terminal contract 및 terminal kit archive에서 생성한 candidate 증거는 무효입니다. Kit source
-manifest가 외부 local archive를 사용하도록 임시 변경됐고 pnpm은 해당 dependency를 lockfile에 local
-absolute locator와 parent-relative locator 두 형태로 기록했습니다. Source file을 되돌려도 오염된
-metadata에서 이미 만든 archive와 downstream 증거는 복구되지 않습니다.
+임시 터미널 계약과 터미널 kit archive 로 만든 후보 증거는 무효입니다. kit 의 소스 manifest 가 외부
+로컬 archive 를 쓰도록 임시로 바뀌었고, pnpm 이 그 의존을 lockfile 에 로컬 절대 경로와 상위 상대
+경로 두 형태로 기록했습니다. 소스 파일을 되돌려도 오염된 metadata 로 이미 만든 archive 와 하류
+증거는 복구되지 않습니다.
 
-해당 오염 kit archive가 closure에 포함된 candidate archive, parity, visibility, screenshot,
-recording 결과는 재사용하면 안 됩니다. 이를 대체하고 8번 색상 인증을 통과한 run 32779972490의
-clean renderer closure는 다음과 같습니다. 이후 focus 수정은 kit commit `075a31a`로 전진했으며
-아래 색상 closure를 현재 focus closure라고 기록하면 안 됩니다.
+그 오염된 kit archive 를 closure 에 포함한 후보 archive, parity, 표시, 스크린샷, 녹화 결과는 다시
+쓰면 안 됩니다. 그것을 대체하고 8번 색 인증을 통과한 run 32779972490 의 깨끗한 renderer closure 는
+다음과 같습니다. 이후 포커스 수정은 kit commit `075a31a` 로 전진했으므로, 아래 색 closure 를 현재
+포커스 closure 로 기록해서는 안 됩니다.
 
-| Artifact | Source commit | SHA-256 |
+| 산출물 | 소스 commit | SHA-256 |
 | --- | --- | --- |
 | contract-plugin-terminal 0.0.7 | 18c8261 | 3e9fd042b497cb7d44d736e597c56e0279412b134f098458d883277915733356 |
 | kit-plugin-terminal 0.0.19 | 017f63c | ddac758f0234d780ccd5a6e13c72f425e81e193000e9f2970dddfcf026703a7b |
@@ -218,71 +216,70 @@ clean renderer closure는 다음과 같습니다. 이후 focus 수정은 kit com
 | plugin-terminal-wezterm 0.0.16 | 24797a1 | 670e0af3e178398817d1184775d2c1dc827e488e4ca077d42be09f156be06e43 |
 | plugin-terminal-xterm 0.0.23 | 29d26a8 | 28a1bca790fc6835ec8a3e0c356f342d0ecedd5d935c0fe7ca0a43f06143ccf5 |
 
-Candidate plan SHA-256은
-`630486414dd0a83cdd7d4cb54d78c1f6a2a6d7295293d35f13fdf27836a5c51b`입니다. 이 plan은 PTY와 여섯
-frame-sidecar archive도 고정합니다. 표와 digest는 closure identity이며 설치 제품 report,
-공개 상태/DOM assertion이 자동 판정 증거이고 screenshot과 recording은 직접 관측 증거입니다.
+후보 plan 의 SHA-256 은
+`630486414dd0a83cdd7d4cb54d78c1f6a2a6d7295293d35f13fdf27836a5c51b` 입니다. 이 plan 은 PTY 와 프레임
+사이드카 여섯 개의 archive 도 고정합니다. 이 표와 digest 가 closure identity 이며, 설치 제품
+보고서와 공개 상태·DOM 단언이 자동 판정 증거이고 스크린샷과 녹화는 직접 관측 증거입니다.
 
-허용되는 local build-time 검증 경로는 TERMINAL-UX-EXECUTION.ko.md의 “Local cross-repository
-candidate 검증”에 정의합니다. Consumer manifest 또는 lockfile 직접 편집은 development mode가
-아닙니다.
+허용되는 로컬 빌드 시점 검증 경로는 TERMINAL-UX-EXECUTION.ko.md 의 "저장소 간 로컬 후보 검증" 이
+정의합니다. 소비자 manifest 나 lockfile 을 직접 편집하는 것은 개발 모드가 아닙니다.
 
-`soksak-spec` commit `9de8149`부터 `25c58b7`까지가 complete candidate transaction을 소유합니다.
-Clean exact source staging, dependency SHA-256 검증, staging-only workspace override, repository-owned
-Make 검증, canonical package/lock byte 복원, 선언된 generated output 생성, local-locator 거부,
-`candidate-build.json`을 포함한 verified archive exit를 수행합니다. 현재 spec source `0a1e217`은
-해당 구분를 지키면서 긴 ustar path도 지원합니다. Staging metadata와 `.candidate-inputs`는
-archive에 들어가지 않습니다.
+`soksak-spec` commit `9de8149` 부터 `25c58b7` 까지가 후보 트랜잭션 전체를 소유합니다. 깨끗한 정확
+소스 staging, 의존 SHA-256 검증, staging 안에서만 쓰는 workspace override, 저장소가 소유한 Make
+검증, 정본 패키지와 lock 바이트 복원, 선언된 생성 산출물 생성, 로컬 위치 표기 거부,
+`candidate-build.json` 을 포함한 검증된 archive 종료를 수행합니다. 현재 spec 소스 `0a1e217` 은 그
+구분을 지키면서 긴 ustar 경로도 지원합니다. staging metadata 와 `.candidate-inputs` 는 archive 에
+들어가지 않습니다.
 
 ## 현재 진행 상태와 차단점
 
 | 결함 | 2026-08-25 상태 |
 | --- | --- |
-| 1 — 지연 | Candidate parity에서 일곱 provider render 5–11ms, input-to-PTY 6–29ms로 GREEN입니다. 그러나 installed command throughput은 Alacritty에서 3MB/s 기준 RED이므로 결함 전체는 열려 있습니다. |
-| 2 — focus | Native RED는 Alacritty에서 `focusSequence=1` 뒤 `focusedInput=false`였습니다. WebKit default mouse action을 취소하는 공통 kit fix `075a31a`가 owner candidate GREEN이며 최종 native 재검증은 열려 있습니다. |
-| 3 — active cursor | 공개 active/visible cursor state와 직접 확인한 pixel은 candidate GREEN입니다. Native pointer 직후 active cursor 판정은 2번 이후에 확정합니다. |
-| 4 — keyboard input | Capture-only terminal-to-PTY round trip은 일곱 provider GREEN입니다. 최종 AppKit key-to-PTY matrix는 2·3번 이후에 판정합니다. |
-| 5–7 — picker/modal/sidebar blanking | Local Darwin candidate GREEN. 21개 report, 840개 frame, blank 0, violation 0이며 contact sheet를 직접 확인했습니다. |
-| 8 — 색상 parity | Exact candidate run 32779972490 GREEN. 일곱 provider 모두 같은 다섯 theme role, computed foreground/background와 ANSI 256개를 공개했고 7개 capture를 직접 확인했습니다. 공개 release와 현재 사용자 앱은 구버전이므로 deployed product는 아직 RED입니다. |
-| 9 — macOS 신호등 닫기 | 현재 Core 누적 gate에서 실제 AppKit close-button mouse down/up 세 번 GREEN입니다. |
-| 10 — test 간섭 | Local GREEN. Capture-only window는 transparent/non-key이고 readiness는 polling 0의 event 기반이며 run마다 고유 ownership을 가집니다. Cleanup은 open/recorded sidecar 0에 도달하고 사용자 app을 건드리지 않습니다. |
+| 1 — 지연 | 후보 parity 에서 제공자 일곱 개의 렌더 5–11ms, 입력에서 PTY 까지 6–29ms 로 GREEN 입니다. 그러나 설치된 명령 처리량이 Alacritty 에서 3MB/s 기준 RED 이므로 결함 전체는 열려 있습니다. |
+| 2 — 포커스 | 네이티브 RED 는 Alacritty 에서 `focusSequence=1` 뒤 `focusedInput=false` 였습니다. WebKit 기본 마우스 동작을 취소하는 공통 kit 수정 `075a31a` 가 소유자 후보에서 GREEN 이며 최종 네이티브 재검증은 열려 있습니다. |
+| 3 — 활성 커서 | 공개 active·visible 커서 상태와 직접 확인한 픽셀은 후보에서 GREEN 입니다. 네이티브 포인터 직후의 활성 커서 판정은 2번 이후에 확정합니다. |
+| 4 — 키보드 입력 | capture-only 의 터미널에서 PTY 까지 왕복은 제공자 일곱 개 모두 GREEN 입니다. 최종 AppKit 키에서 PTY 까지의 매트릭스는 2·3번 이후에 판정합니다. |
+| 5–7 — picker·모달·사이드바 화면 사라짐 | 로컬 Darwin 후보 GREEN. 보고서 21개, 프레임 840개, 빈 프레임 0, 위반 0이며 대조 시트를 직접 확인했습니다. |
+| 8 — 색 parity | 정확한 후보 run 32779972490 GREEN. 제공자 일곱 개 모두 같은 테마 역할 다섯 개, 계산된 전경·배경과 ANSI 256개를 공개했고 캡처 7개를 직접 확인했습니다. 공개 릴리즈와 현재 사용자 앱은 구버전이므로 배포된 제품은 아직 RED 입니다. |
+| 9 — macOS 신호등 닫기 | 현재 Core 누적 검사에서 실제 AppKit 닫기 버튼 mouse down/up 세 번 GREEN 입니다. |
+| 10 — 테스트 간섭 | 로컬 GREEN. capture-only 창은 투명하고 non-key 이며, 준비 여부는 폴링 0의 이벤트 기반이고, 실행마다 고유한 소유를 가집니다. 정리는 open·recorded 사이드카 0에 도달하고 사용자 앱을 건드리지 않습니다. |
 
-Active spec, contract, 공유 kit, 일곱 renderer plugin, PTY, 결정적으로 build 가능한 여섯 frame
-sidecar, Core, Registry, terminal-tests, 두 Wails framework service의 build/release command ownership은
-Make로 통일했습니다. Tool version은 생태계 owner file에 남고 Actions는 이를 주입해 같은 Make target을
-호출합니다. 기록된 source-level arm64 gate는 GREEN이지만 Darwin arm64/x86_64/universal, Linux
-arm64/x86_64, Windows x86_64 전체 native matrix는 아직 실행하지 않았습니다.
+활성 spec, 계약, 공유 kit, renderer plugin 일곱 개, PTY, 결정적으로 빌드되는 프레임 사이드카 여섯
+개, Core, Registry, terminal-tests, Wails 프레임워크 서비스 둘의 빌드·릴리즈 명령 소유는 Make 로
+통일했습니다. 도구 버전은 각 생태계의 소유자 파일에 남고 Actions 가 그것을 주입해 같은 Make target
+을 호출합니다. 기록된 소스 수준 arm64 검사는 GREEN 이지만, Darwin arm64·x86_64·universal, Linux
+arm64·x86_64, Windows x86_64 전체 네이티브 매트릭스는 아직 실행하지 않았습니다.
 
-Shitty build dependency는 upstream version 13을 이름에 포함한 유지 fork branch
-`min-median-max/shitty:soksak-provider-13`입니다. Commit `a5f8785f`는 embedded version을 source
-commit epoch에서 만들고 deterministic static archive를 사용하며 debug data에서 node work path를
-제거합니다. Sidecar `build-dependencies.json`이 해당 exact commit과 Python/LLVM/Ragel version을
-소유합니다. 서로 다른 timezone의 독립 arm64 SDK build 두 번이 byte-identical이었고 canonical tree
-receipt `86f83d4c`, Sidecar build, 반복 stage, conformance 8개가 GREEN입니다. 다른 native target과 새
-owner-only benchmark contract closure는 아직 검증하지 않았습니다.
+Shitty 빌드 의존은 이름에 upstream 버전 13이 들어간 유지 fork branch
+`min-median-max/shitty:soksak-provider-13` 입니다. commit `a5f8785f` 는 내장 버전을 소스 commit
+epoch 에서 만들고, 결정적 정적 archive 를 쓰며, 디버그 데이터에서 노드 작업 경로를 제거합니다.
+사이드카의 `build-dependencies.json` 이 그 정확한 commit 과 Python·LLVM·Ragel 버전을 소유합니다.
+시간대가 다른 독립 arm64 SDK 빌드 두 번이 바이트 단위로 같았고, 정본 트리 receipt `86f83d4c`,
+사이드카 빌드, 반복 stage, 적합성 8개가 GREEN 입니다. 다른 네이티브 target 과 새 소유자 전용
+benchmark 계약 closure 는 아직 검증하지 않았습니다.
 
-구현 밖 release 차단점도 명시합니다. `soksak-terminal-tests`는 product-specific인데 아직
-`min-median-max` module/reusable-workflow identity에 있으므로 ref를 바꾸기 전에 실제 repository
-ownership 결정이 필요합니다. `soksak-contract-registry`에는 LICENSE가 없으며 owner가 license를
-선택해야 합니다. 두 값 모두 로컬에서 발명하지 않습니다.
+구현 밖의 릴리즈 차단점도 적어 둡니다. `soksak-terminal-tests` 는 제품 전용인데 아직
+`min-median-max` module·reusable-workflow identity 아래에 있으므로, ref 를 바꾸기 전에 실제 저장소
+소유 결정이 필요합니다. `soksak-contract-registry` 에는 LICENSE 가 없으며 소유자가 라이선스를 골라야
+합니다. 두 값 모두 로컬에서 지어내지 않습니다.
 
-남은 acceptance blocker는 timeout이나 fallback이 아닙니다. WebKit은 native keyboard 전달에 active
-key window를 요구합니다. Local capture-only run은 사용자의 foreground session을 침해하면 안 됩니다.
-따라서 native matrix는 unattended final Darwin runner가 소유하며 DOM-event 증거로 대체하거나 개발자
-desktop을 focus해서는 안 됩니다.
+남은 인수 차단점은 제한 시간이나 대체 경로 문제가 아닙니다. WebKit 은 네이티브 키보드 전달에 활성
+key 창을 요구합니다. 로컬 capture-only 실행은 사용자의 전면 세션을 침해해서는 안 됩니다. 따라서
+네이티브 매트릭스는 사람이 없는 최종 Darwin runner 가 소유하며, DOM 이벤트 증거로 대체하거나
+개발자 데스크톱을 포커스해서는 안 됩니다.
 
-Runner의 unpublished candidate 구분는 구현됐습니다. 각 component owner workflow가 clean exact
-commit을 자기 저장소에서 build·검증·봉인하고, 제품 workflow는 선언된 identity와 digest의 artifact
-17개만 조합합니다. 제품 workflow는 형제 component source를 읽거나 build하지 않습니다.
+runner 의 미공개 후보 구분은 구현됐습니다. 각 컴포넌트 소유자 워크플로가 깨끗한 정확 commit 을 자기
+저장소에서 빌드·검증·봉인하고, 제품 워크플로는 선언된 identity 와 digest 를 가진 산출물 17개만
+조합합니다. 제품 워크플로는 형제 컴포넌트 소스를 읽거나 빌드하지 않습니다.
 
 ## 기준점
 
-현재 Core 기준점은 release v0.0.3, commit
-1d140596d9a0c54f14ecb998ae0cce2c4a156f7e입니다. Release 주소는
-https://github.com/soksak-ai/soksak/releases/tag/v0.0.3입니다. Multi-platform run
-32673034161과 release run 32673381309가 통과했습니다.
+현재 Core 기준점은 릴리즈 v0.0.3, commit
+1d140596d9a0c54f14ecb998ae0cce2c4a156f7e 입니다. 릴리즈 주소는
+https://github.com/soksak-ai/soksak/releases/tag/v0.0.3 입니다. 다중 플랫폼 run 32673034161 과 릴리즈
+run 32673381309 가 통과했습니다.
 
-| Component | Version |
+| 컴포넌트 | 버전 |
 | --- | --- |
 | Alacritty terminal | 0.0.15 |
 | Ghostty terminal | 0.0.16 |
@@ -296,21 +293,21 @@ https://github.com/soksak-ai/soksak/releases/tag/v0.0.3입니다. Multi-platform
 | Terminal behavior contract | 0.0.5 |
 | Terminal contract package | 0.0.6 |
 
-이 성공 기록은 regression 기준점일 뿐입니다. 제보된 UX 결함이 해결되었다는 증거가 아닙니다.
+이 성공 기록은 회귀 기준점일 뿐입니다. 제보된 UX 결함이 해결됐다는 증거가 아닙니다.
 
 ## 사용자 세션 보호
 
-구현은 사용자 소유 Soksak process, window, socket, home, workspace를 닫거나 재사용하거나
-수정하면 안 됩니다. 인계 시점의 PID 41136은 사용자 소유였으며 종료하지 않았습니다. Process
-identity는 이 번호로 추정하지 말고 다시 확인해야 합니다.
+구현은 사용자가 소유한 Soksak 프로세스, 창, socket, home, workspace 를 닫거나 재사용하거나 고쳐서는
+안 됩니다. 인계 시점의 PID 41136 은 사용자 소유였으며 종료하지 않았습니다. 프로세스 identity 는 이
+번호로 추정하지 말고 다시 확인해야 합니다.
 
-테스트 instance에는 별도 home, 짧은 runtime path, 고유 identifier, 명시적 socket이
-필요합니다. Darwin Unix socket 길이 제한 때문에 긴 임시 runtime path를 사용할 수 없습니다.
-모든 테스트 소유 sidecar와 application process는 성공 및 실패 시 종료되어야 합니다. Cleanup은
-executable name만으로 process를 선택하면 안 됩니다.
+테스트 인스턴스에는 별도 home, 짧은 runtime 경로, 고유한 identifier, 명시적 socket 이 필요합니다.
+Darwin 의 Unix socket 길이 제한 때문에 긴 임시 runtime 경로는 쓸 수 없습니다. 테스트가 소유한 모든
+사이드카와 애플리케이션 프로세스는 성공하든 실패하든 종료되어야 합니다. 정리는 실행 파일 이름만으로
+프로세스를 골라서는 안 됩니다.
 
 ## 완료 구분
 
-모든 provider matrix RED가 GREEN이 되고, 모든 정량 visibility 및 ownership 검사가 통과하며,
-screenshot과 motion recording을 직접 확인해야 완료입니다. Build, command 응답, 과거 CI run만으로
-이 인계를 종료할 수 없습니다.
+모든 제공자 매트릭스의 RED 가 GREEN 이 되고, 모든 정량 표시 검사와 소유 검사가 통과하며, 스크린샷과
+움직임 녹화를 직접 확인해야 완료입니다. 빌드, 명령 응답, 과거 CI 실행만으로 이 인계를 끝낼 수
+없습니다.
