@@ -1346,7 +1346,7 @@ export const ko = {
   "msg.theme.install.rejected": "테마가 검증을 통과하지 못했습니다",
   "msg.theme.list": "테마 {n}개",
   "msg.theme.reload": "테마 {n}개를 다시 읽었습니다",
-  "msg.plugin.install.local.plan": "{n, plural, one {Local Plugin {id}와 release component #개를 검증했습니다} other {Local Plugin {id}와 release component #개를 검증했습니다}}",
+  "msg.plugin.install.local.plan": "Local Plugin {id}와 release component {n}개를 검증했습니다",
   "msg.plugin.install.local": "Local Plugin {id} {version}을 설치했습니다",
   "msg.sidecar.request": "{name} 사이드카 응답을 반환했습니다",
   "msg.sidecar.install.local.plan": "Local Sidecar {id}를 검증했습니다",

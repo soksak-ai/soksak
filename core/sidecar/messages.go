@@ -17,6 +17,10 @@ func init() {
 			EN: "sidecar requirement id is required",
 			KO: "사이드카 요구사항 ID가 필요합니다",
 		},
+		"sidecar.connectionEnded": {
+			EN: "sidecar {name} closed the connection before answering",
+			KO: "사이드카 {name} 이(가) 응답 전에 연결을 닫았습니다",
+		},
 		"sidecar.noResolver": {EN: "sidecar {name} has no installation settings resolver", KO: "사이드카 {name}의 설치 설정 경로를 해석할 수 없습니다"},
 		"sidecar.secretSetMismatch": {
 			EN: "sidecar {name} is already running with a different declared secret set",

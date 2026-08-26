@@ -3,7 +3,6 @@ package sidecar
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"io"
 	"strconv"
 	"sync"
@@ -29,7 +28,10 @@ import (
 // have acted on it. Streams keep a connection of their own: the bytes after their one answer belong
 // to them.
 
-var errLinkEnded = errors.New("connection ended")
+// linkEnded is the refusal a request left waiting on a closed connection answers with.
+func linkEnded(name string) error {
+	return i18n.Errorf("sidecar.connectionEnded", map[string]string{"name": name})
+}
 
 // link is one greeted connection held open for a unit.
 type link struct {
@@ -153,7 +155,7 @@ func (host *Host) closeLinkLocked(name string) {
 		return
 	}
 	delete(host.links, name)
-	held.shutdown(errLinkEnded)
+	held.shutdown(linkEnded(name))
 }
 
 func (held *link) isClosed() bool {
@@ -172,7 +174,7 @@ func (held *link) shutdown(reason error) {
 	}
 	held.closed = true
 	if reason == nil {
-		reason = errLinkEnded
+		reason = linkEnded(held.name)
 	}
 	held.failure = reason
 	pending := held.pending
@@ -216,7 +218,7 @@ func (held *link) call(request controlwire.Request) (answer controlwire.Response
 		failure := held.failure
 		held.mu.Unlock()
 		if failure == nil {
-			failure = errLinkEnded
+			failure = linkEnded(held.name)
 		}
 		return controlwire.Response{}, true, failure
 	}

@@ -1178,7 +1178,7 @@ function App() {
         groups.find((g) => g.id === content.activePaneId) ?? groups[0];
       const view = grp?.tabs.find((v) => v.id === grp.activeTabId);
       if (key === "w" && !e.shiftKey) {
-        // ⌘W asks the active view first: a view holding several panes closes one of them and stays.
+        // ⌘W goes to the active view first: a view holding several panes closes one of them and stays.
         // What "close" means inside a view is the view's; which view is active stays the core's.
         e.preventDefault();
         if (view && closeIntentOfView(view.id) === "pass") closeView(workspace.id, view.id);
