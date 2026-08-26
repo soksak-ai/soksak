@@ -101,7 +101,7 @@ describe("plugin.settings.set durability", () => {
     const plugin = manifestOf("settings-plugin", {
       configuration: [{
         key: "renderer", type: "enum", enum: ["canvas", "dom"], default: "canvas",
-        title: { en: "Renderer", ko: "렌더러" },
+        title: { en: "Renderer", ko: "Renderer" },
       }],
     });
     usePlugins.setState({ plugins: { "settings-plugin": runtimeOf(plugin) } });
