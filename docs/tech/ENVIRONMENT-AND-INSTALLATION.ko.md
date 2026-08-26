@@ -39,10 +39,13 @@ path는 설치 input이 아닙니다. 개발 record의 `path`는 `plugin.develop
 source directory이며 installer input이 아닙니다. Core는 `../`, 주입된 workspace root, `PATH`, checkout
 layout, symlink로 repository를 찾지 않습니다.
 
-Exact dependency version이 주소를 받은 local store에 있으면 release와 asset byte가 parent의 URL, size,
-SHA-256과 같아야 합니다. Local release가 손상됐거나 다르면 error이며 network로 fallback하지
-않습니다. Local에 dependency가 없으면 parent release가 선언한 exact HTTPS reference를 사용할 수
-있습니다.
+어떤 release 문서도 위치를 기록하지 않습니다. Release directory는 kind, id, version에서 도출합니다.
+공개본은 `https://github.com/soksak-ai/<id>/releases/download/v<version>/`, local store는
+`<store>/<kind>s/<id>/<version>/`이며 그 안의 모든 file은 bare name으로 가리킵니다. Parent release는
+각 dependency의 `release.json`을 size와 SHA-256으로 고정하고, 그것을 읽는 resolver는 그 byte를
+돌려줘야 합니다. Local install은 closure의 모든 release를 주소를 받은 store에서 읽습니다. Store에
+없는 dependency나 고정값과 byte가 다른 dependency는 도출한 위치를 이름으로 든 error이며 network로
+fallback하지 않습니다.
 
 ## Installer transaction
 

@@ -42,7 +42,9 @@ archive per supported target. The archive contains sidecar.json, dist/<sidecar-i
 files required by that process. The source binary may use a platform extension while the archive
 entry remains the path declared by sidecar.json.
 
-The registry records target, archive URL, byte size, SHA-256, format, source commit, and sidecar.json.
+The release document records target, archive file name, byte size, SHA-256, format, source commit, and
+sidecar.json; the registry index records the release reference {id, version, size, sha256}, and every
+location is derived from the id and version.
 The installer selects the current host target, verifies the digest, extracts regular files in a
 transaction, and records the exact version, target, registry ID, source kind, and absolute local path
 in `environment.json`. A

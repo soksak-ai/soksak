@@ -35,10 +35,13 @@ directory declared by `plugin.develop` or `sidecar.develop`, not an installer in
 discovers a repository through `../`, an injected workspace root, `PATH`, checkout layout, or a
 symbolic link.
 
-If an exact dependency version exists in the addressed local store, its release and asset bytes must
-match the parent's URL, size, and SHA-256. A corrupt or mismatched local release is an error; Core does
-not fall back to the network. A missing local dependency may use the exact HTTPS reference declared
-by its parent release.
+No release document records a location. A release directory is derived from kind, id, and version:
+`https://github.com/soksak-ai/<id>/releases/download/v<version>/` when published,
+`<store>/<kind>s/<id>/<version>/` in a local store; every file inside is addressed by its bare name.
+A parent release pins each dependency's `release.json` by size and SHA-256, and the resolver that
+reads it must return those bytes. A local install reads every release of the closure from the
+addressed store; a dependency absent from the store, or one whose bytes differ from the pin, is an
+error named by its derived location. Core does not fall back to the network.
 
 ## Installer transaction
 
