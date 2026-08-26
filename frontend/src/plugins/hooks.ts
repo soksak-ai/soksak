@@ -24,7 +24,7 @@ import type { PluginPermission } from "./spec";
 type SessionsState = ReturnType<(typeof useSessions)["getState"]>;
 
 export interface Disposable {
-  dispose(): void;
+  dispose(): void | Promise<void>;
 }
 
 export interface PluginEventMap {

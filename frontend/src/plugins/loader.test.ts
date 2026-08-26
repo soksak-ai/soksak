@@ -273,8 +273,8 @@ describe("activatePlugin — lifecycle and disposal", () => {
     const p = await activatePlugin(
       {
         activate: (ctx: PluginContext) => {
-          ctx.subscriptions.push({ dispose: () => order.push("sub-1") });
-          ctx.subscriptions.push({ dispose: () => order.push("sub-2") });
+          ctx.subscriptions.push({ dispose: () => { order.push("sub-1"); } });
+          ctx.subscriptions.push({ dispose: () => { order.push("sub-2"); } });
         },
         deactivate,
       },

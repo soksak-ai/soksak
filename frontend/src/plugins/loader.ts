@@ -356,10 +356,10 @@ export async function activatePlugin(
   const subscriptions: Disposable[] = [];
   const ctx: PluginContext = { app: api, manifest, dir, subscriptions };
 
-  const disposeSubscriptions = () => {
+  const disposeSubscriptions = async () => {
     for (const d of subscriptions.splice(0).reverse()) {
       try {
-        d.dispose();
+        await d.dispose();
       } catch (e) {
         console.error(`plugin subscription dispose failed (${manifest.id}):`, e);
       }
@@ -398,7 +398,7 @@ export async function activatePlugin(
   try {
     await entry.activate(ctx);
   } catch (e) {
-    disposeSubscriptions();
+    await disposeSubscriptions();
     tracker.disposeAll();
     disposeRealm();
     throw new Error(tmsg("plugin.activate.failed", { id: manifest.id, error: String(e) }));
@@ -423,7 +423,7 @@ export async function activatePlugin(
           // §0-4: a plugin's cleanup failure does not block host cleanup either.
           console.error(`deactivate failed (${manifest.id}):`, e);
         }
-        disposeSubscriptions();
+        await disposeSubscriptions();
         tracker.disposeAll();
       } finally {
         disposeRealm();
