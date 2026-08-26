@@ -30,6 +30,8 @@ export interface FrameworkEvent<T> {
 export interface Stream<T> {
   /** Frames received before assignment are delivered in order when the handler is installed. */
   onmessage: (msg: T) => void;
+  /** Release this receiver. Idempotent; it does not stop the producer. */
+  close(): void;
 }
 
 /** Operation surface for one window — the current window, or one found by label. */

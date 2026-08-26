@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const framework = vi.hoisted(() => ({
   name: "wails",
   invoke: async () => undefined,
-  createStream: () => ({ onmessage: () => {} }),
+  createStream: () => ({ onmessage: () => {}, close() {} }),
   listen: async () => () => {},
   currentWindow: () => { throw new Error("not used"); },
   titlebarComposition: {

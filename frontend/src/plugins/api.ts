@@ -1051,16 +1051,25 @@ function createSidecarApi(
       // The requirement travels with the open, because the manifest is this side's. The core reads
       // what the installed sidecar states it implements and refuses the two if they differ — declared
       // against actual, and neither taken on the other's word.
-      const opened = await deps.invoke("sidecar_open", {
-        consumer: { id: manifest.id, version: manifest.version },
-        sidecar: decl,
-        ns: manifest.id,
-        secretEnv: opts?.secretEnv ?? null,
-        generatedSecretEnv: opts?.generatedSecretEnv ?? null,
-        onEvent,
-      }) as { name?: unknown };
+      let opened: { name?: unknown };
+      try {
+        opened = await deps.invoke("sidecar_open", {
+          consumer: { id: manifest.id, version: manifest.version },
+          sidecar: decl,
+          ns: manifest.id,
+          secretEnv: opts?.secretEnv ?? null,
+          generatedSecretEnv: opts?.generatedSecretEnv ?? null,
+          onEvent,
+        }) as { name?: unknown };
+      } catch (error) {
+        onEvent.close();
+        throw error;
+      }
       const provider = typeof opened?.name === "string" && opened.name !== "" ? opened.name : "";
-      if (!provider) throw new Error(tmsg("plugin.sidecar.openNoProvider", { name }));
+      if (!provider) {
+        onEvent.close();
+        throw new Error(tmsg("plugin.sidecar.openNoProvider", { name }));
+      }
       let released = false;
       // Releasing the channel never ends the sidecar.
       //
@@ -1072,6 +1081,8 @@ function createSidecarApi(
       const close = async () => {
         if (released) return;
         released = true;
+        listeners.clear();
+        onEvent.close();
         await deps.invoke("sidecar_release", { name: provider }).catch(() => {});
       };
       tracker.wrap(() => void close());
@@ -1095,29 +1106,47 @@ function createSidecarApi(
           // reads it: it stamps arrivals with it and nothing else.
           streamSeq += 1;
           const label = `${provider}#${streamSeq}`;
-          const onBytes = createStream<ArrayBuffer>();
-          onBytes.onmessage = (m) => handlers.onBytes(new Uint8Array(m));
-          const onEnd = createStream<Record<string, unknown>>();
-          onEnd.onmessage = (m) =>
-            handlers.onEnd?.(typeof m?.reason === "string" ? (m.reason as string) : "");
-          const answer = (await deps.invoke("sidecar_stream", {
-            name: provider,
-            stream: label,
-            payload: JSON.stringify(request),
-            onBytes,
-            onEnd,
-          })) as Record<string, unknown>;
-          // Disposing ends this stream and nothing else. A sidecar outlives any one connection,
-          // and closing it because a view unmounted would end every other view's stream too.
           let stopStarted = false;
           let settle!: () => void;
           let reject!: (error: unknown) => void;
           const settled = new Promise<void>((resolve, rejected) => { settle = resolve; reject = rejected; });
+          const onBytes = createStream<ArrayBuffer>();
+          onBytes.onmessage = (m) => handlers.onBytes(new Uint8Array(m));
+          const onEnd = createStream<Record<string, unknown>>();
+          const closeReceivers = () => {
+            onBytes.close();
+            onEnd.close();
+          };
+          onEnd.onmessage = (m) => {
+            handlers.onEnd?.(typeof m?.reason === "string" ? (m.reason as string) : "");
+            if (stopStarted) return;
+            stopStarted = true;
+            closeReceivers();
+            settle();
+          };
+          let answer: Record<string, unknown>;
+          try {
+            answer = (await deps.invoke("sidecar_stream", {
+              name: provider,
+              stream: label,
+              payload: JSON.stringify(request),
+              onBytes,
+              onEnd,
+            })) as Record<string, unknown>;
+          } catch (error) {
+            stopStarted = true;
+            closeReceivers();
+            settle();
+            throw error;
+          }
+          // Disposing ends this stream and nothing else. A sidecar outlives any one connection,
+          // and closing it because a view unmounted would end every other view's stream too.
           const stop: SidecarStreamClose = tracker.add({
             settled,
             dispose() {
               if (stopStarted) return;
               stopStarted = true;
+              closeReceivers();
               void deps.invoke("sidecar_stream_close", { name: provider, stream: label })
                 .then(() => settle(), reject);
             },

@@ -60,7 +60,7 @@ export const selectedFramework: AppFramework = {
   setWindowZoom: async () => {},
   invoke: unsupported,
   commands: async () => ({ commands: [], unserved: [] }),
-  createStream: () => ({ onmessage: () => {} }),
+  createStream: () => ({ onmessage: () => {}, close() {} }),
   listen: unsupported,
   currentWindow: () => testWindow,
   windowByLabel: unsupported,
