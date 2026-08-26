@@ -23,6 +23,7 @@ interface PluginSettingsState {
   getWorkspace: (root: string, pluginId: string, key: string) => SettingValue | undefined;
   setGlobal: (pluginId: string, key: string, value: SettingValue) => void;
   setWorkspace: (root: string, pluginId: string, key: string, value: SettingValue) => void;
+  saveNow: () => Promise<void>;
   // Omitted key = remove every override of that plugin in that scope (defaults restored).
   resetGlobal: (pluginId: string, key?: string) => void;
   resetWorkspace: (root: string, pluginId: string, key?: string) => void;
@@ -83,6 +84,10 @@ export const usePluginSettings = moduleState("state/pluginSettings#store", () =>
     const s = get();
     pluginSettingsSync.save({ global: s.global, byWorkspace: s.byWorkspace });
   };
+  const persistNow = () => {
+    const s = get();
+    return pluginSettingsSync.saveNow({ global: s.global, byWorkspace: s.byWorkspace });
+  };
   const init = load();
   return {
     global: init.global,
@@ -99,6 +104,7 @@ export const usePluginSettings = moduleState("state/pluginSettings#store", () =>
       }));
       persist();
     },
+    saveNow: persistNow,
     resetGlobal: (pluginId, key) => {
       set((s) => ({ global: bagDelete(s.global, pluginId, key) }));
       persist();

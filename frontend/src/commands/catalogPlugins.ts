@@ -1075,7 +1075,7 @@ export function registerPluginCatalog(): void {
       'plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"codex"}\'',
       'plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"gemini","scope":"workspace"}\'',
     ],
-    handler: (p) => {
+    handler: async (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
       if (!plug) return notFound("msg.plugin.notFoundId", { id: String(p.id) });
       const setting = configSettingOf(plug.manifest, p.key as string);
@@ -1088,6 +1088,7 @@ export function registerPluginCatalog(): void {
         const target = workspaceScope(p.workspace as string | undefined);
         if (!target) return invalid(tmsg("msg.plugin.settings.workspaceRootUnresolved"));
         ps.setWorkspace(target.root, p.id as string, p.key as string, v.value);
+        await ps.saveNow();
         return {
           id: p.id,
           scope,
@@ -1098,6 +1099,7 @@ export function registerPluginCatalog(): void {
         };
       }
       ps.setGlobal(p.id as string, p.key as string, v.value);
+      await ps.saveNow();
       return { id: p.id, scope, key: p.key, value: v.value };
     },
   });
@@ -1118,7 +1120,7 @@ export function registerPluginCatalog(): void {
         : tmsg("msg.plugin.settings.reset.all"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: ['plugin.settings.reset \'{"id":"soksak-plugin-<id>","key":"defaultAgent"}\''],
-    handler: (p) => {
+    handler: async (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
       if (!plug) return notFound("msg.plugin.notFoundId", { id: String(p.id) });
       const scope = (p.scope as string | undefined) ?? "global";
@@ -1128,6 +1130,7 @@ export function registerPluginCatalog(): void {
         const target = workspaceScope(p.workspace as string | undefined);
         if (!target) return invalid(tmsg("msg.plugin.settings.workspaceRootUnresolved"));
         ps.resetWorkspace(target.root, p.id as string, key);
+        await ps.saveNow();
         return {
           id: p.id,
           scope,
@@ -1137,6 +1140,7 @@ export function registerPluginCatalog(): void {
         };
       }
       ps.resetGlobal(p.id as string, key);
+      await ps.saveNow();
       return { id: p.id, scope, key: key ?? null };
     },
   });
