@@ -1660,7 +1660,7 @@ export const ko = {
   "msg.ui.border.workspaceRailRight": "§B2/B6 — 레일이 right 소유(리사이저의 선 소유 금지)",
   "msg.ui.border.railCardPerimeter": "§B1 — 레일 표시 카드 4변은 카드 자신이 소유(§B4 플로팅 표면)",
   "msg.ui.border.railCardPerimeterFlat": "§B1 보수 — flat 은 카드 무선(콘텐츠 칸과 같은 규칙)",
-  "msg.ui.border.railGroundDelegates": "§B2 — ground 레일은 세로 구분선를 이웃 카드 윤곽에 위임(이중선 금지)",
+  "msg.ui.border.railGroundDelegates": "§B2 — ground 레일은 세로 구분선을 이웃 카드 윤곽에 위임(이중선 금지)",
   "msg.ui.border.railGroundFlatStationInner": "§B2 — 내부 스테이션은 양쪽 다 seam 이므로 양측 소유",
   "msg.ui.border.railGroundFlatStationStart": "§B2 — flat 은 이웃 윤곽이 없어 레일이 seam 을 소유, §B2a 바깥 변은 아무도 긋지 않는다",
   "msg.ui.border.railPaneStationInner": "§B2 — 내부 스테이션은 분할창처럼 서므로 양측 소유",
