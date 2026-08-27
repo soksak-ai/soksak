@@ -6,7 +6,9 @@ an empty image is never a successful result.
 
 ## Backends
 
-- macOS captures this process's window with ScreenCaptureKit.
+- macOS captures this process's window with ScreenCaptureKit. A fully occluded window is ordered
+  front without focus, each visible renderer acknowledges a real frame, and the previous background
+  ordering is restored after the read.
 - Linux snapshots the GTK4 render node on the GTK main thread.
 - Windows renders the HWND into an off-screen 32-bit DIB with `PrintWindow` and
   `PW_RENDERFULLCONTENT`. It does not read the desktop, bring the window forward, or fall back to

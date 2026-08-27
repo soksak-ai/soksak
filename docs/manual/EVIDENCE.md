@@ -27,9 +27,10 @@ work, not a judgement call.
 
 ## E3. A capture does not take the focus
 
-Capture uses this process's own window content, so it needs no screen-recording permission, does not
-raise or focus a window, and works while the window is occluded. A capture that steals focus changes
-the thing it is measuring.
+Capture uses this process's own window content, so it needs no screen-recording permission and never
+takes key/main focus or activates the application. On macOS, a fully occluded window is ordered front
+only for the finite renderer-acknowledgement and pixel-read transaction, then ordered back. A capture
+that redirects keyboard input changes the thing it is measuring and is a failure.
 
 ## E3a. The application stays running, because a person is watching it
 

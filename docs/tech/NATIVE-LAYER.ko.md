@@ -74,6 +74,9 @@ N2 로 갚아나갈 수 있는 알려진 비용이 알 수 없는 비용보다 �
   webview 별 스냅샷으로는 그렇게 할 수 없습니다.
 
 macOS 는 ScreenCaptureKit 으로 이 프로세스 자신의 공유 가능 콘텐츠를 읽습니다.
+WebKit 이 완전히 가려져 프레임을 만들지 않았다면 캡처는 창을 key/main 으로 만들지 않고 앞으로
+배치하고, 보이는 renderer가 실제 프레임 하나를 확인한 뒤 캡처하여 다시 뒤로 돌려놓습니다. 애플리케이션
+활성화, 비공개 WebKit scheduling SPI, 폴링은 사용하지 않습니다.
 `CGWindowListCreateImage` 는 macOS 15 에서 폐기되었고 렌더링 중 블로킹하므로 쓰지 않습니다. Linux 는
 GTK 메인 스레드에서 GTK4 render node 를 스냅샷하고 그 텍스처를 인코딩합니다. X11 루트 창을 읽지
 않으므로 가려진 창도 포커스 변경 없이 캡처됩니다. Windows 는 [CAPTURE.md](CAPTURE.md) 에 정의된 HWND

@@ -6,7 +6,8 @@
 
 ## Backend
 
-- macOS는 ScreenCaptureKit으로 이 프로세스의 창을 캡처합니다.
+- macOS는 ScreenCaptureKit으로 이 프로세스의 창을 캡처합니다. 완전히 가려진 창은 포커스 없이
+  앞으로 배치하고, 보이는 renderer가 실제 프레임을 확인한 뒤 읽어서 다시 뒤로 돌려놓습니다.
 - Linux는 GTK main thread에서 GTK4 render node를 snapshot합니다.
 - Windows는 `PrintWindow`와 `PW_RENDERFULLCONTENT`로 HWND를 off-screen 32-bit DIB에
   렌더합니다. desktop을 읽거나 창을 앞으로 가져오거나 화면 pixel로 fallback하지 않습니다.
