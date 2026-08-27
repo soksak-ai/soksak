@@ -288,6 +288,8 @@ github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827152955-7
 github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827152955-738ac73d3fe0/go.mod h1:iubFphZ38mElnRpIxOJ3Fs8x8Lo8jTdMjAMukUy+Lrc=
 github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827162931-b401429eedaa h1:85mgwxdhWcvWwyX8AwzQrAeMva6h7qaH+eQaCfUAWwA=
 github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827162931-b401429eedaa/go.mod h1:iubFphZ38mElnRpIxOJ3Fs8x8Lo8jTdMjAMukUy+Lrc=
+github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827163615-ea1150393c8b h1:jgI0EFPqLnygrhGgRETh35JU3eaJ3cZ0fvWSk1KSeP8=
+github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827163615-ea1150393c8b/go.mod h1:iubFphZ38mElnRpIxOJ3Fs8x8Lo8jTdMjAMukUy+Lrc=
 github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063 h1:wAvk3nSsqcr63cB4JNMsEUgIcMr9Xt5lrtStLlVQy2Y=
 github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063/go.mod h1:9Ez7t5hWyZviMUnZxfwA5MPD/adyERuVMAIT/zMBSAc=
 github.com/mitchellh/copystructure v1.2.0 h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw=
