@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
@@ -12,7 +13,7 @@ import (
 
 // recordManifest is one parse of a record's manifest file. Body is the file
 // as read; ID and Version are set for both kinds; Entry and RuntimeDependencies
-// for a plugin; Interface and Process for a sidecar.
+// for a plugin; Interfaces and Process for a sidecar.
 type recordManifest struct {
 	Body    []byte
 	ID      string
@@ -21,7 +22,7 @@ type recordManifest struct {
 	// string are three distinct cases.
 	Entry               json.RawMessage
 	RuntimeDependencies runtimeDependencies
-	Interface           platformspec.Reference
+	Interfaces          []platformspec.Reference
 	Process             string
 }
 
@@ -55,7 +56,7 @@ func parseManifest(kind, root string) (recordManifest, error) {
 		if err != nil {
 			return recordManifest{}, err
 		}
-		return recordManifest{Body: body, ID: manifest.ID, Version: manifest.Version, Interface: manifest.Interface, Process: manifest.Process}, nil
+		return recordManifest{Body: body, ID: manifest.ID, Version: manifest.Version, Interfaces: manifest.Interfaces, Process: manifest.Process}, nil
 	}
 	var manifest pluginManifest
 	if err := json.Unmarshal(body, &manifest); err != nil {
@@ -106,7 +107,7 @@ func readRecordManifest(kind, id string, record Component) (recordManifest, erro
 			expectedProcess += ".exe"
 		}
 		if stagedErr != nil || staged.ID != manifest.ID || staged.Version != manifest.Version ||
-			staged.Interface != manifest.Interface || staged.Process != expectedProcess {
+			!slices.Equal(staged.Interfaces, manifest.Interfaces) || staged.Process != expectedProcess {
 			detail := "dist/sidecar.json does not match sidecar.json"
 			if stagedErr != nil {
 				detail = "dist/sidecar.json: " + stagedErr.Error()

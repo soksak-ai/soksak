@@ -1,17 +1,17 @@
 package environment
 
 import (
+	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 type SidecarRuntime struct {
-	ID               string
-	Version          string
-	InterfaceID      string
-	InterfaceVersion string
-	Process          string
+	ID         string
+	Version    string
+	Interfaces []platformspec.Reference
+	Process    string
 }
 
 // ResolveSidecarForPlugin resolves sidecar for consumer. consumer must name an
@@ -67,7 +67,7 @@ func ResolveSidecarVersion(home, id, version string) (SidecarRuntime, error) {
 		return SidecarRuntime{}, err
 	}
 	process := filepath.Join(root, filepath.FromSlash(manifest.Process))
-	return SidecarRuntime{ID: id, Version: version, InterfaceID: manifest.Interface.ID, InterfaceVersion: manifest.Interface.Version, Process: process}, nil
+	return SidecarRuntime{ID: id, Version: version, Interfaces: manifest.Interfaces, Process: process}, nil
 }
 func validateRegularPath(root, relative string) error {
 	path := root

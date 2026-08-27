@@ -8,12 +8,12 @@ require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/min-median-max/wails-service-native-compositor v0.0.0-20260822033405-3530617b540f
-	github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827110857-29559b853bfc
+	github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827125314-147ef12d5cfc
 	github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063
 	github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f
 	github.com/soksak-ai/soksak-contract-control v0.0.0-20260823042834-6d1a1c8cbad7
 	github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9
-	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260826072848-b63542ed0eff
+	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260827130240-51c1a5aa97fd
 	github.com/wailsapp/wails/v3 v3.0.0-beta.12
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/mod v0.37.0
@@ -134,6 +134,7 @@ require (
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
+	github.com/soksak-ai/soksak-contract-surface v0.0.0-20260827123850-b095b92660ff // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tc-hib/winres v0.3.1 // indirect

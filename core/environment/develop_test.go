@@ -21,7 +21,7 @@ func pluginSource(t *testing.T, manifest map[string]any) string {
 func sidecarSource(t *testing.T, id string, withBinary bool) string {
 	t.Helper()
 	root := t.TempDir()
-	manifest := map[string]any{"id": id, "version": "0.2.0", "interface": map[string]string{"id": "terminal-state", "version": "0.0.1"}, "process": "dist/" + id}
+	manifest := map[string]any{"id": id, "version": "0.2.0", "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/" + id}
 	writeJSON(t, filepath.Join(root, "sidecar.json"), manifest)
 	if withBinary {
 		if err := os.MkdirAll(filepath.Join(root, "dist"), 0o700); err != nil {
@@ -132,7 +132,7 @@ func TestSidecarDevelopRejectsAStaleStagedManifest(t *testing.T) {
 	root := sidecarSource(t, "terminal-state", true)
 	writeJSON(t, filepath.Join(root, "dist", "sidecar.json"), map[string]any{
 		"id": "terminal-state", "version": "0.1.0",
-		"interface": map[string]string{"id": "terminal-state", "version": "0.0.1"},
+		"interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}},
 		"process":   "dist/terminal-state",
 	})
 
@@ -412,7 +412,7 @@ func TestDevelopRefusesAnUnavailableManifestByName(t *testing.T) {
 		return root
 	}
 	otherSidecar := t.TempDir()
-	writeJSON(t, filepath.Join(otherSidecar, "sidecar.json"), map[string]any{"id": "other", "version": "0.2.0", "interface": map[string]string{"id": "terminal-state", "version": "0.0.1"}, "process": "dist/other"})
+	writeJSON(t, filepath.Join(otherSidecar, "sidecar.json"), map[string]any{"id": "other", "version": "0.2.0", "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/other"})
 	cases := map[string]struct {
 		kind, root string
 	}{
@@ -448,6 +448,6 @@ func TestDevelopRefusesAnUnavailableManifestByName(t *testing.T) {
 func unparseableSidecar(t *testing.T, id string) string {
 	t.Helper()
 	root := t.TempDir()
-	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": id, "version": "0.2.0", "interface": map[string]string{"id": "terminal-state", "version": "v0.0.2"}, "process": "dist/" + id})
+	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": id, "version": "0.2.0", "interface": []map[string]string{{"id": "terminal-state", "version": "v0.0.2"}}, "process": "dist/" + id})
 	return root
 }
