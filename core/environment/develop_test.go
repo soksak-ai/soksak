@@ -21,7 +21,8 @@ func pluginSource(t *testing.T, manifest map[string]any) string {
 func sidecarSource(t *testing.T, id string, withBinary bool) string {
 	t.Helper()
 	root := t.TempDir()
-	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": id, "version": "0.2.0", "interface": map[string]string{"id": "terminal-state", "version": "0.0.1"}, "process": "dist/" + id})
+	manifest := map[string]any{"id": id, "version": "0.2.0", "interface": map[string]string{"id": "terminal-state", "version": "0.0.1"}, "process": "dist/" + id}
+	writeJSON(t, filepath.Join(root, "sidecar.json"), manifest)
 	if withBinary {
 		if err := os.MkdirAll(filepath.Join(root, "dist"), 0o700); err != nil {
 			t.Fatal(err)
@@ -29,6 +30,7 @@ func sidecarSource(t *testing.T, id string, withBinary bool) string {
 		if err := os.WriteFile(filepath.Join(root, "dist", id), []byte("binary"), 0o700); err != nil {
 			t.Fatal(err)
 		}
+		writeJSON(t, filepath.Join(root, "dist", "sidecar.json"), manifest)
 	}
 	return root
 }
@@ -121,6 +123,26 @@ func TestSidecarDevelopRequiresDistBinary(t *testing.T) {
 	want := Component{Version: "0.2.0", Path: root, Source: "development", Target: "aarch64-apple-darwin"}
 	if after.Sidecars["terminal-state"] != want {
 		t.Fatalf("record=%+v want=%+v", after.Sidecars["terminal-state"], want)
+	}
+}
+
+func TestSidecarDevelopRejectsAStaleStagedManifest(t *testing.T) {
+	home := t.TempDir()
+	writeJSON(t, filepath.Join(home, File), Empty())
+	root := sidecarSource(t, "terminal-state", true)
+	writeJSON(t, filepath.Join(root, "dist", "sidecar.json"), map[string]any{
+		"id": "terminal-state", "version": "0.1.0",
+		"interface": map[string]string{"id": "terminal-state", "version": "0.0.1"},
+		"process":   "dist/terminal-state",
+	})
+
+	_, err := SetSidecarDevelopment(home, "terminal-state", root, "aarch64-apple-darwin", 1)
+	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_STALE") {
+		t.Fatalf("stale staged manifest was accepted: %v", err)
+	}
+	after, _, readErr := Read(home)
+	if readErr != nil || after.Revision != 1 || len(after.Sidecars) != 0 {
+		t.Fatalf("environment changed after stale artifact: %+v err=%v", after, readErr)
 	}
 }
 
