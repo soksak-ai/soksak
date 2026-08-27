@@ -1,0 +1,25 @@
+// @vitest-environment jsdom
+import { expect, it } from "vitest";
+
+import { captureAfterPresentation } from "./capturePresentation";
+
+it("captures after every visible renderer acknowledges and always restores ordering", async () => {
+  const order: string[] = [];
+  const listener = (event: Event) => {
+    const detail = (event as CustomEvent<{ waitUntil(promise: Promise<void>): void }>).detail;
+    detail.waitUntil(Promise.resolve().then(() => { order.push("renderer"); }));
+  };
+  window.addEventListener("soksak:capture-prepare", listener);
+  try {
+    const result = await captureAfterPresentation(
+      window,
+      async () => { order.push("present"); return { ordered: true }; },
+      async () => { order.push("capture"); return 7; },
+      async () => { order.push("restore"); },
+    );
+    expect(result).toBe(7);
+    expect(order).toEqual(["present", "renderer", "capture", "restore"]);
+  } finally {
+    window.removeEventListener("soksak:capture-prepare", listener);
+  }
+});
