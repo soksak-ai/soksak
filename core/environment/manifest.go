@@ -1,6 +1,7 @@
 package environment
 
 import (
+	"fmt"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -54,13 +55,13 @@ func parseManifest(kind, root string) (recordManifest, error) {
 	if kind == "sidecar" {
 		manifest, err := platformspec.ParseSidecarManifest(body)
 		if err != nil {
-			return recordManifest{}, err
+			return recordManifest{}, fmt.Errorf("%s: %w", filepath.Join(root, manifestName(kind)), err)
 		}
 		return recordManifest{Body: body, ID: manifest.ID, Version: manifest.Version, Interfaces: manifest.Interfaces, Process: manifest.Process}, nil
 	}
 	var manifest pluginManifest
 	if err := json.Unmarshal(body, &manifest); err != nil {
-		return recordManifest{}, err
+		return recordManifest{}, fmt.Errorf("%s: %w", filepath.Join(root, manifestName(kind)), err)
 	}
 	return recordManifest{Body: body, ID: manifest.ID, Version: manifest.Version, Entry: manifest.Entry, RuntimeDependencies: manifest.RuntimeDependencies}, nil
 }

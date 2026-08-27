@@ -33,7 +33,12 @@ func Read(home string) (Environment, bool, error) {
 		return Environment{}, false, err
 	}
 	value, err := Parse(body)
-	return value, err == nil, err
+	if err != nil {
+		// The refusal names the document: a bare decode error says what was
+		// wrong but never where, and a boot that dies on it says nothing.
+		return Environment{}, false, fmt.Errorf("%s: %w", filepath.Join(home, File), err)
+	}
+	return value, true, nil
 }
 func Initialize(home string) error {
 	_, exists, err := Read(home)

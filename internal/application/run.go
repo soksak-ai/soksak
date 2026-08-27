@@ -178,7 +178,7 @@ func Run(assets embed.FS) error {
 	// feature verifiable rather than only clickable.
 	err = launch(resolved, control.Listen, func(listener net.Listener) error {
 		if err := coreenvironment.Initialize(resolved.Home); err != nil {
-			return err
+			return fmt.Errorf("environment initialize: %w", err)
 		}
 		kv, err := store.OpenKV(filepath.Join(resolved.Home, "soksak.db"))
 		if err != nil {
