@@ -79,6 +79,7 @@ export const wailsContentViewHost: ContentViewHost = {
     await drive(label, { verb: "stop" });
   },
   pageState: async (label) => drive(label, { verb: "state" }),
+  deliver: async (label, message) => drive(label, message),
   reload: async (label) => void (await drive(label, { verb: "reload" })),
   zoom: async (label) => unsupported(`zoom(${label})`),
   devtools: async (label) => unsupported(`devtools(${label})`),

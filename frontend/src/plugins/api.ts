@@ -610,6 +610,8 @@ export interface SoksakPluginApi {
      *  running are all invisible in it, and on a screen that has not painted the three look the
      *  same. The fields belong to the surface kind, so core reads none of them. */
     pageState: (label: string) => Promise<Record<string, unknown>>;
+    /** One surface kind's own verb, forwarded unread to the backend that owns the label. */
+    deliver: (label: string, message: Record<string, unknown>) => Promise<Record<string, unknown>>;
     /** Toggle the OS inspector (devtools) → whether it is open. */
     devtools: (label: string) => Promise<boolean>;
     /** Run JS in the page and return the result string (AI/E2E DOM control). macOS only. */
@@ -2117,6 +2119,7 @@ export function buildPluginApi(
           // What the surface is showing, as opposed to what it was asked to show. A redirect and a
           // load that never landed are both invisible in the address the caller navigated to.
           pageState: (label) => contentViewHost().pageState(label),
+          deliver: (label, message) => contentViewHost().deliver(label, message),
           reload: (label, ignoreCache) => contentViewHost().reload(label, ignoreCache),
           devtools: (label) => contentViewHost().devtools(label),
           eval: (label, js) => contentViewHost().evalJs(label, js),

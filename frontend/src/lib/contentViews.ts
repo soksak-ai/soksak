@@ -44,6 +44,14 @@ export interface ContentViewHost {
   alive(label: string): Promise<boolean>;
   navigate(label: string, url: string): Promise<void>;
   /**
+   * Hand one surface kind's own verb to its backend, unread.
+   *
+   * The typed methods above are the web view's verbs. A second kind answers verbs of its own; the
+   * compositor checks the surface is applied and forwards, and the kind's backend reads the verb.
+   * This host names no kind, so the next kind arrives with no edit here.
+   */
+  deliver(label: string, message: Record<string, unknown>): Promise<Record<string, unknown>>;
+  /**
    * Fit this view to this rectangle.
    *
    * For an implementation that pushes coordinates this is a **command**; for one whose view is a
