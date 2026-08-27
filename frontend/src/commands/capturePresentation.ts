@@ -13,7 +13,11 @@ async function prepareRenderers(root: Window): Promise<void> {
   const detail: CapturePrepareDetail = {
     waitUntil(promise) { pending.push(Promise.resolve(promise)); },
   };
-  root.dispatchEvent(new CustomEvent("soksak:capture-prepare", { detail }));
+  const scopes = [...root.document.querySelectorAll<HTMLElement>('[data-content-visible="true"]')];
+  if (scopes.length === 0) root.dispatchEvent(new CustomEvent("soksak:capture-prepare", { detail }));
+  else for (const scope of scopes) {
+    scope.dispatchEvent(new CustomEvent("soksak:capture-prepare", { detail, bubbles: true }));
+  }
   if (pending.length === 0) return;
   let expiry = 0;
   try {
