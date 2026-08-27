@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	compositor "github.com/min-median-max/wails-service-native-compositor"
+	terminalsurface "github.com/min-median-max/wails-service-terminal-surface"
 	webviewsurface "github.com/min-median-max/wails-service-webview-surface"
 
 	"github.com/soksak-ai/soksak-core/core/control"
@@ -191,11 +192,7 @@ func Run(options Options) error {
 
 	// The compositor service, held so the surface commands can read what it
 	// applied. The service list below registers the same value.
-	// One backend per surface kind. The kind on a declaration picks it, so the next kind is another
-	// entry here and no edit inside the compositor.
-	nativeCompositor := compositor.NewService(nativeWindow, map[compositor.SurfaceKind]compositor.Backend{
-		webviewsurface.SurfaceKind: webviewBackend,
-	})
+	nativeCompositor := compositor.NewService(nativeWindow, surfaceBackends(webviewBackend))
 	// One reader of the last commit, shared by the surface commands and the capture. Two would
 	// answer from two moments, and the capture would draw a page at a rectangle the numbers say it
 	// is not at.
@@ -468,4 +465,13 @@ func newWindowTemplate(presentation PresentationMode) application.WebviewWindowO
 func jsonString(value string) json.RawMessage {
 	encoded, _ := json.Marshal(value)
 	return encoded
+}
+
+// One backend per surface kind. The kind on a declaration picks it, so the next kind is another
+// entry here and no edit inside the compositor.
+func surfaceBackends(webviewBackend *webviewsurface.Backend) map[compositor.SurfaceKind]compositor.Backend {
+	return map[compositor.SurfaceKind]compositor.Backend{
+		webviewsurface.SurfaceKind:  webviewBackend,
+		terminalsurface.SurfaceKind: terminalsurface.NewBackend(),
+	}
 }
