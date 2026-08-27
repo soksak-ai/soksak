@@ -174,7 +174,7 @@ export function pendingConsentChain(
 ): string[] {
   return activationChain(id, pluginDepNodes(plugins)).filter((cid) => {
     const p = plugins[cid];
-    return p && !consentValid(consents[cid], p.manifest);
+    return p && p.source !== "development" && !consentValid(consents[cid], p.manifest);
   });
 }
 
