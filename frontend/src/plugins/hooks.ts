@@ -69,6 +69,10 @@ export interface PluginEventMap {
   // The window it names is not this one. A plugin in the closing window dies with it, so acting on
   // this is the surviving instances' work.
   "window.gone": { windowLabel: string };
+  // A native terminal surface signalled a painted frame (V13: pushed on change,
+  // at most ten per second per pane). sequence is the pane's frame sequence —
+  // the surface owner's evidence that its pixels moved.
+  "terminal-surface.state": { pane: string; sequence: number };
   // Panel divider drag gesture start (true) / end (false) — a layout-internal gesture channel
   // isomorphic with window.live-resize (window edge). The signal a native surface adapter uses to
   // separate move from resize and to start/end its own placement transition. Emitted by the GroupArea
@@ -167,6 +171,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "app.focus",
   "window.live-resize",
   "window.gone",
+  "terminal-surface.state",
   "layout.resize-gesture",
   "layout.reflow",
   "layout.travel-finished",
@@ -192,6 +197,8 @@ export const EVENT_PERMISSIONS: Partial<
   "turn.ended": "terminal:read",
   // The activity hub streams command lines, turns and other terminal activity → the same class of gate.
   activity: "terminal",
+  // Surface render progression belongs to the pane's surface owner.
+  "terminal-surface.state": "surface",
 };
 
 type AnyListener = (payload: never) => void;
@@ -386,6 +393,21 @@ export function startPluginHooks(): void {
       // A framework with no window facts publishes none. That is a build without windows rather
       // than a failure, and a plugin that never hears the event keeps what it kept until the
       // application quits and the units are reaped.
+    });
+
+  // A native terminal surface's render progression (Go: terminal-surface:state,
+  // bridge-emitted). The framework relays the raw event; the typed plugin event
+  // carries only what the payload proves.
+  void currentWindow()
+    .listen<{ pane?: unknown; sequence?: unknown }>("terminal-surface:state", (event) => {
+      const pane = event.payload?.pane;
+      const sequence = event.payload?.sequence;
+      if (typeof pane === "string" && typeof sequence === "number") {
+        emitPluginEvent("terminal-surface.state", { pane, sequence });
+      }
+    })
+    .catch(() => {
+      // A framework with no event facts publishes none — same reading as window.gone.
     });
 
   // Do not run an O(n) snapshot+diff on every store write (principles 1 and 5,
