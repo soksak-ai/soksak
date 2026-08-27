@@ -2,7 +2,10 @@
 // All deps are fake injections — fixes the surface rules with no real Tauri/registry.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const streamState = vi.hoisted(() => ({ closes: [] as Array<ReturnType<typeof vi.fn>> }));
+const streamState = vi.hoisted(() => ({
+  closes: [] as Array<ReturnType<typeof vi.fn>>,
+  messages: [] as Array<Array<(value: unknown) => void>>,
+}));
 
 // Mock the framework **at the boundary** — not the vendor. Stubbing the vendor global
 // (__TAURI_INTERNALS__) runs the real Tauri adapter in that test, and swapping the framework tears
@@ -16,6 +19,7 @@ vi.mock("../framework", async (orig) => {
       const subs: ((v: T) => void)[] = [];
       const close = vi.fn();
       streamState.closes.push(close);
+      streamState.messages.push(subs as Array<(value: unknown) => void>);
       return {
         onmessage: (cb: (v: T) => void) => subs.push(cb),
         toJSON: () => ({ __channel__: 0 }),
@@ -82,6 +86,7 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
 
 beforeEach(() => {
   streamState.closes.length = 0;
+  streamState.messages.length = 0;
   useViewRegistry.setState({ views: {}, version: 0 });
   __resetContentViewHostForTest();
 });
@@ -1123,6 +1128,27 @@ describe("app.sidecar — permission gate and declaration equals reality", () =>
     expect(settled).toBe(true);
     await channel.close();
     expect(streamState.closes[0]).toHaveBeenCalledOnce();
+  });
+
+  it("settles a sidecar-ended stream before notifying a disposing consumer", async () => {
+    const invoke = vi.fn<PluginApiDeps["invoke"]>(async (command) =>
+      command === "sidecar_open" ? { name: "soksak-sidecar-chromium" } : {});
+    const manifest = manifestOf({
+      permissions: ["sidecar"],
+      runtimeDependencies: { sidecars: [{ id: "soksak-sidecar-chromium", version: "0.0.1" }] },
+    });
+    const { api } = buildPluginApi(manifest, "/d", fakeDeps({ invoke }));
+    const channel = await api.sidecar!.open("soksak-sidecar-chromium");
+    let stream!: Awaited<ReturnType<typeof channel.stream>>;
+    stream = await channel.stream({}, {
+      onBytes() {},
+      onEnd() { stream.close.dispose(); },
+    });
+
+    for (const listener of streamState.messages[2]) listener({ reason: "ended" });
+    await stream.close.settled;
+
+    expect(invoke.mock.calls.some(([command]) => command === "sidecar_stream_close")).toBe(false);
   });
 
   it("closes stream receivers when opening the Core stream fails", async () => {
