@@ -1140,11 +1140,11 @@ function createSidecarApi(
             onEnd.close();
           };
           onEnd.onmessage = (m) => {
-            handlers.onEnd?.(typeof m?.reason === "string" ? (m.reason as string) : "");
             if (stopStarted) return;
             stopStarted = true;
             closeReceivers();
             settle();
+            handlers.onEnd?.(typeof m?.reason === "string" ? (m.reason as string) : "");
           };
           let answer: Record<string, unknown>;
           try {

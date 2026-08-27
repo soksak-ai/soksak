@@ -21,7 +21,7 @@ vi.mock("../framework", async (orig) => {
       streamState.closes.push(close);
       streamState.messages.push(subs as Array<(value: unknown) => void>);
       return {
-        onmessage: (cb: (v: T) => void) => subs.push(cb),
+        set onmessage(cb: (v: T) => void) { subs.push(cb); },
         toJSON: () => ({ __channel__: 0 }),
         close,
       };
