@@ -31,6 +31,7 @@ import {
 
 import { CAPTURE_CALIBRATION_ID, setCaptureCalibration } from "./captureCalibration";
 import { setCaptureMotionAnchors } from "./captureMotionAnchors";
+import { captureAfterPresentation } from "./capturePresentation";
 
 /** The native capture service returns a receipt object. Older adapters returned the path directly;
  *  both carry one path, and no other shape is accepted or stringified. */
@@ -41,6 +42,15 @@ export function savedCapturePath(value: unknown): string | null {
     return path.length > 0 ? path : null;
   }
   return null;
+}
+
+function capturePresented<T>(capture: () => Promise<T>): Promise<T> {
+  return captureAfterPresentation(
+    window,
+    () => invoke<{ ordered: boolean }>("window_capture_present", {}),
+    capture,
+    (presentation) => invoke("window_capture_restore", { ordered: presentation.ordered }).then(() => undefined),
+  );
 }
 
 /**
@@ -428,10 +438,9 @@ export function registerCaptureCatalog(): void {
         // The answer is the image and the statement of what went into it. A capture that drew
         // none of the window's surfaces looks exactly like one that had none to draw, and the
         // note is the only place that difference is written down.
-        const shot = await invoke<CaptureAnswer>(
-          "window_snapshot_region",
-          rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
-        );
+        const shot = await capturePresented(() => invoke<CaptureAnswer>(
+          "window_snapshot_region", rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
+        ));
         const pngBase64 = shot.png;
         // A cropped image is also **left at the path the caller named.** Until now, passing rect
         // ignored path entirely and answered base64 only: the caller got ok:true and there was no
@@ -469,9 +478,7 @@ export function registerCaptureCatalog(): void {
           `snapshot-${Date.now()}.png`,
         );
       }
-      const receipt = await invoke<unknown>("window_snapshot", {
-        path,
-      });
+      const receipt = await capturePresented(() => invoke<unknown>("window_snapshot", { path }));
       const saved = savedCapturePath(receipt);
       if (!saved) throw new Error("window_snapshot returned no saved path");
       // A file capture is declared in media too — the feed reads the path and renders an image, so
@@ -525,10 +532,9 @@ export function registerCaptureCatalog(): void {
         // The answer is the image and the statement of what went into it. A capture that drew
         // none of the window's surfaces looks exactly like one that had none to draw, and the
         // note is the only place that difference is written down.
-        const shot = await invoke<CaptureAnswer>(
-          "window_snapshot_region",
-          rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
-        );
+        const shot = await capturePresented(() => invoke<CaptureAnswer>(
+          "window_snapshot_region", rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
+        ));
         const pngBase64 = shot.png;
         return { ...(tabId ? { tabId } : {}), note: shot.note, ...(await pixelStats(pngBase64)) };
       } finally {
