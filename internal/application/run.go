@@ -109,6 +109,24 @@ func Run(assets embed.FS) error {
 		Spawner:     process.OSSpawner{},
 		Environment: os.Environ(),
 		Dial:        sidecar.DialLocal,
+		// The application's own session layer starts units by name: the
+		// environment record is the resolver, exactly what an installed or
+		// developed sidecar declared (a name with no record refuses by name).
+		ResolvePath: func(name string) (string, error) {
+			environment, exists, err := coreenvironment.Read(resolved.Home)
+			if err != nil {
+				return "", err
+			}
+			record, held := environment.Sidecars[name]
+			if !exists || !held {
+				return "", fmt.Errorf("sidecar %s has no installation record", name)
+			}
+			unit, err := coreenvironment.ResolveSidecarVersion(resolved.Home, name, record.Version)
+			if err != nil {
+				return "", fmt.Errorf("sidecar %s@%s: %w", name, record.Version, err)
+			}
+			return unit.Process, nil
+		},
 	})
 
 	// Started before the registry so `watch_dir` is either served or refused by name from the first
