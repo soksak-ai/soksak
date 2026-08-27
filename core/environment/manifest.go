@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
 	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
@@ -97,6 +98,24 @@ func readRecordManifest(kind, id string, record Component) (recordManifest, erro
 	}
 	if reason != "" {
 		return recordManifest{}, i18n.Errorf("environment.develop.directoryUnavailable", map[string]string{"kind": kind, "id": id, "path": record.Path, "error": reason})
+	}
+	if kind == "sidecar" {
+		staged, stagedErr := parseManifest("sidecar", filepath.Join(record.Path, "dist"))
+		expectedProcess := manifest.Process
+		if strings.HasSuffix(record.Target, "windows-msvc") && !strings.HasSuffix(expectedProcess, ".exe") {
+			expectedProcess += ".exe"
+		}
+		if stagedErr != nil || staged.ID != manifest.ID || staged.Version != manifest.Version ||
+			staged.Interface != manifest.Interface || staged.Process != expectedProcess {
+			detail := "dist/sidecar.json does not match sidecar.json"
+			if stagedErr != nil {
+				detail = "dist/sidecar.json: " + stagedErr.Error()
+			}
+			return recordManifest{}, i18n.Errorf("environment.develop.sidecarArtifactStale", map[string]string{
+				"id": id, "path": record.Path, "error": detail,
+			})
+		}
+		manifest.Process = staged.Process
 	}
 	return manifest, nil
 }

@@ -262,7 +262,12 @@ func TestResolveSidecarVersionUsesTheDiskVersionOfADevelopmentSidecar(t *testing
 	value := Empty()
 	value.Sidecars["terminal-state"] = Component{Version: "0.2.0", Path: root, Source: "development", Target: "aarch64-apple-darwin"}
 	writeJSON(t, filepath.Join(home, File), value)
-	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": "terminal-state", "version": "0.3.0", "interface": map[string]string{"id": "terminal-state", "version": "0.0.1"}, "process": "dist/terminal-state"})
+	manifest := map[string]any{"id": "terminal-state", "version": "0.3.0", "interface": map[string]string{"id": "terminal-state", "version": "0.0.1"}, "process": "dist/terminal-state"}
+	writeJSON(t, filepath.Join(root, "sidecar.json"), manifest)
+	if _, err := ResolveSidecarVersion(home, "terminal-state", "0.3.0"); err == nil || !strings.Contains(err.Error(), "ARTIFACT_STALE") {
+		t.Fatalf("unstaged source version was accepted: %v", err)
+	}
+	writeJSON(t, filepath.Join(root, "dist", "sidecar.json"), manifest)
 	if _, err := ResolveSidecarVersion(home, "terminal-state", "0.2.0"); !os.IsNotExist(err) {
 		t.Fatalf("recorded version error = %v", err)
 	}
