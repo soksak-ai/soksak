@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { allViews, useSessions, type Space, type Tab } from "./sessions";
 import { useSettings } from "./settings";
 import { contentCloseReasons, viewCloseReason } from "./closeGuard";
+import { closeViewPermanently } from "./permanentViewClose";
 
 export interface ClosePending {
   kind: "view" | "content";
@@ -39,6 +40,14 @@ function findContent(
 }
 
 const isWarn = () => useSettings.getState().tabCloseConfirm === "warn";
+const closeNow = (projectId: string, viewId: string) => {
+  void closeViewPermanently(projectId, viewId).catch((error) => {
+    useSessions.getState().setViewStatus(projectId, viewId, {
+      code: "error",
+      message: String(error),
+    });
+  });
+};
 
 // The store is outside the module boundary — if a hot swap replaces it, registrations, subscriptions, and screen
 // state all become new, while the filling side treats them as already filled and never refills (empty forever).
@@ -54,7 +63,7 @@ export const useCloseConfirm = moduleState("state/closeConfirm#store", () =>
         pending: { kind: "view", projectId, id: viewId, reasons: [reason] },
       });
     } else {
-      useSessions.getState().closeView(projectId, viewId);
+      closeNow(projectId, viewId);
     }
   },
 
@@ -71,7 +80,7 @@ export const useCloseConfirm = moduleState("state/closeConfirm#store", () =>
   confirm: () => {
     const p = get().pending;
     if (!p) return;
-    if (p.kind === "view") useSessions.getState().closeView(p.projectId, p.id);
+    if (p.kind === "view") closeNow(p.projectId, p.id);
     else useSessions.getState().closeContent(p.projectId, p.id);
     set({ pending: null });
   },

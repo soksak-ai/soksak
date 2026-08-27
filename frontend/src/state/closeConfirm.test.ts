@@ -60,19 +60,19 @@ describe("requestCloseView — branching on the setting and the status", () => {
     expect(viewExists(vid)).toBe(true);
   });
 
-  it("not blocking — closes immediately with no pending", () => {
+  it("not blocking — closes with no pending", async () => {
     const vid = mkView(); // no status
     useCloseConfirm.getState().requestCloseView(WORKSPACE, vid);
     expect(useCloseConfirm.getState().pending).toBeNull();
-    expect(viewExists(vid)).toBe(false);
+    await vi.waitFor(() => expect(viewExists(vid)).toBe(false));
   });
 
-  it("off — closes immediately even when blocking", () => {
+  it("off — closes even when blocking", async () => {
     useSettings.getState().setTabCloseConfirm("off");
     const vid = mkView({ code: "busy", message: "a job is running" });
     useCloseConfirm.getState().requestCloseView(WORKSPACE, vid);
     expect(useCloseConfirm.getState().pending).toBeNull();
-    expect(viewExists(vid)).toBe(false);
+    await vi.waitFor(() => expect(viewExists(vid)).toBe(false));
   });
 
   it("keeps a mounted view until its provider has closed", async () => {
@@ -101,12 +101,12 @@ describe("requestCloseView — branching on the setting and the status", () => {
 });
 
 describe("confirm / cancel", () => {
-  it("confirm — closes and clears pending", () => {
+  it("confirm — closes and clears pending", async () => {
     const vid = mkView({ code: "busy", message: "a job is running" });
     useCloseConfirm.getState().requestCloseView(WORKSPACE, vid);
     useCloseConfirm.getState().confirm();
     expect(useCloseConfirm.getState().pending).toBeNull();
-    expect(viewExists(vid)).toBe(false);
+    await vi.waitFor(() => expect(viewExists(vid)).toBe(false));
   });
 
   it("cancel — keeps the view and clears pending", () => {

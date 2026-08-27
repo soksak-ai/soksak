@@ -61,7 +61,6 @@ import { addWorkspaceClaimed, closeWorkspaceReleased } from "../state/workspaceR
 import { getRegisteredProgram, listPrograms } from "../plugins/programRegistry";
 import {
   activeSessionViewId,
-  closeMountedView,
   transferViewFocus,
 } from "../plugins/viewFocus";
 import { useSettings, EDGE_SIDEBAR_MODES, type EdgeSidebarMode } from "../state/settings";
@@ -69,6 +68,7 @@ import { currentWindowLabel } from "../lib/webviewLabels";
 import { awaitViewMounted } from "../plugins/viewFocus";
 import { useViewLabels } from "../state/viewLabels";
 import { hasPtyObservation } from "../terminal/ptyObservationStore";
+import { closeViewPermanently } from "../state/permanentViewClose";
 import { computeLayout } from "../components/GroupArea";
 import {
   resolveEffectiveRailRelation,
@@ -2351,8 +2351,8 @@ export function registerCatalog(): void {
     handler: async (p) => {
       const loc = locateTab(p.tab as string);
       if (!loc) return notFound("msg.tab.notFoundId", { id: String(p.tab) });
-      await closeMountedView(p.tab as string);
-      return withTargets(S().closeView(loc.workspace.id, p.tab as string), {
+      const closed = await closeViewPermanently(loc.workspace.id, p.tab as string);
+      return withTargets(closed, {
         tabId: p.tab as string,
       });
     },
