@@ -366,8 +366,17 @@ func (host *Host) startResolvedWithSecrets(
 	}
 	if pending, starting := host.starting[name]; starting {
 		if pending.secretNames != fingerprint {
+			// The same two rules as for a running unit: an empty declaration
+			// waits and adopts; a keyless start yields to the real declaration
+			// once it lands. Only two different real declarations refuse.
+			if fingerprint != "" && pending.secretNames != "" {
+				host.mu.Unlock()
+				return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
+			}
+			done := pending.done
 			host.mu.Unlock()
-			return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
+			<-done
+			return host.startResolvedWithSecrets(name, version, path, namespace, secretEnv, fingerprint)
 		}
 		sameRuntime := pending.version == version && pending.path == path
 		done := pending.done
