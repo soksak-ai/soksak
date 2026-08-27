@@ -96,3 +96,15 @@ func CaptureDocument(window unsafe.Pointer, rect Rect) ([]byte, error) {
 	}
 	return C.GoBytes(unsafe.Pointer(result.png), C.int(result.png_len)), nil
 }
+
+func PresentWindowForCapture(window unsafe.Pointer) bool {
+	return C.soksakCapturePresent(window) != 0
+}
+
+func RestoreWindowAfterCapture(window unsafe.Pointer, ordered bool) {
+	value := C.int(0)
+	if ordered {
+		value = 1
+	}
+	C.soksakCaptureRestore(window, value)
+}

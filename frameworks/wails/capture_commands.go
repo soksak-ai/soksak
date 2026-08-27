@@ -55,6 +55,43 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 	}
 
 	registry.MustRegister(control.Command{
+		Name:  "window_capture_present",
+		Owner: control.OwnerFramework,
+		Handler: func(args control.Args) (any, error) {
+			service, err := target(args)
+			if err != nil {
+				return nil, err
+			}
+			handle, err := service.target()
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"ordered": PresentWindowForCapture(handle)}, nil
+		},
+	})
+
+	registry.MustRegister(control.Command{
+		Name:  "window_capture_restore",
+		Owner: control.OwnerFramework,
+		Handler: func(args control.Args) (any, error) {
+			ordered, err := control.Arg[bool](args, "ordered")
+			if err != nil {
+				return nil, err
+			}
+			service, err := target(args)
+			if err != nil {
+				return nil, err
+			}
+			handle, err := service.target()
+			if err != nil {
+				return nil, err
+			}
+			RestoreWindowAfterCapture(handle, ordered)
+			return map[string]any{"restored": ordered}, nil
+		},
+	})
+
+	registry.MustRegister(control.Command{
 		Name:  "window_snapshot",
 		Owner: control.OwnerFramework,
 		Handler: func(args control.Args) (any, error) {

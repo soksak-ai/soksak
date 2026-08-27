@@ -39,6 +39,9 @@ SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
 SoksakCapture soksakCaptureDocument(void *nsWindow, double x, double y, double w,
                                     double h, int timeout_ms);
 
+int soksakCapturePresent(void *nsWindow);
+void soksakCaptureRestore(void *nsWindow, int ordered);
+
 void soksakCaptureFree(SoksakCapture capture);
 
 #endif

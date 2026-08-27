@@ -54,6 +54,27 @@ static NSData *pngFromCGImage(CGImageRef image) {
   return png;
 }
 
+int soksakCapturePresent(void *nsWindow) {
+  if (nsWindow == NULL) return 0;
+  NSWindow *window = (NSWindow *)nsWindow;
+  __block int ordered = 0;
+  dispatch_block_t present = ^{
+    if ((window.occlusionState & NSWindowOcclusionStateVisible) == 0) {
+      [window orderFrontRegardless];
+      ordered = 1;
+    }
+  };
+  if ([NSThread isMainThread]) present(); else dispatch_sync(dispatch_get_main_queue(), present);
+  return ordered;
+}
+
+void soksakCaptureRestore(void *nsWindow, int ordered) {
+  if (nsWindow == NULL || ordered == 0) return;
+  NSWindow *window = (NSWindow *)nsWindow;
+  dispatch_block_t restore = ^{ [window orderBack:nil]; };
+  if ([NSThread isMainThread]) restore(); else dispatch_sync(dispatch_get_main_queue(), restore);
+}
+
 SoksakCapture soksakCaptureWindow(void *nsWindow, double x, double y, double w,
                                   double h, int timeout_ms) {
   if (nsWindow == NULL) return failure(@"capture received a nil window");
