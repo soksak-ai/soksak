@@ -542,6 +542,13 @@ export interface SoksakPluginApi {
    * syntax. The return value is the unsubscribe: when the view goes away so does the owner (leaving it
    * keeps sending to a dead sidecar).
    */
+  /** A native surface this plugin owns: its label and the door for the kind's own verbs.
+   *  "surface" permission. The pixels come from a render sidecar; this process composites them. */
+  surface?: {
+    label: (kind: string, viewId: string) => string;
+    deliver: (label: string, message: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  };
+
   provideSurfaceInput?: (provider: {
     owns: (label: string) => boolean;
     sendInput: (label: string, input: {
@@ -2091,7 +2098,16 @@ export function buildPluginApi(
     // Where this plugin declares that it delivers pointer input for its own surfaces. The core has no
     // notion of the engine — the owner takes a label and answers whether it is its own, and the core
     // only delivers there.
-    provideSurfaceInput: has("webview")
+    // A native surface owned by a plugin: the label it declares under and the door for the
+    // kind's own verbs. The webview capability below stays a web view's — eval and navigation do
+    // not travel with this.
+    surface: has("surface")
+      ? {
+          label: (kind: string, viewId: string) => surfaceLabel(kind, viewId),
+          deliver: (label: string, message: Record<string, unknown>) => contentViewHost().deliver(label, message),
+        }
+      : undefined,
+    provideSurfaceInput: has("webview") || has("surface")
       ? (provider) => registerSurfaceInputProvider(id, provider)
       : undefined,
     // Drives the core-owned child webview (browser plugin). Native commands are webview_* (capability
