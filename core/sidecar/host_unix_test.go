@@ -3,6 +3,7 @@
 package sidecar
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
+	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/process"
 )
 
@@ -144,26 +146,50 @@ func TestConcurrentStartsShareOneProcess(t *testing.T) {
 	}
 }
 
-func TestStatusComplaintsExposeSidecarStderr(t *testing.T) {
+func TestStatusSeparatesRunningStderrFromEndedFailureByGeneration(t *testing.T) {
 	host := NewHost(Deps{})
-	host.open["provider"] = &unit{open: Open{Name: "provider"}, stderr: newRing(4)}
-	host.open["provider"].stderr.add("provider failed")
-	complaints := host.Complaints()
-	if len(complaints["provider"]) != 1 || complaints["provider"][0] != "provider failed" {
-		t.Fatalf("complaints=%+v", complaints)
-	}
-}
+	running := &unit{open: Open{Name: "running", PID: 11, Version: "0.0.2"}, stderr: newRing(4)}
+	running.stderr.add("broken client pipe")
+	host.open["running"] = running
+	ended := &unit{open: Open{Name: "ended", PID: 22, Version: "0.0.1"}, stderr: newRing(4)}
+	ended.stderr.add("provider crashed")
+	host.recordEndedComplaint("ended", ended)
 
-func TestStatusComplaintsRetainTheLastEndedSidecarStderr(t *testing.T) {
-	host := NewHost(Deps{})
-	held := &unit{open: Open{Name: "provider"}, stderr: newRing(4)}
-	held.stderr.add("provider crashed")
-	host.open["provider"] = held
-	host.recordEndedComplaint("provider", held)
-	delete(host.open, "provider")
-	complaints := host.Complaints()
-	if len(complaints["provider"]) != 1 || complaints["provider"][0] != "provider crashed" {
-		t.Fatalf("complaints=%+v", complaints)
+	registry := control.NewRegistry()
+	Register(registry, Registration{
+		Host:    host,
+		Resolve: func(Consumer, DependencyReference) (Resolved, error) { return Resolved{}, nil },
+	})
+	answer, err := registry.Invoke("sidecar_status", control.Args{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type record struct {
+		Name    string   `json:"name"`
+		PID     int      `json:"pid"`
+		Version string   `json:"version"`
+		Stderr  []string `json:"stderr"`
+	}
+	var status struct {
+		Stderr map[string][]string `json:"stderr"`
+		Open   []record            `json:"open"`
+		Ended  []record            `json:"ended"`
+	}
+	if err := json.Unmarshal(encoded, &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Stderr != nil {
+		t.Fatalf("ambiguous stderr remained: %+v", status.Stderr)
+	}
+	if len(status.Open) != 1 || status.Open[0].Name != "running" || status.Open[0].PID != 11 || status.Open[0].Version != "0.0.2" || len(status.Open[0].Stderr) != 1 || status.Open[0].Stderr[0] != "broken client pipe" {
+		t.Fatalf("open=%+v", status.Open)
+	}
+	if len(status.Ended) != 1 || status.Ended[0].Name != "ended" || status.Ended[0].PID != 22 || status.Ended[0].Version != "0.0.1" || len(status.Ended[0].Stderr) != 1 || status.Ended[0].Stderr[0] != "provider crashed" {
+		t.Fatalf("ended=%+v", status.Ended)
 	}
 }
 
