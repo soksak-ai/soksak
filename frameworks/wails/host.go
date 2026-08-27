@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -64,6 +65,10 @@ type Options struct {
 	// a fact about the launch, so the launch declares it, the same way it declares the home.
 	Presentation     PresentationMode
 	PluginAssetRoots func() ([]string, error)
+	// TerminalLinks is the sending half of the launcher's sidecar relay, for
+	// the terminal surface service. The framework cannot import the relay
+	// (C1a); the launcher injects exactly the function the sessions speak by.
+	TerminalLinks terminalsurface.Links
 }
 
 // macActivation is how this launch presents itself to the desktop.
@@ -192,7 +197,8 @@ func Run(options Options) error {
 
 	// The compositor service, held so the surface commands can read what it
 	// applied. The service list below registers the same value.
-	nativeCompositor := compositor.NewService(nativeWindow, surfaceBackends(webviewBackend))
+	terminalBackend := terminalsurface.NewBackend()
+	nativeCompositor := compositor.NewService(nativeWindow, surfaceBackends(webviewBackend, terminalBackend))
 	// One reader of the last commit, shared by the surface commands and the capture. Two would
 	// answer from two moments, and the capture would draw a page at a rectangle the numbers say it
 	// is not at.
@@ -200,6 +206,12 @@ func Run(options Options) error {
 	// compositor holds every applied rectangle in the contract they are declared in. Neither answers
 	// alone, and a plugin deciding it would re-derive the rectangles in its own coordinate space.
 	webviewsurface.ReadSurfacesWith(nativeCompositor.SurfaceAt)
+
+	// The pane sessions and the surface channel: a declared pane opens its
+	// shell and its render off the commit path, and the ring's frames land on
+	// the pane's own host view.
+	terminalSessions := wireTerminalSessions(terminalBackend, options.Identity, options.TerminalLinks)
+	wireTerminalChannel(terminalBackend, terminalSessions, options.Identity, options.Bridge.Emit)
 
 	surfaceComposition := NewCompositorSource(nativeCompositor)
 
@@ -469,9 +481,62 @@ func jsonString(value string) json.RawMessage {
 
 // One backend per surface kind. The kind on a declaration picks it, so the next kind is another
 // entry here and no edit inside the compositor.
-func surfaceBackends(webviewBackend *webviewsurface.Backend) map[compositor.SurfaceKind]compositor.Backend {
+func surfaceBackends(webviewBackend *webviewsurface.Backend, terminalBackend *terminalsurface.Backend) map[compositor.SurfaceKind]compositor.Backend {
 	return map[compositor.SurfaceKind]compositor.Backend{
 		webviewsurface.SurfaceKind:  webviewBackend,
-		terminalsurface.SurfaceKind: terminalsurface.NewBackend(),
+		terminalsurface.SurfaceKind: terminalBackend,
+	}
+}
+
+// wireTerminalSessions gives the terminal backend its session layer. Opening a
+// pane speaks to sidecars, so it runs off the commit path — the declaration
+// returns immediately and the session catches up.
+func wireTerminalSessions(backend *terminalsurface.Backend, identity string, links terminalsurface.Links) *terminalsurface.Sessions {
+	sessions := terminalsurface.NewSessions(identity, links)
+	backend.UseSessions(sessions)
+	backend.ObservePanes(func(created bool, source compositor.SurfaceSource) {
+		if created {
+			go func() {
+				if err := sessions.Start(map[string]string(source)); err != nil {
+					log.Printf("terminal pane %s did not open: %v", source["pane"], err)
+				}
+			}()
+			return
+		}
+		pane := source["pane"]
+		go func() {
+			if err := sessions.Stop(pane, "detach"); err != nil {
+				log.Printf("terminal pane %s did not stop: %v", pane, err)
+			}
+		}()
+	})
+	return sessions
+}
+
+// terminalStateNotifier forwards every frame to the sessions and pushes the
+// plugin-facing state event at most once per pane per hundred milliseconds
+// (V13: pushed on change, bounded). The sessions always hear the frame — only
+// the event is limited.
+func terminalStateNotifier(
+	note func(pane string, seq uint64),
+	emit func(event string, payload any),
+	now func() time.Time,
+) func(pane string, seq uint64) {
+	var mu sync.Mutex
+	last := map[string]time.Time{}
+	return func(pane string, seq uint64) {
+		note(pane, seq)
+		if emit == nil {
+			return
+		}
+		mu.Lock()
+		moment := now()
+		if held, seen := last[pane]; seen && moment.Sub(held) < 100*time.Millisecond {
+			mu.Unlock()
+			return
+		}
+		last[pane] = moment
+		mu.Unlock()
+		emit("terminal-surface:state", map[string]any{"pane": pane, "sequence": seq})
 	}
 }

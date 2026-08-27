@@ -15,6 +15,10 @@ import (
 	"runtime"
 	"time"
 
+	"encoding/json"
+	"fmt"
+	terminalsurface "github.com/min-median-max/wails-service-terminal-surface"
+	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/activity"
 	"github.com/soksak-ai/soksak-core/core/boot"
 	"github.com/soksak-ai/soksak-core/core/control"
@@ -25,6 +29,8 @@ import (
 	"github.com/soksak-ai/soksak-core/core/sidecar"
 	"github.com/soksak-ai/soksak-core/core/store"
 	"github.com/soksak-ai/soksak-core/frameworks/wails"
+	"strconv"
+	"sync/atomic"
 )
 
 // The frontend build is embedded here because embed paths cannot climb out of
@@ -188,13 +194,14 @@ func Run(assets embed.FS) error {
 			log.Printf("control readiness event failed: %v", err)
 		}
 		return wails.Run(wails.Options{
-			Assets:       assets,
-			Identity:     resolved.Identifier,
-			CaptureProbe: os.Getenv("SOKSAK_CAPTURE_PROBE"),
-			Registry:     registry,
-			Release:      listener.Close,
-			Bridge:       bridge,
-			Reapers:      []wails.UnitReaper{units},
+			Assets:        assets,
+			Identity:      resolved.Identifier,
+			TerminalLinks: terminalSurfaceLinks(units),
+			CaptureProbe:  os.Getenv("SOKSAK_CAPTURE_PROBE"),
+			Registry:      registry,
+			Release:       listener.Close,
+			Bridge:        bridge,
+			Reapers:       []wails.UnitReaper{units},
 			// Declared by whoever started this process. Unset is a person at the application, which
 			// is what a launch with nothing stated about it is. A measurement run declares the
 			// opposite and gets a window that draws without taking the front.
@@ -222,4 +229,54 @@ func installedPluginRoots(home string) ([]string, error) {
 		}
 	}
 	return roots, nil
+}
+
+// terminalSurfaceLinks adapts the relay's send half to the terminal surface
+// service: one request, one unwrapped answer. The generic Answer shape is the
+// wire's own (controlwire.Answer), so a refusal keeps its code.
+func terminalSurfaceLinks(units *sidecar.Host) terminalsurface.Links {
+	var next atomic.Uint64
+	return terminalsurface.Links{Send: func(unit, command string, request map[string]any) (map[string]any, error) {
+		args := make(map[string]json.RawMessage, len(request))
+		for key, value := range request {
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return nil, fmt.Errorf("%s %s: %w", unit, command, err)
+			}
+			args[key] = encoded
+		}
+		response, err := units.Send(unit, controlwire.Request{
+			ID:      "terminal-surface-" + strconv.FormatUint(next.Add(1), 10),
+			Command: command,
+			Args:    args,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if !response.Ok {
+			return nil, fmt.Errorf("%s %s: %s", unit, command, response.Error)
+		}
+		encoded, err := json.Marshal(response.Result)
+		if err != nil {
+			return nil, fmt.Errorf("%s %s: %w", unit, command, err)
+		}
+		var answer struct {
+			Code    string         `json:"code"`
+			Message string         `json:"message"`
+			Data    map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(encoded, &answer); err != nil {
+			return nil, fmt.Errorf("%s %s: %w", unit, command, err)
+		}
+		if answer.Code != "" && answer.Code != "OK" {
+			if answer.Message != "" {
+				return nil, fmt.Errorf("%s: %s", answer.Code, answer.Message)
+			}
+			return nil, fmt.Errorf("%s %s answered %s", unit, command, answer.Code)
+		}
+		if answer.Data == nil {
+			answer.Data = map[string]any{}
+		}
+		return answer.Data, nil
+	}}
 }
