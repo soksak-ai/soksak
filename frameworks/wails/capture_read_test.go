@@ -88,3 +88,19 @@ func TestCaptureDoesNotChangeWebKitSchedulingThroughPrivateSPI(t *testing.T) {
 		}
 	}
 }
+
+func TestCapturePresentationOrdersWithoutTakingFocus(t *testing.T) {
+	body, err := os.ReadFile("capture_darwin.m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	if !strings.Contains(source, "orderFrontRegardless") {
+		t.Fatal("capture presentation never makes a fully occluded window renderable")
+	}
+	for _, forbidden := range []string{"makeKeyAndOrderFront", "activateIgnoringOtherApps", "makeMainWindow"} {
+		if strings.Contains(source, forbidden) {
+			t.Errorf("capture presentation takes focus through %s", forbidden)
+		}
+	}
+}

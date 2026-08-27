@@ -26,7 +26,9 @@ func TestTheCaptureIsReachableThroughTheRegistry(t *testing.T) {
 	for _, command := range described.Commands {
 		found[command.Name] = command.Owner
 	}
-	for _, name := range []string{"window_snapshot", "window_snapshot_region"} {
+	for _, name := range []string{
+		"window_capture_present", "window_capture_restore", "window_snapshot", "window_snapshot_region",
+	} {
 		owner, present := found[name]
 		if !present {
 			t.Errorf("%s is not on the registry", name)
