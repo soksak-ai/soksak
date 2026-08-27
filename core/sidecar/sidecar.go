@@ -317,13 +317,33 @@ func (host *Host) startResolvedWithSecrets(
 	if host.grants == nil {
 		host.grants = make(map[string]grant)
 	}
+	prior, hadGrant := host.grants[name]
 	host.grants[name] = grant{path: path, version: version, namespace: namespace, secretEnv: secretEnv, fingerprint: fingerprint}
 	if held, running := host.open[name]; running {
-		if held.secretNames != fingerprint {
+		if held.secretNames != fingerprint && fingerprint == "" {
+			// An empty declaration is no opinion, not a different one: the
+			// running unit stands, and its remembered grant stays the truth.
+			if hadGrant {
+				host.grants[name] = prior
+			}
+			host.mu.Unlock()
+			return held.open, nil
+		}
+		if held.secretNames != fingerprint && held.secretNames == "" {
+			// A keyless unit yields to the first real declaration: what runs
+			// without the secret cannot serve the caller that requires it.
+			delete(host.open, name)
+			host.closeLinkLocked(name)
+			host.mu.Unlock()
+			host.forget(name)
+			if err := host.end(held); err != nil {
+				return Open{}, err
+			}
+			host.mu.Lock()
+		} else if held.secretNames != fingerprint {
 			host.mu.Unlock()
 			return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
-		}
-		if held.open.Version != version || held.path != path {
+		} else if held.open.Version != version || held.path != path {
 			delete(host.open, name)
 			host.closeLinkLocked(name)
 			host.mu.Unlock()
