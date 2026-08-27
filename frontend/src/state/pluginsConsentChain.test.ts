@@ -15,7 +15,7 @@ function rt(
   id: string,
   permissions: string[],
   dependencies: Record<string, string> = {},
-  opts: { source?: "registry" | "local"; version?: string } = {},
+  opts: { source?: "registry" | "local" | "development"; version?: string } = {},
 ): PluginRuntime {
   const manifest = {
     spec: "soksak-spec-plugin@0.0.1",
@@ -79,6 +79,17 @@ describe("pendingConsentChain — the pending consent chain, dependency first", 
       "acp-studio": rt("acp-studio", ["ui"], { "acp-core": "^0.1.0" }),
     };
     expect(pendingConsentChain("acp-studio", localCore, {})).toEqual(["acp-core", "acp-studio"]);
+  });
+
+  it("development plugins bypass consent while release dependencies do not", () => {
+    const development = {
+      "acp-core": rt("acp-core", ["process"], {}, { source: "local" }),
+      "acp-studio": rt("acp-studio", ["ui"], { "acp-core": "^0.1.0" }, { source: "development" }),
+    };
+    expect(pendingConsentChain("acp-studio", development, {})).toEqual(["acp-core"]);
+
+    development["acp-core"] = rt("acp-core", ["process"], {}, { source: "development" });
+    expect(pendingConsentChain("acp-studio", development, {})).toEqual([]);
   });
 
   it("consentRequiredMessage: the only target is itself — plain prose for that consent alone", () => {
