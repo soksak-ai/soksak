@@ -34,7 +34,7 @@ export {
   transparencyViolations,
   unmetNeeds,
   validateSettingValue,
-} from "@soksak/soksak-spec";
+} from "@soksak-ai/plugin-spec";
 export type {
   ArtifactTarget,
   CertifiedRegistry,
@@ -63,5 +63,5 @@ export type {
   ReleaseReference,
   StaticTransparencyRule,
   ViewSurface,
-} from "@soksak/soksak-spec";
+} from "@soksak-ai/plugin-spec";
 export { BANNED_DOM_MORPHEMES } from "./identityVocabulary";
