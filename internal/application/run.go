@@ -237,14 +237,14 @@ func installedPluginRoots(home string) ([]string, error) {
 func terminalSurfaceLinks(units *sidecar.Host) terminalsurface.Links {
 	var next atomic.Uint64
 	return terminalsurface.Links{Send: func(unit, command string, request map[string]any) (map[string]any, error) {
-		args := make(map[string]json.RawMessage, len(request))
-		for key, value := range request {
-			encoded, err := json.Marshal(value)
-			if err != nil {
-				return nil, fmt.Errorf("%s %s: %w", unit, command, err)
-			}
-			args[key] = encoded
+		// The kit's service socket nests one request object under args.request
+		// (its proto::request envelope); flat args are the control plane's own
+		// grammar, and a flat send reaches a handler as an empty request.
+		payload, err := json.Marshal(request)
+		if err != nil {
+			return nil, fmt.Errorf("%s %s: %w", unit, command, err)
 		}
+		args := map[string]json.RawMessage{"request": payload}
 		response, err := units.Send(unit, controlwire.Request{
 			ID:      "terminal-surface-" + strconv.FormatUint(next.Add(1), 10),
 			Command: command,
