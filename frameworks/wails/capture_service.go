@@ -158,6 +158,28 @@ func (service *CaptureService) PixelsAt(path string, rect Rect) (CapturePixels, 
 	return CapturePixels{PNG: base64.StdEncoding.EncodeToString(png), Note: note}, nil
 }
 
+func (service *CaptureService) DocumentPixelsAt(path string, rect Rect) (CapturePixels, error) {
+	handle, err := service.target()
+	if err != nil {
+		return CapturePixels{}, err
+	}
+	if service.captureDocument == nil {
+		return CapturePixels{}, i18n.Errorf("wails.capture.unsupportedPlatform", nil)
+	}
+	png, err := service.captureDocument(handle, rect)
+	if err != nil {
+		return CapturePixels{}, err
+	}
+	note := CaptureNote{DocumentOnly: true}
+	if path != "" {
+		if err := writeCapture(path, png); err != nil {
+			return CapturePixels{}, err
+		}
+		note.Path = path
+	}
+	return CapturePixels{PNG: base64.StdEncoding.EncodeToString(png), Note: note}, nil
+}
+
 // writeCapture puts one capture on disk, creating the directory it names.
 func writeCapture(path string, png []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

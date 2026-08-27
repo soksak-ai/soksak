@@ -62,9 +62,17 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 			if err != nil {
 				return nil, err
 			}
+			documentOnly, err := control.OptionalArg(args, "documentOnly", false)
+			if err != nil {
+				return nil, err
+			}
 			service, err := target(args)
 			if err != nil {
 				return nil, err
+			}
+			if documentOnly {
+				pixels, err := service.DocumentPixelsAt(path, Whole)
+				return pixels.Note, err
 			}
 			// The written path is the answer, so a caller reads where the file
 			// landed instead of assuming it went where they asked.
@@ -85,6 +93,10 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 			if err != nil {
 				return nil, err
 			}
+			documentOnly, err := control.OptionalArg(args, "documentOnly", false)
+			if err != nil {
+				return nil, err
+			}
 			rect, err := captureRect(args)
 			if err != nil {
 				return nil, err
@@ -92,6 +104,9 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 			service, err := target(args)
 			if err != nil {
 				return nil, err
+			}
+			if documentOnly {
+				return service.DocumentPixelsAt(path, rect)
 			}
 			return service.PixelsAt(path, rect)
 		},
