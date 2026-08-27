@@ -13,6 +13,7 @@ vi.stubGlobal("localStorage", {
 import { useCloseConfirm } from "./closeConfirm";
 import { allViews, useSessions } from "./sessions";
 import { useSettings } from "./settings";
+import { registerMountedViewFocus } from "../plugins/viewFocus";
 
 useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-closeconfirm");
 // The workspace identifier is issued (state/ids.ts), so it is read here rather
@@ -72,6 +73,30 @@ describe("requestCloseView — branching on the setting and the status", () => {
     useCloseConfirm.getState().requestCloseView(WORKSPACE, vid);
     expect(useCloseConfirm.getState().pending).toBeNull();
     expect(viewExists(vid)).toBe(false);
+  });
+
+  it("keeps a mounted view until its provider has closed", async () => {
+    useSettings.getState().setTabCloseConfirm("off");
+    const vid = mkView();
+    let release!: () => void;
+    const closing = new Promise<void>((resolve) => { release = resolve; });
+    const closeView = vi.fn(async () => closing);
+    const unregister = registerMountedViewFocus(
+      vid,
+      document.createElement("div"),
+      { closeView } as never,
+      () => ({ viewId: vid }) as never,
+    );
+    try {
+      useCloseConfirm.getState().requestCloseView(WORKSPACE, vid);
+      await Promise.resolve();
+      expect(closeView).toHaveBeenCalledOnce();
+      expect(viewExists(vid)).toBe(true);
+      release();
+      await vi.waitFor(() => expect(viewExists(vid)).toBe(false));
+    } finally {
+      unregister();
+    }
   });
 });
 
