@@ -27,8 +27,8 @@ func init() {
 		},
 		"sidecar.noResolver": {EN: "sidecar {name} has no installation settings resolver", KO: "사이드카 {name}의 설치 설정 경로를 해석할 수 없습니다"},
 		"sidecar.secretSetMismatch": {
-			EN: "sidecar {name} is already running with a different declared secret set",
-			KO: "sidecar {name} 이(가) 다른 시크릿 선언으로 이미 실행 중입니다",
+			EN: "sidecar {name} is already running with a different declared secret set: it runs with [{running}], this caller declared [{declared}]",
+			KO: "sidecar {name} 이(가) 다른 시크릿 선언으로 이미 실행 중입니다: 실행 중 [{running}], 이 호출 선언 [{declared}]",
 		},
 		"sidecar.noSecretGenerator": {
 			EN: "sidecar {name} requires a generated secret and this host has no secret generator",

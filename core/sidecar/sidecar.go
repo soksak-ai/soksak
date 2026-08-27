@@ -342,7 +342,9 @@ func (host *Host) startResolvedWithSecrets(
 			host.mu.Lock()
 		} else if held.secretNames != fingerprint {
 			host.mu.Unlock()
-			return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
+			return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{
+				"name": name, "running": held.secretNames, "declared": fingerprint,
+			})
 		} else if held.open.Version != version || held.path != path {
 			delete(host.open, name)
 			host.closeLinkLocked(name)
@@ -371,7 +373,9 @@ func (host *Host) startResolvedWithSecrets(
 			// once it lands. Only two different real declarations refuse.
 			if fingerprint != "" && pending.secretNames != "" {
 				host.mu.Unlock()
-				return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
+				return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{
+					"name": name, "running": pending.secretNames, "declared": fingerprint,
+				})
 			}
 			done := pending.done
 			host.mu.Unlock()
