@@ -144,12 +144,12 @@ func TestConcurrentStartsShareOneProcess(t *testing.T) {
 	}
 }
 
-func TestStatusComplaintsExposeSidecarStderr(t *testing.T) {
+func TestStatusComplaintsDoNotMisreportRunningSidecarStderrAsFailure(t *testing.T) {
 	host := NewHost(Deps{})
 	host.open["provider"] = &unit{open: Open{Name: "provider"}, stderr: newRing(4)}
-	host.open["provider"].stderr.add("provider failed")
+	host.open["provider"].stderr.add("broken client pipe")
 	complaints := host.Complaints()
-	if len(complaints["provider"]) != 1 || complaints["provider"][0] != "provider failed" {
+	if _, reported := complaints["provider"]; reported {
 		t.Fatalf("complaints=%+v", complaints)
 	}
 }
