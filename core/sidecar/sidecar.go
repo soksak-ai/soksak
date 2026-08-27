@@ -111,6 +111,11 @@ type Open struct {
 	Version  string `json:"version,omitempty"`
 }
 
+type UnitStatus struct {
+	Open
+	Stderr []string `json:"stderr,omitempty"`
+}
+
 // Host starts units and holds them open.
 type Host struct {
 	deps Deps
@@ -125,7 +130,7 @@ type Host struct {
 	// the unit closes it, and the next send opens another.
 	links   map[string]*link
 	secrets process.SecretSource
-	ended   map[string][]string
+	ended   map[string]UnitStatus
 	// grants are the arguments a unit was last started with, kept under its name. A host that cannot
 	// resolve a path of its own starts the unit again from what started it the first time.
 	grants map[string]grant
@@ -187,7 +192,7 @@ func NewHost(deps Deps) *Host {
 	if deps.ReadyWithin == 0 {
 		deps.ReadyWithin = DefaultReadyWithin
 	}
-	return &Host{deps: deps, open: make(map[string]*unit), starting: make(map[string]*startAttempt), ended: make(map[string][]string)}
+	return &Host{deps: deps, open: make(map[string]*unit), starting: make(map[string]*startAttempt), ended: make(map[string]UnitStatus)}
 }
 
 // Started reports every unit this host holds open.
@@ -217,6 +222,22 @@ func (host *Host) Started() []Open {
 		out = append(out, candidate.held.open)
 	}
 	return out
+}
+
+func (host *Host) Running() []UnitStatus {
+	started := host.Started()
+	host.mu.Lock()
+	defer host.mu.Unlock()
+	result := make([]UnitStatus, 0, len(started))
+	for _, open := range started {
+		status := UnitStatus{Open: open}
+		if held := host.open[open.Name]; held != nil {
+			status.Stderr = held.stderr.snapshot()
+		}
+		result = append(result, status)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result
 }
 
 // Start ensures a unit is running and answers what it announced.
@@ -667,32 +688,15 @@ func (host *Host) forgetWhenGone(name string, held *unit, ended <-chan childExit
 	close(gone)
 }
 
-// Complaint answers what a unit last printed to stderr.
-//
-// A unit that failed after it was started states why there and nowhere else, and without this the
-// caller has an address that no longer answers and no reason.
-func (host *Host) Complaint(name string) []string {
-	host.mu.Lock()
-	held := host.open[name]
-	host.mu.Unlock()
-	if held == nil {
-		return nil
-	}
-	return held.stderr.snapshot()
-}
-
-func (host *Host) Complaints() map[string][]string {
+func (host *Host) Ended() []UnitStatus {
 	host.mu.Lock()
 	defer host.mu.Unlock()
-	result := make(map[string][]string, len(host.open)+len(host.ended))
-	for name, tail := range host.ended {
-		result[name] = append([]string(nil), tail...)
+	result := make([]UnitStatus, 0, len(host.ended))
+	for _, ended := range host.ended {
+		ended.Stderr = append([]string(nil), ended.Stderr...)
+		result = append(result, ended)
 	}
-	for name, held := range host.open {
-		if tail := held.stderr.snapshot(); len(tail) > 0 {
-			result[name] = tail
-		}
-	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result
 }
 
@@ -704,7 +708,8 @@ func (host *Host) recordEndedComplaint(name string, held *unit) {
 
 func (host *Host) recordEndedComplaintLocked(name string, held *unit) {
 	if tail := held.stderr.snapshot(); len(tail) > 0 {
-		host.ended[name] = tail
+		ended := UnitStatus{Open: held.open, Stderr: tail}
+		host.ended[name] = ended
 	}
 }
 

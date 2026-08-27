@@ -228,7 +228,7 @@ func Register(registry *control.Registry, deps Registration) {
 			return nil, err
 		}
 		return map[string]any{
-			"open": deps.Host.Started(), "recorded": recorded, "stderr": deps.Host.Complaints(),
+			"open": deps.Host.Running(), "recorded": recorded, "ended": deps.Host.Ended(),
 		}, nil
 	})
 }
