@@ -497,6 +497,15 @@ func wireTerminalSessions(backend *terminalsurface.Backend, identity string, lin
 	backend.ObservePanes(func(created bool, source compositor.SurfaceSource) {
 		if created {
 			go func() {
+				first := sessions.Start(map[string]string(source))
+				if first == nil {
+					return
+				}
+				// The boot storm can take an engine down mid-request — a keyless
+				// unit yields to the first real declaration. One later attempt
+				// meets the engine that came back with it.
+				log.Printf("terminal pane %s retries after: %v", source["pane"], first)
+				time.Sleep(2500 * time.Millisecond)
 				if err := sessions.Start(map[string]string(source)); err != nil {
 					log.Printf("terminal pane %s did not open: %v", source["pane"], err)
 				}
