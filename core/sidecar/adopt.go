@@ -161,7 +161,22 @@ func (host *Host) adopt(name, secretNames, version, path string) (Open, bool, er
 		return Open{}, false, nil
 	}
 	if remembered.SecretNames != secretNames {
-		return Open{}, false, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
+		if secretNames == "" {
+			// An empty declaration is no opinion: the recorded unit stands,
+			// and its own secret set stays the remembered truth.
+			secretNames = remembered.SecretNames
+		} else if remembered.SecretNames == "" {
+			// A keyless record yields to the first real declaration: what ran
+			// without the secret cannot serve the caller that requires it.
+			_ = signalPID(remembered.PID)
+			host.awaitGone(remembered.Address)
+			host.forget(name)
+			return Open{}, false, nil
+		} else {
+			return Open{}, false, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{
+				"name": name, "running": remembered.SecretNames, "declared": secretNames,
+			})
+		}
 	}
 	if host.deps.Dial == nil {
 		return Open{}, false, nil
