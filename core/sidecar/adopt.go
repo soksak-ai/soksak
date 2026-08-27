@@ -39,7 +39,8 @@ type record struct {
 	SecretNames string `json:"secretNames,omitempty"`
 	// Path is the program the unit was started from. A run whose record resolves to another
 	// program does not adopt the unit; it ends it and starts the recorded one.
-	Path string `json:"path,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Version string `json:"version,omitempty"`
 }
 
 func (host *Host) recordPath(name string) string {
@@ -51,13 +52,13 @@ func (host *Host) recordPath(name string) string {
 // A failure to write is not a failure to start. The unit is running and reachable now; what is lost
 // is the next run's ability to find it, and reporting that as a start failure would end a unit that
 // works.
-func (host *Host) remember(name string, open Open, token, secretNames, path string) {
+func (host *Host) remember(name string, open Open, token, secretNames, version, path string) {
 	location := host.recordPath(name)
 	if err := os.MkdirAll(filepath.Dir(location), 0o700); err != nil {
 		return
 	}
 	encoded, err := json.Marshal(record{
-		Address: open.Address, Token: token, Protocol: open.Protocol, PID: open.PID, SecretNames: secretNames, Path: path,
+		Address: open.Address, Token: token, Protocol: open.Protocol, PID: open.PID, SecretNames: secretNames, Path: path, Version: version,
 	})
 	if err != nil {
 		return
@@ -106,8 +107,8 @@ func (host *Host) Recorded() ([]Open, error) {
 			continue
 		}
 		owned = append(owned, Open{
-			Name:    identity,
-			Address: remembered.Address, Protocol: remembered.Protocol, PID: remembered.PID,
+			Name: identity, Address: remembered.Address, Protocol: remembered.Protocol,
+			PID: remembered.PID, Version: remembered.Version,
 		})
 	}
 	sort.Slice(owned, func(left, right int) bool { return owned[left].Name < owned[right].Name })
@@ -132,7 +133,7 @@ func (host *Host) adoptOwned(name string) (bool, error) {
 	if remembered.PID < 1 {
 		return false, i18n.Errorf("sidecar.invalidAdoptedPID", map[string]string{"pid": strconv.Itoa(remembered.PID)})
 	}
-	_, found, err := host.adopt(name, remembered.SecretNames, "")
+	_, found, err := host.adopt(name, remembered.SecretNames, "", "")
 	return found, err
 }
 
@@ -144,7 +145,7 @@ func (host *Host) adoptOwned(name string) (bool, error) {
 // the next run from finding two.
 // path, when given, is the program the record must name for the unit to be adopted; "" adopts
 // whatever program the record names.
-func (host *Host) adopt(name, secretNames, path string) (Open, bool, error) {
+func (host *Host) adopt(name, secretNames, version, path string) (Open, bool, error) {
 	raw, err := os.ReadFile(host.recordPath(name))
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
@@ -165,7 +166,7 @@ func (host *Host) adopt(name, secretNames, path string) (Open, bool, error) {
 	if host.deps.Dial == nil {
 		return Open{}, false, nil
 	}
-	if path != "" && remembered.Path != "" && remembered.Path != path {
+	if (version != "" && remembered.Version != version) || (path != "" && remembered.Path != path) {
 		// The unit runs another program than the record now names: it is ended, and the caller
 		// starts the recorded program once nothing answers at the old address.
 		_ = signalPID(remembered.PID)
@@ -180,8 +181,8 @@ func (host *Host) adopt(name, secretNames, path string) (Open, bool, error) {
 		host.forget(name)
 		return Open{}, false, nil
 	}
-	open := Open{Name: name, Address: remembered.Address, Protocol: remembered.Protocol, PID: remembered.PID}
-	held := &unit{open: open, stderr: newRing(64), token: remembered.Token, adopted: true, secretNames: secretNames}
+	open := Open{Name: name, Address: remembered.Address, Protocol: remembered.Protocol, PID: remembered.PID, Version: remembered.Version}
+	held := &unit{open: open, stderr: newRing(64), token: remembered.Token, adopted: true, secretNames: secretNames, path: remembered.Path}
 
 	host.mu.Lock()
 	if existing, running := host.open[name]; running {

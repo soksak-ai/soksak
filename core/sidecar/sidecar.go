@@ -106,8 +106,9 @@ type Open struct {
 	// somewhere else is reachable because it said so.
 	Address string `json:"address"`
 	// Protocol is the envelope version the unit announced.
-	Protocol int `json:"protocol"`
-	PID      int `json:"pid"`
+	Protocol int    `json:"protocol"`
+	PID      int    `json:"pid"`
+	Version  string `json:"version,omitempty"`
 }
 
 // Host starts units and holds them open.
@@ -139,6 +140,7 @@ const defaultAnswerWithin = 20 * time.Second
 // fingerprint those values answer to.
 type grant struct {
 	path        string
+	version     string
 	namespace   string
 	secretEnv   map[string]string
 	fingerprint string
@@ -149,6 +151,8 @@ type startAttempt struct {
 	open        Open
 	err         error
 	secretNames string
+	path        string
+	version     string
 }
 
 func (host *Host) SetSecrets(source process.SecretSource) {
@@ -171,6 +175,7 @@ type unit struct {
 	// one, so nothing here waits on it and ending it is a signal to a pid rather than a reap.
 	adopted     bool
 	secretNames string
+	path        string
 }
 
 type childExit struct {
@@ -235,11 +240,11 @@ func (host *Host) StartWithSecrets(name, namespace string, secretEnv map[string]
 	if err != nil {
 		return Open{}, err
 	}
-	return host.StartResolvedWithSecrets(name, path, namespace, secretEnv)
+	return host.StartResolvedWithSecrets(name, "", path, namespace, secretEnv)
 }
 
-func (host *Host) StartResolvedWithSecrets(name, path, namespace string, secretEnv map[string]string) (Open, error) {
-	return host.startResolvedWithSecrets(name, path, namespace, secretEnv, secretNameFingerprint(namespace, secretEnv))
+func (host *Host) StartResolvedWithSecrets(name, version, path, namespace string, secretEnv map[string]string) (Open, error) {
+	return host.startResolvedWithSecrets(name, version, path, namespace, secretEnv, secretNameFingerprint(namespace, secretEnv))
 }
 
 type GeneratedSecret struct {
@@ -257,10 +262,10 @@ func (host *Host) StartWithGeneratedSecrets(
 	if err != nil {
 		return Open{}, err
 	}
-	return host.StartResolvedWithGeneratedSecrets(name, path, generated)
+	return host.StartResolvedWithGeneratedSecrets(name, "", path, generated)
 }
 
-func (host *Host) StartResolvedWithGeneratedSecrets(name, path string, generated map[string]GeneratedSecret) (Open, error) {
+func (host *Host) StartResolvedWithGeneratedSecrets(name, version, path string, generated map[string]GeneratedSecret) (Open, error) {
 	namespace := name
 	keys := make(map[string]string, len(generated))
 	generator, ok := host.secrets.(process.SecretGenerator)
@@ -280,48 +285,63 @@ func (host *Host) StartResolvedWithGeneratedSecrets(name, path string, generated
 	for environment, declaration := range generated {
 		names[environment] = fmt.Sprintf("%s:%d", declaration.Key, declaration.Bytes)
 	}
-	return host.startResolvedWithSecrets(name, path, namespace, keys, secretNameFingerprint(namespace, names))
+	return host.startResolvedWithSecrets(name, version, path, namespace, keys, secretNameFingerprint(namespace, names))
 }
 
 func (host *Host) startResolvedWithSecrets(
-	name, path, namespace string, secretEnv map[string]string, fingerprint string,
+	name, version, path, namespace string, secretEnv map[string]string, fingerprint string,
 ) (Open, error) {
 	host.mu.Lock()
 	delete(host.ended, name)
 	if host.grants == nil {
 		host.grants = make(map[string]grant)
 	}
-	host.grants[name] = grant{path: path, namespace: namespace, secretEnv: secretEnv, fingerprint: fingerprint}
+	host.grants[name] = grant{path: path, version: version, namespace: namespace, secretEnv: secretEnv, fingerprint: fingerprint}
 	if held, running := host.open[name]; running {
 		if held.secretNames != fingerprint {
 			host.mu.Unlock()
 			return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
 		}
-		host.mu.Unlock()
-		// Open means something answers there. A unit this host adopted has no one here watching it
-		// end, so its going is only visible at its address — and answering with an address nobody is
-		// listening at hands the same failure to every caller after the first.
-		if host.answers(held.open.Address) {
-			return held.open, nil
+		if held.open.Version != version || held.path != path {
+			delete(host.open, name)
+			host.closeLinkLocked(name)
+			host.mu.Unlock()
+			host.forget(name)
+			if err := host.end(held); err != nil {
+				return Open{}, err
+			}
+			host.mu.Lock()
+		} else {
+			host.mu.Unlock()
+			// Open means something answers there. A unit this host adopted has no one here watching it
+			// end, so its going is only visible at its address — and answering with an address nobody is
+			// listening at hands the same failure to every caller after the first.
+			if host.answers(held.open.Address) {
+				return held.open, nil
+			}
+			host.drop(name, held)
+			host.mu.Lock()
 		}
-		host.drop(name, held)
-		host.mu.Lock()
 	}
 	if pending, starting := host.starting[name]; starting {
 		if pending.secretNames != fingerprint {
 			host.mu.Unlock()
 			return Open{}, i18n.Errorf("sidecar.secretSetMismatch", map[string]string{"name": name})
 		}
+		sameRuntime := pending.version == version && pending.path == path
 		done := pending.done
 		host.mu.Unlock()
 		<-done
-		return pending.open, pending.err
+		if sameRuntime {
+			return pending.open, pending.err
+		}
+		return host.startResolvedWithSecrets(name, version, path, namespace, secretEnv, fingerprint)
 	}
-	pending := &startAttempt{done: make(chan struct{}), secretNames: fingerprint}
+	pending := &startAttempt{done: make(chan struct{}), secretNames: fingerprint, path: path, version: version}
 	host.starting[name] = pending
 	host.mu.Unlock()
 
-	opened, err := host.startResolved(name, path, namespace, secretEnv, fingerprint)
+	opened, err := host.startResolved(name, version, path, namespace, secretEnv, fingerprint)
 	host.mu.Lock()
 	pending.open, pending.err = opened, err
 	delete(host.starting, name)
@@ -331,9 +351,9 @@ func (host *Host) startResolvedWithSecrets(
 }
 
 func (host *Host) startResolved(
-	name, path, namespace string, secretEnv map[string]string, fingerprint string,
+	name, version, path, namespace string, secretEnv map[string]string, fingerprint string,
 ) (Open, error) {
-	if adopted, found, err := host.adopt(name, fingerprint, path); err != nil {
+	if adopted, found, err := host.adopt(name, fingerprint, version, path); err != nil {
 		return Open{}, err
 	} else if found {
 		return adopted, nil
@@ -361,7 +381,7 @@ func (host *Host) startResolved(
 		return Open{}, err
 	}
 
-	held := &unit{child: child, stderr: newRing(64), secretNames: fingerprint}
+	held := &unit{child: child, stderr: newRing(64), secretNames: fingerprint, path: path}
 	stderrDone := make(chan struct{})
 	go func() {
 		drain(child.Stderr(), held.stderr)
@@ -385,11 +405,11 @@ func (host *Host) startResolved(
 		return Open{}, err
 	}
 
-	held.open = Open{Name: name, Address: announced.address, Protocol: announced.protocol, PID: child.PID()}
+	held.open = Open{Name: name, Address: announced.address, Protocol: announced.protocol, PID: child.PID(), Version: version}
 	// The token stays here rather than on Open. Open is what a caller reads, and a caller that could
 	// read the token could greet the unit itself — which is the one thing this relay exists to be.
 	held.token = announced.token
-	host.remember(name, held.open, announced.token, fingerprint, path)
+	host.remember(name, held.open, announced.token, fingerprint, version, path)
 	host.mu.Lock()
 	// Another caller may have started the same unit while this one waited. The first one holds it;
 	// this one ends what it started rather than leaving a second process nobody has a handle to.
@@ -599,7 +619,7 @@ func (host *Host) restart(name string) (Open, error) {
 		return host.Start(name)
 	}
 	return host.startResolvedWithSecrets(
-		name, remembered.path, remembered.namespace, remembered.secretEnv, remembered.fingerprint,
+		name, remembered.version, remembered.path, remembered.namespace, remembered.secretEnv, remembered.fingerprint,
 	)
 }
 

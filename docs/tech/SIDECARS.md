@@ -65,6 +65,10 @@ Readiness is the first valid announcement from the process. A file appearing on 
 readiness. The core waits on the announcement with a finite deadline and never polls for a socket.
 Concurrent opens for the same provider share one start operation and receive the same success or
 failure result. A different secret declaration is rejected before waiting.
+The exact resolved component version is part of the running unit identity. A unit already serving
+another version or executable path is ended before the selected unit starts; matching only the
+sidecar id or its stable development directory is forbidden. The saved process announcement records
+that version, so a later Core generation applies the same rule before adoption.
 
 ## S5. Lifetime
 

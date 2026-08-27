@@ -112,7 +112,7 @@ func Register(registry *control.Registry, deps Registration) {
 			if err != nil {
 				return nil, err
 			}
-			return deps.Host.StartResolvedWithGeneratedSecrets(resolved.Name, resolved.Path, generated)
+			return deps.Host.StartResolvedWithGeneratedSecrets(resolved.Name, resolved.Version, resolved.Path, generated)
 		}
 		return deps.openWithSecrets(consumer, sidecar, namespace, secretEnv)
 	})
@@ -238,5 +238,5 @@ func (deps Registration) openWithSecrets(consumer Consumer, sidecar DependencyRe
 	if err != nil {
 		return Open{}, err
 	}
-	return deps.Host.StartResolvedWithSecrets(resolved.Name, resolved.Path, namespace, secretEnv)
+	return deps.Host.StartResolvedWithSecrets(resolved.Name, resolved.Version, resolved.Path, namespace, secretEnv)
 }
