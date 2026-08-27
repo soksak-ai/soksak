@@ -84,7 +84,7 @@ Window capture uses a platform compositor path. Every backend must preserve thes
 macOS reads this process's own shareable content through ScreenCaptureKit.
 If WebKit has produced no frame because the window is fully occluded, capture orders that window
 front without making it key or main, waits for visible renderers to acknowledge one real frame,
-then captures and restores the previous background ordering. It never activates the application,
+then captures and returns the window to background ordering. It never activates the application,
 uses private WebKit scheduling SPI, or polls.
 `CGWindowListCreateImage` is obsolete on macOS 15 and blocks during rendering. It is not used.
 Linux snapshots the GTK4 render node on the GTK main thread and encodes the resulting texture. It
