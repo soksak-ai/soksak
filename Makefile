@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: require-target require-label guard preflight lock prepare verify build compose
+.PHONY: require-target require-project guard preflight lock prepare verify build compose
 registry_flags = --@soksak:registry=$(REGISTRY) --@soksak-ai:registry=$(REGISTRY) --config.minimum-release-age=0
 # Recipes forward the flags as arguments; the scripts and the Taskfile pass them to pnpm verbatim.
 registry_arguments = $(if $(findstring command line,$(origin REGISTRY)),$(registry_flags))
@@ -11,18 +11,15 @@ registry_arguments = $(if $(findstring command line,$(origin REGISTRY)),$(regist
 require-target:
 	@test '$(origin TARGET)' = 'command line' && test -n '$(TARGET)' || { echo 'TARGET must be an explicit Make command-line variable' >&2; exit 2; }
 
-require-label:
-	@case "$(origin LABEL)" in undefined|"command line") ;; *) echo 'LABEL must be a command-line process label' >&2; exit 64 ;; esac; \
-		case "$(origin BUNDLE_ID)" in undefined|"command line") ;; *) echo 'BUNDLE_ID must be a command-line application identifier' >&2; exit 64 ;; esac; \
-		case "$(origin LABEL):$(origin BUNDLE_ID)" in undefined:undefined) exit 0 ;; "command line:command line") ;; *) echo 'LABEL and BUNDLE_ID must be supplied together' >&2; exit 64 ;; esac; \
-		label='$(LABEL)'; \
-		bundle_id='$(BUNDLE_ID)'; \
-		test -n "$$label" || { echo 'LABEL must be a command-line process label' >&2; exit 64; }; \
-		case "$$label" in [a-z0-9]*) ;; *) echo 'LABEL must start with a lowercase letter or digit' >&2; exit 64 ;; esac; \
-		case "$$label" in *[!a-z0-9-]*) echo 'LABEL may contain lowercase letters, digits, and hyphens only' >&2; exit 64 ;; esac; \
-		test "$${#label}" -le 31 || { echo 'LABEL must contain at most 31 bytes' >&2; exit 64; }; \
-		printf '%s\n' "$$bundle_id" | grep -Eq '^[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$$' || { echo 'BUNDLE_ID must be a command-line application identifier' >&2; exit 64; }; \
-		case '$(TARGET)' in aarch64-apple-darwin|x86_64-apple-darwin) ;; *) echo 'LABEL is supported only by a Darwin thin build' >&2; exit 64 ;; esac
+require-project:
+	@case "$(origin PROJECT)" in undefined) exit 0 ;; "command line") ;; *) echo 'PROJECT must be a command-line project name' >&2; exit 64 ;; esac; \
+		project='$(PROJECT)'; \
+		test -n "$$project" || { echo 'PROJECT must be a command-line project name' >&2; exit 64; }; \
+		case "$$project" in soksak*) ;; *) echo 'PROJECT must start with soksak' >&2; exit 64 ;; esac; \
+		case "$$project" in [a-z0-9]*) ;; *) echo 'PROJECT must start with a lowercase letter or digit' >&2; exit 64 ;; esac; \
+		case "$$project" in *[!a-z0-9-]*) echo 'PROJECT may contain lowercase letters, digits, and hyphens only' >&2; exit 64 ;; esac; \
+		test "$${#project}" -le 31 || { echo 'PROJECT must contain at most 31 bytes' >&2; exit 64; }; \
+		case '$(TARGET)' in aarch64-apple-darwin|x86_64-apple-darwin) ;; *) echo 'PROJECT is supported only by a Darwin thin build' >&2; exit 64 ;; esac
 
 # A package that depends on @soksak/* or @soksak-ai/* requires REGISTRY for every install, the public registry included.
 guard:
@@ -42,10 +39,10 @@ prepare: guard preflight
 verify: guard
 	@go tool wails3 task verify PNPM_FLAGS='$(registry_arguments)'
 
-build: guard require-target require-label
+build: guard require-target require-project
 	@case '$(TARGET)' in \
-		aarch64-apple-darwin) scripts/ci/darwin-release.sh arm64 '$(LABEL)' '$(BUNDLE_ID)' $(registry_arguments) ;; \
-		x86_64-apple-darwin) scripts/ci/darwin-release.sh x86_64 '$(LABEL)' '$(BUNDLE_ID)' $(registry_arguments) ;; \
+		aarch64-apple-darwin) scripts/ci/darwin-release.sh arm64 '$(PROJECT)' $(registry_arguments) ;; \
+		x86_64-apple-darwin) scripts/ci/darwin-release.sh x86_64 '$(PROJECT)' $(registry_arguments) ;; \
 		aarch64-unknown-linux-gnu) scripts/ci/linux-release.sh arm64 $(registry_arguments) ;; \
 		x86_64-unknown-linux-gnu) scripts/ci/linux-release.sh amd64 $(registry_arguments) ;; \
 		x86_64-pc-windows-msvc) scripts/ci/windows-build.sh all $(registry_arguments) ;; \
