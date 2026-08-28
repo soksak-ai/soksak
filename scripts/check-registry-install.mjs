@@ -118,7 +118,7 @@ test("documentation shows REGISTRY on every make command line", () => {
   for (const name of ["README.md", "README.ko.md"]) {
     const readme = read(name);
     assert.ok(readme.includes("make verify REGISTRY=http://host:port/"), name);
-    assert.ok(readme.includes("REGISTRY required: this package depends on @soksak-ai/"), name);
+    assert.ok(readme.includes("REGISTRY required: this package depends on @soksak/"), name);
   }
   const docs = readdirSync(join(root, "docs/tech")).filter((name) => name.endsWith(".md")).map((name) => `docs/tech/${name}`);
   for (const name of ["README.md", "README.ko.md", ...docs]) {
