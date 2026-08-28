@@ -11,11 +11,6 @@
 
 #include <stdbool.h>
 
-// Apply and read the diagnostic process label through NSProcessInfo. The caller owns the returned
-// string and frees it. This does not change bundle identity or process ownership.
-char *soksakApplyProcessLabel(const char *label);
-char *soksakCopyProcessLabel(void);
-
 // Order the window in front of every other window in this application without
 // making it the key window. Plain front ordering is not used: an occluded
 // window can have its display callbacks suspended, and then it never paints a

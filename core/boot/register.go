@@ -64,7 +64,7 @@ type Boot struct {
 	// commands that need one by name rather than reading $SHELL, which would
 	// tie the answer to whatever launched this process.
 	LoginShell string
-	// ProcessLabel is the launcher's validated diagnostic process name. It is reported but never
+	// ProcessLabel is the launcher's validated diagnostic process label. It is reported but never
 	// used as application identity, dependency state, permission, or ownership.
 	ProcessLabel string
 	// Windows is the platform, as an argument. Reading runtime.GOOS here would

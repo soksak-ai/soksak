@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestLaunchAppliesAndPublishesOneProcessLabel(t *testing.T) {
+func TestLaunchPublishesOneProcessLabel(t *testing.T) {
 	body, err := os.ReadFile("internal/application/run.go")
 	if err != nil {
 		t.Fatal(err)
@@ -15,7 +15,6 @@ func TestLaunchAppliesAndPublishesOneProcessLabel(t *testing.T) {
 	for _, required := range []string{
 		`os.Getenv(controlwire.ProcessLabelEnvironment)`,
 		"processLabelFromEnvironment",
-		"ApplyProcessLabel",
 		"ProcessLabel:",
 	} {
 		if !strings.Contains(source, required) {
@@ -23,9 +22,15 @@ func TestLaunchAppliesAndPublishesOneProcessLabel(t *testing.T) {
 		}
 	}
 	read := strings.Index(source, `os.Getenv(controlwire.ProcessLabelEnvironment)`)
-	apply := strings.Index(source, "ApplyProcessLabel")
 	units := strings.Index(source, "sidecar.NewHost")
-	if read < 0 || apply < read || units < apply {
-		t.Errorf("process label order read=%d apply=%d sidecars=%d", read, apply, units)
+	boot := strings.Index(source, "boot.RegisterCore")
+	if read < 0 || units < read || boot < units {
+		t.Fatalf("process label ownership order read=%d sidecars=%d boot=%d", read, units, boot)
+	}
+	if !strings.Contains(source[units:boot], "ProcessLabel: processLabel") {
+		t.Error("sidecar host does not receive the launch-owned process label")
+	}
+	if !strings.Contains(source[boot:], "ProcessLabel: processLabel") {
+		t.Error("Core public environment does not receive the launch-owned process label")
 	}
 }

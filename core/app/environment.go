@@ -16,7 +16,7 @@ type Environment struct {
 	CoreBuild  string `json:"coreBuild"`
 	CLI        string `json:"cli"`
 	LoginShell string `json:"loginShell"`
-	// ProcessLabel is the diagnostic name applied to the operating-system process surface. It is
+	// ProcessLabel is the diagnostic name published by process inventory and monitoring. It is
 	// deliberately separate from Identity and never participates in routing or ownership.
 	ProcessLabel string `json:"processLabel"`
 	// BuildProfile is how this binary was compiled, which is a different fact

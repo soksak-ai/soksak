@@ -77,10 +77,6 @@ func Run(assets embed.FS) error {
 	if err != nil {
 		return err
 	}
-	if _, err := wails.ApplyProcessLabel(processLabel); err != nil {
-		return err
-	}
-
 	// The ambient is read here, once, and passed as values. Reading it deeper
 	// would let two parts of the process disagree about which home they are in.
 	userHome := os.Getenv("HOME")

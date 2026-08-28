@@ -11,20 +11,10 @@ import "C"
 import (
 	"unsafe"
 
-	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 var ErrRevealWithoutKeyUnsupported = i18n.Errorf("wails.window.revealWithoutKeyUnsupported", nil)
-var ErrProcessLabelUnsupported = i18n.Errorf("wails.process.labelUnsupported", nil)
-
-func applyProcessLabel(label string) (string, error) {
-	if label == controlwire.DefaultProcessLabel {
-		return label, nil
-	}
-	return "", ErrProcessLabelUnsupported
-}
-
 func orderWindowFrontWithoutKey(window unsafe.Pointer) error {
 	if window == nil {
 		return i18n.Errorf("wails.window.noNativeLifetimeFront", nil)

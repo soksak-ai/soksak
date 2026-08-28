@@ -17,34 +17,6 @@ import (
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
-func applyProcessLabel(label string) (string, error) {
-	native := C.CString(label)
-	defer C.free(unsafe.Pointer(native))
-	applied := C.soksakApplyProcessLabel(native)
-	if applied == nil {
-		return "", i18n.Errorf("wails.process.labelApplyFailed", map[string]string{
-			"requested": label, "actual": "absent",
-		})
-	}
-	defer C.free(unsafe.Pointer(applied))
-	actual := C.GoString(applied)
-	if actual != label {
-		return "", i18n.Errorf("wails.process.labelApplyFailed", map[string]string{
-			"requested": label, "actual": actual,
-		})
-	}
-	return actual, nil
-}
-
-func currentProcessLabel() string {
-	value := C.soksakCopyProcessLabel()
-	if value == nil {
-		return ""
-	}
-	defer C.free(unsafe.Pointer(value))
-	return C.GoString(value)
-}
-
 var windowInputMonitorOwner struct {
 	sync.RWMutex
 	monitor *windowInputMonitor

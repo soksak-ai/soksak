@@ -82,7 +82,7 @@ type Deps struct {
 	// Environment is what a unit inherits. It arrives complete: a nil one would make os/exec read
 	// this process's own, which ties a unit to whatever launched the application.
 	Environment []string
-	// ProcessLabel is the diagnostic label every unit this host starts must apply and announce.
+	// ProcessLabel is the diagnostic label every unit this host starts must accept and announce.
 	// It never participates in component identity or dependency resolution.
 	ProcessLabel string
 	// Dial opens a connection to an address a unit announced. It is injected because the address

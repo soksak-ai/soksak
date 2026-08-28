@@ -5,7 +5,6 @@ package wails
 import (
 	"unsafe"
 
-	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
 	"github.com/wailsapp/wails/v3/pkg/w32"
 )
@@ -44,15 +43,6 @@ func presentCaptureOnlyWindow(window unsafe.Pointer) error {
 }
 
 var ErrActivationUnsupported = i18n.Errorf("wails.window.activationUnsupported", nil)
-var ErrProcessLabelUnsupported = i18n.Errorf("wails.process.labelUnsupported", nil)
-
-func applyProcessLabel(label string) (string, error) {
-	if label == controlwire.DefaultProcessLabel {
-		return label, nil
-	}
-	return "", ErrProcessLabelUnsupported
-}
-
 func activateApplication() error { return ErrActivationUnsupported }
 
 var ErrTitleUnsupported = i18n.Errorf("wails.window.titleUnsupported", nil)
