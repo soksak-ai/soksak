@@ -30,8 +30,9 @@ guard:
 preflight:
 	@scripts/ci/check-build-toolchain.sh --toolchain-only
 
-lock: preflight
+lock: guard preflight
 	@go mod tidy
+	@CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm --dir frontend $(registry_arguments) install --lockfile-only
 
 prepare: guard preflight
 	@scripts/ci/prepare-frontend-dependencies.sh $(registry_arguments)
