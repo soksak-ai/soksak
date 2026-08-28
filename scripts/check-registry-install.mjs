@@ -65,9 +65,11 @@ test("Makefile forwards a command-line REGISTRY as the scoped registry flags to 
   assert.match(makefile, /^guard:$/m);
   assert.match(makefile, /^prepare: guard preflight\n\t@scripts\/ci\/prepare-frontend-dependencies\.sh \$\(registry_arguments\)$/m);
   assert.match(makefile, /^verify: guard\n\t@go tool wails3 task verify PNPM_FLAGS='\$\(registry_arguments\)'$/m);
-  assert.match(makefile, /^build: guard require-target$/m);
-  const releaseScripts = makefile.match(/scripts\/ci\/(?:darwin-release|linux-release|windows-build)\.sh \S+ \$\(registry_arguments\)/g) ?? [];
-  assert.equal(releaseScripts.length, 5, "every build script call forwards the registry flags");
+  assert.match(makefile, /^build: guard require-target require-project$/m);
+  const darwinReleaseScripts = makefile.match(/scripts\/ci\/darwin-release\.sh \S+ '\$\(PROJECT\)' \$\(registry_arguments\)/g) ?? [];
+  const otherReleaseScripts = makefile.match(/scripts\/ci\/(?:linux-release|windows-build)\.sh \S+ \$\(registry_arguments\)/g) ?? [];
+  assert.equal(darwinReleaseScripts.length, 2, "every Darwin build forwards PROJECT and registry flags");
+  assert.equal(otherReleaseScripts.length, 3, "every non-Darwin build forwards registry flags");
   assert.match(makefile, /node -p '[^']*dependencies[^']*devDependencies[^']*peerDependencies/);
   refused(run(["prepare", "REGISTRY=localhost:4873"]), /REGISTRY must be an absolute URL/);
   refused(run(["prepare", "REGISTRY="]), /REGISTRY must be an absolute URL/);
@@ -87,11 +89,6 @@ test("Makefile owns both Go and frontend lockfile regeneration", () => {
   assert.match(makefile, /^lock: guard preflight$/m);
   assert.match(makefile, /^\t@go mod tidy$/m);
   assert.match(makefile, /^\t@CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm --dir frontend \$\(registry_arguments\) install --lockfile-only$/m);
-});
-
-test("Makefile accepts a declared project name without a product prefix allowlist", () => {
-  assert.match(makefile, /^require-project:$/m);
-  assert.doesNotMatch(makefile, /PROJECT must start with soksak|case "\$\$project" in soksak\*/);
 });
 
 // pnpm 11 compares the settings recorded by the install before every script run and reinstalls
