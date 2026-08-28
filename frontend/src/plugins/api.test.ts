@@ -94,17 +94,15 @@ beforeEach(() => {
 });
 
 describe("explicit file drop grants", () => {
-  it("redeems only grants issued to this plugin and quotes with the declared login shell", async () => {
-    const execute = vi.fn(async (name: string) => name === "app.environment"
-      ? { ok: true as const, code: "OK", message: "ok", data: { loginShell: "/bin/zsh" } }
-      : { ok: true as const, code: "OK", message: "ok" });
+  it("redeems only grants issued to this plugin without assigning a consumer meaning", async () => {
+    const execute = vi.fn(async () => ({ ok: true as const, code: "OK", message: "ok" }));
     const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps({ execute }));
     const [grant] = issueDropGrants({ pluginId: "demo", window: "main", paths: ["<local-evidence>/a b"] });
     await expect(api.fileGrants?.redeem(grant.id)).resolves.toEqual({
-      kind: "file", shellText: "'<local-evidence>/a b'",
+      kind: "file", path: "<local-evidence>/a b",
     });
     await expect(api.fileGrants?.redeem(grant.id)).resolves.toBeNull();
-    expect(execute).toHaveBeenCalledWith("app.environment", {}, {});
+    expect(execute).not.toHaveBeenCalled();
   });
 });
 

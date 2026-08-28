@@ -14,23 +14,6 @@ const grants = moduleState("plugins/dropGrants#state", () => new Map<string, Sto
 const imagePath = /[.](?:avif|bmp|gif|heic|heif|jpeg|jpg|png|svg|tif|tiff|webp)$/i;
 const control = /[\0\r\n]/;
 
-export function quoteDropPath(path: string, loginShell: string): string {
-  if (!path || control.test(path)) throw new Error("drop path contains a control character");
-  const shell = loginShell.replaceAll("\\", "/").split("/").pop()?.toLowerCase() ?? "";
-  if (["sh", "bash", "dash", "ksh", "zsh"].includes(shell)) {
-    return `'${path.replaceAll("'", `'\\''`)}'`;
-  }
-  if (shell === "fish") return `'${path.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`;
-  if (["pwsh", "pwsh.exe", "powershell", "powershell.exe"].includes(shell)) {
-    return `'${path.replaceAll("'", "''")}'`;
-  }
-  if (shell === "cmd" || shell === "cmd.exe") {
-    if (path.includes('"')) throw new Error("drop path contains a cmd quote");
-    return `"${path}"`;
-  }
-  throw new Error(`unsupported drop shell: ${loginShell}`);
-}
-
 export function issueDropGrants(input: {
   pluginId: string;
   window: string;
@@ -53,13 +36,11 @@ export function redeemDropGrant(input: {
   pluginId: string;
   window: string;
   id: string;
-  loginShell: string;
-}): { kind: DropGrantKind; shellText: string } | null {
+}): { kind: DropGrantKind; path: string } | null {
   const grant = grants.get(input.id);
   if (!grant || grant.pluginId !== input.pluginId || grant.window !== input.window) return null;
-  const shellText = quoteDropPath(grant.path, input.loginShell);
   grants.delete(input.id);
-  return { kind: grant.kind, shellText };
+  return { kind: grant.kind, path: grant.path };
 }
 
 export function __resetDropGrantsForTest(): void {

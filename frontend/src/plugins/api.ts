@@ -478,8 +478,7 @@ export interface SoksakPluginApi {
   fileGrants: {
     redeem(id: string): Promise<{
       kind: "file" | "image";
-      shellText: string;
-      inline?: { protocol: string; data: string };
+      path: string;
     } | null>;
   };
   terminal?: {
@@ -2050,19 +2049,11 @@ export function buildPluginApi(
         : undefined,
 
     fileGrants: {
-      redeem: async (grantId: string) => {
-        const environment = await deps.execute("app.environment", {}, pluginCtx);
-        const loginShell = environment.ok && typeof environment.data?.loginShell === "string"
-          ? environment.data.loginShell
-          : "";
-        if (!loginShell) throw new Error("app.environment returned no login shell for a file grant");
-        return redeemDropGrant({
-          pluginId: id,
-          window: currentWindowLabel() || "main",
-          id: grantId,
-          loginShell,
-        });
-      },
+      redeem: async (grantId: string) => redeemDropGrant({
+        pluginId: id,
+        window: currentWindowLabel() || "main",
+        id: grantId,
+      }),
     },
 
     // [RULE] Terminal area — different capabilities get different permissions: observation ("terminal":

@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   __resetDropGrantsForTest,
   issueDropGrants,
-  quoteDropPath,
   redeemDropGrant,
 } from "./dropGrants";
 
@@ -20,24 +19,16 @@ describe("host-issued file drop grants", () => {
     expect(issued.map((grant) => grant.kind)).toEqual(["file", "image"]);
     expect(JSON.stringify(issued)).not.toContain("<local-evidence>/");
     expect(redeemDropGrant({
-      pluginId: "other-plugin", window: "win-a", id: issued[0].id, loginShell: "/bin/zsh",
+      pluginId: "other-plugin", window: "win-a", id: issued[0].id,
     })).toBeNull();
     expect(redeemDropGrant({
-      pluginId: "soksak-plugin-terminal-vt100", window: "win-b", id: issued[0].id, loginShell: "/bin/zsh",
+      pluginId: "soksak-plugin-terminal-vt100", window: "win-b", id: issued[0].id,
     })).toBeNull();
     expect(redeemDropGrant({
-      pluginId: "soksak-plugin-terminal-vt100", window: "win-a", id: issued[0].id, loginShell: "/bin/zsh",
-    })).toEqual({ kind: "file", shellText: "'<local-evidence>/a b'" });
+      pluginId: "soksak-plugin-terminal-vt100", window: "win-a", id: issued[0].id,
+    })).toEqual({ kind: "file", path: "<local-evidence>/a b" });
     expect(redeemDropGrant({
-      pluginId: "soksak-plugin-terminal-vt100", window: "win-a", id: issued[0].id, loginShell: "/bin/zsh",
+      pluginId: "soksak-plugin-terminal-vt100", window: "win-a", id: issued[0].id,
     })).toBeNull();
-  });
-
-  it("quotes only declared shell families and refuses control characters", () => {
-    expect(quoteDropPath("<local-evidence>/it's here", "/bin/zsh")).toBe("'<local-evidence>/it'\\''s here'");
-    expect(quoteDropPath("C:\\A B\\file.txt", "pwsh.exe")).toBe("'C:\\A B\\file.txt'");
-    expect(quoteDropPath("C:\\A B\\file.txt", "cmd.exe")).toBe('"C:\\A B\\file.txt"');
-    expect(() => quoteDropPath("<local-evidence>/a\nnext", "/bin/zsh")).toThrow(/control character/);
-    expect(() => quoteDropPath("<local-evidence>/a", "/bin/unknown-shell")).toThrow(/unsupported drop shell/);
   });
 });
