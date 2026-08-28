@@ -367,10 +367,13 @@ interface SessionsStore {
     projectId: string,
     viewId: string,
   ) => CmdResult<{ activePaneId: string; activeTabId: string }>;
-  // moved is whether the activation changed the arrangement and opened a layout transition.
-  // Activating the tab that is already active changes nothing, and a caller that cannot tell the
-  // two apart waits for a transaction that was never opened.
-  setActiveView: (projectId: string, viewId: string) => CmdResult<{ moved: boolean }>;
+  // Active-chain identity and layout geometry are separate facts. beforeLayoutMove runs only when
+  // the state write is about to open a layout transition.
+  setActiveView: (
+    projectId: string,
+    viewId: string,
+    beforeLayoutMove?: () => void,
+  ) => CmdResult<{ changed: boolean; layoutMoved: boolean }>;
   setActiveGroup: (projectId: string, groupId: string) => CmdResult;
   // Maximize a view — one view fills the whole content area (split tree unchanged, display only).
   // Restore = the original split.
@@ -736,11 +739,16 @@ export function projectArrangement(
  * identity alone makes even a no-move activation such as PIN create a barrier; skipping the revision
  * without this comparison leaves the FLOW WorkspacePlane on the old display solution. The layout
  * solver and the movement solver are the only judges. */
-function openProjectArrangementTransition(before: Workspace, after: Workspace): boolean {
+function openProjectArrangementTransition(
+  before: Workspace,
+  after: Workspace,
+  beforeOpen?: () => void,
+): boolean {
   const from = projectArrangement(before);
   const to = projectArrangement(after);
   if (!from || !to) return false;
   if (!projectionGeometryChanged(from, to)) return false;
+  beforeOpen?.();
   const revision = invalidateLayout(before.id);
   publishLayoutTransitionIntent({
     ownerKey: before.id,
@@ -1494,9 +1502,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
     return r;
   },
 
-  setActiveView: (projectId, viewId) => {
+  setActiveView: (projectId, viewId, beforeLayoutMove) => {
     noteActivation("setActiveView", viewId); // activation ledger — call count and call path (observation)
-    let r: CmdResult<{ moved: boolean }> = noWorkspace(projectId);
+    let r: CmdResult<{ changed: boolean; layoutMoved: boolean }> = noWorkspace(projectId);
     set((s) => {
       const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
@@ -1507,20 +1515,32 @@ export const useSessions = moduleState("state/sessions#store", () =>
       }
       const grp = findGroupOfView(content.layout, viewId);
       if (!grp) return s;
-      const nextWorkspace = mapContent(t, content.id, (c) => ({
-        ...c,
-        layout: mapGroupNode(c.layout, grp.id, (g) => ({
-          ...g,
-          activeTabId: viewId,
+      const changed = s.activeId !== projectId
+        || t.activeSpaceId !== content.id
+        || content.activePaneId !== grp.id
+        || grp.activeTabId !== viewId;
+      if (!changed) {
+        r = ok({ changed: false, layoutMoved: false });
+        return s;
+      }
+      const nextWorkspace = {
+        ...mapContent(t, content.id, (c) => ({
+          ...c,
+          layout: mapGroupNode(c.layout, grp.id, (g) => ({
+            ...g,
+            activeTabId: viewId,
+          })),
+          activePaneId: grp.id,
         })),
-        activePaneId: grp.id,
-      }));
-      const moved = openProjectArrangementTransition(t, nextWorkspace);
-      r = ok({ moved });
+        activeSpaceId: content.id,
+      };
+      const layoutMoved = openProjectArrangementTransition(t, nextWorkspace, beforeLayoutMove);
+      r = ok({ changed: true, layoutMoved });
       // The WorkspacePlane adapter starts preparing the exact revision before the new workspace
       // subscriber. The React layout commit does not reopen this transaction; it claims the same
       // revision promise.
       return {
+        activeId: projectId,
         workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });

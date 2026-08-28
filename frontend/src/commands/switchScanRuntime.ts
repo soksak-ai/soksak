@@ -17,10 +17,21 @@ export type SwitchScanRegion = {
   y1: number;
 };
 
-export type SwitchScanTransaction = {
+export type SwitchScanLayoutTransaction = {
   transactionId: string;
   sequence: number;
   phase: "committed";
+};
+
+export type SwitchScanActivationReceipt = {
+  changed: true;
+  layoutMoved: boolean;
+  presentation: {
+    kind: "space" | "tab";
+    id: string;
+    phase: "dom-committed";
+  };
+  transaction: SwitchScanLayoutTransaction | null;
 };
 
 type AnalyzeReport = {
@@ -66,7 +77,7 @@ export async function runSwitchScan(input: {
   threshold: number;
   fromViews: readonly string[];
   toViews: readonly string[];
-  activate: () => Promise<SwitchScanTransaction>;
+  activate: () => Promise<SwitchScanActivationReceipt>;
 }): Promise<{
   frames: number;
   frameMs: number;
@@ -79,12 +90,12 @@ export async function runSwitchScan(input: {
   clean: boolean;
   diffsPct: number[];
   presentationFrames: SwitchPresentationSample[];
-  transaction: SwitchScanTransaction;
+  activation: SwitchScanActivationReceipt;
   recordingDir: string;
 }> {
   const samples: SwitchPresentationSample[] = [];
   const activation = { current: null as Promise<
-    { ok: true; transaction: SwitchScanTransaction }
+    { ok: true; activation: SwitchScanActivationReceipt }
     | { ok: false; error: unknown }
   > | null };
   const startedAt = performance.now();
@@ -100,7 +111,7 @@ export async function runSwitchScan(input: {
       });
       if (frame === input.applyAtFrame) {
         activation.current = input.activate().then(
-          (transaction) => ({ ok: true as const, transaction }),
+          (receipt) => ({ ok: true as const, activation: receipt }),
           (error) => ({ ok: false as const, error }),
         );
       }
@@ -152,7 +163,7 @@ export async function runSwitchScan(input: {
     clean: pixels.clean && presentation.clean,
     diffsPct: diffs.map((value) => +(value * 100).toFixed(1)),
     presentationFrames: samples,
-    transaction: activationResult.transaction,
+    activation: activationResult.activation,
     recordingDir: input.dir,
   };
 }

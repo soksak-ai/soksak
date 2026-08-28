@@ -112,7 +112,12 @@ import {
 import { contentViewHost, hasContentViewHost } from "../lib/contentViews";
 import { nextFrame } from "../lib/nextFrame";
 import { waitForDomCommit } from "./waitForDomCommit";
-import { runSwitchScan, type SwitchScanRegion, type SwitchScanTransaction } from "./switchScanRuntime";
+import {
+  runSwitchScan,
+  type SwitchScanActivationReceipt,
+  type SwitchScanLayoutTransaction,
+  type SwitchScanRegion,
+} from "./switchScanRuntime";
 
 // ── Shared errors and helpers ─────────────────────────────────────────────────
 
@@ -1691,24 +1696,10 @@ export function registerCatalog(): void {
     (maximum, entry) => Math.max(maximum, entry.sequence),
     0,
   );
-  const activateForSwitchScan = async (
-    command: "space.activate" | "tab.activate",
-    params: Record<string, unknown>,
-    ctx: CommandContext,
+  const committedLayoutTransaction = async (
     causeTraceId: string,
-  ): Promise<SwitchScanTransaction> => {
-    const afterSequence = layoutSequence();
-    const activated = await execute(
-      command,
-      { ...params, causeTraceId },
-      { ...ctx, origin: "switch-scan" },
-    );
-    if (!activated.ok) {
-      throw new Error(`${command} ${activated.code}: ${activated.message}`);
-    }
-    if (activated.data?.moved !== true) {
-      throw new Error(`${command} did not move the presentation`);
-    }
+    afterSequence: number,
+  ): Promise<SwitchScanLayoutTransaction> => {
     const receipt = await waitForLayoutTransaction({
       causeTraceId,
       afterSequence,
@@ -1721,6 +1712,58 @@ export function registerCatalog(): void {
       transactionId: receipt.entry.transactionId,
       sequence: receipt.entry.sequence,
       phase: "committed",
+    };
+  };
+  const waitForTabPresentationCommit = async (viewId: string): Promise<void> => {
+    const node = (): HTMLElement | undefined => [...document.querySelectorAll<HTMLElement>(
+      '[data-node^="layout/tab/"]',
+    )].find((candidate) => candidate.dataset.node === `layout/tab/${viewId}`);
+    await waitForDomCommit(() => node()?.dataset.contentVisible === "true");
+  };
+  const activateForSwitchScan = async (
+    command: "space.activate" | "tab.activate",
+    params: Record<string, unknown>,
+    ctx: CommandContext,
+    causeTraceId: string,
+  ): Promise<SwitchScanActivationReceipt> => {
+    const afterSequence = layoutSequence();
+    const activated = await execute(
+      command,
+      { ...params, causeTraceId },
+      { ...ctx, origin: "switch-scan" },
+    );
+    if (!activated.ok) {
+      throw new Error(`${command} ${activated.code}: ${activated.message}`);
+    }
+    if (command === "space.activate") {
+      if (activated.data?.moved !== true) {
+        throw new Error(`${command} did not change the active space`);
+      }
+      return {
+        changed: true,
+        layoutMoved: true,
+        presentation: {
+          kind: "space",
+          id: String(params.space),
+          phase: "dom-committed",
+        },
+        transaction: await committedLayoutTransaction(causeTraceId, afterSequence),
+      };
+    }
+    if (activated.data?.changed !== true) {
+      throw new Error(`${command} did not change the active tab`);
+    }
+    const layoutMoved = activated.data.layoutMoved === true;
+    const transaction = layoutMoved
+      ? await committedLayoutTransaction(causeTraceId, afterSequence)
+      : null;
+    const viewId = String(params.tab);
+    await waitForTabPresentationCommit(viewId);
+    return {
+      changed: true,
+      layoutMoved,
+      presentation: { kind: "tab", id: viewId, phase: "dom-committed" },
+      transaction,
     };
   };
   const visibleSpaceViews = (space: Space): string[] => {
@@ -1780,7 +1823,7 @@ export function registerCatalog(): void {
       ...switchScanParams(),
     },
     returns:
-      "{ projectId, fromSpaceId, spaceId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, clean, diffsPct, presentationFrames, transaction, recordingDir }",
+      "{ projectId, fromSpaceId, spaceId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, clean, diffsPct, presentationFrames, activation, recordingDir }",
     message: (d) =>
       d.clean
         ? tmsg("msg.space.switchScan.clean")
@@ -2425,11 +2468,8 @@ export function registerCatalog(): void {
     },
   });
 
-  // Activating a tab moves the screen: the rail travels to the pane that was clicked and the
-  // sidebar stands the section of that view's plugin. Both are a layout transaction, and until this
-  // command stamped a cause there was no way to wait for the one it opened — a caller had to read
-  // the arrangement over and over and call it settled when two readings agreed, which is equally
-  // true of a window that has finished and one whose motion the readings straddled.
+  // Activation changes the workspace→space→pane→tab chain. Geometry is a separate fact: switching
+  // tabs inside one pane commits presentation without opening a layout transaction.
   register("tab.activate", {
     description: key("cmd.tab.activate.desc"),
     triggers: { ko: "탭 전환 탭 선택 탭 활성화" },
@@ -2437,7 +2477,7 @@ export function registerCatalog(): void {
       tab: { ...P.tab, required: true },
       causeTraceId: { type: "string", description: key("cmd.tab.activate.param.causeTraceId") },
     },
-    returns: "{ tabId, moved, causeTraceId? } — causeTraceId is answered only when the activation moved the screen, which is the only case a transaction exists to wait for",
+    returns: "{ tabId, changed, layoutMoved, causeTraceId? } — causeTraceId is answered only when layoutMoved is true",
     message: () => tmsg("msg.tab.activate"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: ['tab.activate \'{"tab":"tab-k5m6n7"}\''],
@@ -2448,19 +2488,17 @@ export function registerCatalog(): void {
       }
       const loc = locateTab(p.tab as string);
       if (!loc) return notFound("msg.tab.notFoundId", { id: String(p.tab) });
-      // Declared before the state write, because the transaction opens inside it.
-      if (causeTraceId !== undefined) declareLayoutCause(causeTraceId);
       const done = transferViewFocus(activeSessionViewId(), p.tab as string, () =>
-        S().setActiveView(loc.workspace.id, p.tab as string),
+        S().setActiveView(
+          loc.workspace.id,
+          p.tab as string,
+          causeTraceId === undefined ? undefined : () => declareLayoutCause(causeTraceId),
+        ),
       );
-      // Whether the screen moved. Activating the tab that is already active changes nothing and
-      // opens no layout transaction, so a caller that waits for one on every activation waits out
-      // its own timeout — measured 2026-08-18, the gate's own click on the pane it was already in.
-      const moved = (done as { moved?: boolean }).moved === true;
-      // The cause is answered only where there is a transaction to find it on.
+      if (!done.ok) return done;
       return withTargets(done, {
         tabId: p.tab as string,
-        ...(causeTraceId !== undefined && moved ? { causeTraceId } : {}),
+        ...(causeTraceId !== undefined && done.layoutMoved ? { causeTraceId } : {}),
       });
     },
   });
@@ -2474,7 +2512,7 @@ export function registerCatalog(): void {
       ...switchScanParams(),
     },
     returns:
-      "{ fromTabId, tabId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, clean, diffsPct, presentationFrames, transaction, recordingDir }",
+      "{ fromTabId, tabId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, clean, diffsPct, presentationFrames, activation, recordingDir }",
     message: (data) => data.clean
       ? tmsg("msg.tab.switchScan.clean")
       : tmsg("msg.tab.switchScan.jank", { n: Number(data.flickerFrames) }),

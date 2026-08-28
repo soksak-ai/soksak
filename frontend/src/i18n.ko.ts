@@ -1565,7 +1565,7 @@ export const ko = {
   "cmd.tab.close.desc": "탭을 닫습니다 — pane 의 마지막 탭이었으면 pane 도 함께 제거합니다. 스페이스의 마지막 탭은 닫지 않습니다.",
   "cmd.tab.label.set.desc": "사이드바 뷰의 탭 라벨을 지정합니다(매니페스트 제목을 덮어씁니다). 빈 라벨은 덮어쓰기를 해제합니다(매니페스트 폴백). viewKey = ui.tree 의 '<pluginId>.<viewId>'(tab/left/<key>).",
   "cmd.tab.list.desc": "pane 안의 탭을 조회합니다.",
-  "cmd.tab.activate.param.causeTraceId": "이 활성화가 여는 레이아웃 트랜잭션에 기록되는 호출자 소유 원인 식별자. layout.transaction.wait 가 이것으로 그 하나를 기다리므로, 호출자는 화면이 정착하기를 시간으로 재지 않습니다.",
+  "cmd.tab.activate.param.causeTraceId": "탭 활성화가 레이아웃 기하를 움직일 때만 기록하는 호출자 소유 식별자. layoutMoved를 확인한 뒤 정확한 트랜잭션을 기다립니다.",
   "msg.cause.empty": "causeTraceId 는 값이 있어야 합니다 — 빈 문자열은 원인을 이름 짓지 않습니다",
   "cmd.tab.maximize.param.causeTraceId": "기하를 바꾸는 레이아웃 트랜잭션에 기록되는 호출자 소유 원인 식별자.",
   "cmd.tab.move.desc": "탭을 dst pane 의 zone 위치로 옮깁니다(center = 그 pane 안으로 이동, 그 외 = 분할해 새 pane 생성).",
