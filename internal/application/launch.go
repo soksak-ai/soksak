@@ -55,9 +55,9 @@ func launch(resolved identity.Resolved, claim claimHome, run own) error {
 // on. A failure is logged rather than returned: the socket stopping is not a
 // reason to take the windows down, and a caller that finds nothing answering
 // finds that by connecting.
-func serveControl(listener net.Listener, registry *control.Registry, identifier string, onStop func(error)) {
+func serveControl(listener net.Listener, registry *control.Registry, identifier, processLabel string, onStop func(error)) {
 	go func() {
-		if err := control.Serve(listener, registry, identifier); err != nil {
+		if err := control.Serve(listener, registry, identifier, processLabel); err != nil {
 			onStop(err)
 		}
 	}()

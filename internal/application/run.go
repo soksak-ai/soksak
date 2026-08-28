@@ -69,8 +69,15 @@ func Run(assets embed.FS) error {
 	if identifier == "" {
 		identifier = defaultIdentifier
 	}
+	processLabel, err := processLabelFromEnvironment(os.Getenv(controlwire.ProcessLabelEnvironment))
+	if err != nil {
+		return fmt.Errorf("PROCESS_LABEL_INVALID: %w", err)
+	}
 	presentation, err := presentationFromEnvironment(os.Getenv("SOKSAK_PRESENTATION"))
 	if err != nil {
+		return err
+	}
+	if _, err := wails.ApplyProcessLabel(processLabel); err != nil {
 		return err
 	}
 
@@ -104,11 +111,12 @@ func Run(assets embed.FS) error {
 	// install put on disk, starts it, and relays — the shell that used to be built into this binary
 	// is a unit like any other now, and adding the next one edits no line here.
 	units := sidecar.NewHost(sidecar.Deps{
-		Home:        resolved.Home,
-		Runtime:     resolved.Runtime,
-		Spawner:     process.OSSpawner{},
-		Environment: os.Environ(),
-		Dial:        sidecar.DialLocal,
+		Home:         resolved.Home,
+		Runtime:      resolved.Runtime,
+		Spawner:      process.OSSpawner{},
+		Environment:  os.Environ(),
+		ProcessLabel: processLabel,
+		Dial:         sidecar.DialLocal,
 		// The application's own session layer starts units by name: the
 		// environment record is the resolver, exactly what an installed or
 		// developed sidecar declared (a name with no record refuses by name).
@@ -148,6 +156,7 @@ func Run(assets embed.FS) error {
 		wired := boot.RegisterCore(registry, boot.Boot{
 			Identity:     resolved,
 			BuildProfile: buildProfile,
+			ProcessLabel: processLabel,
 			KV:           kv,
 			Ledger:       activity.NewLedger(),
 			Recent:       activity.NewTail(0),
@@ -197,7 +206,7 @@ func Run(assets embed.FS) error {
 		defer func() { _ = kv.Close() }()
 		fill(kv)
 
-		serveControl(listener, registry, resolved.Identifier, func(err error) {
+		serveControl(listener, registry, resolved.Identifier, processLabel, func(err error) {
 			log.Printf("control plane stopped: %v", err)
 		})
 		if err := announceControlReady(os.Stdout, resolved, os.Getpid()); err != nil {

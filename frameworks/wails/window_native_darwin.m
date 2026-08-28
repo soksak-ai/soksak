@@ -6,6 +6,23 @@
 #include <stdlib.h>
 #include <string.h>
 
+char *soksakApplyProcessLabel(const char *label) {
+  if (label == NULL) return NULL;
+  @autoreleasepool {
+    NSString *value = [NSString stringWithUTF8String:label];
+    if (value == nil || value.length == 0) return NULL;
+    [[NSProcessInfo processInfo] setProcessName:value];
+    return strdup([[[NSProcessInfo processInfo] processName] UTF8String]);
+  }
+}
+
+char *soksakCopyProcessLabel(void) {
+  @autoreleasepool {
+    NSString *value = [[NSProcessInfo processInfo] processName];
+    return value == nil ? NULL : strdup([value UTF8String]);
+  }
+}
+
 static NSView *soksakFindWebview(NSWindow *window) {
   NSView *content = window.contentView;
   if (content == nil) return nil;

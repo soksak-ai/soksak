@@ -225,7 +225,7 @@ func TestRecordedInventoryForgetsARecordWhoseProcessHasEnded(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(record), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	body := `{"address":"` + filepath.Join(home, "run", "gone.sock") + `","protocol":1,"pid":999999,"secretNames":""}`
+	body := `{"address":"` + filepath.Join(home, "run", "gone.sock") + `","protocol":2,"pid":999999,"processLabel":"soksak","secretNames":""}`
 	if err := os.WriteFile(record, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}

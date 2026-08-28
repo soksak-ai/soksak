@@ -9,7 +9,7 @@ import (
 )
 
 func announcementLine(socket string) string {
-	return `{"protocol":1,"socket":"` + socket + `"}`
+	return `{"protocol":2,"socket":"` + socket + `","processLabel":"soksak-test"}`
 }
 
 func TestTheFirstLineNamingASocketIsReadiness(t *testing.T) {
@@ -22,6 +22,9 @@ func TestTheFirstLineNamingASocketIsReadiness(t *testing.T) {
 	}
 	if read.Socket != socket {
 		t.Errorf("socket = %q, want %q", read.Socket, socket)
+	}
+	if read.ProcessLabel != "soksak-test" {
+		t.Errorf("process label = %q", read.ProcessLabel)
 	}
 }
 
@@ -65,9 +68,10 @@ func TestAHalfAnnouncementIsRefusedByName(t *testing.T) {
 		says string
 	}{
 		{`{"socket":"<local-evidence>/a.sock"}`, "protocol"},
-		{`{"protocol":1}`, "socket"},
-		{`{"protocol":1,"socket":""}`, "empty"},
-		{`{"protocol":1,"socket":"control.sock"}`, "relative"},
+		{`{"protocol":2}`, "socket"},
+		{`{"protocol":2,"socket":"<local-evidence>/a.sock"}`, "process label"},
+		{`{"protocol":2,"socket":"","processLabel":"soksak-test"}`, "empty"},
+		{`{"protocol":2,"socket":"control.sock","processLabel":"soksak-test"}`, "relative"},
 	}
 	for _, one := range cases {
 		read := readAnnouncement(one.line)
@@ -85,7 +89,7 @@ func TestAHalfAnnouncementIsRefusedByName(t *testing.T) {
 // the same as one that is still starting. It is named at the announcement,
 // which is the only moment before a caller acts on the socket.
 func TestAProtocolMismatchIsRefusedCarryingBothNumbers(t *testing.T) {
-	read := readAnnouncement(`{"protocol":99,"socket":"<local-evidence>/a.sock"}`)
+	read := readAnnouncement(`{"protocol":99,"socket":"<local-evidence>/a.sock","processLabel":"soksak-test"}`)
 
 	if read.State != Refused {
 		t.Fatalf("state = %q, want %q", read.State, Refused)
@@ -93,7 +97,7 @@ func TestAProtocolMismatchIsRefusedCarryingBothNumbers(t *testing.T) {
 	if !strings.Contains(read.Reason, "99") {
 		t.Errorf("the refusal %q does not carry what the daemon said", read.Reason)
 	}
-	if !strings.Contains(read.Reason, "1") {
+	if !strings.Contains(read.Reason, "2") {
 		t.Errorf("the refusal %q does not carry what this build speaks (%d)", read.Reason, control.Protocol)
 	}
 	if read.Socket != "" {

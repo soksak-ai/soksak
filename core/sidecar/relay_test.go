@@ -51,9 +51,14 @@ func (fake *memoryUnit) serve(conn net.Conn) {
 			// Takes the request and answers nothing.
 			continue
 		}
-		answer, _ := json.Marshal(controlwire.Response{
-			ID: request.ID, Ok: true, Result: map[string]any{"command": request.Command},
-		})
+		var result any = map[string]any{"command": request.Command}
+		if request.Command == controlwire.HelloCommand {
+			result = controlwire.Greeting{
+				Protocol: controlwire.Protocol, Identity: "unit",
+				ProcessLabel: controlwire.DefaultProcessLabel,
+			}
+		}
+		answer, _ := json.Marshal(controlwire.Response{ID: request.ID, Ok: true, Result: result})
 		if _, err := conn.Write(append(answer, '\n')); err != nil {
 			return
 		}

@@ -79,7 +79,7 @@ func TestEveryCommandAnswersOverTheSocketWithNoWindow(t *testing.T) {
 	Register(registry, fullDeps(t))
 
 	for _, name := range CommandNames() {
-		response := Answer(registry, "com.soksak.test", Request{ID: "1", Command: name})
+		response := Answer(registry, "com.soksak.test", "soksak-test", Request{ID: "1", Command: name})
 		if response.ID != "1" {
 			t.Errorf("%s answered id %q", name, response.ID)
 		}

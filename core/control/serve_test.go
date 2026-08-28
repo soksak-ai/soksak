@@ -36,7 +36,7 @@ func served(t *testing.T, registry *Registry) net.Conn {
 		t.Fatalf("listening: %v", err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
-	go func() { _ = Serve(listener, registry, "com.soksak.test") }()
+	go func() { _ = Serve(listener, registry, "com.soksak.test", "soksak-test") }()
 
 	client, err := net.Dial("unix", path)
 	if err != nil {
@@ -157,7 +157,7 @@ func TestTwoClientsReachTheSameRegistry(t *testing.T) {
 		t.Fatalf("listening: %v", err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
-	go func() { _ = Serve(listener, registry, "com.soksak.test") }()
+	go func() { _ = Serve(listener, registry, "com.soksak.test", "soksak-test") }()
 
 	for _, want := range []float64{1, 2} {
 		client, err := net.Dial("unix", path)
@@ -180,7 +180,7 @@ func TestClosingTheListenerEndsServe(t *testing.T) {
 		t.Fatalf("listening: %v", err)
 	}
 	stopped := make(chan error, 1)
-	go func() { stopped <- Serve(listener, NewRegistry(), "com.soksak.test") }()
+	go func() { stopped <- Serve(listener, NewRegistry(), "com.soksak.test", "soksak-test") }()
 
 	if err := listener.Close(); err != nil {
 		t.Fatalf("closing: %v", err)
@@ -206,7 +206,7 @@ func TestAnOverlongLineDoesNotTakeTheProcessDown(t *testing.T) {
 		t.Fatalf("listening: %v", err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
-	go func() { _ = Serve(listener, registry, "com.soksak.test") }()
+	go func() { _ = Serve(listener, registry, "com.soksak.test", "soksak-test") }()
 
 	flooder, err := net.Dial("unix", path)
 	if err != nil {

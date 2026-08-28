@@ -23,6 +23,7 @@ func TestInternalSoksakNamesAreStrippedAndTheInterfaceSurvives(t *testing.T) {
 		"PATH=/bin", "HOME=/h", "USER=u",
 		"SOKSAK_HOME=/old", "SOKSAK_SOCKET=/s", "SOKSAK_WINDOW=w-1",
 		"SOKSAK_PARENT=p", "SOKSAK_CLI_DIR=/c", "SOKSAK_CALLER_TAB=t",
+		"SOKSAK_PROCESS_LABEL=soksakv3",
 		"SOKSAK_PANE=pane-9",
 		"SOKSAK_VAULT_KEY=k", "SOKSAK_VAULT_PATH=/v", "SOKSAK_SECRET_0=s",
 		"SOKSAK_PTYD_BIN=/b", "SOKSAK_ENV=e",
@@ -33,6 +34,7 @@ func TestInternalSoksakNamesAreStrippedAndTheInterfaceSurvives(t *testing.T) {
 	for _, name := range []string{
 		"PATH", "HOME", "USER",
 		"SOKSAK_SOCKET", "SOKSAK_WINDOW", "SOKSAK_PARENT", "SOKSAK_CLI_DIR", "SOKSAK_CALLER_TAB",
+		"SOKSAK_PROCESS_LABEL",
 	} {
 		if _, kept := child[name]; !kept {
 			t.Errorf("%s must survive: it is the interface a child talks to the app through", name)

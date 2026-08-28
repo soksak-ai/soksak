@@ -64,6 +64,9 @@ type Boot struct {
 	// commands that need one by name rather than reading $SHELL, which would
 	// tie the answer to whatever launched this process.
 	LoginShell string
+	// ProcessLabel is the launcher's validated diagnostic process name. It is reported but never
+	// used as application identity, dependency state, permission, or ownership.
+	ProcessLabel string
 	// Windows is the platform, as an argument. Reading runtime.GOOS here would
 	// answer what this binary is rather than what the caller asked.
 	Windows bool
@@ -165,7 +168,7 @@ func RegisterCore(registry *control.Registry, boot Boot) Wired {
 	registry.MustRegister(control.Command{
 		Name: "app_environment",
 		Handler: func(control.Args) (any, error) {
-			return app.Describe(boot.Identity, boot.BuildProfile, boot.LoginShell), nil
+			return app.Describe(boot.Identity, boot.BuildProfile, boot.LoginShell, boot.ProcessLabel), nil
 		},
 	})
 

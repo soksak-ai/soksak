@@ -103,6 +103,7 @@ describe("app.environment — unit source mode is derived from environment recor
   const appEnvironment = {
     coreBuild: "release",
     identity: "com.soksak.app",
+    processLabel: "soksak-manual",
     cli: "sok",
     home: "/Users/test/.soksak",
     loginShell: "/bin/zsh",
@@ -131,7 +132,7 @@ describe("app.environment — unit source mode is derived from environment recor
     expect(invoke).toHaveBeenCalledWith("app_presentation");
     expect(r).toMatchObject({
       ok: true, data: {
-        coreBuild: "release", cli: "sok", loginShell: "/bin/zsh", unitMode: "mixed",
+        coreBuild: "release", processLabel: "soksak-manual", cli: "sok", loginShell: "/bin/zsh", unitMode: "mixed",
         presentation: { mode: "capture-only", desktopVisible: false },
       },
     });

@@ -3,6 +3,8 @@ package process
 import (
 	"sort"
 	"strings"
+
+	controlwire "github.com/soksak-ai/soksak-contract-control"
 )
 
 // soksakChildAllow is the SOKSAK_* interface a child is entitled to — the
@@ -20,6 +22,7 @@ var soksakChildAllow = [...]string{
 	"SOKSAK_WINDOW",
 	"SOKSAK_PARENT",
 	"SOKSAK_CLI_DIR",
+	controlwire.ProcessLabelEnvironment,
 }
 
 // environmentRequest is everything the environment rules read. All of it is a
@@ -152,6 +155,6 @@ func ChildEnvironment(inherited []string, home string, overrides map[string]stri
 	return childEnvironment(environmentRequest{Inherited: inherited, Home: home, Set: overrides})
 }
 
-func ChildEnvironmentWithSecrets(inherited []string, home string, secrets [][2]string) []string {
-	return childEnvironment(environmentRequest{Inherited: inherited, Home: home, Secrets: secrets})
+func ChildEnvironmentWithSecrets(inherited []string, home string, overrides map[string]string, secrets [][2]string) []string {
+	return childEnvironment(environmentRequest{Inherited: inherited, Home: home, Set: overrides, Secrets: secrets})
 }

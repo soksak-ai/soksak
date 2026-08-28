@@ -16,6 +16,9 @@ type Environment struct {
 	CoreBuild  string `json:"coreBuild"`
 	CLI        string `json:"cli"`
 	LoginShell string `json:"loginShell"`
+	// ProcessLabel is the diagnostic name applied to the operating-system process surface. It is
+	// deliberately separate from Identity and never participates in routing or ownership.
+	ProcessLabel string `json:"processLabel"`
 	// BuildProfile is how this binary was compiled, which is a different fact
 	// from CoreBuild: a debug build can run the release identity.
 	BuildProfile string `json:"buildProfile"`
@@ -29,7 +32,7 @@ type Environment struct {
 // Taking the whole Resolved rather than an identifier keeps the pair from
 // drifting: there is no path here that could pair one installation's home with
 // another's name.
-func Describe(id identity.Resolved, buildProfile, loginShell string) Environment {
+func Describe(id identity.Resolved, buildProfile, loginShell, processLabel string) Environment {
 	return Environment{
 		Identity:       id.Identifier,
 		Home:           id.Home,
@@ -37,6 +40,7 @@ func Describe(id identity.Resolved, buildProfile, loginShell string) Environment
 		CoreBuild:      id.CoreBuild,
 		CLI:            id.CLI,
 		LoginShell:     loginShell,
+		ProcessLabel:   processLabel,
 		BuildProfile:   buildProfile,
 		UpdaterEnabled: id.Release,
 	}

@@ -25,7 +25,7 @@ func TestEnvironmentExposesTheResolvedRuntimeDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := json.Marshal(Describe(id, "debug", "/bin/zsh"))
+	body, err := json.Marshal(Describe(id, "debug", "/bin/zsh", "soksakv3"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,10 +36,13 @@ func TestEnvironmentExposesTheResolvedRuntimeDirectory(t *testing.T) {
 	if values["runtime"] != "<local-evidence>/soksak-capture-runtime" {
 		t.Fatalf("runtime = %#v", values["runtime"])
 	}
+	if values["processLabel"] != "soksakv3" {
+		t.Fatalf("process label = %#v", values["processLabel"])
+	}
 }
 
 func TestEnvironmentReportsOneResolvedIdentity(t *testing.T) {
-	env := Describe(resolved(t, "com.soksak.dev"), "debug", "/bin/zsh")
+	env := Describe(resolved(t, "com.soksak.dev"), "debug", "/bin/zsh", "soksak-dev")
 
 	if env.Identity != "com.soksak.dev" {
 		t.Errorf("identity = %q", env.Identity)
@@ -59,14 +62,17 @@ func TestEnvironmentReportsOneResolvedIdentity(t *testing.T) {
 	if env.LoginShell != "/bin/zsh" {
 		t.Errorf("login shell = %q", env.LoginShell)
 	}
+	if env.ProcessLabel != "soksak-dev" {
+		t.Errorf("process label = %q", env.ProcessLabel)
+	}
 }
 
 func TestUpdaterFollowsTheReleaseAxis(t *testing.T) {
 	// A dev installation must not offer to update itself into the release one.
-	if Describe(resolved(t, "com.soksak.dev"), "debug", "/bin/zsh").UpdaterEnabled {
+	if Describe(resolved(t, "com.soksak.dev"), "debug", "/bin/zsh", "soksak").UpdaterEnabled {
 		t.Error("a dev identity must not enable the updater")
 	}
-	if !Describe(resolved(t, "com.soksak.app"), "release", "/bin/zsh").UpdaterEnabled {
+	if !Describe(resolved(t, "com.soksak.app"), "release", "/bin/zsh", "soksak").UpdaterEnabled {
 		t.Error("a release identity must enable the updater")
 	}
 }

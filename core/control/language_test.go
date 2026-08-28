@@ -77,7 +77,7 @@ func TestTheAnswerCarriesTheLanguageToTheDelegate(t *testing.T) {
 		t.Fatalf("delegating: %v", err)
 	}
 
-	response := Answer(registry, "app", Request{
+	response := Answer(registry, "app", "soksak-test", Request{
 		ID: "1", Command: "pane.list", Language: "en",
 	})
 	if response.Error != "" {

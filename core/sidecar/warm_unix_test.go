@@ -113,7 +113,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	line, _ := json.Marshal(map[string]any{"protocol": 1, "socket": address})
+	processLabel := os.Getenv("SOKSAK_PROCESS_LABEL")
+	line, _ := json.Marshal(map[string]any{"protocol": 2, "socket": address, "processLabel": processLabel})
 	fmt.Println(string(line))
 	os.Stdout.Sync()
 
@@ -143,6 +144,9 @@ func main() {
 				}
 				json.Unmarshal(raw, &request)
 				var data any = map[string]any{}
+				if request.Command == "system.hello" {
+					data = map[string]any{"protocol": 2, "processLabel": processLabel}
+				}
 				mu.Lock()
 				switch request.Command {
 				case "keeper.keep":
@@ -153,9 +157,12 @@ func main() {
 					data = map[string]any{"words": held}
 				}
 				mu.Unlock()
+				var result any = map[string]any{"code": "OK", "data": data}
+				if request.Command == "system.hello" {
+					result = data
+				}
 				answer, _ := json.Marshal(map[string]any{
-					"id": request.ID, "ok": true,
-					"result": map[string]any{"code": "OK", "data": data},
+					"id": request.ID, "ok": true, "result": result,
 				})
 				conn.Write(append(answer, '\n'))
 			}

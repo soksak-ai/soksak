@@ -98,7 +98,7 @@ func TestALiveBackendIsNotEvicted(t *testing.T) {
 		t.Fatalf("first Listen: %v", err)
 	}
 	defer func() { _ = first.Close() }()
-	go func() { _ = Serve(first, NewRegistry(), "com.soksak.test") }()
+	go func() { _ = Serve(first, NewRegistry(), "com.soksak.test", "soksak-test") }()
 
 	_, err = Listen(path)
 	if err == nil {

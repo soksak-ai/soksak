@@ -74,6 +74,14 @@ func init() {
 			EN: "sidecar {name} announced a protocol and no address — there is nowhere to reach it",
 			KO: "사이드카 {name} 이(가) 프로토콜만 알리고 주소를 알리지 않았습니다 — 닿을 곳이 없습니다",
 		},
+		"sidecar.announcedNoProcessLabel": {
+			EN: "sidecar {name} announced no process label",
+			KO: "사이드카 {name} 이(가) process label을 알리지 않았습니다",
+		},
+		"sidecar.processLabelMismatch": {
+			EN: "sidecar {name} announced process label {announced}; this run declared {declared}",
+			KO: "사이드카 {name} 의 process label은 {announced}이고 이 실행은 {declared}를 선언했습니다",
+		},
 		"sidecar.announcedEmptyAddress": {
 			EN: "sidecar {name} announced an empty address",
 			KO: "사이드카 {name} 이(가) 빈 주소를 알렸습니다",
@@ -101,6 +109,10 @@ func init() {
 		"sidecar.greetingRefused": {
 			EN: "sidecar {name} refused the greeting: {reason} — nothing was sent on this connection, so no command ran against a protocol neither side agreed",
 			KO: "사이드카 {name} 이(가) 그리팅을 거절했습니다: {reason} — 이 연결로 아무것도 보내지 않았으므로, 양쪽이 합의하지 않은 프로토콜로 실행된 명령은 없습니다",
+		},
+		"sidecar.greetingProcessLabelMismatch": {
+			EN: "sidecar {name} greeting did not confirm this run's process label",
+			KO: "사이드카 {name} greeting이 이 실행의 process label을 확인하지 않았습니다",
 		},
 		"sidecar.noAnswer": {
 			EN: "sidecar {name} took the request and answered nothing: {reason}",

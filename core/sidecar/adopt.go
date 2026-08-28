@@ -39,8 +39,9 @@ type record struct {
 	SecretNames string `json:"secretNames,omitempty"`
 	// Path is the program the unit was started from. A run whose record resolves to another
 	// program does not adopt the unit; it ends it and starts the recorded one.
-	Path    string `json:"path,omitempty"`
-	Version string `json:"version,omitempty"`
+	Path         string `json:"path,omitempty"`
+	Version      string `json:"version,omitempty"`
+	ProcessLabel string `json:"processLabel"`
 }
 
 func (host *Host) recordPath(name string) string {
@@ -58,7 +59,7 @@ func (host *Host) remember(name string, open Open, token, secretNames, version, 
 		return
 	}
 	encoded, err := json.Marshal(record{
-		Address: open.Address, Token: token, Protocol: open.Protocol, PID: open.PID, SecretNames: secretNames, Path: path, Version: version,
+		Address: open.Address, Token: token, Protocol: open.Protocol, PID: open.PID, SecretNames: secretNames, Path: path, Version: version, ProcessLabel: open.ProcessLabel,
 	})
 	if err != nil {
 		return
@@ -98,7 +99,7 @@ func (host *Host) Recorded() ([]Open, error) {
 		}
 		var remembered record
 		if json.Unmarshal(raw, &remembered) != nil || remembered.Address == "" ||
-			remembered.Protocol < 1 || remembered.PID < 1 {
+			remembered.Protocol < 1 || remembered.PID < 1 || remembered.ProcessLabel == "" {
 			return nil, i18n.Errorf("sidecar.recordInvalid", map[string]string{"path": filepath.Join(directory, name)})
 		}
 		identity := strings.TrimSuffix(strings.TrimPrefix(name, "sidecar-"), ".json")
@@ -108,7 +109,7 @@ func (host *Host) Recorded() ([]Open, error) {
 		}
 		owned = append(owned, Open{
 			Name: identity, Address: remembered.Address, Protocol: remembered.Protocol,
-			PID: remembered.PID, Version: remembered.Version,
+			PID: remembered.PID, Version: remembered.Version, ProcessLabel: remembered.ProcessLabel,
 		})
 	}
 	sort.Slice(owned, func(left, right int) bool { return owned[left].Name < owned[right].Name })
@@ -181,7 +182,8 @@ func (host *Host) adopt(name, secretNames, version, path string) (Open, bool, er
 	if host.deps.Dial == nil {
 		return Open{}, false, nil
 	}
-	if (version != "" && remembered.Version != version) || (path != "" && remembered.Path != path) {
+	if remembered.ProcessLabel != host.deps.ProcessLabel ||
+		(version != "" && remembered.Version != version) || (path != "" && remembered.Path != path) {
 		// The unit runs another program than the record now names: it is ended, and the caller
 		// starts the recorded program once nothing answers at the old address.
 		_ = signalPID(remembered.PID)
@@ -196,7 +198,7 @@ func (host *Host) adopt(name, secretNames, version, path string) (Open, bool, er
 		host.forget(name)
 		return Open{}, false, nil
 	}
-	open := Open{Name: name, Address: remembered.Address, Protocol: remembered.Protocol, PID: remembered.PID, Version: remembered.Version}
+	open := Open{Name: name, Address: remembered.Address, Protocol: remembered.Protocol, PID: remembered.PID, Version: remembered.Version, ProcessLabel: remembered.ProcessLabel}
 	held := &unit{open: open, stderr: newRing(64), token: remembered.Token, adopted: true, secretNames: secretNames, path: remembered.Path}
 
 	host.mu.Lock()

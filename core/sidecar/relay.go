@@ -379,6 +379,14 @@ func (host *Host) greet(conn io.Writer, reader *bufio.Reader, name string) error
 			"name": name, "reason": answer.Error,
 		})
 	}
+	body, err := json.Marshal(answer.Result)
+	if err != nil {
+		return i18n.Errorf("sidecar.greetingProcessLabelMismatch", map[string]string{"name": name})
+	}
+	var greeting controlwire.Greeting
+	if json.Unmarshal(body, &greeting) != nil || greeting.ProcessLabel != host.deps.ProcessLabel {
+		return i18n.Errorf("sidecar.greetingProcessLabelMismatch", map[string]string{"name": name})
+	}
 	return nil
 }
 

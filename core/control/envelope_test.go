@@ -24,7 +24,7 @@ func TestTheAnswerCarriesTheCallersOwnID(t *testing.T) {
 	// dropping it on the failure path, breaks a pipelining client precisely
 	// when something already went wrong.
 	for _, id := range []string{"1", "", "a-caller-chosen-id", "  spaced  "} {
-		answer := Answer(registryWithEcho(t), "com.soksak.test", Request{ID: id, Command: "nope"})
+		answer := Answer(registryWithEcho(t), "com.soksak.test", "soksak-test", Request{ID: id, Command: "nope"})
 		if answer.ID != id {
 			t.Errorf("id %q came back as %q", id, answer.ID)
 		}
@@ -32,7 +32,7 @@ func TestTheAnswerCarriesTheCallersOwnID(t *testing.T) {
 }
 
 func TestAFailedCommandIsNotOk(t *testing.T) {
-	answer := Answer(registryWithEcho(t), "com.soksak.test",
+	answer := Answer(registryWithEcho(t), "com.soksak.test", "soksak-test",
 		Request{ID: "1", Command: "echo", Args: map[string]json.RawMessage{}})
 
 	if answer.Ok {
@@ -49,7 +49,7 @@ func TestASuccessfulNullResultIsStillOk(t *testing.T) {
 	registry := NewRegistry()
 	registry.MustRegister(Command{Name: "nothing", Handler: func(Args) (any, error) { return nil, nil }})
 
-	answer := Answer(registry, "com.soksak.test", Request{ID: "1", Command: "nothing"})
+	answer := Answer(registry, "com.soksak.test", "soksak-test", Request{ID: "1", Command: "nothing"})
 	if !answer.Ok {
 		t.Fatalf("a successful command answered not-ok: %+v", answer)
 	}
@@ -64,7 +64,7 @@ func TestASuccessfulNullResultIsStillOk(t *testing.T) {
 }
 
 func TestAnUnnamedCommandIsRefusedRatherThanLookedUp(t *testing.T) {
-	answer := Answer(registryWithEcho(t), "com.soksak.test", Request{ID: "1"})
+	answer := Answer(registryWithEcho(t), "com.soksak.test", "soksak-test", Request{ID: "1"})
 	if answer.Ok {
 		t.Fatal("a request with no command name succeeded")
 	}
@@ -74,7 +74,7 @@ func TestTheGreetingCarriesTheIdentityAndTheCommandTable(t *testing.T) {
 	// A client that found the wrong socket must learn it here. Without the
 	// identity it would find out from answers that are correct for another
 	// installation.
-	answer := Answer(registryWithEcho(t), "com.soksak.wails", Request{ID: "1", Command: HelloCommand})
+	answer := Answer(registryWithEcho(t), "com.soksak.wails", "soksak-test", Request{ID: "1", Command: HelloCommand})
 	if !answer.Ok {
 		t.Fatalf("the greeting failed: %+v", answer)
 	}
@@ -84,6 +84,9 @@ func TestTheGreetingCarriesTheIdentityAndTheCommandTable(t *testing.T) {
 	}
 	if greeting.Identity != "com.soksak.wails" {
 		t.Errorf("identity = %q", greeting.Identity)
+	}
+	if greeting.ProcessLabel != "soksak-test" {
+		t.Errorf("process label = %q", greeting.ProcessLabel)
 	}
 	if greeting.Protocol != Protocol {
 		t.Errorf("protocol = %d, want %d", greeting.Protocol, Protocol)
@@ -96,7 +99,7 @@ func TestTheGreetingCarriesTheIdentityAndTheCommandTable(t *testing.T) {
 func TestAProtocolMismatchIsRefusedAtTheGreeting(t *testing.T) {
 	// Refused here rather than at the first command that behaves differently: a
 	// mismatch found halfway through has already produced trusted answers.
-	answer := Answer(registryWithEcho(t), "com.soksak.test", Request{
+	answer := Answer(registryWithEcho(t), "com.soksak.test", "soksak-test", Request{
 		ID:      "1",
 		Command: HelloCommand,
 		Args:    map[string]json.RawMessage{"protocol": json.RawMessage(`999`)},
@@ -118,14 +121,14 @@ func TestTheGreetingIsNotAnEntryAnyoneCanReplace(t *testing.T) {
 		Handler: func(Args) (any, error) { return "not a greeting", nil },
 	})
 
-	answer := Answer(registry, "com.soksak.test", Request{ID: "1", Command: HelloCommand})
+	answer := Answer(registry, "com.soksak.test", "soksak-test", Request{ID: "1", Command: HelloCommand})
 	if _, ok := answer.Result.(Greeting); !ok {
 		t.Fatalf("a registered handler took over the greeting: %#v", answer.Result)
 	}
 }
 
 func TestArgumentsReachTheHandlerStillEncoded(t *testing.T) {
-	answer := Answer(registryWithEcho(t), "com.soksak.test", Request{
+	answer := Answer(registryWithEcho(t), "com.soksak.test", "soksak-test", Request{
 		ID:      "1",
 		Command: "echo",
 		Args:    map[string]json.RawMessage{"word": json.RawMessage(`"core"`)},

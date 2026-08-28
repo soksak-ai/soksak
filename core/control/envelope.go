@@ -44,13 +44,13 @@ type (
 // The transport calls this. It performs no I/O, so the rules it holds — the id
 // echo, the reserved greeting, the refusal of an unnamed command — are the same
 // over a socket, a pipe, or a test.
-func Answer(registry *Registry, identity string, request Request) Response {
+func Answer(registry *Registry, identity, processLabel string, request Request) Response {
 	if request.Command == "" {
 		return Response{ID: request.ID, Error: "the request named no command"}
 	}
 
 	if request.Command == HelloCommand {
-		return greet(registry, identity, request)
+		return greet(registry, identity, processLabel, request)
 	}
 
 	language, err := i18n.ParseLanguage(request.Language)
@@ -90,7 +90,7 @@ func answerOf(registry *Registry, command string, result any) any {
 	return PlaneAnswer{Code: "OK", Data: result}
 }
 
-func greet(registry *Registry, identity string, request Request) Response {
+func greet(registry *Registry, identity, processLabel string, request Request) Response {
 	if raw, asked := request.Args["protocol"]; asked {
 		var wanted int
 		if err := json.Unmarshal(raw, &wanted); err != nil {
@@ -110,10 +110,11 @@ func greet(registry *Registry, identity string, request Request) Response {
 		served = append(served, string(known))
 	}
 	return Response{ID: request.ID, Ok: true, Result: Greeting{
-		Protocol:  Protocol,
-		Identity:  identity,
-		Commands:  registry.Describe(),
-		Language:  string(language),
-		Languages: served,
+		Protocol:     Protocol,
+		Identity:     identity,
+		ProcessLabel: processLabel,
+		Commands:     registry.Describe(),
+		Language:     string(language),
+		Languages:    served,
 	}}
 }

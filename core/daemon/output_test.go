@@ -39,7 +39,7 @@ func TestOnlyTheFirstLineIsOfferedAsAnAnnouncement(t *testing.T) {
 	var offered []string
 	kept := collected(t,
 		func(writer io.Writer) {
-			_, _ = io.WriteString(writer, "starting\n{\"protocol\":1,\"socket\":\"<local-evidence>/late.sock\"}\n")
+			_, _ = io.WriteString(writer, "starting\n{\"protocol\":2,\"socket\":\"<local-evidence>/late.sock\",\"processLabel\":\"soksak-test\"}\n")
 		},
 		func(line string) { offered = append(offered, line) })
 

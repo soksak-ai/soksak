@@ -5,6 +5,7 @@ package wails
 import (
 	"unsafe"
 
+	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
@@ -15,6 +16,14 @@ import (
 // window steal the focus from whatever the user is doing and report that it did
 // not — so the platform is named instead.
 var ErrRevealWithoutKeyUnsupported = i18n.Errorf("wails.window.revealWithoutKeyUnsupported", nil)
+var ErrProcessLabelUnsupported = i18n.Errorf("wails.process.labelUnsupported", nil)
+
+func applyProcessLabel(label string) (string, error) {
+	if label == controlwire.DefaultProcessLabel {
+		return label, nil
+	}
+	return "", ErrProcessLabelUnsupported
+}
 
 // ErrActivationUnsupported is returned where no application activation request
 // exists. A window brought forward while the application stays in the

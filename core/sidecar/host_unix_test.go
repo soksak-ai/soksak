@@ -361,7 +361,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	line, _ := json.Marshal(map[string]any{"protocol": 1, "socket": address})
+	processLabel := os.Getenv("SOKSAK_PROCESS_LABEL")
+	line, _ := json.Marshal(map[string]any{"protocol": 2, "socket": address, "processLabel": processLabel})
 	fmt.Println(string(line))
 	os.Stdout.Sync()
 	for {
@@ -384,7 +385,11 @@ func main() {
 					Command string ` + "`json:\"command\"`" + `
 				}
 				json.Unmarshal(raw, &request)
-				answer, _ := json.Marshal(map[string]any{"id": request.ID, "ok": true, "result": map[string]any{"code": "OK"}})
+				result := map[string]any{"code": "OK"}
+				if request.Command == "system.hello" {
+					result = map[string]any{"protocol": 2, "processLabel": processLabel}
+				}
+				answer, _ := json.Marshal(map[string]any{"id": request.ID, "ok": true, "result": result})
 				conn.Write(append(answer, '\n'))
 				if request.Command == "fake-unit.stream" {
 					conn.Write([]byte("STREAMED-BYTES"))
@@ -436,7 +441,7 @@ func main() {
 	flag.String("home", "", "")
 	flag.String("runtime", "", "")
 	flag.Parse()
-	line, _ := json.Marshal(map[string]any{"protocol": 99, "socket": "<local-evidence>/never"})
+	line, _ := json.Marshal(map[string]any{"protocol": 99, "socket": "<local-evidence>/never", "processLabel": os.Getenv("SOKSAK_PROCESS_LABEL")})
 	fmt.Println(string(line))
 	os.Stdout.Sync()
 	time.Sleep(30 * time.Second)

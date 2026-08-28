@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/control"
 )
 
@@ -61,6 +62,8 @@ type Readiness struct {
 	// Socket is filled only in Ready. A refused announcement has none, so
 	// nothing can connect to an address this build already rejected.
 	Socket string `json:"socket,omitempty"`
+	// ProcessLabel is filled only in Ready and states the label the daemon actually announced.
+	ProcessLabel string `json:"processLabel,omitempty"`
 	// Reason is filled only in Refused, and states what was wrong with the line.
 	Reason string `json:"reason,omitempty"`
 }
@@ -72,11 +75,6 @@ type Readiness struct {
 // daemon that printed an unrelated JSON log line announces nothing; one that
 // sent protocol 0 tried to announce and got it wrong. Collapsing those two
 // would turn every JSON-logging dev server into a broken sidecar.
-type announcement struct {
-	Protocol *int    `json:"protocol"`
-	Socket   *string `json:"socket"`
-}
-
 // readAnnouncement determines what a daemon's first line of stdout stated about
 // itself. It performs no I/O: the line is the whole evidence.
 func readAnnouncement(line string) Readiness {
@@ -85,7 +83,7 @@ func readAnnouncement(line string) Readiness {
 		return Readiness{State: Mute}
 	}
 
-	var said announcement
+	var said controlwire.Announcement
 	if err := json.Unmarshal([]byte(trimmed), &said); err != nil {
 		// A line that opened like an object and is not one is output, not a
 		// malformed announcement: a program may print anything.
@@ -99,6 +97,13 @@ func readAnnouncement(line string) Readiness {
 	}
 	if said.Socket == nil {
 		return refuse("the announcement named a protocol and no socket, so there is no address to reach the daemon at")
+	}
+	if said.ProcessLabel == nil {
+		return refuse("the announcement named no process label")
+	}
+	processLabel, err := controlwire.ParseProcessLabel(*said.ProcessLabel)
+	if err != nil {
+		return refuse(fmt.Sprintf("the announced process label %q is invalid", *said.ProcessLabel))
 	}
 	if *said.Protocol != control.Protocol {
 		return refuse(fmt.Sprintf(
@@ -116,7 +121,7 @@ func readAnnouncement(line string) Readiness {
 			"the announced socket %q is relative, and it would resolve against a working directory this process does not share with the daemon",
 			*said.Socket))
 	}
-	return Readiness{State: Ready, Socket: *said.Socket}
+	return Readiness{State: Ready, Socket: *said.Socket, ProcessLabel: processLabel}
 }
 
 func refuse(reason string) Readiness {

@@ -949,7 +949,7 @@ export const ko = {
   "cmd.secret.set.desc": "상위 키 암호화로 ns/key 아래에 민감한 값을 보관합니다(항목별 DEK 를 장치 KEK 로 감쌉니다). 키가 이미 있으면 덮어씁니다. OS 키 저장소를 쓸 수 없으면(시크릿 서비스 없음) 거절합니다.",
   "cmd.secret.set.param.value": "보관할 민감한 값",
   "cmd.system.hello.desc": "소켓 프로토콜 버전, 지원하는 최소 클라이언트 프로토콜, 앱 버전, pid, 시작 시각, 기능 목록을 반환합니다. 프런트엔드 상태와 관계없이 전송 계층에서 응답합니다.",
-  "cmd.app.environment.desc": "이 앱의 컴파일 시점 코어 정체성, 격리된 홈, 짝이 되는 CLI 이름, 빌드 프로파일, 업데이터 채널, 유닛 소스 모드(official 또는 mixed), 데스크톱 표시 정책을 읽습니다.",
+  "cmd.app.environment.desc": "이 앱의 컴파일 시점 코어 정체성, 진단용 process label, 격리된 홈, 짝이 되는 CLI 이름, 빌드 프로파일, 업데이터 채널, 유닛 소스 모드(official 또는 mixed), 데스크톱 표시 정책을 읽습니다.",
   "cmd.framework.provision.desc": "이 창의 프레임워크가 무엇을 제공하는지 읽습니다. 어댑터 이름은 진단용 정체성이며, 제품 동작은 document-start 스크립트나 실제 입력 주입 같은 명시된 능력으로만 갈립니다.",
   "cmd.window.move.param.x": "물리 x 좌표",
   "cmd.window.move.param.y": "물리 y 좌표",

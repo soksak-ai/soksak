@@ -35,6 +35,7 @@ func booted(t *testing.T) *control.Registry {
 	RegisterCore(registry, Boot{
 		Identity:     resolved,
 		BuildProfile: "debug",
+		ProcessLabel: "soksak",
 		KV:           kv,
 		UserHome:     t.TempDir(),
 		Now:          func() int64 { return 0 },
@@ -84,14 +85,15 @@ func TestEnvironmentCarriesTheResolvedIdentity(t *testing.T) {
 	}
 	encoded, _ := json.Marshal(got)
 	var env struct {
-		Identity  string `json:"identity"`
-		CoreBuild string `json:"coreBuild"`
-		CLI       string `json:"cli"`
+		Identity     string `json:"identity"`
+		CoreBuild    string `json:"coreBuild"`
+		CLI          string `json:"cli"`
+		ProcessLabel string `json:"processLabel"`
 	}
 	if err := json.Unmarshal(encoded, &env); err != nil {
 		t.Fatalf("decoding: %v", err)
 	}
-	if env.Identity != "com.soksak.dev" || env.CoreBuild != "dev" || env.CLI != "sok-dev" {
+	if env.Identity != "com.soksak.dev" || env.CoreBuild != "dev" || env.CLI != "sok-dev" || env.ProcessLabel != "soksak" {
 		t.Errorf("environment = %+v", env)
 	}
 }

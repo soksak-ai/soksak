@@ -27,7 +27,7 @@ const maxRequestBytes = 1 << 20
 // a caller stops it; there is nothing to poll and no shutdown handshake,
 // because a control plane that must be asked politely to stop cannot be stopped
 // by the thing that noticed it should.
-func Serve(listener net.Listener, registry *Registry, identity string) error {
+func Serve(listener net.Listener, registry *Registry, identity, processLabel string) error {
 	var connections sync.WaitGroup
 	defer connections.Wait()
 
@@ -43,7 +43,7 @@ func Serve(listener net.Listener, registry *Registry, identity string) error {
 		go func() {
 			defer connections.Done()
 			defer func() { _ = connection.Close() }()
-			answerAll(connection, connection, registry, identity)
+			answerAll(connection, connection, registry, identity, processLabel)
 		}()
 	}
 }
@@ -54,7 +54,7 @@ func Serve(listener net.Listener, registry *Registry, identity string) error {
 // concurrently within a connection: a caller that sends "create then place"
 // means them in that order, and the id exists to match answers, not to license
 // reordering.
-func answerAll(reader io.Reader, writer io.Writer, registry *Registry, identity string) {
+func answerAll(reader io.Reader, writer io.Writer, registry *Registry, identity, processLabel string) {
 	lines := bufio.NewScanner(reader)
 	lines.Buffer(make([]byte, 0, 4096), maxRequestBytes)
 	encoder := json.NewEncoder(writer)
@@ -73,7 +73,7 @@ func answerAll(reader io.Reader, writer io.Writer, registry *Registry, identity 
 			_ = encoder.Encode(Response{Error: "the request was not one line of JSON: " + err.Error()})
 			continue
 		}
-		if err := encoder.Encode(Answer(registry, identity, request)); err != nil {
+		if err := encoder.Encode(Answer(registry, identity, processLabel, request)); err != nil {
 			return
 		}
 	}

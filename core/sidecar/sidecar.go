@@ -82,6 +82,9 @@ type Deps struct {
 	// Environment is what a unit inherits. It arrives complete: a nil one would make os/exec read
 	// this process's own, which ties a unit to whatever launched the application.
 	Environment []string
+	// ProcessLabel is the diagnostic label every unit this host starts must apply and announce.
+	// It never participates in component identity or dependency resolution.
+	ProcessLabel string
 	// Dial opens a connection to an address a unit announced. It is injected because the address
 	// namespace is the platform's — a filesystem path on one, a named pipe on another — and this
 	// package holds no branch on which.
@@ -106,9 +109,10 @@ type Open struct {
 	// somewhere else is reachable because it said so.
 	Address string `json:"address"`
 	// Protocol is the envelope version the unit announced.
-	Protocol int    `json:"protocol"`
-	PID      int    `json:"pid"`
-	Version  string `json:"version,omitempty"`
+	Protocol     int    `json:"protocol"`
+	PID          int    `json:"pid"`
+	Version      string `json:"version,omitempty"`
+	ProcessLabel string `json:"processLabel"`
 }
 
 type UnitStatus struct {
@@ -191,6 +195,9 @@ type childExit struct {
 func NewHost(deps Deps) *Host {
 	if deps.ReadyWithin == 0 {
 		deps.ReadyWithin = DefaultReadyWithin
+	}
+	if deps.ProcessLabel == "" {
+		deps.ProcessLabel = controlwire.DefaultProcessLabel
 	}
 	return &Host{deps: deps, open: make(map[string]*unit), starting: make(map[string]*startAttempt), ended: make(map[string]UnitStatus)}
 }
@@ -427,8 +434,13 @@ func (host *Host) startResolved(
 		Path: path,
 		// The home is passed rather than read. A unit that derived its own would answer for a
 		// different installation than the one that started it.
-		Args:  []string{"-home", host.deps.Home, "-runtime", host.deps.Runtime},
-		Env:   process.ChildEnvironmentWithSecrets(host.deps.Environment, host.deps.Home, secrets),
+		Args: []string{"-home", host.deps.Home, "-runtime", host.deps.Runtime},
+		Env: process.ChildEnvironmentWithSecrets(
+			host.deps.Environment,
+			host.deps.Home,
+			map[string]string{controlwire.ProcessLabelEnvironment: host.deps.ProcessLabel},
+			secrets,
+		),
 		Group: true,
 	})
 	if err != nil {
@@ -459,7 +471,7 @@ func (host *Host) startResolved(
 		return Open{}, err
 	}
 
-	held.open = Open{Name: name, Address: announced.address, Protocol: announced.protocol, PID: child.PID(), Version: version}
+	held.open = Open{Name: name, Address: announced.address, Protocol: announced.protocol, PID: child.PID(), Version: version, ProcessLabel: announced.processLabel}
 	// The token stays here rather than on Open. Open is what a caller reads, and a caller that could
 	// read the token could greet the unit itself — which is the one thing this relay exists to be.
 	held.token = announced.token
@@ -479,8 +491,9 @@ func (host *Host) startResolved(
 }
 
 type announcement struct {
-	address  string
-	protocol int
+	address      string
+	protocol     int
+	processLabel string
 	// token is what the greeting on that address has to carry. Empty means the unit announced none,
 	// which is a unit stating its socket takes an unauthenticated greeting.
 	token string
@@ -519,7 +532,7 @@ func (host *Host) await(
 				"name": name, "reason": detail,
 			})
 		}
-		return judge(name, got.line)
+		return judge(name, host.deps.ProcessLabel, got.line)
 	case <-timer.C:
 		return announcement{}, i18n.Errorf("sidecar.silent", map[string]string{
 			"name": name, "seconds": fmt.Sprintf("%.0f", host.deps.ReadyWithin.Seconds()),
@@ -535,7 +548,7 @@ func childExitReason(exit childExit) string {
 }
 
 // judge reads what a unit's first line stated about itself. It performs no I/O.
-func judge(name, line string) (announcement, error) {
+func judge(name, expectedProcessLabel, line string) (announcement, error) {
 	var said controlwire.Announcement
 	if err := json.Unmarshal([]byte(line), &said); err != nil || (said.Protocol == nil && said.Socket == nil) {
 		// A line that is not an announcement is output. A program may print anything, and calling
@@ -547,6 +560,15 @@ func judge(name, line string) (announcement, error) {
 	}
 	if said.Socket == nil {
 		return announcement{}, i18n.Errorf("sidecar.announcedNoAddress", map[string]string{"name": name})
+	}
+	if said.ProcessLabel == nil {
+		return announcement{}, i18n.Errorf("sidecar.announcedNoProcessLabel", map[string]string{"name": name})
+	}
+	processLabel, err := controlwire.ParseProcessLabel(*said.ProcessLabel)
+	if err != nil || processLabel != expectedProcessLabel {
+		return announcement{}, i18n.Errorf("sidecar.processLabelMismatch", map[string]string{
+			"name": name, "declared": expectedProcessLabel, "announced": *said.ProcessLabel,
+		})
 	}
 	if *said.Protocol != controlwire.Protocol {
 		return announcement{}, i18n.Errorf("sidecar.protocolMismatch", map[string]string{
@@ -562,7 +584,7 @@ func judge(name, line string) (announcement, error) {
 	if said.Token != nil {
 		token = *said.Token
 	}
-	return announcement{address: *said.Socket, protocol: *said.Protocol, token: token}, nil
+	return announcement{address: *said.Socket, protocol: *said.Protocol, processLabel: processLabel, token: token}, nil
 }
 
 // Release lets go of a unit without ending it.

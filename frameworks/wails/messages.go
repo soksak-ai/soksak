@@ -111,6 +111,14 @@ func init() {
 			EN: "the native window did not enter transparent, input-free capture-only presentation",
 			KO: "네이티브 창이 투명하고 입력을 받지 않는 capture-only 표시 상태에 들어가지 못했습니다",
 		},
+		"wails.process.labelUnsupported": {
+			EN: "this platform cannot publish a custom process label",
+			KO: "이 플랫폼은 사용자 지정 프로세스 label을 공개할 수 없습니다",
+		},
+		"wails.process.labelApplyFailed": {
+			EN: "the operating system applied process label {actual}; this run requested {requested}",
+			KO: "운영체제가 process label {actual}을 적용했지만 이 실행은 {requested}를 요청했습니다",
+		},
 		"wails.window.activationUnsupported": {
 			EN: "application activation is not implemented on this platform",
 			KO: "이 플랫폼에는 애플리케이션 활성화가 구현되어 있지 않습니다",
