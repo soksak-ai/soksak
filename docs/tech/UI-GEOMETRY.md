@@ -283,6 +283,14 @@ under a modal; it is not a second live renderer. The tab slot exposes
 traces record those fields with display, visibility, opacity and rect on every
 captured frame.
 
+Tab activation changes the complete workspace, space, pane and tab chain. Its
+receipt separates `changed` from `layoutMoved`. A same-pane switch has
+`changed=true` and `layoutMoved=false`: it waits for the target tab slot's
+public `contentVisible=true` DOM commit and opens no layout transaction. A
+geometry-changing activation declares a cause before opening the transaction,
+returns `layoutMoved=true`, and can be awaited by that exact cause. No cause is
+left pending when no transaction opens.
+
 **Measured 2026-08-15, on this build.** The webview was opaque, because this
 framework's `MacBackdropNormal` leaves it drawing its own background and its
 `BackgroundType` field is read on Linux and Windows and ignored on darwin. Every

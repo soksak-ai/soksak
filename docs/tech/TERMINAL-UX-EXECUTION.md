@@ -399,6 +399,9 @@ The final gate reports these values mechanically for all seven providers and lis
 - PTY output to rendered frame;
 - overlay open and close blank-frame count equals zero;
 - sidebar motion blank-frame count equals zero;
+- same-pane tab activation reports `changed=true`, `layoutMoved=false`, a DOM-committed
+  presentation receipt and no invented layout transaction;
+- tab switching reports zero blank, overlap and native-receipt-mismatch frames;
 - active cursor visible in every required frame;
 - canonical theme semantic and pixel checks pass;
 - user input owner unchanged across the test run;

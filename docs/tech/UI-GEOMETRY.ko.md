@@ -231,6 +231,12 @@ resizer 와 드래그 핸들은 폭 0 오버레이입니다. 선은 B2 나 B3 �
 `surfaceVisible`, `visibilityReason` 을 노출하고, 유한 녹화 trace 가 캡처된 프레임마다 display,
 visibility, opacity, rect 와 함께 이 값들을 기록합니다.
 
+탭 활성화는 workspace·스페이스·pane·탭의 전체 활성 사슬을 바꿉니다. 영수증은 `changed`와
+`layoutMoved`를 분리합니다. 같은 pane 안의 전환은 `changed=true`, `layoutMoved=false`이며 대상 탭
+슬롯의 공개 `contentVisible=true` DOM commit을 기다리고 레이아웃 트랜잭션을 열지 않습니다. 기하를
+바꾸는 활성화는 트랜잭션을 열기 전에 원인을 선언하고 `layoutMoved=true`를 반환하므로 그 정확한 원인으로
+기다릴 수 있습니다. 트랜잭션이 열리지 않으면 대기 중인 원인도 남지 않습니다.
+
 **2026-08-15, 이 빌드에서 실측.** webview 가 불투명했습니다. 이 프레임워크의 `MacBackdropNormal` 이
 webview 가 자기 배경을 그리도록 두고, `BackgroundType` 필드는 Linux 와 Windows 에서 읽히고 darwin
 에서는 무시되기 때문입니다. 아무도 칠하지 않은 모든 영역이 엔진의 흰색이었습니다 — 모든 테마에서,
