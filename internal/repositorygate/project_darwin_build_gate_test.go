@@ -59,7 +59,7 @@ func TestDarwinBuildSelectsOneDeclaredProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := projects["soksakv3"]
-	if want.BundleIdentifier != "com.company.soksak" || want.InstallationIdentifier != "com.company.soksak" {
+	if want.BundleIdentifier != "com.company.soksakv3" || want.InstallationIdentifier != "com.company.soksakv3" {
 		t.Fatalf("soksakv3 project = %+v", want)
 	}
 }
