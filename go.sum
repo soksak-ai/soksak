@@ -276,8 +276,8 @@ github.com/microcosm-cc/bluemonday v1.0.27 h1:MpEUotklkwCSLeH+Qdx1VJgNqLlpY2KXwX
 github.com/microcosm-cc/bluemonday v1.0.27/go.mod h1:jFi9vgW+H7c3V0lb6nR74Ib/DIB5OBs92Dimizgw2cA=
 github.com/min-median-max/wails-service-native-compositor v0.0.0-20260828174855-6a6f57255a3f h1:zwkU7piXe5GNjLyIiTwwT1XuPrHiolpYyNvYnP/e7ls=
 github.com/min-median-max/wails-service-native-compositor v0.0.0-20260828174855-6a6f57255a3f/go.mod h1:tH/DRDJ6eesv9q+DQQCm3SOZNClfoltnhchX/A/M3F0=
-github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827163615-ea1150393c8b h1:jgI0EFPqLnygrhGgRETh35JU3eaJ3cZ0fvWSk1KSeP8=
-github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827163615-ea1150393c8b/go.mod h1:iubFphZ38mElnRpIxOJ3Fs8x8Lo8jTdMjAMukUy+Lrc=
+github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260828181952-6c94dae59f35 h1:O5w5UGNv0K9dM1zIZvWqXNx/zIXPvv9BKvwVASvZlrY=
+github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260828181952-6c94dae59f35/go.mod h1:iubFphZ38mElnRpIxOJ3Fs8x8Lo8jTdMjAMukUy+Lrc=
 github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063 h1:wAvk3nSsqcr63cB4JNMsEUgIcMr9Xt5lrtStLlVQy2Y=
 github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063/go.mod h1:9Ez7t5hWyZviMUnZxfwA5MPD/adyERuVMAIT/zMBSAc=
 github.com/mitchellh/copystructure v1.2.0 h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw=
