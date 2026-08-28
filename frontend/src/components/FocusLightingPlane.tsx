@@ -49,6 +49,18 @@ export function FocusLightingPlane({
   };
   const focusedGeometry = focused ? geometryKey(focused.style) : null;
   const blockedGeometries = new Set(blocked.map((region) => geometryKey(region.style)));
+  const idleContent = content
+    .filter((region) => geometryKey(region.style) !== focusedGeometry
+      && !blockedGeometries.has(geometryKey(region.style)))
+    .reduce<LightingRegion[]>((unique, region) => {
+      // One pane rectangle gets one veil. Multiple tabs or duplicated projection records can
+      // share the same geometry; painting each record stacks opacity and makes dim grow after
+      // navigation/clicks even though the declared amount is unchanged.
+      if (!unique.some((previous) => geometryKey(previous.style) === geometryKey(region.style))) {
+        unique.push(region);
+      }
+      return unique;
+    }, []);
   const exemptionStyle = (style: CSSProperties): CSSProperties => {
     const svg = style as CSSProperties & { x?: string; y?: string };
     return {
@@ -71,8 +83,7 @@ export function FocusLightingPlane({
         <div key={`exempt-${region.id}`} data-node={`focus-lighting/${scopeId}/exempt/${region.id}`}
           data-lighting-exempt={region.id} style={exemptionStyle(region.style)} />
       ))}
-      {content.filter((region) => geometryKey(region.style) !== focusedGeometry
-        && !blockedGeometries.has(geometryKey(region.style))).map((region) => (
+      {idleContent.map((region) => (
         <div key={`idle-${region.id}`} className={regionClass(region.moving)}
           data-node={`focus-lighting/${scopeId}/content/${region.id}`} data-lighting-content={region.id}
           data-lighting-base="idle" style={{ ...region.style, background: "black", opacity: baseAmount }} />

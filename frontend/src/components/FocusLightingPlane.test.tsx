@@ -87,6 +87,22 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
     expect(blocked?.style.opacity).toBe("0.7");
   });
 
+  it("paints one idle veil for duplicate pane geometry", async () => {
+    await act(async () => {
+      root.render(
+        <FocusLightingPlane
+          scopeId="space-duplicate"
+          baseAmount={0.5}
+          focused={region("focused", 50)}
+          blocked={[]}
+          exempt={[]}
+          content={[region("left-a", 0), region("left-b", 0), region("focused", 50)]}
+        />,
+      );
+    });
+    expect(host.querySelectorAll("[data-lighting-base]")).toHaveLength(1);
+  });
+
   it("the left rail area under the work surface is exempt from lighting exactly", async () => {
     const exempt = railLightingExemption(240, 50);
     await act(async () => {
