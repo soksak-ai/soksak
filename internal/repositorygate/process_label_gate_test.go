@@ -14,7 +14,7 @@ func TestLaunchPublishesOneProcessLabel(t *testing.T) {
 	source := string(body)
 	for _, required := range []string{
 		`os.Getenv(controlwire.ProcessLabelEnvironment)`,
-		"processLabelFromEnvironment",
+		"launchProcessLabel",
 		"ProcessLabel:",
 	} {
 		if !strings.Contains(source, required) {
