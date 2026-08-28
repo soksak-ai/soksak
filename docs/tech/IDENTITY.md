@@ -11,7 +11,7 @@ Which installation a process is owned by, and everything that follows from it.
 
 ## I1. One input, one derivation
 
-`core/identity` takes an identifier (`com.soksak.wails.dev`) and the ambient the caller read, and
+`core/identity` takes an identifier (`com.soksakv3.core`) and the ambient the caller read, and
 returns home, socket path, CLI name, build axis and release flag together.
 
 Deriving them separately makes the pair ("home A, identifier B") representable, and a reconnect then
@@ -28,23 +28,26 @@ server and in a test; and a misconfigured process cannot inherit the release use
 
 **Gate.** `core/install/ambient_test.go` scans core sources for ambient reads.
 
-## I3. The axes
+## I3. Project identity
 
-An identifier splits into a framework axis and an environment axis. `com.soksak.dev` has no
-framework axis — the `soksak` segment names the product. `com.soksak.wails.dev` has both.
+A built project has identifier `com.<project>.core`. The middle segment is the stable project name;
+`core` is the application kind, not a home suffix or a framework axis. `com.soksak.core` and
+`com.soksakv3.core` are different projects and share no persistent state.
 
-`release` and `app` are the release axis. Everything else is a separate installation.
+An explicitly addressed development or gate process may use an environment-axis identifier such as
+`com.soksak.dev`. That is a run identity, not a built project. A framework name never participates
+in project identity.
 
 ## I4. What follows from the axis
 
-| Derived | Release | Other axis (e.g. `dev`) |
-| --- | --- | --- |
-| home | `~/.soksak` | `~/.soksak-dev` |
-| environment | `<home>/environment.json` | same rule |
-| socket | `<home>/<identifier>.sock` | same rule |
-| CLI name | `sok` | `sok-dev` |
+| Derived | `com.soksak.core` | `com.soksakv3.core` | Explicit run `com.soksak.dev` |
+| --- | --- | --- | --- |
+| home | `~/.soksak` | `~/.soksakv3` | `~/.soksak-dev` |
+| environment | `<home>/environment.json` | same rule | same rule |
+| socket | `<home>/<identifier>.sock` | same rule | same rule |
+| CLI name | `sok` | `sokv3` | `sok-dev` |
 
-Homes sit side by side, so a new environment gets one without being listed anywhere.
+Project homes sit side by side and require no registration table.
 
 There is no runtime override. A home that can be swapped while the process runs is a home two
 processes can disagree about, and SQLite does not refuse a second writer — it serialises, so the

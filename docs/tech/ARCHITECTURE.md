@@ -259,9 +259,10 @@ A process receives its identifier and derives everything else from it, once.
 Deriving the home and the identifier separately makes the pair "A's home with
 B's name" representable, and a reconnect then lands on the wrong installation.
 
-Homes separate on the environment axis alone — `~/.soksak-<env>`. A framework
-axis deliberately does not separate them: one home holds one backend and may
-have several frontends.
+Built projects use `com.<project>.core` and separate directly as `~/.<project>`.
+The project name also owns the application and CLI binary names. Explicit test
+run identities may use an environment axis; a framework name never separates a
+project home.
 
 Nothing in the core reads the process environment. The launcher reads it once
 and passes values down, so a rule cannot answer differently depending on who

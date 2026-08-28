@@ -10,7 +10,7 @@ canonical: ./IDENTITY.md
 
 ## I1. 입력 하나, 도출 하나
 
-`core/identity` 는 식별자(`com.soksak.wails.dev`)와 호출자가 읽은 ambient 를 받아 home, 소켓 경로,
+`core/identity` 는 식별자(`com.soksakv3.core`)와 호출자가 읽은 ambient 를 받아 home, 소켓 경로,
 CLI 이름, 빌드 축, 릴리즈 플래그를 함께 반환합니다.
 
 따로 도출하면 ("home A, 식별자 B") 라는 조합이 표현 가능해지고, 재연결이 아무 보고 없이 다른 설치본에
@@ -26,23 +26,26 @@ CLI 이름, 빌드 축, 릴리즈 플래그를 함께 반환합니다.
 
 **검사.** `core/install/ambient_test.go` 가 코어 소스에서 ambient 읽기를 검사합니다.
 
-## I3. 축
+## I3. Project identity
 
-식별자는 프레임워크 축과 환경 축으로 나뉩니다. `com.soksak.dev` 에는 프레임워크 축이 없습니다 —
-`soksak` 세그먼트가 제품 이름입니다. `com.soksak.wails.dev` 에는 둘 다 있습니다.
+빌드된 project의 identifier는 `com.<project>.core`입니다. 가운데 segment가 안정적인 project 이름이고
+`core`는 app 종류입니다. Home suffix나 framework axis가 아닙니다. `com.soksak.core`와
+`com.soksakv3.core`는 서로 다른 project이며 persistent state를 공유하지 않습니다.
 
-`release` 와 `app` 이 릴리즈 축입니다. 나머지는 모두 별도 설치본입니다.
+명시적으로 주소를 받은 개발 또는 gate process는 `com.soksak.dev` 같은 environment-axis identifier를
+사용할 수 있습니다. 이는 build project가 아니라 run identity입니다. Framework 이름은 project identity에
+들어가지 않습니다.
 
 ## I4. 축에서 따라 나오는 것
 
-| 도출값 | 릴리즈 | 다른 축 (예: `dev`) |
-| --- | --- | --- |
-| home | `~/.soksak` | `~/.soksak-dev` |
-| environment | `<home>/environment.json` | 같은 규칙 |
-| socket | `<home>/<identifier>.sock` | 같은 규칙 |
-| CLI 이름 | `sok` | `sok-dev` |
+| 도출값 | `com.soksak.core` | `com.soksakv3.core` | 명시적 run `com.soksak.dev` |
+| --- | --- | --- | --- |
+| home | `~/.soksak` | `~/.soksakv3` | `~/.soksak-dev` |
+| environment | `<home>/environment.json` | 같은 규칙 | 같은 규칙 |
+| socket | `<home>/<identifier>.sock` | 같은 규칙 | 같은 규칙 |
+| CLI 이름 | `sok` | `sokv3` | `sok-dev` |
 
-home 은 나란히 놓이므로, 새 환경은 어디에도 등록하지 않고 자기 home 을 갖습니다.
+Project home은 나란히 놓이며 등록표 없이 각자 정해집니다.
 
 런타임 재정의는 없습니다. 프로세스가 도는 중에 바꿀 수 있는 home 은 두 프로세스가 서로 다르게 알 수
 있는 home 이고, SQLite 는 두 번째 writer 를 거부하지 않고 직렬화하므로 충돌이 조용히 남습니다.

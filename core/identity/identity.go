@@ -79,6 +79,23 @@ func AxesOf(identifier string) (framework string, env string) {
 
 func isRelease(env string) bool { return env == "release" || env == "app" }
 
+func projectOf(identifier string) (string, bool) {
+	segments := strings.Split(identifier, ".")
+	if len(segments) != 3 || segments[0] != "com" || segments[2] != "core" {
+		return "", false
+	}
+	project := segments[1]
+	if !strings.HasPrefix(project, product) || len(project) > 31 {
+		return "", false
+	}
+	for _, char := range project {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+			return "", false
+		}
+	}
+	return project, true
+}
+
 // HomeFor derives the installation home. Identity homes live side by side
 // (~/.soksak, ~/.soksak-dev, …), so a new environment gets its own home without
 // anything being listed anywhere.
@@ -94,6 +111,9 @@ func HomeFor(identifier string, env Environment) string {
 		// on the working directory.
 		base = env.UserProfile
 	}
+	if project, ok := projectOf(identifier); ok {
+		return filepath.Join(base, "."+project)
+	}
 	_, axis := AxesOf(identifier)
 	suffix := ""
 	if !isRelease(axis) {
@@ -105,11 +125,15 @@ func HomeFor(identifier string, env Environment) string {
 // Resolve derives one identity. Callers that cannot supply an identifier should
 // use Require instead of passing an empty string.
 func Resolve(identifier string, env Environment) Resolved {
+	project, projectIdentity := projectOf(identifier)
 	_, axis := AxesOf(identifier)
 	release := isRelease(axis)
-
 	cli := "sok"
-	if !release {
+	if projectIdentity {
+		axis = "release"
+		release = true
+		cli = "sok" + strings.TrimPrefix(project, product)
+	} else if !release {
 		cli = "sok-" + axis
 	}
 
