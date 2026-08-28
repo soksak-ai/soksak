@@ -45,6 +45,7 @@ import {
   registerContentViewHost,
   type ContentViewHost,
 } from "../lib/contentViews";
+import { __resetDropGrantsForTest, issueDropGrants } from "./dropGrants";
 
 function manifestOf(overrides: Record<string, unknown>): PluginManifest {
   const { manifest, validation } = parseManifest(
@@ -89,6 +90,22 @@ beforeEach(() => {
   streamState.messages.length = 0;
   useViewRegistry.setState({ views: {}, version: 0 });
   __resetContentViewHostForTest();
+  __resetDropGrantsForTest();
+});
+
+describe("explicit file drop grants", () => {
+  it("redeems only grants issued to this plugin and quotes with the declared login shell", async () => {
+    const execute = vi.fn(async (name: string) => name === "app.environment"
+      ? { ok: true as const, code: "OK", message: "ok", data: { loginShell: "/bin/zsh" } }
+      : { ok: true as const, code: "OK", message: "ok" });
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps({ execute }));
+    const [grant] = issueDropGrants({ pluginId: "demo", window: "main", paths: ["<local-evidence>/a b"] });
+    await expect(api.fileGrants?.redeem(grant.id)).resolves.toEqual({
+      kind: "file", shellText: "'<local-evidence>/a b'",
+    });
+    await expect(api.fileGrants?.redeem(grant.id)).resolves.toBeNull();
+    expect(execute).toHaveBeenCalledWith("app.environment", {}, {});
+  });
 });
 
 describe("webview input surface (webview permission)", () => {
