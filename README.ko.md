@@ -30,10 +30,10 @@ make build TARGET=aarch64-apple-darwin REGISTRY=http://host:port/
 go tool wails3 dev
 ```
 
-Frontend가 `@soksak-ai/plugin-spec`에 의존하므로 install하는 모든 `make` 호출은 make 명령줄의
+Frontend가 `@soksak/soksak-spec`에 의존하므로 install하는 모든 `make` 호출은 make 명령줄의
 `REGISTRY`가 필요합니다. 패키지가 공개된 뒤의 `https://registry.npmjs.org/`도 같습니다. 환경변수로
 들어온 값은 거부합니다. Makefile은 `frontend/package.json`에서 이 요구를 읽고, 값이 없으면
-`REGISTRY required: this package depends on @soksak-ai/...`로 거부합니다. `.npmrc`는 관여하지 않습니다.
+`REGISTRY required: this package depends on @soksak/...`로 거부합니다. `.npmrc`는 관여하지 않습니다.
 
 빌드 입력은 `REGISTRY`가 아니라 `frontend/pnpm-lock.yaml`의 integrity로 식별합니다. pnpm은
 content-addressable store에 없는 integrity의 패키지만 `REGISTRY`에서 받으므로, 같은 기계에서 같은

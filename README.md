@@ -37,10 +37,10 @@ make build TARGET=aarch64-apple-darwin REGISTRY=http://host:port/
 go tool wails3 dev
 ```
 
-The frontend depends on `@soksak-ai/plugin-spec`, so every `make` invocation that installs requires
+The frontend depends on `@soksak/soksak-spec`, so every `make` invocation that installs requires
 `REGISTRY` on the make command line, `https://registry.npmjs.org/` included once the package is
 published there. A value from the environment is refused. The Makefile reads the requirement from
-`frontend/package.json` and refuses `REGISTRY required: this package depends on @soksak-ai/...` when
+`frontend/package.json` and refuses `REGISTRY required: this package depends on @soksak/...` when
 it is absent. No `.npmrc` takes part.
 
 The build input is identified by the `frontend/pnpm-lock.yaml` integrity, not by `REGISTRY`. pnpm

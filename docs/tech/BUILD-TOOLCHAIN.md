@@ -68,7 +68,7 @@ make verify REGISTRY=http://host:port/
 go tool wails3 dev
 ```
 
-`REGISTRY` is accepted from the make command line only; the frontend depends on `@soksak-ai/plugin-spec`,
+`REGISTRY` is accepted from the make command line only; the frontend depends on `@soksak/soksak-spec`,
 so the `prepare`, `verify` and `build` targets refuse to run without it. Make forwards it as pnpm's
 scoped registry flags: the `scripts/ci` scripts take pnpm options as trailing arguments and the
 Taskfile takes them as `PNPM_FLAGS`. No `.npmrc` takes part.

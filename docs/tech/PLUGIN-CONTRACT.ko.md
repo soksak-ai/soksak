@@ -9,8 +9,9 @@ canonical: ./PLUGIN-CONTRACT.md
 ## 소유
 
 `soksak-spec` 이 공개 플러그인 manifest, release, registry, conformance, settings, 설치 상태 문법을
-소유합니다. 코어는 `@soksak-ai/plugin-spec` 패키지와 Go `platformspec` 모듈을 그대로 소비합니다.
-파서 사본을 갖지 않습니다.
+소유합니다. `build/soksak-spec.json` 은 정확한 Spec 릴리즈 하나를 선택합니다. 코어는 그 릴리즈를
+`@soksak/soksak-spec` 패키지와 Go `platformspec` 모듈로 소비합니다. 파서 사본이나 다른 패키지명을
+갖지 않습니다.
 
 규범적 버전 규칙과 예시는 `soksak-ai/soksak-spec` 릴리즈에 있습니다.
 

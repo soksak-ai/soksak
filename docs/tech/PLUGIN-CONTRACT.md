@@ -2,7 +2,7 @@
 
 ## Ownership
 
-`soksak-spec` owns the public plugin manifest, release, registry, conformance, settings, and installed-state grammars. The Core consumes the exact `@soksak-ai/plugin-spec` package and Go `platformspec` module. It keeps no parser copies.
+`soksak-spec` owns the public plugin manifest, release, registry, conformance, settings, and installed-state grammars. `build/soksak-spec.json` selects one exact Spec release. The Core consumes that release through the `@soksak/soksak-spec` package and Go `platformspec` module. It keeps no parser copies or alternate package name.
 
 The normative version rules and examples belong to the `soksak-ai/soksak-spec` release.
 

@@ -68,7 +68,7 @@ make verify REGISTRY=http://host:port/
 go tool wails3 dev
 ```
 
-`REGISTRY`는 make 명령줄에서만 받습니다. Frontend가 `@soksak-ai/plugin-spec`에 의존하므로
+`REGISTRY`는 make 명령줄에서만 받습니다. Frontend가 `@soksak/soksak-spec`에 의존하므로
 `prepare`, `verify`, `build` 타깃은 값이 없으면 실행을 거부합니다. Make는 이 값을 pnpm의
 scoped registry 플래그로 전달합니다. `scripts/ci`의 script는 pnpm option을 뒤따르는 인자로 받고,
 Taskfile은 `PNPM_FLAGS`로 받습니다. `.npmrc`는 관여하지 않습니다.
