@@ -29,13 +29,12 @@ func TestDarwinBuildSelectsOneDeclaredProject(t *testing.T) {
 	}
 	for _, required := range []string{
 		`$project.app/Contents/MacOS/$project`,
-		`bundle_identifier=com.$project.core`,
-		`installation_identifier=$bundle_identifier`,
+		`project_identifier=com.$project.core`,
 		`CFBundleName`, `CFBundleDisplayName`, `CFBundleExecutable`, `CFBundleIdentifier`,
 		`internal/application.defaultProcessLabel=$project`,
-		`internal/application.defaultIdentifier=$installation_identifier`,
-		`main.defaultIdentifier=$installation_identifier`,
-		`project`, `bundleIdentifier`, `installationIdentifier`,
+		`internal/application.defaultIdentifier=$project_identifier`,
+		`main.defaultIdentifier=$project_identifier`,
+		`project`, `projectIdentifier`,
 	} {
 		if !strings.Contains(build, required) {
 			t.Errorf("Darwin project builder omits %q", required)
@@ -46,6 +45,11 @@ func TestDarwinBuildSelectsOneDeclaredProject(t *testing.T) {
 	}
 	if strings.Contains(build, "build/projects.json") {
 		t.Error("Darwin builder requires per-project registration for values derived from PROJECT")
+	}
+	for _, duplicate := range []string{"bundleIdentifier", "installationIdentifier"} {
+		if strings.Contains(build, duplicate) {
+			t.Errorf("Darwin builder duplicates project identity as %s", duplicate)
+		}
 	}
 	if !strings.Contains(processLabel, "var defaultProcessLabel = controlwire.DefaultProcessLabel") {
 		t.Error("application process label has no build-owned default")
