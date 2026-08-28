@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -14,6 +15,27 @@ func resolved(t *testing.T, id string) identity.Resolved {
 		t.Fatalf("resolving %q: %v", id, err)
 	}
 	return got
+}
+
+func TestEnvironmentExposesTheResolvedRuntimeDirectory(t *testing.T) {
+	id, err := identity.Require("com.soksak.capture", identity.Environment{
+		Home:    "<local-evidence>/user",
+		Runtime: "<local-evidence>/soksak-capture-runtime",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(Describe(id, "debug", "/bin/zsh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var values map[string]any
+	if err := json.Unmarshal(body, &values); err != nil {
+		t.Fatal(err)
+	}
+	if values["runtime"] != "<local-evidence>/soksak-capture-runtime" {
+		t.Fatalf("runtime = %#v", values["runtime"])
+	}
 }
 
 func TestEnvironmentReportsOneResolvedIdentity(t *testing.T) {
