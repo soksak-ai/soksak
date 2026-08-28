@@ -1,7 +1,6 @@
 package repositorygate
 
 import (
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -29,8 +28,9 @@ func TestDarwinBuildSelectsOneDeclaredProject(t *testing.T) {
 		}
 	}
 	for _, required := range []string{
-		`build/projects.json`,
 		`$project.app/Contents/MacOS/$project`,
+		`bundle_identifier=com.$project.core`,
+		`installation_identifier=$bundle_identifier`,
 		`CFBundleName`, `CFBundleDisplayName`, `CFBundleExecutable`, `CFBundleIdentifier`,
 		`internal/application.defaultProcessLabel=$project`,
 		`internal/application.defaultIdentifier=$installation_identifier`,
@@ -44,6 +44,9 @@ func TestDarwinBuildSelectsOneDeclaredProject(t *testing.T) {
 	if strings.Contains(build, "label-or-empty") || strings.Contains(build, "bundle-id-or-empty") {
 		t.Error("Darwin builder retains removed label or bundle-id arguments")
 	}
+	if strings.Contains(build, "build/projects.json") {
+		t.Error("Darwin builder requires per-project registration for values derived from PROJECT")
+	}
 	if !strings.Contains(processLabel, "var defaultProcessLabel = controlwire.DefaultProcessLabel") {
 		t.Error("application process label has no build-owned default")
 	}
@@ -51,16 +54,8 @@ func TestDarwinBuildSelectsOneDeclaredProject(t *testing.T) {
 		t.Error("control-plane client identifier has no build-owned default")
 	}
 
-	var projects map[string]struct {
-		BundleIdentifier       string `json:"bundleIdentifier"`
-		InstallationIdentifier string `json:"installationIdentifier"`
-	}
-	if err := json.Unmarshal([]byte(readBuildContractFile(t, "build/projects.json")), &projects); err != nil {
-		t.Fatal(err)
-	}
-	want := projects["soksakv3"]
-	if want.BundleIdentifier != "com.company.soksakv3" || want.InstallationIdentifier != "com.company.soksakv3" {
-		t.Fatalf("soksakv3 project = %+v", want)
+	if _, err := os.Stat("build/projects.json"); !os.IsNotExist(err) {
+		t.Fatalf("project registry must not exist: %v", err)
 	}
 }
 
