@@ -74,7 +74,7 @@ if ! MACOSX_DEPLOYMENT_TARGET=10.15 \
 fi
 if grep -F 'warning:' "$log" >/dev/null; then cat "$log" >&2; exit 1; fi
 CGO_ENABLED=0 GOOS=darwin GOARCH=$go_arch go build -trimpath -buildvcs=false \
-  -ldflags="-w -s -X github.com/soksak-ai/soksak-core/cmd/sok.defaultIdentifier=$installation_identifier" \
+  -ldflags="-w -s -X main.defaultIdentifier=$installation_identifier" \
   -o "$stage/sok" ./cmd/sok
 plist="$stage/$label.app/Contents/Info.plist"
 cp build/darwin/Info.plist "$plist"
