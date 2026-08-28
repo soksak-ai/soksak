@@ -15,6 +15,7 @@ func TestDarwinBuildSelectsOneDeclaredProject(t *testing.T) {
 	for _, required := range []string{
 		`case "$(origin PROJECT)"`,
 		`PROJECT must be a command-line project name`,
+		`case "$$project" in soksak*`,
 		`scripts/ci/darwin-release.sh arm64 '$(PROJECT)'`,
 		`scripts/ci/darwin-release.sh x86_64 '$(PROJECT)'`,
 	} {
@@ -29,12 +30,14 @@ func TestDarwinBuildSelectsOneDeclaredProject(t *testing.T) {
 	}
 	for _, required := range []string{
 		`$project.app/Contents/MacOS/$project`,
+		`client=sok${project#soksak}`,
+		`$stage/$client`,
 		`project_identifier=com.$project.core`,
 		`CFBundleName`, `CFBundleDisplayName`, `CFBundleExecutable`, `CFBundleIdentifier`,
 		`internal/application.defaultProcessLabel=$project`,
 		`internal/application.defaultIdentifier=$project_identifier`,
 		`main.defaultIdentifier=$project_identifier`,
-		`project`, `projectIdentifier`,
+		`project`, `projectIdentifier`, `client`,
 	} {
 		if !strings.Contains(build, required) {
 			t.Errorf("Darwin project builder omits %q", required)
