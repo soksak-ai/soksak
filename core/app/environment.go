@@ -12,6 +12,7 @@ import "github.com/soksak-ai/soksak-core/core/identity"
 type Environment struct {
 	Identity   string `json:"identity"`
 	Home       string `json:"home"`
+	Runtime    string `json:"runtime"`
 	CoreBuild  string `json:"coreBuild"`
 	CLI        string `json:"cli"`
 	LoginShell string `json:"loginShell"`
@@ -32,6 +33,7 @@ func Describe(id identity.Resolved, buildProfile, loginShell string) Environment
 	return Environment{
 		Identity:       id.Identifier,
 		Home:           id.Home,
+		Runtime:        id.Runtime,
 		CoreBuild:      id.CoreBuild,
 		CLI:            id.CLI,
 		LoginShell:     loginShell,

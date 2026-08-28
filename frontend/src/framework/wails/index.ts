@@ -33,6 +33,15 @@ const unserved = (what: string) => (): never => {
   throw new Error(tmsg("framework.wails.unserved", { what }));
 };
 
+async function runtimeDirectory(): Promise<string> {
+  const { invokeCommand } = await import("./invoke");
+  const environment = await invokeCommand<{ runtime?: unknown }>("app_environment");
+  if (typeof environment.runtime !== "string" || environment.runtime.length === 0) {
+    throw new Error(tmsg("framework.wails.runtimeMissing"));
+  }
+  return environment.runtime;
+}
+
 // This window's name. The contract requires a synchronous `label` while the framework returns it
 // asynchronously, so boot reads it once. An empty label produces a `win//...` address, and that
 // address points the producer and the resolver at different windows — measured 2026-08-15:
@@ -172,7 +181,7 @@ export const wailsFramework: AppFramework = {
   },
 
   path: {
-    tempDir: unserved("path.tempDir"),
+    tempDir: runtimeDirectory,
     join: async (...parts) => parts.filter(Boolean).join("/"),
   },
 

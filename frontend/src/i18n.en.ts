@@ -1622,6 +1622,7 @@ export const en: Record<MsgKey, string> = {
   "framework.presentation.ownerViewIdDuplicate": "duplicate presentation owner viewId: {viewId}",
   "framework.presentation.ownersEmpty": "the presentation owner list is empty",
   "framework.wails.unserved": "the wails adapter does not serve {what} yet",
+  "framework.wails.runtimeMissing": "the application environment has no runtime directory",
   "layout.candidate.animationsEmpty": "DOM layout candidate animations are empty: {transactionId}",
   "layout.candidate.identityChanged": "DOM layout candidate identity changed: {transactionId}",
   "layout.candidate.notPaused": "DOM layout candidate is not paused: {transactionId}",

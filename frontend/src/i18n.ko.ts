@@ -1628,6 +1628,7 @@ export const ko = {
   "framework.presentation.ownerViewIdDuplicate": "presentation owner viewId 가 중복입니다: {viewId}",
   "framework.presentation.ownersEmpty": "presentation owner 목록이 비어 있습니다",
   "framework.wails.unserved": "wails 어댑터는 아직 {what} 을(를) 제공하지 않습니다",
+  "framework.wails.runtimeMissing": "애플리케이션 환경에 runtime 디렉터리가 없습니다",
   "layout.candidate.animationsEmpty": "DOM 배치 후보에 애니메이션이 없습니다: {transactionId}",
   "layout.candidate.identityChanged": "DOM 배치 후보의 identity 가 바뀌었습니다: {transactionId}",
   "layout.candidate.notPaused": "DOM 배치 후보가 일시정지 상태가 아닙니다: {transactionId}",
