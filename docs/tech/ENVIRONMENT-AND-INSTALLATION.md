@@ -11,7 +11,7 @@ The environment records only Plugin and Sidecar runtime selections.
 monotonic `revision`, Plugin records, and Sidecar records. A Plugin record contains its exact
 version, materialized absolute path, source (`local`, `registry`, or `development`), artifact
 SHA-256, and enabled state. A Sidecar record contains the same fields except enabled state and adds
-its target triple.
+its target triple and the absolute materialized process path inside its component directory.
 
 Kit, Contract, and Spec are build or validation inputs. Their exact release references remain in
 release documents and candidate build receipts; Core does not copy them into runtime state. Runtime
@@ -50,6 +50,13 @@ every size and SHA-256, extracts regular files only, validates manifests, and st
 before changing runtime state. It publishes component directories and `environment.json` in one
 transaction. Failure leaves the previous environment and component directories unchanged.
 
+A Sidecar manifest declares a project-independent `processRole` and its canonical release process.
+The installer receives the Core build's `PROJECT`, renames the staged process to
+`<PROJECT>-<processRole>` (preserving `.exe` on Windows), and records that exact absolute file in
+`environment.json`. The canonical release file is not retained as a second executable. Runtime
+resolution executes only the environment record; it does not reconstruct a name from the Sidecar
+id or use an in-process display-name override.
+
 The same id, version, target, and artifact digest is idempotent. An install whose content-addressed
 directory `<home>/components/<kind>/<id>/<version>[/<target>]/<sha256>` already exists reuses that
 directory and discards the staged copy: the same SHA-256 is the same bytes, and the directory was
@@ -68,7 +75,7 @@ complete an update.
 A development record is the same Plugin or Sidecar record shape with `source` set to `development`.
 `path` is the absolute, clean source directory: a Plugin directory contains `plugin.json` and the
 entry it declares (entry `null`: no entry file); a Sidecar directory contains `sidecar.json` and
-`dist/<id>`. The entry rule is the manifest rule of `parseManifest` (`soksak-spec`,
+the project-materialized process declared by the environment. The entry rule is the manifest rule of `parseManifest` (`soksak-spec`,
 `packages/plugin-spec/src/spec.ts`): key absent is `main.js`; `null` is no entry file (a pure
 contract Plugin); a string is trimmed and must be non-empty, relative (no leading separator, no
 drive letter), contain no `..` segment, and end with `.js` or `.mjs`; any other value is refused

@@ -16,7 +16,8 @@ environment 는 Plugin과 Sidecar runtime 선택만 기록합니다.
 `<identity-home>/environment.json`은 유일한 영구 runtime-component 상태입니다. 하나의 단조 증가
 `revision`, Plugin record, Sidecar record를 포함합니다. Plugin record에는 exact version, materialized
 절대 경로, source(`local`, `registry` 또는 `development`), artifact SHA-256, enabled 상태가 있습니다.
-Sidecar record 는 enabled 상태 대신 target triple을 추가합니다.
+Sidecar record 는 enabled 상태 대신 target triple과 component directory 안의 절대 materialized process
+경로를 추가합니다.
 
 Kit, Contract, Spec은 빌드 입력이거나 검증 입력입니다. 이들의 정확한 릴리즈 참조는 릴리즈
 문서와 후보 빌드 receipt에 남으며 Core는 runtime 상태로 복사하지 않습니다. 실행 시점
@@ -54,6 +55,12 @@ SHA-256을 검증하고 regular file만 추출하며 manifest를 확인합니다
 component directory와 `environment.json`을 transaction 하나로 공개합니다. 실패하면 이전 environment와
 component directory가 그대로 유지됩니다.
 
+Sidecar manifest는 project-independent `processRole`과 canonical release process를 선언합니다.
+Installer는 Core build의 `PROJECT`를 받아 staged process를 `<PROJECT>-<processRole>`로 rename하고
+(Windows는 `.exe` 유지) 그 정확한 절대 file을 `environment.json`에 기록합니다. Canonical release
+file은 두 번째 executable로 남기지 않습니다. Runtime resolution은 environment record만 실행하며
+Sidecar id에서 이름을 재구성하거나 process 내부 display-name override를 사용하지 않습니다.
+
 같은 id, version, target, 산출물 digest 는 멱등입니다. 내용 주소 디렉터리
 `<home>/components/<kind>/<id>/<version>[/<target>]/<sha256>`가 이미 있으면 설치는 그 directory를
 재사용하고 stage된 복사본을 폐기합니다. 같은 SHA-256은 같은 byte이며 directory는 atomic rename으로
@@ -70,8 +77,8 @@ install transaction이 필요합니다.
 
 개발 record는 Plugin 또는 Sidecar record와 같은 형식이며 `source`가 `development`입니다. `path`는
 절대 경로이자 깨끗한 소스 디렉터리입니다. Plugin 디렉터리는 `plugin.json`과 manifest가 선언한
-entry(entry `null`: entry file 없음)를 포함하고 Sidecar directory는 `sidecar.json`과 `dist/<id>`를
-포함합니다. Entry 규칙은 `parseManifest`(`soksak-spec`, `packages/plugin-spec/src/spec.ts`)의
+entry(entry `null`: entry file 없음)를 포함하고 Sidecar directory는 `sidecar.json`과 environment가
+선언한 project-materialized process를 포함합니다. Entry 규칙은 `parseManifest`(`soksak-spec`, `packages/plugin-spec/src/spec.ts`)의
 manifest 규칙과 같습니다. key가 없으면 `main.js`, `null`이면 entry file 없음(순수 contract Plugin),
 문자열이면 trim한 뒤 비어 있지 않고 상대 경로(선행 separator 금지, drive letter 금지)이며 `..`
 segment가 없고 `.js` 또는 `.mjs`로 끝나야 합니다. 그 외의 값은
