@@ -148,7 +148,65 @@ socket, 소유자를 받습니다. Darwin 의 `SOKSAK_PRESENTATION=capture-only`
 픽셀을 읽습니다. 현재 Wails 런타임은 파일 잠금으로 한 번에 테스트 애플리케이션 소유자 하나만
 허용합니다.
 
-## 사실과 가설
+## 현재 정본 상태 — 2026-08-28
+
+현재 로컬 closure는 Contract `0.0.13`, 브라우저 Kit `0.0.71`, Sidecar Kit `0.0.16`, PTY Sidecar
+`0.0.13`, 복구 Sidecar 여섯 개와 터미널 Plugin 일곱 개입니다. 선택된 runtime 버전은 다음과
+같습니다.
+
+| Provider | 복구 Sidecar | Plugin |
+| --- | --- | --- |
+| Alacritty | 0.0.23 | 0.0.29 |
+| Ghostty | 0.0.23 | 0.0.30 |
+| Kitty | 0.0.19 | 0.0.29 |
+| Shitty | 0.0.18 | 0.0.29 |
+| VT100 | 0.0.22 | 0.0.29 |
+| WezTerm | 0.0.22 | 0.0.29 |
+| Xterm | 선택한 복구 Sidecar 사용 | 0.0.45 |
+
+정본 로컬 composer는 plan을 한 번 쓰고 두 번째 실행에서 `unchanged`를 반환했습니다. SHA-256은
+`a6234d0a49c0377f72e60cd22ff2549c80fdae848d7e0611767ace50518242eb`입니다. Plan은 Core
+`f0b39ff9dc01d13a39dfa50e956e50eb58333110`과 terminal system test `0788e45`를 선택합니다.
+모든 선택 Plugin·Sidecar owner release는 `created` 뒤 `unchanged`를 반환했고 로컬 release store의
+52개 entry가 모두 검증됐습니다.
+
+설치된 일곱 provider의 Darwin arm64 `system-restore` gate는 GREEN입니다. 앱만 다시 시작하는 warm
+restart와 PTY daemon 교체를 모두 증명했습니다. Warm restart는 같은 shell/session 소유를 유지했고,
+PTY 교체 뒤에는 각 archived marker가 history에 남았으며 새 shell의 실제 입력을 받았습니다. 앱 로그에
+`already renders`, `INPUT_WRITE_FAILED`, 응답 정지가 없습니다. Capture-only window는 non-key,
+alpha-zero를 유지했습니다. Cleanup은 `open=[]`, `recorded=[]`, 정상 앱 종료와 테스트 identity process
+0개를 보고했습니다. archived-restart 캡처 일곱 장을 직접 확인했고 모두 live prompt와
+`SOKSAK_ARCHIVED_RESTART_n` marker를 보여 줍니다.
+
+Checkpoint generation은 순서 숫자가 아니라 identity입니다. 새 observation이 pane을 명시적으로
+claim하고 그 generation만 checkpoint sequence를 전진시킬 수 있습니다. 다른 generation의 늦은 worker
+write는 거부합니다. 새 PTY generation은 이전 viewport를 scrollback으로 옮기고 새 viewport를 지우고
+cursor를 home으로 옮긴 뒤 fresh shell output을 적용합니다. Random generation ID의 숫자 크기로 최신성을
+비교하는 것은 금지합니다.
+
+File drop도 같은 소유 규칙을 따릅니다. Core는 Plugin/window에 묶인 불투명 일회용 grant를 발급하고
+redeem할 때 허용된 raw path만 반환합니다. Login-shell quote는 Terminal Kit이 소유합니다. Core는 shell
+family를 열거하거나 `shellText`를 만들지 않습니다.
+
+| 결함 | 현재 증거 |
+| --- | --- |
+| hang / 남은 render 소유 | 정확한 v3 closure에서 GREEN: 일곱 provider warm restart, PTY 교체, 입력, cleanup. |
+| 1 — 지연 | 열려 있음. Owner·restore 처리량 증거는 있지만 현재 closure의 전체 설치 성능 matrix를 다시 실행하지 않았습니다. |
+| 2 — 포커스 | 열려 있음. Capture-only DOM focus는 native AppKit focus가 아니며 무인 native gate가 필요합니다. |
+| 3 — 활성 커서 | 열려 있음. Engine 상태는 공개됐지만 native pointer에서 활성 cursor까지의 인증이 필요합니다. |
+| 4 — 키보드 입력 | 부분 GREEN. Command/DOM 입력과 restart 뒤 shell 입력은 GREEN이며 무인 AppKit key-to-PTY가 남았습니다. |
+| 5–7 — picker·modal·sidebar 표시 | 부분 GREEN. 같은 pane 탭 전환은 한 clean frame이며 v3 overlay/sidebar visibility matrix를 다시 실행해야 합니다. |
+| 8 — 색 parity | 열려 있음. v3 restore 캡처는 읽을 수 있고 일관되지만 v3에서 전체 계산 style/ANSI matrix를 다시 실행하지 않았습니다. |
+| 9 — macOS 신호등 닫기 | 반복 native click을 포함한 Core owner gate가 GREEN입니다. |
+| 10 — 테스트 간섭 | 현재 capture-only restore gate에서 GREEN: non-key, focus 이동 없음, exact identity cleanup, 소유 Sidecar 0개. |
+
+Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
+제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.
+
+## 폐기된 2026-08-25 snapshot
+
+아래 자료는 역사적 맥락으로만 유지합니다. 현재 closure identity나 완료 증거가 아니며 현재 gate를
+건너뛰는 근거로 쓰면 안 됩니다.
 
 확인된 사실:
 
@@ -231,7 +289,7 @@ socket, 소유자를 받습니다. Darwin 의 `SOKSAK_PRESENTATION=capture-only`
 구분을 지키면서 긴 ustar 경로도 지원합니다. staging metadata 와 `.candidate-inputs` 는 archive 에
 들어가지 않습니다.
 
-## 현재 진행 상태와 차단점
+## 폐기된 2026-08-25 진행 표
 
 | 결함 | 2026-08-25 상태 |
 | --- | --- |

@@ -151,7 +151,66 @@ transparent, mouse-transparent and non-key. Capture reads document pixels withou
 application. The current Wails runtime admits one test application owner at a time through a
 blocking file lock.
 
-## Facts and hypotheses
+## Current authoritative status — 2026-08-28
+
+The current local closure is Contract `0.0.13`, browser Kit `0.0.71`, Sidecar Kit `0.0.16`, PTY
+Sidecar `0.0.13`, six recovery Sidecars and seven terminal Plugins. The selected runtime versions
+are:
+
+| Provider | Recovery Sidecar | Plugin |
+| --- | --- | --- |
+| Alacritty | 0.0.23 | 0.0.29 |
+| Ghostty | 0.0.23 | 0.0.30 |
+| Kitty | 0.0.19 | 0.0.29 |
+| Shitty | 0.0.18 | 0.0.29 |
+| VT100 | 0.0.22 | 0.0.29 |
+| WezTerm | 0.0.22 | 0.0.29 |
+| Xterm | uses the selected recovery Sidecar | 0.0.45 |
+
+The canonical local composer wrote the plan once and returned `unchanged` on the second run. Its
+SHA-256 is `a6234d0a49c0377f72e60cd22ff2549c80fdae848d7e0611767ace50518242eb`.
+The plan selects Core `f0b39ff9dc01d13a39dfa50e956e50eb58333110` and terminal-system test
+`0788e45`. All selected Plugin and Sidecar owner releases returned `created` then `unchanged`, and
+the local release store verified all 52 entries.
+
+The installed seven-provider `system-restore` gate is GREEN on Darwin arm64. It proved both
+application-only warm restart and replacement of the PTY daemon. Warm restart retained the exact
+shell/session owner; PTY replacement preserved each archived marker in history and accepted fresh
+typed shell input. Application logs contain no `already renders`, `INPUT_WRITE_FAILED`, or hung
+request. Capture-only windows remained non-key and alpha-zero. Cleanup reported `open=[]`,
+`recorded=[]`, graceful application exit, and no process under the test identity. The seven
+archived-restart captures were inspected directly and each shows a live prompt and its
+`SOKSAK_ARCHIVED_RESTART_n` marker.
+
+Checkpoint generation is an identity, not an ordering number. A new observation explicitly claims
+the pane. Only that generation may advance its checkpoint sequence; a late worker from another
+generation is refused. A new PTY generation moves the prior viewport into scrollback, clears and
+homes a new viewport, then applies fresh shell output. Numeric comparison of random generation IDs
+is forbidden.
+
+File drops follow the same ownership rule. Core issues opaque Plugin/window-bound one-shot grants
+and returns the authorized raw path only on redemption. Terminal Kit owns login-shell quoting. Core
+does not name shell families or produce `shellText`.
+
+| Defect | Current evidence |
+| --- | --- |
+| hang / orphan render ownership | GREEN for the exact v3 closure: seven-provider warm restart, PTY replacement, input and cleanup. |
+| 1 — latency | Open. Owner and restore throughput evidence exists, but the current closure has not rerun the complete installed performance matrix. |
+| 2 — focus | Open. Capture-only DOM focus is not native AppKit focus; the unattended native gate remains required. |
+| 3 — active cursor | Open. Engine state is exposed, but native pointer-to-active-cursor certification remains required. |
+| 4 — keyboard input | Partial. Command/DOM input and post-restart shell input are GREEN; unattended AppKit key-to-PTY remains required. |
+| 5–7 — picker, modal and sidebar visibility | Partial. Same-pane tab switching is one clean frame; the v3 overlay/sidebar visibility matrix must be rerun. |
+| 8 — colour parity | Open. The v3 restore captures are readable and consistent by inspection, but the complete computed-style/ANSI matrix has not rerun on v3. |
+| 9 — macOS traffic-light close | Core owner gate remains GREEN, including repeated native clicks. |
+| 10 — test interference | GREEN for the current capture-only restore gate: non-key, no focus transfer, exact identity cleanup, zero owned Sidecars. |
+
+No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
+remaining product goals must use this exact or a later fully recomposed closure.
+
+## Superseded 2026-08-25 snapshot
+
+The material below is retained only as historical context. It is not current closure identity or
+completion evidence and does not authorize skipping a current gate.
 
 Verified facts:
 
@@ -239,7 +298,7 @@ projection, local-locator rejection and verified archive exit with `candidate-bu
 spec source `0a1e217` also supports long ustar paths while preserving those boundaries. Staging
 metadata and `.candidate-inputs` do not enter the archive.
 
-## Current progress and blockers
+## Superseded 2026-08-25 progress table
 
 | Defect | State on 2026-08-25 |
 | --- | --- |
