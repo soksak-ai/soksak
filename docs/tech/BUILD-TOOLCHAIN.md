@@ -100,8 +100,9 @@ change. Tests read those declarations and therefore do not change merely because
 - A Node upgrade changes `.node-version` and its `engines.node` projection, then rematerializes and
   verifies the frontend lock on every supported architecture.
 - A pnpm upgrade changes `packageManager` and the lockfile produced by that exact pnpm version.
-- A Wails upgrade changes the `go.mod` module requirement. `go mod tidy` updates the module/tool
-  closure; local tasks, CI and container execution continue to use `go tool wails3`.
+- A Wails or Go module dependency upgrade changes the `go.mod` requirement. `make lock` owns the
+  `go mod tidy` projection into `go.sum`; local tasks, CI and container execution continue to use
+  `go tool wails3`.
 - A Go upgrade changes the `go` directive and reruns every host and cross-compilation gate.
 
 An upgrade is incomplete while a script, workflow, Dockerfile, test fixture or document includes an

@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: require-target guard preflight prepare verify build compose
+.PHONY: require-target guard preflight lock prepare verify build compose
 registry_flags = --@soksak:registry=$(REGISTRY) --@soksak-ai:registry=$(REGISTRY) --config.minimum-release-age=0
 # Recipes forward the flags as arguments; the scripts and the Taskfile pass them to pnpm verbatim.
 registry_arguments = $(if $(findstring command line,$(origin REGISTRY)),$(registry_flags))
@@ -19,6 +19,9 @@ guard:
 
 preflight:
 	@scripts/ci/check-build-toolchain.sh --toolchain-only
+
+lock: preflight
+	@go mod tidy
 
 prepare: guard preflight
 	@scripts/ci/prepare-frontend-dependencies.sh $(registry_arguments)

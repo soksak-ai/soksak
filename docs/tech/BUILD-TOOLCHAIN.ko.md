@@ -99,8 +99,9 @@ Test는 선언을 읽으므로 version이 바뀌었다는 이유만으로 수정
 - Node 업그레이드는 `.node-version`과 `engines.node` projection을 변경한 뒤 지원 architecture마다
   frontend lock을 다시 materialize하고 검증합니다.
 - pnpm 업그레이드는 `packageManager`와 해당 pnpm version으로 만든 lockfile을 변경합니다.
-- Wails 업그레이드는 `go.mod` module requirement를 변경합니다. `go mod tidy`가 module/tool closure를
-  갱신하며 local task, CI, container는 계속 `go tool wails3`를 사용합니다.
+- Wails 또는 Go module dependency 업그레이드는 `go.mod` requirement를 변경합니다. `make lock`이
+  `go mod tidy`를 소유해 `go.sum`에 반영하며 local task, CI, container는 계속 `go tool wails3`를
+  사용합니다.
 - Go 업그레이드는 `go` directive를 변경하고 모든 host 및 cross-compilation gate를 다시 실행합니다.
 
 스크립트, 워크플로, Dockerfile, 테스트 fixture, 문서에 별도의 버전 리터럴이 남아 있으면
