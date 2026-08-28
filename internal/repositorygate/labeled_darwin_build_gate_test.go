@@ -28,9 +28,9 @@ func TestDarwinBuildOwnsOneLabeledUserApplication(t *testing.T) {
 		`$label.app/Contents/MacOS/$label`,
 		`CFBundleName`, `CFBundleDisplayName`, `CFBundleExecutable`, `CFBundleIdentifier`,
 		`internal/application.defaultProcessLabel=$label`,
-		`internal/application.defaultIdentifier=$bundle_identifier`,
-		`cmd/sok.defaultIdentifier=$bundle_identifier`,
-		`productLabel`, `bundleIdentifier`,
+		`internal/application.defaultIdentifier=$installation_identifier`,
+		`cmd/sok.defaultIdentifier=$installation_identifier`,
+		`productLabel`, `bundleIdentifier`, `installationIdentifier`,
 	} {
 		if !strings.Contains(build, required) {
 			t.Errorf("Darwin release builder omits %q", required)
