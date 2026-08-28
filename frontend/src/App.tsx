@@ -19,6 +19,8 @@ import { parkedStyle } from "./lib/layerPark";
 import { createRectMotionTracker } from "./lib/layoutRectMotion";
 import { timed, useEngineLayoutCost, useRenderCost } from "./lib/mainThreadCost";
 import { emitPathsDropped, emitPluginEvent } from "./plugins/hooks";
+import { issueDropGrants } from "./plugins/dropGrants";
+import { currentWindowLabel } from "./lib/webviewLabels";
 import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { startWindowPointerActivation } from "./lib/windowPointerActivation";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
@@ -1213,10 +1215,22 @@ function App() {
       if (!paths || paths.length === 0) return;
       const s = useSessions.getState();
       const proj = s.workspaces.find((t) => t.id === s.activeId);
+      const content = proj?.spaces.find((space) => space.id === proj.activeSpaceId);
+      const group = content
+        ? allGroups(content.layout).find((pane) => pane.id === content.activePaneId)
+        : undefined;
+      const view = group?.tabs.find((tab) => tab.id === group.activeTabId);
+      if (!view?.pluginId) return;
+      const grants = issueDropGrants({
+        pluginId: view.pluginId,
+        window: currentWindowLabel() || "main",
+        paths,
+      });
+      if (grants.length === 0) return;
       emitPathsDropped({
         projectId: proj?.id ?? null,
-        paneId: proj ? (cwdTabOf(proj) ?? null) : null,
-        paths,
+        paneId: view.id,
+        grants,
       });
     });
     return () => {

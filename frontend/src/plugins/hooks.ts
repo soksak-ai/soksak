@@ -44,7 +44,11 @@ export interface PluginEventMap {
   /** Paths dropped on this window. The core places no meaning on a drop: a terminal plugin types
    *  them, an editor plugin opens them, and both may be listening. paneId is the workspace's
    *  cwd-tracking pane when there is one — where "here" is, for a subscriber that wants it. */
-  "paths.dropped": { projectId: string | null; paneId: string | null; paths: string[] };
+  "paths.dropped": {
+    projectId: string | null;
+    paneId: string | null;
+    grants: Array<{ id: string; kind: "file" | "image" }>;
+  };
   "theme.changed": { name: string; mode: "light" | "dark" };
   // Progress delta (MESSAGE-PROTOCOL §2) — sidecar events and AI thinking, published by the consuming plugin.
   "command.progress": { command?: string; delta?: unknown; source?: string };
