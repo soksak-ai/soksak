@@ -75,7 +75,9 @@ export function Drain(): $CancellablePromise<[number, number]> {
  * History answers the last retained successful application before sinceUnixMs as a baseline, then
  * every application at or after it, in apply order. A DOM trace whose first frame precedes the first
  * motion Apply still needs to know what the native layer already held; omitting that baseline calls
- * the first displayed frame unobserved. An exact timestamp starts at that exact sample.
+ * the first displayed frame unobserved. An exact timestamp starts at the first sample carrying that
+ * timestamp. Wall-clock milliseconds are not a unique cursor: multiple applies can share one, and
+ * dropping an equal-time sample would make the trace lossy. Sequence preserves their apply order.
  * 
  * The compositor owns this timeline because it is the only layer that observes Apply itself;
  * reconstructing it from frontend responses measures bridge return order instead.
