@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  emitPathsDropped,
   emitPluginEvent,
   onPluginEvent,
   startPluginHooks,
@@ -19,6 +20,23 @@ async function flush() {
 }
 
 type Ev = { event: keyof PluginEventMap; payload: unknown };
+
+describe("paths.dropped event", () => {
+  it("delivers opaque grants and no filesystem path", () => {
+    const received: PluginEventMap["paths.dropped"][] = [];
+    const subscription = onPluginEvent("paths.dropped", (payload) => received.push(payload));
+    emitPathsDropped({
+      projectId: "wsp-a", paneId: "tab-a",
+      grants: [{ id: "drop-a", kind: "file" }],
+    });
+    subscription.dispose();
+    expect(received).toEqual([{
+      projectId: "wsp-a", paneId: "tab-a",
+      grants: [{ id: "drop-a", kind: "file" }],
+    }]);
+    expect(JSON.stringify(received)).not.toContain("<local-evidence>/");
+  });
+});
 
 describe("startPluginHooks — sessions diff coalescing", () => {
   it("many writes in one synchronous burst (a resize storm) coalesce into one diff and keep the semantic events", async () => {
