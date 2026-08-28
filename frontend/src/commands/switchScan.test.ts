@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { classifySwitchFrames } from "./switchScan";
+import * as switchScan from "./switchScan";
 
 describe("switch frame verdict", () => {
   it("accepts one pixel transition frame", () => {
@@ -58,5 +59,54 @@ describe("switch scan command contract", () => {
     for (const field of ["blankFrames", "overlapFrames", "nativeMismatchFrames", "flickerFrames"]) {
       expect(source).toContain(field);
     }
+  });
+});
+
+describe("switch presentation verdict", () => {
+  type View = {
+    native: boolean;
+    contentVisible: boolean;
+    surfaceVisible: boolean;
+    liveSurfaceVisible: boolean;
+    parkedPictureVisible: boolean;
+  };
+  const view = (over: Partial<View>): View => ({
+    native: false,
+    contentVisible: false,
+    surfaceVisible: false,
+    liveSurfaceVisible: false,
+    parkedPictureVisible: false,
+    ...over,
+  });
+  const classify = (switchScan as unknown as {
+    classifySwitchPresentation?: (
+      samples: Array<{ frame: number; from: View; to: View }>,
+    ) => Record<string, unknown>;
+  }).classifySwitchPresentation;
+
+  it("counts blank, overlap, and native receipt mismatch frames", () => {
+    expect(classify).toBeTypeOf("function");
+    if (!classify) return;
+    const result = classify([
+      { frame: 0, from: view({ contentVisible: true }), to: view({}) },
+      { frame: 1, from: view({}), to: view({}) },
+      { frame: 2, from: view({ contentVisible: true }), to: view({ contentVisible: true }) },
+      {
+        frame: 3,
+        from: view({}),
+        to: view({ native: true, contentVisible: true, surfaceVisible: true }),
+      },
+      {
+        frame: 4,
+        from: view({}),
+        to: view({ native: true, contentVisible: true, surfaceVisible: false, parkedPictureVisible: true }),
+      },
+    ]);
+    expect(result).toMatchObject({
+      blankFrames: [1, 3],
+      overlapFrames: [2],
+      nativeMismatchFrames: [3],
+      clean: false,
+    });
   });
 });
