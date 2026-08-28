@@ -48,6 +48,30 @@ func TestHomeIsDerivedFromTheIdentifierAlone(t *testing.T) {
 	}
 }
 
+func TestProjectIdentifierOwnsTheProjectHomeAndClient(t *testing.T) {
+	base := filepath.Join("<local-evidence>", "user")
+	for _, want := range []struct {
+		identifier string
+		home       string
+		cli        string
+	}{
+		{"com.soksak.core", filepath.Join(base, ".soksak"), "sok"},
+		{"com.soksakv3.core", filepath.Join(base, ".soksakv3"), "sokv3"},
+	} {
+		resolved := Resolve(want.identifier, Environment{Home: base})
+		if resolved.Home != want.home || resolved.CLI != want.cli {
+			t.Errorf("Resolve(%q) home=%q cli=%q; want home=%q cli=%q",
+				want.identifier, resolved.Home, resolved.CLI, want.home, want.cli)
+		}
+		if resolved.CoreBuild != "release" || !resolved.Release {
+			t.Errorf("Resolve(%q) build=%q release=%v", want.identifier, resolved.CoreBuild, resolved.Release)
+		}
+		if resolved.Socket != filepath.Join(want.home, want.identifier+".sock") {
+			t.Errorf("Resolve(%q) socket=%q", want.identifier, resolved.Socket)
+		}
+	}
+}
+
 func TestWindowsFallsBackToUserProfile(t *testing.T) {
 	// Windows commonly leaves HOME unset. An empty base would put the vault and
 	// the database at a cwd-relative `.soksak`, which is a different store on
