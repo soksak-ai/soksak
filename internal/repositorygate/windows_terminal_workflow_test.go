@@ -250,21 +250,7 @@ func TestDarwinVerificationUsesTheProductDeploymentTarget(t *testing.T) {
 }
 
 func TestCorePinsTheWindowsSidecarSpec(t *testing.T) {
-	selectionBody, err := os.ReadFile("build/soksak-spec.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var selection struct{ Commit string }
-	if err := json.Unmarshal(selectionBody, &selection); err != nil {
-		t.Fatal(err)
-	}
-	body, err := os.ReadFile("go.mod")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(body), selection.Commit[:12]) {
-		t.Fatal("Core and acceptance do not share the Windows sidecar manifest parser")
-	}
+	requireSelectedGoSpec(t, readSelectedSpecRelease(t))
 }
 
 func TestWindowsCanRevealWithoutTakingFocus(t *testing.T) {
