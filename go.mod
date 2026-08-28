@@ -11,7 +11,7 @@ require (
 	github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260827163615-ea1150393c8b
 	github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063
 	github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f
-	github.com/soksak-ai/soksak-contract-control v0.0.0-20260823042834-6d1a1c8cbad7
+	github.com/soksak-ai/soksak-contract-control v0.0.0-20260828141635-965770de7446
 	github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9
 	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828063003-1ea11821a8f0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.12
