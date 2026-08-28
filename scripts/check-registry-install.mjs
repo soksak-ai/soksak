@@ -89,6 +89,11 @@ test("Makefile owns both Go and frontend lockfile regeneration", () => {
   assert.match(makefile, /^\t@CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm --dir frontend \$\(registry_arguments\) install --lockfile-only$/m);
 });
 
+test("Makefile accepts a declared project name without a product prefix allowlist", () => {
+  assert.match(makefile, /^require-project:$/m);
+  assert.doesNotMatch(makefile, /PROJECT must start with soksak|case "\$\$project" in soksak\*/);
+});
+
 // pnpm 11 compares the settings recorded by the install before every script run and reinstalls
 // on any difference; every pnpm invocation therefore repeats the install environment and flags.
 test("Taskfiles and CI scripts run pnpm with the forwarded flags and the install environment", () => {
