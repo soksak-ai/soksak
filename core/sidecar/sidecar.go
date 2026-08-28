@@ -46,6 +46,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -438,7 +439,10 @@ func (host *Host) startResolved(
 		Env: process.ChildEnvironmentWithSecrets(
 			host.deps.Environment,
 			host.deps.Home,
-			map[string]string{controlwire.ProcessLabelEnvironment: host.deps.ProcessLabel},
+			map[string]string{
+				controlwire.ProcessLabelEnvironment: host.deps.ProcessLabel,
+				controlwire.SidecarNameEnvironment:  filepath.Base(path),
+			},
 			secrets,
 		),
 		Group: true,
