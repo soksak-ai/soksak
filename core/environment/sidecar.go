@@ -1,10 +1,12 @@
 package environment
 
 import (
-	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/soksak-ai/soksak-core/core/i18n"
+	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
 )
 
 type SidecarRuntime struct {
@@ -12,6 +14,22 @@ type SidecarRuntime struct {
 	Version    string
 	Interfaces []platformspec.Reference
 	Process    string
+}
+
+// ResolveSelectedSidecar resolves the installed sidecar selected by environment.json.
+func ResolveSelectedSidecar(home, id string) (SidecarRuntime, error) {
+	environment, exists, err := Read(home)
+	if err != nil {
+		return SidecarRuntime{}, err
+	}
+	if !exists {
+		return SidecarRuntime{}, i18n.Errorf("environment.sidecar.noInstallationRecord", map[string]string{"id": id})
+	}
+	value, found := environment.Sidecars[id]
+	if !found {
+		return SidecarRuntime{}, i18n.Errorf("environment.sidecar.noInstallationRecord", map[string]string{"id": id})
+	}
+	return resolveSidecarRecord(id, value, value.Version)
 }
 
 // ResolveSidecarForPlugin resolves sidecar for consumer. consumer must name an
@@ -55,6 +73,10 @@ func ResolveSidecarVersion(home, id, version string) (SidecarRuntime, error) {
 	if !found {
 		return SidecarRuntime{}, os.ErrNotExist
 	}
+	return resolveSidecarRecord(id, value, version)
+}
+
+func resolveSidecarRecord(id string, value Component, version string) (SidecarRuntime, error) {
 	manifest, err := readRecordManifest("sidecar", id, value)
 	if err != nil {
 		return SidecarRuntime{}, err

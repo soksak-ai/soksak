@@ -113,17 +113,9 @@ func Run(assets embed.FS) error {
 		// environment record is the resolver, exactly what an installed or
 		// developed sidecar declared (a name with no record refuses by name).
 		ResolvePath: func(name string) (string, error) {
-			environment, exists, err := coreenvironment.Read(resolved.Home)
+			unit, err := coreenvironment.ResolveSelectedSidecar(resolved.Home, name)
 			if err != nil {
 				return "", err
-			}
-			record, held := environment.Sidecars[name]
-			if !exists || !held {
-				return "", fmt.Errorf("sidecar %s has no installation record", name)
-			}
-			unit, err := coreenvironment.ResolveSidecarVersion(resolved.Home, name, record.Version)
-			if err != nil {
-				return "", fmt.Errorf("sidecar %s@%s: %w", name, record.Version, err)
 			}
 			return unit.Process, nil
 		},

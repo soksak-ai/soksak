@@ -9,6 +9,7 @@ func init() {
 		"environment.develop.entryInvalid":         {EN: "plugin {id}: entry {entry} is not a relative .js/.mjs path inside the plugin directory", KO: "플러그인 {id}: entry {entry}은(는) 플러그인 디렉터리 내부의 상대 .js/.mjs 경로가 아닙니다"},
 		"environment.develop.directoryUnavailable": {EN: "development {kind} {id}: directory {path} is unavailable: {error}", KO: "개발 {kind} {id}: 디렉터리 {path}을(를) 사용할 수 없습니다: {error}"},
 		"environment.develop.sidecarArtifactStale": {EN: "ARTIFACT_STALE: development sidecar {id} at {path}: {error}", KO: "ARTIFACT_STALE: 개발 사이드카 {id} ({path}): {error}"},
+		"environment.sidecar.noInstallationRecord": {EN: "sidecar {id} has no installation record", KO: "사이드카 {id}의 설치 레코드가 없습니다"},
 		"environment.remove.pathOutsideHome":       {EN: "artifact path {path} is not under {home}/components; the record is kept", KO: "아티팩트 경로 {path}이(가) {home}/components 아래에 있지 않습니다; 레코드는 유지됩니다"},
 		"environment.remove.pathSymlink":           {EN: "artifact path {path}: {link} is a symlink; the record is kept", KO: "아티팩트 경로 {path}: {link}이(가) 심볼릭 링크입니다; 레코드는 유지됩니다"},
 		"environment.remove.notFound":              {EN: "no {kind} record for id {id}", KO: "id {id}의 {kind} 레코드가 없습니다"},
