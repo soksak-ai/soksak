@@ -13,9 +13,11 @@ func TestDarwinBuildOwnsOneLabeledUserApplication(t *testing.T) {
 
 	for _, required := range []string{
 		`case "$(origin LABEL)"`,
+		`case "$(origin BUNDLE_ID)"`,
 		`LABEL must be a command-line process label`,
-		`scripts/ci/darwin-release.sh arm64 '$(LABEL)'`,
-		`scripts/ci/darwin-release.sh x86_64 '$(LABEL)'`,
+		`BUNDLE_ID must be a command-line application identifier`,
+		`scripts/ci/darwin-release.sh arm64 '$(LABEL)' '$(BUNDLE_ID)'`,
+		`scripts/ci/darwin-release.sh x86_64 '$(LABEL)' '$(BUNDLE_ID)'`,
 	} {
 		if !strings.Contains(makefile, required) {
 			t.Errorf("Makefile omits labeled Darwin build rule %q", required)
@@ -25,6 +27,7 @@ func TestDarwinBuildOwnsOneLabeledUserApplication(t *testing.T) {
 		`$label.app/Contents/MacOS/$label`,
 		`CFBundleName`, `CFBundleDisplayName`, `CFBundleExecutable`, `CFBundleIdentifier`,
 		`internal/application.defaultProcessLabel=$label`,
+		`internal/application.defaultIdentifier=$bundle_identifier`,
 		`productLabel`, `bundleIdentifier`,
 	} {
 		if !strings.Contains(build, required) {
@@ -33,6 +36,9 @@ func TestDarwinBuildOwnsOneLabeledUserApplication(t *testing.T) {
 	}
 	if !strings.Contains(processLabel, "var defaultProcessLabel = controlwire.DefaultProcessLabel") {
 		t.Error("application process label has no build-owned default")
+	}
+	if strings.Contains(build, "bundle_identifier=com.soksak.core.$label") {
+		t.Error("Darwin builder derives stable bundle identity from the presentation label")
 	}
 }
 
