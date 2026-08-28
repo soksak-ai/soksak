@@ -83,6 +83,12 @@ test("Makefile requires REGISTRY on the command line because the frontend depend
   refused(run(["verify"]), dependency);
 });
 
+test("Makefile owns both Go and frontend lockfile regeneration", () => {
+  assert.match(makefile, /^lock: guard preflight$/m);
+  assert.match(makefile, /^\t@go mod tidy$/m);
+  assert.match(makefile, /^\t@CI=1 PNPM_DISABLE_SELF_UPDATE_CHECK=1 pnpm --dir frontend \$\(registry_arguments\) install --lockfile-only$/m);
+});
+
 // pnpm 11 compares the settings recorded by the install before every script run and reinstalls
 // on any difference; every pnpm invocation therefore repeats the install environment and flags.
 test("Taskfiles and CI scripts run pnpm with the forwarded flags and the install environment", () => {
