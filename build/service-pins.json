@@ -1,0 +1,6 @@
+{
+  "nativeCompositor": {
+    "repository": "https://github.com/min-median-max/wails-service-native-compositor",
+    "commit": "8d6ac7e19893278546d870b52d281b8ba7bf386b"
+  }
+}
