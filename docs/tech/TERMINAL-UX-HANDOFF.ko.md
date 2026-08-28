@@ -366,6 +366,26 @@ Darwin 의 Unix socket 길이 제한 때문에 긴 임시 runtime 경로는 쓸 
 
 ## 완료 구분
 
+## v7 격리 관측에서 추가된 결함
+
+사용자 앱과 분리된 `soksakv7`에서 다음 두 동작을 별도 결함으로 추적한다.
+
+- 터미널 pane을 클릭한 직후 다음 키 입력이 전달되지 않고 다른 탭을 갔다 돌아와야 입력되는 현상. 클릭의
+  native/DOM 이벤트, focus 상태 event, PTY write를 하나의 시퀀스로 기록해 재현한다.
+- pane을 전환하거나 복원할 때 이전 pane의 프롬프트·브랜치 문자열이 새 pane 위에 잔상처럼 겹치는 현상.
+  frame sequence와 surface generation을 기준으로 이전 세대 frame이 새 세대에 도달하지 않는 것을 기계적으로
+  검증하고, 캡처로 최종 픽셀을 확인한다.
+
+두 항목은 기존 2번(포커스)·4번(입력)의 하위 현상으로 숨기지 않고 각각 named assertion을 가진다. RED가
+  확인되기 전 구현하지 않으며, 사용자 `soksakv3`에서는 재현·수정하지 않는다.
+
+## 프로젝트별 sidecar identity
+
+Installer가 `environment.json`의 `processRole`과 현재 프로젝트 이름으로 materialize한 실행 파일 이름을
+`SOKSAK_SIDECAR_NAME`으로 자식에게 전달한다. PTY socket·token은 이 선언된 이름으로 파생한다. 따라서
+같은 runtime root라도 `soksak-sidecar-pty`와 `soksakv7-sidecar-pty`가 endpoint를 공유하지 않으며,
+실행 파일 이름을 추측하거나 하드코딩하지 않는다.
+
 모든 제공자 매트릭스의 RED 가 GREEN 이 되고, 모든 정량 표시 검사와 소유 검사가 통과하며, 스크린샷과
 움직임 녹화를 직접 확인해야 완료입니다. 빌드, 명령 응답, 과거 CI 실행만으로 이 인계를 끝낼 수
 없습니다.

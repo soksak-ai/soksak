@@ -376,6 +376,25 @@ executable name alone.
 
 ## Completion boundary
 
+## Additional v7 observation defects
+
+In the isolated `soksakv7` application, track these as named assertions rather than hiding them under
+focus or input:
+
+- After clicking a terminal pane, the next key may be lost until another tab is selected and returned.
+  Record native/DOM click, focus state event, and PTY write as one sequence.
+- On pane switch or restore, the previous prompt/branch text can appear as a ghost over the new pane.
+  Assert frame sequence and surface generation ownership mechanically, then inspect final pixels.
+
+Do not reproduce or modify the user `soksakv3` instance. Each assertion needs its own RED before a fix.
+
+## Project-qualified sidecar identity
+
+The installer passes the materialized process name, derived from `environment.json` `processRole` and
+the project name, as `SOKSAK_SIDECAR_NAME`. PTY socket and token paths derive from that declared name;
+they are never inferred from an executable path or hard-coded. Thus `soksak-sidecar-pty` and
+`soksakv7-sidecar-pty` cannot share endpoints under one runtime root.
+
 Completion requires all provider-matrix RED tests to become GREEN, all numeric visibility and
 ownership checks to pass, and direct inspection of screenshots and motion recordings. A build,
 command reply or previous CI run alone cannot close this handoff.
