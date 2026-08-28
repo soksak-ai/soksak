@@ -47,13 +47,66 @@ func TestSidecarCommitRefusesWhenProjectNameWasNotInjected(t *testing.T) {
 	}
 }
 
+func TestSidecarCommitMaterializesTheDeclaredProjectProcess(t *testing.T) {
+	home := t.TempDir()
+	archive := tgz(t,
+		archiveEntry{name: "sidecar.json", body: `{"id":"soksak-sidecar-terminal-alacritty","version":"0.0.1","processRole":"sidecar-terminal-alacritty","interface":[{"id":"soksak-spec-sidecar-terminal","version":"0.0.1"}],"process":"dist/soksak-sidecar-terminal-alacritty"}`},
+		archiveEntry{name: "dist/soksak-sidecar-terminal-alacritty", body: "binary"},
+	)
+	manager := NewTransactionManager(filepath.Join(home, ".transactions"), memoryFetcher{body: archive}, nil)
+	identity := ArtifactIdentity{Kind: "sidecar", ID: "soksak-sidecar-terminal-alacritty", Version: "0.0.1"}
+	transaction, err := manager.Begin("official", identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged, err := manager.Stage(context.Background(), StageRequest{
+		TransactionID: transaction.TransactionID, RegistryID: "official", Identity: identity,
+		Artifact: Artifact{
+			File: "alacritty.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz",
+			Manifest: "sidecar.json", Entrypoints: []string{"sidecar.json", "dist/soksak-sidecar-terminal-alacritty"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = manager.Commit(CommitRequest{
+		TransactionID: transaction.TransactionID, ExpectedRevision: 0, Home: home, Project: "soksakv3",
+		Components: []VerifiedComponent{{
+			Kind: "sidecar", ID: identity.ID, Version: identity.Version, Target: "aarch64-apple-darwin",
+			RegistryID: "official", SourceRepository: "https://github.com/soksak-ai/soksak-sidecar-terminal-alacritty",
+			SourceCommit: strings.Repeat("a", 40), ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	environment, exists, err := coreenvironment.Read(home)
+	if err != nil || !exists {
+		t.Fatalf("environment exists=%v err=%v", exists, err)
+	}
+	record := environment.Sidecars[identity.ID]
+	want := filepath.Join(record.Path, "dist", "soksakv3-sidecar-terminal-alacritty")
+	if record.Process != want {
+		t.Fatalf("process=%q want=%q", record.Process, want)
+	}
+	if body, err := os.ReadFile(want); err != nil || string(body) != "binary" {
+		t.Fatalf("materialized process body=%q err=%v", body, err)
+	}
+	if _, err := os.Lstat(filepath.Join(record.Path, "dist", "soksak-sidecar-terminal-alacritty")); !os.IsNotExist(err) {
+		t.Fatalf("canonical artifact process remained after materialization: %v", err)
+	}
+}
+
 func TestCommitPublishesOneEnvironmentWithSeparateComponentPaths(t *testing.T) {
 	home := t.TempDir()
 	manager := NewTransactionManager(filepath.Join(home, ".transactions"), memoryFetcher{}, nil)
 	root := ArtifactIdentity{Kind: "plugin", ID: "view", Version: "0.0.1"}
 	transaction, _ := manager.Begin("official", root)
 	pluginArchive := tgz(t, archiveEntry{name: "plugin.json", body: `{"id":"view","version":"0.0.1"}`})
-	sidecarArchive := tgz(t, archiveEntry{name: "sidecar.json", body: `{"id":"state","version":"0.0.1"}`})
+	sidecarArchive := tgz(t,
+		archiveEntry{name: "sidecar.json", body: `{"id":"state","version":"0.0.1","processRole":"sidecar-state","interface":[{"id":"state","version":"0.0.1"}],"process":"dist/state"}`},
+		archiveEntry{name: "dist/state", body: "binary"},
+	)
 	manager.fetcher = memoryFetcher{body: pluginArchive}
 	pluginStage, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: root, Artifact: Artifact{File: "p.tgz", Size: uint64(len(pluginArchive)), SHA256: sha256Hex(pluginArchive), Format: "tgz", Manifest: "plugin.json", Entrypoints: []string{"plugin.json"}}})
 	if err != nil {
@@ -61,7 +114,7 @@ func TestCommitPublishesOneEnvironmentWithSeparateComponentPaths(t *testing.T) {
 	}
 	sidecarIdentity := ArtifactIdentity{Kind: "sidecar", ID: "state", Version: "0.0.1"}
 	manager.fetcher = memoryFetcher{body: sidecarArchive}
-	sidecarStage, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: sidecarIdentity, Artifact: Artifact{File: "s.tgz", Size: uint64(len(sidecarArchive)), SHA256: sha256Hex(sidecarArchive), Format: "tgz", Manifest: "sidecar.json", Entrypoints: []string{"sidecar.json"}}})
+	sidecarStage, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: sidecarIdentity, Artifact: Artifact{File: "s.tgz", Size: uint64(len(sidecarArchive)), SHA256: sha256Hex(sidecarArchive), Format: "tgz", Manifest: "sidecar.json", Entrypoints: []string{"sidecar.json", "dist/state"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +124,7 @@ func TestCommitPublishesOneEnvironmentWithSeparateComponentPaths(t *testing.T) {
 		Components: []VerifiedComponent{
 			{Kind: "plugin", ID: "view", Version: "0.0.1", RegistryID: "official", SourceRepository: "https://github.com/example/view", SourceCommit: commit, ArtifactSHA256: pluginStage.SHA256, StagedHandle: pluginStage.Handle},
 			{Kind: "sidecar", ID: "state", Version: "0.0.1", Target: "aarch64-apple-darwin", RegistryID: "official", SourceRepository: "https://github.com/example/state", SourceCommit: commit, ArtifactSHA256: sidecarStage.SHA256, StagedHandle: sidecarStage.Handle},
-		}, Home: home,
+		}, Home: home, Project: "soksakv3",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -182,23 +235,27 @@ func TestCommitRejectsASidecarVersionThatBreaksAnInstalledPlugin(t *testing.T) {
 	current.Plugins["terminal"] = coreenvironment.Plugin{Component: coreenvironment.Component{
 		Version: "0.0.23", Path: pluginRoot, ArtifactSHA256: strings.Repeat("a", 64), Source: "local",
 	}}
+	oldSidecarRoot := t.TempDir()
 	current.Sidecars["terminal-state"] = coreenvironment.Component{
-		Version: "0.0.12", Path: t.TempDir(), ArtifactSHA256: strings.Repeat("b", 64), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin",
+		Version: "0.0.12", Path: oldSidecarRoot, Process: filepath.Join(oldSidecarRoot, "dist", "soksakv3-sidecar-terminal-state"), ArtifactSHA256: strings.Repeat("b", 64), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin",
 	}
 	writeJSONFile(t, filepath.Join(home, coreenvironment.File), current)
 
-	archive := tgz(t, archiveEntry{name: "sidecar.json", body: `{"id":"terminal-state","version":"0.0.13"}`})
+	archive := tgz(t,
+		archiveEntry{name: "sidecar.json", body: `{"id":"terminal-state","version":"0.0.13","processRole":"sidecar-terminal-state","interface":[{"id":"terminal-state","version":"0.0.1"}],"process":"dist/terminal-state"}`},
+		archiveEntry{name: "dist/terminal-state", body: "binary"},
+	)
 	manager := NewTransactionManager(filepath.Join(home, ".transactions"), memoryFetcher{body: archive}, nil)
 	identity := ArtifactIdentity{Kind: "sidecar", ID: "terminal-state", Version: "0.0.13"}
 	transaction, err := manager.Begin("official", identity)
 	if err != nil {
 		t.Fatal(err)
 	}
-	staged, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: identity, Artifact: Artifact{File: "state.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "sidecar.json", Entrypoints: []string{"sidecar.json"}}})
+	staged, err := manager.Stage(context.Background(), StageRequest{TransactionID: transaction.TransactionID, RegistryID: "official", Identity: identity, Artifact: Artifact{File: "state.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive), Format: "tgz", Manifest: "sidecar.json", Entrypoints: []string{"sidecar.json", "dist/terminal-state"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = manager.Commit(CommitRequest{TransactionID: transaction.TransactionID, ExpectedRevision: 1, Home: home, Components: []VerifiedComponent{{Kind: "sidecar", ID: "terminal-state", Version: "0.0.13", Target: "aarch64-apple-darwin", RegistryID: "official", ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle}}})
+	_, err = manager.Commit(CommitRequest{TransactionID: transaction.TransactionID, ExpectedRevision: 1, Home: home, Project: "soksakv3", Components: []VerifiedComponent{{Kind: "sidecar", ID: "terminal-state", Version: "0.0.13", Target: "aarch64-apple-darwin", RegistryID: "official", ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle}}})
 	if err == nil || !strings.Contains(err.Error(), "DEPENDENCY_VERSION_CONFLICT") || !strings.Contains(err.Error(), "terminal@0.0.23") || !strings.Contains(err.Error(), "0.0.12") || !strings.Contains(err.Error(), "0.0.13") {
 		t.Fatalf("error = %v", err)
 	}

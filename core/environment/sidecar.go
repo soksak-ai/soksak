@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
 	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
 )
@@ -14,6 +15,21 @@ type SidecarRuntime struct {
 	Version    string
 	Interfaces []platformspec.Reference
 	Process    string
+}
+
+// MaterializedSidecarProcess returns the relative installed execution path from the one project
+// name and the Sidecar-owned process role. The release artifact's canonical process name is an
+// input file, not the runtime process name.
+func MaterializedSidecarProcess(project, processRole, process string) (string, error) {
+	name, err := controlwire.FormatProcessName(project, processRole)
+	if err != nil {
+		return "", err
+	}
+	canonical := filepath.FromSlash(process)
+	if filepath.Ext(canonical) == ".exe" {
+		name += ".exe"
+	}
+	return filepath.Join(filepath.Dir(canonical), name), nil
 }
 
 // ResolveSelectedSidecar resolves the installed sidecar selected by environment.json.
@@ -85,11 +101,14 @@ func resolveSidecarRecord(id string, value Component, version string) (SidecarRu
 		return SidecarRuntime{}, os.ErrNotExist
 	}
 	root := value.Path
-	if err := validateRegularPath(root, manifest.Process); err != nil {
+	relative, err := filepath.Rel(root, value.Process)
+	if err != nil {
 		return SidecarRuntime{}, err
 	}
-	process := filepath.Join(root, filepath.FromSlash(manifest.Process))
-	return SidecarRuntime{ID: id, Version: version, Interfaces: manifest.Interfaces, Process: process}, nil
+	if err := validateRegularPath(root, relative); err != nil {
+		return SidecarRuntime{}, err
+	}
+	return SidecarRuntime{ID: id, Version: version, Interfaces: manifest.Interfaces, Process: value.Process}, nil
 }
 func validateRegularPath(root, relative string) error {
 	path := root

@@ -62,7 +62,7 @@ describe("atomic registry installation", () => {
     const installed = {
       revision: 3,
       plugins: { demo: { version: "0.0.1", path: "/installed/demo", artifactSha256: digest("c"), source: "registry" as const, registry: "official", enabled: true } },
-      sidecars: { state: { version: "0.0.0", path: "/installed/state", artifactSha256: digest("0"), source: "registry" as const, registry: "official", target: "aarch64-apple-darwin" } },
+      sidecars: { state: { version: "0.0.0", path: "/installed/state", process: "/installed/state/dist/soksakv3-sidecar-state", artifactSha256: digest("0"), source: "registry" as const, registry: "official", target: "aarch64-apple-darwin" } },
     };
     const result = await installRegistryRelease({ sourceId: "official", root: { kind: "plugin", id: "demo", version: "0.0.1" }, releases: [plugin, sidecar] as never, target: "aarch64-apple-darwin", environment: installed, artifacts: a.value });
     expect(result).toMatchObject({ ok: true, revision: 2 });

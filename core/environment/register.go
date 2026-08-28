@@ -8,7 +8,8 @@ import (
 const ChangeEvent = "environment.changed"
 
 type Deps struct {
-	Home string
+	Home    string
+	Project string
 	// OS and Arch name the host in Go's spelling ("darwin"/"arm64"). sidecar_develop
 	// derives the record's target from them. Either one empty refuses that command.
 	OS      string
@@ -72,7 +73,7 @@ func Register(registry *control.Registry, deps Deps) {
 		if err != nil {
 			return nil, err
 		}
-		change, err := SetSidecarDevelopment(deps.Home, id, path, target, expected)
+		change, err := SetSidecarDevelopment(deps.Home, id, path, target, deps.Project, expected)
 		return emit(deps, change, err)
 	}})
 	registry.MustRegister(control.Command{Name: "sidecar_remove", Handler: func(args control.Args) (any, error) {

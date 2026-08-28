@@ -1,8 +1,8 @@
 package environment
 
 import (
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -25,6 +25,7 @@ type recordManifest struct {
 	RuntimeDependencies runtimeDependencies
 	Interfaces          []platformspec.Reference
 	Process             string
+	ProcessRole         string
 }
 
 type runtimeDependencies struct {
@@ -57,7 +58,7 @@ func parseManifest(kind, root string) (recordManifest, error) {
 		if err != nil {
 			return recordManifest{}, fmt.Errorf("%s: %w", filepath.Join(root, manifestName(kind)), err)
 		}
-		return recordManifest{Body: body, ID: manifest.ID, Version: manifest.Version, Interfaces: manifest.Interfaces, Process: manifest.Process}, nil
+		return recordManifest{Body: body, ID: manifest.ID, Version: manifest.Version, Interfaces: manifest.Interfaces, Process: manifest.Process, ProcessRole: manifest.ProcessRole}, nil
 	}
 	var manifest pluginManifest
 	if err := json.Unmarshal(body, &manifest); err != nil {
@@ -107,7 +108,7 @@ func readRecordManifest(kind, id string, record Component) (recordManifest, erro
 		if strings.HasSuffix(record.Target, "windows-msvc") && !strings.HasSuffix(expectedProcess, ".exe") {
 			expectedProcess += ".exe"
 		}
-		if stagedErr != nil || staged.ID != manifest.ID || staged.Version != manifest.Version ||
+		if stagedErr != nil || staged.ID != manifest.ID || staged.Version != manifest.Version || staged.ProcessRole != manifest.ProcessRole ||
 			!slices.Equal(staged.Interfaces, manifest.Interfaces) || staged.Process != expectedProcess {
 			detail := "dist/sidecar.json does not match sidecar.json"
 			if stagedErr != nil {

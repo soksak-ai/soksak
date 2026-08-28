@@ -21,13 +21,13 @@ func pluginSource(t *testing.T, manifest map[string]any) string {
 func sidecarSource(t *testing.T, id string, withBinary bool) string {
 	t.Helper()
 	root := t.TempDir()
-	manifest := map[string]any{"id": id, "version": "0.2.0", "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/" + id}
+	manifest := map[string]any{"id": id, "version": "0.2.0", "processRole": "sidecar-" + id, "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/" + id}
 	writeJSON(t, filepath.Join(root, "sidecar.json"), manifest)
 	if withBinary {
 		if err := os.MkdirAll(filepath.Join(root, "dist"), 0o700); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, "dist", id), []byte("binary"), 0o700); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "dist", "soksakv3-sidecar-"+id), []byte("binary"), 0o700); err != nil {
 			t.Fatal(err)
 		}
 		writeJSON(t, filepath.Join(root, "dist", "sidecar.json"), manifest)
@@ -109,18 +109,18 @@ func TestSidecarDevelopRequiresDistBinary(t *testing.T) {
 	home := t.TempDir()
 	writeJSON(t, filepath.Join(home, File), Empty())
 	missing := sidecarSource(t, "terminal-state", false)
-	if _, err := SetSidecarDevelopment(home, "terminal-state", missing, "aarch64-apple-darwin", 1); err == nil {
+	if _, err := SetSidecarDevelopment(home, "terminal-state", missing, "aarch64-apple-darwin", "soksakv3", 1); err == nil {
 		t.Fatal("sidecar without dist/<id> was accepted")
 	}
 	root := sidecarSource(t, "terminal-state", true)
-	if _, err := SetSidecarDevelopment(home, "terminal-state", root, "aarch64-apple-darwin", 1); err != nil {
+	if _, err := SetSidecarDevelopment(home, "terminal-state", root, "aarch64-apple-darwin", "soksakv3", 1); err != nil {
 		t.Fatal(err)
 	}
 	after, _, err := Read(home)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Component{Version: "0.2.0", Path: root, Source: "development", Target: "aarch64-apple-darwin"}
+	want := Component{Version: "0.2.0", Path: root, Process: filepath.Join(root, "dist", "soksakv3-sidecar-terminal-state"), Source: "development", Target: "aarch64-apple-darwin"}
 	if after.Sidecars["terminal-state"] != want {
 		t.Fatalf("record=%+v want=%+v", after.Sidecars["terminal-state"], want)
 	}
@@ -132,11 +132,12 @@ func TestSidecarDevelopRejectsAStaleStagedManifest(t *testing.T) {
 	root := sidecarSource(t, "terminal-state", true)
 	writeJSON(t, filepath.Join(root, "dist", "sidecar.json"), map[string]any{
 		"id": "terminal-state", "version": "0.1.0",
-		"interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}},
-		"process":   "dist/terminal-state",
+		"processRole": "sidecar-terminal-state",
+		"interface":   []map[string]string{{"id": "terminal-state", "version": "0.0.1"}},
+		"process":     "dist/terminal-state",
 	})
 
-	_, err := SetSidecarDevelopment(home, "terminal-state", root, "aarch64-apple-darwin", 1)
+	_, err := SetSidecarDevelopment(home, "terminal-state", root, "aarch64-apple-darwin", "soksakv3", 1)
 	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_STALE") {
 		t.Fatalf("stale staged manifest was accepted: %v", err)
 	}
@@ -152,7 +153,7 @@ func TestDevelopRejectsARelativePath(t *testing.T) {
 	if _, err := SetPluginDevelopment(home, "demo", "relative/plugin", 1); err == nil {
 		t.Fatal("relative plugin path was accepted")
 	}
-	if _, err := SetSidecarDevelopment(home, "demo", "relative/sidecar", "aarch64-apple-darwin", 1); err == nil {
+	if _, err := SetSidecarDevelopment(home, "demo", "relative/sidecar", "aarch64-apple-darwin", "soksakv3", 1); err == nil {
 		t.Fatal("relative sidecar path was accepted")
 	}
 }
@@ -228,7 +229,7 @@ func TestValidatePluginDependenciesUsesTheDiskVersionOfADevelopmentSidecar(t *te
 	sidecar := sidecarSource(t, "terminal-state", true)
 	value := Empty()
 	// The record keeps the version read at develop time; sidecar.json moved on afterwards.
-	value.Sidecars["terminal-state"] = Component{Version: "0.1.0", Path: sidecar, Source: "development", Target: "aarch64-apple-darwin"}
+	value.Sidecars["terminal-state"] = Component{Version: "0.1.0", Path: sidecar, Process: filepath.Join(sidecar, "dist", "soksakv3-sidecar-terminal-state"), Source: "development", Target: "aarch64-apple-darwin"}
 	value.Plugins["terminal"] = Plugin{Component: Component{Version: "0.1.0", Path: pluginSource(t, map[string]any{
 		"id": "terminal", "version": "0.1.0",
 		"runtimeDependencies": map[string]any{"sidecars": []map[string]any{{"id": "terminal-state", "version": "0.2.0"}}},
@@ -274,7 +275,7 @@ func TestABrokenDevelopmentPluginIsAbsentForDependentsAndBlocksNoOtherWrite(t *t
 		t.Fatalf("unrelated remove refused: %v", err)
 	}
 	sidecar := sidecarSource(t, "terminal-state", true)
-	if _, err := SetSidecarDevelopment(home, "terminal-state", sidecar, "aarch64-apple-darwin", 3); err != nil {
+	if _, err := SetSidecarDevelopment(home, "terminal-state", sidecar, "aarch64-apple-darwin", "soksakv3", 3); err != nil {
 		t.Fatalf("unrelated sidecar develop refused: %v", err)
 	}
 	_, err = SetPluginsEnabled(home, []PluginRef{{ID: "base", Version: "1.0.0"}}, true, 4)
@@ -412,7 +413,7 @@ func TestDevelopRefusesAnUnavailableManifestByName(t *testing.T) {
 		return root
 	}
 	otherSidecar := t.TempDir()
-	writeJSON(t, filepath.Join(otherSidecar, "sidecar.json"), map[string]any{"id": "other", "version": "0.2.0", "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/other"})
+	writeJSON(t, filepath.Join(otherSidecar, "sidecar.json"), map[string]any{"id": "other", "version": "0.2.0", "processRole": "sidecar-other", "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/other"})
 	cases := map[string]struct {
 		kind, root string
 	}{
@@ -430,7 +431,7 @@ func TestDevelopRefusesAnUnavailableManifestByName(t *testing.T) {
 			if value.kind == "plugin" {
 				_, err = SetPluginDevelopment(home, "demo", value.root, 1)
 			} else {
-				_, err = SetSidecarDevelopment(home, "demo", value.root, "aarch64-apple-darwin", 1)
+				_, err = SetSidecarDevelopment(home, "demo", value.root, "aarch64-apple-darwin", "soksakv3", 1)
 			}
 			assertRefusalKey(t, err, "environment.develop.directoryUnavailable", value.kind, "demo", value.root)
 			if errors.Is(err, os.ErrNotExist) {
@@ -448,6 +449,6 @@ func TestDevelopRefusesAnUnavailableManifestByName(t *testing.T) {
 func unparseableSidecar(t *testing.T, id string) string {
 	t.Helper()
 	root := t.TempDir()
-	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": id, "version": "0.2.0", "interface": []map[string]string{{"id": "terminal-state", "version": "v0.0.2"}}, "process": "dist/" + id})
+	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": id, "version": "0.2.0", "processRole": "sidecar-" + id, "interface": []map[string]string{{"id": "terminal-state", "version": "v0.0.2"}}, "process": "dist/" + id})
 	return root
 }

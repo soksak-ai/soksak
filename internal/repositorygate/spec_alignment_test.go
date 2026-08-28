@@ -47,7 +47,7 @@ func requireSelectedGoSpec(t *testing.T, selection selectedSpecRelease) {
 }
 
 func TestGoSidecarSpecAcceptsPatchVersions(t *testing.T) {
-	manifest := []byte(`{"id":"soksak-sidecar-terminal-vt100","version":"0.0.7","interface":[{"id":"soksak-spec-sidecar-terminal","version":"0.0.1"}],"process":"dist/soksak-sidecar-terminal-vt100"}`)
+	manifest := []byte(`{"id":"soksak-sidecar-terminal-vt100","version":"0.0.7","processRole":"sidecar-terminal-vt100","interface":[{"id":"soksak-spec-sidecar-terminal","version":"0.0.1"}],"process":"dist/soksak-sidecar-terminal-vt100"}`)
 	parsed, err := platformspec.ParseSidecarManifest(manifest)
 	if err != nil || parsed.Version != "0.0.7" {
 		t.Fatalf("Go sidecar parser rejected patch version: %+v %v", parsed, err)

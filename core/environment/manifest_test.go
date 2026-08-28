@@ -49,7 +49,7 @@ func TestADevelopmentPluginManifestIsReadOncePerOperation(t *testing.T) {
 			return err
 		}, ""},
 		{"develop a sidecar", func(expected uint64) error {
-			_, err := SetSidecarDevelopment(home, "terminal-state", sidecarSource(t, "terminal-state", true), "aarch64-apple-darwin", expected)
+			_, err := SetSidecarDevelopment(home, "terminal-state", sidecarSource(t, "terminal-state", true), "aarch64-apple-darwin", "soksakv3", expected)
 			return err
 		}, ""},
 		{"disable the broken plugin", func(expected uint64) error {
@@ -85,7 +85,7 @@ func TestADevelopmentSidecarWhoseManifestFailsTheSpecParseIsBroken(t *testing.T)
 	home := t.TempDir()
 	root := sidecarSource(t, "terminal-state", true)
 	value := Empty()
-	value.Sidecars["terminal-state"] = Component{Version: "0.2.0", Path: root, Source: "development", Target: "aarch64-apple-darwin"}
+	value.Sidecars["terminal-state"] = Component{Version: "0.2.0", Path: root, Process: filepath.Join(root, "dist", "soksakv3-sidecar-terminal-state"), Source: "development", Target: "aarch64-apple-darwin"}
 	value.Plugins["terminal"] = Plugin{Component: Component{Version: "0.1.0", Path: pluginSource(t, map[string]any{
 		"id": "terminal", "version": "0.1.0",
 		"runtimeDependencies": map[string]any{"sidecars": []map[string]any{{"id": "terminal-state", "version": "0.2.0"}}},
@@ -95,7 +95,7 @@ func TestADevelopmentSidecarWhoseManifestFailsTheSpecParseIsBroken(t *testing.T)
 		t.Fatalf("valid sidecar manifest refused: %v", err)
 	}
 	// id and version parse; the interface version is not strict SemVer.
-	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": "terminal-state", "version": "0.2.0", "interface": []map[string]string{{"id": "terminal-state", "version": "v0.0.2"}}, "process": "dist/terminal-state"})
+	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": "terminal-state", "version": "0.2.0", "processRole": "sidecar-terminal-state", "interface": []map[string]string{{"id": "terminal-state", "version": "v0.0.2"}}, "process": "dist/terminal-state"})
 	_, err := ResolveSidecarVersion(home, "terminal-state", "0.2.0")
 	assertRefusalKey(t, err, "environment.develop.directoryUnavailable", "sidecar", "terminal-state", root)
 	err = ValidatePluginDependencies(value, nil)
@@ -120,7 +120,7 @@ func TestReadRecordManifestNeverAnswersARawFileError(t *testing.T) {
 // introduces a conflict is refused.
 func TestDependencyTransitionRefusesOnlyTheConflictItIntroduces(t *testing.T) {
 	before := Empty()
-	before.Sidecars["terminal-state"] = Component{Version: "0.0.7", Path: "/installed/terminal-state", Source: "local", Target: "aarch64-apple-darwin"}
+	before.Sidecars["terminal-state"] = Component{Version: "0.0.7", Path: "/installed/terminal-state", Process: "/installed/terminal-state/dist/soksakv3-sidecar-terminal-state", ArtifactSHA256: strings.Repeat("b", 64), Source: "local", Target: "aarch64-apple-darwin"}
 	before.Plugins["terminal"] = Plugin{Component: Component{Version: "0.1.0", Path: pluginSource(t, map[string]any{
 		"id": "terminal", "version": "0.1.0",
 		"runtimeDependencies": map[string]any{"sidecars": []map[string]any{{"id": "terminal-state", "version": "0.0.8"}}},

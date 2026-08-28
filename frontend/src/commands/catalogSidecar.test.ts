@@ -96,7 +96,7 @@ describe("sidecar.develop / sidecar.remove", () => {
       if (cmd === "environment_get") {
         return environmentReads++ === 0
           ? { revision: 4, plugins: {}, sidecars: {} }
-          : { revision: 5, plugins: {}, sidecars: { "soksak-sidecar-pty": { version: "0.4.0", path: "/work/pty", artifactSha256: "", source: "development", target: "darwin-arm64" } } };
+          : { revision: 5, plugins: {}, sidecars: { "soksak-sidecar-pty": { version: "0.4.0", path: "/work/pty", process: "/work/pty/dist/soksakv3-sidecar-pty", artifactSha256: "", source: "development", target: "darwin-arm64" } } };
       }
       if (cmd === "sidecar_develop") return { previousRevision: 4, revision: 5 };
       return null;
@@ -114,7 +114,7 @@ describe("sidecar.develop / sidecar.remove", () => {
     const written = {
       revision: 5,
       plugins: {},
-      sidecars: { "soksak-sidecar-pty": { version: "0.4.0", path: "/work/pty", artifactSha256: "", source: "development", target: "darwin-arm64" } },
+      sidecars: { "soksak-sidecar-pty": { version: "0.4.0", path: "/work/pty", process: "/work/pty/dist/soksakv3-sidecar-pty", artifactSha256: "", source: "development", target: "darwin-arm64" } },
     };
     let environmentReads = 0;
     invoke.mockImplementation(async (cmd: unknown) => {
@@ -139,7 +139,7 @@ describe("sidecar.develop / sidecar.remove", () => {
       if (cmd === "environment_get") {
         return environmentReads++ === 0
           ? { revision: 4, plugins: {}, sidecars: {} }
-          : { revision: 5, plugins: {}, sidecars: { "soksak-sidecar-pty": { version: "0.4.0", path: "/work/pty", artifactSha256: "", source: "development", target: "darwin-arm64" } } };
+          : { revision: 5, plugins: {}, sidecars: { "soksak-sidecar-pty": { version: "0.4.0", path: "/work/pty", process: "/work/pty/dist/soksakv3-sidecar-pty", artifactSha256: "", source: "development", target: "darwin-arm64" } } };
       }
       if (cmd === "sidecar_develop") return { previousRevision: 4, revision: 5 };
       return null;

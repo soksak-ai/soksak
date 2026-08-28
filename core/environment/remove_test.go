@@ -146,14 +146,14 @@ func TestRemoveSidecarDevelopmentKeepsTheSourceDirectory(t *testing.T) {
 	home := t.TempDir()
 	writeJSON(t, filepath.Join(home, File), Empty())
 	root := sidecarSource(t, "terminal-state", true)
-	if _, err := SetSidecarDevelopment(home, "terminal-state", root, "aarch64-apple-darwin", 1); err != nil {
+	if _, err := SetSidecarDevelopment(home, "terminal-state", root, "aarch64-apple-darwin", "soksakv3", 1); err != nil {
 		t.Fatal(err)
 	}
 	result, err := RemoveSidecar(home, "terminal-state", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRemoved(t, home, result.Change, Change{PreviousRevision: 2, Revision: 3}, "sidecar", "terminal-state", filepath.Join(root, "dist", "terminal-state"), false)
+	assertRemoved(t, home, result.Change, Change{PreviousRevision: 2, Revision: 3}, "sidecar", "terminal-state", filepath.Join(root, "dist", "soksakv3-sidecar-terminal-state"), false)
 }
 
 func TestRemoveSidecarLocalDeletesTheArtifactDirectoryUnderHome(t *testing.T) {
@@ -161,7 +161,7 @@ func TestRemoveSidecarLocalDeletesTheArtifactDirectoryUnderHome(t *testing.T) {
 	root := filepath.Join(componentRoot(home, "sidecar", "state"), "aarch64-apple-darwin")
 	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": "state", "version": "0.0.1"})
 	value := Empty()
-	value.Sidecars["state"] = Component{Version: "0.0.1", Path: root, ArtifactSHA256: strings.Repeat("a", 64), Source: "local", Target: "aarch64-apple-darwin"}
+	value.Sidecars["state"] = Component{Version: "0.0.1", Path: root, Process: filepath.Join(root, "dist", "soksakv3-sidecar-state"), ArtifactSHA256: strings.Repeat("a", 64), Source: "local", Target: "aarch64-apple-darwin"}
 	writeJSON(t, filepath.Join(home, File), value)
 	result, err := RemoveSidecar(home, "state", 1)
 	if err != nil {
@@ -175,7 +175,7 @@ func TestRemoveSidecarRefusesAnArtifactPathOutsideHome(t *testing.T) {
 	root := t.TempDir()
 	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": "state", "version": "0.0.1"})
 	value := Empty()
-	value.Sidecars["state"] = Component{Version: "0.0.1", Path: root, ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}
+	value.Sidecars["state"] = Component{Version: "0.0.1", Path: root, Process: filepath.Join(root, "dist", "soksakv3-sidecar-state"), ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}
 	writeJSON(t, filepath.Join(home, File), value)
 	_, err := RemoveSidecar(home, "state", 1)
 	if err == nil || !strings.Contains(err.Error(), root) {
@@ -188,7 +188,7 @@ func TestRemoveSidecarRefusesABrokenPluginDependency(t *testing.T) {
 	home := t.TempDir()
 	writeJSON(t, filepath.Join(home, File), Empty())
 	sidecar := sidecarSource(t, "terminal-state", true)
-	if _, err := SetSidecarDevelopment(home, "terminal-state", sidecar, "aarch64-apple-darwin", 1); err != nil {
+	if _, err := SetSidecarDevelopment(home, "terminal-state", sidecar, "aarch64-apple-darwin", "soksakv3", 1); err != nil {
 		t.Fatal(err)
 	}
 	plugin := pluginSource(t, map[string]any{
@@ -209,7 +209,7 @@ func TestRemoveSidecarRejectsARevisionConflictAndAnAbsentRecord(t *testing.T) {
 	home := t.TempDir()
 	writeJSON(t, filepath.Join(home, File), Empty())
 	root := sidecarSource(t, "terminal-state", true)
-	if _, err := SetSidecarDevelopment(home, "terminal-state", root, "aarch64-apple-darwin", 1); err != nil {
+	if _, err := SetSidecarDevelopment(home, "terminal-state", root, "aarch64-apple-darwin", "soksakv3", 1); err != nil {
 		t.Fatal(err)
 	}
 	var conflict ErrRevisionConflict

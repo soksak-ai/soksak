@@ -26,6 +26,9 @@ type Deps struct {
 	// directory, because a theme written somewhere nobody scans is an install
 	// that reports success and changes nothing.
 	Home string
+	// Project is the one build project name. The installer materializes every Sidecar executable
+	// as <project>-<manifest processRole>; it never infers a prefix from a component id.
+	Project string
 
 	// OS and Arch name the host this build was made for, in Go's spelling:
 	// "darwin"/"linux"/"windows" and "arm64"/"amd64". Reading runtime.GOOS
@@ -258,7 +261,7 @@ func registerInstallTransactions(registry *control.Registry, manager *Transactio
 		if err != nil {
 			return nil, err
 		}
-		result, err := manager.Commit(CommitRequest{TransactionID: transactionID, ExpectedRevision: expected, Components: components, Home: deps.Home})
+		result, err := manager.Commit(CommitRequest{TransactionID: transactionID, ExpectedRevision: expected, Components: components, Home: deps.Home, Project: deps.Project})
 		if err == nil && deps.Changed != nil {
 			deps.Changed(environment.ChangeEvent, result)
 		}

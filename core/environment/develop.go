@@ -52,7 +52,7 @@ func SetPluginDevelopment(home, id, path string, expected uint64) (Change, error
 // SetSidecarDevelopment registers path as the development source for sidecar id.
 // sidecar.json is read once under the same rule as SetPluginDevelopment.
 // target is the host artifact triple. dist/<id> must exist as a regular file.
-func SetSidecarDevelopment(home, id, path, target string, expected uint64) (Change, error) {
+func SetSidecarDevelopment(home, id, path, target, project string, expected uint64) (Change, error) {
 	if err := validateDevelopmentPath(path); err != nil {
 		return Change{}, err
 	}
@@ -61,9 +61,14 @@ func SetSidecarDevelopment(home, id, path, target string, expected uint64) (Chan
 	if err != nil {
 		return Change{}, err
 	}
-	if err := validateRegularPath(path, manifest.Process); err != nil {
+	process, err := MaterializedSidecarProcess(project, manifest.ProcessRole, manifest.Process)
+	if err != nil {
 		return Change{}, err
 	}
+	if err := validateRegularPath(path, process); err != nil {
+		return Change{}, err
+	}
+	record.Process = filepath.Join(path, process)
 	current, exists, err := Read(home)
 	if err != nil {
 		return Change{}, err

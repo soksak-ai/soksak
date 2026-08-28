@@ -1,11 +1,13 @@
 package install
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
 	coreenvironment "github.com/soksak-ai/soksak-core/core/environment"
 	"github.com/soksak-ai/soksak-core/core/i18n"
+	platformspec "github.com/soksak-ai/soksak-spec/go/platformspec"
 )
 
 type VerifiedComponent struct {
@@ -24,6 +26,7 @@ type CommitRequest struct {
 	ExpectedRevision uint64
 	Components       []VerifiedComponent
 	Home             string
+	Project          string
 }
 type CommitResult struct {
 	Revision uint64 `json:"revision"`
@@ -106,6 +109,16 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		if staged.identity != expected || staged.sha256 != artifact.digest {
 			return CommitResult{}, i18n.Errorf("install.transaction.stagedArtifactMismatch", map[string]string{"artifact": key})
 		}
+		materializedProcess := ""
+		if artifact.kind == "sidecar" {
+			if request.Project == "" {
+				return CommitResult{}, i18n.Errorf("install.transaction.projectRequired", nil)
+			}
+			materializedProcess, err = materializeSidecarProcess(staged, request.Project)
+			if err != nil {
+				return CommitResult{}, err
+			}
+		}
 		source := coreenvironment.RegistrySource
 		registryID := transaction.registryID
 		if transaction.registryID == "local" {
@@ -149,6 +162,9 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 			prepared = append(prepared, publishedArtifact{final: final, staged: staged})
 		}
 		value := coreenvironment.Component{Version: artifact.version, Path: final, ArtifactSHA256: artifact.digest, Source: source, Registry: registryID, Target: artifact.target}
+		if materializedProcess != "" {
+			value.Process = filepath.Join(final, materializedProcess)
+		}
 		selectComponent(&next, artifact.kind, artifact.id, value)
 		if artifact.kind == "plugin" {
 			stagedPluginRoots[artifact.id] = staged.path
@@ -200,4 +216,51 @@ func (manager *TransactionManager) Commit(request CommitRequest) (CommitResult, 
 		Root: transaction.root, Component: transaction.root, Phase: "committed",
 	})
 	return CommitResult{Revision: change.Revision}, nil
+}
+
+func materializeSidecarProcess(staged stagedState, project string) (string, error) {
+	body, err := os.ReadFile(filepath.Join(staged.path, filepath.FromSlash(staged.manifest)))
+	if err != nil {
+		return "", err
+	}
+	manifest, err := platformspec.ParseSidecarManifest(body)
+	if err != nil {
+		return "", err
+	}
+	materialized, err := coreenvironment.MaterializedSidecarProcess(project, manifest.ProcessRole, manifest.Process)
+	if err != nil {
+		return "", err
+	}
+	canonical := filepath.FromSlash(manifest.Process)
+	canonicalPath := filepath.Join(staged.path, canonical)
+	materializedPath := filepath.Join(staged.path, materialized)
+	if canonicalPath == materializedPath {
+		if err := regularInstalledProcess(canonicalPath); err != nil {
+			return "", err
+		}
+		return materialized, nil
+	}
+	canonicalErr := regularInstalledProcess(canonicalPath)
+	materializedErr := regularInstalledProcess(materializedPath)
+	if canonicalErr == nil && errors.Is(materializedErr, os.ErrNotExist) {
+		if err := os.Rename(canonicalPath, materializedPath); err != nil {
+			return "", err
+		}
+		return materialized, nil
+	}
+	if errors.Is(canonicalErr, os.ErrNotExist) && materializedErr == nil {
+		return materialized, nil
+	}
+	return "", i18n.Errorf("install.transaction.processMaterializationInvalid", map[string]string{"process": materialized})
+}
+
+func regularInstalledProcess(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return os.ErrInvalid
+	}
+	return nil
 }

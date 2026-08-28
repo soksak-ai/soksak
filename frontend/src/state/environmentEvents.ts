@@ -13,7 +13,7 @@ export interface HostComponent {
   target?: string;
 }
 export interface HostPlugin extends HostComponent { enabled: boolean }
-export interface HostSidecar extends HostComponent { target: string }
+export interface HostSidecar extends HostComponent { target: string; process: string }
 export interface HostEnvironment {
   revision: number;
   plugins: Record<string, HostPlugin>;

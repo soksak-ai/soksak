@@ -94,18 +94,18 @@ func TestInitializePublishesTheFirstEnvironmentRevision(t *testing.T) {
 func TestExactSidecarReferenceResolvesEnvironmentSidecar(t *testing.T) {
 	home := t.TempDir()
 	root := t.TempDir()
-	process := filepath.Join(root, "dist", "terminal-sidecar")
+	process := filepath.Join(root, "dist", "soksakv3-sidecar-terminal-sidecar")
 	if err := os.MkdirAll(filepath.Dir(process), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(process, []byte("binary"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	manifest := map[string]any{"id": "terminal-sidecar", "version": "0.0.1", "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/terminal-sidecar"}
+	manifest := map[string]any{"id": "terminal-sidecar", "version": "0.0.1", "processRole": "sidecar-terminal-sidecar", "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/terminal-sidecar"}
 	writeJSON(t, filepath.Join(root, "sidecar.json"), manifest)
 	environment := Empty()
 	environment.Plugins["terminal-view"] = Plugin{Component: Component{Version: "0.0.1", Path: t.TempDir(), ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official"}, Enabled: true}
-	environment.Sidecars["terminal-sidecar"] = Component{Version: "0.0.1", Path: root, ArtifactSHA256: strings.Repeat("b", 64), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}
+	environment.Sidecars["terminal-sidecar"] = Component{Version: "0.0.1", Path: root, Process: process, ArtifactSHA256: strings.Repeat("b", 64), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}
 	writeJSON(t, filepath.Join(home, File), environment)
 	runtime, err := ResolveSidecarForPlugin(home, PluginRef{ID: "terminal-view", Version: "0.0.1"}, PluginRef{ID: "terminal-sidecar", Version: "0.0.1"})
 	if err != nil {
@@ -119,7 +119,7 @@ func TestExactSidecarReferenceResolvesEnvironmentSidecar(t *testing.T) {
 func TestSidecarSelectionResolvesAWindowsSidecarExecutable(t *testing.T) {
 	home := t.TempDir()
 	root := t.TempDir()
-	process := filepath.Join(root, "dist", "terminal-sidecar.exe")
+	process := filepath.Join(root, "dist", "soksakv3-sidecar-terminal-sidecar.exe")
 	if err := os.MkdirAll(filepath.Dir(process), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -128,11 +128,12 @@ func TestSidecarSelectionResolvesAWindowsSidecarExecutable(t *testing.T) {
 	}
 	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{
 		"id": "terminal-sidecar", "version": "0.0.1",
-		"interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}},
-		"process":   "dist/terminal-sidecar.exe",
+		"processRole": "sidecar-terminal-sidecar",
+		"interface":   []map[string]string{{"id": "terminal-state", "version": "0.0.1"}},
+		"process":     "dist/terminal-sidecar.exe",
 	})
 	environment := Empty()
-	environment.Sidecars["terminal-sidecar"] = Component{Version: "0.0.1", Path: root, ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official", Target: "x86_64-pc-windows-msvc"}
+	environment.Sidecars["terminal-sidecar"] = Component{Version: "0.0.1", Path: root, Process: process, ArtifactSHA256: strings.Repeat("a", 64), Source: "registry", Registry: "official", Target: "x86_64-pc-windows-msvc"}
 	writeJSON(t, filepath.Join(home, File), environment)
 	runtime, err := ResolveSidecarVersion(home, "terminal-sidecar", "0.0.1")
 	if err != nil {
@@ -219,15 +220,15 @@ func TestPluginDisableIgnoresTheVersionField(t *testing.T) {
 func registrySidecar(t *testing.T, value *Environment, id, version string) string {
 	t.Helper()
 	root := t.TempDir()
-	process := filepath.Join(root, "dist", id)
+	process := filepath.Join(root, "dist", "soksakv3-sidecar-"+id)
 	if err := os.MkdirAll(filepath.Dir(process), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(process, []byte("binary"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": id, "version": version, "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/" + id})
-	value.Sidecars[id] = Component{Version: version, Path: root, ArtifactSHA256: strings.Repeat("b", 64), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}
+	writeJSON(t, filepath.Join(root, "sidecar.json"), map[string]any{"id": id, "version": version, "processRole": "sidecar-" + id, "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/" + id})
+	value.Sidecars[id] = Component{Version: version, Path: root, Process: process, ArtifactSHA256: strings.Repeat("b", 64), Source: "registry", Registry: "official", Target: "aarch64-apple-darwin"}
 	return process
 }
 
@@ -260,9 +261,9 @@ func TestResolveSidecarVersionUsesTheDiskVersionOfADevelopmentSidecar(t *testing
 	home := t.TempDir()
 	root := sidecarSource(t, "terminal-state", true)
 	value := Empty()
-	value.Sidecars["terminal-state"] = Component{Version: "0.2.0", Path: root, Source: "development", Target: "aarch64-apple-darwin"}
+	value.Sidecars["terminal-state"] = Component{Version: "0.2.0", Path: root, Process: filepath.Join(root, "dist", "soksakv3-sidecar-terminal-state"), Source: "development", Target: "aarch64-apple-darwin"}
 	writeJSON(t, filepath.Join(home, File), value)
-	manifest := map[string]any{"id": "terminal-state", "version": "0.3.0", "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/terminal-state"}
+	manifest := map[string]any{"id": "terminal-state", "version": "0.3.0", "processRole": "sidecar-terminal-state", "interface": []map[string]string{{"id": "terminal-state", "version": "0.0.1"}}, "process": "dist/terminal-state"}
 	writeJSON(t, filepath.Join(root, "sidecar.json"), manifest)
 	if _, err := ResolveSidecarVersion(home, "terminal-state", "0.3.0"); err == nil || !strings.Contains(err.Error(), "ARTIFACT_STALE") {
 		t.Fatalf("unstaged source version was accepted: %v", err)
@@ -275,7 +276,7 @@ func TestResolveSidecarVersionUsesTheDiskVersionOfADevelopmentSidecar(t *testing
 	if err != nil {
 		t.Fatalf("disk version refused: %v", err)
 	}
-	if runtime.Version != "0.3.0" || runtime.Process != filepath.Join(root, "dist", "terminal-state") || runtime.Interfaces[0].ID != "terminal-state" {
+	if runtime.Version != "0.3.0" || runtime.Process != filepath.Join(root, "dist", "soksakv3-sidecar-terminal-state") || runtime.Interfaces[0].ID != "terminal-state" {
 		t.Fatalf("runtime=%+v", runtime)
 	}
 	if err := os.RemoveAll(root); err != nil {
