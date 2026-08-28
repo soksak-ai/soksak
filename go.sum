@@ -359,6 +359,8 @@ github.com/soksak-ai/soksak-contract-surface v0.0.0-20260827123850-b095b92660ff 
 github.com/soksak-ai/soksak-contract-surface v0.0.0-20260827123850-b095b92660ff/go.mod h1:wXRo6E+0QlXIKNKVcVjCseH67D27OtG2Zp7M74d0iPo=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828063003-1ea11821a8f0 h1:UY2N6Yv+RnW7dPcY7nySsco0hV+JOULo1S9EoTfLVAA=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828063003-1ea11821a8f0/go.mod h1:IfcO4wTw2RDCPvUz+x92mqUt3J/5lkJe4rn9FiyINFI=
+github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828163806-cfa7e7aca3e5 h1:wJjfthCVEnf54spTpdAoBVHjTOjBUWG1OMSu+oEVFSA=
+github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828163806-cfa7e7aca3e5/go.mod h1:IfcO4wTw2RDCPvUz+x92mqUt3J/5lkJe4rn9FiyINFI=
 github.com/spf13/cast v1.10.0 h1:h2x0u2shc1QuLHfxi+cTJvs30+ZAHOGRic8uyGTDWxY=
 github.com/spf13/cast v1.10.0/go.mod h1:jNfB8QC9IA6ZuY2ZjDp0KtFO2LZZlg4S/7bzP6qqeHo=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=

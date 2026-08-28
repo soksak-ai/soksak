@@ -13,7 +13,7 @@ require (
 	github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f
 	github.com/soksak-ai/soksak-contract-control v0.0.0-20260828150033-44c52e0e5436
 	github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9
-	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828063003-1ea11821a8f0
+	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828163806-cfa7e7aca3e5
 	github.com/wailsapp/wails/v3 v3.0.0-beta.12
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/mod v0.37.0
