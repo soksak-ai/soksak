@@ -34,8 +34,7 @@ func Read(home string) (Environment, bool, error) {
 	}
 	value, err := Parse(body)
 	if err != nil {
-		// The refusal names the document: a bare decode error says what was
-		// wrong but never where, and a boot that dies on it says nothing.
+		// Include the document path because Parse errors contain only shape details.
 		return Environment{}, false, fmt.Errorf("%s: %w", filepath.Join(home, File), err)
 	}
 	return value, true, nil

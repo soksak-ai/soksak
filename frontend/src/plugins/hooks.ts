@@ -197,7 +197,7 @@ export const EVENT_PERMISSIONS: Partial<
   "turn.ended": "terminal:read",
   // The activity hub streams command lines, turns and other terminal activity → the same class of gate.
   activity: "terminal",
-  // Surface render progression belongs to the pane's surface owner.
+  // Surface render progress requires the surface permission.
   "terminal-surface.state": "surface",
 };
 
@@ -371,33 +371,22 @@ function diffSessions(prev: SessionsSnapshot, next: SessionsSnapshot): void {
   }
 }
 
-// The "already attached" memory must cross the hot-swap boundary — if only this flag disappears, the
-// installation is gone while the side that filled it treats it as done and never attaches again.
+// Module state retains subscription initialization across hot replacement.
 const startedFlag = moduleState("plugins/hooks#startedFlag.on", () => ({ on: false }));
 
-// Once at app start — installs the store subscriptions (called from initPluginHost).
+// startPluginHooks installs each store subscription once per application module state.
 export function startPluginHooks(): void {
   if (startedFlag.on) return;
   startedFlag.on = true;
 
-  // A window of this application has gone, and whatever was kept under its label is somebody's to
-  // let go of. The host publishes the label and nothing else; what it means is decided here and in
-  // the plugins that subscribe.
-  //
-  // The host used to invoke a command named for terminals at this moment, which is a host that knew
-  // what a terminal is — and it broke without a word the day that command left with the plugin that
-  // registered it.
+  // Convert the framework window lifetime event to the public plugin event.
   void currentWindow()
     .onWindowGone((windowLabel) => emitPluginEvent("window.gone", { windowLabel }))
     .catch(() => {
-      // A framework with no window facts publishes none. That is a build without windows rather
-      // than a failure, and a plugin that never hears the event keeps what it kept until the
-      // application quits and the units are reaped.
+      // A framework without window lifetime support emits no event. Shutdown still reaps units.
     });
 
-  // A native terminal surface's render progression (Go: terminal-surface:state,
-  // bridge-emitted). The framework relays the raw event; the typed plugin event
-  // carries only what the payload proves.
+  // Validate terminal-surface:state before publishing the typed plugin event.
   void currentWindow()
     .listen<{ pane?: unknown; sequence?: unknown }>("terminal-surface:state", (event) => {
       const pane = event.payload?.pane;
@@ -407,7 +396,7 @@ export function startPluginHooks(): void {
       }
     })
     .catch(() => {
-      // A framework with no event facts publishes none — same reading as window.gone.
+      // A framework without native surface events emits no terminal surface state.
     });
 
   // Do not run an O(n) snapshot+diff on every store write (principles 1 and 5,

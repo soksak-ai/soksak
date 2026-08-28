@@ -5,9 +5,7 @@ import (
 	"time"
 )
 
-// Every frame reaches the sessions; the plugin-facing state event is rate
-// limited to one per pane per hundred milliseconds (V13 — pushed on change,
-// never a firehose).
+// Session state receives every frame. Plugin events are limited to one per pane per 100 ms.
 func TestFrameStateIsForwardedAlwaysAndEmittedAtMostTenPerSecond(t *testing.T) {
 	var noted []uint64
 	var emitted []any
