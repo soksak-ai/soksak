@@ -33,9 +33,22 @@ Views declare `surfaces: ["tab"]`, `surfaces: ["side"]`, or both. The host owns 
 - Loader activation checks `appVersionRequirement`, permissions, commands, views, nodes, and interface requirements through the canonical package.
 - Plugin, sidecar, and Core communicate through commands, events, status, and versioned interfaces. They do not read each other's internal files or DOM.
 
+## File-drop grants
+
+An operating-system drop enters Core as a path, but Plugin events receive only opaque grant IDs and
+non-sensitive kind labels. A grant is bound to one Plugin and window, can be redeemed once, and is
+removed only by that successful owner redemption. Core returns the authorized raw `path`; it does
+not interpret the path as shell text, editor input, an image protocol, or another domain command.
+
+The consuming Plugin or domain Kit owns that interpretation. Terminal Kit reads the declared login
+shell through `app.environment`, quotes the granted path for one explicitly supported shell family,
+and refuses an unknown family. A command cannot supply a raw path in place of a grant. File-path
+input and inline-image payloads are separate capabilities and neither falls back to the other.
+
 ## Verification
 
 - `soksak-spec` tests the complete manifest and wire grammar.
 - Core facade tests prove the exact package is used and unknown fields are rejected.
 - `permissionBacking.test.ts` requires every public permission to gate an actual capability.
+- `dropGrants.test.ts` proves opaque, owner-bound, one-shot redemption without consumer semantics.
 - Plugin repositories test their own manifest, implementation, translations, and release artifact.

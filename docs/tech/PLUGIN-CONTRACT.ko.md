@@ -48,9 +48,22 @@ view 는 `surfaces: ["tab"]`, `surfaces: ["side"]`, 또는 둘 다를 선언합�
 - 플러그인, 사이드카, 코어는 명령·이벤트·상태·버전이 있는 interface 로 통신합니다. 서로의 내부
   파일이나 DOM 을 읽지 않습니다.
 
+## File drop grant
+
+운영체제 drop은 Core에 path로 들어오지만 Plugin event에는 불투명 grant ID와 민감하지 않은 kind만
+전달됩니다. Grant는 Plugin 하나와 window 하나에 묶이고 한 번만 redeem할 수 있으며, 올바른 소유자가
+성공적으로 redeem했을 때만 제거됩니다. Core는 허용된 raw `path`를 반환할 뿐 그것을 shell text,
+editor 입력, image protocol 또는 다른 domain command로 해석하지 않습니다.
+
+그 해석은 소비 Plugin 또는 domain Kit이 소유합니다. Terminal Kit은 `app.environment`에서 선언된
+login shell을 읽고 명시적으로 지원하는 shell family 하나의 문법으로 grant path를 quote하며 알 수
+없는 family는 거부합니다. Command는 raw path를 grant 대신 전달할 수 없습니다. File path 입력과
+inline image payload는 별도 capability이며 서로 fallback하지 않습니다.
+
 ## 검증
 
 - `soksak-spec` 이 전체 manifest 와 wire 문법을 테스트합니다.
 - 코어 facade 테스트가 정확한 패키지를 사용하는지, 알 수 없는 필드를 거부하는지 증명합니다.
 - `permissionBacking.test.ts` 는 모든 공개 권한이 실제 capability 를 통제하도록 요구합니다.
+- `dropGrants.test.ts` 는 소비자 의미 없이 불투명하고 소유자에 묶인 일회용 redemption을 증명합니다.
 - 플러그인 저장소는 자기 manifest, 구현, 번역, 릴리즈 artifact 를 테스트합니다.

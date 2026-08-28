@@ -21,6 +21,14 @@ cross the plugin boundary or several plugins would otherwise recreate it. Meanin
 belong to plugins. File viewing, terminal interpretation, conversations, and media policy therefore
 moved behind plugin commands and capabilities.
 
+## File drops became owner-bound grants
+
+The first drop implementation converted file paths into shell command text inside Core. That made
+Core name terminal shell families and violated the same domain boundary. The stable host mechanism
+is an opaque, Plugin/window-bound, one-shot grant. Redemption returns the authorized raw path;
+Terminal Kit, an editor, or another consumer applies its own meaning. The Core coupling gate found
+and rejected the shell-specific implementation before the application gate ran.
+
 ## Installed components replaced source-tree composition
 
 Core linked specific plugin packages and found neighboring repositories during builds. That made

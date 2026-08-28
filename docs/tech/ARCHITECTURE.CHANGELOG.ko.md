@@ -19,6 +19,14 @@ Core census 는 다음 기준을 확정했습니다. 도메인 중립 기제가 
 plugin이 소유합니다. 따라서 file 보기, terminal 해석, conversation, media policy는 plugin command와
 capability 뒤로 이동했습니다.
 
+## File drop을 소유자에 묶인 grant로 전환
+
+첫 drop 구현은 Core 안에서 file path를 shell command text로 바꿨습니다. 그 결과 Core가 terminal
+shell family를 열거해 같은 domain 구분을 위반했습니다. 안정적인 host 기제는 Plugin/window에 묶인
+불투명 일회용 grant입니다. Redeem은 허용된 raw path를 반환하고 Terminal Kit, editor 또는 다른
+소비자가 자기 의미를 적용합니다. Core coupling gate가 application gate 실행 전에 shell 전용 구현을
+찾아 거부했습니다.
+
 ## Source tree composition을 설치 component로 교체
 
 Core가 특정 plugin package를 link하고 이웃 repository를 찾으면 checkout layout이 제품 계약이 되고
