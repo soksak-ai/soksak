@@ -73,3 +73,11 @@ matrices are required; neither may be renamed to stand in for the other.
 Every application gate waits for `soksak.host.ready` rather than polling and records its process,
 window, socket, home, runtime and open/recorded sidecar ownership. GREEN cleanup means graceful
 application exit and zero remaining test-owned sidecars.
+
+## T8. Switch motion has a numeric command
+
+Use `tab.switchScan {"from":"<tab>","to":"<tab>"}` for two views and
+`space.switchScan {"from":"<space>","to":"<space>"}` for complete layouts. The commands activate
+on `applyAtFrame`, return the recording directory for direct inspection, and mechanically require
+one pixel transition with zero blank, overlap, or native-receipt mismatch frames. Capture does not
+focus the window.

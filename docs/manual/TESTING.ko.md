@@ -63,3 +63,10 @@ repository의 `make system-native-input TARGET=<darwin-target>`은 사람이 없
 모든 애플리케이션 검사는 폴링 대신 `soksak.host.ready` 를 기다리고 프로세스, 창, socket, home,
 runtime 및 open/recorded sidecar ownership을 기록합니다. GREEN cleanup은 application 정상 종료와
 테스트가 소유한 사이드카가 0개 남았다는 뜻입니다.
+
+## T8. 전환 움직임에는 수치 명령이 있습니다
+
+View 둘은 `tab.switchScan {"from":"<tab>","to":"<tab>"}`, 전체 layout 둘은
+`space.switchScan {"from":"<space>","to":"<space>"}`를 사용합니다. 명령은 `applyAtFrame`에서
+활성화하고 직접 확인할 녹화 디렉터리를 반환하며 pixel 전환 하나와 blank, overlap, native receipt
+mismatch 프레임 0을 기계적으로 요구합니다. Capture는 창에 포커스를 주지 않습니다.
