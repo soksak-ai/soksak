@@ -123,6 +123,16 @@ Failing to reach a standard and then lowering it is a betrayal. It is never done
 A standard that is itself wrong is raised and corrected. Lowering a standard and correcting a
 wrong one are different acts; failing to tell them apart means it is the former.
 
+### 3-8. Report the failed decision directly
+
+When the requested fact A is still false, say that A is incomplete first. Related work B or C is
+not evidence for A and is not used to soften, hide or redirect attention from that fact.
+
+A wrong decision is reported in four plain facts: what was requested, what is true now, what
+decision was wrong, and what correction remains. Adjacent progress, intent and difficulty are not
+an explanation of the error. Work does not move to D while A is incomplete unless the user changed
+the order explicitly.
+
 ## 4. Structure
 
 ### 4-1. Core and plugins
