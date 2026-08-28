@@ -494,22 +494,17 @@ func surfaceBackends(webviewBackend *webviewsurface.Backend, terminalBackend *te
 func wireTerminalSessions(backend *terminalsurface.Backend, identity string, links terminalsurface.Links) *terminalsurface.Sessions {
 	sessions := terminalsurface.NewSessions(identity, links)
 	backend.UseSessions(sessions)
-	backend.ObservePanes(func(created bool, source compositor.SurfaceSource) {
-		if created {
-			go func() {
-				first := sessions.Start(map[string]string(source))
-				if first == nil {
-					return
-				}
-				// The boot storm can take an engine down mid-request — a keyless
-				// unit yields to the first real declaration. One later attempt
-				// meets the engine that came back with it.
-				log.Printf("terminal pane %s retries after: %v", source["pane"], first)
-				time.Sleep(2500 * time.Millisecond)
-				if err := sessions.Start(map[string]string(source)); err != nil {
-					log.Printf("terminal pane %s did not open: %v", source["pane"], err)
-				}
-			}()
+		backend.ObservePanes(func(created bool, source compositor.SurfaceSource) {
+			if created {
+				go func() {
+					// One declaration has one lifecycle transaction. Retrying after a failed
+					// surface.open created a second owner against the same sidecar pane and
+					// left an orphaned renderer (`already renders`) with no PTY record.
+					// Recovery is an explicit new declaration/rehydrate, not a timer.
+					if err := sessions.Start(map[string]string(source)); err != nil {
+						log.Printf("terminal pane %s did not open: %v", source["pane"], err)
+					}
+				}()
 			return
 		}
 		pane := source["pane"]
