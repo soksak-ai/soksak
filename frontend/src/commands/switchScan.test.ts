@@ -48,7 +48,8 @@ describe("switch scan command contract", () => {
   const space = source.split('register("space.switchScan"')[1]?.split('register("space.rename"')[0] ?? "";
 
   it("uses recorded frames rather than elapsed-time activation", () => {
-    expect(space).toContain("applyAtFrame");
+    expect(source).toContain("applyAtFrame");
+    expect(space).toContain("...switchScanParams()");
     expect(space).not.toContain("applyAtMs");
     expect(space).not.toContain("settleMs");
     expect(space).not.toContain("setTimeout");

@@ -12,7 +12,10 @@ import { registerHealthCatalog } from "./catalogHealth";
 import { registerBootCatalog } from "./catalogBoot";
 import { registerWindowCatalog } from "./catalogWindow";
 import { framework, invoke, frameworkPath } from "../framework";
-import { recordWindowFrames } from "./windowRecorder";
+import {
+  validWindowRecordFrames,
+  validWindowRecordIntervalMs,
+} from "./windowRecorder";
 import { tabIconOf } from "../lib/tabIcon";
 import { tmsg, key} from "../i18n";
 import { computeSplitLayout } from "../lib/splitLayout";
@@ -74,7 +77,7 @@ import {
   resolveEffectiveRailRelation,
   type Arrangement,
 } from "../lib/railArrangement";
-import { catalogJson, register, type CommandContext, type CommandHint } from "./registry";
+import { catalogJson, execute, register, type CommandContext, type CommandHint } from "./registry";
 import { notFound } from "./refuse";
 import { registerFsWatchCatalog } from "./catalogFsWatch";
 import { registerSectionsCatalog } from "./catalogSections";
@@ -109,6 +112,7 @@ import {
 import { contentViewHost, hasContentViewHost } from "../lib/contentViews";
 import { nextFrame } from "../lib/nextFrame";
 import { waitForDomCommit } from "./waitForDomCommit";
+import { runSwitchScan, type SwitchScanRegion, type SwitchScanTransaction } from "./switchScanRuntime";
 
 // ── Shared errors and helpers ─────────────────────────────────────────────────
 
@@ -1638,24 +1642,128 @@ export function registerCatalog(): void {
     },
   });
 
+  const switchScanParams = () => ({
+    frames: { type: "number" as const, description: key("cmd.space.switchScan.param.frames") },
+    intervalMs: { type: "number" as const, description: key("cmd.space.switchScan.param.intervalMs") },
+    applyAtFrame: { type: "number" as const, description: key("cmd.space.switchScan.param.applyAtFrame") },
+    region: { type: "json" as const, description: key("cmd.space.switchScan.param.region") },
+    threshold: { type: "number" as const, description: key("cmd.space.switchScan.param.threshold") },
+  });
+  const switchScanSettings = (params: Record<string, unknown>): {
+    frames: number;
+    intervalMs: number;
+    applyAtFrame: number;
+    region: SwitchScanRegion;
+    threshold: number;
+  } | null => {
+    const frames = (params.frames as number | undefined) ?? 30;
+    const intervalMs = (params.intervalMs as number | undefined) ?? 16;
+    const applyAtFrame = (params.applyAtFrame as number | undefined) ?? 4;
+    const region = (params.region as SwitchScanRegion | undefined) ?? {
+      x0: 0.23,
+      y0: 0.1,
+      x1: 0.99,
+      y1: 0.96,
+    };
+    const threshold = (params.threshold as number | undefined) ?? 0.003;
+    if (!validWindowRecordFrames(frames)
+        || frames < 3
+        || !validWindowRecordIntervalMs(intervalMs)
+        || !Number.isSafeInteger(applyAtFrame)
+        || applyAtFrame < 0
+        || applyAtFrame >= frames - 1
+        || !Number.isFinite(threshold)
+        || threshold < 0
+        || threshold > 1
+        || !region
+        || ![region.x0, region.y0, region.x1, region.y1].every(Number.isFinite)
+        || region.x0 < 0
+        || region.y0 < 0
+        || region.x1 > 1
+        || region.y1 > 1
+        || region.x0 >= region.x1
+        || region.y0 >= region.y1) {
+      return null;
+    }
+    return { frames, intervalMs, applyAtFrame, region, threshold };
+  };
+  const layoutSequence = (): number => layoutTransitionJournal().reduce(
+    (maximum, entry) => Math.max(maximum, entry.sequence),
+    0,
+  );
+  const activateForSwitchScan = async (
+    command: "space.activate" | "tab.activate",
+    params: Record<string, unknown>,
+    ctx: CommandContext,
+    causeTraceId: string,
+  ): Promise<SwitchScanTransaction> => {
+    const afterSequence = layoutSequence();
+    const activated = await execute(
+      command,
+      { ...params, causeTraceId },
+      { ...ctx, origin: "switch-scan" },
+    );
+    if (!activated.ok) {
+      throw new Error(`${command} ${activated.code}: ${activated.message}`);
+    }
+    if (activated.data?.moved !== true) {
+      throw new Error(`${command} did not move the presentation`);
+    }
+    const receipt = await waitForLayoutTransaction({
+      causeTraceId,
+      afterSequence,
+      timeoutMs: 15_000,
+    });
+    if (receipt.entry.phase !== "committed") {
+      throw new Error(`layout transaction ${receipt.entry.transactionId} ${receipt.entry.phase}`);
+    }
+    return {
+      transactionId: receipt.entry.transactionId,
+      sequence: receipt.entry.sequence,
+      phase: "committed",
+    };
+  };
+  const visibleSpaceViews = (space: Space): string[] => {
+    if (space.maximizedTabId) return [space.maximizedTabId];
+    return allGroups(space.layout)
+      .map((pane) => pane.tabs.find((view) => view.id === pane.activeTabId)?.id)
+      .filter((view): view is string => typeof view === "string");
+  };
+  const switchScanDir = async (): Promise<string> => {
+    const { tempDir, join } = frameworkPath;
+    return join(await tempDir(), "soksak", `switchscan-${crypto.randomUUID()}`);
+  };
+
   register("space.activate", {
     description: key("cmd.space.activate.desc"),
     triggers: { ko: "탭 이동 탭 전환 탭 바꾸기" },
     params: {
       workspace: P.workspace,
       space: { ...P.space, required: true },
+      causeTraceId: { type: "string", description: key("cmd.space.activate.param.causeTraceId") },
     },
-    returns: "{ projectId, spaceId }",
+    returns: "{ projectId, spaceId, moved, causeTraceId? }",
     message: () => tmsg("msg.space.activate"),
     errors: ["TARGET_NOT_FOUND"],
     examples: ['space.activate \'{"space":"spc-d5e6f7"}\''],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
       if (!t) return notFound("msg.workspace.notFound");
-      return withTargets(S().setActiveContent(t.id, p.space as string), {
+      const causeTraceId = p.causeTraceId as string | undefined;
+      if (causeTraceId !== undefined && causeTraceId.length === 0) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.cause.empty") };
+      }
+      const moved = t.activeSpaceId !== p.space;
+      if (moved && causeTraceId !== undefined) declareLayoutCause(causeTraceId);
+      const done = S().setActiveContent(t.id, p.space as string);
+      if (!done.ok) return done;
+      return {
+        ...done,
         projectId: t.id,
         spaceId: p.space as string,
-      });
+        moved,
+        ...(moved && causeTraceId !== undefined ? { causeTraceId } : {}),
+      };
     },
   });
 
@@ -1669,27 +1777,10 @@ export function registerCatalog(): void {
         type: "string",
         description: key("cmd.space.switchScan.param.from"),
       },
-      frames: { type: "number", description: key("cmd.space.switchScan.param.frames") },
-      intervalMs: { type: "number", description: key("cmd.space.switchScan.param.intervalMs") },
-      applyAtMs: {
-        type: "number",
-        description: key("cmd.space.switchScan.param.applyAtMs"),
-      },
-      settleMs: {
-        type: "number",
-        description: key("cmd.space.switchScan.param.settleMs"),
-      },
-      region: {
-        type: "json",
-        description: key("cmd.space.switchScan.param.region"),
-      },
-      threshold: {
-        type: "number",
-        description: key("cmd.space.switchScan.param.threshold"),
-      },
+      ...switchScanParams(),
     },
     returns:
-      "{ projectId, spaceId(measured), frames, frameMs, switchFrame, switchFrames (consecutive changed = jank spread), clean, diffsPct }",
+      "{ projectId, fromSpaceId, spaceId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, clean, diffsPct, presentationFrames, transaction, recordingDir }",
     message: (d) =>
       d.clean
         ? tmsg("msg.space.switchScan.clean")
@@ -1701,76 +1792,52 @@ export function registerCatalog(): void {
     handler: async (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
       if (!t) return notFound("msg.workspace.notFound");
-      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-      const prev = t.activeSpaceId;
+      const settings = switchScanSettings(p);
+      if (!settings) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.switchScan.invalid") };
+      }
+      const original = t.activeSpaceId;
       const to = p.to as string;
-      const from = (p.from as string | undefined) ?? prev;
-      const frames = (p.frames as number | undefined) ?? 30;
-      const intervalMs = (p.intervalMs as number | undefined) ?? 16;
-      const applyAtMs = (p.applyAtMs as number | undefined) ?? 250;
-      const settleMs = (p.settleMs as number | undefined) ?? 600;
-      const region =
-        (p.region as { x0: number; y0: number; x1: number; y1: number }) ?? {
-          // Body area excluding the left sidebar and the top chrome (where a tab switch changes pixels).
-          x0: 0.23,
-          y0: 0.1,
-          x1: 0.99,
-          y1: 0.96,
-        };
-
-      const { tempDir, join } = frameworkPath;
-      const dir = await join(await tempDir(), "soksak", `switchscan-${Date.now()}`);
-
-      // 1) Go to the starting space + settle.
-      S().setActiveContent(t.id, from);
-      await sleep(settleMs);
-      // 2) Start recording (no await) → switch to the target space after applyAtMs → wait for completion.
-      const recT0 = performance.now();
-      const recP = recordWindowFrames({
-        dir,
-        frames,
-        intervalMs,
-      });
-      await sleep(applyAtMs);
-      S().setActiveContent(t.id, to);
-      const n = await recP;
-      const realFrameMs = n > 0 ? (performance.now() - recT0) / n : intervalMs;
-      // 3) Per-frame pixel change rate → detect the switch frame.
-      const grid = await invoke<number[][]>(
-        "plugin:webview-capture|analyze_frame_diffs",
-        { dir, regions: [region] },
-      );
-      // 4) Restore the original space.
-      S().setActiveContent(t.id, prev);
-
-      const diffs = grid.map((r) => r[0] ?? 0);
-      // Self-adapting detection — the switch delta differs per space pair (two similar terminals=0.5%,
-      // terminal↔editor=several %). A fixed threshold misses small switches, so a frame at or above 40%
-      // of peak counts as the switch (below floor it counts as noise and there is no switch). Clean =
-      // exactly 1 such frame (consecutive/multiple = smear = jank). floor is adjustable.
-      const peak = diffs.length ? Math.max(...diffs) : 0;
-      const floor = (p.threshold as number | undefined) ?? 0.003;
-      let switchFrame = -1;
-      let switchFrames = 0;
-      if (peak >= floor) {
-        const hi = Math.max(floor, peak * 0.4);
-        for (let f = 0; f < diffs.length; f++) {
-          if (diffs[f] >= hi) {
-            if (switchFrame < 0) switchFrame = f;
-            switchFrames++;
-          }
+      const from = (p.from as string | undefined) ?? original;
+      const fromSpace = t.spaces.find((space) => space.id === from);
+      const toSpace = t.spaces.find((space) => space.id === to);
+      if (!fromSpace || !toSpace) return notFound("msg.space.notFound", { id: !fromSpace ? from : to });
+      if (from === to) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.switchScan.sameTarget") };
+      }
+      if (original !== from) {
+        await activateForSwitchScan(
+          "space.activate",
+          { workspace: t.id, space: from },
+          ctx,
+          `switch-scan-start-${crypto.randomUUID()}`,
+        );
+      }
+      try {
+        const scanned = await runSwitchScan({
+          dir: await switchScanDir(),
+          ...settings,
+          fromViews: visibleSpaceViews(fromSpace),
+          toViews: visibleSpaceViews(toSpace),
+          activate: () => activateForSwitchScan(
+            "space.activate",
+            { workspace: t.id, space: to },
+            ctx,
+            `switch-scan-target-${crypto.randomUUID()}`,
+          ),
+        });
+        return { projectId: t.id, fromSpaceId: from, spaceId: to, ...scanned };
+      } finally {
+        const current = S().workspaces.find((workspace) => workspace.id === t.id)?.activeSpaceId;
+        if (current !== original) {
+          await activateForSwitchScan(
+            "space.activate",
+            { workspace: t.id, space: original },
+            ctx,
+            `switch-scan-restore-${crypto.randomUUID()}`,
+          );
         }
       }
-      return {
-        projectId: t.id,
-        spaceId: to,
-        frames: n,
-        frameMs: Math.round(realFrameMs),
-        switchFrame,
-        switchFrames,
-        clean: switchFrame >= 0 && switchFrames <= 1,
-        diffsPct: diffs.map((d) => +(d * 100).toFixed(1)),
-      };
     },
   });
 
@@ -2395,6 +2462,73 @@ export function registerCatalog(): void {
         tabId: p.tab as string,
         ...(causeTraceId !== undefined && moved ? { causeTraceId } : {}),
       });
+    },
+  });
+
+  register("tab.switchScan", {
+    description: key("cmd.tab.switchScan.desc"),
+    triggers: { ko: "탭 전환 측정 깜빡임 프레임 공백 겹침" },
+    params: {
+      to: { type: "string", required: true, description: key("cmd.tab.switchScan.param.to") },
+      from: { type: "string", description: key("cmd.tab.switchScan.param.from") },
+      ...switchScanParams(),
+    },
+    returns:
+      "{ fromTabId, tabId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, clean, diffsPct, presentationFrames, transaction, recordingDir }",
+    message: (data) => data.clean
+      ? tmsg("msg.tab.switchScan.clean")
+      : tmsg("msg.tab.switchScan.jank", { n: Number(data.flickerFrames) }),
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'tab.switchScan \'{"from":"tab-a1b2c3","to":"tab-d4e5f6"}\'',
+      'tab.switchScan \'{"to":"tab-d4e5f6","frames":30,"applyAtFrame":4}\'',
+    ],
+    handler: async (params, ctx) => {
+      const settings = switchScanSettings(params);
+      if (!settings) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.switchScan.invalid") };
+      }
+      const original = activeSessionViewId();
+      if (!original) return notFound("msg.tab.noActive");
+      const from = (params.from as string | undefined) ?? original;
+      const to = params.to as string;
+      if (!locateTab(from)) return notFound("msg.tab.notFoundId", { id: from });
+      if (!locateTab(to)) return notFound("msg.tab.notFoundId", { id: to });
+      if (from === to) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.switchScan.sameTarget") };
+      }
+      if (original !== from) {
+        await activateForSwitchScan(
+          "tab.activate",
+          { tab: from },
+          ctx,
+          `switch-scan-start-${crypto.randomUUID()}`,
+        );
+      }
+      try {
+        const scanned = await runSwitchScan({
+          dir: await switchScanDir(),
+          ...settings,
+          fromViews: [from],
+          toViews: [to],
+          activate: () => activateForSwitchScan(
+            "tab.activate",
+            { tab: to },
+            ctx,
+            `switch-scan-target-${crypto.randomUUID()}`,
+          ),
+        });
+        return { fromTabId: from, tabId: to, ...scanned };
+      } finally {
+        if (activeSessionViewId() !== original) {
+          await activateForSwitchScan(
+            "tab.activate",
+            { tab: original },
+            ctx,
+            `switch-scan-restore-${crypto.randomUUID()}`,
+          );
+        }
+      }
     },
   });
 
