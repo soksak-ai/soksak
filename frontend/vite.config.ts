@@ -26,7 +26,7 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes("/node_modules/react") || id.includes("/node_modules/scheduler/")) return "react";
-          if (id.includes("/node_modules/@soksak-ai/plugin-spec/")) return "plugin-spec";
+          if (id.includes("/node_modules/@soksak/soksak-spec/")) return "soksak-spec";
           if (/\/src\/i18n\.(?:en|ko)\.ts$/.test(id)) return "translations";
         },
       },

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import test from "node:test";
-// The version grammar is the spec package's, read from the installed dependency; nothing here restates it.
-import { STRICT_SEMVER_RE } from "../frontend/node_modules/@soksak-ai/plugin-spec/dist/release-primitives.js";
+
+const requireFrontend = createRequire(new URL("../frontend/package.json", import.meta.url));
+const { STRICT_SEMVER_RE } = requireFrontend("@soksak/soksak-spec");
 
 const root = join(import.meta.dirname, "..");
 const read = (name) => readFileSync(join(root, name), "utf8");
@@ -23,7 +25,7 @@ const scopedDependencies = () => {
 
 test("frontend/package.json declares every @soksak dependency by exact version", () => {
   const found = scopedDependencies();
-  assert.deepEqual(found.map(([, name]) => name), ["@soksak-ai/plugin-spec"]);
+  assert.deepEqual(found.map(([, name]) => name), ["@soksak/soksak-spec"]);
   for (const [section, name, spec] of found) assert.match(spec, STRICT_SEMVER_RE, `${section}.${name}`);
 });
 
@@ -74,8 +76,8 @@ test("Makefile forwards a command-line REGISTRY as the scoped registry flags to 
   refused(run(["verify"], { REGISTRY: "http://127.0.0.1:4873/" }), /REGISTRY from the environment is refused/);
 });
 
-test("Makefile requires REGISTRY on the command line because the frontend depends on @soksak-ai", () => {
-  const dependency = /REGISTRY required: this package depends on @soksak-ai\/plugin-spec/;
+test("Makefile requires REGISTRY on the command line because the frontend depends on @soksak", () => {
+  const dependency = /REGISTRY required: this package depends on @soksak\/soksak-spec/;
   refused(run(["prepare"]), dependency);
   refused(run(["build", "TARGET=aarch64-apple-darwin"]), dependency);
   refused(run(["verify"]), dependency);
