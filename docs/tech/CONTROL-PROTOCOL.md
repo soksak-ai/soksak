@@ -96,6 +96,13 @@ The path limit is 104 bytes, the lower of darwin's and linux's, so a home that w
 everywhere this builds. Overrunning it fails with "invalid argument", which reports nothing about
 paths.
 
+## C5a. Runtime is the temporary-path owner
+
+`app.environment` exposes the exact resolved `runtime` directory with identity and home. Framework
+adapters implement `path.tempDir` from that field. Recording, snapshots and other temporary output
+therefore use the same declared runtime root as the control socket; frontend code does not inspect
+the process environment or guess an operating-system path.
+
 ## C6. Windows
 
 Windows uses a named pipe carrying the same envelope. The identity derives one opaque pipe name from

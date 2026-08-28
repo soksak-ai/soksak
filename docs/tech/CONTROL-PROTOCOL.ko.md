@@ -91,6 +91,13 @@ timeout 을 같은 순간의 전송 timeout 으로 대체해서는 안 됩니다
 도는 모든 곳에서 동작합니다. 넘기면 "invalid argument" 로 실패하는데, 그 메시지는 경로에 대해 아무것도
 보고하지 않습니다.
 
+## C5a. Runtime이 임시 경로를 소유합니다
+
+`app.environment` 는 identity, home 과 함께 정확히 해석된 `runtime` 디렉터리를 노출합니다. Framework
+adapter는 그 필드로 `path.tempDir`을 구현합니다. 따라서 recording, snapshot 및 다른 임시 출력은 control
+socket과 같은 선언된 runtime root를 사용하며 frontend code는 process environment를 읽거나 운영체제
+경로를 추측하지 않습니다.
+
 ## C6. Windows
 
 Windows 는 같은 envelope 를 나르는 named pipe 를 씁니다. identity 가 런타임 루트와 설치본 식별자에서
