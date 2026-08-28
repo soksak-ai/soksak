@@ -10,6 +10,7 @@ func TestDarwinBuildOwnsOneLabeledUserApplication(t *testing.T) {
 	makefile := readBuildContractFile(t, "Makefile")
 	build := readBuildContractFile(t, "scripts/ci/darwin-release.sh")
 	processLabel := readBuildContractFile(t, "internal/application/process_label.go")
+	client := readBuildContractFile(t, "cmd/sok/main.go")
 
 	for _, required := range []string{
 		`case "$(origin LABEL)"`,
@@ -28,6 +29,7 @@ func TestDarwinBuildOwnsOneLabeledUserApplication(t *testing.T) {
 		`CFBundleName`, `CFBundleDisplayName`, `CFBundleExecutable`, `CFBundleIdentifier`,
 		`internal/application.defaultProcessLabel=$label`,
 		`internal/application.defaultIdentifier=$bundle_identifier`,
+		`cmd/sok.defaultIdentifier=$bundle_identifier`,
 		`productLabel`, `bundleIdentifier`,
 	} {
 		if !strings.Contains(build, required) {
@@ -36,6 +38,9 @@ func TestDarwinBuildOwnsOneLabeledUserApplication(t *testing.T) {
 	}
 	if !strings.Contains(processLabel, "var defaultProcessLabel = controlwire.DefaultProcessLabel") {
 		t.Error("application process label has no build-owned default")
+	}
+	if !strings.Contains(client, `var defaultIdentifier = "com.soksak.wails"`) {
+		t.Error("control-plane client identifier has no build-owned default")
 	}
 	if strings.Contains(build, "bundle_identifier=com.soksak.core.$label") {
 		t.Error("Darwin builder derives stable bundle identity from the presentation label")
