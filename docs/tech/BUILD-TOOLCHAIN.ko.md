@@ -107,6 +107,26 @@ Test는 선언을 읽으므로 version이 바뀌었다는 이유만으로 수정
 스크립트, 워크플로, Dockerfile, 테스트 fixture, 문서에 별도의 버전 리터럴이 남아 있으면
 업그레이드는 완료되지 않았습니다.
 
+## 이름이 구분되는 Darwin 사용자 앱
+
+공개 릴리스 이름은 계속 `soksak.app`입니다. 별도로 구분할 사용자 빌드는 표시 label 하나와 안정적인
+앱 identifier 하나를 Make command line으로 받습니다.
+
+```sh
+make build TARGET=aarch64-apple-darwin LABEL=soksakv3 BUNDLE_ID=com.company.soksak REGISTRY=http://127.0.0.1:4873/
+```
+
+산출물은 `bin/labeled/soksakv3/darwin-arm64/soksakv3.app`입니다. `LABEL`은
+`CFBundleName`, `CFBundleDisplayName`, `CFBundleExecutable`, Core 기본 process label이 됩니다.
+`BUNDLE_ID`는 `CFBundleIdentifier`와 Core 기본 installation identifier가 됩니다. 따라서 WebKit helper
+이름에도 `soksakv3`가 들어가고 Core는 같은 process label을 Sidecar에 전달합니다. Build receipt는
+`productLabel`과 `bundleIdentifier`를 기록하며 같은 commit과 같은 두 값을 다시 빌드하면 byte가 같은
+산출물을 재사용해야 합니다.
+
+두 값은 Make command-line에서 함께 받을 때만 허용하며 Darwin thin build에서만 사용합니다. Label에는
+소문자 ASCII, 숫자, hyphen만 허용합니다. Bundle identifier는 소문자 reverse-DNS 형식입니다. 어느
+값도 경로에서 찾지 않으며 서로에게서 만들지 않습니다.
+
 ## Gate
 
 `internal/repositorygate/build_toolchain_owner_test.go`는 중복 소유자, ambient Wails 또는 Task

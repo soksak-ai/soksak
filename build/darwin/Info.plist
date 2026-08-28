@@ -5,6 +5,8 @@
             <string>APPL</string>
         <key>CFBundleName</key>
             <string>soksak</string>
+        <key>CFBundleDisplayName</key>
+            <string>soksak</string>
         <key>CFBundleExecutable</key>
             <string>soksak</string>
         <key>CFBundleIdentifier</key>

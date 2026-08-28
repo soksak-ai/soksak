@@ -36,6 +36,8 @@ The socket is derived from the identifier, as the application derives it.
 SOKSAK_IDENTIFIER overrides it; --socket overrides that.
 `
 
+var defaultIdentifier = "com.soksak.wails"
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "sok:", err)
@@ -83,7 +85,7 @@ func run(argv []string) error {
 func address() (string, error) {
 	identifier := os.Getenv("SOKSAK_IDENTIFIER")
 	if identifier == "" {
-		identifier = "com.soksak.wails"
+		identifier = defaultIdentifier
 	}
 	resolved, err := identity.Require(identifier, identity.Environment{
 		Windows:     runtime.GOOS == "windows",

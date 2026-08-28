@@ -108,6 +108,26 @@ change. Tests read those declarations and therefore do not change merely because
 An upgrade is incomplete while a script, workflow, Dockerfile, test fixture or document includes an
 independent version literal.
 
+## Labeled Darwin user application
+
+The canonical release remains `soksak.app`. A separately observable user build takes one display
+label and one stable application identifier from the Make command line:
+
+```sh
+make build TARGET=aarch64-apple-darwin LABEL=soksakv3 BUNDLE_ID=com.company.soksak REGISTRY=http://127.0.0.1:4873/
+```
+
+The output is `bin/labeled/soksakv3/darwin-arm64/soksakv3.app`. `LABEL` becomes
+`CFBundleName`, `CFBundleDisplayName`, `CFBundleExecutable`, and the Core default process label.
+`BUNDLE_ID` becomes `CFBundleIdentifier` and the Core default installation identifier. WebKit
+helper names therefore carry `soksakv3`, and Core passes the same process label to its Sidecars.
+The build receipt records `productLabel` and `bundleIdentifier`; rebuilding the same commit with the
+same pair must reuse byte-identical output.
+
+Both values are accepted only together as Make command-line values and only for a Darwin thin build.
+The label contains lowercase ASCII letters, digits and hyphens. The bundle identifier is a lowercase
+reverse-DNS identifier. Neither value is discovered from a path or derived from the other.
+
 ## Gates
 
 `internal/repositorygate/build_toolchain_owner_test.go` rejects duplicate owners, ambient Wails or

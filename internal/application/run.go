@@ -53,7 +53,7 @@ const buildProfile = "debug"
 // another process held live sockets in that directory. The store is
 // single-writer by design and SQLite does not refuse a second writer — it
 // serialises — so the collision would have stayed silent.
-const defaultIdentifier = "com.soksak.wails"
+var defaultIdentifier = "com.soksak.wails"
 
 // startWatcher answers the operating system's watcher, or nil with the reason.
 //
