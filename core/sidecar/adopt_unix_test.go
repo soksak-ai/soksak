@@ -243,6 +243,32 @@ func TestRecordedInventoryForgetsARecordWhoseProcessHasEnded(t *testing.T) {
 	}
 }
 
+func TestRecordedInventoryForgetsADeadRecordBeforeApplyingTheCurrentWireShape(t *testing.T) {
+	home := shortHome(t)
+	recordPath := filepath.Join(home, "run", "sidecar-old-unit.json")
+	if err := os.MkdirAll(filepath.Dir(recordPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// This is valid ownership JSON from protocol 1. It has a PID but predates processLabel.
+	// A dead owner makes the record stale before the current wire shape matters.
+	body := `{"address":"<local-evidence>/gone-old-unit.sock","protocol":1,"pid":999999}`
+	if err := os.WriteFile(recordPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	host := NewHost(Deps{Home: home})
+	recorded, err := host.Recorded()
+	if err != nil {
+		t.Fatalf("dead old record blocked the inventory: %v", err)
+	}
+	if len(recorded) != 0 {
+		t.Fatalf("dead old record was reported as owned: %+v", recorded)
+	}
+	if _, err := os.Stat(recordPath); !os.IsNotExist(err) {
+		t.Fatalf("dead old record survived inventory: %v", err)
+	}
+}
+
 // A unit this host adopted is one another run started, so nothing here observes its end. When its
 // process goes the address refuses, and starting again has to begin a new one rather than answer
 // with an address nobody is listening at — otherwise every caller after the first keeps getting it.
