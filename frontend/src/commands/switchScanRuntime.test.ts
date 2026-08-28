@@ -58,7 +58,12 @@ describe("frame-driven switch scan", () => {
     const activate = vi.fn(() => {
       document.querySelector<HTMLElement>('[data-node="layout/tab/from"]')!.dataset.contentVisible = "false";
       document.querySelector<HTMLElement>('[data-node="layout/tab/to"]')!.dataset.contentVisible = "true";
-      return Promise.resolve({ transactionId: "layout-1", sequence: 7, phase: "committed" as const });
+      return Promise.resolve({
+        changed: true as const,
+        layoutMoved: false as const,
+        presentation: { viewId: "to", phase: "dom-committed" as const },
+        transaction: null,
+      });
     });
     const result = await runSwitchScan({
       dir: "/recording",
@@ -81,7 +86,12 @@ describe("frame-driven switch scan", () => {
       overlapFrames: [],
       nativeMismatchFrames: [],
       clean: true,
-      transaction: { transactionId: "layout-1", sequence: 7, phase: "committed" },
+      activation: {
+        changed: true,
+        layoutMoved: false,
+        presentation: { viewId: "to", phase: "dom-committed" },
+        transaction: null,
+      },
     });
     expect(result.presentationFrames[4]).toMatchObject({
       frame: 4,

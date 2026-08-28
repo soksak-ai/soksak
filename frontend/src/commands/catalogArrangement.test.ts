@@ -395,27 +395,26 @@ describe("layout.arrangement", () => {
     });
   });
 
-  // Whether the screen moved is a fact only this command holds, and a caller that cannot read it
-  // waits for a transaction that was never opened. Measured 2026-08-18: the arrangement gate
-  // clicked the pane it was already in and waited out an eight-second timeout on a transaction
-  // nothing had opened, once every six runs before this and every run after the wait was added.
-  it("tab.activate says whether it moved the screen, and answers a cause only when it did", async () => {
+  // Presentation identity and layout geometry are separate facts. A caller waits for a layout
+  // transaction only when layoutMoved is true and otherwise waits for the target DOM commit.
+  it("tab.activate separates active-chain change from layout movement", async () => {
     const moving = (await execute(
       "tab.activate",
       { tab: "tab-aaaaaa", causeTraceId: "b08/activate/moved" },
       {},
-    )) as { data?: { moved?: boolean; causeTraceId?: string } };
-    expect(moving.data?.moved, "activating another pane moves the screen").toBe(true);
+    )) as { data?: { changed?: boolean; layoutMoved?: boolean; causeTraceId?: string } };
+    expect(moving.data?.changed, "activating another pane changes the active chain").toBe(true);
+    expect(moving.data?.layoutMoved, "FLOW moves the rail geometry to the other pane").toBe(true);
     expect(moving.data?.causeTraceId).toBe("b08/activate/moved");
 
-    // The same tab again. Nothing changes, so nothing opens, and no cause is answered — the
-    // caller reads that and does not wait.
+    // The same tab again changes neither presentation nor geometry, so no cause is answered.
     const still = (await execute(
       "tab.activate",
       { tab: "tab-aaaaaa", causeTraceId: "b08/activate/still" },
       {},
-    )) as { data?: { moved?: boolean; causeTraceId?: string } };
-    expect(still.data?.moved, "activating the active tab moves nothing").toBe(false);
+    )) as { data?: { changed?: boolean; layoutMoved?: boolean; causeTraceId?: string } };
+    expect(still.data?.changed, "activating the active tab changes nothing").toBe(false);
+    expect(still.data?.layoutMoved, "an idempotent activation moves no geometry").toBe(false);
     expect(still.data?.causeTraceId, "no transaction exists to find this cause on").toBeUndefined();
   });
 
@@ -439,14 +438,72 @@ describe("layout.arrangement", () => {
     });
     useSessions.setState({ workspaces: [fixture], activeId: "wsp-aaaaaa" });
 
-    await expect(execute("tab.activate", { tab: "v-g2-second" }, {})).resolves.toMatchObject({
+    await expect(execute(
+      "tab.activate",
+      { tab: "v-g2-second", causeTraceId: "same-pane/no-layout" },
+      {},
+    )).resolves.toMatchObject({
       ok: true,
+      data: {
+        changed: true,
+        layoutMoved: false,
+        tabId: "v-g2-second",
+      },
     });
     await expect(execute("tab.activate", { tab: "missing" }, {})).resolves.toMatchObject({
       ok: false,
       code: "TARGET_NOT_FOUND",
     });
     expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({ active: false, pending: [] });
+  });
+
+  it("tab.activate completes the active space, pane, and tab chain", async () => {
+    const fixture = workspace("pan-aaaaaa");
+    const hidden = structuredClone(fixture.spaces[0]);
+    hidden.id = "spc-hidden";
+    hidden.activePaneId = "pan-hidden";
+    hidden.layout = splitLeaf(group("pan-hidden"));
+    fixture.spaces.push(hidden);
+    useSessions.setState({ workspaces: [fixture], activeId: fixture.id });
+
+    await expect(execute("tab.activate", { tab: "tab-hidden" }, {})).resolves.toMatchObject({
+      ok: true,
+      data: { changed: true, tabId: "tab-hidden" },
+    });
+    const landed = useSessions.getState();
+    expect(landed.activeId).toBe(fixture.id);
+    expect(landed.workspaces[0].activeSpaceId).toBe("spc-hidden");
+    expect(landed.workspaces[0].spaces[1].activePaneId).toBe("pan-hidden");
+    expect(
+      landed.workspaces[0].spaces[1].layout.type === "leaf"
+        ? landed.workspaces[0].spaces[1].layout.value.activeTabId
+        : null,
+    ).toBe("tab-hidden");
+  });
+
+  it("a same-pane activation cause cannot leak into a later layout transaction", async () => {
+    const fixture = workspace("pan-bbbbbb");
+    const g2 = fixture.spaces[0].layout.type === "split"
+      ? fixture.spaces[0].layout.children[1]
+      : null;
+    if (!g2 || g2.type !== "leaf") throw new Error("g2 fixture missing");
+    g2.value.tabs.push({
+      id: "v-g2-second",
+      kind: "plugin",
+      title: "g2 second",
+      pluginId: "fixture",
+      view: "content",
+    });
+    useSessions.setState({ workspaces: [fixture], activeId: fixture.id });
+
+    await execute("tab.activate", {
+      tab: "v-g2-second",
+      causeTraceId: "same-pane/must-not-leak",
+    }, {});
+    await execute("pane.activate", { pane: "pan-aaaaaa" }, {});
+
+    const journal = await import("../lib/layoutTransitionJournal");
+    expect(journal.layoutTransitionJournal().at(-1)?.causeTraceId).toBeUndefined();
   });
 
   it("cross-pane activation under PIN changes focus only and opens no geometry revision", async () => {
