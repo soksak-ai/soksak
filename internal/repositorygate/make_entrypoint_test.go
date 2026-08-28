@@ -12,10 +12,13 @@ func TestMakeOwnsLocalAndNativeBuildEntrypoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(body)
-	for _, target := range []string{"preflight:", "prepare:", "verify:", "build:", "compose:"} {
+	for _, target := range []string{"preflight:", "lock:", "prepare:", "verify:", "build:", "compose:"} {
 		if !strings.Contains(source, target) {
 			t.Errorf("Makefile omits %s", target)
 		}
+	}
+	if !strings.Contains(source, "go mod tidy") {
+		t.Error("Makefile lock target does not project go.mod into go.sum")
 	}
 	for _, target := range []string{
 		"aarch64-apple-darwin", "x86_64-apple-darwin", "universal-apple-darwin",
