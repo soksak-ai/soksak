@@ -69,7 +69,7 @@ func Run(assets embed.FS) error {
 	if identifier == "" {
 		identifier = defaultIdentifier
 	}
-	processLabel, err := processLabelFromEnvironment(os.Getenv(controlwire.ProcessLabelEnvironment))
+	processLabel, err := launchProcessLabel(os.Getenv(controlwire.ProcessLabelEnvironment))
 	if err != nil {
 		return fmt.Errorf("PROCESS_LABEL_INVALID: %w", err)
 	}
