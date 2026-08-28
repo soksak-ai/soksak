@@ -69,6 +69,7 @@ import {
 import { localize, readingLanguage, tmsg } from "../i18n";
 import { usePluginSettings, type SettingValue } from "../state/pluginSettings";
 import { useSessions } from "../state/sessions";
+import { redeemDropGrant } from "./dropGrants";
 
 export type { Disposable } from "./hooks";
 
@@ -472,6 +473,14 @@ export interface SoksakPluginApi {
     readText?: () => Promise<string>;
     writeText?: (text: string) => Promise<void>;
     watch?: (cb: (e: { text: string }) => void) => Disposable;
+  };
+  /** Explicit file drop grants. Grant ids are opaque, window- and Plugin-bound, and one-shot. */
+  fileGrants: {
+    redeem(id: string): Promise<{
+      kind: "file" | "image";
+      shellText: string;
+      inline?: { protocol: string; data: string };
+    } | null>;
   };
   terminal?: {
     /** Snapshot of the commands running now (at most 1 per pane). The current-state form of the
@@ -2039,6 +2048,22 @@ export function buildPluginApi(
               : undefined,
           }
         : undefined,
+
+    fileGrants: {
+      redeem: async (grantId: string) => {
+        const environment = await deps.execute("app.environment", {}, pluginCtx);
+        const loginShell = environment.ok && typeof environment.data?.loginShell === "string"
+          ? environment.data.loginShell
+          : "";
+        if (!loginShell) throw new Error("app.environment returned no login shell for a file grant");
+        return redeemDropGrant({
+          pluginId: id,
+          window: currentWindowLabel() || "main",
+          id: grantId,
+          loginShell,
+        });
+      },
+    },
 
     // [RULE] Terminal area — different capabilities get different permissions: observation ("terminal":
     // command.* snapshots), screen read ("terminal:read": buffer content and updates — the whole screen
