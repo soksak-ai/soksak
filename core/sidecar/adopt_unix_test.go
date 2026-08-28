@@ -4,6 +4,7 @@ package sidecar
 
 import (
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -266,6 +267,26 @@ func TestRecordedInventoryForgetsADeadRecordBeforeApplyingTheCurrentWireShape(t 
 	}
 	if _, err := os.Stat(recordPath); !os.IsNotExist(err) {
 		t.Fatalf("dead old record survived inventory: %v", err)
+	}
+}
+
+func TestRecordedInventoryKeepsAndRefusesALiveRecordOutsideTheCurrentWireShape(t *testing.T) {
+	home := shortHome(t)
+	recordPath := filepath.Join(home, "run", "sidecar-live-old-unit.json")
+	if err := os.MkdirAll(filepath.Dir(recordPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"address":"<local-evidence>/live-old-unit.sock","protocol":1,"pid":` + strconv.Itoa(os.Getpid()) + `}`
+	if err := os.WriteFile(recordPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	host := NewHost(Deps{Home: home})
+	if _, err := host.Recorded(); err == nil {
+		t.Fatal("live old record was accepted as current ownership")
+	}
+	if _, err := os.Stat(recordPath); err != nil {
+		t.Fatalf("live old record was removed: %v", err)
 	}
 }
 

@@ -98,14 +98,16 @@ func (host *Host) Recorded() ([]Open, error) {
 			return nil, err
 		}
 		var remembered record
-		if json.Unmarshal(raw, &remembered) != nil || remembered.Address == "" ||
-			remembered.Protocol < 1 || remembered.PID < 1 || remembered.ProcessLabel == "" {
+		if json.Unmarshal(raw, &remembered) != nil || remembered.PID < 1 {
 			return nil, i18n.Errorf("sidecar.recordInvalid", map[string]string{"path": filepath.Join(directory, name)})
 		}
 		identity := strings.TrimSuffix(strings.TrimPrefix(name, "sidecar-"), ".json")
 		if processGone(remembered.PID) {
 			host.forget(identity)
 			continue
+		}
+		if remembered.Address == "" || remembered.Protocol < 1 || remembered.ProcessLabel == "" {
+			return nil, i18n.Errorf("sidecar.recordInvalid", map[string]string{"path": filepath.Join(directory, name)})
 		}
 		owned = append(owned, Open{
 			Name: identity, Address: remembered.Address, Protocol: remembered.Protocol,
