@@ -310,7 +310,9 @@ resolves name, version and process together and publishes process-generation eve
 recovery. The rebuilt v7 retained exact Shitty 0.0.30 from first start and repeated the pointer row.
 VT100 0.0.33 then passed the same row through the fork's live `Screen` mouse encoder. Exact closure,
 PTY and capture evidence are in `TERMINAL-STANDARD-AUDIT.md`. VT100 selection, wheel and the failed
-first hot-install start remain open. The WezTerm pointer row remains open.
+first hot-install start remain open. WezTerm 0.0.33 then passed the pointer row through its existing
+`TerminalState::mouse_event` API without a fork change. All six native pointer rows are GREEN;
+selection, wheel and the remaining standard rows stay open.
 
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.

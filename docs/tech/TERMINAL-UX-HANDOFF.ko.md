@@ -301,7 +301,9 @@ name, version, process를 함께 해석하고 held pane 복구용 process-genera
 
 VT100 0.0.33은 이어서 fork의 live `Screen` mouse encoder로 같은 행을 통과했습니다. Exact closure,
 PTY, capture 증거는 `TERMINAL-STANDARD-AUDIT.ko.md`에 기록했습니다. VT100 selection, wheel과 실패한
-첫 hot-install 시작은 열려 있습니다. WezTerm pointer 행도 열려 있습니다.
+첫 hot-install 시작은 열려 있습니다. WezTerm 0.0.33은 fork 변경 없이 기존
+`TerminalState::mouse_event` API로 pointer 행을 통과했습니다. Native pointer 여섯 행은 모두
+GREEN이며 selection, wheel과 나머지 표준 행은 열려 있습니다.
 
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.
