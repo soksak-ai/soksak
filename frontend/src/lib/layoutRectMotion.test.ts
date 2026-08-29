@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRectMotionTracker, registerRectMotionExclusion } from "./layoutRectMotion";
-import { setMotionDebug } from "./motionDebug";
+import { motionJourneys, setMotionDebug } from "./motionDebug";
 
 function rectOf(x: number, y: number, w: number, h: number): DOMRect {
   return {
@@ -100,6 +100,31 @@ describe("a layout change during hold", () => {
     t.flush();
 
     expect(el.style.left).toBe("");
+  });
+
+  it("reconciles a finished animation even when WebKit defers its finish callback", () => {
+    const t = createRectMotionTracker();
+    const { el, move } = laidOut(100, 50);
+    const animation = {
+      cancel: vi.fn(),
+      pause: vi.fn(),
+      play: vi.fn(),
+      currentTime: 0,
+      playbackRate: 1,
+      playState: "running",
+    };
+    Object.defineProperty(el, "animate", { configurable: true, value: vi.fn(() => animation) });
+    t.ref(el);
+    t.flush();
+    move(200, 0);
+    t.flush();
+    expect(motionJourneys().at(-1)?.end).toBeNull();
+
+    // A non-key WebKit window can expose the final Animation state before dispatching onfinish.
+    // The finite scan reads that state once after its final captured frame; it must not report the
+    // already-finished journey as incomplete merely because the callback is still queued.
+    animation.playState = "finished";
+    expect(motionJourneys().at(-1)?.end).toBe("finish");
   });
 
   it("a structural snap replace adopts the new rect as the baseline instead of interpolating the old rect to the destination", () => {
