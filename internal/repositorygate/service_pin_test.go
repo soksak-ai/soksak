@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestNativeCompositorConsumersUseTheDeclaredCommit(t *testing.T) {
+func TestNativeSurfaceConsumersUseTheDeclaredCommits(t *testing.T) {
 	selectionBytes, err := os.ReadFile("build/service-pins.json")
 	if err != nil {
 		t.Fatal(err)
@@ -18,6 +18,10 @@ func TestNativeCompositorConsumersUseTheDeclaredCommit(t *testing.T) {
 			Repository string `json:"repository"`
 			Commit     string `json:"commit"`
 		} `json:"nativeCompositor"`
+		TerminalSurface struct {
+			Repository string `json:"repository"`
+			Commit     string `json:"commit"`
+		} `json:"terminalSurface"`
 	}
 	if err := json.Unmarshal(selectionBytes, &selection); err != nil {
 		t.Fatal(err)
@@ -34,6 +38,14 @@ func TestNativeCompositorConsumersUseTheDeclaredCommit(t *testing.T) {
 	}
 	if !regexp.MustCompile(`(?m)^\s*github[.]com/min-median-max/wails-service-native-compositor\s+v\S+-` + commit[:12] + `$`).Match(goMod) {
 		t.Fatalf("Go compositor dependency does not use %s", commit)
+	}
+	terminalCommit := selection.TerminalSurface.Commit
+	if selection.TerminalSurface.Repository != "https://github.com/min-median-max/wails-service-terminal-surface" ||
+		!regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(terminalCommit) {
+		t.Fatal("terminal surface selection is not an exact repository commit")
+	}
+	if !regexp.MustCompile(`(?m)^\s*github[.]com/min-median-max/wails-service-terminal-surface\s+v\S+-` + terminalCommit[:12] + `$`).Match(goMod) {
+		t.Fatalf("Go terminal surface dependency does not use %s", terminalCommit)
 	}
 
 	packageBytes, err := os.ReadFile("frontend/package.json")
