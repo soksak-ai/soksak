@@ -1,11 +1,19 @@
 package wails
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
 	terminalsurface "github.com/min-median-max/wails-service-terminal-surface"
 )
+
+func TestTerminalUnitGenerationEventsAreInjectedIntoTheHost(t *testing.T) {
+	field, found := reflect.TypeOf(Options{}).FieldByName("TerminalUnitStarts")
+	if !found || field.Type.Kind() != reflect.Func {
+		t.Fatal("Wails host has no event input for selected terminal unit generations")
+	}
+}
 
 type refusedByFake struct{}
 
