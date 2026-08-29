@@ -525,6 +525,14 @@ must return `unchanged`. A digest conflict leaves the previous v4 artifact untou
 checkout, automatic v7-to-v4 copy or partial component promotion is valid evidence. `make soksakv4`
 therefore remains a read-only verification-and-run command until that promotion is GREEN.
 
+### Build-time kit dependency gate
+
+The terminal kit geometry fix is released as immutable kit `0.0.82` in the local release store. The
+current soksak-spec `main` (`d7b1b3d`) no longer contains the candidate materializer removed by
+`51f72cd`; therefore a Vision candidate that consumes kit `0.0.82` cannot be composed from source
+without violating the release boundary. Until spec restores or replaces that owner-level command,
+the existing Vision closure remains unchanged and no new v7 visual evidence may claim the kit fix.
+
 ### Prompt absence classification
 
 `INPUT_WRITE_FAILED: pane ... is not running` is not itself a rendering diagnosis. Read the
