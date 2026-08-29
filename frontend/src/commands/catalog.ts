@@ -1713,6 +1713,7 @@ export function registerCatalog(): void {
       transactionId: receipt.entry.transactionId,
       sequence: receipt.entry.sequence,
       phase: "committed",
+      mode: receipt.entry.mode === "snap" ? "snap" : "glide",
     };
   };
   const waitForTabPresentationCommit = async (viewId: string): Promise<void> => {
@@ -1827,7 +1828,7 @@ export function registerCatalog(): void {
       ...switchScanParams(),
     },
     returns:
-      "{ projectId, fromSpaceId, spaceId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, clean, diffsPct, presentationFrames, activation, recordingDir }",
+      "{ projectId, fromSpaceId, spaceId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, motion:{journeys,cancelled,incomplete,clean}, clean, diffsPct, presentationFrames, activation, recordingDir }",
     message: (d) =>
       d.clean
         ? tmsg("msg.space.switchScan.clean")
@@ -2516,7 +2517,7 @@ export function registerCatalog(): void {
       ...switchScanParams(),
     },
     returns:
-      "{ fromTabId, tabId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, clean, diffsPct, presentationFrames, activation, recordingDir }",
+      "{ fromTabId, tabId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, motion:{journeys,cancelled,incomplete,clean}, clean, diffsPct, presentationFrames, activation, recordingDir }",
     message: (data) => data.clean
       ? tmsg("msg.tab.switchScan.clean")
       : tmsg("msg.tab.switchScan.jank", { n: Number(data.flickerFrames) }),

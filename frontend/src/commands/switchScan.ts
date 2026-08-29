@@ -5,6 +5,22 @@ export type SwitchFrameVerdict = {
   clean: boolean;
 };
 
+export function classifySwitchMotion(
+  journeys: readonly { at: string; end: "finish" | "cancel" | null }[],
+  required: boolean,
+): { journeys: number; cancelled: string[]; incomplete: string[]; clean: boolean } {
+  const cancelled = journeys.filter(({ end }) => end === "cancel").map(({ at }) => at);
+  const incomplete = journeys.filter(({ end }) => end === null).map(({ at }) => at);
+  return {
+    journeys: journeys.length,
+    cancelled,
+    incomplete,
+    clean: cancelled.length === 0
+      && incomplete.length === 0
+      && (!required || journeys.length > 0),
+  };
+}
+
 export function classifySwitchFrames(frameDiffs: readonly number[], noiseFloor: number): SwitchFrameVerdict {
   const peak = frameDiffs.reduce(
     (maximum, value) => Number.isFinite(value) ? Math.max(maximum, value) : maximum,

@@ -5,10 +5,12 @@ import { surfaceLabelOfView } from "../lib/surfaceLabels";
 import { startWindowRecording } from "./windowRecorder";
 import {
   classifySwitchFrames,
+  classifySwitchMotion,
   classifySwitchPresentation,
   type SwitchPresentationSample,
   type SwitchViewPresentation,
 } from "./switchScan";
+import { motionJourneys } from "../lib/motionDebug";
 
 export type SwitchScanRegion = {
   x0: number;
@@ -21,6 +23,7 @@ export type SwitchScanLayoutTransaction = {
   transactionId: string;
   sequence: number;
   phase: "committed";
+  mode: "glide" | "snap";
 };
 
 export type SwitchScanActivationReceipt = {
@@ -87,6 +90,7 @@ export async function runSwitchScan(input: {
   blankFrames: number[];
   overlapFrames: number[];
   nativeMismatchFrames: number[];
+  motion: ReturnType<typeof classifySwitchMotion>;
   clean: boolean;
   diffsPct: number[];
   presentationFrames: SwitchPresentationSample[];
@@ -94,6 +98,7 @@ export async function runSwitchScan(input: {
   recordingDir: string;
 }> {
   const samples: SwitchPresentationSample[] = [];
+  const motionStartedAt = performance.now();
   const activation = { current: null as Promise<
     { ok: true; activation: SwitchScanActivationReceipt }
     | { ok: false; error: unknown }
@@ -151,19 +156,29 @@ export async function runSwitchScan(input: {
   const diffs = series.frames.map((frame) => frame.changed ?? 0);
   const pixels = classifySwitchFrames(diffs, input.threshold);
   const presentation = classifySwitchPresentation(samples);
+  const activationReceipt = activationResult.activation;
+  const motion = classifySwitchMotion(
+    motionJourneys().filter(({ startedAt }) => startedAt >= motionStartedAt),
+    activationReceipt.layoutMoved && activationReceipt.transaction?.mode === "glide",
+  );
+  const pixelVerdictApplies = !activationReceipt.layoutMoved
+    || activationReceipt.transaction?.mode === "snap";
   return {
     frames: report.frames,
     frameMs: Math.round((performance.now() - startedAt) / report.frames),
     switchFrame: pixels.switchFrame,
     switchFrames: pixels.switchFrames,
-    flickerFrames: pixels.flickerFrames,
+    flickerFrames: pixelVerdictApplies
+      ? pixels.flickerFrames
+      : motion.cancelled.length + motion.incomplete.length,
     blankFrames: presentation.blankFrames,
     overlapFrames: presentation.overlapFrames,
     nativeMismatchFrames: presentation.nativeMismatchFrames,
-    clean: pixels.clean && presentation.clean,
+    motion,
+    clean: presentation.clean && motion.clean && (!pixelVerdictApplies || pixels.clean),
     diffsPct: diffs.map((value) => +(value * 100).toFixed(1)),
     presentationFrames: samples,
-    activation: activationResult.activation,
+    activation: activationReceipt,
     recordingDir: input.dir,
   };
 }
