@@ -173,10 +173,10 @@ describe("a parking commit goes through the content view host", () => {
       <div data-node="layout/tab/v-1">
         <div data-native-surface="browser" data-native-surface-id="browser-win-a-v-1"></div>
       </div>`;
-    const { commitViewVisibility, dropViewVisibility } = await import("./viewPark");
+    const { commitViewPresentation, dropViewVisibility } = await import("./viewPark");
 
     dropViewVisibility("v-1");
-    commitViewVisibility("v-1", false);
+    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, false, true));
     // The picture is taken before the surface goes, so the commit lands after that answer rather
     // than in the same breath as the call.
     await new Promise((done) => setTimeout(done, 0));
@@ -186,12 +186,22 @@ describe("a parking commit goes through the content view host", () => {
     expect(seen[0][1]).toBe(false);
 
     // Idempotent — recommitting the same value does nothing.
-    commitViewVisibility("v-1", false);
+    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, false, true));
     await Promise.resolve();
     expect(seen).toHaveLength(1);
 
-    commitViewVisibility("v-1", true);
+    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, false, false));
     await Promise.resolve();
     expect(seen[1][1]).toBe(true);
+
+    // An inactive tab has a different owner on screen. Keeping the departing picture covers that
+    // arriving view, so inactive-chain hides directly and retains no stand-in.
+    dropViewVisibility("v-1");
+    order.length = 0;
+    seen.length = 0;
+    commitViewPresentation("v-1", resolveViewVisibility(true, true, false, false, false));
+    await Promise.resolve();
+    expect(order).toEqual(["hide"]);
+    expect(seen).toEqual([["browser-win-a-v-1", false]]);
   });
 });
