@@ -157,12 +157,15 @@ export function startNativeSurfaces(root: Document = document): void {
 }
 
 /** Applies target view ownership before React publishes the matching tab visibility DOM. */
-export async function stageNativeSurfacePresentation(visibleViewIds: ReadonlySet<string>): Promise<void> {
-  if (!controller) return;
-  await controller.stagePresentation((declaration) => {
+export async function stageNativeSurfacePresentation(
+  visibleViewIds: ReadonlySet<string>,
+): Promise<{ sequence: number; visibleViewIds: string[] }> {
+  if (!controller) throw new Error("native surface observer is not installed");
+  const receipt = await controller.stagePresentation((declaration) => {
     const owner = compositionOwnerViewId(declaration as HTMLElement);
     return owner !== null && visibleViewIds.has(owner);
   });
+  return { sequence: receipt.sequence, visibleViewIds: [...visibleViewIds].sort() };
 }
 
 /** Re-applies the current DOM presentation after a staged transaction is cancelled. */

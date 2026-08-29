@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-const stage = vi.hoisted(() => vi.fn(async () => {}));
+const stage = vi.hoisted(() => vi.fn(async (visibleViewIds: ReadonlySet<string>) => ({
+  sequence: 7,
+  visibleViewIds: [...visibleViewIds].sort(),
+})));
 const restore = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("./nativeSurfaces", () => ({
   restoreNativeSurfacePresentation: restore,
@@ -24,6 +27,12 @@ describe("Wails layout presentation staging", () => {
       mode: "glide",
       requiresSharedStart: false,
       stagedTargets: [],
+      preparation: {
+        stages: [{ id: "native-presentation", status: "prepared", data: {
+          sequence: 7,
+          visibleViewIds: ["tab-left", "tab-right"],
+        } }],
+      },
     });
     await expect(prepared.start()).resolves.toBeNull();
     await expect(prepared.commit()).resolves.toBeUndefined();
