@@ -232,6 +232,24 @@ injected framework clipboard; Vision copy returned `copied=true` and the indepen
 the same 18 characters. Clipboard change subscription, mouse-reporting arbitration, scroll and the
 other five native engines remain open and this row must not certify them.
 
+The 2026-08-29 Alacritty wheel slice is also GREEN only for its named row. Surface Contract 0.0.6
+preserves the surface point, pixel/line/page unit and four modifiers and requires one effect route.
+Render Kit 0.0.27 owns fractional accumulation and mode routing; Alacritty Sidecar 0.0.36 owns
+legacy, UTF-8, SGR and alternate-scroll byte encoding; the terminal-surface service validates that
+answer and remains the single PTY writer. Vision 0.0.20 routes DOM and generic owner wheel input
+through one serialized `surface.wheel` path and exposes route, written byte count and sequence.
+The immutable v7 release digests are `d5a04200d2f5857bd3364cf9e5c0ffda6685e129f7ba2a69445abbc3d71106af`
+for Alacritty, `0833136c4c24a8d6f62522449843fc3cea5920c1e87cc0fcbb2cb2e457f30411`
+for Vision and `c7f7ddaf39f0df849bcf0a86c4a1b8c118cf6f8136c201779be5e940de448bad`
+for the closure-aligned Xterm Plugin; every second publication returned `unchanged`, and batch plan
+`cb54a4815700710b5a2557fc65580953a9dc63eada3687992ff28a5d2bd5f252` installed nine components.
+In v7, line wheel `-3` over 53 history rows returned `scrollback`, `written=0`, `offset=3`; the
+captured viewport moved from line 80 to line 78. With 1000+1006 active, wheel-up returned
+`mouse-report`, `written=12`, and the shell received hex `1b5b3c36343b31363b31334d`
+(`ESC[<64;16;13M`). With alternate screen+1007 active, the same wheel returned
+`alternate-scroll`, `written=3`, and the shell received `1b4f41` (`ESC O A`). Ghostty, Kitty,
+Shitty, VT100 and WezTerm remain open; no evidence in this paragraph certifies their wheel path.
+
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.
 

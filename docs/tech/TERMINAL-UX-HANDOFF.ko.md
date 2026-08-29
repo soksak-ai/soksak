@@ -225,6 +225,23 @@ surface 위에서 host DOM drag를 합성하지 않습니다. 다시 빌드한 v
 구독, mouse-reporting 중재, scroll, 나머지 native engine 다섯 개는 열려 있으며 이 행의 증거로 인증하면
 안 됩니다.
 
+2026-08-29 Alacritty wheel 증분도 이름 붙인 그 행에서만 GREEN입니다. Surface Contract 0.0.6은
+surface point, pixel/line/page unit, 네 modifier를 보존하고 effect route 하나만 허용합니다. Render Kit
+0.0.27은 분수 누적과 mode routing을 소유하고, Alacritty Sidecar 0.0.36은 legacy, UTF-8, SGR,
+alternate-scroll byte encoding을 소유하며, terminal-surface service는 그 응답을 검증하고 유일한 PTY
+writer로 남습니다. Vision 0.0.20은 DOM과 generic owner wheel input을 직렬화된 `surface.wheel` 경로
+하나로 전달하고 route, written byte count, sequence를 공개합니다. v7 불변 release digest는 Alacritty
+`d5a04200d2f5857bd3364cf9e5c0ffda6685e129f7ba2a69445abbc3d71106af`, Vision
+`0833136c4c24a8d6f62522449843fc3cea5920c1e87cc0fcbb2cb2e457f30411`, closure를 맞춘 Xterm Plugin
+`c7f7ddaf39f0df849bcf0a86c4a1b8c118cf6f8136c201779be5e940de448bad`이며 두 번째 게시는 모두
+`unchanged`였습니다. Batch plan `cb54a4815700710b5a2557fc65580953a9dc63eada3687992ff28a5d2bd5f252`는
+component 아홉 개를 설치했습니다. v7에서 history 53행 위의 line wheel `-3`은 `scrollback`,
+`written=0`, `offset=3`을 반환했고 캡처 viewport는 line 80에서 78로 이동했습니다. 1000+1006 활성
+상태의 wheel up은 `mouse-report`, `written=12`를 반환했으며 shell은
+`1b5b3c36343b31363b31334d`(`ESC[<64;16;13M`)를 받았습니다. Alternate screen+1007 활성 상태에서는
+`alternate-scroll`, `written=3`을 반환했고 shell은 `1b4f41`(`ESC O A`)을 받았습니다. Ghostty,
+Kitty, Shitty, VT100, WezTerm은 열려 있으며 이 문단의 증거로 wheel 경로를 인증하면 안 됩니다.
+
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.
 

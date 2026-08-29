@@ -183,6 +183,13 @@ provider 정보에서 label을 다시 조립하면 RED입니다. Selection GREEN
 selection status, selection command가 일치해야 합니다. Copy는 추가로 write 뒤 독립된 공개 clipboard
 read가 정확히 같은 text를 반환해야 합니다.
 
+Wheel 행은 `point`, `deltaX`, `deltaY`, `deltaMode`, 네 modifier를 owner 경로 끝까지 보존합니다. GREEN은
+서로 독립된 세 사례를 요구합니다. Primary screen history는 PTY write 없이 offset을 바꾸고, mouse
+reporting 활성 상태는 engine이 encode한 byte를 정확히 한 번 쓰며, alternate-scroll이 활성인 alternate
+screen은 대응하는 cursor-key byte를 정확히 한 번 써야 합니다. 공개 DOM의 route, written count,
+sequence는 shell이 받은 hex와 일치해야 합니다. Plugin이나 Core가 escape를 encode하거나, 분수 pixel
+delta를 잃거나, effect route 두 개를 보고하면 RED입니다.
+
 ## 단계 2 — renderer parity
 
 같은 제공자 행을 명시적으로 다른 두 매트릭스에서 씁니다. 로컬 capture-only 매트릭스는 사용자의

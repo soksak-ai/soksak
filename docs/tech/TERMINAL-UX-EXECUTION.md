@@ -187,6 +187,13 @@ from a provider name is RED. Selection GREEN requires the engine selection statu
 selection status and the selection command to agree; copy additionally requires a write followed by
 an independent public clipboard read of the exact text.
 
+Wheel rows preserve `point`, `deltaX`, `deltaY`, `deltaMode` and all four modifiers through the
+owner route. GREEN requires three independent cases: primary-screen history changes offset without
+a PTY write; active mouse reporting writes the engine-encoded bytes exactly once; alternate screen
+with alternate-scroll writes the matching cursor-key bytes exactly once. The public DOM route,
+written count and sequence must agree with the shell-received hex. A Plugin or Core escape encoder,
+loss of fractional pixel delta, or reporting two effect routes is RED.
+
 ## Phase 2 — renderer parity
 
 Use the same provider rows in two explicitly different matrices. The local capture-only matrix
