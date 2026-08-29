@@ -31,6 +31,7 @@ afterEach(() => {
 
 it("window.open forwards focus:false to the native window contract so automation does not move the focus", async () => {
   expect(getSpec("window.open")?.params.focus).toMatchObject({ type: "boolean" });
+  expect(getSpec("window.list")?.windowScoped).toBe(false);
 
   invoke.mockImplementation(async (command: string) => {
     if (command === "workspace_owners") return { owners: [] };
