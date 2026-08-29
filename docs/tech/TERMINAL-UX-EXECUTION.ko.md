@@ -297,11 +297,13 @@ soksak-core/bin/sok 와 soksak-core/bin/soksak 입니다. 예전 skill 문서의
 격리 실행에는 별도 SOKSAK_HOME, Darwin 의 짧은 <local-evidence> 실행 디렉터리, 고유한 identifier 와 소유자, 모든
 CLI 호출의 명시적 --socket, 창 범위 요청의 명시적 window 필드가 필요합니다. 로컬 매트릭스와 시각
 매트릭스는 `SOKSAK_PRESENTATION=capture-only` 를 쓰고, 사람이 없는 `system-native-input` 인증만
-`interactive` 를 씁니다. 현재 Wails 런타임은 GUI 프로세스 둘을 안전하게 공존시키지 못하므로, 테스트
-애플리케이션이 수명 전체 동안 저장소 소유 애플리케이션 잠금을 보유합니다. targetWindow 는
-window_renderer_wait 에서만 씁니다. Control plane 준비는 `soksak.host.ready`에서 확인하고, framework
-window가 필요한 호출자는 window label을 포함하며 `WindowRuntimeReady` 뒤에 발생하는
-`soksak.window.ready`를 기다립니다. 두 경로 모두 polling하지 않습니다.
+`interactive` 를 씁니다. 사용자·project application이 아니라 native GUI application gate만 Core
+repository 아래의 test 전용 lock을 수명 전체 동안 보유합니다. 현재 Wails runtime에서 test GUI process
+두 개가 충돌하지 않도록 gate만 직렬화합니다. targetWindow 는 window_renderer_wait 에서만 씁니다.
+`soksak.host.ready`는 process control plane 등록, `soksak.window.ready`는 label로 식별한 framework
+window의 `WindowRuntimeReady`, `soksak.renderer.ready`는 해당 window의 전체 renderer command catalog
+등록을 뜻합니다. 호출자는 다음 동작에 필요한 가장 좁은 event를 기다리며 어떤 경로도 polling하지
+않습니다.
 정리는 테스트가 소유한 정확한 open·recorded 사이드카 인벤토리를 중지하고 app.shutdown.commit 을
 호출한 뒤 애플리케이션의 정상 종료를 증명합니다.
 
