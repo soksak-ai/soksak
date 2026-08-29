@@ -6,6 +6,7 @@ import { isCleanRailStation } from "./railPlacement";
 import {
   arrangementMoves,
   moveOffsetPx,
+  presentedRailWidth,
   projectionGeometryChanged,
   resolvePresentedRailRelation,
   resolveEffectiveRailRelation,
@@ -538,6 +539,11 @@ describe("pinned rail — focus does not change the arrangement", () => {
   it("carries rail presence in the solved transaction state", () => {
     expect(solve(two(), "R", { railOpen: true }).railPresent).toBe(true);
     expect(solve(two(), "R", { railOpen: false }).railPresent).toBe(false);
+  });
+
+  it("takes the rendered rail width from the displayed solution", () => {
+    expect(presentedRailWidth(solve(two(), "R", { railOpen: false }), 320)).toBe(0);
+    expect(presentedRailWidth(solve(two(), "R", { railOpen: true }), 320)).toBe(320);
   });
 });
 
