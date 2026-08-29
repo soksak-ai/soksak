@@ -70,6 +70,8 @@ function noteReceipt(snapshot: Parameters<NativeSurfaceCommit>[0], receipt: Comp
       w: surface.frame.width, h: surface.frame.height,
       ...(surface.settled ? { settled: { x: surface.settled.x, y: surface.settled.y, w: surface.settled.width, h: surface.settled.height } } : {}),
       visible: surface.visible,
+      alpha: surface.alpha,
+      layer: surface.layer,
     })),
     answeredAt, answeredAt - askedAt, receipt.appliedMs ?? -1, receipt.carriedMs ?? -1,
     snapshot.interactive,

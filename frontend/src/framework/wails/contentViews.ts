@@ -66,6 +66,8 @@ export const wailsContentViewHost: ContentViewHost = {
       w: surface.applied.width,
       h: surface.applied.height,
       visible: surface.appliedVisible,
+      alpha: surface.appliedAlpha,
+      layer: surface.layer,
     }));
   },
 

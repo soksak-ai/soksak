@@ -32,6 +32,10 @@ import {
 import { CAPTURE_CALIBRATION_ID, setCaptureCalibration } from "./captureCalibration";
 import { setCaptureMotionAnchors } from "./captureMotionAnchors";
 import { captureAfterPresentation } from "./capturePresentation";
+import {
+  composeNativeSurfacePictures,
+  type DocumentCapture,
+} from "./captureNativeSurfaceComposition";
 
 /** The native capture service returns a receipt object. Older adapters returned the path directly;
  *  both carry one path, and no other shape is accepted or stringified. */
@@ -51,6 +55,25 @@ function capturePresented<T>(capture: () => Promise<T>): Promise<T> {
     capture,
     (presentation) => invoke("window_capture_restore", { ordered: presentation.ordered }).then(() => undefined),
   );
+}
+
+async function captureWindowPixels(
+  rect?: { x: number; y: number; w: number; h: number },
+): Promise<DocumentCapture> {
+  return capturePresented(async () => {
+    const shot = await invoke<DocumentCapture>(
+      "window_snapshot_region",
+      rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
+    );
+    const region = rect ?? { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+    const host = contentViewHost();
+    return composeNativeSurfacePictures(
+      shot,
+      region,
+      await host.appliedSurfaces(),
+      (id) => host.picture(id),
+    );
+  });
 }
 
 /**
@@ -168,11 +191,6 @@ type Region = {
  * the window declared no surface, or it declared one and nothing was painted — and `surfaces`,
  * `drawn` and `skipped` are where that difference is written down.
  */
-type CaptureAnswer = {
-  png: string;
-  note: { surfaces: number; drawn: number; skipped?: string[]; path?: string };
-};
-
 type Refusal = { ok: false; code: string; message: string };
 
 const isRefusal = (v: Region | Refusal): v is Refusal => "ok" in v;
@@ -434,24 +452,23 @@ export function registerCaptureCatalog(): void {
       const region = await resolveRegion(p);
       if (isRefusal(region)) return region;
       const { rect, tabId, restore } = region;
-      if (rect || p.base64) {
-        // The answer is the image and the statement of what went into it. A capture that drew
-        // none of the window's surfaces looks exactly like one that had none to draw, and the
-        // note is the only place that difference is written down.
-        const shot = await capturePresented(() => invoke<CaptureAnswer>(
-          "window_snapshot_region", rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
-        ));
+      try {
+        const shot = await captureWindowPixels(rect);
         const pngBase64 = shot.png;
-        // A cropped image is also **left at the path the caller named.** Until now, passing rect
-        // ignored path entirely and answered base64 only: the caller got ok:true and there was no
-        // file (measured 2026-07-31). Cropping and saving are separate axes and compose freely.
-        const outPath = p.path as string | undefined;
+        let outPath = p.path as string | undefined;
+        if (!outPath && !rect && !p.base64) {
+          const { tempDir, join } = frameworkPath;
+          outPath = await join(
+            await tempDir(),
+            "soksak",
+            `snapshot-${Date.now()}.png`,
+          );
+        }
         if (outPath) {
           const w = await invoke<{ path: string; bytes: number }>(
             "write_file_base64",
             { path: outPath, base64: pngBase64 },
           );
-          restore?.();
           return {
             ...(tabId ? { tabId } : {}),
             saved: w.path,
@@ -460,30 +477,14 @@ export function registerCaptureCatalog(): void {
             media: { kind: "image/png", path: w.path },
           };
         }
-        // Images are declared in the envelope media (standard) — consumers render media only, with
-        // no key guessing.
-        restore?.();
         return {
           ...(tabId ? { tabId } : {}),
           note: shot.note,
           media: { kind: "image/png", base64: pngBase64 },
         };
+      } finally {
+        restore?.();
       }
-      let path = p.path as string | undefined;
-      if (!path) {
-        const { tempDir, join } = frameworkPath;
-        path = await join(
-          await tempDir(),
-          "soksak",
-          `snapshot-${Date.now()}.png`,
-        );
-      }
-      const receipt = await capturePresented(() => invoke<unknown>("window_snapshot", { path }));
-      const saved = savedCapturePath(receipt);
-      if (!saved) throw new Error("window_snapshot returned no saved path");
-      // A file capture is declared in media too — the feed reads the path and renders an image, so
-      // the path text is not all that shows.
-      return { saved, media: { kind: "image/png", path: saved } };
     },
   });
 
@@ -532,9 +533,7 @@ export function registerCaptureCatalog(): void {
         // The answer is the image and the statement of what went into it. A capture that drew
         // none of the window's surfaces looks exactly like one that had none to draw, and the
         // note is the only place that difference is written down.
-        const shot = await capturePresented(() => invoke<CaptureAnswer>(
-          "window_snapshot_region", rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
-        ));
+        const shot = await captureWindowPixels(rect);
         const pngBase64 = shot.png;
         return { ...(tabId ? { tabId } : {}), note: shot.note, ...(await pixelStats(pngBase64)) };
       } finally {

@@ -285,6 +285,8 @@ export interface AppliedSurface {
   /** Raw native layout frame while the presented frame above is transformed interactively. */
   settled?: { x: number; y: number; w: number; h: number };
   visible: boolean;
+  alpha?: number;
+  layer?: number;
 }
 
 /**
