@@ -535,13 +535,13 @@ therefore remains a read-only verification-and-run command until that promotion 
 
 ### Build-time kit dependency gate
 
-The terminal kit geometry fix is released as immutable kit `0.0.83` in the local release store. The
-soksak-spec `main` (`5f45eba`) owns the candidate materializer (`stage-node-candidate.mjs` and
+The terminal kit geometry fix is released as immutable kit `0.0.84` in the local release store. The
+soksak-spec `main` (`181e130`, Spec `0.0.50`) owns the candidate materializer (`stage-node-candidate.mjs` and
 `build-node-candidate.mjs`); plugin candidates also pass the addressed runtime release `--store`.
 A Vision candidate must use those commands with digest-pinned kit and
 contract archives; source manifests and lockfiles remain canonical and unchanged. A candidate is
 not evidence until its build receipt, verified archive, complete closure and v7 visual capture are
-all present. The current isolated Vision candidate `0.0.30` was built with kit `0.0.83` and its
+all present. The isolated Vision candidate `0.0.31` was built with kit `0.0.84` and its
 contract/kit digests; it remains candidate evidence until installed closure and v7 visual capture pass.
 
 ### Prompt absence classification
