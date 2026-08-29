@@ -17,7 +17,11 @@ vi.mock("../lib/contentViews", () => ({
     { id: "webview.win-test.tab-browser", ownerViewId: "tab-browser" },
     { id: "terminal.win-test.tab-terminal-1", ownerViewId: "tab-terminal" },
   ],
-  contentViewHost: () => ({ list: async () => labels }),
+  contentViewHost: () => ({
+    list: async () => labels,
+    picture: async (label: string) => label === "terminal.win-test.tab-terminal-1"
+      ? "data:image/png;base64,c3VyZmFjZQ==" : null,
+  }),
 }));
 vi.mock("../state/sessions", () => ({
   allViews: (layout: { views: Array<{ id: string }> }) => layout.views,
@@ -41,6 +45,7 @@ import { execute, getSpec, unregister } from "./registry";
 
 afterEach(() => {
   unregister("surface.inventory");
+  unregister("surface.snapshot");
   unregister("webview.surfaces");
   unregister("webview.health.query");
   unregister("webview.recover");
@@ -60,5 +65,23 @@ describe("surface.inventory window inventory", () => {
     expect((result.data as { ghosts: string[] }).ghosts).toEqual([]);
     expect((result.data as { unowned: string[] }).unowned).toEqual([]);
     expect(getSpec("webview.surfaces")).toBeUndefined();
+  });
+
+  it("returns the exact applied surface pixels through a public snapshot command", async () => {
+    registerWebviewCatalog();
+
+    const result = await execute("surface.snapshot", {
+      id: "terminal.win-test.tab-terminal-1",
+    }, {});
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        id: "terminal.win-test.tab-terminal-1",
+        media: { kind: "image/png", base64: "c3VyZmFjZQ==" },
+      },
+    });
+    await expect(execute("surface.snapshot", { id: "terminal.win-other.tab-away" }, {}))
+      .resolves.toMatchObject({ ok: false, code: "TARGET_NOT_FOUND" });
   });
 });
