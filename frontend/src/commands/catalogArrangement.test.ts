@@ -19,6 +19,7 @@ import { registerCatalog } from "./catalog";
 import { execute, getSpec } from "./registry";
 import { projectArrangement, useSessions, type Workspace, type Pane } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
+import { useSectionSets } from "../state/sectionSets";
 import { splitLeaf } from "../state/splitTree";
 import {
   prepareLayoutChange,
@@ -83,6 +84,10 @@ beforeEach(() => {
   __resetLayoutTransitionJournalForTest();
   __resetLayoutSettlementForTest();
   __resetLayoutTransitionIntentForTest();
+  useSectionSets.setState({ sets: [], byPlugin: {}, left: null });
+  const set = useSectionSets.getState().create("fixture rail");
+  useSectionSets.getState().arrange(set.id, ["fixture.section"]);
+  useSectionSets.getState().link("fixture", "rail", set.id);
   useSessions.setState({ workspaces: [workspace("pan-bbbbbb")], activeId: "wsp-aaaaaa" });
 });
 

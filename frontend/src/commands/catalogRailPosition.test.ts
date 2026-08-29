@@ -16,13 +16,14 @@ import { registerCatalog } from "./catalog";
 import { execute } from "./registry";
 import { useSessions, type Workspace, type Pane } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
+import { useSectionSets } from "../state/sectionSets";
 import { splitLeaf } from "../state/splitTree";
 import {
   __resetLayoutSettlementForTest,
   layoutSettlementFacts,
 } from "../lib/layoutSettlement";
 
-const group = (id: string, viewId?: string): Pane => ({
+const group = (id: string, viewId: string = `${id}-view`): Pane => ({
   id,
   tabs: viewId
     ? [{
@@ -114,6 +115,10 @@ registerCatalog();
 
 beforeEach(() => {
   __resetLayoutSettlementForTest();
+  useSectionSets.setState({ sets: [], byPlugin: {}, left: null });
+  const set = useSectionSets.getState().create("test rail");
+  useSectionSets.getState().arrange(set.id, ["test.plugin.section"]);
+  useSectionSets.getState().link("test.plugin", "rail", set.id);
   useSessions.setState({ workspaces: [workspace()], activeId: "wsp-aaaaaa" });
 });
 
@@ -503,8 +508,14 @@ describe("state.tree — the solution is a public fact", () => {
       }> }>;
     }).workspaces[0].spaces[0];
     expect(space.layout).toEqual({ pane: "ghostty" });
-    expect(space.panes).toEqual([
-      { id: "ghostty", rect: { left: 0, top: 0, width: 100, height: 100 }, active: true, activeTabId: "", tabs: [] },
+    expect(space.panes).toMatchObject([
+      {
+        id: "ghostty",
+        rect: { left: 0, top: 0, width: 100, height: 100 },
+        active: true,
+        activeTabId: "ghostty-view",
+        tabs: [{ id: "ghostty-view", plugin: "test.plugin" }],
+      },
     ]);
     expect(space.projection).toEqual({
       kind: "maximized",

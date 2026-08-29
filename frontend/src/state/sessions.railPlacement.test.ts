@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { splitLeaf } from "./splitTree";
 import { projectArrangement, useSessions, type Workspace, type Pane } from "./sessions";
+import { useSectionSets } from "./sectionSets";
 
 function group(id: string, viewId: string): Pane {
   return {
@@ -44,6 +45,10 @@ function twoColumnWorkspace(): Workspace {
 
 beforeEach(() => {
   useSessions.setState({ workspaces: [], activeId: "" });
+  useSectionSets.setState({ sets: [], byPlugin: {}, left: null });
+  const set = useSectionSets.getState().create("fixture rail");
+  useSectionSets.getState().arrange(set.id, ["fixture.section"]);
+  useSectionSets.getState().link("fixture", "rail", set.id);
 });
 
 describe("position PIN guards the clean grid line", () => {
