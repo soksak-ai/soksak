@@ -516,6 +516,13 @@ the `soksak-sidecar-pty` binding to find their peer. Neither role is inferred fr
 executable. Thus `soksak-sidecar-pty` and `soksakv7-sidecar-pty` cannot share endpoints under one
 runtime root.
 
+Opening a terminal surface owns exact sidecar startup. After resolving the engine and PTY component
+from `environment.json`, the common Core surface link must call `Start` for each exact selected unit
+before sending its surface/session request. `Send` never starts an unopened unit, and an adopted
+process is not a startup prerequisite. A fresh project home and every later restart therefore follow
+the same `resolve -> Start -> Send` transaction; manually launching a sidecar or depending on a
+process left by an earlier run is invalid evidence.
+
 Completion requires all provider-matrix RED tests to become GREEN, all numeric visibility and
 ownership checks to pass, and direct inspection of screenshots and motion recordings. A build,
 command reply or previous CI run alone cannot close this handoff.
