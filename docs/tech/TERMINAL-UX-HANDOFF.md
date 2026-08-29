@@ -217,6 +217,21 @@ recorded frames were inspected directly without focusing the window; no white ga
 surface was present. This closes the tab-switch compositor ownership defect, not the remaining
 overlay, border or focus-input matrices.
 
+The 2026-08-29 Alacritty selection slice is GREEN only for its named row. Surface Contract 0.0.5
+defines the owner-bound selection transaction; Render Kit 0.0.26 and Alacritty Sidecar 0.0.35 own
+the gesture state, engine selection and rendered range. Vision 0.0.19 routes both DOM pointer events
+and the owner `SurfacePointerInput` sequence through that transaction. Its immutable v7 local
+release digest is `bf62dff8926271ca813a48f04320d0db35a0236de69110dfc3e978de1551d64f`
+and a second publication returned `unchanged`. Core resolves an exposed native declaration by the
+exact `data-native-surface-id`; it no longer synthesizes a host-DOM drag over a native surface.
+In the rebuilt v7 application, `ui.input.drag` returned
+`surface=terminal.win-vug6zo.tab-ms2k2p-1`, selection command and exposed DOM both returned
+`SELECT_FINAL_13579`, and the 24-frame recording visibly showed the same selected range without
+focusing the window. The Wails host now serves `clipboard_read` and `clipboard_write` through its
+injected framework clipboard; Vision copy returned `copied=true` and the independent read returned
+the same 18 characters. Clipboard change subscription, mouse-reporting arbitration, scroll and the
+other five native engines remain open and this row must not certify them.
+
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.
 

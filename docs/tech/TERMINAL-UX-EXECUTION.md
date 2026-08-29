@@ -178,6 +178,15 @@ fact with no acceptance check in later phases.
 RED: every matrix row fails with a named missing or incorrect fact. Empty values, silent absence and
 inferred values are failures.
 
+An exposed native surface is one input realm regardless of whether it presents a browser or a
+terminal. The exact owner label is `data-native-surface-id` in its DOM declaration.
+`ui.input.click`, `ui.input.drag` and related commands must route the surface-relative sequence to
+that label's registered input owner and report the label in their result. Dispatching host DOM mouse
+events over that placeholder, reporting success without an owner call, or reconstructing the label
+from a provider name is RED. Selection GREEN requires the engine selection status, the public DOM
+selection status and the selection command to agree; copy additionally requires a write followed by
+an independent public clipboard read of the exact text.
+
 ## Phase 2 — renderer parity
 
 Use the same provider rows in two explicitly different matrices. The local capture-only matrix

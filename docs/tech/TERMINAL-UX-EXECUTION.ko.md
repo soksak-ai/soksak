@@ -175,6 +175,14 @@ train 을 시작합니다.
 RED 는 매트릭스의 각 행에서 무엇이 빠졌거나 틀렸는지 이름과 함께 식별하며 실패해야 합니다. 빈 값,
 조용한 누락, 추정값은 실패입니다.
 
+공개 native surface는 browser를 표시하든 terminal을 표시하든 하나의 input realm입니다. DOM 선언의
+`data-native-surface-id`가 정확한 owner label입니다. `ui.input.click`, `ui.input.drag`와 관련
+command는 surface 상대 좌표의 연속을 그 label의 등록된 input owner로 전달하고 결과에도 label을
+보고해야 합니다. Placeholder 위에 host DOM mouse event를 보내거나, owner 호출 없이 성공을 보고하거나,
+provider 정보에서 label을 다시 조립하면 RED입니다. Selection GREEN은 engine selection status, 공개 DOM
+selection status, selection command가 일치해야 합니다. Copy는 추가로 write 뒤 독립된 공개 clipboard
+read가 정확히 같은 text를 반환해야 합니다.
+
 ## 단계 2 — renderer parity
 
 같은 제공자 행을 명시적으로 다른 두 매트릭스에서 씁니다. 로컬 capture-only 매트릭스는 사용자의

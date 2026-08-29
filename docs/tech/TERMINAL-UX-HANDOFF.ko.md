@@ -211,6 +211,20 @@ incomplete 0, blank·overlap·native mismatch 목록이 모두 비었습니다. 
 직접 확인했으며 흰 공백이나 남은 native surface가 없었습니다. 이는 tab-switch compositor 소유권 결함을
 닫는 증거이며 overlay, border, focus-input matrix를 닫는 증거는 아닙니다.
 
+2026-08-29 Alacritty 선택 증분은 이름 붙인 그 행에서만 GREEN입니다. Surface Contract 0.0.5가
+owner에 묶인 selection transaction을 정의하고, Render Kit 0.0.26과 Alacritty Sidecar 0.0.35가 gesture
+상태, engine selection, 렌더 범위를 소유합니다. Vision 0.0.19는 DOM pointer event와 owner
+`SurfacePointerInput` 연속을 모두 그 transaction으로 전달합니다. v7 불변 local release digest는
+`bf62dff8926271ca813a48f04320d0db35a0236de69110dfc3e978de1551d64f`이며 두 번째 게시는
+`unchanged`였습니다. Core는 공개 native 선언을 정확한 `data-native-surface-id`로 해석하며 native
+surface 위에서 host DOM drag를 합성하지 않습니다. 다시 빌드한 v7에서 `ui.input.drag`는
+`surface=terminal.win-vug6zo.tab-ms2k2p-1`을 반환했고, selection command와 공개 DOM은 모두
+`SELECT_FINAL_13579`를 반환했으며, 창에 focus를 주지 않은 24-frame 녹화에서도 같은 선택 범위를 직접
+확인했습니다. Wails host는 주입된 framework clipboard를 통해 `clipboard_read`와 `clipboard_write`를
+제공합니다. Vision copy는 `copied=true`였고 독립 read도 같은 18자를 반환했습니다. Clipboard 변경
+구독, mouse-reporting 중재, scroll, 나머지 native engine 다섯 개는 열려 있으며 이 행의 증거로 인증하면
+안 됩니다.
+
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.
 
