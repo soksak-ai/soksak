@@ -502,12 +502,12 @@ Installer가 `environment.json`의 `processRole`과 현재 프로젝트 값으�
 같은 runtime root라도 `soksak-sidecar-pty`와 `soksakv7-sidecar-pty`가 endpoint를 공유하지 않으며,
 실행 파일명을 추측하거나 하드코딩하지 않는다.
 
-터미널 surface를 여는 공통 Core 경로가 exact sidecar 시작을 소유한다. `environment.json`에서 engine과
-PTY component를 해석한 뒤, 각 exact selected unit에 `Start`를 호출하고 surface/session 요청을
-`Send`해야 한다. `Send`는 열리지 않은 unit을 시작하지 않으며, 이전 실행에서 이어서 사용한 process가 시작의
-전제조건이어서도 안 된다. 따라서 fresh project home과 이후 모든 재시작은 동일한
-`resolve -> Start -> Send` transaction을 따른다. Sidecar 수동 실행이나 이전 실행에서 남은 process에
-의존한 결과는 검증 증거로 인정하지 않는다.
+terminal-surface service가 PTY와 engine unit을 모두 선언한 source를 가지므로 dependency 순서의 시작을
+소유한다. 어떤 session command보다 먼저 `Start(exact PTY)`, `Start(exact engine)`을 요청한다. Core는
+각 요청을 `environment.json`에서 해석하며, link는 `Start`와 `Send`를 분리해 노출하고 provider를
+추측하거나 `Send` 안에서 시작을 숨기지 않는다. 따라서 fresh project home과 이후 모든 재시작은 동일한
+`resolve -> PTY ready -> engine ready -> session` transaction을 따른다. Sidecar 수동 실행이나 이전
+실행에서 남은 process에 의존한 결과는 검증 증거로 인정하지 않는다.
 
 모든 제공자 매트릭스의 RED 가 GREEN 이 되고, 모든 정량 표시 검사와 소유 검사가 통과하며, 스크린샷과
 움직임 녹화를 직접 확인해야 완료입니다. 빌드, 명령 응답, 과거 CI 실행만으로 이 인계를 끝낼 수
