@@ -485,3 +485,21 @@ arm64 Core의 격리 browser release 0.0.9에서 선택한 workspace의 browser 
 보고했습니다. 두 rectangle이 일치하므로 이 실행은 browser 보더 geometry에 대해 GREEN입니다.
 수정된 kit release를 사용하는 terminal을 설치해 같은 selector를 측정하기 전에는 terminal parity를
 증명하지 않습니다.
+
+### Browser와 terminal 혼합 lighting — 2026-08-30
+
+격리된 2-pane layout에 browser tab 3개와 terminal tab 2개를 열었습니다. 수정 전에는 같은 idle
+amount에서 browser page의 원래 238 중 183이 남았지만 terminal은 원래 255 중 127만 남았습니다.
+native view를 fade하면 이미 dim된 document와 다시 섞이므로 `alpha=0.5`가 50% retained light를
+뜻하지 않았습니다.
+
+native webview service는 이제 각 native host에 대해 window compositor 계층에 pointer-transparent
+black veil을 둡니다. capture-only compositor도 같은 연산을 사용합니다. page를 opaque로 그린 뒤
+`1 - alpha`인 검은 veil 하나를 그립니다. 결과는 browser `238→119`, terminal `255→127`로 integer
+pixel 반올림 범위에서 둘 다 50%였습니다. pane focus를 20회 왕복한 뒤에도 browser는 119를 유지해
+veil이 누적되지 않음을 증명했습니다.
+
+활성 pane frame과 focus-boundary rectangle은 양쪽에서 각각 같았습니다. 왼쪽은
+`(5,87,489.5,525)`, 오른쪽은 `(504.5,87,489.5,525)`입니다. 두 pane에서 양방향으로 실행한 네 번의
+30-frame browser↔terminal scan은 모두 switch frame 하나로 끝났고 flicker, blank, overlap, native
+mismatch, cancelled motion, incomplete motion frame이 모두 0이었습니다.

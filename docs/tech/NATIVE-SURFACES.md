@@ -457,6 +457,24 @@ were identical, so this run is GREEN for the browser border geometry. It does
 not certify terminal parity until a terminal using the corrected kit release is
 installed and measured by the same selectors.
 
+### Mixed browser and terminal lighting — 2026-08-30
+
+An isolated two-pane layout held three browser tabs and two terminal tabs. Before the fix, the same
+idle amount retained 183 of the browser page's original 238 but only 127 of the terminal's original
+255. Fading a native view blended it with an already-dimmed document, so `alpha=0.5` did not mean
+50% retained light.
+
+The native webview service now places a pointer-transparent black veil at the window compositor
+level for each native host. The capture-only compositor mirrors that operation: it paints the page
+opaquely, then paints one black veil with `1 - alpha`. The resulting measurements were browser
+`238→119` and terminal `255→127`, both 50% within integer pixel rounding. Twenty pane-focus
+round trips left the browser at 119, proving the veil did not stack.
+
+The focused pane frame and focus-boundary rectangles were equal in both halves: left
+`(5,87,489.5,525)` and right `(504.5,87,489.5,525)`. Four 30-frame browser↔terminal scans, both
+directions in both panes, each completed in one switch frame with zero flicker, blank, overlap,
+native mismatch, cancelled motion, or incomplete motion frames.
+
 Measured 2026-08-16 on macOS at 999×535 and again at 1200×800: one browser
 surface, `worst` 0 through a split, a gutter resize, maximize and restore.
 
