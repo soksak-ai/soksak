@@ -289,7 +289,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // The solver solves the arrangement — single truth for station, layout, produced adjacency and move amounts (never recompute).
   // **Subscribe** to the attach mode and pass it down — reading it through getState skips the redraw when the setting changes.
   const railPullFocused = useSettings((s) => s.railPullFocused);
-  const solved = projectArrangement(workspace, lastStationRef.current, railPullFocused);
+  const solved = projectArrangement(workspace, lastStationRef.current, railPullFocused, railOpen);
   lastStationRef.current = solved?.station ?? 0;
   const railGeometryScope = railGeometryScopeId(
     activeContent?.id,

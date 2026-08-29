@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { moduleState } from "../lib/moduleState";
 import { issueId } from "./ids";
-import { byPlace, type SectionPlace } from "./sectionSets";
+import { byPlace, focusedPluginOf, standingSet, type SectionPlace } from "./sectionSets";
 import { noteActivation } from "../lib/motionDebug";
 import {
   DEFAULT_RAIL_PLACEMENT,
@@ -713,6 +713,8 @@ export function projectArrangement(
    * same place, so the two cannot diverge.
    */
   pullFocused = useSettings.getState().railPullFocused,
+  /** The actual standing rail. React passes its subscribed value; imperative callers read the same section-set rule. */
+  railPresent = workspace.regionOpen.rail && standingSet("rail", focusedPluginOf(workspace)) !== null,
 ): Arrangement<Pane> | null {
   const content =
     workspace.spaces.find((item) => item.id === workspace.activeSpaceId) ??
@@ -722,7 +724,7 @@ export function projectArrangement(
     layout: content.layout,
     focusId: content.activePaneId,
     placement: workspace.railPlacement ?? DEFAULT_RAIL_PLACEMENT,
-    railOpen: workspace.regionOpen.rail,
+    railOpen: railPresent,
     // Maximize is not a move on top of the underlying split but an atomic switch to the single
     // [rail | feature] plane. The filling panel is the group holding the maximized view — not the
     // active group. The two can diverge (double-clicking a tab of another group does exactly that),
