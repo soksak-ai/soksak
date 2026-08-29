@@ -559,6 +559,7 @@ export interface SoksakPluginApi {
 
   provideSurfaceInput?: (provider: {
     owns: (label: string) => boolean;
+    labelOfView?: (viewId: string) => string | null;
     sendInput: (label: string, input: {
       x: number; y: number;
       kind: "down" | "up" | "move" | "drag" | "enter" | "exit";

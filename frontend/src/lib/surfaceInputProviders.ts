@@ -21,6 +21,8 @@ export interface SurfaceInputProvider {
    * the day that syntax changes. The owner answers for itself.
    */
   owns(label: string): boolean;
+  /** The exact live surface label for one host view, or null when this owner has no surface there. */
+  labelOfView?(viewId: string): string | null;
   sendInput(label: string, input: SurfacePointerInput): Promise<void>;
   inputState(label: string, at?: { x: number; y: number }): Promise<Record<string, unknown>>;
 }
@@ -78,6 +80,22 @@ export function surfaceInputProvider(label: string): SurfaceInputProvider | null
     throw new Error(tmsg("msg.ui.input.surfaceProviderConflict", { label, plugins: claimed.join(", ") }));
   }
   return found;
+}
+
+/** Exact owner-declared label for a host view. The core never reconstructs a plugin's label kind. */
+export function surfaceInputLabelOfView(viewId: string): string | null {
+  const claimed: Array<{ pluginId: string; label: string }> = [];
+  for (const [pluginId, provider] of state.byPlugin) {
+    const label = provider.labelOfView?.(viewId) ?? null;
+    if (label !== null) claimed.push({ pluginId, label });
+  }
+  if (claimed.length > 1) {
+    throw new Error(tmsg("msg.ui.input.surfaceProviderConflict", {
+      label: claimed.map(({ pluginId, label }) => `${pluginId}:${label}`).join(", "),
+      plugins: claimed.map(({ pluginId }) => pluginId).join(", "),
+    }));
+  }
+  return claimed[0]?.label ?? null;
 }
 
 /** Currently registered owners — an observation surface (with no count of who took what, "nobody took it" is invisible). */

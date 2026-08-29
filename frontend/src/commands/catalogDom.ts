@@ -18,7 +18,7 @@ import { currentWindow, invoke } from "../framework";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { surfaceLabelOfView } from "../lib/surfaceLabels";
 import { contentViewHost, hasContentViewHost, type SurfacePointerInput } from "../lib/contentViews";
-import { surfaceInputProvider } from "../lib/surfaceInputProviders";
+import { surfaceInputLabelOfView, surfaceInputProvider } from "../lib/surfaceInputProviders";
 import { surfacesOutsideWindow, type SurfaceFrameFact } from "../lib/surfaceInsideWindow";
 import { parseAddress, isParseError } from "./address";
 import { lightingRegionsIn } from "./focusLighting";
@@ -1524,7 +1524,11 @@ function gestureSurface(el: Element, addr: string): GestureSurface | UndeclaredP
   // The label comes from the declaration. Rebuilding it needs the surface's kind, and the kind is
   // the plugin's word — a core that held one could only find the surfaces of the plugin it had been
   // written against.
-  const wanted = viewId ? surfaceLabelOfView(viewId) : null;
+  const wanted = viewId ? surfaceLabelOfView(viewId) ?? surfaceInputLabelOfView(viewId) : null;
+  if (wanted && viewId) {
+    const r = el.getBoundingClientRect();
+    return { label: wanted, x: 0, y: 0, w: r.width, h: r.height, whole: true };
+  }
   const byLabel = wanted
     ? Array.from(document.querySelectorAll<HTMLElement>("[data-content-view]")).find(
         (n) => n.getAttribute("data-content-view") === wanted,
