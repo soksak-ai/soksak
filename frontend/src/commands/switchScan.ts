@@ -47,9 +47,12 @@ export type SwitchPresentationVerdict = {
 };
 
 function presented(view: SwitchViewPresentation): boolean {
+  // A parked picture is drawn in the document even after its view's content decision turned false.
+  // Ignoring it calls the exact frame where the departing page covers the arriving view clean.
+  if (view.parkedPictureVisible) return true;
   if (!view.contentVisible) return false;
   if (!view.native) return true;
-  return view.liveSurfaceVisible || view.parkedPictureVisible;
+  return view.liveSurfaceVisible;
 }
 
 function nativeMismatch(view: SwitchViewPresentation): boolean {
