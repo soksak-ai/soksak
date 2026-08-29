@@ -36,7 +36,7 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial:        dialUnix,
 		ReadyWithin: 10 * time.Second,
-		ResolvePath: testSidecarResolver(home),
+		ResolveUnit: testSidecarResolver(home),
 		ResolveBindings: func() (map[string]string, error) {
 			return map[string]string{"soksak-sidecar-pty": "soksakv7-sidecar-pty"}, nil
 		},
@@ -117,10 +117,11 @@ func TestStartedObserverReceivesEverySelectedProcessGeneration(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
-	path, err := testSidecarResolver(home)("fake-unit")
+	resolved, err := testSidecarResolver(home)("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
+	path := resolved.Path
 	host := NewHost(Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second,
@@ -165,7 +166,7 @@ func TestConcurrentStartsShareOneProcess(t *testing.T) {
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	host := NewHost(Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 	})
 	t.Cleanup(func() { host.StopAll() })
 	type result struct {
@@ -253,7 +254,7 @@ func TestAUnitWhoseFirstLineIsOutputAnnouncesNothing(t *testing.T) {
 
 	host := NewHost(Deps{
 		Home: home, Runtime: shortHome(t), Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 5 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 5 * time.Second, ResolveUnit: testSidecarResolver(home),
 	})
 	t.Cleanup(func() { host.StopAll() })
 
@@ -281,7 +282,7 @@ func TestAChildExitBeforeAnnouncementReportsItsExitCode(t *testing.T) {
 	stageUnit(t, home, "exits", exitSource)
 	host := NewHost(Deps{
 		Home: home, Runtime: shortHome(t), Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 5 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 5 * time.Second, ResolveUnit: testSidecarResolver(home),
 	})
 	_, err := host.Start("exits")
 	if err == nil || !strings.Contains(err.Error(), "exit code 37") {
@@ -296,7 +297,7 @@ func TestAnEnvelopeMismatchIsRefusedAtTheAnnouncement(t *testing.T) {
 
 	host := NewHost(Deps{
 		Home: home, Runtime: shortHome(t), Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 5 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 5 * time.Second, ResolveUnit: testSidecarResolver(home),
 	})
 	t.Cleanup(func() { host.StopAll() })
 
@@ -358,17 +359,17 @@ func stageUnit(t *testing.T, home, name, source string) {
 	// refusal three calls later.
 }
 
-func testSidecarResolver(home string) func(string) (string, error) {
-	return func(name string) (string, error) {
+func testSidecarResolver(home string) func(string) (Resolved, error) {
+	return func(name string) (Resolved, error) {
 		path := filepath.Join(home, "sidecars", "soksak-sidecar-"+name, "dist", "soksak-sidecar-"+name)
 		info, err := os.Lstat(path)
 		if err != nil {
-			return "", err
+			return Resolved{}, err
 		}
 		if !info.Mode().IsRegular() {
-			return "", fmt.Errorf("test sidecar is not a regular file: %s", path)
+			return Resolved{}, fmt.Errorf("test sidecar is not a regular file: %s", path)
 		}
-		return path, nil
+		return Resolved{Name: name, Version: "0.0.1", Path: path}, nil
 	}
 }
 

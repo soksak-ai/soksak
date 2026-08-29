@@ -92,7 +92,9 @@ type Deps struct {
 	Dial func(address string) (io.ReadWriteCloser, error)
 	// ReadyWithin bounds the wait for a unit's first line. Zero takes the default below.
 	ReadyWithin time.Duration
-	ResolvePath func(name string) (string, error)
+	// ResolveUnit reads one selected environment record. Version and process path are one identity;
+	// resolving either independently would allow the same bytes to be restarted under a null version.
+	ResolveUnit func(name string) (Resolved, error)
 	// ResolveBindings reads the current environment's Sidecar component-id to materialized process
 	// name map immediately before a child starts. It is separate from the child's own process name.
 	ResolveBindings func() (map[string]string, error)
@@ -298,14 +300,17 @@ func (host *Host) Start(name string) (Open, error) {
 }
 
 func (host *Host) StartWithSecrets(name, namespace string, secretEnv map[string]string) (Open, error) {
-	if host.deps.ResolvePath == nil {
+	if host.deps.ResolveUnit == nil {
 		return Open{}, i18n.Errorf("sidecar.noResolver", map[string]string{"name": name})
 	}
-	path, err := host.deps.ResolvePath(name)
+	resolved, err := host.deps.ResolveUnit(name)
 	if err != nil {
 		return Open{}, err
 	}
-	return host.StartResolvedWithSecrets(name, "", path, namespace, secretEnv)
+	if resolved.Name != name || resolved.Version == "" || resolved.Path == "" {
+		return Open{}, i18n.Errorf("sidecar.noResolver", map[string]string{"name": name})
+	}
+	return host.StartResolvedWithSecrets(resolved.Name, resolved.Version, resolved.Path, namespace, secretEnv)
 }
 
 func (host *Host) StartResolvedWithSecrets(name, version, path, namespace string, secretEnv map[string]string) (Open, error) {
@@ -320,14 +325,17 @@ type GeneratedSecret struct {
 func (host *Host) StartWithGeneratedSecrets(
 	name string, generated map[string]GeneratedSecret,
 ) (Open, error) {
-	if host.deps.ResolvePath == nil {
+	if host.deps.ResolveUnit == nil {
 		return Open{}, i18n.Errorf("sidecar.noResolver", map[string]string{"name": name})
 	}
-	path, err := host.deps.ResolvePath(name)
+	resolved, err := host.deps.ResolveUnit(name)
 	if err != nil {
 		return Open{}, err
 	}
-	return host.StartResolvedWithGeneratedSecrets(name, "", path, generated)
+	if resolved.Name != name || resolved.Version == "" || resolved.Path == "" {
+		return Open{}, i18n.Errorf("sidecar.noResolver", map[string]string{"name": name})
+	}
+	return host.StartResolvedWithGeneratedSecrets(resolved.Name, resolved.Version, resolved.Path, generated)
 }
 
 func (host *Host) StartResolvedWithGeneratedSecrets(name, version, path string, generated map[string]GeneratedSecret) (Open, error) {

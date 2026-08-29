@@ -29,7 +29,7 @@ func TestASecondRunFindsTheUnitTheFirstStarted(t *testing.T) {
 	deps := func() Deps {
 		return Deps{
 			Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-			Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+			Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 		}
 	}
 
@@ -71,7 +71,7 @@ func TestASecondRunCanIdempotentlyStopAnOwnedUnitWithoutStartingIt(t *testing.T)
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
 	started, err := first.Start("fake-unit")
@@ -103,7 +103,7 @@ func TestRecordedInventoryExposesOwnershipWithoutAdoptingOrLeakingToken(t *testi
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
 	started, err := first.Start("fake-unit")
@@ -138,7 +138,7 @@ func TestARecordWithNothingBehindItStartsAUnit(t *testing.T) {
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 	}
 
 	first := NewHost(deps)
@@ -174,7 +174,7 @@ func TestASecondRunReplacesAUnitWhoseRecordedProgramChanged(t *testing.T) {
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	first := NewHost(Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 	})
 	started, err := first.Start("fake-unit")
 	if err != nil {
@@ -188,7 +188,7 @@ func TestASecondRunReplacesAUnitWhoseRecordedProgramChanged(t *testing.T) {
 	stageUnit(t, reinstalled, "fake-unit", fakeUnitSource)
 	second := NewHost(Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(reinstalled),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(reinstalled),
 	})
 	t.Cleanup(func() { second.StopAll() })
 	found, err := second.Start("fake-unit")
@@ -211,7 +211,7 @@ func TestRecordedInventoryForgetsARecordWhoseProcessHasEnded(t *testing.T) {
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
 	if _, err := first.Start("fake-unit"); err != nil {
@@ -299,7 +299,7 @@ func TestStartingAgainReplacesAnAdoptedUnitNothingAnswersAt(t *testing.T) {
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
 	started, err := first.Start("fake-unit")
@@ -349,7 +349,7 @@ func TestStartedInventoryDropsAHeldUnitNothingAnswersAt(t *testing.T) {
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
 	started, err := first.Start("fake-unit")
@@ -385,7 +385,7 @@ func TestSendStartsAUnitWhoseProcessIsGone(t *testing.T) {
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolvePath: testSidecarResolver(home),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 	}
 	host := NewHost(deps)
 	t.Cleanup(func() { _ = host.Stop("fake-unit") })

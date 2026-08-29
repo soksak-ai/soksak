@@ -15,10 +15,11 @@ func TestNameResolutionPreservesTheSelectedVersion(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
-	path, err := testSidecarResolver(home)("fake-unit")
+	resolved, err := testSidecarResolver(home)("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
+	path := resolved.Path
 	deps := Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second,
@@ -51,10 +52,11 @@ func TestResolvedVersionReplacesRunningUnit(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
-	path, err := testSidecarResolver(home)("fake-unit")
+	resolved, err := testSidecarResolver(home)("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
+	path := resolved.Path
 	host := NewHost(Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second,
@@ -92,10 +94,11 @@ func TestResolvedVersionReplacesAdoptedUnit(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
-	path, err := testSidecarResolver(home)("fake-unit")
+	resolved, err := testSidecarResolver(home)("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
+	path := resolved.Path
 	registration := func(host *Host, version string) Registration {
 		return Registration{
 			Host: host,

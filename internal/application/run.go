@@ -116,12 +116,12 @@ func Run(assets embed.FS) error {
 		// The application's own session layer starts units by name: the
 		// environment record is the resolver, exactly what an installed or
 		// developed sidecar declared (a name with no record refuses by name).
-		ResolvePath: func(name string) (string, error) {
+		ResolveUnit: func(name string) (sidecar.Resolved, error) {
 			unit, err := coreenvironment.ResolveSelectedSidecar(resolved.Home, name)
 			if err != nil {
-				return "", err
+				return sidecar.Resolved{}, err
 			}
-			return unit.Process, nil
+			return sidecar.Resolved{Name: unit.ID, Version: unit.Version, Path: unit.Process}, nil
 		},
 		ResolveBindings: func() (map[string]string, error) {
 			return coreenvironment.SelectedSidecarBindings(resolved.Home)

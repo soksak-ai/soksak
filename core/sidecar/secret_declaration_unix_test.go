@@ -21,10 +21,11 @@ func secretHost(t *testing.T) (*Host, string) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
-	path, err := testSidecarResolver(home)("fake-unit")
+	resolved, err := testSidecarResolver(home)("fake-unit")
 	if err != nil {
 		t.Fatal(err)
 	}
+	path := resolved.Path
 	host := NewHost(Deps{
 		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
 		Dial: dialUnix, ReadyWithin: 10 * time.Second,
