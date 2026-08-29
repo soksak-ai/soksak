@@ -52,7 +52,7 @@ func (manager *Manager) Inventory() (Inventory, error) {
 			}
 			processes = append(processes, OwnedProcess{
 				ID: fmt.Sprintf("core-process-%d", value.ID), Owner: "soksak-core", PID: uint32(value.PID),
-				Window: value.Window, Command: value.Cmd, State: state,
+				Window: value.Window, CWD: value.CWD, Command: value.Cmd, State: state,
 			})
 		}
 		owners = append(owners, OwnerInventory{Owner: "soksak-core", Revision: 1, Processes: processes})

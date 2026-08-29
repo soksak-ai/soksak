@@ -269,6 +269,23 @@ func TestListMarshalsEmptyAsAnArray(t *testing.T) {
 	}
 }
 
+func TestInventoryPreservesCoreChildWorkingDirectory(t *testing.T) {
+	registry, _, _, _ := testRegistry(t)
+	if _, err := registry.Invoke("process_spawn", args(t, map[string]any{
+		"cmd": "/bin/sh", "args": []string{"-c", "sleep 2"}, "cwd": "/workspace/project",
+	})); err != nil {
+		t.Fatal(err)
+	}
+	value, err := registry.Invoke("process_inventory", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventory := value.(Inventory)
+	if len(inventory.Owners) != 1 || len(inventory.Owners[0].Processes) != 1 || inventory.Owners[0].Processes[0].CWD != "/workspace/project" {
+		t.Fatalf("inventory=%+v", inventory)
+	}
+}
+
 // An unowned child has a null window rather than "", which the consumer
 // filters on by comparing to a label.
 func TestListCarriesTheTagsTheConsumerFiltersOn(t *testing.T) {

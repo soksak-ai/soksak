@@ -54,6 +54,7 @@ type Info struct {
 	// equal to a label and make one reclaim reap every windowless child.
 	Window *string `json:"window"`
 	Cmd    string  `json:"cmd"`
+	CWD    string  `json:"cwd,omitempty"`
 	Group  bool    `json:"group"`
 	// Alive is false once the direct child has been reaped. An entry that is
 	// dead and still listed is exactly what an orphan looks like.
@@ -64,6 +65,7 @@ type session struct {
 	id     uint32
 	pid    int
 	window string
+	cwd    string
 	owned  bool
 	cmd    string
 	group  bool
@@ -144,6 +146,7 @@ func (manager *Manager) Spawn(request Request) (uint32, error) {
 		id:     0,
 		pid:    child.PID(),
 		window: request.Window,
+		cwd:    request.Cwd,
 		owned:  request.Window != "",
 		cmd:    strings.TrimSpace(path + " " + strings.Join(request.Args, " ")),
 		group:  request.Group,
@@ -374,6 +377,7 @@ func (manager *Manager) List() []Info {
 			ID:    entry.id,
 			PID:   entry.pid,
 			Cmd:   entry.cmd,
+			CWD:   entry.cwd,
 			Group: entry.group,
 			Alive: entry.alive.Load(),
 		}
