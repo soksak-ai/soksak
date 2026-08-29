@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { classifySwitchFrames } from "./switchScan";
+import { classifySwitchFrames, classifySwitchMotion } from "./switchScan";
 import * as switchScan from "./switchScan";
 
 describe("switch frame verdict", () => {
@@ -40,6 +40,36 @@ describe("switch frame verdict", () => {
       flickerFrames: 0,
       clean: true,
     });
+  });
+});
+
+describe("switch layout motion verdict", () => {
+  it("accepts a glide only when every journey finishes", () => {
+    expect(classifySwitchMotion([
+      { at: "pane/a", end: "finish" },
+      { at: "rail", end: "finish" },
+    ], true)).toEqual({
+      journeys: 2,
+      cancelled: [],
+      incomplete: [],
+      clean: true,
+    });
+  });
+
+  it("rejects cancelled, incomplete, and missing glide journeys", () => {
+    expect(classifySwitchMotion([
+      { at: "pane/a", end: "cancel" },
+      { at: "rail", end: null },
+    ], true)).toMatchObject({
+      cancelled: ["pane/a"],
+      incomplete: ["rail"],
+      clean: false,
+    });
+    expect(classifySwitchMotion([], true).clean).toBe(false);
+  });
+
+  it("requires no journey for a non-layout tab switch", () => {
+    expect(classifySwitchMotion([], false)).toMatchObject({ clean: true });
   });
 });
 
