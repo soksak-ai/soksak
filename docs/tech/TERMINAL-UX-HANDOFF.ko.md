@@ -285,7 +285,12 @@ terminal과 selection이 보였습니다. 전후 모두 `windowFocused=false`였
 Ghostty 0.0.34도 복사한 protocol 구현이 아니라 fork된 libghostty-vt mouse encoder로 같은 pointer 행을
 통과했습니다. v7 batch와 exact PTY hex는 `TERMINAL-STANDARD-AUDIT.ko.md`에 기록했습니다. 536,524-byte
 합성 capture는 window를 non-key로 유지했고 결과와 cursor를 직접 확인했습니다. Ghostty selection과
-wheel은 열려 있으며 Kitty, Shitty, VT100, WezTerm pointer 행도 열려 있습니다.
+wheel은 열려 있습니다.
+
+Kitty 0.0.31도 provider ABI가 공개한 fork의 live `Screen` encoder로 같은 pointer 행을 통과했습니다.
+Exact closure identity와 PTY 증거는 `TERMINAL-STANDARD-AUDIT.ko.md`에 기록했습니다. 289,925-byte 합성
+capture는 window를 non-key로 유지했고 결과와 cursor를 보여 줬습니다. Kitty selection과 wheel은
+열려 있으며 Shitty, VT100, WezTerm pointer 행도 열려 있습니다.
 
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.

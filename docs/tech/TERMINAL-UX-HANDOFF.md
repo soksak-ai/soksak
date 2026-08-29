@@ -295,8 +295,12 @@ the screen was static, visibly retained both terminals and the selection, and ke
 Ghostty 0.0.34 passed the same named pointer row through the forked libghostty-vt mouse encoder,
 not a copied protocol implementation. The v7 batch and exact PTY hex are recorded in
 `TERMINAL-STANDARD-AUDIT.md`; its 536,524-byte composed capture kept the window non-key and visibly
-showed the result and cursor. Ghostty selection and wheel remain open, and Kitty, Shitty, VT100 and
-WezTerm pointer rows remain open.
+showed the result and cursor. Ghostty selection and wheel remain open.
+
+Kitty 0.0.31 then passed the same pointer row through its forked live `Screen` encoder exposed by
+the provider ABI. Exact closure identity and PTY evidence are in `TERMINAL-STANDARD-AUDIT.md`; the
+289,925-byte composed capture kept the window non-key and showed the result and cursor. Kitty
+selection and wheel remain open. Shitty, VT100 and WezTerm pointer rows remain open.
 
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.
