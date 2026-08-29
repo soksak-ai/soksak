@@ -278,6 +278,8 @@ github.com/min-median-max/wails-service-native-compositor v0.0.0-20260829052058-
 github.com/min-median-max/wails-service-native-compositor v0.0.0-20260829052058-a8012c3f9bcc/go.mod h1:tH/DRDJ6eesv9q+DQQCm3SOZNClfoltnhchX/A/M3F0=
 github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260829025741-cd1e10f6943e h1:MPzwAcak5arcqYA21JrBn/cePt2Deb8MSCFubjceBzE=
 github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260829025741-cd1e10f6943e/go.mod h1:iubFphZ38mElnRpIxOJ3Fs8x8Lo8jTdMjAMukUy+Lrc=
+github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260829071000-a28a9fd95e68 h1:hh8eLA2Qa+PKrBW8Z7bKoXUClQPs6/bddwYDATeXP3I=
+github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260829071000-a28a9fd95e68/go.mod h1:dwaGE9T3+GzX/Ib/go4aM6Tn9w+PryFtQdoF3eHQsnU=
 github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063 h1:wAvk3nSsqcr63cB4JNMsEUgIcMr9Xt5lrtStLlVQy2Y=
 github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063/go.mod h1:9Ez7t5hWyZviMUnZxfwA5MPD/adyERuVMAIT/zMBSAc=
 github.com/mitchellh/copystructure v1.2.0 h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw=
@@ -357,6 +359,8 @@ github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9/go.mod h1:ytm+dh2ShxYePv/d5xxSH7bDrd+pQzM5e2rGUyXeD9w=
 github.com/soksak-ai/soksak-contract-surface v0.0.0-20260827123850-b095b92660ff h1:RQ637fcQ9+ISqikWk/U9sccvtPT3gdc7PiMynH8uhA0=
 github.com/soksak-ai/soksak-contract-surface v0.0.0-20260827123850-b095b92660ff/go.mod h1:wXRo6E+0QlXIKNKVcVjCseH67D27OtG2Zp7M74d0iPo=
+github.com/soksak-ai/soksak-contract-surface v0.0.0-20260829065406-d59e685eb8bf h1:s3j/HZSr+nBi98T83Y0VP43akycMaUNuq/4iTNTMVpw=
+github.com/soksak-ai/soksak-contract-surface v0.0.0-20260829065406-d59e685eb8bf/go.mod h1:wXRo6E+0QlXIKNKVcVjCseH67D27OtG2Zp7M74d0iPo=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828170819-d66aebf6e732 h1:1QGjP2pFsT0qAIFcFXa4PkBO3eLPYAfRzY5ErUhzqoc=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828170819-d66aebf6e732/go.mod h1:IfcO4wTw2RDCPvUz+x92mqUt3J/5lkJe4rn9FiyINFI=
 github.com/spf13/cast v1.10.0 h1:h2x0u2shc1QuLHfxi+cTJvs30+ZAHOGRic8uyGTDWxY=

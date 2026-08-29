@@ -2,5 +2,9 @@
   "nativeCompositor": {
     "repository": "https://github.com/min-median-max/wails-service-native-compositor",
     "commit": "a8012c3f9bcc7b028659d2cc132689d03c4e573c"
+  },
+  "terminalSurface": {
+    "repository": "https://github.com/min-median-max/wails-service-terminal-surface",
+    "commit": "a28a9fd95e68c8f068d856fd36f2b3292d9c409a"
   }
 }
