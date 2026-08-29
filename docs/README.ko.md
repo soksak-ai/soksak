@@ -70,6 +70,7 @@ changelog에 기록합니다.
 | `COMMAND-LINE.md` | 공개 CLI command 형식 |
 | `TERMINAL-UX-HANDOFF.ko.md` | 해결되지 않은 터미널 UX 결함, workspace 소유권 지도, 확인된 기준점 |
 | `TERMINAL-UX-EXECUTION.ko.md` | Renderer parity, view visibility, native close, test isolation의 필수 RED-to-GREEN 순서 |
+| `TERMINAL-STANDARD-AUDIT.ko.md` | Provider별 표준 근거와 명시적인 UNVERIFIED·RED 행 |
 | `MESSAGE-PROTOCOL.md` | Request, response, progress 상관관계 |
 | `SIDECARS.md` | Sidecar 배포, 선택, lifetime |
 | `PLUGIN-CONTRACT.md` | Plugin 선언과 계약 소유권 |
