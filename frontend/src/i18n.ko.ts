@@ -1919,6 +1919,7 @@ export const ko = {
   "msg.ui.input.click.causeTraceIdInvalid": "causeTraceId는 비어 있지 않은 문자열이어야 한다",
   "msg.ui.input.drag.crossSurface": "끌기의 두 끝이 같은 표면이 아닙니다: {from} → {to}",
   "msg.ui.input.drag.durationInvalid": "durationMs는 0..10000이어야 함",
+  "msg.ui.input.drag.originInvalid": "x/y는 원본 노드 안의 유한한 좌표여야 합니다",
   "msg.ui.input.drag.pathInvalid": "path는 유한한 {dx,dy} 점 1..16개여야 하고 다른 목표와 함께 쓸 수 없으며 전체 이동은 120회를 넘을 수 없습니다",
   "msg.ui.input.drag.stepsInvalid": "steps는 1..120 정수여야 함",
   "msg.ui.input.fill.nodeMissingInScreen": "그 화면 안에 이 노드가 없습니다: {address}. ui.tree 로 지금 있는 주소를 확인하세요",

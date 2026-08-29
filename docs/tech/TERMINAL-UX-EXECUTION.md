@@ -187,6 +187,11 @@ from a provider name is RED. Selection GREEN requires the engine selection statu
 selection status and the selection command to agree; copy additionally requires a write followed by
 an independent public clipboard read of the exact text.
 
+For a normal DOM source, `ui.input.drag.x` and `.y` are local CSS-pixel coordinates inside the
+source node; omitted coordinates use the node centre. Coordinates outside the measured rect are
+rejected as `INVALID_PARAMS` before any pointer event is dispatched. This keeps drag-selection
+reproducible and prevents a host placeholder from silently choosing a different grab point.
+
 Wheel rows preserve `point`, `deltaX`, `deltaY`, `deltaMode` and all four modifiers through the
 owner route. GREEN requires three independent cases: primary-screen history changes offset without
 a PTY write; active mouse reporting writes the engine-encoded bytes exactly once; alternate screen

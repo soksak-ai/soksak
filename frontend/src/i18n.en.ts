@@ -1913,6 +1913,7 @@ export const en: Record<MsgKey, string> = {
   "msg.ui.input.click.causeTraceIdInvalid": "causeTraceId must be a non-empty string",
   "msg.ui.input.drag.crossSurface": "The two ends of the drag are not on the same surface: {from} → {to}",
   "msg.ui.input.drag.durationInvalid": "durationMs must be 0..10000",
+  "msg.ui.input.drag.originInvalid": "x/y must be finite coordinates inside the source node",
   "msg.ui.input.drag.pathInvalid": "path must contain 1..16 finite {dx,dy} points, use no other target, and produce at most 120 moves",
   "msg.ui.input.drag.stepsInvalid": "steps must be an integer in 1..120",
   "msg.ui.input.fill.nodeMissingInScreen": "That screen has no such node: {address}. Call ui.tree for the addresses present now",

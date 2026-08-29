@@ -1289,6 +1289,20 @@ describe("ui.input.drag — realtime reproduction surface", () => {
     });
   });
 
+  it("uses an explicit origin point inside a normal DOM node", async () => {
+    mountNode(`<div data-node="btn">drag</div>`);
+    const node = document.querySelector<HTMLElement>("[data-node=btn]")!;
+    vi.spyOn(node, "getBoundingClientRect").mockReturnValue({
+      x: 10, y: 20, left: 10, top: 20, right: 110, bottom: 70,
+      width: 100, height: 50, toJSON: () => ({}),
+    });
+    const down: number[] = [];
+    node.addEventListener("mousedown", (event) => down.push((event as MouseEvent).clientX));
+    const result = await execute("ui.input.drag", { from: ADDR, x: 7, y: 9, dx: 20, dy: 0 }, {});
+    expect(result.data).toMatchObject({ dragged: true });
+    expect(down).toEqual([17]);
+  });
+
   it("starts the requested recording before the drag and reports the completed frames in the same response", async () => {
     mountNode(`<div data-node="btn">drag</div>`);
     const node = document.querySelector<HTMLElement>("[data-node=btn]")!;

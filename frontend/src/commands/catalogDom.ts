@@ -3260,7 +3260,12 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       if (dragSurface && "ok" in dragSurface) return dragSurface;
       let toSurfacePt: { x: number; y: number } | null = null;
       const fr = fromR.el.getBoundingClientRect();
-      const fromPt = { x: fr.left + fr.width / 2, y: fr.top + fr.height / 2 };
+      const localX = p.x === undefined ? fr.width / 2 : Number(p.x);
+      const localY = p.y === undefined ? fr.height / 2 : Number(p.y);
+      if (!Number.isFinite(localX) || !Number.isFinite(localY) || localX < 0 || localY < 0 || localX > fr.width || localY > fr.height) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.ui.input.drag.originInvalid") };
+      }
+      const fromPt = { x: fr.left + localX, y: fr.top + localY };
       const byDelta = path !== undefined || p.dx != null || p.dy != null;
       let toPt: { x: number; y: number };
       if (byDelta) {

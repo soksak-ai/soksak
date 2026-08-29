@@ -183,6 +183,11 @@ provider 정보에서 label을 다시 조립하면 RED입니다. Selection GREEN
 selection status, selection command가 일치해야 합니다. Copy는 추가로 write 뒤 독립된 공개 clipboard
 read가 정확히 같은 text를 반환해야 합니다.
 
+일반 DOM 원본에서 `ui.input.drag.x`와 `.y`는 원본 노드 안의 CSS 픽셀 상대 좌표이며, 생략하면 노드
+중심을 사용합니다. 측정된 rect 밖의 좌표는 포인터 이벤트를 하나도 보내기 전에
+`INVALID_PARAMS`로 거부합니다. 이 규칙으로 드래그 선택의 재현성을 보장하고 host placeholder가
+임의의 잡기 지점을 고르는 일을 막습니다.
+
 Wheel 행은 `point`, `deltaX`, `deltaY`, `deltaMode`, 네 modifier를 owner 경로 끝까지 보존합니다. GREEN은
 서로 독립된 세 사례를 요구합니다. Primary screen history는 PTY write 없이 offset을 바꾸고, mouse
 reporting 활성 상태는 engine이 encode한 byte를 정확히 한 번 쓰며, alternate-scroll이 활성인 alternate
