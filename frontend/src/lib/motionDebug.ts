@@ -144,6 +144,10 @@ export interface MotionJourney {
 }
 const JOURNEYS_CAP = 64;
 const journeys: MotionJourney[] = [];
+const journeyAnimations = new WeakMap<MotionJourney, {
+  animation: Pick<Animation, "playState">;
+  landed: () => MotionJourney["landed"];
+}>();
 // The journey is published to the activity hub too — logs discriminate better than capture (pixels)
 // (user decision 2026-07-27). `sok events --kinds motion.journey` streams start and end live.
 // Failures are swallowed (observation cannot block the body — the same contract as boot.step).
@@ -165,7 +169,30 @@ function publishJourney(phase: "start" | "end", j: MotionJourney): void {
       }).catch(() => {});
 }
 export function motionJourneys(): MotionJourney[] {
+  // WKWebView can expose the final Animation state to a finite background-window capture before
+  // dispatching onfinish/oncancel. Reconcile that authoritative state once when the status is read;
+  // this is not a timer or a retry, and keeps an already-finished journey from being reported as
+  // incomplete solely because its callback is still queued.
+  for (const journey of journeys) {
+    if (journey.end !== null) continue;
+    const probe = journeyAnimations.get(journey);
+    if (!probe) continue;
+    if (probe.animation.playState === "finished") {
+      endJourney(journey, "finish", probe.landed());
+    } else if (probe.animation.playState === "idle") {
+      endJourney(journey, "cancel", probe.landed());
+    }
+  }
   return [...journeys];
+}
+
+/** Connects the journey ledger to the public Web Animations state used to draw it. */
+export function attachJourneyAnimation(
+  journey: MotionJourney,
+  animation: Pick<Animation, "playState">,
+  landed: () => MotionJourney["landed"],
+): void {
+  journeyAnimations.set(journey, { animation, landed });
 }
 export function beginJourney(
   at: string,
@@ -191,9 +218,11 @@ export function endJourney(
   end: "finish" | "cancel",
   landed: MotionJourney["landed"],
 ): void {
+  if (j.end !== null) return;
   j.endedAt = typeof performance === "undefined" ? 0 : performance.now();
   j.end = end;
   j.landed = landed;
+  journeyAnimations.delete(j);
   publishJourney("end", j);
 }
 
