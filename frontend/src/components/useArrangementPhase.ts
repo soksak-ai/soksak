@@ -38,6 +38,28 @@ import {
   removeLayoutArrangementPhase,
 } from "../lib/layoutArrangementPhase";
 import { emitPluginEvent } from "../plugins/hooks";
+import type { SplitTree } from "../state/splitTree";
+
+function valuesById<L extends { id: string }>(tree: SplitTree<L>, values = new Map<string, L>()): Map<string, L> {
+  if (tree.type === "leaf") values.set(tree.value.id, tree.value);
+  else for (const child of tree.children) valuesById(child, values);
+  return values;
+}
+
+function rebindLayoutValues<L extends { id: string }>(tree: SplitTree<L>, values: Map<string, L>): SplitTree<L> {
+  if (tree.type === "leaf") return { ...tree, value: values.get(tree.value.id) ?? tree.value };
+  return { ...tree, children: tree.children.map((child) => rebindLayoutValues(child, values)) };
+}
+
+function rebindArrangementContent<L extends { id: string }>(
+  displayed: Arrangement<L>,
+  current: Arrangement<L>,
+): Arrangement<L> {
+  return {
+    ...displayed,
+    displayLayout: rebindLayoutValues(displayed.displayLayout, valuesById(current.displayLayout)),
+  };
+}
 
 export interface ArrangementPhase<L> {
   /** The arrangement on screen now — the single truth for render (during a phase it holds the phase target). */
@@ -285,6 +307,18 @@ export function useArrangementPhase<L extends { id: string }>(
       return;
     }
     const contentChanged = phase.contentKey !== contentKey;
+    // A tab switch during an active rail journey changes pane content, not that journey's geometry.
+    // Apply the newest pane values to the displayed tree while retaining from/displayed geometry,
+    // timer, transaction intent and settlement ownership. Replacing the whole phase here abandons
+    // the open intent and leaves every later focus change queued behind it.
+    if (traveling && contentChanged && currentKey === displayedKey && phase.displayed && current) {
+      setPhase((p) => p.displayed ? {
+        ...p,
+        displayed: rebindArrangementContent(p.displayed, current),
+        contentKey,
+      } : p);
+      return;
+    }
     if (currentKey === displayedKey && !contentChanged) return;
     if (acceptWithoutTravel.current) {
       acceptWithoutTravel.current = false;
@@ -560,9 +594,15 @@ export function useArrangementPhase<L extends { id: string }>(
         // The next target is prepared again through the normal entry path after this landing.
         // Changing displayed here bypasses Tauri's precommit bounds transaction.
         void next;
+        const landed = p.displayed
+          && latest.current
+          && arrangementKey(p.displayed) === arrangementKey(latest.current)
+          && p.contentKey === latestContent.current
+          ? latest.current
+          : p.displayed;
         return {
-          from: p.displayed,
-          displayed: p.displayed,
+          from: landed,
+          displayed: landed,
           scopeId: latestScope.current,
           contentKey: latestContent.current,
           glide: p.glide,
