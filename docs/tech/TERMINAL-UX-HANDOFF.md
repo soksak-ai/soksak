@@ -273,10 +273,14 @@ This does not close visual or full-closure verification. The non-key capture-onl
 terminal pixels while the engine reported 104 paints, the selection state was non-empty, and the
 compositor reported the active surface applied and visible with zero geometry drift. That capture
 or native-paint discrepancy is a product RED, not permission to substitute state text for pixels.
-Xterm 0.0.57 also entered an activation error, `already registered program: terminal-xterm`, after
-consent; its aligned release exists but its installed activation is not GREEN. The capture path and
-duplicate activation must be resolved before this pointer slice or the exact closure is called
-complete. Ghostty, Kitty, Shitty, VT100 and WezTerm pointer rows remain open.
+The first consent run also exposed a Core lifecycle race: Vision's enabled write returned before
+its environment-triggered reload drained, so the following Xterm enable raced that reload and
+reported `already registered program: terminal-xterm` even though its renderer was active. Core
+commit `df255a6c19f8820f980896758e5a58b8d37f6de2` makes every enabled-state write await the shared
+revision coordinator. In the rebuilt v7, disabling both terminal Plugins and then enabling Vision
+followed by Xterm returned four successful transactions; both installed Plugins reported enabled
+with no error. The capture path must still be resolved before this pointer slice is called complete.
+Ghostty, Kitty, Shitty, VT100 and WezTerm pointer rows remain open.
 
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.

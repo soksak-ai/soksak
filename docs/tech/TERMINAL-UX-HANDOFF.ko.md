@@ -264,11 +264,15 @@ sequence를 3으로 유지하면서 selection sequence를 4로 올렸고 `IFT_MO
 `windowFocused=false`를 유지했지만, 직접 snapshot과 설정 overlay snapshot 모두 터미널 픽셀이
 비었습니다. 같은 시점에 engine은 paint 104회를 보고했고 selection state는 비어 있지 않았으며
 compositor는 활성 surface가 geometry drift 0으로 적용되어 보인다고 보고했습니다. 이 capture 또는
-native paint 불일치는 제품 RED이며 상태 text를 pixel 증거로 바꿔 부를 근거가 아닙니다. Xterm
-0.0.57도 동의 뒤 `이미 등록된 프로그램: terminal-xterm` activation 오류에 들어갔습니다. 정렬된
-release는 존재하지만 설치 실행은 GREEN이 아닙니다. Capture 경로와 중복 activation을 해결하기 전에는
-이 pointer 증분이나 exact closure를 완료라고 부르면 안 됩니다. Ghostty, Kitty, Shitty, VT100,
-WezTerm pointer 행도 열려 있습니다.
+native paint 불일치는 제품 RED이며 상태 text를 pixel 증거로 바꿔 부를 근거가 아닙니다. 첫 동의
+실행에서는 Core 수명주기 경합도 드러났습니다. Vision enabled write가 environment-triggered reload를
+마치기 전에 반환하여 뒤따른 Xterm enable이 그 reload와 경합했고, renderer는 활성인데
+`이미 등록된 프로그램: terminal-xterm` 오류를 보고했습니다. Core commit
+`df255a6c19f8820f980896758e5a58b8d37f6de2`는 모든 enabled-state write가 공유 revision coordinator를
+기다리게 합니다. 다시 빌드한 v7에서 두 terminal Plugin을 모두 disable한 뒤 Vision과 Xterm 순서로
+enable했으며 네 transaction이 모두 성공했고 설치된 두 Plugin은 error 없이 enabled를 보고했습니다.
+Capture 경로는 여전히 해결해야 하므로 이 pointer 증분을 완료라고 부르면 안 됩니다. Ghostty, Kitty,
+Shitty, VT100, WezTerm pointer 행도 열려 있습니다.
 
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.
