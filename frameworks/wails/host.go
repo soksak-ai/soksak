@@ -494,14 +494,14 @@ func surfaceBackends(webviewBackend *webviewsurface.Backend, terminalBackend *te
 func wireTerminalSessions(backend *terminalsurface.Backend, identity string, links terminalsurface.Links) *terminalsurface.Sessions {
 	sessions := terminalsurface.NewSessions(identity, links)
 	backend.UseSessions(sessions)
-	backend.ObservePanes(func(created bool, source compositor.SurfaceSource) {
+	backend.ObservePanes(func(created bool, generation uint64, source compositor.SurfaceSource) {
 		if created {
 			go func() {
 				// One declaration has one lifecycle transaction. Retrying after a failed
 				// surface.open created a second owner against the same sidecar pane and
 				// left an orphaned renderer (`already renders`) with no PTY record.
 				// Recovery is an explicit new declaration/rehydrate, not a timer.
-				if err := sessions.Start(map[string]string(source)); err != nil {
+				if err := sessions.Start(map[string]string(source), generation); err != nil {
 					log.Printf("terminal pane %s did not open: %v", source["pane"], err)
 				}
 			}()
@@ -509,7 +509,7 @@ func wireTerminalSessions(backend *terminalsurface.Backend, identity string, lin
 		}
 		pane := source["pane"]
 		go func() {
-			if err := sessions.Stop(pane, "detach"); err != nil {
+			if err := sessions.Remove(pane, generation); err != nil {
 				log.Printf("terminal pane %s did not stop: %v", pane, err)
 			}
 		}()

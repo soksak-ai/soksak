@@ -34,7 +34,7 @@ func TestTheSessionsSpeakThroughTheInjectedLinks(t *testing.T) {
 		"ptyUnit": "soksak-sidecar-pty", "engineUnit": "soksak-sidecar-terminal-alacritty",
 		"pixelW": "100", "pixelH": "100", "scale": "2",
 		"fontFamily": "Menlo", "fontPt": "13", "theme": "{}", "shell": "/bin/zsh",
-	})
+	}, 1)
 	if err == nil {
 		t.Fatal("the fake refuses every call; Start cannot succeed")
 	}
