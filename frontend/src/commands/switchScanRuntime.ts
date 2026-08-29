@@ -29,7 +29,7 @@ export type SwitchScanActivationReceipt = {
   presentation: {
     kind: "space" | "tab";
     id: string;
-    phase: "dom-committed";
+    phase: "presentation-settled";
   };
   transaction: SwitchScanLayoutTransaction | null;
 };

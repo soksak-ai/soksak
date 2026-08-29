@@ -61,7 +61,7 @@ describe("frame-driven switch scan", () => {
       return Promise.resolve({
         changed: true as const,
         layoutMoved: false as const,
-        presentation: { kind: "tab" as const, id: "to", phase: "dom-committed" as const },
+        presentation: { kind: "tab" as const, id: "to", phase: "presentation-settled" as const },
         transaction: null,
       });
     });
@@ -89,7 +89,7 @@ describe("frame-driven switch scan", () => {
       activation: {
         changed: true,
         layoutMoved: false,
-        presentation: { kind: "tab", id: "to", phase: "dom-committed" },
+        presentation: { kind: "tab", id: "to", phase: "presentation-settled" },
         transaction: null,
       },
     });

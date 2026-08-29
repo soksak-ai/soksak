@@ -103,6 +103,7 @@ import {
 } from "../lib/layoutTransitionJournal";
 import { registerLayoutAlignmentCatalog, registerLayoutTraceCatalog } from "./catalogLayoutAlignment";
 import { registerWebviewCatalog } from "./catalogWebview";
+import { waitLayoutSettled } from "./waitLayoutSettled";
 import { registerPresentationClockCatalog } from "./catalogPresentationClock";
 import {
   ensureDefaultWorkspaceRoot,
@@ -1739,15 +1740,17 @@ export function registerCatalog(): void {
       if (activated.data?.moved !== true) {
         throw new Error(`${command} did not change the active space`);
       }
+      const transaction = await committedLayoutTransaction(causeTraceId, afterSequence);
+      await waitLayoutSettled(15_000);
       return {
         changed: true,
         layoutMoved: true,
         presentation: {
           kind: "space",
           id: String(params.space),
-          phase: "dom-committed",
+          phase: "presentation-settled",
         },
-        transaction: await committedLayoutTransaction(causeTraceId, afterSequence),
+        transaction,
       };
     }
     if (activated.data?.changed !== true) {
@@ -1759,10 +1762,11 @@ export function registerCatalog(): void {
       : null;
     const viewId = String(params.tab);
     await waitForTabPresentationCommit(viewId);
+    await waitLayoutSettled(15_000);
     return {
       changed: true,
       layoutMoved,
-      presentation: { kind: "tab", id: viewId, phase: "dom-committed" },
+      presentation: { kind: "tab", id: viewId, phase: "presentation-settled" },
       transaction,
     };
   };
