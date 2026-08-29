@@ -106,6 +106,8 @@ describe("contract — a drag is a different event from a move", () => {
   it("the pointer event kinds include drag", () => {
     const contract = readFileSync(resolve(__dirname, "../lib/contentViews.ts"), "utf8");
     expect(contract).toMatch(/kind:\s*"down"\s*\|\s*"up"\s*\|\s*"move"\s*\|\s*"drag"/);
+    expect(contract).toMatch(/button:\s*"left"\s*\|\s*"middle"\s*\|\s*"right"/);
+    expect(contract).toMatch(/modifiers:\s*\{\s*shift:\s*boolean;\s*alt:\s*boolean;\s*control:\s*boolean;\s*meta:\s*boolean/);
   });
 });
 
