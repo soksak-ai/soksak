@@ -24,24 +24,26 @@ vi.mock("../framework", () => ({
 }));
 
 import { registerWebviewCatalog } from "./catalogWebview";
-import { execute, unregister } from "./registry";
+import { execute, getSpec, unregister } from "./registry";
 
 afterEach(() => {
+  unregister("surface.inventory");
   unregister("webview.surfaces");
   unregister("webview.health.query");
   unregister("webview.recover");
 });
 
-describe("webview.surfaces window inventory", () => {
+describe("surface.inventory window inventory", () => {
   it("includes every native surface whose declared window field is current", async () => {
     registerWebviewCatalog();
 
-    const result = await execute("webview.surfaces", {}, {});
+    const result = await execute("surface.inventory", {}, {});
 
     expect(result.ok).toBe(true);
     expect((result.data as { actual: string[] }).actual).toEqual([
       "webview.win-test.tab-browser",
       "terminal.win-test.tab-terminal",
     ]);
+    expect(getSpec("webview.surfaces")).toBeUndefined();
   });
 });
