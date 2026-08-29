@@ -304,10 +304,11 @@ selection and wheel remain open.
 
 Shitty 0.0.30 passed the pointer row through the fork's existing live `encodeMouseProtocol` path
 exposed by its provider ABI. Its exact closure, PTY bytes, and non-key composed capture are recorded
-in `TERMINAL-STANDARD-AUDIT.md`. Shitty selection and wheel remain open. One first-run pane also
-lost its render owner while its DOM declaration remained after the selected service process
-changed; the cause and missing reopen transaction remain an explicit lifecycle RED. VT100 and
-WezTerm pointer rows remain open.
+in `TERMINAL-STANDARD-AUDIT.md`. Shitty selection and wheel remain open. The first-run render loss
+was caused by Core discarding the selected sidecar version during name-based startup. Core now
+resolves name, version and process together and publishes process-generation events for held-pane
+recovery. The rebuilt v7 retained exact Shitty 0.0.30 from first start and repeated the pointer row.
+VT100 and WezTerm pointer rows remain open.
 
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.
