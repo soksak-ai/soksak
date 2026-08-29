@@ -31,3 +31,23 @@ func TestFrameStateIsForwardedAlwaysAndEmittedAtMostTenPerSecond(t *testing.T) {
 		t.Fatalf("the state payload names the pane and its sequence: %#v", emitted[1])
 	}
 }
+
+func TestAThrottledFinalFrameIsEmittedAtTheWindowEnd(t *testing.T) {
+	emitted := make(chan map[string]any, 2)
+	notify := terminalStateNotifier(
+		func(string, uint64) {},
+		func(_ string, payload any) { emitted <- payload.(map[string]any) },
+		time.Now,
+	)
+	notify("tab-1.1", 1)
+	<-emitted
+	notify("tab-1.1", 2)
+	select {
+	case payload := <-emitted:
+		if payload["sequence"] != uint64(2) {
+			t.Fatalf("trailing state sequence = %#v", payload["sequence"])
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("the final throttled frame was dropped")
+	}
+}
