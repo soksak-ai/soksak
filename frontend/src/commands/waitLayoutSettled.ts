@@ -1,4 +1,8 @@
-import { layoutMotionFacts, onLayoutMotion } from "../lib/layoutMotion";
+import {
+  LAYOUT_SETTLEMENT_ANIMATION_ID,
+  layoutMotionFacts,
+  onLayoutMotion,
+} from "../lib/layoutMotion";
 import {
   layoutSettlementFacts,
   layoutSettlementEvents,
@@ -44,7 +48,7 @@ function liveLayoutAnimations(): NamedAnimation[] {
     const named = animation as NamedAnimation;
     return (
       (animation.playState === "running" || animation.pending) &&
-      (named.animationName === "rail-flip-x" || animation.id === "phase")
+      (named.animationName === "rail-flip-x" || animation.id === LAYOUT_SETTLEMENT_ANIMATION_ID)
     );
   }) as NamedAnimation[];
 }

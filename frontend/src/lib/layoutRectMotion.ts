@@ -21,7 +21,11 @@
 //    There were two reasons, and one of them is universal.
 import { moduleState } from "./moduleState";
 import { beginLayoutDecorationMotion } from "./layoutDecorationPresentation";
-import { LAYOUT_MOTION_MS, layoutMotionFacts } from "./layoutMotion";
+import {
+  LAYOUT_MOTION_MS,
+  LAYOUT_SETTLEMENT_ANIMATION_ID,
+  layoutMotionFacts,
+} from "./layoutMotion";
 import {
   adoptLayoutAnimation,
   beginJourney,
@@ -177,6 +181,9 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
             ],
         { duration: LAYOUT_MOTION_MS, easing: "ease" },
       );
+      // waitLayoutSettled observes this exact public identity through document.getAnimations().
+      // Without it the activation receipt can be returned while this journey still has end:null.
+      a.id = LAYOUT_SETTLEMENT_ANIMATION_ID;
       running.set(el, a);
       const j = beginJourney(el.dataset.node ?? el.className, was, now);
       const landRect = () => {
