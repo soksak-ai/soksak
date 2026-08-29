@@ -165,47 +165,20 @@ Cursor, CSI/OSC/DCS/APC 범위, bracketed paste, mouse mode, drag selection, cop
 file/image drop, clipboard image, Kitty graphics, iTerm2 OSC 1337, Sixel, TUI host split, latency, damage,
 gap gate는 각 matrix 실행 전까지 UNVERIFIED입니다.
 
-## Selection, copy, scroll RED 기준선 — 2026-08-29
+## Selection, copy, scroll 상태 — 2026-08-30
 
-표준은 직접 만든 selection algorithm이 아닙니다. Xterm.js 6은 `onSelectionChange`, `getSelection`,
-`getSelectionPosition`, `hasSelection`, `onScroll`, `scrollLines`, `scrollPages`, 절대 scroll method를
-제공합니다. Xterm mouse mode는 X10, VT200, button-event, any-event tracking을 구분합니다. Local
-selection은 application이 잡은 mouse를 빼앗지 않으며 명시적인 강제-selection modifier는 terminal
-policy로 둡니다. OSC 52 application clipboard I/O는 사람이 cell을 선택하고 host copy command를
-호출하는 것과 별도입니다.
+선택된 renderer가 selection text와 scrollback 위치를 소유합니다. Core는 하나의 일관된 pointer
+transaction을 제공합니다. Down은 primary-button detail을, move는 held buttons를 포함하며 move/up event는
+source document를 통과합니다. Kit은 renderer가 보고한 selection과 scroll 상태를 그대로 게시합니다.
+Copy는 허가된 host clipboard에 selection을 쓰며 독립 clipboard read가 같은 text를 반환해야 합니다.
 
-현재 소스는 unsupported가 아니라 RED입니다.
+설치된 xterm Plugin 0.0.69는 자기 행의 selection, copy, 기본 scroll을 통과했습니다.
 
-- Xterm은 selection과 scroll을 engine API에 위임합니다.
-- 공유 DOM frame presenter는 왼쪽 `mousedown`에서 `preventDefault()`를 호출한 뒤 browser document의
-  selection을 읽습니다. 이 시작 event가 나중에 읽으려는 selection 자체를 막습니다.
-- Vision은 `surface.selection`을 비동기로 보내지만 reply 전에 cache text를 반환합니다. Terminal Kit
-  0.0.78이 async presenter interface를 세웠고 Vision owner test가 이전 stale-empty 결과를 증명합니다.
-- Native render runtime은 `surface.selection`을 `NOT_YET_SERVED`로 명시적으로 거부하며 selection
-  overlay를 그리지 않습니다. Native host view는 hit test를 통과시키지만 Plugin container는 현재
-  gesture를 hidden input focus에만 사용합니다.
-- Native `surface.scroll`은 이미 mirror viewport를 바꾸고 `{offset, historySize}`를 반환합니다. Vision은
-  reply를 버리고 ACK 전에 local offset을 바꾸며 wheel gesture를 등록하지 않습니다. Surface state에는
-  wheel·drag가 local viewport 동작인지 PTY mouse input인지 결정할 engine mouse/alternate-scroll mode도
-  없습니다.
+- 공개 drag가 `SELECT_ME_1234567890`의 정확한 20자 selection을 반환하고 선택 범위를 그렸습니다.
+- `copy`와 독립 `clipboard.read`가 같은 20자를 반환했습니다.
+- 80행 출력 뒤 `scroll(lines=10)`과 status가 모두 `{historySize:85, offset:10}`을 반환했습니다.
+- scroll viewport는 `64..71`을 읽었고 `scroll(edge=bottom)`은 offset 0을 반환했습니다.
 
-Provider 소스에는 유지되는 selection 기계가 이미 있습니다. Alacritty는 `Selection`/`SelectionType`과
-`Term::selection_to_string`을, Ghostty VT API는 selection gesture와 row selection range를, Kitty Screen은
-start/update/text selection 연산과 selection render data를 제공합니다. Provider source owner가 자기
-저장소에서 해당 API를 adapter로 연결해야 합니다. Core나 Plugin code의 generic cell-string fallback은
-금지합니다.
-
-수직 GREEN 순서는 다음으로 고정합니다.
-
-1. async selection reply가 exact string 하나 또는 이름 있는 거부 하나로 Kit `selection`, `copy`, status,
-   DOM data, event에 도달합니다.
-2. provider 구현 전에 terminal sidecar contract가 gesture kind, cell point/side, phase, modifier, 반환
-   selection snapshot을 정의합니다.
-3. provider 하나가 engine selection API로 simple drag를 처리하고 engine selection range를 그립니다.
-4. wheel scroll은 engine receipt를 await하고 offset/history/follow 상태를 게시합니다.
-5. mouse tracking과 alternate-scroll mode는 modifier 없는 gesture를 PTY로 보내고 명시적인 modifier를
-   local selection으로 보냅니다.
-6. 남은 provider가 같은 계약을 자기 저장소에서 구현한 뒤 설치된 일곱 provider matrix가 실제 drag,
-   selection read, copy, wheel, mode-conflict gate를 실행합니다.
-
-Command 존재, source 존재, screenshot만으로는 이 행을 GREEN으로 만들 수 없습니다.
+Status의 follow/pinned 상태, wheel의 local-scroll/PTy 단일 route, mouse-reporting 충돌, 설치된 모든 provider의
+같은 drag/copy/scroll 검사가 끝날 때까지 전체 matrix는 RED입니다. Command 이름, source 존재, screenshot
+하나만으로는 통과가 아닙니다.

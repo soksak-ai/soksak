@@ -173,49 +173,23 @@ Cursor, CSI/OSC/DCS/APC coverage, bracketed paste, mouse modes, drag selection, 
 scroll, file/image drop, clipboard images, Kitty graphics, iTerm2 OSC 1337, Sixel, TUI host split,
 latency, damage and gap gates remain UNVERIFIED until their own matrix runs.
 
-## Selection, copy and scroll RED baseline — 2026-08-29
+## Selection, copy and scroll status — 2026-08-30
 
-The standard is not a home-grown selection algorithm. Xterm.js 6 exposes
-`onSelectionChange`, `getSelection`, `getSelectionPosition`, `hasSelection`, `onScroll`,
-`scrollLines`, `scrollPages` and absolute scroll methods. Xterm mouse modes distinguish X10,
-VT200, button-event and any-event tracking; local selection must not steal a grabbed mouse, while
-an explicit force-selection modifier remains a terminal policy. OSC 52 is application clipboard
-I/O and is separate from a person selecting cells and invoking the host copy command.
+The selected renderer owns selection text and scrollback position. Core supplies one coherent
+pointer transaction: primary-button detail on down, held buttons on move, and move/up events through
+the source document. Kit publishes the renderer's exact selection and scroll state. Copy writes the
+selection through the granted host clipboard and an independent clipboard read must return the same
+text.
 
-The current source is RED, not unsupported:
+The installed xterm Plugin 0.0.69 closes selection, copy, and basic scroll for its row:
 
-- Xterm delegates selection and scrolling to its engine API.
-- The shared DOM frame presenter calls `preventDefault()` on left `mousedown` and then reads the
-  browser document selection. That start event prevents the selection it later tries to
-  read.
-- Vision sends `surface.selection` asynchronously but currently returns cached text before the
-  reply. Terminal Kit 0.0.78 establishes the required async presenter boundary; the Vision owner
-  test proves the previous stale-empty result.
-- The native render runtime explicitly refuses `surface.selection` as `NOT_YET_SERVED`; it paints
-  no selection overlay. The native host view passes hit testing through, and the Plugin container
-  currently uses the gesture only to focus the hidden input.
-- Native `surface.scroll` already changes the mirror viewport and returns `{offset, historySize}`.
-  Vision discards that reply, mutates a local offset before acknowledgement, and registers no wheel
-  gesture. Surface state also omits the engine mouse/alternate-scroll modes needed to decide whether
-  wheel and drag are local viewport actions or PTY mouse input.
+- a public drag over `SELECT_ME_1234567890` returned that exact 20-character selection and painted
+  the selected range;
+- `copy` returned the same text and an independent `clipboard.read` returned the same 20 characters;
+- after 80 output rows, `scroll(lines=10)` and status both returned `{historySize:85, offset:10}`;
+- the scrolled viewport read `64..71`, and `scroll(edge=bottom)` returned offset zero.
 
-The provider sources already contain maintained selection machinery. Alacritty exposes
-`Selection`/`SelectionType` and `Term::selection_to_string`; Ghostty's VT API exposes selection
-gestures and row selection ranges; Kitty's Screen owns start/update/text selection operations and
-selection render data. Provider source owners must adapt those APIs in their repositories. A
-generic cell-string fallback in Core or Plugin code is forbidden.
-
-The vertical GREEN order is fixed:
-
-1. Kit delivers the async selection reply to `selection`, `copy`, status, DOM data and events as one exact
-   string or one named refusal;
-2. the terminal sidecar contract defines gesture kind, cell point/side, phase, modifiers and the
-   returned selection snapshot before any provider implementation;
-3. one provider uses its engine selection API for simple drag and paints the engine selection range;
-4. wheel scroll awaits the engine receipt and publishes offset/history/follow state;
-5. mouse tracking and alternate-scroll modes route unmodified gestures to PTY and an explicit
-   modifier to local selection;
-6. every remaining provider implements the same contract in its own repository, then the installed
-   seven-provider matrix performs actual drag, selection read, copy, wheel and mode-conflict gates.
-
-No command-presence, source-presence or screenshot-only result makes this row GREEN.
+The complete matrix remains RED until status publishes follow/pinned state, wheel gestures select
+exactly one local-scroll or PTY route, mouse-reporting conflicts are verified, and every installed
+provider passes the same drag/copy/scroll assertions. A command name, source presence, or screenshot
+alone is not a pass.
