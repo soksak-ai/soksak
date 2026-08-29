@@ -299,7 +299,9 @@ CLI 호출의 명시적 --socket, 창 범위 요청의 명시적 window 필드�
 매트릭스는 `SOKSAK_PRESENTATION=capture-only` 를 쓰고, 사람이 없는 `system-native-input` 인증만
 `interactive` 를 씁니다. 현재 Wails 런타임은 GUI 프로세스 둘을 안전하게 공존시키지 못하므로, 테스트
 애플리케이션이 수명 전체 동안 저장소 소유 애플리케이션 잠금을 보유합니다. targetWindow 는
-window_renderer_wait 에서만 쓰며, 준비 여부는 폴링이 아니라 `soksak.host.ready` 이벤트에서 옵니다.
+window_renderer_wait 에서만 씁니다. Control plane 준비는 `soksak.host.ready`에서 확인하고, framework
+window가 필요한 호출자는 window label을 포함하며 `WindowRuntimeReady` 뒤에 발생하는
+`soksak.window.ready`를 기다립니다. 두 경로 모두 polling하지 않습니다.
 정리는 테스트가 소유한 정확한 open·recorded 사이드카 인벤토리를 중지하고 app.shutdown.commit 을
 호출한 뒤 애플리케이션의 정상 종료를 증명합니다.
 

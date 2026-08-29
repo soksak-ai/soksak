@@ -314,9 +314,11 @@ unique identifier and owner, an explicit --socket for every CLI call, an explici
 window-scoped requests, and targetWindow only for window_renderer_wait. Local and visual matrices
 use `SOKSAK_PRESENTATION=capture-only`. Only the unattended `system-native-input` certification uses
 `interactive`. Test applications hold the repository-owned application lock for their whole
-lifetime because the current Wails runtime cannot host two GUI processes safely. Readiness comes
-from `soksak.host.ready`, not polling. Cleanup inventories and stops exact test-owned open and
-recorded sidecars, calls app.shutdown.commit, and proves graceful application exit.
+lifetime because the current Wails runtime cannot host two GUI processes safely. Control-plane
+readiness comes from `soksak.host.ready`; a caller that needs a framework window waits for
+`soksak.window.ready`, which includes its label and occurs after `WindowRuntimeReady`. Neither path
+polls. Cleanup inventories and stops exact test-owned open and recorded sidecars, calls
+app.shutdown.commit, and proves graceful application exit.
 
 Discover command schemas from the running binary. Do not infer them from old examples. Discover
 repository roots with Git; do not join repositories through guessed sibling paths.
