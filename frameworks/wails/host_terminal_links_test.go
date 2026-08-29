@@ -46,8 +46,12 @@ func TestTerminalUnitGenerationEventCallsTheSessionOwner(t *testing.T) {
 // directly here: driving Apply would need an AppKit runloop (P7), so the
 // ObservePanes goroutine glue is verified at the application stage, not here.
 func TestTheSessionsSpeakThroughTheInjectedLinks(t *testing.T) {
+	var starts []string
 	var calls []string
-	links := terminalsurface.Links{Send: func(unit, command string, _ map[string]any) (map[string]any, error) {
+	links := terminalsurface.Links{Start: func(unit string) error {
+		starts = append(starts, unit)
+		return nil
+	}, Send: func(unit, command string, _ map[string]any) (map[string]any, error) {
 		calls = append(calls, unit+":"+command)
 		return nil, refusedByFake{}
 	}}
@@ -67,6 +71,10 @@ func TestTheSessionsSpeakThroughTheInjectedLinks(t *testing.T) {
 	}, 1)
 	if err == nil {
 		t.Fatal("the fake refuses every call; Start cannot succeed")
+	}
+	wantStarts := []string{"soksak-sidecar-pty", "soksak-sidecar-terminal-alacritty"}
+	if !reflect.DeepEqual(starts, wantStarts) {
+		t.Fatalf("started units=%v want=%v", starts, wantStarts)
 	}
 	if len(calls) == 0 || calls[0] != "soksak-sidecar-terminal-alacritty:terminal.rehydrate" {
 		t.Fatalf("the session did not open with the engine's rehydrate: %v", calls)
