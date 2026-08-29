@@ -70,6 +70,24 @@ A running or recorded Sidecar is not stopped by installation. Selecting differen
 requires an explicit lifecycle operation; Core does not terminate a user's restorable process to
 complete an update.
 
+## Immutable local release store
+
+A local release is a release transport, not a build cache. The addressed store retains every
+verified version under `<store>/<kind>s/<id>/<version>/` with its `release.json`, manifest, evidence,
+and target artifact. Publishing a newer candidate never replaces or mutates an older directory.
+Each application identity chooses a compatible closure through its own install transaction and
+home; an existing application therefore continues to use its recorded older closure while a
+separate identity can install a newer one. A dependency version conflict rejects the transaction
+before any environment write—it never silently upgrades a different plugin or rewrites an existing
+release directory.
+
+Frontend packaging does not imply a native compilation step. A frontend release owner declares
+whether its entry requires a build; a build-required package runs that command and seals only its
+declared outputs, while a static or already-generated entry may be packaged without a build. Both
+paths run the same manifest, dependency, archive, and digest validation and produce the same
+immutable store layout. Skipping compilation never permits a source-directory runtime path,
+`file:`/`link:` locator, or mutable workspace injection.
+
 ## Development source
 
 A development record is the same Plugin or Sidecar record shape with `source` set to `development`.

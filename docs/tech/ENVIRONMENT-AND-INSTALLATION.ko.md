@@ -73,6 +73,12 @@ install transaction이 필요합니다.
 수명주기 연산이 필요합니다. Core는 update 를 끝내려고 사용자의 복구 가능한 프로세스를 종료하지
 않습니다.
 
+Frontend packaging에 native compile이 항상 필요한 것은 아닙니다. 각 frontend release owner가 entry에
+build가 필요한지 선언합니다. build가 필요한 package는 선언된 명령과 산출물만 봉인하고, 정적이거나
+이미 생성된 entry는 build 없이 package할 수 있습니다. 두 경로 모두 동일한 manifest·dependency·archive·
+digest 검증과 불변 store 구조를 사용합니다. compile을 생략해도 source directory 실행 경로,
+`file:`/`link:` locator, 변경 가능한 workspace 주입은 허용되지 않습니다.
+
 ## 개발 소스
 
 개발 record는 Plugin 또는 Sidecar record와 같은 형식이며 `source`가 `development`입니다. `path`는
