@@ -1,9 +1,8 @@
 package wails
 
 import (
-	"fmt"
-
 	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // ClipboardHost is the desktop clipboard door supplied by the active framework.
@@ -24,7 +23,7 @@ func RegisterClipboard(registry *control.Registry, host ClipboardHost) {
 		Handler: func(control.Args) (any, error) {
 			text, ok := host.Text()
 			if !ok {
-				return nil, fmt.Errorf("clipboard_read: framework clipboard refused text")
+				return nil, i18n.Errorf("wails.clipboard.readRefused", nil)
 			}
 			return text, nil
 		},
@@ -38,7 +37,7 @@ func RegisterClipboard(registry *control.Registry, host ClipboardHost) {
 				return nil, err
 			}
 			if !host.SetText(text) {
-				return nil, fmt.Errorf("clipboard_write: framework clipboard refused text")
+				return nil, i18n.Errorf("wails.clipboard.writeRefused", nil)
 			}
 			return nil, nil
 		},

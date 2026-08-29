@@ -16,6 +16,14 @@ func init() {
 			EN: "application identity is required before creating a window",
 			KO: "창을 만들기 전에 application identity가 필요합니다",
 		},
+		"wails.clipboard.readRefused": {
+			EN: "the framework clipboard refused to read text",
+			KO: "framework clipboard가 text 읽기를 거부했습니다",
+		},
+		"wails.clipboard.writeRefused": {
+			EN: "the framework clipboard refused to write text",
+			KO: "framework clipboard가 text 쓰기를 거부했습니다",
+		},
 		"wails.window.invalidClientRect": {EN: "window client rect has no area: {width}x{height}", KO: "창 client rect에 면적이 없습니다: {width}x{height}"},
 		"wails.window.noClientDPI":       {EN: "window client rect has no DPI", KO: "창 client rect에 DPI가 없습니다"},
 		"wails.input.negativeCoordinates": {
