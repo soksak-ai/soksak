@@ -31,11 +31,7 @@ import {
 
 import { CAPTURE_CALIBRATION_ID, setCaptureCalibration } from "./captureCalibration";
 import { setCaptureMotionAnchors } from "./captureMotionAnchors";
-import { captureAfterPresentation } from "./capturePresentation";
-import {
-  composeNativeSurfacePictures,
-  type DocumentCapture,
-} from "./captureNativeSurfaceComposition";
+import { captureWindowPixels } from "./windowCapture";
 
 /** The native capture service returns a receipt object. Older adapters returned the path directly;
  *  both carry one path, and no other shape is accepted or stringified. */
@@ -46,34 +42,6 @@ export function savedCapturePath(value: unknown): string | null {
     return path.length > 0 ? path : null;
   }
   return null;
-}
-
-function capturePresented<T>(capture: () => Promise<T>): Promise<T> {
-  return captureAfterPresentation(
-    window,
-    () => invoke<{ ordered: boolean }>("window_capture_present", {}),
-    capture,
-    (presentation) => invoke("window_capture_restore", { ordered: presentation.ordered }).then(() => undefined),
-  );
-}
-
-async function captureWindowPixels(
-  rect?: { x: number; y: number; w: number; h: number },
-): Promise<DocumentCapture> {
-  return capturePresented(async () => {
-    const shot = await invoke<DocumentCapture>(
-      "window_snapshot_region",
-      rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
-    );
-    const region = rect ?? { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
-    const host = contentViewHost();
-    return composeNativeSurfacePictures(
-      shot,
-      region,
-      await host.appliedSurfaces(),
-      (id) => host.picture(id),
-    );
-  });
 }
 
 /**
