@@ -554,11 +554,12 @@ Do not reproduce or modify the user `soksakv3` instance. Each assertion needs it
 
 `INPUT_WRITE_FAILED: terminal surface ... is not applied` is a real compositor transaction race when
 input arrives while the current DOM declaration is still being committed. The generic Wails content
-surface adapter now waits for the native-surface settlement receipt before every surface verb, then
-performs exactly one delivery. It does not retry, recreate a surface, poll for ownership, or bypass
-the compositor. The contract is therefore `DOM declaration -> applied receipt -> one command`; an
-unapplied surface remains a named failure. The regression is covered by the adapter's RED→GREEN
-delivery test and must be rechecked in the isolated v7 rapid tab-switch/input matrix.
+surface adapter now waits for the declaration event and then the native-surface settlement receipt
+before every surface verb, then performs exactly one delivery. It does not retry, recreate a surface,
+poll for ownership, or bypass the compositor. The contract is therefore
+`DOM declaration event -> applied receipt -> one command`; an unapplied surface remains a named
+failure. The regression is covered by the adapter's RED→GREEN delivery test and must be rechecked in
+the isolated v7 rapid tab-switch/input matrix.
 
 ## Project-qualified sidecar identity
 

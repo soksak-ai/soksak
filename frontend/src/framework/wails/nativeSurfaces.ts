@@ -236,6 +236,38 @@ export function __setNativeSurfaceStatusForTest(
 }
 
 /**
+ * Waits for the DOM declaration that owns one native surface.
+ *
+ * A tab can mount its presenter and receive a key event in the same task in which React is about
+ * to publish `data-native-surface-id`. Checking the compositor at that point is too early: there
+ * is no declaration to commit yet, so the applied-surface barrier quite correctly returns at once.
+ * MutationObserver is the declaration event; the bounded timer is only the finite failure limit.
+ */
+export function waitForNativeSurfaceDeclaration(label: string, limitMs: number = SETTLE_LIMIT_MS): Promise<void> {
+  const root = watching ?? document;
+  const present = () => Array.from(root.querySelectorAll<HTMLElement>("[data-native-surface-id]"))
+    .some((element) => element.dataset.nativeSurfaceId === label);
+  if (present()) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    let finished = false;
+    const observer = new MutationObserver(() => {
+      if (!present() || finished) return;
+      finished = true;
+      observer.disconnect();
+      clearTimeout(expiry);
+      resolve();
+    });
+    const expiry = window.setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      observer.disconnect();
+      reject(new Error(`native surface declaration ${label} did not appear within ${limitMs}ms`));
+    }, limitMs);
+    observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-native-surface-id"] });
+  });
+}
+
+/**
  * Waits until the declared surfaces are reflected in an actual frame.
  *
  * The observer has one writer, and events that arrive during a commit collect into the next full snapshot.

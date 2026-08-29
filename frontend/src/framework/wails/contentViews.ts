@@ -12,7 +12,7 @@ import * as CompositorService from "../../../bindings/github.com/min-median-max/
 import { tmsg } from "../../i18n";
 import type { ContentViewHost } from "../../lib/contentViews";
 
-import { nativeSurfacesSettled } from "./nativeSurfaces";
+import { nativeSurfacesSettled, waitForNativeSurfaceDeclaration } from "./nativeSurfaces";
 import { currentWindowLabel } from "../../lib/webviewLabels";
 
 function unsupported(method: string): never {
@@ -36,6 +36,7 @@ async function drive(label: string, message: Record<string, unknown>): Promise<R
   // current DOM transaction is still dirty races the compositor inventory and produces
   // "surface ... is not applied" even though the pane is already visible in the document. The
   // settlement barrier is receipt/event based; it does not retry or invent an owner.
+  await waitForNativeSurfaceDeclaration(label);
   await nativeSurfacesSettled();
   return (await CompositorService.Deliver(label, message)) as Record<string, unknown>;
 }

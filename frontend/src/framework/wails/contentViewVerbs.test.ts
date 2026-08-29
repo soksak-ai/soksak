@@ -35,6 +35,9 @@ describe("driving a native surface", () => {
   beforeEach(() => {
     delivered.length = 0;
     refuse = null;
+    const surface = document.createElement("div");
+    surface.dataset.nativeSurfaceId = SURFACE;
+    document.body.append(surface);
   });
 
   it("navigate carries the surface and the address", async () => {

@@ -541,8 +541,8 @@ session/generation을 함께 기록한 뒤, 동일한 clean 폐포를 v7에서 �
 
 `INPUT_WRITE_FAILED: terminal surface ... is not applied`는 DOM 선언이 native-surface compositor에
 적용되는 중 입력이 도착할 때 발생하는 실제 transaction 경쟁이다. Wails 공통 content surface adapter는
-이제 모든 surface verb 전에 적용 receipt 장벽을 기다린 뒤 정확히 한 번만 전달한다. 재시도·surface 재생성·
-ownership 폴링·compositor 우회는 하지 않는다. 계약은 `DOM 선언 -> applied receipt -> 단일 command`이며,
+이제 모든 surface verb 전에 DOM 선언 event와 적용 receipt 장벽을 차례로 기다린 뒤 정확히 한 번만 전달한다. 재시도·surface 재생성·
+ownership 폴링·compositor 우회는 하지 않는다. 계약은 `DOM 선언 event -> applied receipt -> 단일 command`이며,
 적용되지 않은 surface는 이름 있는 실패로 남긴다. adapter RED→GREEN 전달 테스트가 회귀를 고정하고,
 격리된 v7에서 빠른 탭 전환/입력 매트릭스를 다시 실행해야 한다.
 
