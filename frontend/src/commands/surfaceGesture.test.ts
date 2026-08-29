@@ -116,7 +116,7 @@ describe("gestures on a surface", () => {
     const owner = {
       owns: (label: string) => label === "terminal.win-test.tab-terminal-1",
       labelOfView: (viewId: string) => viewId === "tab-terminal" ? "terminal.win-test.tab-terminal-1" : null,
-      sendInput: vi.fn(async () => {}),
+      sendInput: vi.fn(async (_label: string, _input: unknown) => {}),
       inputState: vi.fn(async () => ({})),
     };
     const dispose = registerSurfaceInputProvider("soksak-plugin-terminal-vision", owner);
