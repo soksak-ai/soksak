@@ -488,6 +488,20 @@ executable name alone.
 
 ## Additional v7 observation defects
 
+### Frozen-project promotion
+
+The current v7 source and its isolated observation homes are development inputs, not an implicit
+update channel for v4. The v4 operator continues to use its last verified immutable project until
+the current Core, frontend, contract, kit, Plugin roots and selected Sidecars have all passed their
+owner gates, installed-product assertions, visual captures and motion measurements.
+
+Only then may one explicit promotion transaction build the same source commit for `soksakv4`,
+install the complete closure into its isolated home, verify its environment and executable digests,
+and run `project-freeze`. The first freeze creates the new artifact and a second equal invocation
+must return `unchanged`. A digest conflict leaves the previous v4 artifact untouched. No mutable v4
+checkout, automatic v7-to-v4 copy or partial component promotion is valid evidence. `make soksakv4`
+therefore remains a read-only verification-and-run command until that promotion is GREEN.
+
 ### Prompt absence classification
 
 `INPUT_WRITE_FAILED: pane ... is not running` is not itself a rendering diagnosis. Read the
@@ -503,6 +517,13 @@ focus or input:
   Record native/DOM click, focus state event, and PTY write as one sequence.
 - On pane switch or restore, the previous prompt/branch text can appear as a ghost over the new pane.
   Assert frame sequence and surface generation ownership mechanically, then inspect final pixels.
+
+On 2026-08-30 a fresh v7 home with Vision 0.0.27, Xterm 0.0.63 and the six current Sidecars was
+captured immediately after `phase=live` without sending input. The prompt was visible in the PNG;
+an event-driven `wait` for `soksak-core` also succeeded without input. A trailing `read` that returned
+blank lines was not evidence of missing output: the prompt was at the top of the viewport and the
+bounded read asks for trailing rows. This does not close the older user-v3 report; it records that
+the named prompt absence was not reproduced in this clean current closure.
 
 Do not reproduce or modify the user `soksakv3` instance. Each assertion needs its own RED before a fix.
 

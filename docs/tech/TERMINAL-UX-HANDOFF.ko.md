@@ -473,6 +473,20 @@ Darwin 의 Unix socket 길이 제한 때문에 긴 임시 runtime 경로는 쓸 
 
 ## v7 격리 관측에서 추가된 결함
 
+### Frozen project 승격
+
+현재 v7 source와 격리 관측 home은 개발 입력이며 v4로 자동 유입되는 갱신 경로가 아닙니다.
+v4 운영 명령은 현재 Core, frontend, contract, kit, Plugin root, 선택된 Sidecar 전체가 owner
+gate, 설치 제품 assertion, 시각 캡처와 motion 측정을 모두 통과할 때까지 마지막 검증 불변
+project를 실행합니다.
+
+그 뒤에만 같은 source commit으로 `soksakv4`를 build하고 격리 home에 완전한 폐포를 설치하고
+environment와 실행 파일 digest를 검증한 뒤 `project-freeze`를 한 번 실행하는 명시적 승격
+트랜잭션을 허용합니다. 첫 실행은 새 artifact를 만들고, 같은 승격을 두 번째 실행하면 반드시
+`unchanged`여야 합니다. digest conflict가 발생하면 이전 v4 artifact는 그대로 둡니다.
+mutable v4 checkout, v7에서 v4로의 자동 복사, 일부 component만의 승격은 유효한 증거가
+아닙니다. 따라서 승격이 GREEN이 되기 전 `make soksakv4`는 읽기 전용 검증 후 실행만 합니다.
+
 ### 프롬프트 미출력 판정 규칙
 
 사용자 앱에서 `INPUT_WRITE_FAILED: pane ... is not running`이 보이면 프롬프트 렌더링 결함으로
@@ -489,6 +503,13 @@ session/generation을 함께 기록한 뒤, 동일한 clean 폐포를 v7에서 �
 - pane을 전환하거나 복원할 때 이전 pane의 프롬프트·브랜치 문자열이 새 pane 위에 잔상처럼 겹치는 현상.
   frame sequence와 surface generation을 기준으로 이전 세대 frame이 새 세대에 도달하지 않는 것을 기계적으로
   검증하고, 캡처로 최종 픽셀을 확인한다.
+
+2026-08-30 새 v7 home에 Vision 0.0.27, Xterm 0.0.63, 현재 Sidecar 여섯 개를 설치하고 input을
+보내지 않은 `phase=live` 직후 PNG를 캡처했습니다. 프롬프트가 화면에 보였고,
+`soksak-core`를 기다리는 event-driven `wait`도 input 없이 통과했습니다. 뒤에서 읽는 제한된
+`read`가 빈 줄을 반환한 것은 출력 누락의 증거가 아닙니다. 프롬프트가 viewport 첫 줄에 있어
+마지막 행만 읽는 명령 범위 밖이었습니다. 이것은 사용자 v3의 오래된 보고를 닫는 것이 아니라,
+깨끗한 현재 폐포에서는 해당 프롬프트 부재를 재현하지 못했다는 사실만 기록합니다.
 
 두 항목은 기존 2번(포커스)·4번(입력)의 하위 현상으로 숨기지 않고 각각 named assertion을 가진다. RED가
   확인되기 전 구현하지 않으며, 사용자 `soksakv3`에서는 재현·수정하지 않는다.
