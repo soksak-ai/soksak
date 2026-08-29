@@ -123,9 +123,16 @@ describe("arrangement solver — station is a function of the grid and the focus
   });
 
   it("a closed sidebar has no rail to attach to — no switching", () => {
-    const closed = solve(oneOverTwo(), "br", { railOpen: false });
-    expect(closed.swapped).toBe(false);
-    expect(order(closed.displayLayout)).toEqual(["top", "bl", "br"]);
+    const layout = oneOverTwo();
+    const atTop = solve(layout, "top", { railOpen: false, fallbackStation: 50 });
+    const atBottomRight = solve(layout, "br", { railOpen: false, fallbackStation: 50 });
+    expect(atBottomRight.swapped).toBe(false);
+    expect(order(atBottomRight.displayLayout)).toEqual(["top", "bl", "br"]);
+    expect(atTop.station).toBe(0);
+    expect(atBottomRight.station).toBe(0);
+    expect(atTop.betweenIds).toEqual([]);
+    expect(atBottomRight.betweenIds).toEqual([]);
+    expect(projectionGeometryChanged(atTop, atBottomRight)).toBe(false);
   });
 
   it("maximize is one [rail | pane] plane — it does not consume the split underneath", () => {
