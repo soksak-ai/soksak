@@ -28,7 +28,12 @@ vi.stubGlobal("ResizeObserver", class {
   disconnect() {}
 });
 
-import { clearNativeSurfaces, resetNativeSurfaces, startNativeSurfaces } from "./nativeSurfaces";
+import {
+  clearNativeSurfaces,
+  resetNativeSurfaces,
+  stageNativeSurfacePresentation,
+  startNativeSurfaces,
+} from "./nativeSurfaces";
 import { __resetLayoutMotionForTest, beginLayoutMotion, endLayoutMotion } from "../../lib/layoutMotion";
 
 /** One pane's declaration, written the way the browser plugin writes it. */
@@ -62,6 +67,28 @@ describe("the native surface observer", () => {
     declare("browser.win-main.tab-a");
     await settle();
     expect(commits.at(-1)?.surfaces).toHaveLength(1);
+  });
+
+  it("stages target view visibility before the tab DOM commit", async () => {
+    const first = document.createElement("section");
+    first.dataset.tabId = "tab-a";
+    first.append(declare("browser.win-main.tab-a"));
+    const second = document.createElement("section");
+    second.dataset.tabId = "tab-b";
+    second.append(declare("terminal.win-main.tab-b-1"));
+    document.body.append(first, second);
+    startNativeSurfaces();
+    await settle();
+
+    await stageNativeSurfacePresentation(new Set(["tab-b"]));
+
+    const visible = new Map((commits.at(-1)?.surfaces as Array<{ id: string; visible: boolean }>).map(
+      (surface) => [surface.id, surface.visible],
+    ));
+    expect(visible).toEqual(new Map([
+      ["browser.win-main.tab-a", false],
+      ["terminal.win-main.tab-b-1", true],
+    ]));
   });
 
   it("carries the explicit interactive motion edges", async () => {
