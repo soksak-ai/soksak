@@ -86,7 +86,7 @@ describe("the native surface observer", () => {
     startNativeSurfaces();
     await settle();
 
-    await stageNativeSurfacePresentation(new Set(["tab-b"]));
+    const staged = await stageNativeSurfacePresentation(new Set(["tab-b"]));
 
     const visible = new Map((commits.at(-1)?.surfaces as Array<{ id: string; visible: boolean }>).map(
       (surface) => [surface.id, surface.visible],
@@ -95,6 +95,7 @@ describe("the native surface observer", () => {
       ["browser.win-main.tab-a", false],
       ["terminal.win-main.tab-b-1", true],
     ]));
+    expect(staged).toEqual({ sequence: commits.at(-1)?.sequence, visibleViewIds: ["tab-b"] });
   });
 
   it("carries the explicit interactive motion edges", async () => {
