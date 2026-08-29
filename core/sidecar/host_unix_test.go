@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -109,6 +110,52 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 	}
 	if !processGone(pid) {
 		t.Fatalf("unit process %d still exists after Stop returned", pid)
+	}
+}
+
+func TestStartedObserverReceivesEverySelectedProcessGeneration(t *testing.T) {
+	home := shortHome(t)
+	runtimeRoot := shortHome(t)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
+	path, err := testSidecarResolver(home)("fake-unit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := NewHost(Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second,
+	})
+	t.Cleanup(func() { host.StopAll() })
+	observer, exposed := any(host).(interface {
+		ObserveStarted(func(Open)) func()
+	})
+	if !exposed {
+		t.Fatal("sidecar Host does not expose selected process generations")
+	}
+	var mu sync.Mutex
+	var selected []Open
+	cancel := observer.ObserveStarted(func(open Open) {
+		mu.Lock()
+		selected = append(selected, open)
+		mu.Unlock()
+	})
+	defer cancel()
+
+	first, err := host.StartResolvedWithSecrets("fake-unit", "0.0.1", path, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := host.StartResolvedWithSecrets("fake-unit", "0.0.2", path, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if first.PID == second.PID || len(selected) != 2 {
+		t.Fatalf("selected generations=%+v, first=%d second=%d", selected, first.PID, second.PID)
+	}
+	if selected[0].PID != first.PID || selected[1].PID != second.PID {
+		t.Fatalf("observer order=%+v, first=%d second=%d", selected, first.PID, second.PID)
 	}
 }
 
