@@ -4,11 +4,48 @@ package sidecar
 
 import (
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/soksak-ai/soksak-core/core/process"
 )
+
+func TestNameResolutionPreservesTheSelectedVersion(t *testing.T) {
+	home := shortHome(t)
+	runtimeRoot := shortHome(t)
+	stageUnit(t, home, "fake-unit", fakeUnitSource)
+	path, err := testSidecarResolver(home)("fake-unit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := Deps{
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
+		Dial: dialUnix, ReadyWithin: 10 * time.Second,
+	}
+	field := reflect.ValueOf(&deps).Elem().FieldByName("ResolveUnit")
+	if !field.IsValid() || field.Kind() != reflect.Func || field.Type().NumIn() != 1 || field.Type().NumOut() != 2 {
+		t.Fatal("sidecar Deps does not resolve name, version, and process as one selection")
+	}
+	field.Set(reflect.MakeFunc(field.Type(), func(input []reflect.Value) []reflect.Value {
+		if input[0].String() != "fake-unit" {
+			t.Fatalf("resolved unexpected unit %q", input[0].String())
+		}
+		return []reflect.Value{
+			reflect.ValueOf(Resolved{Name: "fake-unit", Version: "0.0.30", Path: path}),
+			reflect.Zero(field.Type().Out(1)),
+		}
+	}))
+	host := NewHost(deps)
+	t.Cleanup(func() { host.StopAll() })
+	opened, err := host.Start("fake-unit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened.Version != "0.0.30" {
+		t.Fatalf("generic start discarded selected version: %+v", opened)
+	}
+}
 
 func TestResolvedVersionReplacesRunningUnit(t *testing.T) {
 	home := shortHome(t)
