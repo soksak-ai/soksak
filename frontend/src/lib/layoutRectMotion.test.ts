@@ -127,6 +127,32 @@ describe("a layout change during hold", () => {
     expect(motionJourneys().at(-1)?.end).toBe("finish");
   });
 
+  it("accepts a removed animation only after its declared duration and exact landing", () => {
+    let now = 1_000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const t = createRectMotionTracker();
+    const { el, move } = laidOut(100, 50);
+    const animation = {
+      cancel: vi.fn(),
+      pause: vi.fn(),
+      play: vi.fn(),
+      currentTime: 0,
+      playbackRate: 1,
+      playState: "running",
+    };
+    Object.defineProperty(el, "animate", { configurable: true, value: vi.fn(() => animation) });
+    t.ref(el);
+    t.flush();
+    move(200, 0);
+    t.flush();
+
+    // WKWebView may auto-remove a completed non-key-window animation before dispatching onfinish.
+    // Idle alone is ambiguous; elapsed duration plus the exact destination makes it a completion.
+    now += 200;
+    animation.playState = "idle";
+    expect(motionJourneys().at(-1)).toMatchObject({ end: "finish", landed: { x: 200, y: 0, w: 100, h: 50 } });
+  });
+
   it("a structural snap replace adopts the new rect as the baseline instead of interpolating the old rect to the destination", () => {
     const t = createRectMotionTracker();
     const { el, move } = laidOut(100, 50);
