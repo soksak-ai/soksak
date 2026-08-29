@@ -71,6 +71,7 @@ function workspaceFixture(): Workspace {
 beforeEach(() => {
   useSessions.setState({ workspaces: [], activeId: "" });
 });
+const withRail = (workspace: Workspace) => projectArrangement(workspace, 0, undefined, true)!;
 
 describe("session arrangement — the solution decides the display and the canonical tree stays unchanged", () => {
   it("a blocked focus (ghostty) is displayed as a swapped arrangement and the session tree stays unchanged", () => {
@@ -80,7 +81,7 @@ describe("session arrangement — the solution decides the display and the canon
     const canonical = workspace.spaces[0].layout;
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
 
-    const solved = projectArrangement(useSessions.getState().workspaces[0])!;
+    const solved = withRail(useSessions.getState().workspaces[0]);
     expect(solved.swapped).toBe(true);
     expect(solved.cells.find((cell) => cell.id === "ghostty")!.rect.left).toBeCloseTo(100 / 3);
     expect(solved.cells.find((cell) => cell.id === "design")!.rect.left).toBeCloseTo(50);
@@ -94,7 +95,7 @@ describe("session arrangement — the solution decides the display and the canon
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
     useSessions.getState().setActiveGroup(workspace.id, "terminal");
 
-    const solved = projectArrangement(useSessions.getState().workspaces[0])!;
+    const solved = withRail(useSessions.getState().workspaces[0]);
     expect(solved.swapped).toBe(false);
     expect(solved.displayLayout).toBe(canonical);
     expect(solved.cells.find((cell) => cell.id === "design")!.rect.left).toBeCloseTo(100 / 3);
@@ -111,7 +112,7 @@ describe("session arrangement — the solution decides the display and the canon
       viewId: "v-ghostty",
     });
     const maximized = useSessions.getState().workspaces[0];
-    const solved = projectArrangement(maximized)!;
+    const solved = withRail(maximized);
     expect(solved.cells).toEqual([
       { id: "ghostty", rect: { left: 0, top: 0, width: 100, height: 100 } },
     ]);
@@ -130,7 +131,7 @@ describe("session arrangement — the solution decides the display and the canon
 
   it("PIN validity is decided by the clean line of the canonical split, not by the temporary maximize plane", () => {
     const workspace = workspaceFixture();
-    const station = projectArrangement(workspace)!.cleanLines.find((line) => line > 0 && line < 100);
+    const station = withRail(workspace).cleanLines.find((line) => line > 0 && line < 100);
     expect(station).toBeTypeOf("number");
     const pinned: Workspace = {
       ...workspace,
@@ -174,7 +175,7 @@ describe("maximize — the filling panel is the group that holds the view", () =
     };
     useSessions.setState({ workspaces: [withMax], activeId: withMax.id });
 
-    const solved = projectArrangement(useSessions.getState().workspaces[0])!;
+    const solved = withRail(useSessions.getState().workspaces[0]);
     const shown = solved.cells.filter((c) => c.rect.width > 0 && c.rect.height > 0);
     expect(shown.map((c) => c.id)).toEqual(["kanban"]);
   });
@@ -188,7 +189,7 @@ describe("maximize — the filling panel is the group that holds the view", () =
     };
     useSessions.setState({ workspaces: [withMax], activeId: withMax.id });
 
-    const solved = projectArrangement(useSessions.getState().workspaces[0])!;
+    const solved = withRail(useSessions.getState().workspaces[0]);
     const shown = solved.cells.filter((c) => c.rect.width > 0 && c.rect.height > 0);
     expect(shown.map((c) => c.id)).toEqual(["ghostty"]);
   });
