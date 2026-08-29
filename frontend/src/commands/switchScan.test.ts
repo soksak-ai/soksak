@@ -61,6 +61,13 @@ describe("switch scan command contract", () => {
       expect(source).toContain(field);
     }
   });
+
+  it("settles the precondition through the event-driven presentation barrier", () => {
+    const activation = source.split("const activateForSwitchScan")[1]
+      ?.split("const visibleSpaceViews")[0] ?? "";
+    expect(activation).toContain("await waitLayoutSettled(15_000)");
+    expect(activation).not.toContain("setTimeout");
+  });
 });
 
 describe("switch presentation verdict", () => {
