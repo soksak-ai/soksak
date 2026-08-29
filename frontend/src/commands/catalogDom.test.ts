@@ -1318,6 +1318,19 @@ describe("ui.input.drag — realtime reproduction surface", () => {
     expect(seen).toEqual(["mousedown", "mousemove", "mousemove", "mouseup"]);
   });
 
+  it("starts a drag as one primary-button click", async () => {
+    mountNode(`<div data-node="btn">drag</div>`);
+    const node = document.querySelector<HTMLElement>("[data-node=btn]")!;
+    vi.spyOn(node, "getBoundingClientRect").mockReturnValue({
+      x: 10, y: 20, left: 10, top: 20, right: 110, bottom: 70,
+      width: 100, height: 50, toJSON: () => ({}),
+    });
+    let detail = -1;
+    node.addEventListener("mousedown", (event) => { detail = (event as MouseEvent).detail; });
+    await execute("ui.input.drag", { from: ADDR, x: 7, y: 9, dx: 20, dy: 0 }, {});
+    expect(detail).toBe(1);
+  });
+
   it("starts the requested recording before the drag and reports the completed frames in the same response", async () => {
     mountNode(`<div data-node="btn">drag</div>`);
     const node = document.querySelector<HTMLElement>("[data-node=btn]")!;

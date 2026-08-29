@@ -3318,6 +3318,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
             clientY: y,
             bubbles: true,
             composed: true,
+            detail: type === "mousedown" ? 1 : 0,
             button: domButton,
             buttons: type === "mouseup" ? 0 : domButtons,
             shiftKey: domModifiers.shift,
