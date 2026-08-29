@@ -24,6 +24,7 @@ beforeEach(() => __resetSurfaceInputProvidersForTest());
 const provider = (owns: (label: string) => boolean) => ({
   owns,
   sendInput: vi.fn(async () => {}),
+  sendWheel: vi.fn(async () => {}),
   inputState: vi.fn(async () => ({ attached: true })),
 });
 
@@ -76,6 +77,7 @@ describe("surface input owner", () => {
     registerSurfaceInputProvider("plugin-a", {
       owns: () => { throw new Error("broken check"); },
       sendInput: vi.fn(),
+      sendWheel: vi.fn(),
       inputState: vi.fn(),
     });
     expect(() => surfaceInputProvider("x")).toThrow(/plugin-a/);

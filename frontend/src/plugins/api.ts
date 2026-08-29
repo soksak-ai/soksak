@@ -566,6 +566,11 @@ export interface SoksakPluginApi {
       button: "left" | "right";
       clickCount: number;
     }) => Promise<void>;
+    sendWheel: (label: string, input: {
+      x: number; y: number; deltaX: number; deltaY: number;
+      deltaMode: "pixel" | "line" | "page";
+      modifiers: { shift: boolean; alt: boolean; control: boolean; meta: boolean };
+    }) => Promise<void>;
     inputState: (label: string, at?: { x: number; y: number }) => Promise<Record<string, unknown>>;
   }) => () => void;
 
@@ -2161,7 +2166,10 @@ export function buildPluginApi(
               contentViewHost().injectScript(label, code, phase ?? "document-start"),
             ),
           sendInput: (label, input) => contentViewHost().sendInput(label, input),
-          wheel: (label, x, y, dx, dy) => contentViewHost().wheel(label, x, y, dx, dy),
+          wheel: (label, x, y, dx, dy) => contentViewHost().wheel(label, {
+            x, y, deltaX: dx, deltaY: dy, deltaMode: "pixel",
+            modifiers: { shift: false, alt: false, control: false, meta: false },
+          }),
           captureFull: (label, path, width, height) => contentViewHost().captureFull(label, path, width, height),
           typeText: (label, text) => contentViewHost().typeText(label, text),
           on: (label, event, cb) =>

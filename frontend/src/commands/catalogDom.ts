@@ -17,7 +17,9 @@ import {
 import { currentWindow, invoke } from "../framework";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { surfaceLabelOfView } from "../lib/surfaceLabels";
-import { contentViewHost, hasContentViewHost, type SurfacePointerInput } from "../lib/contentViews";
+import {
+  contentViewHost, hasContentViewHost, type SurfacePointerInput, type SurfaceWheelInput,
+} from "../lib/contentViews";
 import { surfaceInputLabelOfView, surfaceInputProvider } from "../lib/surfaceInputProviders";
 import { surfacesOutsideWindow, type SurfaceFrameFact } from "../lib/surfaceInsideWindow";
 import { parseAddress, isParseError } from "./address";
@@ -1611,6 +1613,27 @@ async function playGesture(
   }
 }
 
+async function playWheel(
+  label: string,
+  input: SurfaceWheelInput,
+): Promise<{ ok: false; code: "SURFACE_INPUT_UNAVAILABLE"; message: string } | null> {
+  const owner = surfaceInputProvider(label);
+  try {
+    if (owner) await owner.sendWheel(label, input);
+    else await contentViewHost().wheel(label, input);
+    return null;
+  } catch (error) {
+    return {
+      ok: false as const,
+      code: "SURFACE_INPUT_UNAVAILABLE" as const,
+      message: tmsg("msg.ui.gesture.pointerFailed", {
+        surface: label,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
 /** One press pair — the same pair a human press makes. Sending only the press never forms a click. */
 function press(
   at: { x: number; y: number },
@@ -2915,6 +2938,64 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         }
       }
       return { count: nodes.length, nodes };
+    },
+  });
+
+  register("ui.input.wheel", {
+    description: key("cmd.ui.input.wheel.desc"),
+    triggers: { ko: "휠 스크롤 트랙패드 주입 E2E" },
+    params: {
+      from: { type: "string", description: key("cmd.ui.input.wheel.param.from"), required: true },
+      x: { type: "number", description: key("cmd.ui.input.wheel.param.x"), required: false },
+      y: { type: "number", description: key("cmd.ui.input.wheel.param.y"), required: false },
+      deltaX: { type: "number", description: key("cmd.ui.input.wheel.param.deltaX"), required: true },
+      deltaY: { type: "number", description: key("cmd.ui.input.wheel.param.deltaY"), required: true },
+      deltaMode: {
+        type: "string", description: key("cmd.ui.input.wheel.param.deltaMode"),
+        enum: ["pixel", "line", "page"], default: "pixel",
+      },
+      shift: { type: "boolean", description: key("cmd.ui.input.wheel.param.shift"), default: false },
+      alt: { type: "boolean", description: key("cmd.ui.input.wheel.param.alt"), default: false },
+      control: { type: "boolean", description: key("cmd.ui.input.wheel.param.control"), default: false },
+      meta: { type: "boolean", description: key("cmd.ui.input.wheel.param.meta"), default: false },
+    },
+    returns: "{ wheeled, from, surface?, deltaX, deltaY, deltaMode }",
+    message: () => tmsg("msg.ui.input.wheel"),
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
+    danger: "inject",
+    examples: ['ui.input.wheel \'{"from":"win/main/content/view/x/node/surface","x":20,"y":20,"deltaX":0,"deltaY":120,"deltaMode":"pixel"}\''],
+    handler: async (p) => {
+      const addr = p.from as string;
+      const found = resolveExposed(addr);
+      if (!("el" in found)) return found;
+      const deltaX = Number(p.deltaX);
+      const deltaY = Number(p.deltaY);
+      if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY) || (deltaX === 0 && deltaY === 0)) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.ui.input.wheel.deltaInvalid") };
+      }
+      const deltaMode = p.deltaMode as SurfaceWheelInput["deltaMode"];
+      const surface = gestureSurface(found.el, addr);
+      if (surface && "ok" in surface) return surface;
+      const modifiers = {
+        shift: p.shift === true, alt: p.alt === true, control: p.control === true, meta: p.meta === true,
+      };
+      if (surface) {
+        if (!hasContentViewHost()) return noGesturePath(addr);
+        const at = gesturePoint(surface, p);
+        const refused = await playWheel(surface.label, { ...at, deltaX, deltaY, deltaMode, modifiers });
+        if (refused) return refused;
+        return { wheeled: true, from: addr, surface: surface.label, deltaX, deltaY, deltaMode };
+      }
+      const rect = found.el.getBoundingClientRect();
+      const x = typeof p.x === "number" ? p.x : rect.width / 2;
+      const y = typeof p.y === "number" ? p.y : rect.height / 2;
+      found.el.dispatchEvent(new WheelEvent("wheel", {
+        clientX: rect.left + x, clientY: rect.top + y, deltaX, deltaY,
+        deltaMode: deltaMode === "pixel" ? 0 : deltaMode === "line" ? 1 : 2,
+        shiftKey: modifiers.shift, altKey: modifiers.alt, ctrlKey: modifiers.control,
+        metaKey: modifiers.meta, bubbles: true, composed: true, cancelable: true,
+      }));
+      return { wheeled: true, from: addr, deltaX, deltaY, deltaMode };
     },
   });
 

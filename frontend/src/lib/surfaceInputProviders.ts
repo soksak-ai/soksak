@@ -10,7 +10,7 @@
 // one, it goes to the framework.
 import { moduleState } from "./moduleState";
 import { tmsg } from "../i18n";
-import type { SurfacePointerInput } from "./contentViews";
+import type { SurfacePointerInput, SurfaceWheelInput } from "./contentViews";
 
 /** The side that injects pointer input into one surface and answers its state — the contract has the same shape as the framework adapter. */
 export interface SurfaceInputProvider {
@@ -24,6 +24,7 @@ export interface SurfaceInputProvider {
   /** The exact live surface label for one host view, or null when this owner has no surface there. */
   labelOfView?(viewId: string): string | null;
   sendInput(label: string, input: SurfacePointerInput): Promise<void>;
+  sendWheel(label: string, input: SurfaceWheelInput): Promise<void>;
   inputState(label: string, at?: { x: number; y: number }): Promise<Record<string, unknown>>;
 }
 

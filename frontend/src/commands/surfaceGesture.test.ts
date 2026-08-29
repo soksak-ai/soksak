@@ -29,7 +29,7 @@ import { resolve } from "node:path";
 
 const host = vi.hoisted(() => ({
   sendInput: vi.fn(async (_label: string, _input: unknown) => {}),
-  wheel: vi.fn(async (_label: string, _x: number, _y: number, _dx: number, _dy: number) => {}),
+  wheel: vi.fn(async (_label: string, _input: unknown) => {}),
   evalJs: vi.fn(async () => "ok"),
   typeText: vi.fn(async () => {}),
 }));
@@ -117,7 +117,10 @@ describe("gestures on a surface", () => {
       shift: false, alt: false, control: false, meta: false,
     }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
-    expect(host.wheel).toHaveBeenCalledWith("browser.main.tab-4h7kq2", 10, 20, 0, 120);
+    expect(host.wheel).toHaveBeenCalledWith("browser.main.tab-4h7kq2", {
+      x: 10, y: 20, deltaX: 0, deltaY: 120, deltaMode: "pixel",
+      modifiers: { shift: false, alt: false, control: false, meta: false },
+    });
   });
 
   it("routes a native surface declaration to its owner instead of synthesizing host DOM input", async () => {
@@ -129,6 +132,7 @@ describe("gestures on a surface", () => {
     const owner = {
       owns: (label: string) => label === "terminal.win-test.tab-native-1",
       sendInput: vi.fn(async (_label: string, _input: unknown) => {}),
+      sendWheel: vi.fn(async (_label: string, _input: unknown) => {}),
       inputState: vi.fn(async () => ({})),
     };
     const dispose = registerSurfaceInputProvider("soksak-plugin-terminal-vision", owner);
@@ -144,6 +148,15 @@ describe("gestures on a surface", () => {
       .toBe("terminal.win-test.tab-native-1");
     expect(owner.sendInput.mock.calls.map(([, input]) => (input as { kind: string }).kind))
       .toEqual(["down", "drag", "drag", "up"]);
+    const wheel = await execute("ui.input.wheel", {
+      from: address, x: 15, y: 25, deltaX: 0, deltaY: -2, deltaMode: "line",
+      shift: true, alt: false, control: false, meta: false,
+    }, {});
+    expect(wheel.ok, JSON.stringify(wheel)).toBe(true);
+    expect(owner.sendWheel).toHaveBeenCalledWith("terminal.win-test.tab-native-1", {
+      x: 15, y: 25, deltaX: 0, deltaY: -2, deltaMode: "line",
+      modifiers: { shift: true, alt: false, control: false, meta: false },
+    });
     dispose();
   });
 
@@ -156,6 +169,7 @@ describe("gestures on a surface", () => {
       owns: (label: string) => label === "terminal.win-test.tab-terminal-1",
       labelOfView: (viewId: string) => viewId === "tab-terminal" ? "terminal.win-test.tab-terminal-1" : null,
       sendInput: vi.fn(async (_label: string, _input: unknown) => {}),
+      sendWheel: vi.fn(async (_label: string, _input: unknown) => {}),
       inputState: vi.fn(async () => ({})),
     };
     const dispose = registerSurfaceInputProvider("soksak-plugin-terminal-vision", owner);
@@ -376,6 +390,7 @@ describe("delivery goes to the surface owner", () => {
     const owner = {
       owns: (label: string) => label === "browser.main.tab-4h7kq2",
       sendInput: vi.fn(async () => {}),
+      sendWheel: vi.fn(async () => {}),
       inputState: vi.fn(async () => ({ attached: true })),
     };
     const dispose = registerSurfaceInputProvider("plugin-x", owner);
@@ -401,6 +416,7 @@ describe("delivery goes to the surface owner", () => {
     const owner = {
       owns: () => true,
       sendInput: vi.fn(async () => {}),
+      sendWheel: vi.fn(async () => {}),
       inputState: vi.fn(async () => ({ attached: true })),
     };
     const dispose = registerSurfaceInputProvider("plugin-x", owner);

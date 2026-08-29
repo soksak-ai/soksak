@@ -38,6 +38,17 @@ export interface SurfacePointerInput {
   clickCount: number;
 }
 
+export interface SurfaceWheelInput {
+  /** CSS px relative to the surface's top-left. */
+  x: number;
+  y: number;
+  /** Positive values point right/down, matching WheelEvent. */
+  deltaX: number;
+  deltaY: number;
+  deltaMode: "pixel" | "line" | "page";
+  modifiers: { shift: boolean; alt: boolean; control: boolean; meta: boolean };
+}
+
 export interface ContentViewHost {
   open(label: string, opts: Record<string, unknown>): Promise<void>;
   close(label: string): Promise<void>;
@@ -123,7 +134,7 @@ export interface ContentViewHost {
    */
   inputState(label: string, at?: { x: number; y: number }): Promise<Record<string, unknown>>;
   /** Puts real wheel input into the content view — view coordinates and DOM WheelEvent signs (+down/+right). */
-  wheel(label: string, x: number, y: number, dx: number, dy: number): Promise<void>;
+  wheel(label: string, input: SurfaceWheelInput): Promise<void>;
   captureFull(label: string, path: string, width: number, height: number): Promise<{ path: string; bytes: number }>;
   /** Puts a committed string into the currently focused editing element through the engine's text input path. */
   typeText(label: string, text: string): Promise<void>;
