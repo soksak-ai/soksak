@@ -68,6 +68,13 @@ func (manager *Manager) Inventory() (Inventory, error) {
 		if owner.Owner == "" {
 			return Inventory{}, i18n.Errorf("process.inventory.ownerEmpty", nil)
 		}
+		for _, record := range owner.Processes {
+			if record.Owner != owner.Owner {
+				return Inventory{}, i18n.Errorf("process.inventory.ownerMismatch", map[string]string{
+					"record": record.Owner, "source": owner.Owner,
+				})
+			}
+		}
 		owners = append(owners, owner)
 	}
 	sort.Slice(owners, func(i, j int) bool { return owners[i].Owner < owners[j].Owner })

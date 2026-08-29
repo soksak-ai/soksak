@@ -71,6 +71,16 @@ func TestProcessInventoryAggregatesAnInjectedOwner(t *testing.T) {
 	}
 }
 
+func TestProcessInventoryRejectsARecordWhoseOwnerDiffersFromItsSource(t *testing.T) {
+	source := fakeInventorySource{value: OwnerInventory{Owner: "owner-a", Revision: 1, Processes: []OwnedProcess{{
+		ID: "process-1", Owner: "owner-b", PID: 123, Command: "worker", State: "running",
+	}}}}
+	manager := NewManager(Deps{InventorySources: []InventorySource{source}})
+	if _, err := manager.Inventory(); err == nil || !strings.Contains(err.Error(), "owner") {
+		t.Fatalf("owner mismatch must be refused, got %v", err)
+	}
+}
+
 func TestProcessInventoryCommandReturnsTheAggregatedOwnerSnapshot(t *testing.T) {
 	source := fakeInventorySource{value: OwnerInventory{Owner: "owner-a", Revision: 2}}
 	registry := control.NewRegistry()

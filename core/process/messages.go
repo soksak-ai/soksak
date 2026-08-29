@@ -83,5 +83,9 @@ func init() {
 			EN: "process inventory owner is empty",
 			KO: "process inventory owner가 비어 있습니다",
 		},
+		"process.inventory.ownerMismatch": {
+			EN: "process inventory record owner {record} differs from source owner {source}",
+			KO: "process inventory record owner {record}가 source owner {source}와 다릅니다",
+		},
 	})
 }
