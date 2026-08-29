@@ -232,6 +232,11 @@ func Run(assets embed.FS) error {
 					log.Printf("host readiness event failed: %v", err)
 				}
 			},
+			WindowReady: func(window string) {
+				if err := announceWindowReady(os.Stdout, resolved, os.Getpid(), window); err != nil {
+					log.Printf("window readiness event failed: %v", err)
+				}
+			},
 			PluginAssetRoots: func() ([]string, error) { return installedPluginRoots(resolved.Home) },
 		})
 	})

@@ -54,6 +54,9 @@ type Options struct {
 	// HostReady runs after every host-owned command is registered and before
 	// the first renderer is created. Nil publishes no process event.
 	HostReady func()
+	// WindowReady runs after a window reports WindowRuntimeReady. At that point framework window
+	// discovery can address it; HostReady intentionally occurs earlier and cannot make that claim.
+	WindowReady func(string)
 	// Release gives up the process claim before a framework quit path can bypass Run's return.
 	Release func() error
 	// Presentation declares whether this process is shown on the user's desktop.
@@ -378,6 +381,9 @@ func Run(options Options) error {
 	window.SetBackgroundColour(controlPlane.BackgroundColour)
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
 		repairDocumentView(window)
+		if options.WindowReady != nil {
+			options.WindowReady(window.Name())
+		}
 	})
 
 	// Window-owning commands join the same registry the core filled. One table,

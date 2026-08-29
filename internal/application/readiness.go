@@ -29,3 +29,16 @@ func announceControlReady(writer io.Writer, resolved identity.Resolved, pid int)
 func announceHostReady(writer io.Writer, resolved identity.Resolved, pid int) error {
 	return announceReady(writer, "soksak.host.ready", resolved, pid)
 }
+
+func announceWindowReady(writer io.Writer, resolved identity.Resolved, pid int, window string) error {
+	return json.NewEncoder(writer).Encode(struct {
+		controlReadyEvent
+		Window string `json:"window"`
+	}{
+		controlReadyEvent: controlReadyEvent{
+			Event: "soksak.window.ready", Protocol: 1,
+			Socket: resolved.Socket, Identifier: resolved.Identifier, PID: pid,
+		},
+		Window: window,
+	})
+}
