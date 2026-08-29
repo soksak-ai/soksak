@@ -250,6 +250,34 @@ captured viewport moved from line 80 to line 78. With 1000+1006 active, wheel-up
 `alternate-scroll`, `written=3`, and the shell received `1b4f41` (`ESC O A`). Ghostty, Kitty,
 Shitty, VT100 and WezTerm remain open; no evidence in this paragraph certifies their wheel path.
 
+The 2026-08-29 Alacritty pointer slice is mechanically GREEN but visually RED. Surface Contract
+0.0.7 defines strict down/move/up, button, click count, point and modifier facts. Render Kit 0.0.28
+owns mouse-mode arbitration and Alacritty Sidecar 0.0.37 owns SGR, legacy and UTF-8 encoding. The
+terminal-surface service validates the one-effect answer and remains the only PTY writer. Vision
+0.0.21 serializes pointer and wheel delivery through one input queue, routes grabbed input to
+`surface.pointer`, and keeps Shift-drag in the engine selection transaction. Core commit
+`8f5b3fc1d16756994c35f402b5d737b8df2ae25c` preserves middle/right buttons and all four modifiers
+through the public DOM command surface. The immutable v7 release digests are
+`ef283aa66c60838ede3126fd9e536fae1ceaffabecc82d48fec8dfdde02c8346` for Alacritty,
+`0ab2f49472f0071f5a59f25da04d1316b9ba44c90edd8437b7179e7e30dbce0d` for Vision and
+`1c7c9cfac285e0ce089b3879e296b1efcad4733f0244ec897d97d8f3dfb2ad4a` for Xterm. Every second
+publication returned `unchanged`; batch plan
+`29878a3bfcdb03a0575ed31ed8e96076070d74e283eb7d52841b686a7c19eef7` installed nine components at
+environment revision 49. With 1002+1006 active, one down/drag/up produced pointer sequence 3 and
+shell hex `1b5b3c303b323b324d1b5b3c33323b363b324d1b5b3c303b363b326d`, exactly
+`ESC[<0;2;2M`, `ESC[<32;6;2M`, `ESC[<0;6;2m`. A Shift drag kept pointer sequence 3, advanced
+selection sequence to 4, and returned `IFT_MODE_READY_2468`.
+
+This does not close visual or full-closure verification. The non-key capture-only window kept
+`windowFocused=false`, but both the direct snapshot and a settings-overlay snapshot showed blank
+terminal pixels while the engine reported 104 paints, the selection state was non-empty, and the
+compositor reported the active surface applied and visible with zero geometry drift. That capture
+or native-paint discrepancy is a product RED, not permission to substitute state text for pixels.
+Xterm 0.0.57 also entered an activation error, `already registered program: terminal-xterm`, after
+consent; its aligned release exists but its installed activation is not GREEN. The capture path and
+duplicate activation must be resolved before this pointer slice or the exact closure is called
+complete. Ghostty, Kitty, Shitty, VT100 and WezTerm pointer rows remain open.
+
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.
 

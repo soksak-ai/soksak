@@ -242,6 +242,34 @@ component 아홉 개를 설치했습니다. v7에서 history 53행 위의 line w
 `alternate-scroll`, `written=3`을 반환했고 shell은 `1b4f41`(`ESC O A`)을 받았습니다. Ghostty,
 Kitty, Shitty, VT100, WezTerm은 열려 있으며 이 문단의 증거로 wheel 경로를 인증하면 안 됩니다.
 
+2026-08-29 Alacritty pointer 증분은 기계적으로 GREEN이지만 시각적으로 RED입니다. Surface Contract
+0.0.7은 엄격한 down/move/up, button, click count, point, modifier 사실을 정의합니다. Render Kit
+0.0.28은 mouse mode 중재를 소유하고 Alacritty Sidecar 0.0.37은 SGR, legacy, UTF-8 인코딩을
+소유합니다. terminal-surface service는 effect 하나인 응답을 검증하고 유일한 PTY writer로 남습니다.
+Vision 0.0.21은 pointer와 wheel을 input queue 하나로 직렬화하고, grabbed 입력을 `surface.pointer`로
+보내며, Shift drag는 engine selection transaction에 남깁니다. Core commit
+`8f5b3fc1d16756994c35f402b5d737b8df2ae25c`는 공개 DOM command 면 전체에서 middle/right button과
+modifier 네 개를 보존합니다. v7 불변 release digest는 Alacritty
+`ef283aa66c60838ede3126fd9e536fae1ceaffabecc82d48fec8dfdde02c8346`, Vision
+`0ab2f49472f0071f5a59f25da04d1316b9ba44c90edd8437b7179e7e30dbce0d`, Xterm
+`1c7c9cfac285e0ce089b3879e296b1efcad4733f0244ec897d97d8f3dfb2ad4a`이고 두 번째 게시는 모두
+`unchanged`였습니다. Batch plan
+`29878a3bfcdb03a0575ed31ed8e96076070d74e283eb7d52841b686a7c19eef7`은 component 아홉 개를
+environment revision 49로 설치했습니다. 1002+1006 상태에서 down/drag/up 한 번은 pointer sequence
+3과 shell hex `1b5b3c303b323b324d1b5b3c33323b363b324d1b5b3c303b363b326d`, 즉
+`ESC[<0;2;2M`, `ESC[<32;6;2M`, `ESC[<0;6;2m`을 정확히 만들었습니다. Shift drag는 pointer
+sequence를 3으로 유지하면서 selection sequence를 4로 올렸고 `IFT_MODE_READY_2468`을 반환했습니다.
+
+이 결과는 시각 검증이나 전체 closure를 닫지 않습니다. Non-key capture-only 창은
+`windowFocused=false`를 유지했지만, 직접 snapshot과 설정 overlay snapshot 모두 터미널 픽셀이
+비었습니다. 같은 시점에 engine은 paint 104회를 보고했고 selection state는 비어 있지 않았으며
+compositor는 활성 surface가 geometry drift 0으로 적용되어 보인다고 보고했습니다. 이 capture 또는
+native paint 불일치는 제품 RED이며 상태 text를 pixel 증거로 바꿔 부를 근거가 아닙니다. Xterm
+0.0.57도 동의 뒤 `이미 등록된 프로그램: terminal-xterm` activation 오류에 들어갔습니다. 정렬된
+release는 존재하지만 설치 실행은 GREEN이 아닙니다. Capture 경로와 중복 activation을 해결하기 전에는
+이 pointer 증분이나 exact closure를 완료라고 부르면 안 됩니다. Ghostty, Kitty, Shitty, VT100,
+WezTerm pointer 행도 열려 있습니다.
+
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.
 
