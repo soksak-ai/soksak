@@ -33,9 +33,10 @@ export interface SurfacePointerInput {
    *  `enter`/`exit` are the facts of **entering and leaving** the surface — a different event from
    *  movement, and the engine starts and ends hover with this pair. */
   kind: "down" | "up" | "move" | "drag" | "enter" | "exit";
-  button: "left" | "right";
+  button: "left" | "middle" | "right";
   /** 1=single, 2=double — the engine builds a double click from this number. */
   clickCount: number;
+  modifiers: { shift: boolean; alt: boolean; control: boolean; meta: boolean };
 }
 
 export interface SurfaceWheelInput {

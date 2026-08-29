@@ -276,8 +276,8 @@ github.com/microcosm-cc/bluemonday v1.0.27 h1:MpEUotklkwCSLeH+Qdx1VJgNqLlpY2KXwX
 github.com/microcosm-cc/bluemonday v1.0.27/go.mod h1:jFi9vgW+H7c3V0lb6nR74Ib/DIB5OBs92Dimizgw2cA=
 github.com/min-median-max/wails-service-native-compositor v0.0.0-20260829052058-a8012c3f9bcc h1:RlqyQB+hc73oTpE3A58xJO8Ogv/4tudOyf1KzOxXffM=
 github.com/min-median-max/wails-service-native-compositor v0.0.0-20260829052058-a8012c3f9bcc/go.mod h1:tH/DRDJ6eesv9q+DQQCm3SOZNClfoltnhchX/A/M3F0=
-github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260829081450-95c15ed2fd8c h1:96622eehIAr7ByAUBNLeMwdSDqY9B4bkGZ21xG04VP0=
-github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260829081450-95c15ed2fd8c/go.mod h1:vy4b6AXkv2uplNMD10BfWo2SlLr4QeknocSupUl2QoY=
+github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260829090756-710cb6129980 h1:BvBXo1ddwfmrvYAIXVsaPxVHfk7dHDOWZxesRuI3Hv0=
+github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260829090756-710cb6129980/go.mod h1:WrfFpbYiATu9818oUoStkKNdd/t2IBtSIqiOizHr0c8=
 github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063 h1:wAvk3nSsqcr63cB4JNMsEUgIcMr9Xt5lrtStLlVQy2Y=
 github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063/go.mod h1:9Ez7t5hWyZviMUnZxfwA5MPD/adyERuVMAIT/zMBSAc=
 github.com/mitchellh/copystructure v1.2.0 h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw=
@@ -355,8 +355,8 @@ github.com/soksak-ai/soksak-contract-control v0.0.0-20260829002406-d37e5c3cc521 
 github.com/soksak-ai/soksak-contract-control v0.0.0-20260829002406-d37e5c3cc521/go.mod h1:attu3HRIL9ErRVPXHEj20rrsPswUyqH53HEMd7qXyWw=
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9 h1:pgAA1NyDuK5daROyjR4aG5dPshemXlWu0XvOZkqS9tI=
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9/go.mod h1:ytm+dh2ShxYePv/d5xxSH7bDrd+pQzM5e2rGUyXeD9w=
-github.com/soksak-ai/soksak-contract-surface v0.0.0-20260829081021-c74bbff0e42d h1:UhMHI7Vsl3iM1l7ihekt7KnxA8DOwFsmVUc1+LKTx/w=
-github.com/soksak-ai/soksak-contract-surface v0.0.0-20260829081021-c74bbff0e42d/go.mod h1:wXRo6E+0QlXIKNKVcVjCseH67D27OtG2Zp7M74d0iPo=
+github.com/soksak-ai/soksak-contract-surface v0.0.0-20260829090523-321ac93c007d h1:5PMDankrjoUWl6M4hO9/0S4n2TgMjmm64YyqH8GT/KM=
+github.com/soksak-ai/soksak-contract-surface v0.0.0-20260829090523-321ac93c007d/go.mod h1:wXRo6E+0QlXIKNKVcVjCseH67D27OtG2Zp7M74d0iPo=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828170819-d66aebf6e732 h1:1QGjP2pFsT0qAIFcFXa4PkBO3eLPYAfRzY5ErUhzqoc=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828170819-d66aebf6e732/go.mod h1:IfcO4wTw2RDCPvUz+x92mqUt3J/5lkJe4rn9FiyINFI=
 github.com/spf13/cast v1.10.0 h1:h2x0u2shc1QuLHfxi+cTJvs30+ZAHOGRic8uyGTDWxY=

@@ -563,8 +563,9 @@ export interface SoksakPluginApi {
     sendInput: (label: string, input: {
       x: number; y: number;
       kind: "down" | "up" | "move" | "drag" | "enter" | "exit";
-      button: "left" | "right";
+      button: "left" | "middle" | "right";
       clickCount: number;
+      modifiers: { shift: boolean; alt: boolean; control: boolean; meta: boolean };
     }) => Promise<void>;
     sendWheel: (label: string, input: {
       x: number; y: number; deltaX: number; deltaY: number;

@@ -2250,8 +2250,10 @@ describe("ui.input.click — pointing at a content view puts the input inside it
     expect(r.data?.surface).toBe("browser.main.tab-probe");
     // A press and a release must be paired for a click — sending only the press leaves that surface half-pressed.
     expect(sentInput).toEqual([
-      ["browser.main.tab-probe", { x: 0, y: 0, kind: "down", button: "left", clickCount: 1 }],
-      ["browser.main.tab-probe", { x: 0, y: 0, kind: "up", button: "left", clickCount: 1 }],
+      ["browser.main.tab-probe", { x: 0, y: 0, kind: "down", button: "left", clickCount: 1,
+        modifiers: { shift: false, alt: false, control: false, meta: false } }],
+      ["browser.main.tab-probe", { x: 0, y: 0, kind: "up", button: "left", clickCount: 1,
+        modifiers: { shift: false, alt: false, control: false, meta: false } }],
     ]);
     expect(domClicks).toBe(0);
   });
@@ -2263,8 +2265,10 @@ describe("ui.input.click — pointing at a content view puts the input inside it
     const address = await probeAddress();
     await execute("ui.input.click", { address, x: 7, y: 9 }, {});
     expect(sentInput).toEqual([
-      ["browser.main.tab-probe", { x: 7, y: 9, kind: "down", button: "left", clickCount: 1 }],
-      ["browser.main.tab-probe", { x: 7, y: 9, kind: "up", button: "left", clickCount: 1 }],
+      ["browser.main.tab-probe", { x: 7, y: 9, kind: "down", button: "left", clickCount: 1,
+        modifiers: { shift: false, alt: false, control: false, meta: false } }],
+      ["browser.main.tab-probe", { x: 7, y: 9, kind: "up", button: "left", clickCount: 1,
+        modifiers: { shift: false, alt: false, control: false, meta: false } }],
     ]);
   });
 });
@@ -2287,8 +2291,10 @@ describe("ui.input.click — projected realm coordinates use the producer's surf
 
     expect(result.ok).toBe(true);
     expect(sentInput).toEqual([
-      ["rlm-realm", { x: 242, y: 14, kind: "down", button: "left", clickCount: 1 }],
-      ["rlm-realm", { x: 242, y: 14, kind: "up", button: "left", clickCount: 1 }],
+      ["rlm-realm", { x: 242, y: 14, kind: "down", button: "left", clickCount: 1,
+        modifiers: { shift: false, alt: false, control: false, meta: false } }],
+      ["rlm-realm", { x: 242, y: 14, kind: "up", button: "left", clickCount: 1,
+        modifiers: { shift: false, alt: false, control: false, meta: false } }],
     ]);
   });
 });

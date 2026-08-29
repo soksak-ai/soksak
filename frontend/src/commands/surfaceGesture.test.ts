@@ -159,6 +159,15 @@ describe("gestures on a surface", () => {
       x: 15, y: 25, deltaX: 0, deltaY: -2, deltaMode: "line",
       modifiers: { shift: true, alt: false, control: false, meta: false },
     });
+    await execute("ui.input.click", {
+      address, x: 20, y: 30, button: "middle", control: true, meta: true,
+    }, {});
+    expect(owner.sendInput.mock.calls.slice(-2).map(([, input]) => input)).toEqual([
+      { x: 20, y: 30, kind: "down", button: "middle", clickCount: 1,
+        modifiers: { shift: false, alt: false, control: true, meta: true } },
+      { x: 20, y: 30, kind: "up", button: "middle", clickCount: 1,
+        modifiers: { shift: false, alt: false, control: true, meta: true } },
+    ]);
     dispose();
   });
 
@@ -220,8 +229,10 @@ describe("gestures on a surface", () => {
     expect(out.ok, JSON.stringify(out)).toBe(true);
     // Enter, then move — the order a human pointer follows, and the engine opens hover on that pair.
     expect(sent("browser.main.tab-4h7kq2")).toEqual([
-      { x: 33, y: 44, kind: "enter", button: "left", clickCount: 1 },
-      { x: 33, y: 44, kind: "move", button: "left", clickCount: 1 },
+      { x: 33, y: 44, kind: "enter", button: "left", clickCount: 1,
+        modifiers: { shift: false, alt: false, control: false, meta: false } },
+      { x: 33, y: 44, kind: "move", button: "left", clickCount: 0,
+        modifiers: { shift: false, alt: false, control: false, meta: false } },
     ]);
   });
 });

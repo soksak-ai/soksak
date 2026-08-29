@@ -1637,14 +1637,22 @@ async function playWheel(
 /** One press pair — the same pair a human press makes. Sending only the press never forms a click. */
 function press(
   at: { x: number; y: number },
-  button: "left" | "right",
+  button: "left" | "middle" | "right",
   clickCount: number,
+  modifiers: SurfacePointerInput["modifiers"],
 ): SurfacePointerInput[] {
   return [
-    { ...at, kind: "down", button, clickCount },
-    { ...at, kind: "up", button, clickCount },
+    { ...at, kind: "down", button, clickCount, modifiers },
+    { ...at, kind: "up", button, clickCount, modifiers },
   ];
 }
+
+const pointerModifiers = (params: Record<string, unknown>): SurfacePointerInput["modifiers"] => ({
+  shift: params.shift === true,
+  alt: params.alt === true,
+  control: params.control === true,
+  meta: params.meta === true,
+});
 
 /**
  * Performs an operation on a projected node in the realm that node is in.
@@ -1712,9 +1720,13 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       button: {
         type: "string",
         description: key("cmd.ui.input.click.param.button"),
-        enum: ["left", "right"],
+        enum: ["left", "middle", "right"],
         required: false,
       },
+      shift: { type: "boolean", description: key("cmd.ui.input.wheel.param.shift"), default: false },
+      alt: { type: "boolean", description: key("cmd.ui.input.wheel.param.alt"), default: false },
+      control: { type: "boolean", description: key("cmd.ui.input.wheel.param.control"), default: false },
+      meta: { type: "boolean", description: key("cmd.ui.input.wheel.param.meta"), default: false },
       recordDir: {
         type: "string",
         description: key("cmd.ui.input.click.param.recordDir"),
@@ -1876,7 +1888,9 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         // its name (no silent success).
         if (causeTraceId !== undefined) declareLayoutCause(causeTraceId);
         const atUnixMs = presentationNowUnixMs();
-        const pair = press(at, p.button === "right" ? "right" : "left", 1);
+        const button = p.button === "right" ? "right" as const
+          : p.button === "middle" ? "middle" as const : "left" as const;
+        const pair = press(at, button, 1, pointerModifiers(p));
         const refused = await playGesture(
           surface.label,
           phase === "down" ? [pair[0]] : phase === "up" ? [pair[1]] : pair,
@@ -1905,9 +1919,15 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // in the same tick.
       if (causeTraceId !== undefined) declareLayoutCause(causeTraceId);
       const atUnixMs = presentationNowUnixMs();
+      const domButton = p.button === "right" ? 2 : p.button === "middle" ? 1 : 0;
+      const domModifiers = pointerModifiers(p);
       for (const type of types) {
         el.dispatchEvent(
-          new MouseEvent(type, { clientX: x, clientY: y, bubbles: true, composed: true, button: 0 }),
+          new MouseEvent(type, {
+            clientX: x, clientY: y, bubbles: true, composed: true, button: domButton,
+            shiftKey: domModifiers.shift, altKey: domModifiers.alt,
+            ctrlKey: domModifiers.control, metaKey: domModifiers.meta,
+          }),
         );
       }
       return clickStimulusReceipt(causeTraceId, phase
@@ -2180,6 +2200,10 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       address: { type: "string", description: key("cmd.ui.input.pointer.param.address") },
       x: { type: "number", description: key("cmd.ui.input.pointer.param.x"), required: false },
       y: { type: "number", description: key("cmd.ui.input.pointer.param.y"), required: false },
+      shift: { type: "boolean", description: key("cmd.ui.input.wheel.param.shift"), default: false },
+      alt: { type: "boolean", description: key("cmd.ui.input.wheel.param.alt"), default: false },
+      control: { type: "boolean", description: key("cmd.ui.input.wheel.param.control"), default: false },
+      meta: { type: "boolean", description: key("cmd.ui.input.wheel.param.meta"), default: false },
     },
     returns: "{ address, surface?, gutterHover }",
     message: () => tmsg("msg.ui.input.pointer"),
@@ -2210,17 +2234,22 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         // A human pointer enters first and then moves — the engine starts hover from that pair.
         // Sending only the move means moving on a surface never entered, so it never settles.
         const refused = await playGesture(surface.label, [
-          { ...at, kind: "enter", button: "left", clickCount: 1 },
-          { ...at, kind: "move", button: "left", clickCount: 1 },
+          { ...at, kind: "enter", button: "left", clickCount: 1, modifiers: pointerModifiers(p) },
+          { ...at, kind: "move", button: "left", clickCount: 0, modifiers: pointerModifiers(p) },
         ]);
         if (refused) return refused;
         return { address: addr, surface: surface.label, gutterHover: useGutterHover.getState().key };
       }
       const key = el instanceof HTMLElement ? (el.dataset.gutterKey ?? null) : null;
       if (key != null) useGutterHover.getState().set(key);
-      el.dispatchEvent(new PointerEvent("pointerenter", { bubbles: false, composed: true }));
-      el.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, composed: true }));
-      el.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, composed: true }));
+      const domModifiers = pointerModifiers(p);
+      const init = {
+        shiftKey: domModifiers.shift, altKey: domModifiers.alt,
+        ctrlKey: domModifiers.control, metaKey: domModifiers.meta,
+      };
+      el.dispatchEvent(new PointerEvent("pointerenter", { ...init, bubbles: false, composed: true }));
+      el.dispatchEvent(new PointerEvent("pointerover", { ...init, bubbles: true, composed: true }));
+      el.dispatchEvent(new PointerEvent("pointermove", { ...init, bubbles: true, composed: true }));
       return { address: addr, gutterHover: useGutterHover.getState().key };
     },
   });
@@ -3006,7 +3035,11 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       address: { type: "string", description: key("cmd.ui.input.dblclick.param.address"), required: true },
       x: { type: "number", description: key("cmd.ui.input.dblclick.param.x"), required: false },
       y: { type: "number", description: key("cmd.ui.input.dblclick.param.y"), required: false },
-      button: { type: "string", description: key("cmd.ui.input.dblclick.param.button"), enum: ["left", "right"], required: false },
+      button: { type: "string", description: key("cmd.ui.input.dblclick.param.button"), enum: ["left", "middle", "right"], required: false },
+      shift: { type: "boolean", description: key("cmd.ui.input.wheel.param.shift"), default: false },
+      alt: { type: "boolean", description: key("cmd.ui.input.wheel.param.alt"), default: false },
+      control: { type: "boolean", description: key("cmd.ui.input.wheel.param.control"), default: false },
+      meta: { type: "boolean", description: key("cmd.ui.input.wheel.param.meta"), default: false },
     },
     returns: "{ dblclicked, address, surface? }",
     message: () => tmsg("msg.ui.input.dblclick"),
@@ -3028,17 +3061,27 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       if (surface) {
         if (!hasContentViewHost()) return noGesturePath(addr);
         const at = gesturePoint(surface, p);
-        const button = p.button === "right" ? "right" as const : "left" as const;
-        const refused = await playGesture(surface.label, [...press(at, button, 1), ...press(at, button, 2)]);
+        const button = p.button === "right" ? "right" as const
+          : p.button === "middle" ? "middle" as const : "left" as const;
+        const modifiers = pointerModifiers(p);
+        const refused = await playGesture(surface.label, [
+          ...press(at, button, 1, modifiers), ...press(at, button, 2, modifiers),
+        ]);
         if (refused) return refused;
         return { dblclicked: true, address: addr, surface: surface.label };
       }
       const r = el.getBoundingClientRect();
       const x = r.left + r.width / 2;
       const y = r.top + r.height / 2;
+      const domButton = p.button === "right" ? 2 : p.button === "middle" ? 1 : 0;
+      const domModifiers = pointerModifiers(p);
       const fire = (type: string) =>
         el.dispatchEvent(
-          new MouseEvent(type, { clientX: x, clientY: y, bubbles: true, composed: true, button: 0 }),
+          new MouseEvent(type, {
+            clientX: x, clientY: y, bubbles: true, composed: true, button: domButton,
+            shiftKey: domModifiers.shift, altKey: domModifiers.alt,
+            ctrlKey: domModifiers.control, metaKey: domModifiers.meta,
+          }),
         );
       // React onDoubleClick listens for the native dblclick — two clicks do not produce it, so dispatch
       // it explicitly.
@@ -3116,7 +3159,11 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       },
       x: { type: "number", description: key("cmd.ui.input.drag.param.x"), required: false },
       y: { type: "number", description: key("cmd.ui.input.drag.param.y"), required: false },
-      button: { type: "string", description: key("cmd.ui.input.drag.param.button"), enum: ["left", "right"], required: false },
+      button: { type: "string", description: key("cmd.ui.input.drag.param.button"), enum: ["left", "middle", "right"], required: false },
+      shift: { type: "boolean", description: key("cmd.ui.input.wheel.param.shift"), default: false },
+      alt: { type: "boolean", description: key("cmd.ui.input.wheel.param.alt"), default: false },
+      control: { type: "boolean", description: key("cmd.ui.input.wheel.param.control"), default: false },
+      meta: { type: "boolean", description: key("cmd.ui.input.wheel.param.meta"), default: false },
       dx: { type: "number", description: key("cmd.ui.input.drag.param.dx"), required: false },
       dy: { type: "number", description: key("cmd.ui.input.drag.param.dy"), required: false },
       path: { type: "json", description: key("cmd.ui.input.drag.param.path"), required: false },
@@ -3256,6 +3303,9 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // drag died, and the observation surface caught that mouseup at the same moment and coordinate as
       // the first move). That protection is right — the inconsistency was on the injection side. When
       // two contracts do not know each other, both stay right and the feature dies.
+      const domButton = p.button === "right" ? 2 : p.button === "middle" ? 1 : 0;
+      const domButtons = p.button === "right" ? 2 : p.button === "middle" ? 4 : 1;
+      const domModifiers = pointerModifiers(p);
       const fire = (type: string, x: number, y: number, target: EventTarget) =>
         target.dispatchEvent(
           new MouseEvent(type, {
@@ -3263,8 +3313,12 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
             clientY: y,
             bubbles: true,
             composed: true,
-            button: 0,
-            buttons: type === "mouseup" ? 0 : 1,
+            button: domButton,
+            buttons: type === "mouseup" ? 0 : domButtons,
+            shiftKey: domModifiers.shift,
+            altKey: domModifiers.alt,
+            ctrlKey: domModifiers.control,
+            metaKey: domModifiers.meta,
           }),
         );
       const deltas = path ?? [{ dx: toPt.x - fromPt.x, dy: toPt.y - fromPt.y }];
@@ -3308,21 +3362,23 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         const end = byDelta
           ? { x: start.x + deltas.at(-1)!.dx, y: start.y + deltas.at(-1)!.dy }
           : toSurfacePt ?? start;
-        const button = p.button === "right" ? "right" as const : "left" as const;
+        const button = p.button === "right" ? "right" as const
+          : p.button === "middle" ? "middle" as const : "left" as const;
+        const modifiers = pointerModifiers(p);
         // No move is placed before the grab. The press itself creates hover at that spot (measured
         // 2026-08-08: one click emitted mouseover, mouseenter, and pointerover), and on an engine that
         // cannot receive moves that one leading step kills the whole drag.
-        const seq: SurfacePointerInput[] = [{ ...start, kind: "down", button, clickCount: 1 }];
+        const seq: SurfacePointerInput[] = [{ ...start, kind: "down", button, clickCount: 1, modifiers }];
         if (dist >= 5) {
           for (const point of pointsFrom(start)) {
             seq.push({
               x: Math.round(point.x),
               y: Math.round(point.y),
-              kind: "drag", button, clickCount: 1,
+              kind: "drag", button, clickCount: 0, modifiers,
             });
           }
         }
-        seq.push({ ...(dist >= 5 ? end : start), kind: "up", button, clickCount: 1 });
+        seq.push({ ...(dist >= 5 ? end : start), kind: "up", button, clickCount: 1, modifiers });
         // One gesture, one call — letting the caller stitch the steps puts the interval in the hands of
         // the CLI round trip.
         for (const [index, step] of seq.entries()) {
