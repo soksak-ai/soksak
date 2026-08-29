@@ -142,6 +142,9 @@ type Host struct {
 	// grants are the arguments a unit was last started with, kept under its name. A host that cannot
 	// resolve a path of its own starts the unit again from what started it the first time.
 	grants map[string]grant
+	// startedObservers receive one event after this host selects a reachable process generation.
+	startedObservers map[uint64]func(Open)
+	nextObserver     uint64
 	// answerWithin bounds how long a caller waits for one request. A unit that took the request and
 	// answered nothing must not hold the caller, and every caller behind it.
 	answerWithin time.Duration
@@ -203,7 +206,37 @@ func NewHost(deps Deps) *Host {
 	if deps.ProcessLabel == "" {
 		deps.ProcessLabel = controlwire.DefaultProcessLabel
 	}
-	return &Host{deps: deps, open: make(map[string]*unit), starting: make(map[string]*startAttempt), ended: make(map[string]UnitStatus)}
+	return &Host{
+		deps: deps, open: make(map[string]*unit), starting: make(map[string]*startAttempt),
+		ended: make(map[string]UnitStatus), startedObservers: make(map[uint64]func(Open)),
+	}
+}
+
+// ObserveStarted subscribes to process generations selected after registration. Delivery completes
+// before Start returns, so consumers can install dependent state without polling process records.
+func (host *Host) ObserveStarted(observer func(Open)) func() {
+	host.mu.Lock()
+	host.nextObserver++
+	id := host.nextObserver
+	host.startedObservers[id] = observer
+	host.mu.Unlock()
+	return func() {
+		host.mu.Lock()
+		delete(host.startedObservers, id)
+		host.mu.Unlock()
+	}
+}
+
+func (host *Host) notifyStarted(open Open) {
+	host.mu.Lock()
+	observers := make([]func(Open), 0, len(host.startedObservers))
+	for _, observer := range host.startedObservers {
+		observers = append(observers, observer)
+	}
+	host.mu.Unlock()
+	for _, observer := range observers {
+		observer(open)
+	}
 }
 
 // Started reports every unit this host holds open.
@@ -421,6 +454,7 @@ func (host *Host) startResolved(
 	if adopted, found, err := host.adopt(name, fingerprint, version, path); err != nil {
 		return Open{}, err
 	} else if found {
+		host.notifyStarted(adopted)
 		return adopted, nil
 	}
 
@@ -506,6 +540,7 @@ func (host *Host) startResolved(
 	host.open[name] = held
 	host.mu.Unlock()
 	go host.forgetWhenGone(name, held, ended, gone)
+	host.notifyStarted(held.open)
 	return held.open, nil
 }
 
