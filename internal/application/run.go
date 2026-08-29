@@ -185,8 +185,9 @@ func Run(assets embed.FS) error {
 			// No process inspector either: a daemon that cannot ask what a pid
 			// is running declares the commands that need it, rather than
 			// assuming a live pid is the child it started.
-			Reaper:      nil,
-			ProcessSink: processEventSink{bridge: bridge},
+			Reaper:        nil,
+			ProcessSink:   processEventSink{bridge: bridge},
+			ProcessOwners: []process.InventorySource{terminalProcessInventorySource{units: units}},
 		})
 		units.SetSecrets(wired.Secrets)
 	}
