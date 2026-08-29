@@ -91,4 +91,15 @@ describe("waiting for the declared surfaces to be in a frame", () => {
 
     await expect(m.nativeSurfacesSettled(1_000)).resolves.toBeUndefined();
   });
+
+  it("waits for a surface declaration event instead of probing ownership", async () => {
+    const m = await import("./nativeSurfaces");
+    const waiting = m.waitForNativeSurfaceDeclaration("terminal.win-test.tab-test", 1_000);
+    queueMicrotask(() => {
+      const surface = document.createElement("div");
+      surface.dataset.nativeSurfaceId = "terminal.win-test.tab-test";
+      document.body.append(surface);
+    });
+    await expect(waiting).resolves.toBeUndefined();
+  });
 });
