@@ -1490,6 +1490,15 @@ interface GestureSurface {
  */
 function gestureSurface(el: Element, addr: string): GestureSurface | UndeclaredProjection | null {
   const declared = el instanceof HTMLElement ? el.dataset : undefined;
+  // A plugin-owned native surface uses the same input ownership path as a browser content view.
+  // `data-native-surface` names the kind; `data-native-surface-id` is the exact compositor and
+  // input-owner label. Treating this declaration as ordinary host DOM made terminal gestures look
+  // successful while no native owner received a byte.
+  const nativeSurfaceId = el.getAttribute("data-native-surface-id");
+  if (nativeSurfaceId) {
+    const r = el.getBoundingClientRect();
+    return { label: nativeSurfaceId, x: 0, y: 0, w: r.width, h: r.height, whole: true };
+  }
   // Whole-surface projection: this node is the content surface. Its top-left is
   // (0,0) in surface coordinates, not the position it occupies on screen.
   if (declared?.surface) {
