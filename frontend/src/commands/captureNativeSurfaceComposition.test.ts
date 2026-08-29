@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { nativeSurfacePicturePlacements } from "./captureNativeSurfaceComposition";
+import { nativeSurfacePicturePaint, nativeSurfacePicturePlacements } from "./captureNativeSurfaceComposition";
 
 describe("capture-only native surface composition", () => {
+  it("paints the native picture opaquely and applies declared dim once above it", () => {
+    expect(nativeSurfacePicturePaint(1)).toEqual({ pictureAlpha: 1, veilAlpha: 0 });
+    expect(nativeSurfacePicturePaint(0.5)).toEqual({ pictureAlpha: 1, veilAlpha: 0.5 });
+    expect(nativeSurfacePicturePaint(0)).toEqual({ pictureAlpha: 1, veilAlpha: 1 });
+  });
+
   it("clips visible surfaces into the capture region and preserves layer order", () => {
     expect(nativeSurfacePicturePlacements(
       { x: 100, y: 50, w: 400, h: 300 },

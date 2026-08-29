@@ -21,6 +21,12 @@ export interface ComposedCapture extends DocumentCapture {
   };
 }
 
+/** Native dim is a black veil above opaque content, matching the document lighting plane. */
+export function nativeSurfacePicturePaint(alpha: number): { pictureAlpha: 1; veilAlpha: number } {
+  const retained = Math.max(0, Math.min(1, alpha));
+  return { pictureAlpha: 1, veilAlpha: 1 - retained };
+}
+
 export function nativeSurfacePicturePlacements(
   region: { x: number; y: number; w: number; h: number },
   surfaces: readonly AppliedSurface[],
@@ -97,7 +103,8 @@ export async function composeNativeSurfacePictures(
     if (!placement || !image) continue;
     const surface = surfaceById.get(placement.id);
     if (!surface) throw new Error(`VISIBLE_SURFACE_CAPTURE_FAILED: ${placement.id} left the applied inventory`);
-    context.globalAlpha = placement.alpha;
+    const paint = nativeSurfacePicturePaint(placement.alpha);
+    context.globalAlpha = paint.pictureAlpha;
     context.drawImage(
       image,
       placement.source.x / surface.w * image.naturalWidth,
@@ -109,6 +116,16 @@ export async function composeNativeSurfacePictures(
       placement.target.w * scaleX,
       placement.target.h * scaleY,
     );
+    if (paint.veilAlpha > 0) {
+      context.globalAlpha = paint.veilAlpha;
+      context.fillStyle = "black";
+      context.fillRect(
+        placement.target.x * scaleX,
+        placement.target.y * scaleY,
+        placement.target.w * scaleX,
+        placement.target.h * scaleY,
+      );
+    }
   }
   context.globalAlpha = 1;
   const encoded = canvas.toDataURL("image/png");
