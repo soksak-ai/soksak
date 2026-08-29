@@ -406,6 +406,23 @@ export function solveArrangement<L extends { id: string }>(input: {
     };
   }
 
+  // No rendered sidebar means there is no rail position, adjacency or blocked corridor to solve.
+  // Keep the canonical pane order and one stable station so focus-only changes cannot open a
+  // geometry transaction for an element that does not exist.
+  if (!input.railOpen) {
+    const cells = computeSplitLayout(input.layout).cells.map(({ value, rect }) => ({ id: value.id, rect }));
+    return {
+      station: 0,
+      cleanLines: cleanRailLines(cells.map((cell) => cell.rect)),
+      displayLayout: input.layout,
+      swapped: false,
+      betweenIds: [],
+      cells,
+      focusId,
+      maximizedId: null,
+    };
+  }
+
   // PIN is an anchoring contract: neither focus nor setting changes the rail or the canonical layout.
   // Only FLOW follows the focus, and it swaps panes only when resolving an unreachable row is requested
   // explicitly.
