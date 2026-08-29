@@ -255,7 +255,12 @@ func installedPluginRoots(home string) ([]string, error) {
 // terminalSurfaceLinks adapts the relay's send half to the terminal surface
 // service: one request, one unwrapped answer. The generic Answer shape is the
 // wire's own (controlwire.Answer), so a refusal keeps its code.
-func terminalSurfaceLinks(units *sidecar.Host) terminalsurface.Links {
+type terminalUnitHost interface {
+	Start(string) (sidecar.Open, error)
+	Send(string, controlwire.Request) (controlwire.Response, error)
+}
+
+func terminalSurfaceLinks(units terminalUnitHost) terminalsurface.Links {
 	var next atomic.Uint64
 	return terminalsurface.Links{Send: func(unit, command string, request map[string]any) (map[string]any, error) {
 		// The service socket expects its request under args.request. Flat control-plane args
