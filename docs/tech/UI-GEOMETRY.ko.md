@@ -220,11 +220,11 @@ resizer 와 드래그 핸들은 폭 0 오버레이입니다. 선은 B2 나 B3 �
 
 1. **내용 가시성.** 활성 workspace·스페이스·탭 사슬이 DOM 슬롯을 마운트된 상태로 보이게 유지합니다.
    오버레이와 레이아웃 움직임은 이를 바꾸지 않습니다.
-2. **실시간 표면 가시성.** 문서 밖 표면은 오버레이나 선언된 움직임이 가리는 동안 숨깁니다. 비활성
-   workspace·스페이스·탭 상태는 내용과 표면을 모두 숨깁니다.
-3. **픽셀 연속성.** 실시간 표면을 숨기기 전에 그 백엔드가 적용된 픽셀을 캡처합니다.
+2. **실시간 표면 가시성.** 문서 밖 표면은 오버레이가 가리는 동안 숨깁니다. 레이아웃 움직임은 compositor
+   transaction에서 live 상태를 유지합니다. 비활성 workspace·스페이스·탭 상태는 내용과 표면을 모두 숨깁니다.
+3. **픽셀 연속성.** 오버레이가 실시간 표면을 숨기기 전에 그 백엔드가 적용된 픽셀을 캡처합니다.
    `ParkedPicture` 가 그 픽셀을 아직 보이는 DOM 슬롯에 그리고, 실시간 표면이 다시 적용된 뒤에야
-   놓습니다.
+   놓습니다. 비활성 사슬은 다른 view가 픽셀을 소유하므로 표면과 그림을 모두 놓습니다.
 
 문서 안 터미널은 내용이 계속 살아 있으므로 주차 그림이 필요 없습니다. 문서 밖 브라우저는 모달 아래에서
 그림이 보이고 비활성입니다. 두 번째 실시간 렌더러가 아닙니다. 탭 슬롯은 `contentVisible`,
@@ -236,6 +236,10 @@ visibility, opacity, rect 와 함께 이 값들을 기록합니다.
 슬롯의 공개 `contentVisible=true` DOM commit을 기다리고 레이아웃 트랜잭션을 열지 않습니다. 기하를
 바꾸는 활성화는 트랜잭션을 열기 전에 원인을 선언하고 `layoutMoved=true`를 반환하므로 그 정확한 원인으로
 기다릴 수 있습니다. 트랜잭션이 열리지 않으면 대기 중인 원인도 남지 않습니다.
+
+해결된 arrangement는 `railPresent`를 포함합니다. paint 전 준비는 이전 render closure가 아니라 source와
+target 해에서 rail 폭을 구합니다. intent host 수명은 workspace identity입니다. render callback 변경은
+다음 prepare 호출만 바꾸며 활성 transaction 소유자를 unregister하지 않습니다.
 
 **2026-08-15, 이 빌드에서 실측.** webview 가 불투명했습니다. 이 프레임워크의 `MacBackdropNormal` 이
 webview 가 자기 배경을 그리도록 두고, `BackgroundType` 필드는 Linux 와 Windows 에서 읽히고 darwin

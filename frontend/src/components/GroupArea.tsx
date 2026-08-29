@@ -225,8 +225,7 @@ export const GroupArea = memo(function GroupArea({
   //
   // What no motion can fix is the order. A surface is composited above the document, so a card drawn
   // over a pane is drawn under the page in it — and there the page does step aside, and its picture,
-  // which is in the document, stands in its place. That is the overlay term of `surfaceShown`, and a
-  // pane whose page is being replaced by a stand-in through a travel is the other.
+  // which is in the document, stands in its place. That is the overlay term of the presentation.
   const rectMotion = useRef(createRectMotionTracker(`${projectId}/${content.id}`)).current;
   const displayLayout = solvedLayout ?? content.layout;
   const focusProjectionApplied = displayLayout !== content.layout;

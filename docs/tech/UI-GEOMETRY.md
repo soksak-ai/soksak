@@ -270,11 +270,12 @@ owns three facts rather than one:
 1. **Content visibility.** The active workspace, space and tab chain keeps the
    DOM slot mounted and visible. Overlay and layout motion do not change it.
 2. **Live-surface visibility.** An out-of-document surface is hidden while an
-   overlay or declared motion occludes it. Inactive workspace, space and tab
-   states hide both content and surface.
-3. **Pixel continuity.** Before a live surface is hidden, its backend captures
+   overlay occludes it. Layout motion keeps it live under the compositor transaction.
+   Inactive workspace, space and tab states hide both content and surface.
+3. **Pixel continuity.** Before an overlay hides a live surface, its backend captures
    the applied pixels. `ParkedPicture` draws those pixels in the still-visible
-   DOM slot and releases them only after the live surface is applied again.
+   DOM slot and releases them only after the live surface is applied again. An inactive
+   chain releases both the surface and picture because another view owns those pixels.
 
 For an in-document terminal, content remains live and no parked picture is
 needed. For an out-of-document browser, the picture is visible and inactive
@@ -290,6 +291,11 @@ public `contentVisible=true` DOM commit and opens no layout transaction. A
 geometry-changing activation declares a cause before opening the transaction,
 returns `layoutMoved=true`, and can be awaited by that exact cause. No cause is
 left pending when no transaction opens.
+
+The solved arrangement includes `railPresent`; pre-paint preparation derives rail width from the
+source and target solutions rather than from the previous render closure. The intent host lifetime
+is the workspace identity. Updating a render callback changes the next prepare call and never
+unregisters the owner of an active transaction.
 
 **Measured 2026-08-15, on this build.** The webview was opaque, because this
 framework's `MacBackdropNormal` leaves it drawing its own background and its

@@ -237,10 +237,10 @@ For every frame, assert:
 - sidebar motion produces one committed composition without a blank intermediate frame;
 - closing an overlay preserves renderer mount identity, session identity and previous pixels;
 - `contentVisible` keeps the active DOM slot mounted and visible;
-- `surfaceVisible` may be false while an overlay or layout motion occludes an out-of-document live
-  surface;
+- `surfaceVisible` is false while an overlay occludes an out-of-document live surface; layout motion
+  keeps the live surface in the compositor transaction;
 - when `contentVisible` is true and `surfaceVisible` is false, a parked picture preserves the last
-  applied pixels until the live surface returns.
+  applied pixels until the live surface returns; inactive chains retain no picture.
 
 One visibility transaction owns overlay occlusion and layout motion. Remove every older path that
 computes conflicting visibility. Do not retain a compatibility branch.

@@ -228,9 +228,9 @@ RED 가 앞 단계의 인증을 막을 수 없습니다.
 0·빈 프레임이 아니며, 모달 아래 내용이 보이는 비활성 상태인지 확인합니다. 사이드바가 움직이는
 동안 빈 중간 프레임이 없어야 합니다. 오버레이가 끝난 뒤 renderer mount identity, 세션 identity, 이전
 픽셀이 유지되어야 합니다. `contentVisible` 은 활성 DOM 슬롯을 mount 된 채 보이는 상태로 유지합니다.
-오버레이나 레이아웃 움직임이 문서 밖 live surface 를 가리면 `surfaceVisible` 은 false 일 수 있습니다.
-그때는 parked picture 가 live surface 가 돌아올 때까지 마지막으로 적용된 픽셀을 같은 슬롯에
-유지합니다.
+오버레이가 문서 밖 live surface 를 가리면 `surfaceVisible` 은 false입니다. 레이아웃 움직임은 live
+surface를 compositor transaction에 유지합니다. 그때는 parked picture 가 live surface 가 돌아올 때까지
+마지막으로 적용된 픽셀을 같은 슬롯에 유지합니다. 비활성 사슬은 그림을 유지하지 않습니다.
 
 표시 트랜잭션 하나가 오버레이 가림과 레이아웃 움직임을 함께 소유해야 합니다. 서로 어긋나는 표시
 상태를 계산하던 이전 경로는 제거합니다. 호환 분기를 남기지 않습니다.
