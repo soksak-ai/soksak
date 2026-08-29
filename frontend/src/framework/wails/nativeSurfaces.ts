@@ -32,10 +32,32 @@ export const NATIVE_COMMIT_LIMIT_MS = 2_000;
 type CompositorReceipt = Awaited<ReturnType<typeof CompositorService.Commit>>;
 let lastNotedSequence = 0;
 let interactiveDeliveryFailure: unknown = null;
+let lastPresentationSignature: string | null = null;
+
+function presentationSignature(snapshot: Parameters<NativeSurfaceCommit>[0]): string {
+  return JSON.stringify(snapshot.surfaces.map((surface) => ({
+    id: surface.id,
+    generation: surface.generation,
+    kind: surface.kind,
+    visible: surface.visible,
+    alpha: surface.alpha,
+    layer: surface.layer,
+    source: Object.fromEntries(Object.entries(surface.source).sort(([left], [right]) => (
+      left.localeCompare(right)
+    ))),
+  })));
+}
+
+export function __resetNativeSurfaceCommitForTest(): void {
+  lastNotedSequence = 0;
+  interactiveDeliveryFailure = null;
+  lastPresentationSignature = null;
+}
 
 function noteReceipt(snapshot: Parameters<NativeSurfaceCommit>[0], receipt: CompositorReceipt, askedAt: number): void {
   if (!receipt.accepted || receipt.sequence !== snapshot.sequence || receipt.sequence <= lastNotedSequence) return;
   lastNotedSequence = receipt.sequence;
+  lastPresentationSignature = presentationSignature(snapshot);
   const answeredAt = presentationNowUnixMs();
   noteAppliedSurfaces(
     (receipt.surfaces ?? []).map((surface) => ({
@@ -54,7 +76,8 @@ function noteReceipt(snapshot: Parameters<NativeSurfaceCommit>[0], receipt: Comp
 
 export const commitNativeSurfaces: NativeSurfaceCommit = async (snapshot) => {
   const askedAt = presentationNowUnixMs();
-  if (snapshot.interactive) {
+  const presentationChanged = presentationSignature(snapshot) !== lastPresentationSignature;
+  if (snapshot.interactive && !presentationChanged) {
     void CompositorService.Commit(Snapshot.createFrom(snapshot))
       .then((receipt) => noteReceipt(snapshot, receipt, askedAt))
       .catch((error) => { interactiveDeliveryFailure = error; });
