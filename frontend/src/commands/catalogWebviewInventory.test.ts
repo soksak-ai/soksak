@@ -15,7 +15,8 @@ vi.mock("../lib/contentViews", () => ({
   contentViewDomFacts: () => [],
   contentViewHost: () => ({ list: async () => labels }),
 }));
-vi.mock("../framework", () => ({
+vi.mock("../framework", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../framework")>()),
   invoke: vi.fn(async (name: string) => {
     if (name === "window_list") return ["win-test", "win-other"];
     if (name === "engine_surface_stats") return { registered: labels.length, providerParentPresent: true };
