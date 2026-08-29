@@ -486,6 +486,29 @@ executable name alone.
 
 ## Completion boundary
 
+## 2026-08-30 current-closure observation
+
+In a new capture-only v7 home, the local release batch installed Browser 0.0.8, File Tree 0.0.3,
+Vision 0.0.27 and Xterm 0.0.63 with the current six terminal Sidecars. The user-owned v3 and the
+frozen v4 process were not touched and the capture window remained non-key.
+
+The same workspace pane held a Vision tab and an Example Domain Browser tab. Both directions of
+`tab.switchScan` ran for 20 frames at 16 ms: `switchFrames=1`, `flickerFrames=0`, `blankFrames=[]`,
+`overlapFrames=[]`, `nativeMismatchFrames=[]`, and `clean=true`. `surface.inventory` at the settled
+end reported `worst=0` with no displaced, unapplied, undeclared, misparented or orphaned surfaces.
+The Browser and terminal content roots shared the same CSS pane rect; the Browser's own URL chrome
+correctly made its native child 31 px shorter without changing the compositor owner rect.
+
+The File Tree was linked to the left sidebar through the public sections API. A real exposed-resizer
+drag was recorded in 24 frames on the outward move and 30 frames on the return, with a 500 ms lead
+baseline. `capture_analyze` showed changes only during the finite resize interval and then a stable
+tail; the settled composition again returned `worst=0` and empty ownership-error lists. The inspected
+frames retained the terminal prompt, Browser tab chrome and File Tree while the sidebar moved.
+
+These are current-closure compositor and sidebar observations, not a release or a claim that every
+reported defect is closed. v4 remains on its prior frozen declaration until the explicit promotion
+transaction described above.
+
 ## Additional v7 observation defects
 
 ### Frozen-project promotion

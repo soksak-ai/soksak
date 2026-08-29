@@ -471,6 +471,29 @@ Darwin 의 Unix socket 길이 제한 때문에 긴 임시 runtime 경로는 쓸 
 
 ## 완료 구분
 
+## 2026-08-30 현재 폐포 관측
+
+새 capture-only v7 home에 local release batch로 Browser 0.0.8, File Tree 0.0.3, Vision 0.0.27,
+Xterm 0.0.63과 현재 terminal Sidecar 여섯 개를 설치했습니다. 사용자 v3와 frozen v4 process는
+건드리지 않았고 capture 창은 non-key로 유지했습니다.
+
+같은 workspace pane에 Vision 탭과 Example Domain Browser 탭을 열고 `tab.switchScan`을 양방향
+각 20 frame, 16 ms 간격으로 실행했습니다. 두 방향 모두 `switchFrames=1`, `flickerFrames=0`,
+`blankFrames=[]`, `overlapFrames=[]`, `nativeMismatchFrames=[]`, `clean=true`였습니다.
+정착 후 `surface.inventory`도 `worst=0`이며 displaced, unapplied, undeclared, misparented,
+orphan surface가 없었습니다. Browser의 URL chrome 때문에 native child 높이가 31 px 짧아지는
+것은 Browser 내부 chrome의 정상 영역 차이이며, Browser와 terminal content root의 CSS pane rect와
+compositor owner rect는 같았습니다.
+
+File Tree를 공개 sections API로 왼쪽 sidebar에 연결했습니다. 노출된 resizer를 실제 드래그하고
+바깥쪽 24 frame, 되돌림 30 frame을 녹화했으며 되돌림에는 500 ms 선행 기준 프레임을 두었습니다.
+`capture_analyze`는 유한한 resize 구간에서만 변화하고 이후 안정 tail을 보였습니다. 정착 후
+composition은 다시 `worst=0`, ownership 오류 배열 모두 빈 값이었고, 확인한 frame에는 이동 중에도
+terminal prompt, Browser 탭 chrome, File Tree가 남아 있었습니다.
+
+이는 현재 폐포의 compositor·sidebar 관측 결과이지 release나 10개 결함 전체 완료 선언이 아닙니다.
+위의 명시적 promotion transaction이 끝날 때까지 v4는 이전 frozen declaration을 유지합니다.
+
 ## v7 격리 관측에서 추가된 결함
 
 ### Frozen project 승격
