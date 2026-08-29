@@ -110,7 +110,7 @@ const nativeSurfaceViewIds = (content: Workspace["spaces"][number]): string[] =>
 // The three places a sidebar stands in take their bounds from `state/placeWidth` — one place, so
 // what a drag is clamped to and what `sidebar.width` refuses by are one rule.
 // Left workspace rail width.
-// Product layout contract: workspace rail default 54px, drag 44–110px.
+// Product layout contract: workspace rail defaults to 54px and drags within 44–110px.
 const RAIL_MIN = 44;
 const RAIL_MAX = 110;
 const RAIL_DEFAULT = 54;

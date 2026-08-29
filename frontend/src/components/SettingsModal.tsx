@@ -18,7 +18,7 @@ import { useIconRegistry } from "../ui/icons/registry";
 import { localize, useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
 
-// Settings modal — exactly as the product contract: a draggable 520px card,
+// Settings-modal product contract: a draggable 520px card,
 // header (⠿ grip·✕), theme grid (swatch + label, active = accent border), row layout
 // (label 130px + inset control), section caption, − n + stepper.
 

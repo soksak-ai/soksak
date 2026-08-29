@@ -11,7 +11,7 @@ import {
   validateWorkspaceRoot,
 } from "../lib/workspaceRoot";
 
-// New workspace modal — product contract: draggable 460px card,
+// New-workspace modal product contract: draggable 460px card,
 // header (+ icon, ⠿, ✕), row layout.
 //
 // The folder is an explicit choice (no implicit mode). The mode fixes what the input field means:

@@ -1452,10 +1452,9 @@ body,
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   The layer that consumes theme tokens — the SKIN mapping of the design
-   product contract. Colour comes only from CSS variables the engine
+   The layer that consumes theme tokens — the product SKIN mapping. Colour comes only from CSS variables the engine
    fills, and shape only from :root data-* variants. Workspace tab (wsA/wsI) and
-   panel tab (pt) styles per tabShape are the reference values unchanged.
+   panel tab (pt) styles per tabShape are the product contract values.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Titlebar, 44px ── */

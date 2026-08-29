@@ -1,5 +1,5 @@
-// 5 builtin themes — values taken verbatim from the product theme contract (
-// [data-k] tokens). Exactly the same raw JSON format as external themes, loaded through the same
+// Five built-in themes whose values are owned by the product theme contract. They use exactly the
+// same raw JSON format as installed themes and pass through the same
 // parseTheme validation (no builtin/external difference exists in the code). shadow is a full
 // box-shadow value.
 
