@@ -12,6 +12,7 @@
 // The caller (plugins/api.ts) does not know which one it is. That is why this file exists.
 import { moduleState } from "../lib/moduleState";
 import {
+  compositionOwnerViewId,
   readCompositionParticipant,
   type CompositionParticipant,
 } from "./compositionParticipants";
@@ -295,6 +296,45 @@ export const CONTENT_VIEW_BODY = "data-content-view-body";
  */
 export function nativeSurfaceDeclarations(doc: Document = document): HTMLElement[] {
   return Array.from(doc.querySelectorAll<HTMLElement>("[data-native-surface][data-native-surface-id]"));
+}
+
+export interface NativeSurfaceDomFact {
+  id: string;
+  kind: string;
+  ownerViewId: string | null;
+  generation: number | null;
+  declaredVisible: boolean | null;
+  declaredAlpha: number | null;
+  layer: number | null;
+  rect: { x: number; y: number; w: number; h: number };
+}
+
+/** Public ownership and declaration facts for every native surface in this document. */
+export function nativeSurfaceDomFacts(doc: Document = document): NativeSurfaceDomFact[] {
+  return nativeSurfaceDeclarations(doc).map((el) => {
+    const rect = el.getBoundingClientRect();
+    const number = (raw: string | undefined): number | null => {
+      if (raw === undefined || raw === "") return null;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : null;
+    };
+    const visible = el.dataset.nativeVisible;
+    return {
+      id: el.dataset.nativeSurfaceId ?? "",
+      kind: el.dataset.nativeSurface ?? "",
+      ownerViewId: compositionOwnerViewId(el),
+      generation: number(el.dataset.nativeGeneration),
+      declaredVisible: visible === "true" ? true : visible === "false" ? false : null,
+      declaredAlpha: number(el.dataset.nativeAlpha),
+      layer: number(el.dataset.nativeLayer),
+      rect: {
+        x: +rect.x.toFixed(2),
+        y: +rect.y.toFixed(2),
+        w: +rect.width.toFixed(2),
+        h: +rect.height.toFixed(2),
+      },
+    };
+  });
 }
 
 /** The slot declared for this label. Without one, this view has **no slot** and is not placed on screen. */

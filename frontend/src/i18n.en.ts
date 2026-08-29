@@ -1431,7 +1431,7 @@ export const en: Record<MsgKey, string> = {
   "msg.layout.alignment": "Worst off {off}pt — lag {lag}pt, drift {drift}pt",
   "msg.webview.health.query": "{n, plural, one {Health for # webview} other {Health for # webviews}}",
   "msg.surface.inventory": "Reconciled native surfaces",
-  "msg.surface.inventory.ghost": "{n, plural, one {# native surface has no view in state} other {# native surfaces have no views in state}}",
+  "msg.surface.inventory.ghost": "{n, plural, one {# native surface inventory mismatch} other {# native surface inventory mismatches}}",
   "msg.surface.inventory.clean": "{n, plural, one {Surfaces consistent — # state view, no ghosts} other {Surfaces consistent — # state views, no ghosts}}",
   "msg.webview.recover": "Reloaded {label}",
   "msg.window.close": "Closed the window",

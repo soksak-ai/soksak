@@ -10,7 +10,12 @@ import { register, type CommandHint } from "./registry";
 import { key, tmsg } from "../i18n";
 import { allViews, useSessions } from "../state/sessions";
 import { orphanSurfaceLabels, viewIdFromSurfaceLabel } from "../lib/surfaceLabels";
-import { CONTENT_VIEW_BODY, contentViewDomFacts, contentViewHost } from "../lib/contentViews";
+import {
+  CONTENT_VIEW_BODY,
+  contentViewDomFacts,
+  contentViewHost,
+  nativeSurfaceDomFacts,
+} from "../lib/contentViews";
 import { presentationNowUnixMs } from "../lib/presentationClock";
 
 interface LabelHealth {
@@ -29,10 +34,12 @@ export function registerWebviewCatalog(): void {
     triggers: { ko: "표면 정합 유령 네이티브 표면 잔존 대조 확인" },
     params: {},
     returns:
-      "{ window, actual: [label], ghosts: [label], orphans: [label], engine: {registered, providerParentPresent, surfaces:[{label,hidden,effectivelyHidden,alpha,effectiveAlpha,frame}]}, bodies: [{node,x,y,w,h,children,overlay,…}], contentViews: {inDocument, detached: [label], dom: [{label,slotLabel,computedVisibility,opacity,filter,composition:{kind,viewId,topologyPath,visible}|null,rect}], sampledAtUnixMs}, stateViews } — sampledAtUnixMs is when this ledger read itself, on the same presentation clock as ui.layout.wait-settled, so a caller can tell one settled observation window from two; opacity/filter are how much light the adapter lets through its own surface, so a second dimming on top of the focus lighting plane is readable instead of assumed absent",
+      "{ window, actual: [id], ghosts: [id], unowned: [id], unapplied: [id], orphans: [id], declarations:[{id,kind,ownerViewId,generation,declaredVisible,declaredAlpha,layer,rect}], engine: {registered, providerParentPresent, surfaces:[…]}, bodies: […], contentViews: {inDocument, detached: [label], dom: […], sampledAtUnixMs}, stateViews }",
     message: (d) => {
       const bad =
         Number((d.ghosts as string[] | undefined)?.length ?? 0) +
+        Number((d.unowned as string[] | undefined)?.length ?? 0) +
+        Number((d.unapplied as string[] | undefined)?.length ?? 0) +
         Number((d.orphans as string[] | undefined)?.length ?? 0) +
         Number((d.contentViews as { detached?: string[] } | undefined)?.detached?.length ?? 0);
       return bad > 0
@@ -60,20 +67,27 @@ export function registerWebviewCatalog(): void {
       const viewIds = new Set<string>();
       for (const t of useSessions.getState().workspaces)
         for (const c of t.spaces) for (const v of allViews(c.layout)) viewIds.add(v.id);
-      const ghosts = mine.filter((l) => {
-        const v = viewIdFromSurfaceLabel(l);
-        return v !== null && !viewIds.has(v);
+      const declarations = nativeSurfaceDomFacts();
+      const declarationById = new Map(declarations.map((fact) => [fact.id, fact]));
+      const actual = new Set(mine);
+      const ghosts = mine.filter((id) => !declarationById.has(id));
+      const unowned = mine.filter((id) => {
+        const owner = declarationById.get(id)?.ownerViewId;
+        return owner !== undefined && (owner === null || !viewIds.has(owner));
       });
-      if (ghosts.length > 0 || orphans.length > 0) {
+      const unapplied = declarations.filter((fact) => !actual.has(fact.id)).map((fact) => fact.id);
+      if (ghosts.length > 0 || unowned.length > 0 || unapplied.length > 0 || orphans.length > 0) {
         // A ghost is recorded in the activity hub the moment it is found — readable without pixels (sok events).
         void invoke("activity_publish", {
           kind: "surface.ghost",
           source: "webview",
           payload: {
             ghosts,
+            unowned,
+            unapplied,
             orphans,
             stateViews: viewIds.size,
-            message: `· surface ghost ×${ghosts.length} orphan ×${orphans.length}: ${[...ghosts, ...orphans].join(", ")}`,
+            message: `surface ghost=${ghosts.length} unowned=${unowned.length} unapplied=${unapplied.length} orphan=${orphans.length}`,
             origin: "internal",
           },
         }).catch(() => {});
@@ -131,7 +145,10 @@ export function registerWebviewCatalog(): void {
       return {
         actual: mine,
         ghosts,
+        unowned,
+        unapplied,
         orphans,
+        declarations,
         engine,
         bodies,
         stateViews: viewIds.size,

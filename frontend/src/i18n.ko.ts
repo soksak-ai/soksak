@@ -1436,7 +1436,7 @@ export const ko = {
   "msg.layout.alignment": "최대 어긋남 {off}pt — 지연 {lag}pt, 드리프트 {drift}pt",
   "msg.webview.health.query": "webview {n}개의 건강 상태입니다",
   "msg.surface.inventory": "표면 정합을 대조했습니다",
-  "msg.surface.inventory.ghost": "상태 뷰가 없는 네이티브 표면 {n}개가 남아 있습니다",
+  "msg.surface.inventory.ghost": "네이티브 표면 인벤토리 불일치 {n}개가 있습니다",
   "msg.surface.inventory.clean": "표면 정합 — 상태 뷰 {n}개, 유령 없음",
   "msg.webview.recover": "{label} 을 다시 불러왔습니다",
   "msg.window.close": "창을 닫았습니다",
