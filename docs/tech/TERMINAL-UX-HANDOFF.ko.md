@@ -278,8 +278,10 @@ cursor와 `SHIFT_MODE_READY_24680` 선택 강조가 보였고 capture 전후 inp
 `df255a6c19f8820f980896758e5a58b8d37f6de2`는 모든 enabled-state write가 공유 revision coordinator를
 기다리게 합니다. 다시 빌드한 v7에서 두 terminal Plugin을 모두 disable한 뒤 Vision과 Xterm 순서로
 enable했으며 네 transaction이 모두 성공했고 설치된 두 Plugin은 error 없이 enabled를 보고했습니다.
-`window.record`는 아직 framework의 document-only burst를 사용하므로 고친 단일 snapshot 경로의 증거로
-인증하지 않습니다. Ghostty, Kitty, Shitty, VT100, WezTerm pointer 행도 열려 있습니다.
+유한한 `window.record` 경로도 이제 frame마다 같은 native 합성을 사용합니다. v7 3-frame 실행은
+`frames=3`을 반환하고 화면이 정지해 같은 SHA-256인 589,723-byte PNG 세 개를 썼으며, 각 이미지에 두
+terminal과 selection이 보였습니다. 전후 모두 `windowFocused=false`였습니다. Ghostty, Kitty, Shitty,
+VT100, WezTerm pointer 행도 열려 있습니다.
 
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.

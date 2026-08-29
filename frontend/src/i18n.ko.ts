@@ -905,7 +905,7 @@ export const ko = {
   "cmd.window.pixels.desc": "한 영역에 실제로 그려진 것을 측정합니다 — 그림이 아니라 평균 색과 휘도입니다. 영역 축은 window.snapshot 과 같으므로(rect | node | tab), 측정하는 주소가 곧 캡처하는 주소입니다. 선언한 스타일이 화면에 닿았는지 확인할 때 씁니다: 계산된 스타일은 무엇을 선언했는지를, 이것은 무엇이 그려졌는지를 보고합니다(오버레이는 잘리거나 가려지거나 네이티브 표면 아래로 합성될 수 있고 그래도 선언은 옳게 읽힙니다). 두 상태나 두 영역은 휘도로 견주십시오.",
   "cmd.window.pixels.param.rect": "영역 {x,y,w,h} (CSS px, 창 좌표 — ui.measure 공간)",
   "cmd.window.pixels.param.tab": "콘텐츠 탭 id. 활성이 아닌 탭은 화면 밖에 주차되므로 그 순간 탭을 활성화했다가 원래 활성이던 것을 되돌립니다",
-  "cmd.window.record.desc": "주소로 받은 창을 PNG 연속(dir/f0000.png ...)으로 읽어 영상 소스로 씁니다. capture-only는 compositor에 상주한 주 document를 읽고 documentOnly를 보고하며 interactive는 compositor pixel을 읽습니다. 녹화는 scheduling이나 animation 상태를 바꾸지 않습니다. 폴더는 자동으로 만듭니다.",
+  "cmd.window.record.desc": "주소로 받은 창을 유한한 PNG 연속(dir/f0000.png ...)으로 읽어 영상 소스로 씁니다. 모든 frame은 window.snapshot과 같은 capture-only native-surface 합성을 사용하며 interactive capture는 이미 compositor pixel을 포함합니다. 명시한 interval과 deadline이 연속을 제한합니다. 녹화는 창에 포커스를 주거나 animation 상태를 바꾸지 않습니다. 폴더는 자동으로 만듭니다.",
   "cmd.surface.inventory.desc": "창 상태의 뷰와 컴포지터 인벤토리를 비교합니다. ghosts는 상태에 없지만 남아 있는 표면이고, detached는 선언한 슬롯 밖에 있는 표면입니다. 둘 중 하나라도 있으면 결함입니다.",
   "cmd.surface.snapshot.desc": "창에 포커스를 주지 않고 선언된 네이티브 표면 하나가 현재 소유한 정확한 픽셀을 캡처합니다. id는 surface.inventory 또는 노출된 data-native-surface-id에서 찾습니다.",
   "cmd.surface.snapshot.param.id": "surface.inventory 또는 data-native-surface-id의 정확한 네이티브 표면 id",

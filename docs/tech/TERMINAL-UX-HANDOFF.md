@@ -287,9 +287,11 @@ reported `already registered program: terminal-xterm` even though its renderer w
 commit `df255a6c19f8820f980896758e5a58b8d37f6de2` makes every enabled-state write await the shared
 revision coordinator. In the rebuilt v7, disabling both terminal Plugins and then enabling Vision
 followed by Xterm returned four successful transactions; both installed Plugins reported enabled
-with no error. `window.record` still uses the framework's document-only burst and is not certified
-by the corrected single-snapshot path. Ghostty, Kitty, Shitty, VT100 and WezTerm pointer rows also
-remain open.
+with no error. The finite `window.record` path now uses the same native composition per frame. A
+three-frame v7 run returned `frames=3`, wrote three 589,723-byte PNGs with the same SHA-256 because
+the screen was static, visibly retained both terminals and the selection, and kept
+`windowFocused=false` before and after. Ghostty, Kitty, Shitty, VT100 and WezTerm pointer rows remain
+open.
 
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.
