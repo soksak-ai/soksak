@@ -1831,7 +1831,11 @@ export function registerCatalog(): void {
       "{ projectId, fromSpaceId, spaceId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, motion:{journeys,cancelled,incomplete,clean}, clean, diffsPct, presentationFrames, activation, recordingDir }",
     message: (d) =>
       d.clean
-        ? tmsg("msg.space.switchScan.clean")
+        ? (d.activation as { transaction?: { mode?: string } } | undefined)?.transaction?.mode === "glide"
+          ? tmsg("msg.space.switchScan.cleanGlide", {
+              n: Number((d.motion as { journeys?: number } | undefined)?.journeys ?? 0),
+            })
+          : tmsg("msg.space.switchScan.clean")
         : tmsg("msg.space.switchScan.jank", { n: Number(d.switchFrames) }),
     examples: [
       'space.switchScan \'{"from":"spc-d5e6f7","to":"spc-h2j3k4"}\'',
@@ -2519,7 +2523,11 @@ export function registerCatalog(): void {
     returns:
       "{ fromTabId, tabId, frames, frameMs, switchFrame, switchFrames, flickerFrames, blankFrames, overlapFrames, nativeMismatchFrames, motion:{journeys,cancelled,incomplete,clean}, clean, diffsPct, presentationFrames, activation, recordingDir }",
     message: (data) => data.clean
-      ? tmsg("msg.tab.switchScan.clean")
+      ? (data.activation as { transaction?: { mode?: string } } | undefined)?.transaction?.mode === "glide"
+        ? tmsg("msg.tab.switchScan.cleanGlide", {
+            n: Number((data.motion as { journeys?: number } | undefined)?.journeys ?? 0),
+          })
+        : tmsg("msg.tab.switchScan.clean")
       : tmsg("msg.tab.switchScan.jank", { n: Number(data.flickerFrames) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
