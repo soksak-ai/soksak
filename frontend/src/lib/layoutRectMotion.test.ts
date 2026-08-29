@@ -102,6 +102,30 @@ describe("a layout change during hold", () => {
     expect(el.style.left).toBe("");
   });
 
+  it("names every JS-owned interpolation as a layout settlement phase", () => {
+    const t = createRectMotionTracker();
+    const { el, move } = laidOut(100, 50);
+    const animation = {
+      id: "",
+      cancel: vi.fn(),
+      pause: vi.fn(),
+      play: vi.fn(),
+      currentTime: 0,
+      playbackRate: 1,
+      playState: "running",
+    };
+    Object.defineProperty(el, "animate", { configurable: true, value: vi.fn(() => animation) });
+    t.ref(el);
+    t.flush();
+
+    move(200, 0);
+    t.flush();
+
+    // waitLayoutSettled consumes the public Animation id. Without it, the scan returns while the
+    // journey ledger still says end:null even though the same animation finishes immediately after.
+    expect(animation.id).toBe("phase");
+  });
+
   it("a structural snap replace adopts the new rect as the baseline instead of interpolating the old rect to the destination", () => {
     const t = createRectMotionTracker();
     const { el, move } = laidOut(100, 50);
