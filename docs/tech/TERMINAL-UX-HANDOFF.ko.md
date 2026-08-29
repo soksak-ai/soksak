@@ -280,8 +280,12 @@ cursor와 `SHIFT_MODE_READY_24680` 선택 강조가 보였고 capture 전후 inp
 enable했으며 네 transaction이 모두 성공했고 설치된 두 Plugin은 error 없이 enabled를 보고했습니다.
 유한한 `window.record` 경로도 이제 frame마다 같은 native 합성을 사용합니다. v7 3-frame 실행은
 `frames=3`을 반환하고 화면이 정지해 같은 SHA-256인 589,723-byte PNG 세 개를 썼으며, 각 이미지에 두
-terminal과 selection이 보였습니다. 전후 모두 `windowFocused=false`였습니다. Ghostty, Kitty, Shitty,
-VT100, WezTerm pointer 행도 열려 있습니다.
+terminal과 selection이 보였습니다. 전후 모두 `windowFocused=false`였습니다.
+
+Ghostty 0.0.34도 복사한 protocol 구현이 아니라 fork된 libghostty-vt mouse encoder로 같은 pointer 행을
+통과했습니다. v7 batch와 exact PTY hex는 `TERMINAL-STANDARD-AUDIT.ko.md`에 기록했습니다. 536,524-byte
+합성 capture는 window를 non-key로 유지했고 결과와 cursor를 직접 확인했습니다. Ghostty selection과
+wheel은 열려 있으며 Kitty, Shitty, VT100, WezTerm pointer 행도 열려 있습니다.
 
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.

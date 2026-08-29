@@ -290,8 +290,13 @@ followed by Xterm returned four successful transactions; both installed Plugins 
 with no error. The finite `window.record` path now uses the same native composition per frame. A
 three-frame v7 run returned `frames=3`, wrote three 589,723-byte PNGs with the same SHA-256 because
 the screen was static, visibly retained both terminals and the selection, and kept
-`windowFocused=false` before and after. Ghostty, Kitty, Shitty, VT100 and WezTerm pointer rows remain
-open.
+`windowFocused=false` before and after.
+
+Ghostty 0.0.34 passed the same named pointer row through the forked libghostty-vt mouse encoder,
+not a copied protocol implementation. The v7 batch and exact PTY hex are recorded in
+`TERMINAL-STANDARD-AUDIT.md`; its 536,524-byte composed capture kept the window non-key and visibly
+showed the result and cursor. Ghostty selection and wheel remain open, and Kitty, Shitty, VT100 and
+WezTerm pointer rows remain open.
 
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.
