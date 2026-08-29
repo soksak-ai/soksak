@@ -14,6 +14,7 @@ type OwnedProcess struct {
 	Owner           string  `json:"owner"`
 	Window          *string `json:"window,omitempty"`
 	Pane            *string `json:"pane,omitempty"`
+	CWD             string  `json:"cwd,omitempty"`
 	PID             uint32  `json:"pid"`
 	ParentPID       uint32  `json:"parentPid"`
 	Command         string  `json:"command"`

@@ -60,6 +60,7 @@ func (source terminalProcessInventorySource) Inventory() (process.OwnerInventory
 	for _, value := range answer.Data.Processes {
 		owner.Processes = append(owner.Processes, process.OwnedProcess{
 			ID: value.ID, Owner: value.Owner, Window: value.Window, Pane: value.Pane,
+			CWD: value.CWD,
 			PID: value.PID, ParentPID: value.ParentPID, Command: value.Command, State: value.State,
 			StartedAtUnixMs: value.StartedAtUnixMs, EndedAtUnixMs: value.EndedAtUnixMs,
 		})
