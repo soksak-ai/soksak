@@ -1,5 +1,9 @@
 import { nativeSurfaceDOMRuntime, startNativeSurfaceObserver } from "@min-median-max/wails-service-native-compositor";
-import type { NativeSurfaceCommit, NativeSurfaceObserverController } from "@min-median-max/wails-service-native-compositor";
+import type {
+  NativeSurfaceCommit,
+  NativeSurfaceObserverController,
+  NativeSurfacePresentation,
+} from "@min-median-max/wails-service-native-compositor";
 
 import * as CompositorService from "../../../bindings/github.com/min-median-max/wails-service-native-compositor/service";
 import { Snapshot } from "../../../bindings/github.com/min-median-max/wails-service-native-compositor/models";
@@ -8,6 +12,7 @@ import { presentationNowUnixMs } from "../../lib/presentationClock";
 import { nextFrame } from "../../lib/nextFrame";
 import { currentWindowLabel } from "../../lib/webviewLabels";
 import { layoutMotionFacts, onLayoutMotion } from "../../lib/layoutMotion";
+import { compositionOwnerViewId } from "../../lib/compositionParticipants";
 
 /**
  * How long a commit may go unanswered before it fails by name.
@@ -112,6 +117,7 @@ const commit: NativeSurfaceCommit = commitNativeSurfaces;
 
 let controller: NativeSurfaceObserverController | null = null;
 let stopMotion: (() => void) | null = null;
+let presentationVisibleFromDOM: NativeSurfacePresentation | null = null;
 // The compositor refuses a sequence it has already passed, so the counter has to survive a restart.
 // A fresh observer starts its own at 1, and every commit after a restart would be rejected as stale:
 // the screen would hold the last accepted inventory and nothing after it.
@@ -143,9 +149,26 @@ export function startNativeSurfaces(root: Document = document): void {
   stopMotion?.();
   controller?.stop();
   watching = root;
-  controller = startNativeSurfaceObserver(nativeSurfaceDOMRuntime(root), commit, declaringWindow(), sequenceFloor);
+  const runtime = nativeSurfaceDOMRuntime(root);
+  presentationVisibleFromDOM = runtime.presentationVisible;
+  controller = startNativeSurfaceObserver(runtime, commit, declaringWindow(), sequenceFloor);
   controller.setInteractive(layoutMotionFacts().active);
   stopMotion = onLayoutMotion((active) => controller?.setInteractive(active));
+}
+
+/** Applies target view ownership before React publishes the matching tab visibility DOM. */
+export async function stageNativeSurfacePresentation(visibleViewIds: ReadonlySet<string>): Promise<void> {
+  if (!controller) return;
+  await controller.stagePresentation((declaration) => {
+    const owner = compositionOwnerViewId(declaration as HTMLElement);
+    return owner !== null && visibleViewIds.has(owner);
+  });
+}
+
+/** Re-applies the current DOM presentation after a staged transaction is cancelled. */
+export async function restoreNativeSurfacePresentation(): Promise<void> {
+  if (!controller || !presentationVisibleFromDOM) return;
+  await controller.stagePresentation(presentationVisibleFromDOM);
 }
 
 /**
@@ -162,6 +185,7 @@ export async function clearNativeSurfaces(): Promise<void> {
   stopMotion = null;
   controller?.stop();
   controller = null;
+  presentationVisibleFromDOM = null;
   sequenceFloor += 1;
   // Stamped like every other commit, so a receipt for this one splits the same way.
   await commit({
