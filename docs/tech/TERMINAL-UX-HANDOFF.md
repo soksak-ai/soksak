@@ -492,6 +492,13 @@ In a new capture-only v7 home, the local release batch installed Browser 0.0.8, 
 Vision 0.0.27 and Xterm 0.0.63 with the current six terminal Sidecars. The user-owned v3 and the
 frozen v4 process were not touched and the capture window remained non-key.
 
+The browser release contract was subsequently advanced to immutable Browser 0.0.9 at source
+`9d26cfe`. Its owner gate now selects the profile's SDK 0.0.15; the prior 0.0.8 release remains
+untouched. The local release store accepted the attested artifact with digest
+`67df26fed421ae792c77b5a391db9a06d4e8b3e053383ac0d44ece0a1e820ba6`, and a second publication of
+the same complete bytes returned `unchanged`. This is release-store evidence only, not visual
+browser acceptance.
+
 The same workspace pane held a Vision tab and an Example Domain Browser tab. Both directions of
 `tab.switchScan` ran for 20 frames at 16 ms: `switchFrames=1`, `flickerFrames=0`, `blankFrames=[]`,
 `overlapFrames=[]`, `nativeMismatchFrames=[]`, and `clean=true`. `surface.inventory` at the settled

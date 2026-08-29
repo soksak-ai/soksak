@@ -477,6 +477,13 @@ Darwin 의 Unix socket 길이 제한 때문에 긴 임시 runtime 경로는 쓸 
 Xterm 0.0.63과 현재 terminal Sidecar 여섯 개를 설치했습니다. 사용자 v3와 frozen v4 process는
 건드리지 않았고 capture 창은 non-key로 유지했습니다.
 
+이후 브라우저 release contract는 source `9d26cfe`의 immutable Browser 0.0.9로 올렸습니다. Owner
+gate는 프로필의 SDK 0.0.15를 선택하며 이전 0.0.8 release는 그대로 보존합니다. local release
+store는 attested artifact digest
+`67df26fed421ae792c77b5a391db9a06d4e8b3e053383ac0d44ece0a1e820ba6`를 저장했고, 같은 완전한
+bytes를 두 번째 publish했을 때 `unchanged`를 반환했습니다. 이는 release-store 증거이며 브라우저
+시각 acceptance 증거는 아닙니다.
+
 같은 workspace pane에 Vision 탭과 Example Domain Browser 탭을 열고 `tab.switchScan`을 양방향
 각 20 frame, 16 ms 간격으로 실행했습니다. 두 방향 모두 `switchFrames=1`, `flickerFrames=0`,
 `blankFrames=[]`, `overlapFrames=[]`, `nativeMismatchFrames=[]`, `clean=true`였습니다.
