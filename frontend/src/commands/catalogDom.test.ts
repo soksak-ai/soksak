@@ -1303,6 +1303,21 @@ describe("ui.input.drag — realtime reproduction surface", () => {
     expect(down).toEqual([17]);
   });
 
+  it("delivers move and release through the source document", async () => {
+    mountNode(`<div data-node="btn">drag</div>`);
+    const node = document.querySelector<HTMLElement>("[data-node=btn]")!;
+    vi.spyOn(node, "getBoundingClientRect").mockReturnValue({
+      x: 10, y: 20, left: 10, top: 20, right: 110, bottom: 70,
+      width: 100, height: 50, toJSON: () => ({}),
+    });
+    const seen: string[] = [];
+    const observe = (event: Event) => seen.push(event.type);
+    for (const type of ["mousedown", "mousemove", "mouseup"]) document.addEventListener(type, observe);
+    await execute("ui.input.drag", { from: ADDR, x: 7, y: 9, dx: 20, dy: 0, steps: 2 }, {});
+    for (const type of ["mousedown", "mousemove", "mouseup"]) document.removeEventListener(type, observe);
+    expect(seen).toEqual(["mousedown", "mousemove", "mousemove", "mouseup"]);
+  });
+
   it("starts the requested recording before the drag and reports the completed frames in the same response", async () => {
     mountNode(`<div data-node="btn">drag</div>`);
     const node = document.querySelector<HTMLElement>("[data-node=btn]")!;
@@ -1320,7 +1335,7 @@ describe("ui.input.drag — realtime reproduction surface", () => {
         dx: 100,
         steps: 3,
         durationMs: 0,
-        recordDir: "<local-evidence>/drag-scan",
+        recordDir: "/tmp/drag-scan",
         recordFrames: 7,
         recordIntervalMs: 0,
         recordLeadMs: 0,
@@ -1329,7 +1344,7 @@ describe("ui.input.drag — realtime reproduction surface", () => {
       {},
     );
     expect(recordWindowFrames).toHaveBeenCalledWith({
-      dir: "<local-evidence>/drag-scan",
+      dir: "/tmp/drag-scan",
       frames: 7,
       intervalMs: 0,
       maxBytes: 4096,
@@ -1339,7 +1354,7 @@ describe("ui.input.drag — realtime reproduction surface", () => {
       dragged: true,
       recording: {
         status: "complete",
-        dir: "<local-evidence>/drag-scan",
+        dir: "/tmp/drag-scan",
         requestedFrames: 7,
         frames: 7,
         mode: "realtime",
@@ -1367,7 +1382,7 @@ describe("ui.input.drag — realtime reproduction surface", () => {
     const executing = execute("ui.input.drag", {
       from: ADDR,
       dx: 100,
-      recordDir: "<local-evidence>/drag-baseline",
+      recordDir: "/tmp/drag-baseline",
     }, {});
     await Promise.resolve();
     expect(downs).toEqual([]);
@@ -1398,13 +1413,13 @@ describe("ui.input.drag — realtime reproduction surface", () => {
       const result = await execute("ui.input.drag", {
         from: ADDR,
         dx: 100,
-        recordDir: "<local-evidence>/drag-failed-recording",
+        recordDir: "/tmp/drag-failed-recording",
       }, {});
       expect(result.data).toMatchObject({
         dragged: true,
         recording: {
           status: "failed",
-          dir: "<local-evidence>/drag-failed-recording",
+          dir: "/tmp/drag-failed-recording",
           requestedFrames: 120,
           mode: "realtime",
         },
@@ -1421,7 +1436,7 @@ describe("ui.input.drag — realtime reproduction surface", () => {
     const result = await execute("ui.input.drag", {
       from: ADDR,
       dx: 100,
-      recordDir: "<local-evidence>/drag-invalid-budget",
+      recordDir: "/tmp/drag-invalid-budget",
       recordMaxBytes,
     }, {});
     expect(result).toMatchObject({ ok: false, code: "INVALID_PARAMS" });
@@ -1611,7 +1626,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
 
     const result = await execute("ui.input.click", {
       address: ADDR,
-      recordDir: "<local-evidence>/click-transition",
+      recordDir: "/tmp/click-transition",
       recordFrames: 9,
       recordIntervalMs: 16,
       recordLeadMs: 0,
@@ -1620,7 +1635,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
 
     expect(order).toEqual(["record", "click"]);
     expect(recordWindowFrames).toHaveBeenCalledWith({
-      dir: "<local-evidence>/click-transition",
+      dir: "/tmp/click-transition",
       frames: 9,
       intervalMs: 16,
       maxBytes: 4096,
@@ -1630,7 +1645,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
       clicked: true,
       recording: {
         status: "complete",
-        dir: "<local-evidence>/click-transition",
+        dir: "/tmp/click-transition",
         requestedFrames: 9,
         frames: 9,
         mode: "realtime",
@@ -1655,7 +1670,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
 
     const executing = execute("ui.input.click", {
       address: ADDR,
-      recordDir: "<local-evidence>/click-baseline",
+      recordDir: "/tmp/click-baseline",
     }, {});
     await Promise.resolve();
     expect(clicks).toEqual([]);
@@ -1688,7 +1703,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
 
     const result = await execute("ui.input.click", {
       address: ADDR,
-      recordDir: "<local-evidence>/click-failed-recording",
+      recordDir: "/tmp/click-failed-recording",
     }, {});
 
     expect(clicks).toEqual(["click"]);
@@ -1696,7 +1711,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
       clicked: true,
       recording: {
         status: "failed",
-        dir: "<local-evidence>/click-failed-recording",
+        dir: "/tmp/click-failed-recording",
         requestedFrames: 40,
         mode: "realtime",
       },
@@ -1708,7 +1723,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
     mountNode(`<button data-node="btn">tab</button>`);
     const result = await execute("ui.input.click", {
       address: ADDR,
-      recordDir: "<local-evidence>/click-invalid-budget",
+      recordDir: "/tmp/click-invalid-budget",
       recordMaxBytes,
     }, {});
     expect(result).toMatchObject({ ok: false, code: "INVALID_PARAMS" });
@@ -1730,7 +1745,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
     });
     const executing = execute("ui.input.click", {
       address: ADDR,
-      recordDir: "<local-evidence>/click-trace",
+      recordDir: "/tmp/click-trace",
       recordFrames: 2,
       traceAddresses: [ADDR],
     }, {});
@@ -1762,7 +1777,7 @@ describe("ui.input.click — a synthetic event crosses the Shadow DOM boundary (
 
     const result = await execute("ui.input.click", {
       address: ADDR,
-      recordDir: "<local-evidence>/click-trace-failed-tail",
+      recordDir: "/tmp/click-trace-failed-tail",
       recordFrames: 3,
       traceAddresses: [ADDR],
     }, {});

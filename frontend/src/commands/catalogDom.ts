@@ -3402,9 +3402,8 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
           steps, durationMs, surface: dragSurface.label, recording: surfaceRecording,
         };
       }
-      // mousedown goes to the grabbed element (gutter/tab), move/up to the window — a gutter resize
-      // registers window-level mousemove/mouseup listeners on that handle, so they are received only
-      // when sent to the window.
+      // mousedown goes to the grabbed element. Move/up start at its document: document-level
+      // selection listeners receive them, and event bubbling also serves window-level gutter listeners.
       fire("mousedown", fromPt.x, fromPt.y, fromR.el);
       if (dist >= 5) {
         const points = pointsFrom(fromPt);
@@ -3413,7 +3412,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
             "mousemove",
             point.x,
             point.y,
-            window,
+            fromR.el.ownerDocument,
           );
           if (durationMs > 0 && index < points.length - 1) {
             await new Promise((resolve) =>
@@ -3422,7 +3421,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
           }
         }
       }
-      fire("mouseup", toPt.x, toPt.y, window);
+      fire("mouseup", toPt.x, toPt.y, fromR.el.ownerDocument);
       const recordingResult = recording
         ? await recording.report
         : { status: "not-requested" as const, mode: "realtime" as const };
