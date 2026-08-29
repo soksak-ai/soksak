@@ -36,6 +36,9 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 		Dial:        dialUnix,
 		ReadyWithin: 10 * time.Second,
 		ResolvePath: testSidecarResolver(home),
+		ResolveBindings: func() (map[string]string, error) {
+			return map[string]string{"soksak-sidecar-pty": "soksakv7-sidecar-pty"}, nil
+		},
 	})
 	t.Cleanup(func() { host.StopAll() })
 
@@ -362,6 +365,15 @@ func main() {
 		os.Exit(1)
 	}
 	processLabel := os.Getenv("SOKSAK_PROCESS_LABEL")
+	if os.Getenv("SOKSAK_SIDECAR_NAME") != "soksak-sidecar-fake-unit" {
+		fmt.Fprintln(os.Stderr, "own sidecar name was not declared")
+		os.Exit(1)
+	}
+	var bindings map[string]string
+	if json.Unmarshal([]byte(os.Getenv("SOKSAK_SIDECAR_BINDINGS")), &bindings) != nil {
+		fmt.Fprintln(os.Stderr, "sidecar dependency bindings were not declared")
+		os.Exit(1)
+	}
 	line, _ := json.Marshal(map[string]any{"protocol": 2, "socket": address, "processLabel": processLabel})
 	fmt.Println(string(line))
 	os.Stdout.Sync()

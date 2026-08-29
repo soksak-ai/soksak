@@ -17,6 +17,28 @@ type SidecarRuntime struct {
 	Process    string
 }
 
+// SelectedSidecarBindings returns the exact materialized process name for every Sidecar selected
+// by environment.json. It is the dependency discovery surface passed to Sidecars; callers do not
+// derive names from component ids or executable locations.
+func SelectedSidecarBindings(home string) (map[string]string, error) {
+	value, exists, err := Read(home)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, os.ErrNotExist
+	}
+	bindings := make(map[string]string, len(value.Sidecars))
+	for id := range value.Sidecars {
+		runtime, err := ResolveSelectedSidecar(home, id)
+		if err != nil {
+			return nil, err
+		}
+		bindings[id] = filepath.Base(runtime.Process)
+	}
+	return bindings, nil
+}
+
 // MaterializedSidecarProcess returns the relative installed execution path from the one project
 // name and the Sidecar-owned process role. The release artifact's canonical process name is an
 // input file, not the runtime process name.

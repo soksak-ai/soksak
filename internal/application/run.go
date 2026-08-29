@@ -123,6 +123,9 @@ func Run(assets embed.FS) error {
 			}
 			return unit.Process, nil
 		},
+		ResolveBindings: func() (map[string]string, error) {
+			return coreenvironment.SelectedSidecarBindings(resolved.Home)
+		},
 	})
 
 	// Started before the registry so `watch_dir` is either served or refused by name from the first

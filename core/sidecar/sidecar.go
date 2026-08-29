@@ -93,6 +93,9 @@ type Deps struct {
 	// ReadyWithin bounds the wait for a unit's first line. Zero takes the default below.
 	ReadyWithin time.Duration
 	ResolvePath func(name string) (string, error)
+	// ResolveBindings reads the current environment's Sidecar component-id to materialized process
+	// name map immediately before a child starts. It is separate from the child's own process name.
+	ResolveBindings func() (map[string]string, error)
 }
 
 // DefaultReadyWithin is how long a unit has to print its first line.
@@ -431,6 +434,17 @@ func (host *Host) startResolved(
 	if err != nil {
 		return Open{}, err
 	}
+	bindings := map[string]string{}
+	if host.deps.ResolveBindings != nil {
+		bindings, err = host.deps.ResolveBindings()
+		if err != nil {
+			return Open{}, err
+		}
+	}
+	bindingBytes, err := json.Marshal(bindings)
+	if err != nil {
+		return Open{}, err
+	}
 	child, err := host.deps.Spawner.Start(process.Spec{
 		Path: path,
 		// The home is passed rather than read. A unit that derived its own would answer for a
@@ -440,8 +454,9 @@ func (host *Host) startResolved(
 			host.deps.Environment,
 			host.deps.Home,
 			map[string]string{
-				controlwire.ProcessLabelEnvironment: host.deps.ProcessLabel,
-				controlwire.SidecarNameEnvironment:  filepath.Base(path),
+				controlwire.ProcessLabelEnvironment:    host.deps.ProcessLabel,
+				controlwire.SidecarNameEnvironment:     filepath.Base(path),
+				controlwire.SidecarBindingsEnvironment: string(bindingBytes),
 			},
 			secrets,
 		),
