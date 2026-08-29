@@ -250,7 +250,7 @@ captured viewport moved from line 80 to line 78. With 1000+1006 active, wheel-up
 `alternate-scroll`, `written=3`, and the shell received `1b4f41` (`ESC O A`). Ghostty, Kitty,
 Shitty, VT100 and WezTerm remain open; no evidence in this paragraph certifies their wheel path.
 
-The 2026-08-29 Alacritty pointer slice is mechanically GREEN but visually RED. Surface Contract
+The 2026-08-29 Alacritty pointer slice is GREEN only for its named row. Surface Contract
 0.0.7 defines strict down/move/up, button, click count, point and modifier facts. Render Kit 0.0.28
 owns mouse-mode arbitration and Alacritty Sidecar 0.0.37 owns SGR, legacy and UTF-8 encoding. The
 terminal-surface service validates the one-effect answer and remains the only PTY writer. Vision
@@ -268,19 +268,28 @@ shell hex `1b5b3c303b323b324d1b5b3c33323b363b324d1b5b3c303b363b326d`, exactly
 `ESC[<0;2;2M`, `ESC[<32;6;2M`, `ESC[<0;6;2m`. A Shift drag kept pointer sequence 3, advanced
 selection sequence to 4, and returned `IFT_MODE_READY_2468`.
 
-This does not close visual or full-closure verification. The non-key capture-only window kept
-`windowFocused=false`, but both the direct snapshot and a settings-overlay snapshot showed blank
-terminal pixels while the engine reported 104 paints, the selection state was non-empty, and the
-compositor reported the active surface applied and visible with zero geometry drift. That capture
-or native-paint discrepancy is a product RED, not permission to substitute state text for pixels.
+The first capture isolated a separate ownership defect rather than weakening the pixel gate. The
+non-key capture-only window kept `windowFocused=false`, but `window.snapshot` returned only the main
+document and therefore left native panes blank. The new public `surface.snapshot` read the same
+terminal owner directly and returned a 112,642-byte PNG containing its glyphs, cursor and selected
+range, proving that engine paint was not the missing layer. Core commit
+`81e33ca35549233bbaf3b4658a33f78218a7515c` now composes every visible applied native surface over a
+document-only capture in applied layer order, clipping by the requested region and preserving
+alpha; a visible surface that returns no PNG fails by name. The rebuilt v7 window snapshot returned
+588,815 bytes with `nativeComposed=true`, `surfaces=2`, `drawn=2`, `documentOnly=false`; direct pixel
+inspection showed the dim left terminal, active right terminal, cursor and
+`SHIFT_MODE_READY_24680` selection, while input state remained `windowFocused=false` before and
+after capture.
+
 The first consent run also exposed a Core lifecycle race: Vision's enabled write returned before
 its environment-triggered reload drained, so the following Xterm enable raced that reload and
 reported `already registered program: terminal-xterm` even though its renderer was active. Core
 commit `df255a6c19f8820f980896758e5a58b8d37f6de2` makes every enabled-state write await the shared
 revision coordinator. In the rebuilt v7, disabling both terminal Plugins and then enabling Vision
 followed by Xterm returned four successful transactions; both installed Plugins reported enabled
-with no error. The capture path must still be resolved before this pointer slice is called complete.
-Ghostty, Kitty, Shitty, VT100 and WezTerm pointer rows remain open.
+with no error. `window.record` still uses the framework's document-only burst and is not certified
+by the corrected single-snapshot path. Ghostty, Kitty, Shitty, VT100 and WezTerm pointer rows also
+remain open.
 
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.

@@ -242,7 +242,7 @@ component 아홉 개를 설치했습니다. v7에서 history 53행 위의 line w
 `alternate-scroll`, `written=3`을 반환했고 shell은 `1b4f41`(`ESC O A`)을 받았습니다. Ghostty,
 Kitty, Shitty, VT100, WezTerm은 열려 있으며 이 문단의 증거로 wheel 경로를 인증하면 안 됩니다.
 
-2026-08-29 Alacritty pointer 증분은 기계적으로 GREEN이지만 시각적으로 RED입니다. Surface Contract
+2026-08-29 Alacritty pointer 증분은 이름 붙인 그 행에서만 GREEN입니다. Surface Contract
 0.0.7은 엄격한 down/move/up, button, click count, point, modifier 사실을 정의합니다. Render Kit
 0.0.28은 mouse mode 중재를 소유하고 Alacritty Sidecar 0.0.37은 SGR, legacy, UTF-8 인코딩을
 소유합니다. terminal-surface service는 effect 하나인 응답을 검증하고 유일한 PTY writer로 남습니다.
@@ -260,19 +260,26 @@ environment revision 49로 설치했습니다. 1002+1006 상태에서 down/drag/
 `ESC[<0;2;2M`, `ESC[<32;6;2M`, `ESC[<0;6;2m`을 정확히 만들었습니다. Shift drag는 pointer
 sequence를 3으로 유지하면서 selection sequence를 4로 올렸고 `IFT_MODE_READY_2468`을 반환했습니다.
 
-이 결과는 시각 검증이나 전체 closure를 닫지 않습니다. Non-key capture-only 창은
-`windowFocused=false`를 유지했지만, 직접 snapshot과 설정 overlay snapshot 모두 터미널 픽셀이
-비었습니다. 같은 시점에 engine은 paint 104회를 보고했고 selection state는 비어 있지 않았으며
-compositor는 활성 surface가 geometry drift 0으로 적용되어 보인다고 보고했습니다. 이 capture 또는
-native paint 불일치는 제품 RED이며 상태 text를 pixel 증거로 바꿔 부를 근거가 아닙니다. 첫 동의
-실행에서는 Core 수명주기 경합도 드러났습니다. Vision enabled write가 environment-triggered reload를
+첫 capture는 pixel gate를 낮추지 않고 별도 ownership 결함을 분리했습니다. Non-key capture-only 창은
+`windowFocused=false`를 유지했지만 `window.snapshot`이 main document만 반환하여 native pane을
+비웠습니다. 새 공개 `surface.snapshot`은 같은 terminal owner를 직접 읽어 112,642-byte PNG를
+반환했고, 그 안에서 glyph, cursor, 선택 범위를 확인했습니다. 따라서 빠진 층은 engine paint가
+아니었습니다. Core commit `81e33ca35549233bbaf3b4658a33f78218a7515c`는 이제 document-only
+capture 위에 적용되어 보이는 모든 native surface를 applied layer 순서로 합성하고, 요청 영역으로
+clip하며 alpha를 보존합니다. 보이는 surface가 PNG를 반환하지 않으면 이름 붙여 실패합니다. 다시
+빌드한 v7 window snapshot은 588,815 byte와 `nativeComposed=true`, `surfaces=2`, `drawn=2`,
+`documentOnly=false`를 반환했습니다. 픽셀을 직접 확인해 dim된 왼쪽 terminal, 활성 오른쪽 terminal,
+cursor와 `SHIFT_MODE_READY_24680` 선택 강조가 보였고 capture 전후 input state는 모두
+`windowFocused=false`였습니다.
+
+첫 동의 실행에서는 Core 수명주기 경합도 드러났습니다. Vision enabled write가 environment-triggered reload를
 마치기 전에 반환하여 뒤따른 Xterm enable이 그 reload와 경합했고, renderer는 활성인데
 `이미 등록된 프로그램: terminal-xterm` 오류를 보고했습니다. Core commit
 `df255a6c19f8820f980896758e5a58b8d37f6de2`는 모든 enabled-state write가 공유 revision coordinator를
 기다리게 합니다. 다시 빌드한 v7에서 두 terminal Plugin을 모두 disable한 뒤 Vision과 Xterm 순서로
 enable했으며 네 transaction이 모두 성공했고 설치된 두 Plugin은 error 없이 enabled를 보고했습니다.
-Capture 경로는 여전히 해결해야 하므로 이 pointer 증분을 완료라고 부르면 안 됩니다. Ghostty, Kitty,
-Shitty, VT100, WezTerm pointer 행도 열려 있습니다.
+`window.record`는 아직 framework의 document-only burst를 사용하므로 고친 단일 snapshot 경로의 증거로
+인증하지 않습니다. Ghostty, Kitty, Shitty, VT100, WezTerm pointer 행도 열려 있습니다.
 
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.
