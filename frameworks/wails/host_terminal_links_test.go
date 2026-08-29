@@ -15,6 +15,13 @@ func TestTerminalUnitGenerationEventsAreInjectedIntoTheHost(t *testing.T) {
 	}
 }
 
+func TestWindowRuntimeReadinessIsAnInjectedProcessEvent(t *testing.T) {
+	field, found := reflect.TypeOf(Options{}).FieldByName("WindowReady")
+	if !found || field.Type.Kind() != reflect.Func {
+		t.Fatal("Wails host has no runtime-ready window event output")
+	}
+}
+
 type refusedByFake struct{}
 
 func (refusedByFake) Error() string { return "refused by the fake" }
