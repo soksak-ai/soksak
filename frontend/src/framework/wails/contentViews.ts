@@ -35,6 +35,11 @@ async function drive(label: string, message: Record<string, unknown>): Promise<R
   return (await CompositorService.Deliver(label, message)) as Record<string, unknown>;
 }
 
+async function surfaceIds(): Promise<string[]> {
+  const composition = await CompositorService.Latest(currentWindowLabel());
+  return composition.surfaces.map((surface) => surface.id);
+}
+
 export const wailsContentViewHost: ContentViewHost = {
   // Visibility is owned by the declaration — a view with a surface changes data-native-visible on
   // its own node and the next commit applies it. Pushing again here makes two writers.
@@ -66,8 +71,10 @@ export const wailsContentViewHost: ContentViewHost = {
 
   open: async (label) => unsupported(`open(${label})`),
   close: async (label) => unsupported(`close(${label})`),
-  list: async () => unsupported("list()"),
-  alive: async (label) => unsupported(`alive(${label})`),
+  // Enumeration and existence are reads of the compositor-owned inventory. DOM declarations are
+  // requests; the latest composition is the fact that the native layer accepted.
+  list: surfaceIds,
+  alive: async (label) => (await surfaceIds()).includes(label),
   navigate: async (label, url) => void (await drive(label, { verb: "navigate", url })),
   // A step of zero is not a direction. Sending it would ask the surface for a verb nobody answers,
   // and the refusal would name the surface rather than the call that was wrong.

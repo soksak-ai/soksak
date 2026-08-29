@@ -48,11 +48,10 @@ export function registerWebviewCatalog(): void {
       // set, so it is always "no ghosts" (measured 2026-08-03: 3 browser views on screen with
       // actual: []). The host has its own list under both implementations.
       const labels = await contentViewHost().list();
-      // This window's, by the window part of the label rather than by a kind. Matching a kind would
-      // hide every surface of a kind this core has not been told about, and a hidden surface is
-      // exactly the ghost this command exists to find.
-      const here = `-${currentWindowLabel()}-`;
-      const mine = labels.filter((l) => l.includes(here));
+      // This window's, by the declared window field rather than by a kind. Matching a kind would
+      // hide every surface of a kind this core has not been told about, and substring matching
+      // makes the answer depend on punctuation instead of the public label grammar.
+      const mine = labels.filter((label) => viewIdFromSurfaceLabel(label) !== null);
       // Orphan child — a surface whose parent window is already closed matches no
       // window's prefix, so the window-local comparison never sees it (real incident: a browser
       // from a closed harness window floated over an empty main window). Parent survival is judged
