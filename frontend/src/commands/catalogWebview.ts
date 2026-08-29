@@ -166,6 +166,66 @@ export function registerWebviewCatalog(): void {
     },
   });
 
+  register("surface.snapshot", {
+    description: key("cmd.surface.snapshot.desc"),
+    triggers: { ko: "네이티브 표면 픽셀 캡처 스냅샷" },
+    params: {
+      id: {
+        type: "string",
+        required: true,
+        description: key("cmd.surface.snapshot.param.id"),
+      },
+      path: {
+        type: "string",
+        description: key("cmd.surface.snapshot.param.path"),
+      },
+    },
+    returns: "{ id, saved?, media:{kind:'image/png',base64?|path?} }",
+    message: (data) => data.saved
+      ? tmsg("msg.surface.snapshot.saved", { path: String(data.saved) })
+      : tmsg("msg.surface.snapshot.captured", { id: String(data.id) }),
+    errors: ["TARGET_NOT_FOUND", "SURFACE_CAPTURE_UNAVAILABLE"],
+    examples: [
+      'surface.snapshot \'{"id":"terminal.win-example.tab-example-1"}\'',
+      'surface.snapshot \'{"id":"webview.win-example.tab-example","path":"/absolute/surface.png"}\'',
+    ],
+    handler: async (params) => {
+      const id = String(params.id ?? "");
+      const declared = nativeSurfaceDomFacts().some((surface) => surface.id === id);
+      const applied = declared && (await contentViewHost().list()).includes(id);
+      if (!applied) {
+        return {
+          ok: false as const,
+          code: "TARGET_NOT_FOUND" as const,
+          message: tmsg("msg.surface.snapshot.notFound", { id }),
+        };
+      }
+      const url = await contentViewHost().picture(id);
+      const prefix = "data:image/png;base64,";
+      if (url === null || !url.startsWith(prefix) || url.length === prefix.length) {
+        return {
+          ok: false as const,
+          code: "SURFACE_CAPTURE_UNAVAILABLE" as const,
+          message: tmsg("msg.surface.snapshot.unavailable", { id }),
+        };
+      }
+      const base64 = url.slice(prefix.length);
+      if (typeof params.path === "string" && params.path !== "") {
+        const written = await invoke<{ path: string; bytes: number }>("write_file_base64", {
+          path: params.path,
+          base64,
+        });
+        return {
+          id,
+          saved: written.path,
+          bytes: written.bytes,
+          media: { kind: "image/png", path: written.path },
+        };
+      }
+      return { id, media: { kind: "image/png", base64 } };
+    },
+  });
+
   register("webview.health.query", {
     description: key("cmd.webview.health.query.desc"),
     triggers: { ko: "웹뷰 건강 웹뷰 상태 크래시 조회 복구 상태" },

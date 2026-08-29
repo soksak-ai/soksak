@@ -180,6 +180,8 @@ export interface CommandSpec {
     // The surface exists but **this framework does not hold it** — a surface drawn by a sidecar engine is owned by
     // that plugin, and the core input path does not extend there.
     | "SURFACE_INPUT_UNAVAILABLE"
+    // The surface is declared and applied, but its owner returned no PNG snapshot.
+    | "SURFACE_CAPTURE_UNAVAILABLE"
     // This address is not a surface — the request asked for a fact only a surface has.
     | "NOT_A_SURFACE"
     // The projection did not declare the facts manipulation needs — it declared which realm, but not where inside it.

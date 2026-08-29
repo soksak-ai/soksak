@@ -81,6 +81,7 @@ export type CmdErrCode =
   | "LOCAL_INSTALL_PLAN_CHANGED"
   | "LOCAL_RELEASE_INVALID"
   | "VERSION_ARTIFACT_CONFLICT"
+  | "SURFACE_CAPTURE_UNAVAILABLE"
   | "SIDECAR_IN_USE"
   | "DEPENDENCY_VERSION_CONFLICT"
   // The DOM address is not on an exposed node (data-node) — no selector guessing, access only what

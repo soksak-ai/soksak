@@ -78,8 +78,8 @@ describe("surface.inventory window inventory", () => {
       ok: true,
       data: {
         id: "terminal.win-test.tab-terminal-1",
-        media: { kind: "image/png", base64: "c3VyZmFjZQ==" },
       },
+      media: { kind: "image/png", base64: "c3VyZmFjZQ==" },
     });
     await expect(execute("surface.snapshot", { id: "terminal.win-other.tab-away" }, {}))
       .resolves.toMatchObject({ ok: false, code: "TARGET_NOT_FOUND" });
