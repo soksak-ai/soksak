@@ -27,14 +27,34 @@ vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compos
   Snapshot: { createFrom: (value: unknown) => value },
 }));
 
-import { commitNativeSurfaces, NATIVE_COMMIT_LIMIT_MS } from "./nativeSurfaces";
+import {
+  __resetNativeSurfaceCommitForTest,
+  commitNativeSurfaces,
+  NATIVE_COMMIT_LIMIT_MS,
+} from "./nativeSurfaces";
 
-const snapshot = { window: "win-test", sequence: 4, surfaces: [] };
+const snapshot = { window: "win-test", sequence: 4, interactive: false, surfaces: [] };
+const surface = (visible: boolean, x = 0) => ({
+  id: "terminal.win-test.tab-a-1",
+  generation: 1,
+  kind: "terminal",
+  frame: { x, y: 0, width: 100, height: 100 },
+  visible,
+  alpha: 1,
+  layer: 0,
+  source: { pane: "tab-a.1" },
+});
+const receiptSurface = (visible: boolean, x = 0) => ({
+  id: "terminal.win-test.tab-a-1",
+  frame: { x, y: 0, width: 100, height: 100 },
+  visible,
+});
 
 describe("a commit the backend never answers", () => {
   beforeEach(() => {
     vi.useRealTimers();
     calls = 0;
+    __resetNativeSurfaceCommitForTest();
   });
 
   it("fails by name after the bound, naming the sequence nobody answered for", async () => {
@@ -59,8 +79,39 @@ describe("a commit the backend never answers", () => {
   });
 
   it("delivers interactive geometry without giving the bridge reply ownership of the next frame", async () => {
-    const delivered = commitNativeSurfaces({ ...snapshot, interactive: true } as never);
-    await expect(delivered).resolves.toMatchObject({ sequence: 4, accepted: true });
-    expect(calls).toBe(1);
+    const baseline = commitNativeSurfaces({ ...snapshot, sequence: 1, surfaces: [surface(true)] } as never);
+    answer({ sequence: 1, accepted: true, surfaces: [receiptSurface(true)] });
+    await baseline;
+
+    const delivered = commitNativeSurfaces({
+      ...snapshot,
+      sequence: 2,
+      interactive: true,
+      surfaces: [surface(true, 20)],
+    } as never);
+    await expect(delivered).resolves.toMatchObject({ sequence: 2, accepted: true });
+    expect(calls).toBe(2);
+  });
+
+  it("waits for the real receipt when interactive presentation ownership changes", async () => {
+    const baseline = commitNativeSurfaces({ ...snapshot, sequence: 1, surfaces: [surface(false)] } as never);
+    answer({ sequence: 1, accepted: true, surfaces: [receiptSurface(false)] });
+    await baseline;
+
+    let settled = false;
+    const delivered = commitNativeSurfaces({
+      ...snapshot,
+      sequence: 2,
+      interactive: true,
+      surfaces: [surface(true, 20)],
+    } as never).then((value) => {
+      settled = true;
+      return value;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    answer({ sequence: 2, accepted: true, surfaces: [receiptSurface(true, 20)] });
+    await expect(delivered).resolves.toMatchObject({ sequence: 2, accepted: true });
   });
 });
