@@ -216,6 +216,15 @@ and recovery phase used by mechanical verdicts.
 - raw retained-tail replay reported as complete full-screen recovery;
 - lowering a correct standard because one candidate fails it.
 
+## Active dependency-closure RED
+
+Terminal plugins compile the shared kit as an npm dependency, while the kit release contract marks
+that package private and forbids language-registry publication. The local registry currently resolves
+kit versions only through 0.0.81; publishing kit 0.0.86 with pnpm is refused by its `private` field.
+This prevents an xterm candidate from cleanly consuming the workspace-root fix in kit 0.0.86. The
+resolution must be one declared publisher/registry policy for private kits; a `file:` locator, source
+path, or temporary flag change is not an acceptable bridge.
+
 ## Completion
 
 The terminal platform is complete when six state providers and seven terminal plugins pass their

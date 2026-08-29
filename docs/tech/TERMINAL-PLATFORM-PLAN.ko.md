@@ -206,6 +206,15 @@ SOKSAK_UNATTENDED 이름은 대체가 아닙니다. 각 검사 실행은 고유�
 - 완전한 전체 화면 복구라고 보고하는 원시 tail 재생;
 - 후보 하나가 통과하지 못한다는 이유로 옳은 표준을 낮추는 것.
 
+## 활성 dependency closure RED
+
+터미널 plugin은 공통 kit을 npm dependency로 compile하지만, kit release 계약은 package를 private으로
+표시하고 언어 registry publish를 금지합니다. 현재 local registry는 kit을 0.0.81까지만 해석하며,
+pnpm으로 kit 0.0.86을 publish하면 `private` 필드가 거부합니다. 따라서 xterm candidate가 kit
+0.0.86의 workspace-root 수정을 깨끗하게 소비할 수 없습니다. private kit에 대한 publisher/registry
+정책을 하나의 선언된 경로로 정해야 하며 `file:` locator, source path, 임시 flag 변경은 허용하지
+않습니다.
+
 ## 완료
 
 터미널 플랫폼은 상태 제공자 여섯 개와 터미널 플러그인 일곱 개가 선언한 모든 플랫폼에서 각자의 독립
