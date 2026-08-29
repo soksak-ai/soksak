@@ -262,10 +262,10 @@ Darwin 의 capture-only 창은 컴포지터에 남고, alpha 0 이며, 마우스
 
 ## 실행 환경
 
-### v7 격리 후보 경계
+### v7 격리 후보 범위
 
 v7 관측은 공개 Registry와 사용자 `soksakv3`에서 분리된 local release transaction이다. 후보
-release store는 저장소 작업 트리 밖의 임의 임시 디렉터리가 아니라 다음의 명시된 경계를 사용한다.
+release store는 저장소 작업 트리 밖의 임의 임시 디렉터리가 아니라 다음의 명시된 디렉터리를 사용한다.
 
 `<local-release-store>/soksakv7`
 

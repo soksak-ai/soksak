@@ -400,8 +400,11 @@ Do not reproduce or modify the user `soksakv3` instance. Each assertion needs it
 
 The installer passes the materialized process name, derived from `environment.json` `processRole` and
 the project name, as `SOKSAK_SIDECAR_NAME`. PTY socket and token paths derive from that declared name;
-they are never inferred from an executable path or hard-coded. Thus `soksak-sidecar-pty` and
-`soksakv7-sidecar-pty` cannot share endpoints under one runtime root.
+Core also passes the complete selected component-id to materialized-process-name map as
+`SOKSAK_SIDECAR_BINDINGS`. The PTY derives its own endpoint from its identity; terminal engines use
+the `soksak-sidecar-pty` binding to find their peer. Neither role is inferred from the current
+executable. Thus `soksak-sidecar-pty` and `soksakv7-sidecar-pty` cannot share endpoints under one
+runtime root.
 
 Completion requires all provider-matrix RED tests to become GREEN, all numeric visibility and
 ownership checks to pass, and direct inspection of screenshots and motion recordings. A build,

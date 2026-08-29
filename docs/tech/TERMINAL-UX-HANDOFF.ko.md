@@ -390,10 +390,12 @@ session/generation을 함께 기록한 뒤, 동일한 clean 폐포를 v7에서 �
 
 ## 프로젝트별 sidecar identity
 
-Installer가 `environment.json`의 `processRole`과 현재 프로젝트 이름으로 materialize한 실행 파일 이름을
-`SOKSAK_SIDECAR_NAME`으로 자식에게 전달한다. PTY socket·token은 이 선언된 이름으로 파생한다. 따라서
+Installer가 `environment.json`의 `processRole`과 현재 프로젝트 값으로 materialize한 실행 파일명을
+`SOKSAK_SIDECAR_NAME`으로 자식에게 전달한다. Core는 모든 선택 Sidecar의 component id와 materialized
+실행 파일명 대응을 `SOKSAK_SIDECAR_BINDINGS`로 전달한다. PTY는 자기 socket·token을 자기 identity에서
+파생하고 terminal engine은 bindings의 `soksak-sidecar-pty` 값을 사용해 PTY endpoint를 찾는다. 따라서
 같은 runtime root라도 `soksak-sidecar-pty`와 `soksakv7-sidecar-pty`가 endpoint를 공유하지 않으며,
-실행 파일 이름을 추측하거나 하드코딩하지 않는다.
+실행 파일명을 추측하거나 하드코딩하지 않는다.
 
 모든 제공자 매트릭스의 RED 가 GREEN 이 되고, 모든 정량 표시 검사와 소유 검사가 통과하며, 스크린샷과
 움직임 녹화를 직접 확인해야 완료입니다. 빌드, 명령 응답, 과거 CI 실행만으로 이 인계를 끝낼 수
