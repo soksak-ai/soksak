@@ -110,4 +110,17 @@ describe("switch presentation verdict", () => {
       clean: false,
     });
   });
+
+  it("counts a departing parked picture over the arriving view as overlap", () => {
+    expect(classify).toBeTypeOf("function");
+    if (!classify) return;
+    const result = classify([
+      {
+        frame: 7,
+        from: view({ native: true, parkedPictureVisible: true }),
+        to: view({ native: true, contentVisible: true, parkedPictureVisible: true }),
+      },
+    ]);
+    expect(result).toMatchObject({ overlapFrames: [7], clean: false });
+  });
 });
