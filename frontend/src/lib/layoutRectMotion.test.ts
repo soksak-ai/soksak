@@ -153,6 +153,28 @@ describe("a layout change during hold", () => {
     expect(motionJourneys().at(-1)).toMatchObject({ end: "finish", landed: { x: 200, y: 0, w: 100, h: 50 } });
   });
 
+  it("keeps an early removed animation classified as cancelled even when layout reveals the destination", () => {
+    let now = 2_000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const t = createRectMotionTracker();
+    const { el, move } = laidOut(100, 50);
+    const animation = {
+      cancel: vi.fn(), pause: vi.fn(), play: vi.fn(), currentTime: 0,
+      playbackRate: 1, playState: "running",
+    };
+    Object.defineProperty(el, "animate", { configurable: true, value: vi.fn(() => animation) });
+    t.ref(el);
+    t.flush();
+    move(200, 0);
+    t.flush();
+
+    // Cancelling removes the animation effect and exposes the final layout rectangle. Geometry
+    // alone would therefore lie; the declared 160ms duration is the second required fact.
+    now += 40;
+    animation.playState = "idle";
+    expect(motionJourneys().at(-1)?.end).toBe("cancel");
+  });
+
   it("a structural snap replace adopts the new rect as the baseline instead of interpolating the old rect to the destination", () => {
     const t = createRectMotionTracker();
     const { el, move } = laidOut(100, 50);

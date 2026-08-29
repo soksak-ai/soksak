@@ -184,7 +184,7 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
         const lr = el.getBoundingClientRect();
         return { x: lr.x, y: lr.y, w: lr.width, h: lr.height };
       };
-      attachJourneyAnimation(j, a, landRect);
+      attachJourneyAnimation(j, a, LAYOUT_MOTION_MS, landRect);
       a.onfinish = () => {
         if (running.get(el) === a) running.delete(el);
         releaseDecoration();

@@ -145,9 +145,21 @@ export interface MotionJourney {
 const JOURNEYS_CAP = 64;
 const journeys: MotionJourney[] = [];
 const journeyAnimations = new WeakMap<MotionJourney, {
-  animation: Pick<Animation, "playState">;
+  animation: Pick<Animation, "playState" | "playbackRate">;
+  declaredMs: number;
   landed: () => MotionJourney["landed"];
 }>();
+
+function sameJourneyRect(
+  left: MotionJourney["landed"],
+  right: MotionJourney["to"],
+): boolean {
+  return left !== null
+    && Math.abs(left.x - right.x) < 0.5
+    && Math.abs(left.y - right.y) < 0.5
+    && Math.abs(left.w - right.w) < 0.5
+    && Math.abs(left.h - right.h) < 0.5;
+}
 // The journey is published to the activity hub too — logs discriminate better than capture (pixels)
 // (user decision 2026-07-27). `sok events --kinds motion.journey` streams start and end live.
 // Failures are swallowed (observation cannot block the body — the same contract as boot.step).
@@ -177,10 +189,18 @@ export function motionJourneys(): MotionJourney[] {
     if (journey.end !== null) continue;
     const probe = journeyAnimations.get(journey);
     if (!probe) continue;
+    const landed = probe.landed();
     if (probe.animation.playState === "finished") {
-      endJourney(journey, "finish", probe.landed());
+      endJourney(journey, "finish", landed);
     } else if (probe.animation.playState === "idle") {
-      endJourney(journey, "cancel", probe.landed());
+      const rate = Math.abs(probe.animation.playbackRate);
+      const requiredMs = rate > 0 ? probe.declaredMs / rate : Number.POSITIVE_INFINITY;
+      const elapsedMs = (typeof performance === "undefined" ? 0 : performance.now()) - journey.startedAt;
+      endJourney(
+        journey,
+        elapsedMs >= requiredMs && sameJourneyRect(landed, journey.to) ? "finish" : "cancel",
+        landed,
+      );
     }
   }
   return [...journeys];
@@ -189,10 +209,11 @@ export function motionJourneys(): MotionJourney[] {
 /** Connects the journey ledger to the public Web Animations state used to draw it. */
 export function attachJourneyAnimation(
   journey: MotionJourney,
-  animation: Pick<Animation, "playState">,
+  animation: Pick<Animation, "playState" | "playbackRate">,
+  declaredMs: number,
   landed: () => MotionJourney["landed"],
 ): void {
-  journeyAnimations.set(journey, { animation, landed });
+  journeyAnimations.set(journey, { animation, declaredMs, landed });
 }
 export function beginJourney(
   at: string,
