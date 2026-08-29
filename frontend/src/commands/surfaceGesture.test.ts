@@ -49,7 +49,7 @@ vi.mock("../framework", async (importOriginal) => ({
   currentWindow: () => ({ innerPosition: async () => ({ x: 0, y: 0 }), scaleFactor: async () => 1 }),
 }));
 
-import { registerDomCatalog } from "./catalogDom";
+import { registerDomCatalog, resolveExposed } from "./catalogDom";
 import { registerSurfaceInputProvider } from "../lib/surfaceInputProviders";
 import { catalogJson, execute, unregister } from "./registry";
 
@@ -108,6 +108,33 @@ describe("contract — a drag is a different event from a move", () => {
 });
 
 describe("gestures on a surface", () => {
+  it("routes a native surface declaration to its owner instead of synthesizing host DOM input", async () => {
+    document.body.innerHTML =
+      `<div class="tab-viewer" data-view-addr="${VIEW}">` +
+      `<div data-node="terminal-screen/1" data-native-surface="terminal"` +
+      ` data-native-surface-id="terminal.win-test.tab-native-1"></div></div>`;
+    at(document.querySelector('[data-node="terminal-screen/1"]')!, 0, 0, 330, 468);
+    const owner = {
+      owns: (label: string) => label === "terminal.win-test.tab-native-1",
+      sendInput: vi.fn(async (_label: string, _input: unknown) => {}),
+      inputState: vi.fn(async () => ({})),
+    };
+    const dispose = registerSurfaceInputProvider("soksak-plugin-terminal-vision", owner);
+    const address = `win/main/${VIEW}/node/terminal-screen/1`;
+    const resolved = resolveExposed(address);
+    expect("el" in resolved && resolved.el.getAttribute("data-native-surface-id"))
+      .toBe("terminal.win-test.tab-native-1");
+    const out = await execute("ui.input.drag", {
+      from: address, x: 5, y: 20, dx: 80, dy: 0, steps: 2,
+    }, {});
+    expect(out.ok, JSON.stringify(out)).toBe(true);
+    expect((out.data as { surface?: string } | undefined)?.surface)
+      .toBe("terminal.win-test.tab-native-1");
+    expect(owner.sendInput.mock.calls.map(([, input]) => (input as { kind: string }).kind))
+      .toEqual(["down", "drag", "drag", "up"]);
+    dispose();
+  });
+
   it("routes a host layout tab to the exact surface label declared by its plugin owner", async () => {
     document.body.innerHTML =
       `<div class="tab-viewer" data-view-addr="${VIEW}">` +
