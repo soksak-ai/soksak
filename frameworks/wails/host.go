@@ -57,6 +57,9 @@ type Options struct {
 	// WindowReady runs after a window reports WindowRuntimeReady. At that point framework window
 	// discovery can address it; HostReady intentionally occurs earlier and cannot make that claim.
 	WindowReady func(string)
+	// RendererReady runs after one window's complete command catalogue has been accepted. A caller
+	// that needs renderer-owned commands must wait for this rather than infer readiness from a window.
+	RendererReady func(string)
 	// Release gives up the process claim before a framework quit path can bypass Run's return.
 	Release func() error
 	// Presentation declares whether this process is shown on the user's desktop.
@@ -338,6 +341,9 @@ func Run(options Options) error {
 		if err := renderer.DeclareFrom(event.Sender, event.Data); err != nil {
 			log.Printf("renderer commands: %v", err)
 			return
+		}
+		if options.RendererReady != nil {
+			options.RendererReady(event.Sender)
 		}
 		if event.Sender != controlPlaneWindow && bootstrap.workspaceDeclared() {
 			closeBootstrap()
