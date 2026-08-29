@@ -494,17 +494,17 @@ func surfaceBackends(webviewBackend *webviewsurface.Backend, terminalBackend *te
 func wireTerminalSessions(backend *terminalsurface.Backend, identity string, links terminalsurface.Links) *terminalsurface.Sessions {
 	sessions := terminalsurface.NewSessions(identity, links)
 	backend.UseSessions(sessions)
-		backend.ObservePanes(func(created bool, source compositor.SurfaceSource) {
-			if created {
-				go func() {
-					// One declaration has one lifecycle transaction. Retrying after a failed
-					// surface.open created a second owner against the same sidecar pane and
-					// left an orphaned renderer (`already renders`) with no PTY record.
-					// Recovery is an explicit new declaration/rehydrate, not a timer.
-					if err := sessions.Start(map[string]string(source)); err != nil {
-						log.Printf("terminal pane %s did not open: %v", source["pane"], err)
-					}
-				}()
+	backend.ObservePanes(func(created bool, source compositor.SurfaceSource) {
+		if created {
+			go func() {
+				// One declaration has one lifecycle transaction. Retrying after a failed
+				// surface.open created a second owner against the same sidecar pane and
+				// left an orphaned renderer (`already renders`) with no PTY record.
+				// Recovery is an explicit new declaration/rehydrate, not a timer.
+				if err := sessions.Start(map[string]string(source)); err != nil {
+					log.Printf("terminal pane %s did not open: %v", source["pane"], err)
+				}
+			}()
 			return
 		}
 		pane := source["pane"]
@@ -528,6 +528,14 @@ func terminalStateNotifier(
 ) func(pane string, seq uint64) {
 	var mu sync.Mutex
 	last := map[string]time.Time{}
+	type pendingState struct {
+		seq   uint64
+		timer *time.Timer
+	}
+	pending := map[string]*pendingState{}
+	emitState := func(pane string, seq uint64) {
+		emit("terminal-surface:state", map[string]any{"pane": pane, "sequence": seq})
+	}
 	return func(pane string, seq uint64) {
 		note(pane, seq)
 		if emit == nil {
@@ -536,11 +544,35 @@ func terminalStateNotifier(
 		mu.Lock()
 		moment := now()
 		if held, seen := last[pane]; seen && moment.Sub(held) < 100*time.Millisecond {
+			remaining := 100*time.Millisecond - moment.Sub(held)
+			if queued := pending[pane]; queued != nil {
+				queued.seq = seq
+			} else {
+				queued := &pendingState{seq: seq}
+				pending[pane] = queued
+				queued.timer = time.AfterFunc(remaining, func() {
+					mu.Lock()
+					current := pending[pane]
+					if current != queued {
+						mu.Unlock()
+						return
+					}
+					delete(pending, pane)
+					last[pane] = now()
+					trailing := queued.seq
+					mu.Unlock()
+					emitState(pane, trailing)
+				})
+			}
 			mu.Unlock()
 			return
 		}
+		if queued := pending[pane]; queued != nil {
+			queued.timer.Stop()
+			delete(pending, pane)
+		}
 		last[pane] = moment
 		mu.Unlock()
-		emit("terminal-surface:state", map[string]any{"pane": pane, "sequence": seq})
+		emitState(pane, seq)
 	}
 }
