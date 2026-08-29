@@ -29,6 +29,7 @@ import { resolve } from "node:path";
 
 const host = vi.hoisted(() => ({
   sendInput: vi.fn(async (_label: string, _input: unknown) => {}),
+  wheel: vi.fn(async (_label: string, _x: number, _y: number, _dx: number, _dy: number) => {}),
   evalJs: vi.fn(async () => "ok"),
   typeText: vi.fn(async () => {}),
 }));
@@ -88,6 +89,7 @@ const sent = (label: string) =>
 
 beforeEach(() => {
   host.sendInput.mockClear();
+  host.wheel.mockClear();
   host.evalJs.mockClear();
   registerDomCatalog();
 });
@@ -108,6 +110,16 @@ describe("contract — a drag is a different event from a move", () => {
 });
 
 describe("gestures on a surface", () => {
+  it("routes wheel delta and position through the addressed surface input realm", async () => {
+    const addr = mountSurface();
+    const out = await execute("ui.input.wheel", {
+      from: addr, x: 10, y: 20, deltaX: 0, deltaY: 120, deltaMode: "pixel",
+      shift: false, alt: false, control: false, meta: false,
+    }, {});
+    expect(out.ok, JSON.stringify(out)).toBe(true);
+    expect(host.wheel).toHaveBeenCalledWith("browser.main.tab-4h7kq2", 10, 20, 0, 120);
+  });
+
   it("routes a native surface declaration to its owner instead of synthesizing host DOM input", async () => {
     document.body.innerHTML =
       `<div class="tab-viewer" data-view-addr="${VIEW}">` +
