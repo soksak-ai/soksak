@@ -199,10 +199,23 @@ does not name shell families or produce `shellText`.
 | 2 — focus | Open. Capture-only DOM focus is not native AppKit focus; the unattended native gate remains required. |
 | 3 — active cursor | Open. Engine state is exposed, but native pointer-to-active-cursor certification remains required. |
 | 4 — keyboard input | Partial. Command/DOM input and post-restart shell input are GREEN; unattended AppKit key-to-PTY remains required. |
-| 5–7 — picker, modal and sidebar visibility | Partial. Same-pane tab switching is one clean frame; the v3 overlay/sidebar visibility matrix must be rerun. |
+| 5–7 — picker, modal and sidebar visibility | Partial. The installed v7 browser↔Vision glide is gap-free in both directions; picker/modal/sidebar occlusion and border/dim remain open. |
 | 8 — colour parity | Open. The v3 restore captures are readable and consistent by inspection, but the complete computed-style/ANSI matrix has not rerun on v3. |
 | 9 — macOS traffic-light close | Core owner gate remains GREEN, including repeated native clicks. |
 | 10 — test interference | GREEN for the current capture-only restore gate: non-key, no focus transfer, exact identity cleanup, zero owned Sidecars. |
+
+The 2026-08-29 v7 compositor increment removed duplicate presentation ownership rather than adding
+a provider exception. Browser 0.0.8 keeps a mounted webview intrinsically visible. Terminal Kit
+0.0.77 separates Workbench intrinsic visibility from Core host presentation and Vision 0.0.16 writes
+only the intrinsic axis to `data-native-visible`. Their owner gates passed; both Plugin releases
+returned `created` and then `unchanged` through the immutable local release command. In v7 revision
+39, `surface.inventory` showed the inactive Vision and active Browser declarations both
+`declaredVisible=true`, with ghosts, unowned, unapplied and orphans empty. Two 20-frame
+`tab.switchScan` runs (Browser→Vision and Vision→Browser) each reported eight completed journeys,
+zero cancelled/incomplete journeys, and empty blank, overlap and native-mismatch frame lists. The
+recorded frames were inspected directly without focusing the window; no white gap or stale native
+surface was present. This closes the tab-switch compositor ownership defect, not the remaining
+overlay, border or focus-input matrices.
 
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.

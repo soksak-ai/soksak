@@ -195,10 +195,21 @@ family를 열거하거나 `shellText`를 만들지 않습니다.
 | 2 — 포커스 | 열려 있음. Capture-only DOM focus는 native AppKit focus가 아니며 무인 native gate가 필요합니다. |
 | 3 — 활성 커서 | 열려 있음. Engine 상태는 공개됐지만 native pointer에서 활성 cursor까지의 인증이 필요합니다. |
 | 4 — 키보드 입력 | 부분 GREEN. Command/DOM 입력과 restart 뒤 shell 입력은 GREEN이며 무인 AppKit key-to-PTY가 남았습니다. |
-| 5–7 — picker·modal·sidebar 표시 | 부분 GREEN. 같은 pane 탭 전환은 한 clean frame이며 v3 overlay/sidebar visibility matrix를 다시 실행해야 합니다. |
+| 5–7 — picker·modal·sidebar 표시 | 부분 GREEN. 설치된 v7 browser↔Vision glide는 양방향 표시 공백이 없으며 picker/modal/sidebar 가림과 border/dim은 열려 있습니다. |
 | 8 — 색 parity | 열려 있음. v3 restore 캡처는 읽을 수 있고 일관되지만 v3에서 전체 계산 style/ANSI matrix를 다시 실행하지 않았습니다. |
 | 9 — macOS 신호등 닫기 | 반복 native click을 포함한 Core owner gate가 GREEN입니다. |
 | 10 — 테스트 간섭 | 현재 capture-only restore gate에서 GREEN: non-key, focus 이동 없음, exact identity cleanup, 소유 Sidecar 0개. |
+
+2026-08-29 v7 compositor 증분은 provider 예외를 추가하지 않고 중복 presentation 소유권을 제거했습니다.
+Browser 0.0.8은 mount된 webview를 intrinsic visible로 유지합니다. Terminal Kit 0.0.77은 Workbench
+intrinsic visibility와 Core host presentation을 분리하고 Vision 0.0.16은 intrinsic 축만
+`data-native-visible`에 씁니다. 각 owner gate가 통과했고 두 Plugin release는 immutable local release
+명령에서 `created` 뒤 `unchanged`를 반환했습니다. v7 revision 39의 `surface.inventory`에서 비활성 Vision과
+활성 Browser 선언은 모두 `declaredVisible=true`였고 ghosts, unowned, unapplied, orphans는 비었습니다.
+Browser→Vision과 Vision→Browser의 20-frame `tab.switchScan`은 각각 journey 8개가 모두 완료됐고 cancel·
+incomplete 0, blank·overlap·native mismatch 목록이 모두 비었습니다. 창에 focus를 주지 않고 녹화 프레임을
+직접 확인했으며 흰 공백이나 남은 native surface가 없었습니다. 이는 tab-switch compositor 소유권 결함을
+닫는 증거이며 overlay, border, focus-input matrix를 닫는 증거는 아닙니다.
 
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.
