@@ -25,7 +25,7 @@ func (source terminalProcessInventorySource) Inventory() (process.OwnerInventory
 			}
 		}
 		if !present {
-			return process.OwnerInventory{Owner: ptycontract.SidecarName}, nil
+			return process.OwnerInventory{Owner: ptycontract.SidecarName, Processes: []process.OwnedProcess{}}, nil
 		}
 	}
 	payload, err := json.Marshal(map[string]any{})

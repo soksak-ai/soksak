@@ -90,6 +90,18 @@ describe("a region draws the set standing in it", () => {
     expect(host.textContent).toContain("Files");
   });
 
+  it("mounts the active side provider rather than leaving only the section frame", async () => {
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), {
+      mount: (container) => container.append("mounted"),
+    });
+    const set = useSectionSets.getState().create("work");
+    useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
+    useSectionSets.getState().standLeft(set.id);
+    render("left");
+    await act(async () => { await Promise.resolve(); });
+    expect(host.textContent).toContain("mounted");
+  });
+
   it("draws the linked section in the rail", () => {
     stand("rail");
     render("rail");
