@@ -19,6 +19,28 @@ type refusedByFake struct{}
 
 func (refusedByFake) Error() string { return "refused by the fake" }
 
+type recordedUnitRestarter struct {
+	units []string
+}
+
+func (restarter *recordedUnitRestarter) RestartUnit(unit string) error {
+	restarter.units = append(restarter.units, unit)
+	return nil
+}
+
+func TestTerminalUnitGenerationEventCallsTheSessionOwner(t *testing.T) {
+	var listener func(string)
+	restarter := &recordedUnitRestarter{}
+	observeTerminalUnitStarts(restarter, func(selected func(string)) func() {
+		listener = selected
+		return func() {}
+	})
+	listener("soksak-sidecar-terminal-shitty")
+	if len(restarter.units) != 1 || restarter.units[0] != "soksak-sidecar-terminal-shitty" {
+		t.Fatalf("restarted units=%v", restarter.units)
+	}
+}
+
 // The host's glue builds the session layer from the identity and the injected
 // links, and a started pane speaks to its engine first. Start is called
 // directly here: driving Apply would need an AppKit runloop (P7), so the
@@ -30,7 +52,7 @@ func TestTheSessionsSpeakThroughTheInjectedLinks(t *testing.T) {
 		return nil, refusedByFake{}
 	}}
 	backend := terminalsurface.NewBackend()
-	sessions := wireTerminalSessions(backend, "install-test", links)
+	sessions := wireTerminalSessions(backend, "install-test", links, nil)
 
 	if err := sessions.Input("tab-1.1", "aa"); err == nil ||
 		!strings.Contains(err.Error(), "is not running") {

@@ -215,11 +215,14 @@ func Run(assets embed.FS) error {
 			Assets:        assets,
 			Identity:      resolved.Identifier,
 			TerminalLinks: terminalSurfaceLinks(units),
-			CaptureProbe:  os.Getenv("SOKSAK_CAPTURE_PROBE"),
-			Registry:      registry,
-			Release:       listener.Close,
-			Bridge:        bridge,
-			Reapers:       []wails.UnitReaper{units},
+			TerminalUnitStarts: func(listener func(string)) func() {
+				return units.ObserveStarted(func(open sidecar.Open) { listener(open.Name) })
+			},
+			CaptureProbe: os.Getenv("SOKSAK_CAPTURE_PROBE"),
+			Registry:     registry,
+			Release:      listener.Close,
+			Bridge:       bridge,
+			Reapers:      []wails.UnitReaper{units},
 			// Declared by whoever started this process. Unset is a person at the application, which
 			// is what a launch with nothing stated about it is. A measurement run declares the
 			// opposite and gets a window that draws without taking the front.

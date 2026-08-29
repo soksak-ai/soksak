@@ -69,6 +69,9 @@ type Options struct {
 	// the terminal surface service. The framework cannot import the relay
 	// (C1a); the launcher injects exactly the function the sessions speak by.
 	TerminalLinks terminalsurface.Links
+	// TerminalUnitStarts subscribes to selected sidecar process generations. A replacement process
+	// has no in-memory surfaces, so held declarations rebuild from this event.
+	TerminalUnitStarts func(func(string)) func()
 }
 
 // macActivation is how this launch presents itself to the desktop.
@@ -210,7 +213,9 @@ func Run(options Options) error {
 	// The pane sessions and the surface channel: a declared pane opens its
 	// shell and its render off the commit path, and the ring's frames land on
 	// the pane's own host view.
-	terminalSessions := wireTerminalSessions(terminalBackend, options.Identity, options.TerminalLinks)
+	terminalSessions := wireTerminalSessions(
+		terminalBackend, options.Identity, options.TerminalLinks, options.TerminalUnitStarts,
+	)
 	wireTerminalChannel(terminalBackend, terminalSessions, options.Identity, options.Bridge.Emit)
 
 	surfaceComposition := NewCompositorSource(nativeCompositor)
@@ -492,9 +497,30 @@ func surfaceBackends(webviewBackend *webviewsurface.Backend, terminalBackend *te
 // wireTerminalSessions gives the terminal backend its session layer. Opening a
 // pane speaks to sidecars, so it runs off the commit path — the declaration
 // returns immediately and the session catches up.
-func wireTerminalSessions(backend *terminalsurface.Backend, identity string, links terminalsurface.Links) *terminalsurface.Sessions {
+type terminalUnitRestarter interface {
+	RestartUnit(string) error
+}
+
+func observeTerminalUnitStarts(restarter terminalUnitRestarter, subscribe func(func(string)) func()) {
+	if subscribe == nil {
+		return
+	}
+	subscribe(func(unit string) {
+		if err := restarter.RestartUnit(unit); err != nil {
+			log.Printf("terminal surfaces did not restart after %s process selection: %v", unit, err)
+		}
+	})
+}
+
+func wireTerminalSessions(
+	backend *terminalsurface.Backend,
+	identity string,
+	links terminalsurface.Links,
+	subscribe func(func(string)) func(),
+) *terminalsurface.Sessions {
 	sessions := terminalsurface.NewSessions(identity, links)
 	backend.UseSessions(sessions)
+	observeTerminalUnitStarts(sessions, subscribe)
 	backend.ObservePanes(func(created bool, generation uint64, source compositor.SurfaceSource) {
 		if created {
 			go func() {
