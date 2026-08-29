@@ -290,7 +290,14 @@ wheel은 열려 있습니다.
 Kitty 0.0.31도 provider ABI가 공개한 fork의 live `Screen` encoder로 같은 pointer 행을 통과했습니다.
 Exact closure identity와 PTY 증거는 `TERMINAL-STANDARD-AUDIT.ko.md`에 기록했습니다. 289,925-byte 합성
 capture는 window를 non-key로 유지했고 결과와 cursor를 보여 줬습니다. Kitty selection과 wheel은
-열려 있으며 Shitty, VT100, WezTerm pointer 행도 열려 있습니다.
+열려 있습니다.
+
+Shitty 0.0.30도 provider ABI가 공개한 fork의 기존 live `encodeMouseProtocol` 경로로 pointer 행을
+통과했습니다. Exact closure, PTY byte, non-key 합성 capture는
+`TERMINAL-STANDARD-AUDIT.ko.md`에 기록했습니다. Shitty selection과 wheel은 열려 있습니다. 첫 실행
+pane 하나는 DOM declaration이 남은 상태에서 선택된 service process가 바뀐 뒤 render owner를 잃었고,
+그 원인과 누락된 reopen transaction은 명시적인 lifecycle RED로 남겼습니다. VT100과 WezTerm pointer
+행도 열려 있습니다.
 
 Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboard, visibility, performance와 남은
 제품 목표는 이 exact closure 또는 이후 완전히 다시 조합한 closure를 사용해야 합니다.

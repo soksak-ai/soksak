@@ -300,7 +300,14 @@ showed the result and cursor. Ghostty selection and wheel remain open.
 Kitty 0.0.31 then passed the same pointer row through its forked live `Screen` encoder exposed by
 the provider ABI. Exact closure identity and PTY evidence are in `TERMINAL-STANDARD-AUDIT.md`; the
 289,925-byte composed capture kept the window non-key and showed the result and cursor. Kitty
-selection and wheel remain open. Shitty, VT100 and WezTerm pointer rows remain open.
+selection and wheel remain open.
+
+Shitty 0.0.30 passed the pointer row through the fork's existing live `encodeMouseProtocol` path
+exposed by its provider ABI. Its exact closure, PTY bytes, and non-key composed capture are recorded
+in `TERMINAL-STANDARD-AUDIT.md`. Shitty selection and wheel remain open. One first-run pane also
+lost its render owner while its DOM declaration remained after the selected service process
+changed; the cause and missing reopen transaction remain an explicit lifecycle RED. VT100 and
+WezTerm pointer rows remain open.
 
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
 remaining product goals must use this exact or a later fully recomposed closure.
