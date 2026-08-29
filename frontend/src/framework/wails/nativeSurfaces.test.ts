@@ -77,6 +77,12 @@ describe("the native surface observer", () => {
     second.dataset.tabId = "tab-b";
     second.append(declare("terminal.win-main.tab-b-1"));
     document.body.append(first, second);
+    for (const element of document.querySelectorAll<HTMLElement>("[data-native-surface]")) {
+      vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+        x: 0, y: 0, left: 0, top: 0, right: 100, bottom: 100,
+        width: 100, height: 100, toJSON: () => ({}),
+      } as DOMRect);
+    }
     startNativeSurfaces();
     await settle();
 
