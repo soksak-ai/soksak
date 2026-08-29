@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   __resetSurfaceInputProvidersForTest,
   registerSurfaceInputProvider,
+  surfaceInputLabelOfView,
   surfaceInputProvider,
 } from "./surfaceInputProviders";
 
@@ -36,6 +37,16 @@ describe("surface input owner", () => {
     registerSurfaceInputProvider("soksak-plugin-browser-chromium", p);
     expect(surfaceInputProvider("chromium-tab-1")).toBe(p);
     expect(surfaceInputProvider("browser.main.tab-4h7kq2")).toBeNull();
+  });
+
+  it("reads a view label from its owner instead of reconstructing a plugin surface kind", () => {
+    const p = {
+      ...provider((label) => label === "terminal.win-a.tab-a-1"),
+      labelOfView: (viewId: string) => viewId === "tab-a" ? "terminal.win-a.tab-a-1" : null,
+    };
+    registerSurfaceInputProvider("soksak-plugin-terminal-vision", p);
+    expect(surfaceInputLabelOfView("tab-a")).toBe("terminal.win-a.tab-a-1");
+    expect(surfaceInputLabelOfView("tab-b")).toBeNull();
   });
 
   // If two owners both claim the same surface, no value determines the delivery target.

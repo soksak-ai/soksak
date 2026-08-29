@@ -108,6 +108,26 @@ describe("contract — a drag is a different event from a move", () => {
 });
 
 describe("gestures on a surface", () => {
+  it("routes a host layout tab to the exact surface label declared by its plugin owner", async () => {
+    document.body.innerHTML =
+      `<div class="tab-viewer" data-view-addr="${VIEW}">` +
+      `<div data-node="layout/tab/tab-terminal"></div></div>`;
+    at(document.querySelector('[data-node="layout/tab/tab-terminal"]')!, 0, 0, 800, 600);
+    const owner = {
+      owns: (label: string) => label === "terminal.win-test.tab-terminal-1",
+      labelOfView: (viewId: string) => viewId === "tab-terminal" ? "terminal.win-test.tab-terminal-1" : null,
+      sendInput: vi.fn(async () => {}),
+      inputState: vi.fn(async () => ({})),
+    };
+    const dispose = registerSurfaceInputProvider("soksak-plugin-terminal-vision", owner);
+    const out = await execute("ui.input.click", {
+      address: `win/main/${VIEW}/node/layout/tab/tab-terminal`, x: 25, y: 20,
+    }, {});
+    expect(out.ok, JSON.stringify(out)).toBe(true);
+    expect(owner.sendInput.mock.calls.map(([, input]) => (input as { kind: string }).kind)).toEqual(["down", "up"]);
+    dispose();
+  });
+
   it("a double click sends four events in one call and the second press has clickCount 2", async () => {
     const addr = mountSurface();
     const out = await execute("ui.input.dblclick", { address: addr, x: 40, y: 12 }, {});
