@@ -22,6 +22,13 @@ func TestWindowRuntimeReadinessIsAnInjectedProcessEvent(t *testing.T) {
 	}
 }
 
+func TestRendererDeclarationReadinessIsAnInjectedProcessEvent(t *testing.T) {
+	field, found := reflect.TypeOf(Options{}).FieldByName("RendererReady")
+	if !found || field.Type.Kind() != reflect.Func {
+		t.Fatal("Wails host has no renderer-declared event output")
+	}
+}
+
 type refusedByFake struct{}
 
 func (refusedByFake) Error() string { return "refused by the fake" }
