@@ -174,6 +174,7 @@ export function commitViewPresentation(viewId: string, presentation: ViewPresent
         // It may have come back while the picture was being taken. Hiding it then would park a
         // surface nobody asked to park.
         if (presentationByView.get(viewId) === key) commit();
+        else releaseParkedPicture(viewId);
       })
       .catch((e: unknown) => {
         // The park still has to happen. A rejection with nobody holding it is an unhandled one, and
