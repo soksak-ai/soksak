@@ -388,7 +388,7 @@ export function registerDataCatalog(): void {
     returns: "{ path }",
     message: (d) => tmsg("msg.data.backup", { path: String(d.path) }),
     errors: ["INTERNAL"],
-    examples: ["data.backup", 'data.backup \'{"path":"<local-evidence>/soksak.db"}\''],
+    examples: ["data.backup", 'data.backup \'{"path":"/tmp/soksak.db"}\''],
     handler: async (p) => {
       const path = await invoke<string>("data_backup", {
         path: typeof p.path === "string" ? p.path : null,
@@ -407,7 +407,7 @@ export function registerDataCatalog(): void {
     message: () => tmsg("msg.data.restore"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['data.restore \'{"path":"<local-evidence>/soksak.db"}\''],
+    examples: ['data.restore \'{"path":"/tmp/soksak.db"}\''],
     handler: async (p) => {
       if (typeof p.path !== "string" || !p.path.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.data.pathRequired") };

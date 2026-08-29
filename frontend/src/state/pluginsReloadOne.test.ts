@@ -27,7 +27,7 @@ vi.mock("../plugins/loader", () => ({
 
 const ID = "soksak-plugin-demo";
 // The checkout folder name is not the plugin identity. plugin.json and the selection config define the id.
-const PATH = "<local-evidence>/arbitrary-checkout";
+const PATH = "/tmp/arbitrary-checkout";
 let restoreEnvironmentHandler = () => {};
 
 // Current manifest on disk — the test mutates it mid-run, standing in for the author editing the file.

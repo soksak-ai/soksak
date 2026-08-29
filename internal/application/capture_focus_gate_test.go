@@ -12,7 +12,7 @@ import (
 
 func TestWindowCaptureDoesNotChangeTheInputOwner(t *testing.T) {
 	owner := activeInputOwner(t)
-	gate := newGate(t, "<local-evidence>/soksak-capture-focus-gate", "com.soksak.capturefocusgate")
+	gate := newGate(t, "/tmp/soksak-capture-focus-gate", "com.soksak.capturefocusgate")
 	gate.start()
 	if afterStart := activeInputOwner(t); afterStart != owner {
 		t.Fatalf("unattended application start changed the input owner: %s -> %s", owner, afterStart)

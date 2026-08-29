@@ -19,7 +19,7 @@ func TestAWindowIsNeverDrawnBeforeTheHomeIsClaimed(t *testing.T) {
 	drew := false
 
 	err := launch(
-		identity.Resolved{Socket: "<local-evidence>/does-not-matter.sock"},
+		identity.Resolved{Socket: "/tmp/does-not-matter.sock"},
 		func(string) (net.Listener, error) { return nil, taken },
 		func(net.Listener) error { drew = true; return nil },
 	)
@@ -41,7 +41,7 @@ func TestTheClaimIsReleasedWhenTheApplicationStops(t *testing.T) {
 	listener := &countingListener{}
 
 	if err := launch(
-		identity.Resolved{Socket: "<local-evidence>/does-not-matter.sock"},
+		identity.Resolved{Socket: "/tmp/does-not-matter.sock"},
 		func(string) (net.Listener, error) { return listener, nil },
 		func(net.Listener) error { return nil },
 	); err != nil {
@@ -59,7 +59,7 @@ func TestTheFrameworksFailureIsTheLaunchsFailure(t *testing.T) {
 	refused := errors.New("no window")
 
 	err := launch(
-		identity.Resolved{Socket: "<local-evidence>/does-not-matter.sock"},
+		identity.Resolved{Socket: "/tmp/does-not-matter.sock"},
 		func(string) (net.Listener, error) { return &countingListener{}, nil },
 		func(net.Listener) error { return refused },
 	)
@@ -94,7 +94,7 @@ func TestTheStoreIsNotOpenedBeforeTheHomeIsClaimed(t *testing.T) {
 	opened := false
 
 	err := launch(
-		identity.Resolved{Socket: "<local-evidence>/does-not-matter.sock"},
+		identity.Resolved{Socket: "/tmp/does-not-matter.sock"},
 		func(string) (net.Listener, error) { return nil, taken },
 		func(net.Listener) error { opened = true; return nil },
 	)

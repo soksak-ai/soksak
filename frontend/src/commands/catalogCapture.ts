@@ -393,10 +393,10 @@ export function registerCaptureCatalog(): void {
     errors: ["INVALID_PARAMS", "OFFSCREEN", "TARGET_NOT_FOUND", "NOT_EXPOSED", "AMBIGUOUS_HOST"],
     examples: [
       "window.snapshot",
-      'window.snapshot \'{"path":"<local-evidence>/shot.png"}\'',
+      'window.snapshot \'{"path":"/tmp/shot.png"}\'',
       'window.snapshot \'{"rect":{"x":100,"y":80,"w":400,"h":300},"base64":true}\'',
-      'window.snapshot \'{"rect":{"x":100,"y":80,"w":400,"h":300},"path":"<local-evidence>/crop.png"}\'',
-      'window.snapshot \'{"node":"win/main/proj/p1/chrome/tab/space/0","path":"<local-evidence>/tab.png"}\'',
+      'window.snapshot \'{"rect":{"x":100,"y":80,"w":400,"h":300},"path":"/tmp/crop.png"}\'',
+      'window.snapshot \'{"node":"win/main/proj/p1/chrome/tab/space/0","path":"/tmp/tab.png"}\'',
     ],
     handler: async (p, ctx) => {
       // **Two writers on one path and one of them disappears.**
@@ -540,9 +540,9 @@ export function registerCaptureCatalog(): void {
     message: (d) => tmsg("msg.window.record", { n: Number(d.frames) }),
     errors: ["INVALID_PARAMS"],
     examples: [
-      'window.record \'{"dir":"<local-evidence>/rec"}\'',
-      'window.record \'{"dir":"<local-evidence>/rec","frames":120,"intervalMs":33}\'',
-      'window.record \'{"dir":"<local-evidence>/rec","frames":120,"maxBytes":536870912}\'',
+      'window.record \'{"dir":"/tmp/rec"}\'',
+      'window.record \'{"dir":"/tmp/rec","frames":120,"intervalMs":33}\'',
+      'window.record \'{"dir":"/tmp/rec","frames":120,"maxBytes":536870912}\'',
     ],
     // **The frame loop is policy, not a surface.** The framework already answers "capture one frame"
     // (snapshot_region). How many frames, at what interval, under what names, is this app's decision,

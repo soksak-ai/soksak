@@ -67,9 +67,9 @@ func TestAHalfAnnouncementIsRefusedByName(t *testing.T) {
 		line string
 		says string
 	}{
-		{`{"socket":"<local-evidence>/a.sock"}`, "protocol"},
+		{`{"socket":"/tmp/a.sock"}`, "protocol"},
 		{`{"protocol":2}`, "socket"},
-		{`{"protocol":2,"socket":"<local-evidence>/a.sock"}`, "process label"},
+		{`{"protocol":2,"socket":"/tmp/a.sock"}`, "process label"},
 		{`{"protocol":2,"socket":"","processLabel":"soksak-test"}`, "empty"},
 		{`{"protocol":2,"socket":"control.sock","processLabel":"soksak-test"}`, "relative"},
 	}
@@ -89,7 +89,7 @@ func TestAHalfAnnouncementIsRefusedByName(t *testing.T) {
 // the same as one that is still starting. It is named at the announcement,
 // which is the only moment before a caller acts on the socket.
 func TestAProtocolMismatchIsRefusedCarryingBothNumbers(t *testing.T) {
-	read := readAnnouncement(`{"protocol":99,"socket":"<local-evidence>/a.sock","processLabel":"soksak-test"}`)
+	read := readAnnouncement(`{"protocol":99,"socket":"/tmp/a.sock","processLabel":"soksak-test"}`)
 
 	if read.State != Refused {
 		t.Fatalf("state = %q, want %q", read.State, Refused)

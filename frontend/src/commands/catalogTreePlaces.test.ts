@@ -35,7 +35,7 @@ function workspace(open: Record<string, boolean>): Workspace {
   return {
     id: "wsp-aaaaaa",
     title: "P",
-    root: "<local-evidence>/w",
+    root: "/tmp/w",
     regionOpen: open as Workspace["regionOpen"],
     railPlacement: { mode: "flow" },
     sidebarLayouts: {

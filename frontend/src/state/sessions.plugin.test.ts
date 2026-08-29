@@ -6,7 +6,7 @@ import { useProgramRegistry } from "../plugins/programRegistry";
 
 // Boot model (P3): tabs start empty and main.tsx creates the first workspace through
 // bootstrapFirstWorkspace — the test prepares t1 the same way, then snapshots.
-useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-test-root");
+useSessions.getState().bootstrapFirstWorkspace("/tmp/soksak-test-root");
 // The workspace identifier is issued (state/ids.ts), so it is read here rather
 // than written down. A literal is a shape the product does not produce, and code
 // that reads a prefix is then never run against it (NAMING N4).
@@ -218,7 +218,7 @@ describe("addWorkspace — initial program", () => {
     try {
       const r = useSessions.getState().addWorkspace({
         alias: "px",
-        root: "<local-evidence>/soksak-test-addworkspace",
+        root: "/tmp/soksak-test-addworkspace",
         program: "terminal-prog-test",
       });
       expect(r.ok).toBe(true);
@@ -242,7 +242,7 @@ describe("addWorkspace — initial program", () => {
   it("with program omitted, an empty skeleton (0 views, no viewId) — the existing design holds", () => {
     const r = useSessions.getState().addWorkspace({
       alias: "",
-      root: "<local-evidence>/soksak-test-addworkspace-empty",
+      root: "/tmp/soksak-test-addworkspace-empty",
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -254,7 +254,7 @@ describe("addWorkspace — initial program", () => {
   it("an unregistered program degrades to an empty skeleton — makeContent creates no view", () => {
     const r = useSessions.getState().addWorkspace({
       alias: "",
-      root: "<local-evidence>/soksak-test-addworkspace-unreg",
+      root: "/tmp/soksak-test-addworkspace-unreg",
       program: "no-such-program",
     });
     expect(r.ok).toBe(true);

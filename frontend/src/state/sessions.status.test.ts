@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { allGroups, useSessions, type Tab } from "./sessions";
 
-useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-status-test");
+useSessions.getState().bootstrapFirstWorkspace("/tmp/soksak-status-test");
 // The workspace identifier is issued (state/ids.ts), so it is read here rather
 // than written down. A literal is a shape the product does not produce, and code
 // that reads a prefix is then never run against it (NAMING N4).

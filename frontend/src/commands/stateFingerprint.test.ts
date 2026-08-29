@@ -16,7 +16,7 @@ const layout = {
   workspaces: [
     {
       id: "wsp-aaaaaa",
-      root: "<local-evidence>/a",
+      root: "/tmp/a",
       railPosition: { mode: "flow", effectiveStation: 50, cleanLines: [0, 50, 100] },
       spaces: [
         {
@@ -73,14 +73,14 @@ describe("the state fingerprint", () => {
     // The root is the workspace's identity (P4). Two windows holding different roots are not the
     // same window however alike their panes are.
     const elsewhere = structuredClone(layout);
-    elsewhere.workspaces[0].root = "<local-evidence>/b";
+    elsewhere.workspaces[0].root = "/tmp/b";
     expect(fingerprintOf(elsewhere).digest).not.toBe(fingerprintOf(layout).digest);
   });
 
   it("carries the parts it was built from, so a mismatch says which one moved", () => {
     const print = fingerprintOf(layout);
     expect(print.workspaces).toHaveLength(1);
-    expect(print.workspaces[0].root).toBe("<local-evidence>/a");
+    expect(print.workspaces[0].root).toBe("/tmp/a");
     expect(print.workspaces[0].station).toBe(50);
     expect(print.workspaces[0].spaces[0].panes).toEqual([
       { rect: { left: 0, top: 0, width: 50, height: 100 }, active: false },
@@ -91,7 +91,7 @@ describe("the state fingerprint", () => {
   it("orders workspaces by root, so two windows in a different order still match", () => {
     const swapped = structuredClone(layout);
     swapped.workspaces.push(structuredClone(layout.workspaces[0]));
-    swapped.workspaces[1].root = "<local-evidence>/b";
+    swapped.workspaces[1].root = "/tmp/b";
     const reversed = structuredClone(swapped);
     reversed.workspaces.reverse();
     expect(fingerprintOf(reversed).digest).toBe(fingerprintOf(swapped).digest);

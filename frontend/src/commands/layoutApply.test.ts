@@ -42,7 +42,7 @@ const terminalEnginePlugins: Record<string, PluginRuntime> = {
   },
 };
 
-useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-layout-apply");
+useSessions.getState().bootstrapFirstWorkspace("/tmp/soksak-layout-apply");
 registerCatalog();
 
 const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));

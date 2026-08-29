@@ -522,7 +522,7 @@ export function registerSettingsCatalog(): void {
         ? tmsg("msg.theme.install.rejected")
         : tmsg("msg.theme.install.installed", { path: String(d.installed) }),
     errors: ["INTERNAL"],
-    examples: ['theme.install \'{"path":"<local-evidence>/dracula.json"}\''],
+    examples: ['theme.install \'{"path":"/tmp/dracula.json"}\''],
     handler: async (p) => {
       const installed = await useTheme.getState().install(p.path as string);
       const s = useTheme.getState();

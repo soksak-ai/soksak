@@ -58,11 +58,11 @@ func TestAnEmptyPrefixIsNotARootPath(t *testing.T) {
 // runs the user's profile first, and anything it prints arrives ahead of npm's
 // answer — taking the first line hands a greeting back as a directory.
 func TestTheLastLineIsTheAnswer(t *testing.T) {
-	dirs, err := npmDirsFromPrefix("nvm: using node v20\n<machine-path>/.nvm/versions/node/v20.11.0\n")
+	dirs, err := npmDirsFromPrefix("nvm: using node v20\n/workspace/.nvm/versions/node/v20.11.0\n")
 	if err != nil {
 		t.Fatalf("splitting: %v", err)
 	}
-	if dirs.BinDir != "<machine-path>/.nvm/versions/node/v20.11.0/bin" {
+	if dirs.BinDir != "/workspace/.nvm/versions/node/v20.11.0/bin" {
 		t.Errorf("binDir = %q, want the last line", dirs.BinDir)
 	}
 }

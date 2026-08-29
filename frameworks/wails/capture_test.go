@@ -24,7 +24,7 @@ func TestSnapshotNeedsAPath(t *testing.T) {
 func TestCaptureWithoutAWindowSaysSo(t *testing.T) {
 	service := NewCaptureService("main", nil, PresentationInteractive)
 
-	_, err := service.Snapshot("<local-evidence>/soksak-capture-test.png")
+	_, err := service.Snapshot("/tmp/soksak-capture-test.png")
 	if err == nil {
 		t.Fatal("capture with no window source must fail")
 	}

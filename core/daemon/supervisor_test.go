@@ -395,13 +395,13 @@ func TestADaemonThatNamesItsSocketIsAnnouncedReady(t *testing.T) {
 	if _, err := supervisor.Start("/workspaces/app", "db", "sidecar:db-studio"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
-	spawner.child(0).say(announcementLine("<local-evidence>/soksak/db.sock"))
+	spawner.child(0).say(announcementLine("/tmp/soksak/db.sock"))
 
 	row := waitFor(t, announced)
 	if row.Readiness.State != Ready {
 		t.Fatalf("announced %+v, want ready", row.Readiness)
 	}
-	if row.Readiness.Socket != "<local-evidence>/soksak/db.sock" {
+	if row.Readiness.Socket != "/tmp/soksak/db.sock" {
 		t.Errorf("socket = %q, want what the daemon said", row.Readiness.Socket)
 	}
 	if row.Name != "db" || row.Root != "/workspaces/app" {
@@ -409,7 +409,7 @@ func TestADaemonThatNamesItsSocketIsAnnouncedReady(t *testing.T) {
 	}
 
 	rows := supervisor.Status("/workspaces/app")
-	if rows[0].Readiness.Socket != "<local-evidence>/soksak/db.sock" {
+	if rows[0].Readiness.Socket != "/tmp/soksak/db.sock" {
 		t.Errorf("status readiness = %+v, want the same answer the event carried", rows[0].Readiness)
 	}
 }

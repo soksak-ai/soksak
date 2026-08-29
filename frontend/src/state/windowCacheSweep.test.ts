@@ -17,7 +17,7 @@ import { describe, expect, it } from "vitest";
 import { staleWindowCacheKeys, windowCacheKey } from "./windowCacheSweep";
 
 const manifest = (...labels: string[]) => ({
-  slots: labels.map((label) => ({ label, roots: ["<local-evidence>/w"], activeRoot: "<local-evidence>/w" })),
+  slots: labels.map((label) => ({ label, roots: ["/tmp/w"], activeRoot: "/tmp/w" })),
 });
 
 describe("which window caches are dead", () => {

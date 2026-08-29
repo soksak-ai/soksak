@@ -23,7 +23,7 @@ export function registerFsWatchCatalog(): void {
     returns: "{ projectId|null, root, children: [{name,dir}] }",
     message: (d) => tmsg("msg.fs.list", { n: ((d.children as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ["fs.list", 'fs.list \'{"path":"<local-evidence>"}\''],
+    examples: ["fs.list", 'fs.list \'{"path":"/tmp"}\''],
     handler: async (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
       const path = (p.path as string) ?? t?.root ?? null;

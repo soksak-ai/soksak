@@ -21,7 +21,7 @@ func TestLinuxSmokeProvidesSecretService(t *testing.T) {
 	if !strings.Contains(string(smoke), "gnome-keyring-daemon --unlock") {
 		t.Fatal("Linux smoke run does not start Secret Service")
 	}
-	if !strings.Contains(string(smoke), ". <local-evidence>/soksak-keyring.env") {
+	if !strings.Contains(string(smoke), ". /tmp/soksak-keyring.env") {
 		t.Fatal("Linux smoke discards the Secret Service session environment")
 	}
 	if !strings.Contains(string(smoke), "plugin.catalog") || !strings.Contains(string(smoke), "refresh=true") {

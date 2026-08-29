@@ -35,9 +35,9 @@ import (
 // disturbs the store a person is using.
 
 // The prefix names this gate's short runtime endpoint family. Persistent state is kept under the
-// repository's declared .task/gates root; only the Unix socket uses <local-evidence> because sockaddr_un holds
+// repository's declared .task/gates root; only the Unix socket uses /tmp because sockaddr_un holds
 // 104 bytes on macOS. State and endpoint are resolved together by identity, never guessed apart.
-const restoreGateHome = "<local-evidence>/soksak-restore-gate"
+const restoreGateHome = "/tmp/soksak-restore-gate"
 
 const restoreGateIdentifier = "com.soksak.restoregate"
 
@@ -177,12 +177,12 @@ func reclaimGateState(root string) error {
 }
 
 func TestGateHomesAreOwnedByOneRunAndNeverEraseAnotherRun(t *testing.T) {
-	first := newGate(t, "<local-evidence>/soksak-idempotent-gate", "com.soksak.idempotentgate")
+	first := newGate(t, "/tmp/soksak-idempotent-gate", "com.soksak.idempotentgate")
 	marker := filepath.Join(first.home, "owned-by-first")
 	if err := os.WriteFile(marker, []byte("first"), 0o644); err != nil {
 		t.Fatalf("writing first run marker: %v", err)
 	}
-	second := newGate(t, "<local-evidence>/soksak-idempotent-gate", "com.soksak.idempotentgate")
+	second := newGate(t, "/tmp/soksak-idempotent-gate", "com.soksak.idempotentgate")
 	if first.home == second.home {
 		t.Fatalf("two runs were handed the same home: %s", first.home)
 	}
@@ -192,8 +192,8 @@ func TestGateHomesAreOwnedByOneRunAndNeverEraseAnotherRun(t *testing.T) {
 }
 
 func TestConcurrentGateRunsReceiveDisjointIdentityAxes(t *testing.T) {
-	first := newGate(t, "<local-evidence>/soksak-concurrent-gate", "com.soksak.concurrentgate")
-	second := newGate(t, "<local-evidence>/soksak-concurrent-gate", "com.soksak.concurrentgate")
+	first := newGate(t, "/tmp/soksak-concurrent-gate", "com.soksak.concurrentgate")
+	second := newGate(t, "/tmp/soksak-concurrent-gate", "com.soksak.concurrentgate")
 	checks := []struct {
 		name        string
 		first, next string

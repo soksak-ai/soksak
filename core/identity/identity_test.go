@@ -29,7 +29,7 @@ func TestAxesOfIdentifier(t *testing.T) {
 }
 
 func TestHomeIsDerivedFromTheIdentifierAlone(t *testing.T) {
-	base := filepath.Join("<local-evidence>", "user")
+	base := filepath.Join("/tmp", "user")
 	cases := []struct {
 		identifier string
 		home       string
@@ -49,7 +49,7 @@ func TestHomeIsDerivedFromTheIdentifierAlone(t *testing.T) {
 }
 
 func TestProjectIdentifierOwnsTheProjectHomeAndClient(t *testing.T) {
-	base := filepath.Join("<local-evidence>", "user")
+	base := filepath.Join("/tmp", "user")
 	for _, want := range []struct {
 		identifier string
 		home       string
@@ -87,12 +87,12 @@ func TestResolveReadsTheAmbientOnce(t *testing.T) {
 	// Reading identifier and home separately makes the pair
 	// ("A home, B identifier") was representable. Resolving once removes the
 	// combination rather than checking for it.
-	resolved := Resolve("com.soksak.dev", Environment{Home: "<local-evidence>/user"})
+	resolved := Resolve("com.soksak.dev", Environment{Home: "/tmp/user"})
 
 	if resolved.Identifier != "com.soksak.dev" {
 		t.Fatalf("identifier = %q", resolved.Identifier)
 	}
-	if resolved.Home != filepath.Join("<local-evidence>/user", ".soksak-dev") {
+	if resolved.Home != filepath.Join("/tmp/user", ".soksak-dev") {
 		t.Errorf("home = %q", resolved.Home)
 	}
 	if resolved.CoreBuild != "dev" {
@@ -109,15 +109,15 @@ func TestResolveReadsTheAmbientOnce(t *testing.T) {
 func TestRuntimeSocketCanBeSeparatedFromPersistentStateWithoutSplittingIdentity(t *testing.T) {
 	resolved := Resolve("com.soksak.gate", Environment{
 		Home:    "/workspace/.task/gates/123/1",
-		Runtime: "<local-evidence>/soksak-gates/123/1",
+		Runtime: "/tmp/soksak-gates/123/1",
 	})
 	if resolved.Home != "/workspace/.task/gates/123/1/.soksak-gate" {
 		t.Fatalf("persistent state moved outside the declared gate root: %s", resolved.Home)
 	}
-	if resolved.Socket != "<local-evidence>/soksak-gates/123/1/com.soksak.gate.sock" {
+	if resolved.Socket != "/tmp/soksak-gates/123/1/com.soksak.gate.sock" {
 		t.Fatalf("runtime endpoint did not use the declared short runtime root: %s", resolved.Socket)
 	}
-	if resolved.Runtime != "<local-evidence>/soksak-gates/123/1" {
+	if resolved.Runtime != "/tmp/soksak-gates/123/1" {
 		t.Fatalf("runtime root = %q", resolved.Runtime)
 	}
 }
@@ -134,7 +134,7 @@ func TestWindowsControlAddressUsesTheNamedPipeNamespace(t *testing.T) {
 
 func TestExactPersistentHomeDoesNotReceiveAnIdentitySuffix(t *testing.T) {
 	resolved, err := Require("com.soksak.gate", Environment{
-		Home: "/Users/person", Persistent: "/workspace/gate-home", Runtime: "<local-evidence>/gate-runtime",
+		Home: "/Users/person", Persistent: "/workspace/gate-home", Runtime: "/tmp/gate-runtime",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -151,9 +151,9 @@ func TestExactPersistentHomeMustBeAbsolute(t *testing.T) {
 }
 
 func TestReleaseCarriesNoSuffix(t *testing.T) {
-	resolved := Resolve("com.soksak.app", Environment{Home: "<local-evidence>/user"})
+	resolved := Resolve("com.soksak.app", Environment{Home: "/tmp/user"})
 
-	if resolved.Home != filepath.Join("<local-evidence>/user", ".soksak") {
+	if resolved.Home != filepath.Join("/tmp/user", ".soksak") {
 		t.Errorf("home = %q, want the unsuffixed home", resolved.Home)
 	}
 	if resolved.CLI != "sok" {
@@ -167,7 +167,7 @@ func TestReleaseCarriesNoSuffix(t *testing.T) {
 func TestMissingIdentifierFailsRatherThanGuessing(t *testing.T) {
 	// Deriving a default here would point a misconfigured process at the release
 	// user's home and do it silently.
-	if _, err := Require("", Environment{Home: "<local-evidence>/user"}); err == nil {
+	if _, err := Require("", Environment{Home: "/tmp/user"}); err == nil {
 		t.Fatal("an empty identifier must fail by name")
 	}
 }
@@ -182,10 +182,10 @@ func TestThisInstallationDoesNotShareAnotherHome(t *testing.T) {
 	// The store is single-writer by design and SQLite does not refuse a second
 	// writer — it serialises — so the collision would have stayed silent.
 	const ours = "com.soksak.wails"
-	home := HomeFor(ours, Environment{Home: "<local-evidence>/user"})
+	home := HomeFor(ours, Environment{Home: "/tmp/user"})
 
 	for _, taken := range []string{"com.soksak.app", "com.soksak.dev", "com.soksak.debug"} {
-		if HomeFor(taken, Environment{Home: "<local-evidence>/user"}) == home {
+		if HomeFor(taken, Environment{Home: "/tmp/user"}) == home {
 			t.Errorf("%s shares a home with %s: %s", ours, taken, home)
 		}
 	}

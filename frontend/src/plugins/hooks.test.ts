@@ -34,7 +34,7 @@ describe("paths.dropped event", () => {
       projectId: "wsp-a", paneId: "tab-a",
       grants: [{ id: "drop-a", kind: "file" }],
     }]);
-    expect(JSON.stringify(received)).not.toContain("<local-evidence>/");
+    expect(JSON.stringify(received)).not.toContain("/tmp/");
   });
 });
 
@@ -52,7 +52,7 @@ describe("startPluginHooks — sessions diff coalescing", () => {
     );
 
     const s = useSessions.getState();
-    const created = s.addWorkspace({ alias: "perf", root: "<local-evidence>/perf-test" });
+    const created = s.addWorkspace({ alias: "perf", root: "/tmp/perf-test" });
     expect(created.ok).toBe(true);
 
     if (!created.ok) throw new Error("addWorkspace failed");
@@ -111,7 +111,7 @@ describe("startPluginHooks — sessions diff coalescing", () => {
     const created = useSessions
       .getState()
       // P5 (no duplicate root) — the root must differ from the first test for a new workspace to be created.
-      .addWorkspace({ alias: "perf2", root: "<local-evidence>/perf-test-2" });
+      .addWorkspace({ alias: "perf2", root: "/tmp/perf-test-2" });
     expect(created.ok).toBe(true);
     await flush(); // drain the workspace-added event first
     events.length = 0;

@@ -43,7 +43,7 @@ function workspace(
   return {
     id: "wsp-aaaaaa",
     title: "P",
-    root: "<local-evidence>/rail-position",
+    root: "/tmp/rail-position",
     regionOpen: { left: false, rail: true, right: false },
     ...(placement ? { railPlacement: placement } : {}),
     sidebarLayouts: { left: initialSidebarLayout([]), rail: initialSidebarLayout([]), right: initialSidebarLayout([]) },

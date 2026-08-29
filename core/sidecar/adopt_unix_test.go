@@ -252,7 +252,7 @@ func TestRecordedInventoryForgetsADeadRecordBeforeApplyingTheCurrentWireShape(t 
 	}
 	// This is valid ownership JSON from protocol 1. It has a PID but predates processLabel.
 	// A dead owner makes the record stale before the current wire shape matters.
-	body := `{"address":"<local-evidence>/gone-old-unit.sock","protocol":1,"pid":999999}`
+	body := `{"address":"/tmp/gone-old-unit.sock","protocol":1,"pid":999999}`
 	if err := os.WriteFile(recordPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func TestRecordedInventoryKeepsAndRefusesALiveRecordOutsideTheCurrentWireShape(t
 	if err := os.MkdirAll(filepath.Dir(recordPath), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	body := `{"address":"<local-evidence>/live-old-unit.sock","protocol":1,"pid":` + strconv.Itoa(os.Getpid()) + `}`
+	body := `{"address":"/tmp/live-old-unit.sock","protocol":1,"pid":` + strconv.Itoa(os.Getpid()) + `}`
 	if err := os.WriteFile(recordPath, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -49,7 +49,7 @@ beforeEach(() => {
 it("one shared record contract stores a finite frame sequence", async () => {
   const observed: number[] = [];
   const recording = recordWindowFrames({
-    dir: "<local-evidence>/framework-neutral-record",
+    dir: "/tmp/framework-neutral-record",
     frames: 2,
     intervalMs: 0,
     onFrame: (frame) => observed.push(frame),
@@ -61,17 +61,17 @@ it("one shared record contract stores a finite frame sequence", async () => {
   expect(observed).toEqual([0, 1]);
   expect(captureWindowPixels).toHaveBeenCalledTimes(2);
   expect(vi.mocked(invoke)).toHaveBeenNthCalledWith(1, "write_file_base64", {
-    path: "<local-evidence>/framework-neutral-record/f0000.png", base64: "YWJj",
+    path: "/tmp/framework-neutral-record/f0000.png", base64: "YWJj",
   });
   expect(vi.mocked(invoke)).toHaveBeenNthCalledWith(2, "write_file_base64", {
-    path: "<local-evidence>/framework-neutral-record/f0001.png", base64: "YWJj",
+    path: "/tmp/framework-neutral-record/f0001.png", base64: "YWJj",
   });
   expect(createStream).not.toHaveBeenCalled();
 });
 
 it("the storage budget reaches the producer unchanged, with no framework branch, and readiness is preserved", async () => {
   const recording = recordWindowFrames({
-    dir: "<local-evidence>/framework-neutral-budget-record",
+    dir: "/tmp/framework-neutral-budget-record",
     frames: 1,
     intervalMs: 0,
     maxBytes: 1_048_576,
@@ -81,13 +81,13 @@ it("the storage budget reaches the producer unchanged, with no framework branch,
   await expect(recording).resolves.toBe(1);
   expect(captureWindowPixels).toHaveBeenCalledOnce();
   expect(vi.mocked(invoke)).toHaveBeenCalledWith("write_file_base64", {
-    path: "<local-evidence>/framework-neutral-budget-record/f0000.png", base64: "YWJj",
+    path: "/tmp/framework-neutral-budget-record/f0000.png", base64: "YWJj",
   });
 });
 
 it("stops before writing the frame that would exceed the byte budget", async () => {
   const recording = recordWindowFrames({
-    dir: "<local-evidence>/framework-neutral-budget-stop",
+    dir: "/tmp/framework-neutral-budget-stop",
     frames: 1,
     intervalMs: 0,
     maxBytes: 2,
@@ -108,7 +108,7 @@ it("every framework call states the shared producer deadline", async () => {
   vi.useFakeTimers();
   captureWindowPixels.mockImplementationOnce(() => new Promise(() => {}));
   const explicitRecording = recordWindowFrames({
-    dir: "<local-evidence>/framework-neutral-explicit-deadline",
+    dir: "/tmp/framework-neutral-explicit-deadline",
     frames: 1,
     intervalMs: 0,
     frameTimeoutMs: 25,
@@ -130,14 +130,14 @@ it("the shared recorder does not alter frames or intervalMs and rejects strictly
 
   for (const frames of [0, -1, 1.5, 601, Number.NaN, Number.POSITIVE_INFINITY]) {
     expect(() => recordWindowFrames({
-      dir: "<local-evidence>/rejected-frames",
+      dir: "/tmp/rejected-frames",
       frames,
       intervalMs: 0,
     })).toThrow("frames");
   }
   for (const intervalMs of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
     expect(() => recordWindowFrames({
-      dir: "<local-evidence>/rejected-interval",
+      dir: "/tmp/rejected-interval",
       frames: 1,
       intervalMs,
     })).toThrow("intervalMs");

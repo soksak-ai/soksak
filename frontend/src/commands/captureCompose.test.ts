@@ -22,8 +22,8 @@ describe("capture — cropping and saving compose", () => {
   });
 
   it("reads the saved path from the backend receipt instead of stringifying the object", () => {
-    expect(savedCapturePath({ path: "<local-evidence>/shot.png" })).toBe("<local-evidence>/shot.png");
-    expect(savedCapturePath("<local-evidence>/legacy.png")).toBe("<local-evidence>/legacy.png");
+    expect(savedCapturePath({ path: "/tmp/shot.png" })).toBe("/tmp/shot.png");
+    expect(savedCapturePath("/tmp/legacy.png")).toBe("/tmp/legacy.png");
     expect(savedCapturePath({})).toBeNull();
   });
 

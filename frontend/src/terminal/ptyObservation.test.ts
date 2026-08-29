@@ -10,15 +10,15 @@ describe("ptyObservation — OSC 7 cwd", () => {
   it("decodes an OSC 7 file URI into a cwd", () => {
     const cwds: string[] = [];
     const p = createPtyObservationParser({ onCwd: (c) => cwds.push(c) });
-    p.write("\x1b]7;file://<local-evidence>/x\x07");
-    expect(cwds).toEqual(["<local-evidence>/x"]);
+    p.write("\x1b]7;file:///tmp/x\x07");
+    expect(cwds).toEqual(["/tmp/x"]);
   });
 
   it("preserves a percent-encoded, non-ASCII path across the round trip", () => {
     const cwds: string[] = [];
     const p = createPtyObservationParser({ onCwd: (c) => cwds.push(c) });
-    p.write(`\x1b]7;file://host${encodeURI("<local-evidence>/my workspace/héllo")}\x07`);
-    expect(cwds).toEqual(["<local-evidence>/my workspace/héllo"]);
+    p.write(`\x1b]7;file://host${encodeURI("/tmp/my workspace/héllo")}\x07`);
+    expect(cwds).toEqual(["/tmp/my workspace/héllo"]);
   });
 
   it("a repeated cwd notifies nothing; only a change does", () => {
@@ -33,8 +33,8 @@ describe("ptyObservation — OSC 7 cwd", () => {
   it("getCwd exposes the snapshot", () => {
     const p = createPtyObservationParser({});
     expect(p.getCwd()).toBeUndefined();
-    p.write("\x1b]7;file://<local-evidence>/z\x07");
-    expect(p.getCwd()).toBe("<local-evidence>/z");
+    p.write("\x1b]7;file:///tmp/z\x07");
+    expect(p.getCwd()).toBe("/tmp/z");
   });
 });
 

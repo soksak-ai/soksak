@@ -44,10 +44,10 @@ func (writer *gateControlReadyWriter) Write(payload []byte) (int, error) {
 func TestGateControlReadyWriterConsumesASplitEvent(t *testing.T) {
 	writer := newGateControlReadyWriter()
 	_, _ = writer.Write([]byte("noise\n{\"event\":\"soksak.host."))
-	_, _ = writer.Write([]byte("ready\",\"protocol\":1,\"socket\":\"<local-evidence>/gate.sock\",\"identifier\":\"com.soksak.gate\",\"pid\":42}\n"))
+	_, _ = writer.Write([]byte("ready\",\"protocol\":1,\"socket\":\"/tmp/gate.sock\",\"identifier\":\"com.soksak.gate\",\"pid\":42}\n"))
 	select {
 	case event := <-writer.events:
-		if event.Protocol != 1 || event.Socket != "<local-evidence>/gate.sock" || event.Identifier != "com.soksak.gate" || event.PID != 42 {
+		if event.Protocol != 1 || event.Socket != "/tmp/gate.sock" || event.Identifier != "com.soksak.gate" || event.PID != 42 {
 			t.Fatalf("event=%+v", event)
 		}
 	default:

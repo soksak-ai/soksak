@@ -83,7 +83,7 @@ func ValidateRoot(path string, userHome string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not canonicalize %s: %w", path, err)
 	}
-	// The home is canonicalized too: on darwin <local-evidence>/x is <local-evidence>/x, and two
+	// The home is canonicalized too: on darwin /tmp/x is /tmp/x, and two
 	// spellings of one home must not disagree about whether this is the home.
 	home, err := canonicalize(userHome)
 	if err != nil {

@@ -221,7 +221,7 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
                   title: "Terminal",
                   pluginId: "soksak-plugin-terminal-xterm",
                   view: "content",
-                  cwd: "<local-evidence>/somewhere",
+                  cwd: "/tmp/somewhere",
                   lastActivity: 1234567890,
                 },
                 { id: "tab-bbbbbb", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-fixture", view: "content" },
@@ -236,7 +236,7 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
     const v1 = g.tabs.find((v) => v.id === "tab-aaaaaa") as Extract<Tab, { kind: "plugin" }>;
     const v2 = g.tabs.find((v) => v.id === "tab-bbbbbb") as Extract<Tab, { kind: "plugin" }>;
-    expect(v1.cwd).toBe("<local-evidence>/somewhere");
+    expect(v1.cwd).toBe("/tmp/somewhere");
     expect(v1.lastActivity).toBe(1234567890);
     expect(v2.cwd).toBeUndefined();
     expect(v2.lastActivity).toBeUndefined();

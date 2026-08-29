@@ -22,8 +22,8 @@ if [ "$current" != "$definition" ]; then
 fi
 
 docker run --rm -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
-  -v "$root:/app" -v soksak-windows-ci-go-mod:/go/pkg/mod -v soksak-windows-ci-go-build:<local-evidence>/go-build \
+  -v "$root:/app" -v soksak-windows-ci-go-mod:/go/pkg/mod -v soksak-windows-ci-go-build:/tmp/go-build \
   -v soksak-windows-ci-node-modules:/app/frontend/node_modules -v soksak-windows-ci-pnpm-store:/app/.pnpm-store \
-  -e GOCACHE=<local-evidence>/go-build --entrypoint /bin/sh "$image" \
+  -e GOCACHE=/tmp/go-build --entrypoint /bin/sh "$image" \
   -e BUILD_PHASE="$phase" \
-  -c 'mkdir -p <local-evidence>/home <local-evidence>/go-build /go/pkg/mod /app/.pnpm-store /app/frontend/node_modules && chown -R "$HOST_UID:$HOST_GID" <local-evidence>/home <local-evidence>/go-build /go/pkg/mod /app/.pnpm-store /app/frontend/node_modules && exec setpriv --reuid="$HOST_UID" --regid="$HOST_GID" --clear-groups env HOME=<local-evidence>/home GOCACHE=<local-evidence>/go-build /bin/sh -c "cd /app && scripts/ci/windows-build.sh $BUILD_PHASE"'
+  -c 'mkdir -p /tmp/home /tmp/go-build /go/pkg/mod /app/.pnpm-store /app/frontend/node_modules && chown -R "$HOST_UID:$HOST_GID" /tmp/home /tmp/go-build /go/pkg/mod /app/.pnpm-store /app/frontend/node_modules && exec setpriv --reuid="$HOST_UID" --regid="$HOST_GID" --clear-groups env HOME=/tmp/home GOCACHE=/tmp/go-build /bin/sh -c "cd /app && scripts/ci/windows-build.sh $BUILD_PHASE"'

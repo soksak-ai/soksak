@@ -10,7 +10,7 @@ import (
 )
 
 func TestNativeTrafficLightCloseEndsTheAddressedWindowWithoutTakingInput(t *testing.T) {
-	gate := newGate(t, "<local-evidence>/soksak-native-close-gate", "com.soksak.nativeclosegate")
+	gate := newGate(t, "/tmp/soksak-native-close-gate", "com.soksak.nativeclosegate")
 	inputOwner := activeInputOwner(t)
 	gate.start()
 	first := gate.openWorkspace()

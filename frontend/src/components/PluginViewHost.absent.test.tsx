@@ -50,7 +50,7 @@ describe("what a pane says when its view is not there", () => {
         <PluginViewHost
           viewKey="soksak-plugin-file-tree.tree"
           projectId="wsp-aaaaaa"
-          root="<local-evidence>/w"
+          root="/tmp/w"
           region="rail"
           paneId="pan-aaaaaa"
         />,
@@ -119,7 +119,7 @@ describe("the overlay is addressable under the view's address", () => {
         <PluginViewHost
           viewKey="soksak-plugin-file-tree.tree"
           projectId="wsp-aaaaaa"
-          root="<local-evidence>/w"
+          root="/tmp/w"
           region="center"
           viewId="tab-aaaaaa"
         />,

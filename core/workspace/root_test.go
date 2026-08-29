@@ -117,8 +117,8 @@ func TestAUserHomeThatCannotBeResolvedRefusesRatherThanAllows(t *testing.T) {
 	}
 }
 
-// One home reached by two spellings is one home. On darwin <local-evidence>/x is
-// <local-evidence>/x, so an uncanonicalized comparison admits the home itself.
+// One home reached by two spellings is one home. On darwin /tmp/x is
+// /tmp/x, so an uncanonicalized comparison admits the home itself.
 func TestTwoSpellingsOfOneHomeAgree(t *testing.T) {
 	real := t.TempDir()
 	link := filepath.Join(t.TempDir(), "home-link")

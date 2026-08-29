@@ -31,9 +31,9 @@ describe("ptyObservationStore", () => {
     registerPtyObservation("pan-aaaaaa");
     const seen: string[] = [];
     subscribeObservedCwd("pan-aaaaaa", (c) => seen.push(c));
-    feedPtyOutput("pan-aaaaaa", "\x1b]7;file://<local-evidence>/work\x07");
-    expect(getObservedCwd("pan-aaaaaa")).toBe("<local-evidence>/work");
-    expect(seen).toEqual(["<local-evidence>/work"]);
+    feedPtyOutput("pan-aaaaaa", "\x1b]7;file:///tmp/work\x07");
+    expect(getObservedCwd("pan-aaaaaa")).toBe("/tmp/work");
+    expect(seen).toEqual(["/tmp/work"]);
   });
 
   it("a subscription with a current value notifies once immediately (no polling)", () => {

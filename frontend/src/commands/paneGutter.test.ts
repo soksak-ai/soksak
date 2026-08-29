@@ -37,7 +37,7 @@ function fixture(): Workspace {
   return {
     id: "wsp-aaaaaa",
     title: "P",
-    root: "<local-evidence>/pane-gutter",
+    root: "/tmp/pane-gutter",
     regionOpen: { left: false, rail: false, right: false },
     sidebarLayouts: { left: initialSidebarLayout([]), rail: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [

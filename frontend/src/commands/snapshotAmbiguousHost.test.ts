@@ -28,19 +28,19 @@ registerCatalog();
 
 describe("window.snapshot — with more than one host, nothing is written to a path", () => {
   it("a path with two hosts is refused by name", async () => {
-    const out = await execute("window.snapshot", { path: "<local-evidence>/shot.png" }, { hosts: 2 });
+    const out = await execute("window.snapshot", { path: "/tmp/shot.png" }, { hosts: 2 });
     expect(out.ok, "two hosts write the same path and one result is lost, yet success was answered").toBe(false);
     expect(out.code).toBe("AMBIGUOUS_HOST");
     expect(out.message).toContain("base64");
   });
 
   it("one host passes — a call with no overlap is not blocked", async () => {
-    const out = await execute("window.snapshot", { path: "<local-evidence>/shot.png" }, { hosts: 1 });
+    const out = await execute("window.snapshot", { path: "/tmp/shot.png" }, { hosts: 1 });
     expect(out.code).not.toBe("AMBIGUOUS_HOST");
   });
 
   it("an unstated count is read as one — reading unknown as many would block a sound call", async () => {
-    const out = await execute("window.snapshot", { path: "<local-evidence>/shot.png" }, {});
+    const out = await execute("window.snapshot", { path: "/tmp/shot.png" }, {});
     expect(out.code).not.toBe("AMBIGUOUS_HOST");
   });
 

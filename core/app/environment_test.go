@@ -10,7 +10,7 @@ import (
 
 func resolved(t *testing.T, id string) identity.Resolved {
 	t.Helper()
-	got, err := identity.Require(id, identity.Environment{Home: "<local-evidence>/user"})
+	got, err := identity.Require(id, identity.Environment{Home: "/tmp/user"})
 	if err != nil {
 		t.Fatalf("resolving %q: %v", id, err)
 	}
@@ -19,8 +19,8 @@ func resolved(t *testing.T, id string) identity.Resolved {
 
 func TestEnvironmentExposesTheResolvedRuntimeDirectory(t *testing.T) {
 	id, err := identity.Require("com.soksak.capture", identity.Environment{
-		Home:    "<local-evidence>/user",
-		Runtime: "<local-evidence>/soksak-capture-runtime",
+		Home:    "/tmp/user",
+		Runtime: "/tmp/soksak-capture-runtime",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -33,7 +33,7 @@ func TestEnvironmentExposesTheResolvedRuntimeDirectory(t *testing.T) {
 	if err := json.Unmarshal(body, &values); err != nil {
 		t.Fatal(err)
 	}
-	if values["runtime"] != "<local-evidence>/soksak-capture-runtime" {
+	if values["runtime"] != "/tmp/soksak-capture-runtime" {
 		t.Fatalf("runtime = %#v", values["runtime"])
 	}
 	if values["processLabel"] != "soksakv3" {
@@ -47,7 +47,7 @@ func TestEnvironmentReportsOneResolvedIdentity(t *testing.T) {
 	if env.Identity != "com.soksak.dev" {
 		t.Errorf("identity = %q", env.Identity)
 	}
-	if env.Home != filepath.Join("<local-evidence>/user", ".soksak-dev") {
+	if env.Home != filepath.Join("/tmp/user", ".soksak-dev") {
 		t.Errorf("home = %q", env.Home)
 	}
 	if env.CoreBuild != "dev" {

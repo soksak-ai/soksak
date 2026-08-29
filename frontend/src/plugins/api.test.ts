@@ -97,9 +97,9 @@ describe("explicit file drop grants", () => {
   it("redeems only grants issued to this plugin without assigning a consumer meaning", async () => {
     const execute = vi.fn(async () => ({ ok: true as const, code: "OK", message: "ok" }));
     const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps({ execute }));
-    const [grant] = issueDropGrants({ pluginId: "demo", window: "main", paths: ["<local-evidence>/a b"] });
+    const [grant] = issueDropGrants({ pluginId: "demo", window: "main", paths: ["/tmp/a b"] });
     await expect(api.fileGrants?.redeem(grant.id)).resolves.toEqual({
-      kind: "file", path: "<local-evidence>/a b",
+      kind: "file", path: "/tmp/a b",
     });
     await expect(api.fileGrants?.redeem(grant.id)).resolves.toBeNull();
     expect(execute).not.toHaveBeenCalled();

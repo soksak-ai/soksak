@@ -35,7 +35,7 @@ func TestAPlaceholderWithNoParamStays(t *testing.T) {
 	if got := T(English, "test.holder", nil); got != "no file at {path}" {
 		t.Errorf("T = %q, want the placeholder kept", got)
 	}
-	if got := T(English, "test.holder", map[string]string{"path": "<local-evidence>/x"}); got != "no file at <local-evidence>/x" {
+	if got := T(English, "test.holder", map[string]string{"path": "/tmp/x"}); got != "no file at /tmp/x" {
 		t.Errorf("T = %q", got)
 	}
 }

@@ -12,13 +12,13 @@ func TestSocketPathIsTheOneTheLauncherClaimed(t *testing.T) {
 	// drifts from the first, and the caller reading the wrong one starts an
 	// agent that succeeds against a neighbouring installation.
 	registry := NewRegistry()
-	Register(registry, Deps{Socket: "<local-evidence>/user/.soksak-dev/com.soksak.dev.sock"})
+	Register(registry, Deps{Socket: "/tmp/user/.soksak-dev/com.soksak.dev.sock"})
 
 	answer, err := registry.Invoke(commandSocketPath, Args{})
 	if err != nil {
 		t.Fatalf("ipc_socket_path: %v", err)
 	}
-	if answer != "<local-evidence>/user/.soksak-dev/com.soksak.dev.sock" {
+	if answer != "/tmp/user/.soksak-dev/com.soksak.dev.sock" {
 		t.Errorf("socket path = %v", answer)
 	}
 }

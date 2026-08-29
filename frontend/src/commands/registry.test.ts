@@ -98,7 +98,7 @@ describe("speech axis — display (message) and speech (speak), nothing else (§
   });
   it("with speak declared, speak(outcome) is the sentence on success and failure alike — paths stay on message", () => {
     const s = spec((o) => (o.ok ? "Saved the screen." : o.message));
-    expect(effectiveSpeak(s, out("Saved: <local-evidence>/a.png"))).toBe("Saved the screen.");
+    expect(effectiveSpeak(s, out("Saved: /tmp/a.png"))).toBe("Saved the screen.");
     expect(effectiveSpeak(s, out("failure detail", false))).toBe("failure detail");
   });
   it('speak "" means silence — the only block on say-style feedback', () => {

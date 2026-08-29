@@ -10,7 +10,7 @@ import (
 
 func TestControlReadinessAnnouncementBindsSocketIdentityAndProcess(t *testing.T) {
 	var output bytes.Buffer
-	resolved := identity.Resolved{Socket: "<local-evidence>/soksak-ready.sock", Identifier: "com.soksak.ready"}
+	resolved := identity.Resolved{Socket: "/tmp/soksak-ready.sock", Identifier: "com.soksak.ready"}
 	if err := announceControlReady(&output, resolved, 42); err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestControlReadinessAnnouncementBindsSocketIdentityAndProcess(t *testing.T)
 
 func TestHostReadinessAnnouncementUsesTheSameOwnedIdentity(t *testing.T) {
 	var output bytes.Buffer
-	resolved := identity.Resolved{Socket: "<local-evidence>/soksak-ready.sock", Identifier: "com.soksak.ready"}
+	resolved := identity.Resolved{Socket: "/tmp/soksak-ready.sock", Identifier: "com.soksak.ready"}
 	if err := announceHostReady(&output, resolved, 42); err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestHostReadinessAnnouncementUsesTheSameOwnedIdentity(t *testing.T) {
 
 func TestWindowReadinessAnnouncementNamesTheRuntimeReadyWindow(t *testing.T) {
 	var output bytes.Buffer
-	resolved := identity.Resolved{Socket: "<local-evidence>/soksak-ready.sock", Identifier: "com.soksak.ready"}
+	resolved := identity.Resolved{Socket: "/tmp/soksak-ready.sock", Identifier: "com.soksak.ready"}
 	if err := announceWindowReady(&output, resolved, 42, "win-ready"); err != nil {
 		t.Fatal(err)
 	}

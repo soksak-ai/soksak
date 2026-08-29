@@ -13,11 +13,11 @@ describe("host-issued file drop grants", () => {
     const issued = issueDropGrants({
       pluginId: "soksak-plugin-terminal-vt100",
       window: "win-a",
-      paths: ["<local-evidence>/a b", "<local-evidence>/image.png"],
+      paths: ["/tmp/a b", "/tmp/image.png"],
     });
     expect(issued).toHaveLength(2);
     expect(issued.map((grant) => grant.kind)).toEqual(["file", "image"]);
-    expect(JSON.stringify(issued)).not.toContain("<local-evidence>/");
+    expect(JSON.stringify(issued)).not.toContain("/tmp/");
     expect(redeemDropGrant({
       pluginId: "other-plugin", window: "win-a", id: issued[0].id,
     })).toBeNull();
@@ -26,7 +26,7 @@ describe("host-issued file drop grants", () => {
     })).toBeNull();
     expect(redeemDropGrant({
       pluginId: "soksak-plugin-terminal-vt100", window: "win-a", id: issued[0].id,
-    })).toEqual({ kind: "file", path: "<local-evidence>/a b" });
+    })).toEqual({ kind: "file", path: "/tmp/a b" });
     expect(redeemDropGrant({
       pluginId: "soksak-plugin-terminal-vt100", window: "win-a", id: issued[0].id,
     })).toBeNull();

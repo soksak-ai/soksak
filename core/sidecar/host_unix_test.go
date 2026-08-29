@@ -316,7 +316,7 @@ func TestAnEnvelopeMismatchIsRefusedAtTheAnnouncement(t *testing.T) {
 // is long enough on its own to overrun it.
 func shortHome(t *testing.T) string {
 	t.Helper()
-	home, err := os.MkdirTemp("<local-evidence>", "sc")
+	home, err := os.MkdirTemp("/tmp", "sc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -501,7 +501,7 @@ func main() {
 	flag.String("home", "", "")
 	flag.String("runtime", "", "")
 	flag.Parse()
-	line, _ := json.Marshal(map[string]any{"protocol": 99, "socket": "<local-evidence>/never", "processLabel": os.Getenv("SOKSAK_PROCESS_LABEL")})
+	line, _ := json.Marshal(map[string]any{"protocol": 99, "socket": "/tmp/never", "processLabel": os.Getenv("SOKSAK_PROCESS_LABEL")})
 	fmt.Println(string(line))
 	os.Stdout.Sync()
 	time.Sleep(30 * time.Second)

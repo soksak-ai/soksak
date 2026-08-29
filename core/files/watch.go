@@ -245,7 +245,7 @@ func parentOf(path string) (string, bool) {
 // Both the key and the reported directory are symlink-resolved, and that is a
 // divergence with a reason: keying raw strings makes the tests
 // canonicalize the fixture to match what FSEvents reports — the rule then
-// is in the test instead of the code. In production on <local-evidence>, where /var is a
+// is in the test instead of the code. In production on /tmp, where /var is a
 // link to /private/var, that mismatch makes the consumer's `changed === dir`
 // never match.
 func watchKey(path string, home string) (string, error) {

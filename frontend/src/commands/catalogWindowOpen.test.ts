@@ -41,13 +41,13 @@ it("window.open forwards focus:false to the native window contract so automation
 
   const result = await execute(
     "window.open",
-    { root: "<machine-path>/soksak/core", focus: false },
+    { root: "/workspace/soksak/core", focus: false },
     {},
   );
 
   expect(result).toMatchObject({ ok: true, data: { label: "win-test" } });
   expect(invoke).toHaveBeenCalledWith("window_create", {
-    init: "root=%2FUsers%2Fmax%2Fsoksak%2Fcore",
+    init: "root=%2Fworkspace%2Fsoksak%2Fcore",
     focus: false,
   });
 });

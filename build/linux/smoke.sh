@@ -5,9 +5,9 @@ binary=${1:-/app/soksak}
 client=${2:-/app/sok}
 output=${3:-/evidence/soksak-linux.png}
 native_output=${output%.png}-native.png
-runtime=<local-evidence>/soksak-linux-smoke-runtime
-persistent=<local-evidence>/soksak-linux-smoke-home
-user_home=<local-evidence>/soksak-linux-smoke-user
+runtime=/tmp/soksak-linux-smoke-runtime
+persistent=/tmp/soksak-linux-smoke-home
+user_home=/tmp/soksak-linux-smoke-user
 
 test -x "$binary"
 test -x "$client"
@@ -21,22 +21,22 @@ dbus-run-session -- xvfb-run -a -s "-screen 0 1400x900x24" sh -eu -c '
   persistent=$5
   user_home=$6
   native_output=$7
-  printf '\n' | gnome-keyring-daemon --unlock ><local-evidence>/soksak-keyring.env
-  . <local-evidence>/soksak-keyring.env
-  wm_ready=<local-evidence>/soksak-openbox-ready.$$
+  printf '\n' | gnome-keyring-daemon --unlock >/tmp/soksak-keyring.env
+  . /tmp/soksak-keyring.env
+  wm_ready=/tmp/soksak-openbox-ready.$$
   rm -f "$wm_ready"
-  openbox --startup "touch $wm_ready" ><local-evidence>/soksak-openbox.log 2>&1 &
-  while [ ! -f "$wm_ready" ]; do inotifywait -qq -e create <local-evidence>; done
+  openbox --startup "touch $wm_ready" >/tmp/soksak-openbox.log 2>&1 &
+  while [ ! -f "$wm_ready" ]; do inotifywait -qq -e create /tmp; done
   rm -f "$wm_ready"
   HOME=$user_home GDK_BACKEND=x11 GSK_RENDERER=cairo GTK_A11Y=none LIBGL_ALWAYS_SOFTWARE=1 \
     WEBKIT_DISABLE_COMPOSITING_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 \
     WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
     SOKSAK_HOME=$persistent SOKSAK_RUNTIME=$runtime \
-    SOKSAK_IDENTIFIER=com.soksak.linuxsmoke "$binary" > <local-evidence>/soksak-linux-smoke.log 2>&1 &
+    SOKSAK_IDENTIFIER=com.soksak.linuxsmoke "$binary" > /tmp/soksak-linux-smoke.log 2>&1 &
   pid=$!
   cleanup() {
     status=$?
-    if [ "$status" -ne 0 ]; then cat <local-evidence>/soksak-linux-smoke.log >&2; fi
+    if [ "$status" -ne 0 ]; then cat /tmp/soksak-linux-smoke.log >&2; fi
     kill -TERM "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     trap - EXIT INT TERM

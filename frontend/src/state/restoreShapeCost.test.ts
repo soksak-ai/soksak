@@ -20,7 +20,7 @@ const STORED_BEFORE = {
     {
       id: "wsp-a1b2c3",
       title: "w",
-      root: "<local-evidence>/w",
+      root: "/tmp/w",
       regionOpen: { left: false, rail: true, right: false },
       // The shape of that day: one region's layout, and the other region's single active view.
       // `leftRailPlacement` is that day's name for where the rail stands — `left` meant the rail
@@ -50,7 +50,7 @@ describe("restoring a window written by an older build", () => {
 
     expect(workspaces).toHaveLength(1);
     expect(activeId).toBe("wsp-a1b2c3");
-    expect(workspaces[0]?.root).toBe("<local-evidence>/w");
+    expect(workspaces[0]?.root).toBe("/tmp/w");
     expect(workspaces[0]?.spaces).toHaveLength(1);
   });
 

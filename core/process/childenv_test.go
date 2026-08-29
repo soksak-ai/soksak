@@ -17,7 +17,7 @@ func TestTheChildEnvironmentRuleIsLentRatherThanCopied(t *testing.T) {
 		"PATH=/usr/bin",
 		"SOKSAK_HOME=/somewhere-else",
 		"SOKSAK_MASTER_KEY=secret",
-		"SOKSAK_SOCKET=<local-evidence>/s.sock",
+		"SOKSAK_SOCKET=/tmp/s.sock",
 	}
 
 	built := ChildEnvironment(inherited, "/home", map[string]string{"TERM": "xterm"})
@@ -26,7 +26,7 @@ func TestTheChildEnvironmentRuleIsLentRatherThanCopied(t *testing.T) {
 	if strings.Contains(joined, "SOKSAK_MASTER_KEY") {
 		t.Errorf("an internal name reached the child: %v", built)
 	}
-	for _, entitled := range []string{"SOKSAK_HOME=/home", "SOKSAK_SOCKET=<local-evidence>/s.sock"} {
+	for _, entitled := range []string{"SOKSAK_HOME=/home", "SOKSAK_SOCKET=/tmp/s.sock"} {
 		if !strings.Contains(joined, entitled) {
 			t.Errorf("the child lost a handle it is entitled to: %s", entitled)
 		}

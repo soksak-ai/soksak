@@ -50,7 +50,7 @@ func TestCaptureWithNoWindowSaysSoRatherThanCrashing(t *testing.T) {
 	_, err := captureRegistry(t).InvokeFrom(
 		control.Caller{Window: controlPlaneWindow},
 		"window_snapshot",
-		callArgs(t, map[string]any{"path": "<local-evidence>/does-not-matter.png"}))
+		callArgs(t, map[string]any{"path": "/tmp/does-not-matter.png"}))
 	if err == nil {
 		t.Fatal("a capture with no window succeeded")
 	}
@@ -63,9 +63,9 @@ func TestARegionOfNoAreaIsRefusedRatherThanWidened(t *testing.T) {
 	// Zero would reach the capture as Whole. A caller who asked for a region
 	// and received the window compares the wrong pixels and believes them.
 	for _, rect := range []map[string]any{
-		{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "w": 0, "h": 100},
-		{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "w": 100, "h": 0},
-		{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "w": -5, "h": 100},
+		{"path": "/tmp/x.png", "x": 0, "y": 0, "w": 0, "h": 100},
+		{"path": "/tmp/x.png", "x": 0, "y": 0, "w": 100, "h": 0},
+		{"path": "/tmp/x.png", "x": 0, "y": 0, "w": -5, "h": 100},
 	} {
 		_, err := captureRegistry(t).Invoke("window_snapshot_region", callArgs(t, rect))
 		if err == nil {
@@ -82,7 +82,7 @@ func TestARegionNeedsEveryComponent(t *testing.T) {
 	// A missing component would decode as zero, which is a legitimate origin
 	// and an impossible size — so it is named instead.
 	_, err := captureRegistry(t).Invoke("window_snapshot_region",
-		callArgs(t, map[string]any{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "w": 100}))
+		callArgs(t, map[string]any{"path": "/tmp/x.png", "x": 0, "y": 0, "w": 100}))
 	if err == nil {
 		t.Fatal("a region missing its height was accepted")
 	}

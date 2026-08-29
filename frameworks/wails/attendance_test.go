@@ -43,7 +43,7 @@ func TestAnAttendedLaunchIsAnOrdinaryApplication(t *testing.T) {
 // An unattended launch ends when whoever started it does.
 //
 // Measured 2026-08-20: three application processes were running from earlier gate runs, the oldest
-// for an hour and seventeen minutes, each holding a window and a home under <local-evidence>. A gate quits its
+// for an hour and seventeen minutes, each holding a window and a home under /tmp. A gate quits its
 // application on the way out, and that path does not run when the test binary itself is killed —
 // an interrupt, a timeout, a crash — so the child outlives the only thing that knew about it.
 //

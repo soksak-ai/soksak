@@ -44,7 +44,7 @@ function tab(views: Tab[]): Workspace {
     title: "p",
     regionOpen: { left: false, rail: false, right: false },
     sidebarLayouts: { left: splitLeaf({ viewKeys: [], activeViewKey: "" }), rail: splitLeaf({ viewKeys: [], activeViewKey: "" }), right: splitLeaf({ viewKeys: [], activeViewKey: "" }) },
-    root: "<local-evidence>",
+    root: "/tmp",
     spaces: [content(views)],
     activeSpaceId: "spc-aaaaaa",
   };
