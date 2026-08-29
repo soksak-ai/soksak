@@ -32,7 +32,7 @@ func testRegistry(t *testing.T) (*control.Registry, *Manager, *fakeSpawner, *rec
 	return registry, manager, spawner, sink
 }
 
-// The six names this package answers, all core-owned: none of them needs this
+// The seven names this package answers, all core-owned: none of them needs this
 // host's window, because the window arrives as an argument.
 func TestRegisterServesExactlySixCoreCommands(t *testing.T) {
 	registry, _, _, _ := testRegistry(t)
@@ -48,13 +48,32 @@ func TestRegisterServesExactlySixCoreCommands(t *testing.T) {
 	sort.Strings(served)
 
 	want := []string{
-		"process_kill", "process_list", "process_reclaim_by_window",
+		"process_inventory", "process_kill", "process_list", "process_reclaim_by_window",
 		"process_spawn", "process_stdin_close", "process_write",
 	}
 	if strings.Join(served, ",") != strings.Join(want, ",") {
 		t.Fatalf("served %v, want %v", served, want)
 	}
 }
+
+func TestProcessInventoryAggregatesAnInjectedOwner(t *testing.T) {
+	source := fakeInventorySource{value: OwnerInventory{Owner: "soksak-sidecar-pty", Revision: 4, Processes: []OwnedProcess{{
+		ID: "pty-session-7", Owner: "soksak-sidecar-pty", PID: 123, ParentPID: 99,
+		Command: "/bin/zsh -l", State: "running", StartedAtUnixMs: 1700000000000,
+	}}}}
+	manager := NewManager(Deps{InventorySources: []InventorySource{source}})
+	got, err := manager.Inventory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Owners) != 1 || got.Owners[0].Owner != source.value.Owner || len(got.Owners[0].Processes) != 1 {
+		t.Fatalf("inventory=%+v", got)
+	}
+}
+
+type fakeInventorySource struct{ value OwnerInventory }
+
+func (source fakeInventorySource) Inventory() (OwnerInventory, error) { return source.value, nil }
 
 // cleanup_stale is not a process command. It removes stale install artifacts
 // under a caller-supplied allowlist of roots and never touches a child. Its

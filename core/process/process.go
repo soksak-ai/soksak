@@ -38,6 +38,9 @@ type Deps struct {
 	// Secrets nil means this host holds no vault. A spawn that requires none
 	// still works; one that requires a secret is refused by name.
 	Secrets SecretSource
+	// InventorySources are explicit external process owners. Nil means no external owner is
+	// installed; no filesystem or process-name discovery is attempted.
+	InventorySources []InventorySource
 }
 
 // The names this package answers to.
@@ -48,10 +51,11 @@ const (
 	commandWrite      = "process_write"
 	commandStdinClose = "process_stdin_close"
 	commandReclaim    = "process_reclaim_by_window"
+	commandInventory  = "process_inventory"
 )
 
 var commandNames = []string{
-	commandSpawn, commandKill, commandList,
+	commandSpawn, commandKill, commandList, commandInventory,
 	commandWrite, commandStdinClose, commandReclaim,
 }
 
@@ -88,6 +92,10 @@ func Register(registry *control.Registry, deps Deps) *Manager {
 		}
 		return manager
 	}
+	registry.MustRegister(control.Command{
+		Name: commandInventory, Owner: control.OwnerCore,
+		Handler: func(control.Args) (any, error) { return manager.Inventory() },
+	})
 
 	registry.MustRegister(control.Command{
 		Name:  commandSpawn,

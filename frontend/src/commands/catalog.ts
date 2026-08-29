@@ -1191,6 +1191,17 @@ export function registerCatalog(): void {
     },
   });
 
+  register("process.inventory", {
+    description: key("cmd.process.inventory.desc"),
+    triggers: { ko: "프로세스 소유권 inventory terminal shell" },
+    params: {},
+    windowScoped: false,
+    returns: "{ owners: [{ owner, revision, processes: [{ id, owner, window, pane, pid, parentPid, command, state, startedAtUnixMs, endedAtUnixMs? }] }] }",
+    message: (d) => tmsg("msg.process.inventory", { n: Number((d.owners as unknown[] | undefined)?.length ?? 0) }),
+    examples: ["process.inventory"],
+    handler: async () => invoke("process_inventory"),
+  });
+
   // A rail tab label attaches to the view kind (viewKey) — not to one content tab, but to the tab slot
   // for that kind. So the axis of these two commands is viewKey, not tab id, and the name follows.
   register("tab.label.set", {
