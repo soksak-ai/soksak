@@ -1,0 +1,27 @@
+import { describe, expect, it } from "vitest";
+import { nativeSurfacePicturePlacements } from "./captureNativeSurfaceComposition";
+
+describe("capture-only native surface composition", () => {
+  it("clips visible surfaces into the capture region and preserves layer order", () => {
+    expect(nativeSurfacePicturePlacements(
+      { x: 100, y: 50, w: 400, h: 300 },
+      [
+        { id: "hidden", x: 110, y: 60, w: 20, h: 20, visible: false, alpha: 1, layer: 0 },
+        { id: "upper", x: 450, y: 300, w: 100, h: 100, visible: true, alpha: 0.5, layer: 10 },
+        { id: "lower", x: 80, y: 40, w: 100, h: 80, visible: true, alpha: 1, layer: 0 },
+        { id: "away", x: 700, y: 500, w: 10, h: 10, visible: true, alpha: 1, layer: 0 },
+      ],
+    )).toEqual([
+      {
+        id: "lower", alpha: 1,
+        source: { x: 20, y: 10, w: 80, h: 70 },
+        target: { x: 0, y: 0, w: 80, h: 70 },
+      },
+      {
+        id: "upper", alpha: 0.5,
+        source: { x: 0, y: 0, w: 50, h: 50 },
+        target: { x: 350, y: 250, w: 50, h: 50 },
+      },
+    ]);
+  });
+});
