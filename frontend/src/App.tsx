@@ -81,6 +81,7 @@ import { railWidthResizePlan } from "./lib/railWidthResize";
 import { useAppChromeLayoutReflow } from "./lib/appChromeLayoutReflow";
 import { useArrangementPhase } from "./components/useArrangementPhase";
 import {
+  presentedRailWidth,
   resolvePresentedRailRelation,
   viewIdsOfMoves,
 } from "./lib/railArrangement";
@@ -349,6 +350,8 @@ const WorkspacePlane = memo(function WorkspacePlane({
     railGridSurfaceRef.current?.candidateParticipant,
   );
   const arrangement = phase.displayed;
+  const displayedRailWidth = presentedRailWidth(arrangement, sidebarW);
+  const displayedRailOpen = displayedRailWidth > 0;
   const railCleanLines = arrangement?.cleanLines ?? [0, 100];
   const effectiveStation = arrangement?.station ?? 0;
   const [dragStation, setDragStation] = useState<number | null>(null);
@@ -359,7 +362,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // fixed while the pane plane shrinks, moving the rail's left edge in the opposite direction and
   // making a 120px pointer move reach the grabbed boundary by only about 60px.
   const startResize = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0 || !railOpen || !arrangement) return;
+    if (e.button !== 0 || !displayedRailOpen || !arrangement) return;
     e.preventDefault();
     const plane = railPlaneRef.current;
     if (!plane) return;
@@ -409,7 +412,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     document.body.style.cursor = "col-resize";
-  }, [arrangement, railOpen, placement.mode, renderedStation, resizeSplits,
+  }, [arrangement, displayedRailOpen, placement.mode, renderedStation, resizeSplits,
     setLeftRailPlacement, sidebarW, workspace.id]);
   // The renderer and state.tree/pane.list consume the same solver. With no explicit binding it is this solution's
   // focused active tab; a closed or empty panel gives none/0. Group, adjacency and border are never re-decided here.
@@ -419,7 +422,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
         displayed: arrangement,
         destination: solved,
         placement: placement.mode,
-        railOpen: railOpen,
+        railOpen: displayedRailOpen,
         station: renderedStation,
       })
     : null;
@@ -478,7 +481,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
 
   const startRailStationDrag = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button !== 0 || !railOpen) return;
+      if (e.button !== 0 || !displayedRailOpen) return;
       e.preventDefault();
       e.stopPropagation();
       const plane = railPlaneRef.current;
@@ -522,7 +525,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
       effectiveStation,
       phase.rebase,
       workspace.id,
-      railOpen,
+      displayedRailOpen,
       railCleanLines,
       setLeftRailPlacement,
       sidebarW,
@@ -542,7 +545,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // render that changes nothing about its box produces the same values and starts no motion.
   useLayoutEffect(() => {
     timed("rail.flush", () => railMotion.flush(phase.replacing ? "replace" : "animate"));
-  }, [railOpen, sidebarW, renderedStation, railLook, railTraveling, phase.replacing, railMotion]);
+  }, [displayedRailOpen, sidebarW, renderedStation, railLook, railTraveling, phase.replacing, railMotion]);
   useLayoutEffect(() => {
     timed("plugins.reflow", () =>
       emitPluginEvent("layout.reflow", { activeSpaceId: workspace.activeSpaceId }),
@@ -552,7 +555,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
     activeContent?.activePaneId,
     activeContent?.maximizedTabId,
     workspace.activeSpaceId,
-    railOpen,
+    displayedRailOpen,
     isActiveWorkspace,
     renderedStation,
     railTraveling,
@@ -650,16 +653,16 @@ const WorkspacePlane = memo(function WorkspacePlane({
                       // 2026-08-17: the left column ended at 414, the sidebar held 420..580,
                       // and the pane it served began at 586. Six points each way.
                       left: `calc(${rail.station}% - ${(sidebarW * rail.station) / 100}px + var(--pane-inset, 0px))`,
-                      width: railOpen ? sidebarW : 0,
+                      width: displayedRailWidth,
                       borderLeftWidth: railEdgeWidths(
                         railLook,
-                        railOpen,
+                        displayedRailOpen,
                         rail.station,
                         paneStyle,
                       ).left,
                       borderRightWidth: railEdgeWidths(
                         railLook,
-                        railOpen,
+                        displayedRailOpen,
                         rail.station,
                         paneStyle,
                       ).right,
@@ -681,7 +684,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                       focusedPluginId={focusedPluginId}
                     />
                   </div>
-                  {railOpen && (
+                  {displayedRailOpen && (
                     <div className="rail-controls">
                       <button
                         type="button"
@@ -700,7 +703,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                       </button>
                     </div>
                   )}
-                  {railOpen && (
+                  {displayedRailOpen && (
                     <div
                       className="sidebar-resizer"
                       data-node="sidebar/rail/resizer"
@@ -760,7 +763,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   // The maximize fact comes from the **same solution** as station — mixing them makes the render throw.
                   displayMaximizedId={isActiveContent ? (arrangement?.maximizedId ?? null) : undefined}
                   railWidthPx={
-                    isActiveContent && railOpen ? sidebarW : 0
+                    isActiveContent ? displayedRailWidth : 0
                   }
                 />
               </div>

@@ -84,6 +84,14 @@ export interface ArrangementMove {
   dRailUnits: number;
 }
 
+/** Physical rail width of the solution currently displayed by the phase. */
+export function presentedRailWidth<L>(
+  arrangement: Pick<Arrangement<L>, "railPresent"> | null | undefined,
+  width: number,
+): number {
+  return arrangement?.railPresent ? width : 0;
+}
+
 export type RailRelationBorderMode = "union" | "independent" | "none";
 
 /**
