@@ -29,12 +29,10 @@ import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost
 // already answers a view about its own visibility, so the fact is one term of this expression rather
 // than a rule about modals.
 //
-// The travelling layer is that fact once more. A rail that moves to another station passes across
-// the panes on the way, and a page above the document covers it for the whole crossing — 155 to 160
-// points of it, for 85 to 119ms, measured the same day in the named window. What travels while the
-// layout moves is the page's picture, which is in the document and therefore moves with the slot it
-// is drawn in, exactly and by the same transform. When the layout settles the page is back and is
-// the thing being looked at again.
+// Layout motion stays in the compositor transaction. Hiding every surface during motion created a
+// blank target when an inactive native view became active: there were no visible pixels to capture.
+// The live surface therefore follows the applied frame while the rail and panes move. Overlay
+// occlusion remains different because a native child cannot be ordered under a DOM modal.
 //
 // CSS hides these layers separately, but the native layer is outside CSS, so the judgment is
 // collected into one expression.
@@ -63,7 +61,7 @@ export function resolveViewVisibility(
           : "visible";
   return {
     contentVisible,
-    surfaceVisible: contentVisible && !overlayed && !traveling,
+    surfaceVisible: contentVisible && !overlayed,
     occluded: overlayed,
     moving: traveling,
     reason,

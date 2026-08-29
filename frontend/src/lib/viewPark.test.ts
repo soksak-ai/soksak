@@ -67,10 +67,6 @@ describe("view visibility ownership", () => {
 });
 
 describe("viewSurfaceStyle — exclusive (maximize) composition contract", () => {
-  // A rail moving to another station crosses the panes on the way, and a page above the document
-  // covers it for the whole crossing — 155 to 160 points, for 85 to 119ms, measured 2026-08-17. What
-  // travels while the layout moves is the page's picture, which is in the document and moves with the
-  // slot by the same transform.
   it("a travelling layout keeps the live surface under compositor ownership", () => {
     expect(surfaceShown(true, true, true, false, true)).toBe(true);
     expect(surfaceShown(true, true, true, false, false)).toBe(true);
@@ -177,7 +173,7 @@ describe("a parking commit goes through the content view host", () => {
     const { parkedPicture } = await import("./parkedPicture");
 
     dropViewVisibility("v-1");
-    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, false, true));
+    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, true, false));
     // The picture is taken before the surface goes, so the commit lands after that answer rather
     // than in the same breath as the call.
     await new Promise((done) => setTimeout(done, 0));
@@ -187,7 +183,7 @@ describe("a parking commit goes through the content view host", () => {
     expect(seen[0][1]).toBe(false);
 
     // Idempotent — recommitting the same value does nothing.
-    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, false, true));
+    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, true, false));
     await Promise.resolve();
     expect(seen).toHaveLength(1);
 
@@ -212,7 +208,7 @@ describe("a parking commit goes through the content view host", () => {
       resolvePicture = resolve;
     });
     dropViewVisibility("v-1");
-    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, false, true));
+    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, true, false));
     commitViewPresentation("v-1", resolveViewVisibility(true, true, false, false, false));
     resolvePicture("data:image/png;base64,LATE");
     await new Promise((done) => setTimeout(done, 0));
