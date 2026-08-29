@@ -41,10 +41,10 @@ describe("view visibility ownership", () => {
     });
   });
 
-  it("keeps DOM content visible while layout motion replaces an out-of-document surface", () => {
+  it("keeps DOM content and the live surface visible through layout motion", () => {
     expect(resolveViewVisibility(true, true, true, false, true)).toEqual({
       contentVisible: true,
-      surfaceVisible: false,
+      surfaceVisible: true,
       occluded: false,
       moving: true,
       reason: "layout-motion",
@@ -71,9 +71,8 @@ describe("viewSurfaceStyle — exclusive (maximize) composition contract", () =>
   // covers it for the whole crossing — 155 to 160 points, for 85 to 119ms, measured 2026-08-17. What
   // travels while the layout moves is the page's picture, which is in the document and moves with the
   // slot by the same transform.
-  it("a travelling layout hides it, whatever the other layers hold", () => {
-    expect(surfaceShown(true, true, true, false, true)).toBe(false);
-    // Oracle liveness — the same window with the travel over.
+  it("a travelling layout keeps the live surface under compositor ownership", () => {
+    expect(surfaceShown(true, true, true, false, true)).toBe(true);
     expect(surfaceShown(true, true, true, false, false)).toBe(true);
   });
 
