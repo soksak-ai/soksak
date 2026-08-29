@@ -546,6 +546,12 @@ ownership 폴링·compositor 우회는 하지 않는다. 계약은 `DOM 선언 e
 적용되지 않은 surface는 이름 있는 실패로 남긴다. adapter RED→GREEN 전달 테스트가 회귀를 고정하고,
 격리된 v7에서 빠른 탭 전환/입력 매트릭스를 다시 실행해야 한다.
 
+이 변경 후 첫 격리 v7 실행에서는 별도의 kit geometry 결함도 확인했다. 새 workbench가 host에 삽입되기
+전에 측정되어 `hostPixels=0×0`, `renderSequence=0`을 유지했다. terminal kit이 첫 실제 frame에서 한 번
+layout을 재측정하도록 고쳤다(`soksak-kit-plugin-terminal` `7c3261a`, RED→GREEN workbench 테스트).
+이 kit 변경을 포함한 새 Vision/plugin candidate 폐포를 만들기 전에는 시각 또는 프롬프트 GREEN으로
+주장하지 않는다. 기존 v7 및 frozen v4 폐포에는 이 변경이 없다.
+
 ## 프로젝트별 sidecar identity
 
 Installer가 `environment.json`의 `processRole`과 현재 프로젝트 값으로 materialize한 실행 파일명을

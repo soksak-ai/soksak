@@ -561,6 +561,13 @@ poll for ownership, or bypass the compositor. The contract is therefore
 failure. The regression is covered by the adapter's RED→GREEN delivery test and must be rechecked in
 the isolated v7 rapid tab-switch/input matrix.
 
+The first isolated v7 run after this change also exposed a separate kit geometry defect: a newly
+mounted workbench measured its host before insertion and retained `hostPixels=0×0` with
+`renderSequence=0`. The terminal kit fixes this by scheduling one first-frame layout remeasurement
+(`soksak-kit-plugin-terminal` `7c3261a`, RED→GREEN workbench test). A new Vision/plugin candidate
+closure containing that kit change is required before claiming visual or prompt GREEN; the existing
+v7 and frozen v4 closures do not contain it.
+
 ## Project-qualified sidecar identity
 
 The installer passes the materialized process name, derived from `environment.json` `processRole` and
