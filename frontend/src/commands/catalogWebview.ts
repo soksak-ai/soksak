@@ -9,7 +9,6 @@ import { invoke } from "../framework";
 import { register, type CommandHint } from "./registry";
 import { key, tmsg } from "../i18n";
 import { allViews, useSessions } from "../state/sessions";
-import { currentWindowLabel } from "../lib/webviewLabels";
 import { orphanSurfaceLabels, viewIdFromSurfaceLabel } from "../lib/surfaceLabels";
 import { CONTENT_VIEW_BODY, contentViewDomFacts, contentViewHost } from "../lib/contentViews";
 import { presentationNowUnixMs } from "../lib/presentationClock";
@@ -25,9 +24,9 @@ interface LabelHealth {
 }
 
 export function registerWebviewCatalog(): void {
-  register("webview.surfaces", {
-    description: key("cmd.webview.surfaces.desc"),
-    triggers: { ko: "표면 정합 유령 웹뷰 잔존 브라우저 대조 확인" },
+  register("surface.inventory", {
+    description: key("cmd.surface.inventory.desc"),
+    triggers: { ko: "표면 정합 유령 네이티브 표면 잔존 대조 확인" },
     params: {},
     returns:
       "{ window, actual: [label], ghosts: [label], orphans: [label], engine: {registered, providerParentPresent, surfaces:[{label,hidden,effectivelyHidden,alpha,effectiveAlpha,frame}]}, bodies: [{node,x,y,w,h,children,overlay,…}], contentViews: {inDocument, detached: [label], dom: [{label,slotLabel,computedVisibility,opacity,filter,composition:{kind,viewId,topologyPath,visible}|null,rect}], sampledAtUnixMs}, stateViews } — sampledAtUnixMs is when this ledger read itself, on the same presentation clock as ui.layout.wait-settled, so a caller can tell one settled observation window from two; opacity/filter are how much light the adapter lets through its own surface, so a second dimming on top of the focus lighting plane is readable instead of assumed absent",
@@ -37,10 +36,10 @@ export function registerWebviewCatalog(): void {
         Number((d.orphans as string[] | undefined)?.length ?? 0) +
         Number((d.contentViews as { detached?: string[] } | undefined)?.detached?.length ?? 0);
       return bad > 0
-        ? tmsg("msg.webview.surfaces.ghost", { n: bad })
-        : tmsg("msg.webview.surfaces.clean", { n: Number(d.stateViews ?? 0) });
+        ? tmsg("msg.surface.inventory.ghost", { n: bad })
+        : tmsg("msg.surface.inventory.clean", { n: Number(d.stateViews ?? 0) });
     },
-    examples: ["webview.surfaces"],
+    examples: ["surface.inventory"],
     handler: async () => {
       // **Query the host.** With only the framework's native list (webview_list), an
       // implementation that keeps content inside the document has three surfaces alive while the
@@ -79,9 +78,8 @@ export function registerWebviewCatalog(): void {
           },
         }).catch(() => {});
       }
-      // Engine (CEF) axis — surfaces the WKWebView list cannot see (real incident: a leftover
-      // browser frame after reload was misjudged as "no ghosts"). registered = surface count
-      // registered in the core layer.
+      // Native engine axis — the compositor inventory and backend receipt can disagree after an
+      // apply failure. registered is the surface count held by the framework layer.
       const engine = await invoke<{ registered: number; providerParentPresent: boolean }>(
         "engine_surface_stats",
       ).catch(() => ({ registered: -1, providerParentPresent: false }));

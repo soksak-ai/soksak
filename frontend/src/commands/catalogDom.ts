@@ -2297,7 +2297,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // of the screen, and this check answered pass at that very moment. Nobody knew until a person
       // looked at a screenshot and said so. Geometry is judged by geometry.
       try {
-        // Reads the framework's engine surface observation as is — the same place webview.surfaces uses.
+        // Reads the framework's engine surface observation as is — the same place surface.inventory uses.
         const surfaces = await invoke<{ surfaces?: SurfaceFrameFact[] }>("engine_surface_stats");
         const root = document.documentElement;
         const outside = surfacesOutsideWindow(surfaces?.surfaces ?? [], {
