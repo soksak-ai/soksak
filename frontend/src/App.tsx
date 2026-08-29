@@ -85,7 +85,7 @@ import {
   viewIdsOfMoves,
 } from "./lib/railArrangement";
 import { prepareLayoutChange, viewLayoutChange } from "./lib/layoutTransitionHost";
-import { registerLayoutTransitionIntentHost } from "./lib/layoutTransitionIntent";
+import { useLayoutTransitionIntentHost } from "./lib/useLayoutTransitionIntentHost";
 import { ownsNativeSurfaceFromManifests } from "./lib/nativeSurfaceOwnership";
 import { useAddTabIntent } from "./state/addTabIntent";
 import { focusedPluginOf, usePlacePresent, type SectionPlace } from "./state/sectionSets";
@@ -291,6 +291,8 @@ const WorkspacePlane = memo(function WorkspacePlane({
   const railPullFocused = useSettings((s) => s.railPullFocused);
   const solved = projectArrangement(workspace, lastStationRef.current, railPullFocused, railOpen);
   lastStationRef.current = solved?.station ?? 0;
+  const sidebarWRef = useRef(sidebarW);
+  sidebarWRef.current = sidebarW;
   const railGeometryScope = railGeometryScopeId(
     activeContent?.id,
     solved?.cleanLines ?? [0, 100],
@@ -328,16 +330,14 @@ const WorkspacePlane = memo(function WorkspacePlane({
         to,
         groups,
         hostWidth,
-        railOpen ? sidebarW : 0,
+        from.railPresent || to.railPresent ? sidebarWRef.current : 0,
       ), signal);
     },
-    [railOpen, sidebarW],
+    [],
   );
-  useLayoutEffect(
-    () => registerLayoutTransitionIntentHost<Pane>(workspace.id, {
-      prepare: ({ from, to }, signal) => prepareArrangementTravel(from, to, signal),
-    }),
-    [workspace.id, prepareArrangementTravel],
+  useLayoutTransitionIntentHost<Pane>(
+    workspace.id,
+    ({ from, to }, signal) => prepareArrangementTravel(from, to, signal),
   );
   const phase = useArrangementPhase(
     solved,

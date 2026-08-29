@@ -40,6 +40,8 @@ export interface ArrangementCell {
 }
 
 export interface Arrangement<L> {
+  /** Whether this solution contains the rail. Transition preparation reads this state rather than a render closure. */
+  railPresent: boolean;
   /** Logical vertical line (0..100) where the rail is inserted. Always clean over the solution's cells. */
   station: number;
   cleanLines: number[];
@@ -394,6 +396,7 @@ export function solveArrangement<L extends { id: string }>(input: {
       maximizedStation = original && original.rect.left < pinnedStation - RAIL_EPSILON ? 100 : 0;
     }
     return {
+      railPresent: input.railOpen,
       station: maximizedStation,
       cleanLines,
       displayLayout: input.layout,
@@ -412,6 +415,7 @@ export function solveArrangement<L extends { id: string }>(input: {
   if (!input.railOpen) {
     const cells = computeSplitLayout(input.layout).cells.map(({ value, rect }) => ({ id: value.id, rect }));
     return {
+      railPresent: false,
       station: 0,
       cleanLines: cleanRailLines(cells.map((cell) => cell.rect)),
       displayLayout: input.layout,
@@ -443,6 +447,7 @@ export function solveArrangement<L extends { id: string }>(input: {
       : flowStation(cells, focusId, cleanLines, input.fallbackStation ?? 0);
 
   return {
+    railPresent: true,
     station:
       station,
     cleanLines,

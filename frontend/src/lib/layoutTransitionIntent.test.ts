@@ -14,6 +14,7 @@ import {
 type Leaf = { id: string };
 
 const arrangement = (station: number, focusId: string): Arrangement<Leaf> => ({
+  railPresent: true,
   station,
   cleanLines: [0, 50, 100],
   displayLayout: { type: "leaf", value: { id: focusId } },
