@@ -47,8 +47,8 @@ import {
   registerLayoutTransitionIntentHost,
 } from "../lib/layoutTransitionIntent";
 
-type G = { id: string };
-const leaf = (id: string): SplitTree<G> => ({ type: "leaf", value: { id } });
+type G = { id: string; content?: string };
+const leaf = (id: string, content?: string): SplitTree<G> => ({ type: "leaf", value: { id, content } });
 const twoColumns: SplitTree<G> = {
   type: "split",
   id: "r",
@@ -71,6 +71,9 @@ const solve = (layout: SplitTree<G>, focusId: string) =>
     placement: { mode: "flow" },
     railOpen: true,
   });
+const valuesOf = (tree: SplitTree<G>): G[] => tree.type === "leaf"
+  ? [tree.value]
+  : tree.children.flatMap(valuesOf);
 
 function Probe({
   arrangement,
@@ -111,6 +114,7 @@ function Probe({
       data-moves={phase.moves.map((m) => m.id).join(",")}
       data-station={String(phase.displayed?.station ?? "")}
       data-content={String(phase.displayed === arrangement ? "live" : "stale")}
+      data-values={phase.displayed ? valuesOf(phase.displayed.displayLayout).map((value) => `${value.id}:${value.content ?? ""}`).join("|") : ""}
       data-glide={phase.glide ? "1" : "0"}
       data-preparing={phase.preparing ? "1" : "0"}
       data-starting={phase.starting ? "1" : "0"}
@@ -1065,6 +1069,31 @@ describe("useArrangementPhase", () => {
     );
     expect(el().dataset.content).toBe("live"); // the newest solution is displayed immediately
     expect(el().dataset.traveling).toBe("0"); // geometry did not move, so there is no journey
+  });
+
+  it("updates tab content during rail travel without abandoning the open geometry journey", () => {
+    const initialLayout: SplitTree<G> = {
+      type: "split", id: "r", dir: "row", sizes: [0.5, 0.5],
+      children: [leaf("a", "tab-a1"), leaf("b", "tab-b1")],
+    };
+    const changedLayout: SplitTree<G> = {
+      type: "split", id: "r", dir: "row", sizes: [0.5, 0.5],
+      children: [leaf("a", "tab-a2"), leaf("b", "tab-b1")],
+    };
+    const at = solve(initialLayout, "b");
+    const moving = solve(initialLayout, "a");
+    act(() => root.render(<Probe arrangement={at} scopeId={scopeOf(at)} contentKey="a:tab-a1|b:tab-b1" />));
+    act(() => root.render(<Probe arrangement={moving} scopeId={scopeOf(moving)} contentKey="a:tab-a1|b:tab-b1" />));
+    expect(el().dataset.traveling).toBe("1");
+
+    const changed = solve(changedLayout, "a");
+    act(() => root.render(<Probe arrangement={changed} scopeId={scopeOf(changed)} contentKey="a:tab-a2|b:tab-b1" />));
+    expect(el().dataset.values).toContain("a:tab-a2");
+    expect(el().dataset.traveling).toBe("1");
+
+    act(() => vi.advanceTimersByTime(RAIL_TRAVEL_MS + 10));
+    expect(el().dataset.traveling).toBe("0");
+    expect(el().dataset.content).toBe("live");
   });
 
   it("rebase takes the next solution without a journey — a hand drag landing is not a journey", () => {
