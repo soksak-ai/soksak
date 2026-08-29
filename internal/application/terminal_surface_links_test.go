@@ -27,9 +27,19 @@ func (host *recordedTerminalUnitHost) Send(name string, request controlwire.Requ
 	}, nil
 }
 
-func TestTerminalSurfaceStartsTheExactSelectedUnitBeforeSending(t *testing.T) {
+func TestTerminalSurfaceExposesExactStartAndSendAsSeparateOperations(t *testing.T) {
 	host := &recordedTerminalUnitHost{}
-	answer, err := terminalSurfaceLinks(host).Send("soksak-sidecar-terminal-wezterm", "surface.state", map[string]any{"pane": "tab-a.1"})
+	links := terminalSurfaceLinks(host)
+	if links.Start == nil {
+		t.Fatal("terminal surface link exposes no exact unit starter")
+	}
+	if err := links.Start("soksak-sidecar-pty"); err != nil {
+		t.Fatal(err)
+	}
+	if err := links.Start("soksak-sidecar-terminal-wezterm"); err != nil {
+		t.Fatal(err)
+	}
+	answer, err := links.Send("soksak-sidecar-terminal-wezterm", "surface.state", map[string]any{"pane": "tab-a.1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,10 +47,16 @@ func TestTerminalSurfaceStartsTheExactSelectedUnitBeforeSending(t *testing.T) {
 		t.Fatalf("answer=%v", answer)
 	}
 	want := []string{
+		"start:soksak-sidecar-pty",
 		"start:soksak-sidecar-terminal-wezterm",
 		"send:soksak-sidecar-terminal-wezterm:surface.state",
 	}
-	if len(host.calls) != len(want) || host.calls[0] != want[0] || host.calls[1] != want[1] {
+	if len(host.calls) != len(want) {
 		t.Fatalf("calls=%v want=%v", host.calls, want)
+	}
+	for index := range want {
+		if host.calls[index] != want[index] {
+			t.Fatalf("calls=%v want=%v", host.calls, want)
+		}
 	}
 }
