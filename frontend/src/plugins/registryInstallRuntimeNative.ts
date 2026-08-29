@@ -11,6 +11,7 @@ import { invoke } from "../framework";
 import {
   declaredEntrypoints,
   installRegistryRelease,
+  installRegistryReleases,
   type RegistryArtifactStager,
   type RegistryInstallTransaction,
   type StagedRegistryArtifact,
@@ -66,7 +67,7 @@ const artifactStager: RegistryArtifactStager = {
     invoke<void>("artifact_install_rollback", { transactionId }),
 };
 
-const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, sourceId, localStore, root, releases, onProgress }) => {
+const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified, sourceId, localStore, roots, releases, onProgress }) => {
   let target: ArtifactTarget;
   try {
     target = await hostTarget();
@@ -86,18 +87,21 @@ const nativeRegistryInstall: RegistryInstallRuntimeHandler = async ({ certified,
   if (!selectedSource || (selectedSource === "local" && !localStore)) {
     return { ok: false, code: "INSTALL_SOURCE_INVALID", message: "installer source is incomplete" };
   }
-  const result = await installRegistryRelease({
+  const shared = {
     sourceId: selectedSource,
     ...(localStore ? { localStore } : {}),
-    root: { kind: root.kind, id: root.id, version: root.version },
     releases,
     target,
     environment,
     artifacts: artifactStager,
     onProgress,
-  });
+  };
+  const identities = roots.map(({ kind, id, version }) => ({ kind, id, version }));
+  const result = identities.length === 1
+    ? await installRegistryRelease({ ...shared, root: identities[0] })
+    : await installRegistryReleases({ ...shared, roots: identities });
   if (result.ok) {
-    return { ok: true, id: root.id, version: root.version, revision: result.revision };
+    return { ok: true, id: roots[0].id, version: roots[0].version, revision: result.revision };
   }
   return {
     ok: false,

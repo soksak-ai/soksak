@@ -11,7 +11,7 @@ export interface RegistryInstallRuntimeInput {
   certified?: CertifiedRegistry;
   sourceId?: "local";
   localStore?: string;
-  root: ReleaseCoordinates & ReleaseReference;
+  roots: Array<ReleaseCoordinates & ReleaseReference>;
   releases: ReleaseDocument[];
   onProgress?: (progress: Pick<PluginInstallProgress, "phase" | "completed" | "total" | "componentId">) => void;
 }
@@ -44,6 +44,13 @@ export function setRegistryInstallRuntime(
 }
 
 export function installCertifiedRegistryRelease(
+  input: Omit<RegistryInstallRuntimeInput, "roots"> & { root: ReleaseCoordinates & ReleaseReference },
+): Promise<RegistryInstallRuntimeResult> {
+  const { root, ...shared } = input;
+  return handlerSlot.v({ ...shared, roots: [root] });
+}
+
+export function installCertifiedRegistryReleases(
   input: RegistryInstallRuntimeInput,
 ): Promise<RegistryInstallRuntimeResult> {
   return handlerSlot.v(input);

@@ -79,6 +79,13 @@ build가 필요한지 선언합니다. build가 필요한 package는 선언된 �
 digest 검증과 불변 store 구조를 사용합니다. compile을 생략해도 source directory 실행 경로,
 `file:`/`link:` locator, 변경 가능한 workspace 주입은 허용되지 않습니다.
 
+설치된 Plugin 둘 이상이 공유 exact dependency를 새 버전으로 함께 옮겨야 하면 그 Plugin들은 하나의
+transaction root 집합입니다. `plugin.install.local.batch.plan`은 명시한 store 하나에서 모든 root를
+해결하고 중복·충돌 release identity를 거부하며, 정렬한 root 집합과 전체 합집합 closure를 hash합니다.
+`plugin.install.local.batch`는 같은 plan을 다시 해결하고 서로 다른 Plugin과 Sidecar를 각각 한 번만
+stage한 뒤 environment revision을 한 번 commit합니다. root를 하나씩 갱신하거나 `environment.json`을
+직접 편집하거나 dependent Plugin을 잠시 제거하는 방식은 올바른 migration이 아닙니다.
+
 ## 개발 소스
 
 개발 record는 Plugin 또는 Sidecar record와 같은 형식이며 `source`가 `development`입니다. `path`는

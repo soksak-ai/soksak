@@ -54,7 +54,7 @@ import { publishActivity } from "../state/activityFeed";
 import { awaitViewMounted } from "../plugins/viewFocus";
 import { runtimePluginRequirements } from "../plugins/runtimeDependencies";
 import { pluginInstallProgress, waitForPluginInstallPhase, type PluginInstallPhase } from "../plugins/registryInstallProgress";
-import { installLocalPlugin, planLocalPlugin } from "../plugins/localReleaseInstallService";
+import { installLocalPlugin, installLocalPlugins, planLocalPlugin, planLocalPlugins, type LocalPluginRoot } from "../plugins/localReleaseInstallService";
 import { writeDevelopRecord } from "./develop";
 
 // Installed/dev runtime → dependency graph node (based on manifest dependencies).
@@ -710,6 +710,44 @@ export function registerPluginCatalog(): void {
     examples: [`plugin.install.local '{"store":"/absolute/releases","pluginId":"soksak-plugin-<id>","version":"0.0.1","planDigest":"<sha256>"}'`],
     danger: "destructive",
     handler: async (p) => installLocalPlugin(String(p.store), String(p.pluginId), String(p.version), String(p.planDigest)),
+  });
+
+  const localRoots = (value: unknown): LocalPluginRoot[] => {
+    if (!Array.isArray(value)) throw new Error("plugins must be an array of {id,version}");
+    return value.map((entry) => {
+      if (!entry || typeof entry !== "object" || typeof (entry as { id?: unknown }).id !== "string" || typeof (entry as { version?: unknown }).version !== "string") {
+        throw new Error("plugins must contain only {id,version}");
+      }
+      return { id: (entry as { id: string }).id, version: (entry as { version: string }).version };
+    });
+  };
+
+  register("plugin.install.local.batch.plan", {
+    description: key("cmd.plugin.install.local.batch.plan.desc"),
+    params: {
+      store: { type: "string", required: true, description: key("cmd.plugin.install.local.param.store") },
+      plugins: { type: "json", required: true, description: key("cmd.plugin.install.local.batch.param.plugins") },
+    },
+    returns: "{ digest,store,roots:[{id,version}],releases:[{kind,id,version,artifacts:[{target,file,size,sha256}]}] }",
+    message: (d) => tmsg("msg.plugin.install.local.plan", { id: "batch", n: ((d.releases as unknown[]) ?? []).length }),
+    errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "INTERNAL"],
+    examples: [`plugin.install.local.batch.plan '{"store":"/absolute/releases","plugins":[{"id":"<plugin-id-a>","version":"0.0.1"},{"id":"<plugin-id-b>","version":"0.0.1"}]}'`],
+    handler: async (p) => planLocalPlugins(String(p.store), localRoots(p.plugins)),
+  });
+
+  register("plugin.install.local.batch", {
+    description: key("cmd.plugin.install.local.batch.desc"),
+    params: {
+      store: { type: "string", required: true, description: key("cmd.plugin.install.local.param.store") },
+      plugins: { type: "json", required: true, description: key("cmd.plugin.install.local.batch.param.plugins") },
+      planDigest: { type: "string", required: true, description: key("cmd.plugin.install.local.param.planDigest") },
+    },
+    returns: "{ id,version,revision }",
+    message: (d) => tmsg("msg.plugin.install.local", { id: String(d.id), version: String(d.version) }),
+    errors: ["INVALID_PARAMS", "LOCAL_RELEASE_INVALID", "LOCAL_INSTALL_PLAN_CHANGED", "VERSION_ARTIFACT_CONFLICT", "INTERNAL"],
+    examples: [`plugin.install.local.batch '{"store":"/absolute/releases","plugins":[{"id":"<plugin-id-a>","version":"0.0.1"},{"id":"<plugin-id-b>","version":"0.0.1"}],"planDigest":"<sha256>"}'`],
+    danger: "destructive",
+    handler: async (p) => installLocalPlugins(String(p.store), localRoots(p.plugins), String(p.planDigest)),
   });
 
   register("plugin.develop", {

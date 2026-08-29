@@ -1,33 +1,38 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { invoke, install } = vi.hoisted(() => ({ invoke: vi.fn(), install: vi.fn() }));
+const { invoke, install, installBatch } = vi.hoisted(() => ({ invoke: vi.fn(), install: vi.fn(), installBatch: vi.fn() }));
 vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
   invoke: (...args: unknown[]) => invoke(...args),
 }));
 vi.mock("../state/environmentEvents", () => ({ reconcileEnvironmentRevision: vi.fn() }));
-vi.mock("./registryInstallRuntime", () => ({ installCertifiedRegistryRelease: (...args: unknown[]) => install(...args) }));
+vi.mock("./registryInstallRuntime", () => ({
+  installCertifiedRegistryRelease: (...args: unknown[]) => install(...args),
+  installCertifiedRegistryReleases: (...args: unknown[]) => installBatch(...args),
+}));
 
-import { installLocalPlugin, installLocalSidecar, planLocalPlugin, planLocalSidecar } from "./localReleaseInstallService";
+import { installLocalPlugin, installLocalPlugins, installLocalSidecar, planLocalPlugin, planLocalPlugins, planLocalSidecar } from "./localReleaseInstallService";
 import { pluginInstallProgress } from "./registryInstallProgress";
 
 const hash = async (body: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 const integrity = (file: string, body: string) => ({ file, size: body.length, sha256: "a".repeat(64) });
 const PLUGIN = "soksak-plugin-demo";
+const PEER = "soksak-plugin-peer";
 const SIDECAR = "soksak-sidecar-state";
 
 describe("local release planning and installation", () => {
-  let pluginBody = ""; let sidecarBody = "";
+  let pluginBody = ""; let peerBody = ""; let sidecarBody = "";
   const reads = () => invoke.mock.calls.filter(([command]) => command === "local_release_read").map(([, args]) => args);
   beforeEach(async () => {
-    invoke.mockReset(); install.mockReset();
+    invoke.mockReset(); install.mockReset(); installBatch.mockReset();
     sidecarBody = JSON.stringify({ kind: "sidecar", id: SIDECAR, version: "0.0.1", manifest: integrity("sidecar.json", "x"), source: { repository: `https://github.com/soksak-ai/${SIDECAR}`, commit: "b".repeat(40) }, artifacts: [{ ...integrity("state.tgz", "x"), target: "aarch64-apple-darwin", format: "tgz", manifest: "sidecar.json" }], evidence: [integrity("conformance-release.json", "x")] });
     const sidecar = { id: SIDECAR, version: "0.0.1", size: sidecarBody.length, sha256: await hash(sidecarBody) };
     pluginBody = JSON.stringify({ kind: "plugin", id: PLUGIN, version: "0.0.1", manifest: integrity("plugin.json", "x"), source: { repository: `https://github.com/soksak-ai/${PLUGIN}`, commit: "a".repeat(40) }, artifacts: [{ ...integrity("demo.tgz", "x"), target: "any", format: "tgz", manifest: "plugin.json" }], runtimeDependencies: { sidecars: [sidecar] }, evidence: [integrity("conformance-release.json", "x")] });
+    peerBody = JSON.stringify({ ...JSON.parse(pluginBody), id: PEER, source: { repository: `https://github.com/soksak-ai/${PEER}`, commit: "c".repeat(40) }, artifacts: [{ ...integrity("peer.tgz", "x"), target: "any", format: "tgz", manifest: "plugin.json" }] });
     invoke.mockImplementation(async (command: string, args: { id: string }) => {
       if (command === "plugin_manifest_list") return [];
       if (command === "sidecar_status") return { open: [], recorded: [] };
-      const body = args.id === PLUGIN ? pluginBody : sidecarBody;
+      const body = args.id === PLUGIN ? pluginBody : args.id === PEER ? peerBody : sidecarBody;
       return { found: true, body, size: body.length, sha256: await hash(body) };
     });
   });
@@ -61,6 +66,24 @@ describe("local release planning and installation", () => {
     expect(install).toHaveBeenCalledWith(expect.objectContaining({
       sourceId: "local", localStore: "/store",
       root: { kind: "plugin", id: PLUGIN, version: "0.0.1", size: pluginBody.length, sha256: await hash(pluginBody) },
+    }));
+  });
+
+  it("plans and installs two roots with their shared dependency in one atomic call", async () => {
+    installBatch.mockResolvedValue({ ok: true, id: PLUGIN, version: "0.0.1", revision: 3 });
+    const roots = [{ id: PLUGIN, version: "0.0.1" }, { id: PEER, version: "0.0.1" }];
+    const plan = await planLocalPlugins("/store", roots);
+    expect(plan.releases.map((release) => `${release.kind}:${release.id}`)).toEqual([
+      `plugin:${PLUGIN}`, `plugin:${PEER}`, `sidecar:${SIDECAR}`,
+    ]);
+    const result = await installLocalPlugins("/store", roots, plan.digest);
+    expect(result).toMatchObject({ ok: true, revision: 3 });
+    expect(installBatch).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: "local", localStore: "/store",
+      roots: [
+        { kind: "plugin", id: PLUGIN, version: "0.0.1", size: pluginBody.length, sha256: await hash(pluginBody) },
+        { kind: "plugin", id: PEER, version: "0.0.1", size: peerBody.length, sha256: await hash(peerBody) },
+      ],
     }));
   });
 

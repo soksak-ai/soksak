@@ -35,6 +35,9 @@ export interface RegistryInstallRequest {
   artifacts: RegistryArtifactStager;
   onProgress?: (progress: { phase: "staging" | "committing"; completed: number; total: number; componentId?: string }) => void;
 }
+export interface RegistryBatchInstallRequest extends Omit<RegistryInstallRequest, "root"> {
+  roots: ReleaseIdentity[];
+}
 
 class InstallFailure extends Error {
   constructor(readonly code: RegistryInstallFailureCode, readonly errors: string[]) {
@@ -75,13 +78,13 @@ function materializedExactly(environment: HostEnvironment, identity: ReleaseIden
   return record?.version === identity.version && record.artifactSha256 === digest;
 }
 
-function releaseMaterialized(request: RegistryInstallRequest, release: ReleaseDocument): boolean {
+function releaseMaterialized(request: Pick<RegistryInstallRequest, "environment" | "target">, release: ReleaseDocument): boolean {
   const identity = releaseIdentity(release);
   if (identity.kind !== "plugin" && identity.kind !== "sidecar") return false;
   return materializedExactly(request.environment, identity, artifactFor(release, request.target).sha256);
 }
 
-function pendingReleaseCount(request: RegistryInstallRequest): number {
+function pendingReleaseCount(request: RegistryBatchInstallRequest): number {
   const unique = new Set<string>();
   for (const release of request.releases) {
     const identity = releaseIdentity(release);
@@ -91,7 +94,7 @@ function pendingReleaseCount(request: RegistryInstallRequest): number {
   return unique.size;
 }
 
-async function stageRelease(request: RegistryInstallRequest, transactionId: string, release: ReleaseDocument) {
+async function stageRelease(request: Pick<RegistryInstallRequest, "artifacts" | "sourceId" | "target">, transactionId: string, release: ReleaseDocument) {
   const identity = releaseIdentity(release);
   const artifact = artifactFor(release, request.target);
   const staged = await request.artifacts.stage({ transactionId, registryId: request.sourceId, release: identity, artifact });
@@ -129,19 +132,29 @@ function dependencyMismatches(manifest: PluginManifest, release: ReleaseDocument
 }
 
 export async function installRegistryRelease(request: RegistryInstallRequest): Promise<RegistryInstallResult> {
+  const { root, ...shared } = request;
+  return installRegistryReleases({ ...shared, roots: [root] });
+}
+
+export async function installRegistryReleases(request: RegistryBatchInstallRequest): Promise<RegistryInstallResult> {
   let transactionId: string | null = null;
   try {
-    const root = exactRelease(request.releases, request.root);
-    if (!root) throw new InstallFailure("ROOT_NOT_FOUND", ["release absent from certified registry"]);
-    if (request.root.kind === "contract" || request.root.kind === "spec" || request.root.kind === "kit") {
-      throw new InstallFailure("RELEASE_VERIFICATION_FAILED", [request.root.kind + " releases are validation inputs, not runtime installations"]);
-    }
-    const transaction = await request.artifacts.begin({ registryId: request.sourceId, root: request.root, ...(request.localStore ? { localStore: request.localStore } : {}) });
+    if (request.roots.length === 0) throw new InstallFailure("ROOT_NOT_FOUND", ["installation has no release roots"]);
+    const roots = request.roots.map((identity) => {
+      const release = exactRelease(request.releases, identity);
+      if (!release) throw new InstallFailure("ROOT_NOT_FOUND", [`release root is absent: ${identity.id}@${identity.version}`]);
+      if (identity.kind === "contract" || identity.kind === "spec" || identity.kind === "kit") {
+        throw new InstallFailure("RELEASE_VERIFICATION_FAILED", [identity.kind + " releases are validation inputs, not runtime installations"]);
+      }
+      return release;
+    });
+    const transactionRoot = request.roots[0];
+    const transaction = await request.artifacts.begin({ registryId: request.sourceId, root: transactionRoot, ...(request.localStore ? { localStore: request.localStore } : {}) });
     transactionId = transaction.transactionId;
     const verified: VerifiedInstallRelease[] = [];
     const total = pendingReleaseCount(request);
     const seen = new Set<string>();
-    const queue: ReleaseDocument[] = [root];
+    const queue: ReleaseDocument[] = [...roots];
 
     while (queue.length) {
       const release = queue.shift()!;
@@ -171,7 +184,7 @@ export async function installRegistryRelease(request: RegistryInstallRequest): P
     if (verified.length === 0) return { ok: true, registryId: request.sourceId, revision: request.environment.revision, releases: [] };
 
     request.onProgress?.({ phase: "committing", completed: verified.length, total });
-    const committed = await request.artifacts.commit(transactionId, request.environment.revision, verified, request.root);
+    const committed = await request.artifacts.commit(transactionId, request.environment.revision, verified, transactionRoot);
     transactionId = null;
     return { ok: true, registryId: request.sourceId, revision: committed.revision, releases: verified };
   } catch (cause) {
