@@ -76,6 +76,7 @@ describe("switch layout motion verdict", () => {
 describe("switch scan command contract", () => {
   const source = readFileSync(resolve(import.meta.dirname, "catalog.ts"), "utf8");
   const space = source.split('register("space.switchScan"')[1]?.split('register("space.rename"')[0] ?? "";
+  const tab = source.split('register("tab.switchScan"')[1]?.split('register("tab.move"')[0] ?? "";
 
   it("uses recorded frames rather than elapsed-time activation", () => {
     expect(source).toContain("applyAtFrame");
@@ -97,6 +98,12 @@ describe("switch scan command contract", () => {
       ?.split("const visibleSpaceViews")[0] ?? "";
     expect(activation).toContain("await waitLayoutSettled(15_000)");
     expect(activation).not.toContain("setTimeout");
+  });
+
+  it("reports a clean glide as completed journeys rather than a one-frame snap", () => {
+    expect(tab).toContain('transaction?.mode === "glide"');
+    expect(tab).toContain('msg.tab.switchScan.cleanGlide');
+    expect(space).toContain('msg.space.switchScan.cleanGlide');
   });
 });
 
