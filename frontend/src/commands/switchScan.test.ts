@@ -130,4 +130,22 @@ describe("switch presentation verdict", () => {
     ]);
     expect(result).toMatchObject({ overlapFrames: [7], clean: false });
   });
+
+  it("counts a departing live receipt as visible until the compositor hides it", () => {
+    expect(classify).toBeTypeOf("function");
+    if (!classify) return;
+    const result = classify([
+      {
+        frame: 8,
+        from: view({ native: true, liveSurfaceVisible: true }),
+        to: view({ native: true, contentVisible: true, surfaceVisible: true }),
+      },
+    ]);
+    expect(result).toMatchObject({
+      blankFrames: [],
+      overlapFrames: [],
+      nativeMismatchFrames: [8],
+      clean: false,
+    });
+  });
 });
