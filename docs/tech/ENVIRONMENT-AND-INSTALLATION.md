@@ -22,6 +22,12 @@ Core creates revision 1 after acquiring the identity home. Missing or invalid st
 not an implicit empty state. Every change uses compare-and-swap and emits one `environment.changed`
 event. No caller polls the file.
 
+A frontend lifecycle operation that writes an environment revision does not return until the one
+environment coordinator has applied that revision. The matching `environment.changed` event joins
+the same reconciliation and is a no-op after it is applied. Consequently a following enable,
+disable, install, or reload cannot race the reload caused by the preceding write and register the
+same Plugin generation twice.
+
 The host validates `environment.json` once. `environment_get` returns the parsed and validated
 document; the Core frontend consumes it as typed data and does not validate it a second time.
 

@@ -28,6 +28,11 @@ Core는 identity home을 얻은 뒤 revision 1을 생성합니다. 상태가 없
 가상의 빈 상태를 만들지 않습니다. 모든 변경은 compare-and-swap을 사용하고
 `environment.changed` event 하나를 발행합니다. 파일 폴링은 없습니다.
 
+Environment revision을 쓰는 frontend 수명주기 연산은 environment coordinator 하나가 그 revision을
+적용하기 전에는 반환하지 않습니다. 같은 `environment.changed` event는 같은 reconcile에 합류하며
+이미 적용된 뒤에는 no-op입니다. 따라서 뒤따르는 enable, disable, install, reload가 앞선 write가 만든
+reload와 경합해 같은 Plugin generation을 두 번 등록할 수 없습니다.
+
 호스트는 `environment.json`을 한 번 검증합니다. `environment_get`은 parse와 검증을 마친 document를
 반환하며 Core frontend는 이를 typed data로 사용하고 다시 검증하지 않습니다.
 
