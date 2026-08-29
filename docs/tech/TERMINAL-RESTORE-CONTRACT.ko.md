@@ -42,3 +42,20 @@ accepted-input과 PTY-write sequence가 모두 0인 상태에서 한 frame을 �
 32회는 accepted input 32회와 write 32회를 만들고 marker와 prompt를 표시했습니다. 앱 재시작 뒤 pane은
 `recoveryOutcome=continued`와 첫 marker를 유지했고, 공개 key event 30회는 accepted input 30회와 write
 30회를 만들고 두 번째 marker와 prompt를 표시했습니다.
+
+## 선택과 스크롤 증거
+
+공개 drag 경로는 primary button 단일 click과 document 소유 move/release event를 전달합니다. 격리
+runtime에서 렌더된 `SELECT_ME_1234567890` marker를 drag하자 `selection`, `copy`, 독립적인
+`clipboard.read`가 같은 20자를 반환했습니다.
+
+Contract 0.0.19, Kit 0.0.93, xterm Plugin 0.0.70은 viewport 소유 상태를 관측 가능하게 합니다.
+offset 0은 `follow`, 양수 offset은 `pinned`입니다. history 85행에서 설치 runtime은
+`0/85 follow`를 보고했고, 공개 10행 scroll은 `10/85 pinned`를 반환하고 status에도 게시했으며,
+공개 bottom scroll은 `0/85 follow`를 반환하고 게시했습니다. pinned capture에는 43~71행이,
+bottom capture에는 52~80행과 prompt가 보였습니다. command 응답, status, pixel이 같은 viewport
+상태를 설명합니다.
+
+registry에서 소비되는 계약 릴리스는 공개 export로 도달 가능한 모든 파일을 봉인해야 합니다.
+0.0.18 artifact는 `src/pane-key.ts`를 누락해 첫 Kit 소비 build에서 실패했으며 그대로 불변입니다.
+Contract 0.0.19는 누락 파일과 repository boundary test를 추가했고 consumer build는 GREEN입니다.

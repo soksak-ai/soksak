@@ -43,3 +43,21 @@ while accepted-input and PTY-write sequences were both zero; 32 public key event
 accepted inputs and 32 writes with the expected marker and prompt. After application restart the
 pane reported `recoveryOutcome=continued`, retained the first marker, and 30 more public key events
 produced 30 accepted inputs and 30 writes with a second marker and prompt.
+
+## Selection and scroll evidence
+
+The public drag route dispatches a single primary-button press and document-owned move/release
+events. In the isolated runtime, dragging the rendered `SELECT_ME_1234567890` marker made
+`selection`, `copy`, and an independent `clipboard.read` return the same 20 characters.
+
+Contract 0.0.19, Kit 0.0.93, and xterm Plugin 0.0.70 make viewport ownership observable. An offset
+of zero is `follow`; a positive offset is `pinned`. With 85 history rows, the installed runtime
+reported `0/85 follow`, a public ten-line scroll returned and published `10/85 pinned`, and a public
+bottom scroll returned and published `0/85 follow`. The pinned capture showed rows 43 through 71;
+the bottom capture showed rows 52 through 80 and the prompt. Command replies, status, and pixels
+therefore described the same viewport state.
+
+Every registry-consumed contract release must seal every file reachable from its public export.
+The 0.0.18 artifact omitted `src/pane-key.ts` and failed in the first consuming Kit build; it remains
+immutable. Contract 0.0.19 adds the missing sealed file and a repository boundary test, and its
+consumer build is GREEN.
