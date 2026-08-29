@@ -1,6 +1,7 @@
-import { createStream, invoke } from "../framework";
+import { frameworkPath, invoke } from "../framework";
 import { tmsg } from "../i18n";
 import { noteRecordingFrame } from "../lib/layoutTransitionJournal";
+import { captureWindowPixels } from "./windowCapture";
 
 export type WindowRecordRequest = {
   dir: string;
@@ -13,6 +14,7 @@ export type WindowRecordRequest = {
   /** 0-based number of each captured frame once saved. The shared clock for capture and numeric
    *  observation. */
   onFrame?: (frame: number) => void;
+  captureFrame?: typeof captureWindowPixels;
 };
 
 /**
@@ -190,6 +192,7 @@ export function recordWindowFrames({
   maxBytes,
   frameTimeoutMs = WINDOW_RECORD_DEFAULT_FRAME_TIMEOUT_MS,
   onFrame,
+  captureFrame = captureWindowPixels,
 }: WindowRecordRequest): WindowRecording {
   if (!validWindowRecordFrames(frames)) {
     throw new Error(tmsg("msg.window.record.framesRange", { max: WINDOW_RECORD_MAX_FRAMES }));
@@ -205,7 +208,6 @@ export function recordWindowFrames({
       `frameTimeoutMs must be between 1 and ${WINDOW_RECORD_MAX_FRAME_TIMEOUT_MS}`,
     );
   }
-  const frameEvents = createStream<number>();
   let settled = false;
   let resolveReady!: () => void;
   let rejectReady!: (reason: unknown) => void;
@@ -217,44 +219,75 @@ export function recordWindowFrames({
   // readiness rejection unhandled. The same Promise object is kept, so a caller waiting on readiness
   // still receives that error.
   ready.catch(() => {});
-  frameEvents.onmessage = (frame) => {
-    onFrame?.(frame);
+  let stopReason: string | undefined;
+  const encodedBytes = (base64: string): number => {
+    const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+    return Math.floor(base64.length * 3 / 4) - padding;
+  };
+  const delay = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, ms));
+  const frameWithin = async <T>(frame: number, operation: Promise<T>): Promise<T> => {
+    let timeout = 0;
+    return Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timeout = window.setTimeout(
+          () => reject(new Error(`recording frame ${frame} exceeded ${frameTimeoutMs}ms`)),
+          frameTimeoutMs,
+        );
+      }),
+    ]).finally(() => clearTimeout(timeout));
+  };
+  const finished = (async () => {
+    let landed = 0;
+    let totalBytes = 0;
+    for (let frame = 0; frame < frames; frame += 1) {
+      if (frame > 0 && intervalMs > 0) await delay(intervalMs);
+      const result = await frameWithin(frame, (async () => {
+        const capture = await captureFrame();
+        const bytes = encodedBytes(capture.png);
+        if (maxBytes !== undefined && totalBytes + bytes > maxBytes) {
+          return { budgetExceeded: true as const, bytes: 0 };
+        }
+        const path = await frameworkPath.join(dir, `f${String(frame).padStart(4, "0")}.png`);
+        const written = await invoke<{ path: string; bytes: number }>(
+          "write_file_base64",
+          { path, base64: capture.png },
+        );
+        return { budgetExceeded: false as const, bytes: written.bytes };
+      })());
+      if (result.budgetExceeded) {
+        stopReason = `recording byte budget ${maxBytes} would be exceeded at frame ${frame}`;
+        break;
+      }
+      totalBytes += result.bytes;
+      landed += 1;
+      onFrame?.(frame);
+      if (!settled) {
+        settled = true;
+        resolveReady();
+      }
+    }
     if (!settled) {
       settled = true;
-      resolveReady();
+      const error = new Error(stopReason ?? "recording produced no frame");
+      rejectReady(error);
     }
-  };
-  // The host's own recording. It invoked a command of the preceding implementation's plugin, which
-  // this host never served, so every recording answered INTERNAL and no frame was ever written
-  // (measured 2026-08-16). The frame count that comes back is what landed on disk, which is not
-  // always what was asked for — the report names why when they differ.
-  const finished = invoke<{ frames: number; stopped?: string }>("window_record", {
-    dir,
-    frames,
-    intervalMs,
-    ...(maxBytes === undefined ? {} : { maxBytes }),
-    frameTimeoutMs,
-    onFrame: frameEvents,
-    // The rejection consumer is attached to the producer itself, before the count is read off the
-    // report. Reading first puts a promise in between, and the readiness rejection then arrives at
-    // a handler nobody installed — an unhandledrejection instead of a recording that failed.
-  }).catch((error) => {
+    return landed;
+  })().catch((error) => {
     if (!settled) {
       settled = true;
       rejectReady(error);
     }
     throw error;
   });
-  void finished.then(() => frameEvents.close(), () => frameEvents.close());
   // Some diagnostic commands start the recorder, wait until the stimulus time, then await final. To
   // keep a producer failure in that window from becoming an unhandledrejection, the original final
   // is kept and only a rejection consumer is attached immediately.
   finished.catch(() => {});
   // The caller's value is the frame count, and the count is what landed on disk. `stopped` on the
   // report names why that differs from what was asked for.
-  const counted = finished.then((report) => report.frames);
-  counted.catch(() => {});
-  const stopped = finished.then((report) => report.stopped);
+  finished.catch(() => {});
+  const stopped = finished.then(() => stopReason);
   stopped.catch(() => {});
-  return Object.assign(counted, { ready, stopped });
+  return Object.assign(finished, { ready, stopped });
 }

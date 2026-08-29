@@ -8,7 +8,6 @@ import {
   validWindowRecordFrameTimeoutMs,
   validWindowRecordFrames,
   validWindowRecordIntervalMs,
-  WINDOW_RECORD_DEFAULT_FRAME_TIMEOUT_MS,
   WINDOW_RECORD_MAX_INTERVAL_MS,
   WINDOW_RECORD_MAX_FRAME_TIMEOUT_MS,
 } from "./windowRecorder";
@@ -19,20 +18,31 @@ vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
   invoke: vi.fn(),
   createStream: vi.fn(),
+  frameworkPath: {
+    join: vi.fn(async (...parts: string[]) => parts.join("/")),
+    tempDir: vi.fn(),
+  },
 }));
 
-const readyStream = { onmessage: (_message: number) => {}, close: vi.fn() };
+const { captureWindowPixels } = vi.hoisted(() => ({
+  captureWindowPixels: vi.fn(async () => ({
+    png: "YWJj",
+    note: { documentOnly: false, nativeComposed: true, surfaces: 1, drawn: 1 },
+  })),
+}));
+vi.mock("./windowCapture", () => ({ captureWindowPixels }));
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(createStream).mockClear();
-  readyStream.close.mockClear();
-  vi.mocked(createStream).mockReturnValue(readyStream as never);
+  captureWindowPixels.mockClear();
+  captureWindowPixels.mockResolvedValue({
+    png: "YWJj",
+    note: { documentOnly: false, nativeComposed: true, surfaces: 1, drawn: 1 },
+  });
   vi.mocked(invoke).mockImplementation(async (command, args) => {
-    if (command !== "window_record") return undefined;
-    // The host answers a report, not a bare count: what landed on disk is not always what was
-    // asked for, and the reason travels with the number.
-    return { frames: args?.frames };
+    if (command === "write_file_base64") return { path: args?.path, bytes: 3 };
+    return undefined;
   });
 });
 
@@ -44,22 +54,19 @@ it("one shared record contract stores a finite frame sequence", async () => {
     intervalMs: 0,
     onFrame: (frame) => observed.push(frame),
   });
-  readyStream.onmessage(0);
-  readyStream.onmessage(1);
   await recording.ready;
   const frames = await recording;
 
   expect(frames).toBe(2);
   expect(observed).toEqual([0, 1]);
-  expect(vi.mocked(invoke)).toHaveBeenCalledOnce();
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("window_record", {
-    dir: "<local-evidence>/framework-neutral-record",
-    frames: 2,
-    intervalMs: 0,
-    frameTimeoutMs: WINDOW_RECORD_DEFAULT_FRAME_TIMEOUT_MS,
-    onFrame: readyStream,
+  expect(captureWindowPixels).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(invoke)).toHaveBeenNthCalledWith(1, "write_file_base64", {
+    path: "<local-evidence>/framework-neutral-record/f0000.png", base64: "YWJj",
   });
-  expect(readyStream.close).toHaveBeenCalledOnce();
+  expect(vi.mocked(invoke)).toHaveBeenNthCalledWith(2, "write_file_base64", {
+    path: "<local-evidence>/framework-neutral-record/f0001.png", base64: "YWJj",
+  });
+  expect(createStream).not.toHaveBeenCalled();
 });
 
 it("the storage budget reaches the producer unchanged, with no framework branch, and readiness is preserved", async () => {
@@ -70,17 +77,26 @@ it("the storage budget reaches the producer unchanged, with no framework branch,
     maxBytes: 1_048_576,
   });
 
-  readyStream.onmessage(0);
   await expect(recording.ready).resolves.toBeUndefined();
   await expect(recording).resolves.toBe(1);
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("window_record", {
-    dir: "<local-evidence>/framework-neutral-budget-record",
+  expect(captureWindowPixels).toHaveBeenCalledOnce();
+  expect(vi.mocked(invoke)).toHaveBeenCalledWith("write_file_base64", {
+    path: "<local-evidence>/framework-neutral-budget-record/f0000.png", base64: "YWJj",
+  });
+});
+
+it("stops before writing the frame that would exceed the byte budget", async () => {
+  const recording = recordWindowFrames({
+    dir: "<local-evidence>/framework-neutral-budget-stop",
     frames: 1,
     intervalMs: 0,
-    maxBytes: 1_048_576,
-    frameTimeoutMs: WINDOW_RECORD_DEFAULT_FRAME_TIMEOUT_MS,
-    onFrame: readyStream,
+    maxBytes: 2,
   });
+
+  await expect(recording.ready).rejects.toThrow("byte budget 2");
+  await expect(recording).resolves.toBe(0);
+  await expect(recording.stopped).resolves.toContain("frame 0");
+  expect(invoke).not.toHaveBeenCalledWith("write_file_base64", expect.anything());
 });
 
 it("every framework call states the shared producer deadline", async () => {
@@ -89,30 +105,20 @@ it("every framework call states the shared producer deadline", async () => {
   expect(validWindowRecordFrameTimeoutMs(0)).toBe(false);
   expect(validWindowRecordFrameTimeoutMs(WINDOW_RECORD_MAX_FRAME_TIMEOUT_MS + 1)).toBe(false);
 
-  const defaultRecording = recordWindowFrames({
-    dir: "<local-evidence>/framework-neutral-default-deadline",
-    frames: 1,
-    intervalMs: 0,
-  });
-  readyStream.onmessage(0);
-  await defaultRecording;
-  expect(vi.mocked(invoke)).toHaveBeenLastCalledWith(
-    "window_record",
-    expect.objectContaining({ frameTimeoutMs: WINDOW_RECORD_DEFAULT_FRAME_TIMEOUT_MS }),
-  );
-
+  vi.useFakeTimers();
+  captureWindowPixels.mockImplementationOnce(() => new Promise(() => {}));
   const explicitRecording = recordWindowFrames({
     dir: "<local-evidence>/framework-neutral-explicit-deadline",
     frames: 1,
     intervalMs: 0,
     frameTimeoutMs: 25,
   });
-  readyStream.onmessage(0);
-  await explicitRecording;
-  expect(vi.mocked(invoke)).toHaveBeenLastCalledWith(
-    "window_record",
-    expect.objectContaining({ frameTimeoutMs: 25 }),
-  );
+  const readiness = expect(explicitRecording.ready).rejects.toThrow("exceeded 25ms");
+  const completion = expect(explicitRecording).rejects.toThrow("exceeded 25ms");
+  await vi.advanceTimersByTimeAsync(25);
+  await readiness;
+  await completion;
+  vi.useRealTimers();
 });
 
 it("the shared recorder does not alter frames or intervalMs and rejects strictly before the producer", () => {
@@ -267,7 +273,7 @@ it("the raw recorder also attaches a final rejection consumer before it returns"
     unhandled.push(event.reason);
   };
   window.addEventListener("unhandledrejection", onUnhandled);
-  vi.mocked(invoke).mockReturnValueOnce(Promise.reject(new Error("capture failed")) as never);
+  captureWindowPixels.mockRejectedValueOnce(new Error("capture failed"));
 
   const recording = recordWindowFrames({
     dir: "/evidence/raw-rejection",
