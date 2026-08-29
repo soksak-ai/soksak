@@ -295,7 +295,7 @@ async function boot(): Promise<void> {
   // The previous session's child webviews are backend-owned and survive a renderer reboot (reload) — left alone,
   // the old browser shows over the empty pre-restore screen (real incident: Example Domain over an empty window,
   // user measurement 2026-07-27). Early in boot, hide every child of this window — the restore render re-shows
-  // only the active views (commitViewVisibility — a new context means an empty map, which guarantees re-publish).
+  // only the active views (commitViewPresentation — a new context means an empty map, which guarantees re-publish).
   await resetNativeSurfaces();
   const { default: App } = await import("./App");
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

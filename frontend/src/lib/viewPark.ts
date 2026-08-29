@@ -70,6 +70,8 @@ export function resolveViewVisibility(
   };
 }
 
+export type ViewPresentation = ReturnType<typeof resolveViewVisibility>;
+
 export function surfaceShown(
   workspaceActive: boolean,
   spaceActive: boolean,
@@ -125,10 +127,11 @@ export function viewSurfacePlacement(
 }
 
 // Outside the hot swap boundary — a new table here leaves the filling side treating it as already filled and never refilling.
-const visibleByView = moduleState("lib/viewPark#visibleByView", () => new Map<string, boolean>());
-export function commitViewVisibility(viewId: string, visible: boolean): void {
-  if (visibleByView.get(viewId) === visible) return;
-  visibleByView.set(viewId, visible);
+const presentationByView = moduleState("lib/viewPark#presentationByView", () => new Map<string, string>());
+export function commitViewPresentation(viewId: string, presentation: ViewPresentation): void {
+  const key = `${presentation.surfaceVisible}:${presentation.reason}`;
+  if (presentationByView.get(viewId) === key) return;
+  presentationByView.set(viewId, key);
   // **Go through the host.** Calling the name directly gets that name rejected as delegated
   // (FRAMEWORK_DELEGATED) on a framework whose content is inside the DOM, and no parking happens at
   // all — the previous view stays up after a tab switch and the new view is invisible (measured
@@ -142,26 +145,26 @@ export function commitViewVisibility(viewId: string, visible: boolean): void {
   if (label === null) {
     // Most views declare no surface — a terminal, a plugin body. There is nothing to park, and the
     // event is still emitted because the view's parked state did change.
-    emitPluginEvent("view.parked", { viewId, parked: !visible });
+    emitPluginEvent("view.parked", { viewId, parked: !presentation.surfaceVisible });
     return;
   }
   const commit = () =>
     void contentViewHost()
-      .visible(label, visible)
+      .visible(label, presentation.surfaceVisible)
       .catch((e: unknown) => {
         // Not swallowed — a parking that did not happen shows up only as "the previous browser does
         // not disappear", and there is no path back from that symptom to this site.
-        console.warn(`[viewPark] parking commit failed: ${viewId} visible=${visible}`, e);
+        console.warn(`[viewPark] parking commit failed: ${viewId} visible=${presentation.surfaceVisible}`, e);
       });
-  if (visible) {
+  if (presentation.surfaceVisible) {
     // The picture goes when the page is actually back, not when it was asked for. Dropping it at
     // the request leaves the pane with neither for as long as the commit takes — measured
     // 2026-08-17, one reading of a blank pane on the way back.
     commit();
     void whenSurfaceIsBack(label).finally(() => {
-      if (visibleByView.get(viewId) === true) releaseParkedPicture(viewId);
+      if (presentationByView.get(viewId) === key) releaseParkedPicture(viewId);
     });
-  } else {
+  } else if (presentation.contentVisible) {
     // The picture is taken **before** the surface goes, because a surface that is already hidden has
     // nothing to photograph. Nothing drawn in the document can be put over a surface, so a card or a
     // travelling rail can only be shown by taking the surface off the screen — and a pane that goes
@@ -170,21 +173,26 @@ export function commitViewVisibility(viewId: string, visible: boolean): void {
       .finally(() => {
         // It may have come back while the picture was being taken. Hiding it then would park a
         // surface nobody asked to park.
-        if (visibleByView.get(viewId) === false) commit();
+        if (presentationByView.get(viewId) === key) commit();
       })
       .catch((e: unknown) => {
         // The park still has to happen. A rejection with nobody holding it is an unhandled one, and
         // the surface it was about to park stays on the screen over whatever was drawn for it.
         console.warn(`[viewPark] parking a picture failed: ${viewId}`, e);
-        if (visibleByView.get(viewId) === false) commit();
+        if (presentationByView.get(viewId) === key) commit();
       });
+  } else {
+    // Another tab or space owns these pixels. A stand-in for this view would cover that owner.
+    releaseParkedPicture(viewId);
+    commit();
   }
-  emitPluginEvent("view.parked", { viewId, parked: !visible });
+  emitPluginEvent("view.parked", { viewId, parked: !presentation.surfaceVisible });
 }
 
 /** Reclaims state when a view closes permanently (prevents map growth). */
 export function dropViewVisibility(viewId: string): void {
-  visibleByView.delete(viewId);
+  presentationByView.delete(viewId);
+  releaseParkedPicture(viewId);
 }
 
 /** How long the picture is held waiting for the page to be back on the screen. */

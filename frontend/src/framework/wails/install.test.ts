@@ -2,7 +2,7 @@
 // The adapter's install leaves a content view implementation registered.
 //
 // The core commits every tab's visibility through that implementation
-// (lib/viewPark.commitViewVisibility). With none registered the call throws
+// (lib/viewPark.commitViewPresentation). With none registered the call throws
 // inside a render effect and React unmounts the whole tree: measured
 // 2026-08-15, ui.tree went from 64 exposed nodes to 0 the moment a view opened,
 // and the window was blank with no message on screen.

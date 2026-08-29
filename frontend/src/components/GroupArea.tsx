@@ -3,9 +3,8 @@ import { moduleState } from "../lib/moduleState";
 import { execute } from "../commands/registry";
 import { rafThrottle } from "../lib/rafThrottle";
 import {
-  commitViewVisibility,
+  commitViewPresentation,
   resolveViewVisibility,
-  surfaceShown,
   viewSurfacePlacement,
   viewSurfaceStyle,
 } from "../lib/viewPark";
@@ -394,9 +393,9 @@ export const GroupArea = memo(function GroupArea({
     for (const { group } of cells) {
       for (const v of group.tabs) {
         const tabActive = maxCell ? v.id === maximizedId : v.id === group.activeTabId;
-        commitViewVisibility(
+        commitViewPresentation(
           v.id,
-          surfaceShown(surfaceActive, true, tabActive, overlayed, traveling),
+          resolveViewVisibility(surfaceActive, true, tabActive, overlayed, traveling),
         );
       }
     }
