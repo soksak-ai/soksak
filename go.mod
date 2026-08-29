@@ -8,7 +8,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/min-median-max/wails-service-native-compositor v0.0.0-20260829052058-a8012c3f9bcc
-	github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260829132812-a23d4407978f
+	github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260829142410-5043578e77f4
 	github.com/min-median-max/wails-service-webview-surface v0.0.0-20260822033521-1d22c6a85063
 	github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f
 	github.com/soksak-ai/soksak-contract-control v0.0.0-20260829002406-d37e5c3cc521
@@ -134,7 +134,7 @@ require (
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
-	github.com/soksak-ai/soksak-contract-surface v0.0.0-20260829090523-321ac93c007d // indirect
+	github.com/soksak-ai/soksak-contract-surface v0.0.0-20260829141509-4bcf917cd104 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tc-hib/winres v0.3.1 // indirect
