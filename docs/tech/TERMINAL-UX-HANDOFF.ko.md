@@ -512,11 +512,11 @@ mutable v4 checkout, v7에서 v4로의 자동 복사, 일부 component만의 승
 
 ### build-time kit dependency gate
 
-terminal kit geometry 수정은 immutable kit `0.0.82`로 local release store에 저장했습니다. 그러나 현재
-soksak-spec `main`(`d7b1b3d`)에서는 candidate materializer가 `51f72cd`에서 제거되었습니다. 따라서
-release 경계를 위반하지 않고는 kit `0.0.82`를 소비하는 Vision candidate를 source에서 조합할 수 없습니다.
-spec이 owner-level 명령을 복구하거나 대체하기 전까지 기존 Vision 폐포는 변경하지 않으며, 새 v7 시각
-증거에서 kit 수정이 적용됐다고 주장하지 않습니다.
+terminal kit geometry 수정은 immutable kit `0.0.82`로 local release store에 저장했습니다. 현재
+soksak-spec `main`(`b4f0a5b`)이 candidate materializer(`stage-node-candidate.mjs`,
+`build-node-candidate.mjs`)를 소유합니다. Vision candidate는 digest가 고정된 kit·contract archive와
+이 명령만 사용해야 하며 source manifest와 lockfile은 canonical 상태로 유지합니다. build receipt,
+verified archive, 완전한 폐포, v7 시각 캡처가 모두 있어야 candidate를 증거로 인정합니다.
 
 ### 프롬프트 미출력 판정 규칙
 
