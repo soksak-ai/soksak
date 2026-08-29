@@ -106,6 +106,9 @@ type Boot struct {
 	Secrets process.SecretSource
 	// ProcessSink is where a child's output and exit reach a consumer.
 	ProcessSink process.Sink
+	// ProcessOwners are public inventory sources supplied by the application boundary. Core does not
+	// discover sidecars or inspect their implementation.
+	ProcessOwners []process.InventorySource
 	// OS is the operating system this process runs on, as a value. install
 	// reports what was installed and where, and reading runtime.GOOS inside
 	// would answer what this binary is rather than what the caller asked.
@@ -358,11 +361,12 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 	}
 
 	processes := process.Register(registry, process.Deps{
-		Home:        boot.Identity.Home,
-		Environment: boot.Environment,
-		Sink:        boot.ProcessSink,
-		Spawner:     boot.Spawner,
-		Secrets:     secretSource,
+		Home:             boot.Identity.Home,
+		Environment:      boot.Environment,
+		Sink:             boot.ProcessSink,
+		Spawner:          boot.Spawner,
+		Secrets:          secretSource,
+		InventorySources: boot.ProcessOwners,
 	})
 
 	install.Register(registry, install.Deps{

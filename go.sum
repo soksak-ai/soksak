@@ -353,6 +353,8 @@ github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af661172
 github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f/go.mod h1:8mZL8RI8c0G/S2VMvBj1t845gWwopw2xrqF96eaXM8U=
 github.com/soksak-ai/soksak-contract-control v0.0.0-20260829002406-d37e5c3cc521 h1:UleRDAZTw4m6Scy3HAX0WgwNS5ES1Vh56QGRQ1pirhs=
 github.com/soksak-ai/soksak-contract-control v0.0.0-20260829002406-d37e5c3cc521/go.mod h1:attu3HRIL9ErRVPXHEj20rrsPswUyqH53HEMd7qXyWw=
+github.com/soksak-ai/soksak-contract-pty v0.0.0-20260829175215-fe433b69f47e h1:lzHpQyBVXj4syXAaFT24rwn+0glGtcIxYYtIaFIgipg=
+github.com/soksak-ai/soksak-contract-pty v0.0.0-20260829175215-fe433b69f47e/go.mod h1:u591ly839/wznZbPb/yeWSbSvK22MFujozhchwp0oa4=
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9 h1:pgAA1NyDuK5daROyjR4aG5dPshemXlWu0XvOZkqS9tI=
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9/go.mod h1:ytm+dh2ShxYePv/d5xxSH7bDrd+pQzM5e2rGUyXeD9w=
 github.com/soksak-ai/soksak-contract-surface v0.0.0-20260829141509-4bcf917cd104 h1:vY72UhyVDT9Ep4bdV1PxRZ5fhU0kdQ3ognIey5z2V8o=

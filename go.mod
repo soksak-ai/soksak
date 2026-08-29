@@ -134,6 +134,7 @@ require (
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
+	github.com/soksak-ai/soksak-contract-pty v0.0.0-20260829175215-fe433b69f47e // indirect
 	github.com/soksak-ai/soksak-contract-surface v0.0.0-20260829141509-4bcf917cd104 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
