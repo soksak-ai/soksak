@@ -143,6 +143,7 @@ describe("a parking commit goes through the content view host", () => {
     // The order is the rule: a surface that is about to be parked is photographed first, because a
     // surface that is already hidden has nothing to photograph and the pane it left goes blank.
     const order: string[] = [];
+    let pictureAnswer: Promise<string | null> = Promise.resolve("data:image/png;base64,AAAA");
     vi.doMock("./contentViews", () => ({
       hasContentViewHost: () => true,
       // The picture is held until the native layer reports the page back, so the stand-in window
@@ -161,7 +162,7 @@ describe("a parking commit goes through the content view host", () => {
         },
         picture: async () => {
           order.push("picture");
-          return "data:image/png;base64,AAAA";
+          return pictureAnswer;
         },
       }),
     }));
@@ -174,6 +175,7 @@ describe("a parking commit goes through the content view host", () => {
         <div data-native-surface="browser" data-native-surface-id="browser-win-a-v-1"></div>
       </div>`;
     const { commitViewPresentation, dropViewVisibility } = await import("./viewPark");
+    const { parkedPicture } = await import("./parkedPicture");
 
     dropViewVisibility("v-1");
     commitViewPresentation("v-1", resolveViewVisibility(true, true, true, false, true));
@@ -203,5 +205,18 @@ describe("a parking commit goes through the content view host", () => {
     await Promise.resolve();
     expect(order).toEqual(["hide"]);
     expect(seen).toEqual([["browser-win-a-v-1", false]]);
+
+    // A snapshot requested for motion may finish after the tab became inactive. Its result is stale
+    // and cannot put the departing page back over the new active tab.
+    let resolvePicture!: (value: string | null) => void;
+    pictureAnswer = new Promise((resolve) => {
+      resolvePicture = resolve;
+    });
+    dropViewVisibility("v-1");
+    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, false, true));
+    commitViewPresentation("v-1", resolveViewVisibility(true, true, false, false, false));
+    resolvePicture("data:image/png;base64,LATE");
+    await new Promise((done) => setTimeout(done, 0));
+    expect(parkedPicture("v-1")).toBeNull();
   });
 });
