@@ -511,6 +511,14 @@ transaction described above.
 
 ## Additional v7 observation defects
 
+### Immutable version rule
+
+The local release store is write-once per `(kind, id, version)`. An equal source commit and equal
+bytes return `unchanged`; different bytes fail as nondeterministic, and a different source commit
+fails as `LOCAL_RELEASE_VERSION_CONFLICT`. The existing version directory is never replaced or
+deleted. A changed source commit requires a new version. A frozen project continues to resolve its
+recorded version and digest; a later release cannot alter that closure.
+
 ### Frozen-project promotion
 
 The current v7 source and its isolated observation homes are development inputs, not an implicit

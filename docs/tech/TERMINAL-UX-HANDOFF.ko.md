@@ -496,6 +496,14 @@ terminal prompt, Browser 탭 chrome, File Tree가 남아 있었습니다.
 
 ## v7 격리 관측에서 추가된 결함
 
+### 불변 version 규칙
+
+local release store는 `(kind, id, version)`마다 한 번만 기록합니다. 같은 source commit과 같은 byte는
+`unchanged`, 다른 byte는 nondeterministic 실패, 다른 source commit은 `LOCAL_RELEASE_VERSION_CONFLICT`
+실패입니다. 기존 version directory는 교체하거나 삭제하지 않습니다. source commit이 바뀌면 새 version을
+사용해야 합니다. frozen project는 기록된 version과 digest를 계속 해석하며 이후 release가 그 폐포를 바꾸지
+못합니다.
+
 ### Frozen project 승격
 
 현재 v7 source와 격리 관측 home은 개발 입력이며 v4로 자동 유입되는 갱신 경로가 아닙니다.
