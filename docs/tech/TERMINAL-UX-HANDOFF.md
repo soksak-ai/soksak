@@ -378,6 +378,14 @@ executable name alone.
 
 ## Additional v7 observation defects
 
+### Prompt absence classification
+
+`INPUT_WRITE_FAILED: pane ... is not running` is not itself a rendering diagnosis. Read the
+environment's PTY/engine versions, readiness records, and pane session state first. A live PTY can
+outlive an engine whose render thread panicked; shell output then stops while input targets a closed
+pane. Record the first engine assertion together with `terminal.status` session/generation, and
+reproduce against the clean v7 closure. Never terminate or reinstall the user's app to investigate.
+
 In the isolated `soksakv7` application, track these as named assertions rather than hiding them under
 focus or input:
 

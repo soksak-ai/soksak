@@ -368,6 +368,15 @@ Darwin 의 Unix socket 길이 제한 때문에 긴 임시 runtime 경로는 쓸 
 
 ## v7 격리 관측에서 추가된 결함
 
+### 프롬프트 미출력 판정 규칙
+
+사용자 앱에서 `INPUT_WRITE_FAILED: pane ... is not running`이 보이면 프롬프트 렌더링 결함으로
+단정하지 않는다. 먼저 environment의 PTY/engine version, sidecar readiness 기록, pane session 상태를
+읽는다. PTY가 살아 있어도 engine의 render thread가 panic하면 shell 출력은 도착하지 않고 입력 대상
+pane은 이미 종료된 것으로 보고될 수 있다. `panic` 로그의 첫 engine assertion과 `terminal.status`의
+session/generation을 함께 기록한 뒤, 동일한 clean 폐포를 v7에서 재현한다. 사용자 앱의 sidecar를
+종료하거나 재설치해 해결하지 않는다.
+
 사용자 앱과 분리된 `soksakv7`에서 다음 두 동작을 별도 결함으로 추적한다.
 
 - 터미널 pane을 클릭한 직후 다음 키 입력이 전달되지 않고 다른 탭을 갔다 돌아와야 입력되는 현상. 클릭의
