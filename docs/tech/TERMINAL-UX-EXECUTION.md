@@ -276,6 +276,19 @@ runner. Do not delete, skip or weaken either matrix.
 
 ## Execution environment
 
+### v7 isolated candidate boundary
+
+The v7 observation run is a local release transaction isolated from the public Registry and the
+user's `soksakv3`. Its candidate store is an explicit persistent boundary outside source checkouts:
+
+`<local-release-store>/soksakv7`
+
+The store contains only the complete contract-to-kit-to-sidecar-to-plugin release closure. The
+runtime/home is `<isolated-home>`, the identifier is `com.soksakv7.core`, and materialized
+processes use the `soksakv7` prefix. Source checkouts, the user's `soksakv3` home/runtime/environment,
+and the public Registry are neither inputs nor outputs. `<local-evidence>` is permitted only for short Darwin
+Unix-socket runtime paths; release artifacts, configuration, and evidence never live there.
+
 Use the soksak-dev skill and inspect the resulting pixels. Current Core binaries are
 soksak-core/bin/sok and soksak-core/bin/soksak; do not use the obsolete CLI path in older generated
 skill text.

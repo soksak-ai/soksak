@@ -262,6 +262,19 @@ Darwin 의 capture-only 창은 컴포지터에 남고, alpha 0 이며, 마우스
 
 ## 실행 환경
 
+### v7 격리 후보 경계
+
+v7 관측은 공개 Registry와 사용자 `soksakv3`에서 분리된 local release transaction이다. 후보
+release store는 저장소 작업 트리 밖의 임의 임시 디렉터리가 아니라 다음의 명시된 경계를 사용한다.
+
+`<local-release-store>/soksakv7`
+
+후보 store에는 contract→kit→sidecar→plugin의 완전한 release closure만 배치한다. 실행 runtime은
+`<isolated-home>`, identifier는 `com.soksakv7.core`, materialized process prefix는 `soksakv7`로
+고정한다. source checkout, 사용자 `soksakv3`의 home/runtime/environment, 공개 Registry는 이 transaction의
+입력이나 출력이 아니다. `<local-evidence>`는 Darwin Unix socket 길이 제한을 만족하는 runtime 보조 경로에만
+허용하며 release·설정·증거 보관에는 사용하지 않는다.
+
 UI 작업에는 soksak-dev skill 을 쓰고 결과 픽셀을 직접 확인합니다. 현재 Core 바이너리는
 soksak-core/bin/sok 와 soksak-core/bin/soksak 입니다. 예전 skill 문서의 낡은 CLI 경로를 쓰지
 않습니다.
