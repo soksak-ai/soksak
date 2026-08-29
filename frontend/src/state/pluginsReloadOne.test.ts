@@ -1,7 +1,7 @@
 // Reload by id — re-reads that plugin's manifest from disk.
 // Without the re-read, fresh code starts under the old manifest: code registering a new command is rejected
 // as an undeclared command, and the error points at the cache, not the file — the author looks in the wrong place (measured).
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const activatedIds: string[] = [];
 const activeIds = new Set<string>();
@@ -28,6 +28,7 @@ vi.mock("../plugins/loader", () => ({
 const ID = "soksak-plugin-demo";
 // The checkout folder name is not the plugin identity. plugin.json and the selection config define the id.
 const PATH = "<local-evidence>/arbitrary-checkout";
+let restoreEnvironmentHandler = () => {};
 
 // Current manifest on disk — the test mutates it mid-run, standing in for the author editing the file.
 let onDisk: Record<string, unknown> = {};
@@ -44,7 +45,7 @@ const invoke = vi.fn(async (cmd: string, args?: { path?: string }) => {
     return { content: "export const activate = () => {};" };
   }
   if (cmd === "environment_get") return { revision: 1 };
-  if (cmd === "plugin_enabled_set") return { previousGeneration: 1, generation: 2 };
+  if (cmd === "plugin_enabled_set") return { previousRevision: 1, revision: 2 };
   return undefined;
 });
 // The bundle arrives over the **engine resource path**, not IPC — the fixture answers on that path too.
@@ -66,6 +67,7 @@ vi.mock("../framework", async (importOriginal) => ({
 import { usePlugins, type PluginRuntime } from "./plugins";
 import { pluginModuleCache } from "../plugins/pluginModuleCache";
 import { parseManifest } from "../plugins/spec";
+import { createEnvironmentEventHandler, setEnvironmentEventHandler } from "./environmentEvents";
 
 function manifestJson(commands: string[]): Record<string, unknown> {
   return {
@@ -92,6 +94,9 @@ function runtimeOf(json: Record<string, unknown>, status: PluginRuntime["status"
 }
 
 beforeEach(async () => {
+  restoreEnvironmentHandler = setEnvironmentEventHandler(
+    createEnvironmentEventHandler(async () => {}, 1),
+  );
   await pluginModuleCache.releaseAll();
   activatedIds.length = 0;
   activeIds.clear();
@@ -110,6 +115,10 @@ beforeEach(async () => {
   activeIds.add(ID);
 });
 
+afterEach(() => {
+  restoreEnvironmentHandler();
+});
+
 describe("reloadOne — a reload by id reads the manifest from disk again", () => {
   it("joins concurrent enable calls into one activation", async () => {
     activeIds.delete(ID);
@@ -124,6 +133,31 @@ describe("reloadOne — a reload by id reads the manifest from disk again", () =
     expect(first).toMatchObject({ ok: true, id: ID, status: "enabled" });
     expect(second).toEqual(first);
     expect(activatedIds).toEqual([ID]);
+  });
+
+  it("does not finish an enabled write before its environment revision reload drains", async () => {
+    activeIds.delete(ID);
+    usePlugins.setState({
+      plugins: { [ID]: runtimeOf(manifestJson(["thing.run"]), "disabled") },
+      enabledIds: [],
+    });
+    restoreEnvironmentHandler();
+    let releaseReload!: () => void;
+    const reload = vi.fn(() => new Promise<void>((resolve) => { releaseReload = resolve; }));
+    restoreEnvironmentHandler = setEnvironmentEventHandler(createEnvironmentEventHandler(reload, 1));
+
+    let settled = false;
+    const enabling = usePlugins.getState().enable(ID).then((result) => {
+      settled = true;
+      return result;
+    });
+    await vi.waitFor(() => expect(
+      invoke.mock.calls.some(([command]) => command === "plugin_enabled_set"),
+    ).toBe(true));
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    releaseReload();
+    await expect(enabling).resolves.toMatchObject({ ok: true, id: ID, status: "enabled" });
   });
 
   it("restarts the active generation without rewriting its enabled setting", async () => {
