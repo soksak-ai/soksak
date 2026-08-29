@@ -1,8 +1,4 @@
-import {
-  LAYOUT_SETTLEMENT_ANIMATION_ID,
-  layoutMotionFacts,
-  onLayoutMotion,
-} from "../lib/layoutMotion";
+import { layoutMotionFacts, onLayoutMotion } from "../lib/layoutMotion";
 import {
   layoutSettlementFacts,
   layoutSettlementEvents,
@@ -48,7 +44,7 @@ function liveLayoutAnimations(): NamedAnimation[] {
     const named = animation as NamedAnimation;
     return (
       (animation.playState === "running" || animation.pending) &&
-      (named.animationName === "rail-flip-x" || animation.id === LAYOUT_SETTLEMENT_ANIMATION_ID)
+      (named.animationName === "rail-flip-x" || animation.id === "phase")
     );
   }) as NamedAnimation[];
 }
@@ -133,7 +129,6 @@ export function waitLayoutSettled(timeoutMs = 4_000, settlementKey?: string): Pr
     let closed = false;
     let generation = 0;
     let timer = 0;
-    let quietFrame: number | null = null;
     let unsubscribe = () => {};
     let unsubscribeSettlement = () => {};
     let presentationPending: Promise<void> | null = null;
@@ -155,8 +150,6 @@ export function waitLayoutSettled(timeoutMs = 4_000, settlementKey?: string): Pr
       if (closed) return;
       closed = true;
       clearTimeout(timer);
-      if (quietFrame !== null) cancelAnimationFrame(quietFrame);
-      quietFrame = null;
       unsubscribe();
       unsubscribeSettlement();
       presentationAbort?.abort();
@@ -184,18 +177,12 @@ export function waitLayoutSettled(timeoutMs = 4_000, settlementKey?: string): Pr
     const inspect = () => {
       if (closed) return;
       if (layoutMotionFacts().active || layoutSettlementFacts(settlementKey).active) {
-        if (quietFrame !== null) cancelAnimationFrame(quietFrame);
-        quietFrame = null;
         presentationSettled = false;
         return;
       }
       const animations = liveLayoutAnimations();
       generation = Math.max(generation, animations.length);
-      if (animations.length > 0) {
-        if (quietFrame !== null) cancelAnimationFrame(quietFrame);
-        quietFrame = null;
-        presentationSettled = false;
-      }
+      if (animations.length > 0) presentationSettled = false;
       if (animations.length === 0) {
         const pluginPresentation = pluginViewPresentationHost();
         if (!presentationSettled && (hasContentViewHost() || pluginPresentation)) {
@@ -285,25 +272,13 @@ export function waitLayoutSettled(timeoutMs = 4_000, settlementKey?: string): Pr
           }
           return;
         }
-        // React publishes the target DOM before its layout effect creates the FLIP animations.
-        // A quiet microtask is therefore not a settled render. Confirm quietness once at the next
-        // paint boundary; if an animation appeared, its own finished promise becomes the next
-        // event. This is a finite render callback, not an interval or polling loop.
-        if (quietFrame === null) {
-          quietFrame = requestAnimationFrame(() => {
-            quietFrame = null;
-            if (closed) return;
-            if (
-              layoutMotionFacts().active ||
-              layoutSettlementFacts(settlementKey).active ||
-              liveLayoutAnimations().length > 0
-            ) {
-              inspect();
-              return;
-            }
-            close();
-          });
-        }
+        queueMicrotask(() => {
+          if (
+            !layoutMotionFacts().active &&
+            !layoutSettlementFacts(settlementKey).active &&
+            liveLayoutAnimations().length === 0
+          ) close();
+        });
         return;
       }
       void Promise.allSettled(animations.map((animation) => animation.finished)).then(inspect);

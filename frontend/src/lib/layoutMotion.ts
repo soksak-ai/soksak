@@ -72,9 +72,6 @@ function activeKinds(): LayoutMotionKind[] {
  *  existing system owns the movement, so nothing is interpolated (this same module resolves via
  *  isLayoutMotionActive). */
 export const LAYOUT_MOTION_MS = 160;
-/** Public Web Animations identity consumed by the event-driven layout settlement barrier. Every
- *  JS-owned layout interpolation uses it; an unnamed animation is motion the barrier cannot see. */
-export const LAYOUT_SETTLEMENT_ANIMATION_ID = "phase";
 
 function syncEmit(): void {
   const active = depth() > 0;

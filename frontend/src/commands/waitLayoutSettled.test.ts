@@ -68,43 +68,6 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
     expect(done).toBe(true);
   });
 
-  it("confirms a quiet layout on the next paint before accepting settlement", async () => {
-    let paint!: FrameRequestCallback;
-    const request = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      paint = callback;
-      return 41;
-    });
-    let finish!: () => void;
-    const finished = new Promise<void>((resolve) => { finish = resolve; });
-    const animation = {
-      id: "phase",
-      playState: "running",
-      pending: false,
-      finished,
-    } as unknown as Animation;
-    const visible: Animation[] = [];
-    animations(visible);
-
-    let done = false;
-    const waiting = waitLayoutSettled().then(() => { done = true; });
-    await Promise.resolve();
-    expect(request).toHaveBeenCalledTimes(1);
-    expect(done).toBe(false);
-
-    // React's layout effect creates the FLIP after the first quiet inspection but before paint.
-    visible.push(animation);
-    paint(16);
-    await Promise.resolve();
-    expect(done).toBe(false);
-
-    visible.length = 0;
-    finish();
-    await Promise.resolve();
-    paint(32);
-    await waiting;
-    expect(done).toBe(true);
-  });
-
   it("does not complete before the renderer ACKs the state mutation revision", async () => {
     animations([]);
     const revision = invalidateLayout("wsp-4h7kq2");
