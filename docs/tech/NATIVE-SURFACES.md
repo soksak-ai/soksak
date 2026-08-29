@@ -423,12 +423,25 @@ both `worst` 0, and one of them is a broken window. `failure` is separate
 because the compositor keeps answering with the last inventory that landed, so a
 layer refusing every new one reports zero forever.
 
+### Browser release idempotence — 2026-08-30
+
+Browser 0.0.12 selects SDK 0.0.18 through the login-shell tool contract. Two independent
+`make attest` outputs from source commit `d5a87a6` contained the same six files and were byte-for-byte
+equal. Attesting the first completed output again returned `unchanged` for both the release and its
+build receipt. Publishing that output to the local release store returned `published` and then
+`unchanged`, with store digest `2f9a12b7601d89be9326c0c9f784c707982b4ba2502af832fa8ce70700dde6a0`.
+
+An isolated capture-only installation resolved artifact
+`2cefbcbbdf96ebbb7e0830ccc5c5f9c023859d86bf49d2722a052eb2fcafe79f`, loaded Example Domain to
+`progress=1`, and reported one registered native surface with zero coordinate drift. Its capture
+contained the browser chrome and the composed native page.
+
 ### Browser tab transition observation — 2026-08-30
 
 An isolated browser 0.0.11 run with two native tabs used `tab.switchScan` for the same pane. The
 machine result was `clean=true`, `flickerFrames=0`, `blankFrames=[]`, `overlapFrames=[]`, and
-`nativeMismatchFrames=[]` across 30 frames. The focus-free capture
-The capture showed both tab headers and the active Example Domain page.
+`nativeMismatchFrames=[]` across 30 frames. The focus-free capture showed both tab headers and the
+active Example Domain page.
 The run also exposed that pane-only navigation cannot distinguish tabs in one pane; browser 0.0.10
 added an explicit `tab` target, and browser 0.0.11 extends that target to every browser command.
 Runtime `navigate(tab=...)` and `status(tab=...)` returned the matching webview IDs for both tabs;

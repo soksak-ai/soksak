@@ -453,12 +453,25 @@ back, forward, reload, stop 은 선언된 source 를 있는 그대로 두므로 
   문서를 구분할 수 없습니다. true 라고 주장하면 문서가 바뀌었을 수도 있는데 바뀌지 않았다고 소비자에게
   말하게 됩니다.
 
+### Browser release 멱등성 — 2026-08-30
+
+Browser 0.0.12는 login-shell tool 계약으로 SDK 0.0.18을 선택합니다. source commit `d5a87a6`에서
+서로 독립적으로 실행한 `make attest` 출력 두 개는 같은 6개 파일을 포함했고 byte 단위로 같았습니다.
+완료된 첫 출력에 다시 attest하자 release와 build receipt가 모두 `unchanged`를 반환했습니다. 같은
+출력을 local release store에 게시한 결과는 `published` 뒤 `unchanged`였으며 store digest는
+`2f9a12b7601d89be9326c0c9f784c707982b4ba2502af832fa8ce70700dde6a0`입니다.
+
+격리 capture-only 설치는 artifact
+`2cefbcbbdf96ebbb7e0830ccc5c5f9c023859d86bf49d2722a052eb2fcafe79f`를 해석했고 Example Domain을
+`progress=1`까지 로드했으며 coordinate drift가 0인 native surface 하나를 보고했습니다. capture에는
+browser chrome과 합성된 native page가 함께 보였습니다.
+
 ### Browser tab 전환 관측 — 2026-08-30
 
 격리 browser 0.0.11에서 같은 pane에 native tab 두 개를 열고 `tab.switchScan`을 실행했습니다.
 30 frame의 기계 결과는 `clean=true`, `flickerFrames=0`, `blankFrames=[]`, `overlapFrames=[]`,
-`nativeMismatchFrames=[]`였습니다. 포커스를 주지 않은 캡처에는
-캡처에는 두 tab header와 활성 Example Domain 페이지가 보였습니다. 별도로 pane만 지정한
+`nativeMismatchFrames=[]`였습니다. 포커스를 주지 않은 캡처에는 두 tab header와 활성 Example Domain
+페이지가 보였습니다. 별도로 pane만 지정한
 navigation은 같은 pane의 여러 tab을 구분하지 못한다는 RED를 확인했습니다. browser 0.0.10이 명시적
 `tab` target을 추가했고, browser 0.0.11은 모든 browser command에 그 target을 적용했습니다.
 runtime `navigate(tab=...)`와 `status(tab=...)`가 두 tab의 일치하는 webview ID를 반환했으며,
