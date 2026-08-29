@@ -32,7 +32,13 @@ RED입니다. 화면 캡처만으로는 이 계약을 인증할 수 없으며 re
 
 ## 입력 준비 상태
 
-Kit 0.0.90은 byte renderer의 `attach` 직후 `writable=false`를 유지하고 첫 PTY output이 renderer에
+Kit 0.0.91은 byte renderer의 `attach` 직후 `writable=false`를 유지하고 첫 PTY output이 renderer에
 적용된 event에서만 `writable=true`로 전환합니다. Warm 복원은 attach 전에 authoritative frame을 이미
 적용했으므로 즉시 입력 가능합니다. 이 규칙은 timer나 polling 없이 fresh prompt와 첫 입력의 순서를
 고정합니다.
+
+Kit 0.0.91과 xterm Plugin 0.0.68의 설치 런타임 검사도 같은 규칙을 증명했습니다. Fresh mount는
+accepted-input과 PTY-write sequence가 모두 0인 상태에서 한 frame을 먼저 렌더했습니다. 공개 key event
+32회는 accepted input 32회와 write 32회를 만들고 marker와 prompt를 표시했습니다. 앱 재시작 뒤 pane은
+`recoveryOutcome=continued`와 첫 marker를 유지했고, 공개 key event 30회는 accepted input 30회와 write
+30회를 만들고 두 번째 marker와 prompt를 표시했습니다.

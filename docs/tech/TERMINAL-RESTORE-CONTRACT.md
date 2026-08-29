@@ -33,7 +33,13 @@ this contract; use recovery/status sequence fields and an independent input mark
 
 ## Input readiness
 
-Kit 0.0.90 keeps a fresh byte renderer non-writable after `attach` and changes it to writable only
+Kit 0.0.91 keeps a fresh byte renderer non-writable after `attach` and changes it to writable only
 when the first PTY output has reached the renderer. Warm restore already applied an authoritative
 snapshot before attach and can accept input immediately. The output event fixes the ordering without
 a timer or polling loop.
+
+Kit 0.0.91 and xterm Plugin 0.0.68 close the installed runtime row. A fresh mount rendered once
+while accepted-input and PTY-write sequences were both zero; 32 public key events then produced 32
+accepted inputs and 32 writes with the expected marker and prompt. After application restart the
+pane reported `recoveryOutcome=continued`, retained the first marker, and 30 more public key events
+produced 30 accepted inputs and 30 writes with a second marker and prompt.
