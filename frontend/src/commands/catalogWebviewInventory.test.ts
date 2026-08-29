@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const labels = [
   "webview.win-test.tab-browser",
-  "terminal.win-test.tab-terminal",
+  "terminal.win-test.tab-terminal-1",
   "webview.win-other.tab-away",
 ];
 
@@ -13,7 +13,19 @@ vi.mock("../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test" })
 vi.mock("../lib/contentViews", () => ({
   CONTENT_VIEW_BODY: "data-content-view-body",
   contentViewDomFacts: () => [],
+  nativeSurfaceDomFacts: () => [
+    { id: "webview.win-test.tab-browser", ownerViewId: "tab-browser" },
+    { id: "terminal.win-test.tab-terminal-1", ownerViewId: "tab-terminal" },
+  ],
   contentViewHost: () => ({ list: async () => labels }),
+}));
+vi.mock("../state/sessions", () => ({
+  allViews: (layout: { views: Array<{ id: string }> }) => layout.views,
+  useSessions: {
+    getState: () => ({
+      workspaces: [{ spaces: [{ layout: { views: [{ id: "tab-browser" }, { id: "tab-terminal" }] } }] }],
+    }),
+  },
 }));
 vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
@@ -43,8 +55,10 @@ describe("surface.inventory window inventory", () => {
     expect(result.ok).toBe(true);
     expect((result.data as { actual: string[] }).actual).toEqual([
       "webview.win-test.tab-browser",
-      "terminal.win-test.tab-terminal",
+      "terminal.win-test.tab-terminal-1",
     ]);
+    expect((result.data as { ghosts: string[] }).ghosts).toEqual([]);
+    expect((result.data as { unowned: string[] }).unowned).toEqual([]);
     expect(getSpec("webview.surfaces")).toBeUndefined();
   });
 });
