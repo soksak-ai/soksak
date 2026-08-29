@@ -83,6 +83,7 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	// they answer, so stubs are enough.
 	RegisterHost(registry, HostDeps{
 		Host:         startedHost(),
+		Clipboard:    &memoryClipboard{},
 		Presentation: PresentationInteractive,
 		NewID:        counter("1"),
 		// The plugin groups this build composes, named here because this gate's

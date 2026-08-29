@@ -267,6 +267,7 @@ func Run(options Options) error {
 	// a page that is gone.
 	renderer := RegisterHost(options.Registry, HostDeps{
 		Host:         windowHost,
+		Clipboard:    app.Clipboard,
 		Presentation: options.Presentation,
 		NewID:        newWindowID,
 		Composition:  surfaceComposition,

@@ -61,10 +61,6 @@ var unbuilt = map[string]string{
 	"app_relaunch": "this build cannot relaunch itself; the launcher owns the process",
 
 	// Desktop integrations the host has not been given.
-	"clipboard_read":        "this host was given no clipboard bridge",
-	"clipboard_write":       "this host was given no clipboard bridge",
-	"clipboard_watch_start": "this host was given no clipboard bridge to watch",
-	"clipboard_watch_stop":  "this host was given no clipboard bridge to watch",
 	"notify_show":           "this host was given no notification bridge",
 	"notify_activate":       "this host was given no notification bridge, so no notification can be activated",
 

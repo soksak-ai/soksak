@@ -11,6 +11,9 @@ import (
 type HostDeps struct {
 	// Host answers about the windows this process holds.
 	Host WindowHost
+	// Clipboard is the framework's native clipboard. Core and plugins never import the framework;
+	// they reach it only through clipboard_read and clipboard_write.
+	Clipboard ClipboardHost
 	// Presentation is the process-wide desktop policy reported through app.environment.
 	Presentation PresentationMode
 	// NewID mints a window name.
@@ -55,6 +58,7 @@ type HostDeps struct {
 // values, and a test that had to start an application to see the table would be
 // measuring the framework's startup rather than the table.
 func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
+	RegisterClipboard(registry, deps.Clipboard)
 	RegisterPresentation(registry, deps.Presentation)
 	renderer := RegisterRendererCommands(registry, deps.Dispatch)
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
