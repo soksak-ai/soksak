@@ -485,6 +485,7 @@ export function registerWindowCatalog(): void {
 
   register("window.list", {
     description: key("cmd.window.list.desc"),
+    windowScoped: false,
     triggers: { ko: "창 목록 윈도우 목록 열린 창" },
     params: {},
     returns: "{ labels }",
