@@ -531,7 +531,13 @@ describe("pinned rail — focus does not change the arrangement", () => {
       placement: { mode: "pin", station: 0 },
       railOpen: false,
     });
+    expect(a.railPresent).toBe(false);
     expect(a.cells.find((c) => c.id === "R")?.rect.left).toBe(50);
+  });
+
+  it("carries rail presence in the solved transaction state", () => {
+    expect(solve(two(), "R", { railOpen: true }).railPresent).toBe(true);
+    expect(solve(two(), "R", { railOpen: false }).railPresent).toBe(false);
   });
 });
 
