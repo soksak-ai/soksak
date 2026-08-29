@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const delivered: Array<{ id: string; message: Record<string, unknown> }> = [];
 let refuse: Error | null = null;
+const { settled } = vi.hoisted(() => ({ settled: vi.fn(async () => undefined) }));
 vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/service", () => ({
   Commit: vi.fn(async (snapshot: { sequence: number }) => ({ sequence: snapshot.sequence, accepted: true, surfaces: [] })),
   Deliver: vi.fn(async (id: string, message: Record<string, unknown>) => {
@@ -19,6 +20,9 @@ vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compos
 }));
 vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/models", () => ({
   Snapshot: { createFrom: (value: unknown) => value },
+}));
+vi.mock("./nativeSurfaces", () => ({
+  nativeSurfacesSettled: settled,
 }));
 
 import { wailsContentViewHost } from "./contentViews";
@@ -33,6 +37,7 @@ describe("delivering a kind's own verb", () => {
 
   it("forwards the message verbatim and answers what the backend answered", async () => {
     const answer = await wailsContentViewHost.deliver(SURFACE, { verb: "read", lines: 3 });
+    expect(settled).toHaveBeenCalledTimes(1);
     expect(delivered).toEqual([{ id: SURFACE, message: { verb: "read", lines: 3 } }]);
     expect(answer).toEqual({ answered: "read" });
   });

@@ -32,6 +32,11 @@ function unsupported(method: string): never {
  * surface kind arrives with no edit here.
  */
 async function drive(label: string, message: Record<string, unknown>): Promise<Record<string, unknown>> {
+  // A declaration and its native owner are committed on different clocks. Sending while the
+  // current DOM transaction is still dirty races the compositor inventory and produces
+  // "surface ... is not applied" even though the pane is already visible in the document. The
+  // settlement barrier is receipt/event based; it does not retry or invent an owner.
+  await nativeSurfacesSettled();
   return (await CompositorService.Deliver(label, message)) as Record<string, unknown>;
 }
 

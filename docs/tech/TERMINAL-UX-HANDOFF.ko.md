@@ -537,6 +537,15 @@ session/generation을 함께 기록한 뒤, 동일한 clean 폐포를 v7에서 �
 두 항목은 기존 2번(포커스)·4번(입력)의 하위 현상으로 숨기지 않고 각각 named assertion을 가진다. RED가
   확인되기 전 구현하지 않으며, 사용자 `soksakv3`에서는 재현·수정하지 않는다.
 
+### 입력 전달과 적용된 surface 장벽
+
+`INPUT_WRITE_FAILED: terminal surface ... is not applied`는 DOM 선언이 native-surface compositor에
+적용되는 중 입력이 도착할 때 발생하는 실제 transaction 경쟁이다. Wails 공통 content surface adapter는
+이제 모든 surface verb 전에 적용 receipt 장벽을 기다린 뒤 정확히 한 번만 전달한다. 재시도·surface 재생성·
+ownership 폴링·compositor 우회는 하지 않는다. 계약은 `DOM 선언 -> applied receipt -> 단일 command`이며,
+적용되지 않은 surface는 이름 있는 실패로 남긴다. adapter RED→GREEN 전달 테스트가 회귀를 고정하고,
+격리된 v7에서 빠른 탭 전환/입력 매트릭스를 다시 실행해야 한다.
+
 ## 프로젝트별 sidecar identity
 
 Installer가 `environment.json`의 `processRole`과 현재 프로젝트 값으로 materialize한 실행 파일명을

@@ -550,6 +550,16 @@ the named prompt absence was not reproduced in this clean current closure.
 
 Do not reproduce or modify the user `soksakv3` instance. Each assertion needs its own RED before a fix.
 
+### Input delivery and applied-surface barrier
+
+`INPUT_WRITE_FAILED: terminal surface ... is not applied` is a real compositor transaction race when
+input arrives while the current DOM declaration is still being committed. The generic Wails content
+surface adapter now waits for the native-surface settlement receipt before every surface verb, then
+performs exactly one delivery. It does not retry, recreate a surface, poll for ownership, or bypass
+the compositor. The contract is therefore `DOM declaration -> applied receipt -> one command`; an
+unapplied surface remains a named failure. The regression is covered by the adapter's RED→GREEN
+delivery test and must be rechecked in the isolated v7 rapid tab-switch/input matrix.
+
 ## Project-qualified sidecar identity
 
 The installer passes the materialized process name, derived from `environment.json` `processRole` and
