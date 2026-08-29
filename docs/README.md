@@ -90,6 +90,7 @@ that on the same date and the gate landed against it.
 | [`tech/CONTROL-PROTOCOL.CHANGELOG.md`](tech/CONTROL-PROTOCOL.CHANGELOG.md) | Why the control plane requires one self-describing response shape |
 | [`tech/COMMAND-LINE.md`](tech/COMMAND-LINE.md) | Public dotted command names, name-value and JSON object parameter forms, discovery, output and quoting |
 | [`tech/TERMINAL-UX-HANDOFF.md`](tech/TERMINAL-UX-HANDOFF.md) | Unresolved terminal UX defects, workspace ownership map and verified baseline |
+| [`tech/PROCESS-MONITOR.md`](tech/PROCESS-MONITOR.md) | Process ownership contract and the RED boundary for the process-monitor sidebar |
 | [`tech/TERMINAL-UX-EXECUTION.md`](tech/TERMINAL-UX-EXECUTION.md) | Required RED-to-GREEN order for renderer parity, view visibility, native close and test isolation |
 | [`tech/TERMINAL-STANDARD-AUDIT.md`](tech/TERMINAL-STANDARD-AUDIT.md) | Provider-by-provider standards evidence; unverified and RED rows remain explicit |
 | [`tech/MESSAGE-PROTOCOL.md`](tech/MESSAGE-PROTOCOL.md) | Request and response shape, progress deltas, correlation by parent id |
