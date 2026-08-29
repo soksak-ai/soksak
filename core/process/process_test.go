@@ -71,6 +71,20 @@ func TestProcessInventoryAggregatesAnInjectedOwner(t *testing.T) {
 	}
 }
 
+func TestProcessInventoryCommandReturnsTheAggregatedOwnerSnapshot(t *testing.T) {
+	source := fakeInventorySource{value: OwnerInventory{Owner: "owner-a", Revision: 2}}
+	registry := control.NewRegistry()
+	Register(registry, Deps{Home: "/home", Sink: newRecordingSink(), Spawner: &fakeSpawner{}, InventorySources: []InventorySource{source}})
+	value, err := registry.Invoke("process_inventory", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventory, ok := value.(Inventory)
+	if !ok || len(inventory.Owners) != 1 || inventory.Owners[0].Owner != "owner-a" || inventory.Owners[0].Revision != 2 {
+		t.Fatalf("inventory=%#v", value)
+	}
+}
+
 type fakeInventorySource struct{ value OwnerInventory }
 
 func (source fakeInventorySource) Inventory() (OwnerInventory, error) { return source.value, nil }
