@@ -401,11 +401,12 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     enabled: boolean,
   ): Promise<void> => {
     const settings = await invoke<HostEnvironment>("environment_get");
-    await invoke("plugin_enabled_set", {
+    const change = await invoke<EnvironmentChange>("plugin_enabled_set", {
       plugins,
       enabled,
       expectedRevision: settings.revision,
     });
+    await reconcileEnvironmentRevision(change.revision);
   };
 
   // Raw manifest → runtime (validation passed) or a rejected reason.
