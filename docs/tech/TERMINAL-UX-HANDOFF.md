@@ -564,7 +564,7 @@ On 2026-08-30 a fresh v7 home with Vision 0.0.27, Xterm 0.0.63 and the six curre
 captured immediately after `phase=live` without sending input. The prompt was visible in the PNG;
 an event-driven `wait` for `soksak-core` also succeeded without input. A trailing `read` that returned
 blank lines was not evidence of missing output: the prompt was at the top of the viewport and the
-bounded read asks for trailing rows. This does not close the older user-v3 report; it records that
+bounded read requests trailing rows. This does not close the older user-v3 report; it records that
 the named prompt absence was not reproduced in this clean current closure.
 
 Do not reproduce or modify the user `soksakv3` instance. Each assertion needs its own RED before a fix.
