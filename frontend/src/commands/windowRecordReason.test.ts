@@ -13,6 +13,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { invoke } from "../framework";
 
+const { recordWindowFrames } = vi.hoisted(() => ({ recordWindowFrames: vi.fn() }));
+
 vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
   invoke: vi.fn(),
@@ -24,6 +26,10 @@ vi.mock("../lib/webviewLabels", () => ({
   currentWindowLabel: () => "main",
 }));
 vi.mock("../state/windowBoot", () => ({ forgetWindowSlot: vi.fn() }));
+vi.mock("./windowRecorder", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./windowRecorder")>()),
+  recordWindowFrames,
+}));
 vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => setTimeout(() => cb(0), 0));
 
 import { registerCaptureCatalog } from "./catalogCapture";
@@ -49,14 +55,10 @@ const CAPTURE_COMMANDS = [
 ];
 
 it("carries the host's reason when fewer frames landed than were asked for", async () => {
-  vi.mocked(invoke).mockImplementation(async (command) => {
-    if (command !== "window_record") return undefined;
-    return {
-      frames: 0,
-      requested: 3,
-      stopped: "frame 0 could not be captured: the frame did not arrive within 1ms",
-    };
-  });
+  recordWindowFrames.mockReturnValueOnce(Object.assign(Promise.resolve(0), {
+    ready: Promise.resolve(),
+    stopped: Promise.resolve("frame 0 could not be captured: the frame did not arrive within 1ms"),
+  }));
 
   const result = await execute("window.record", { dir: "/evidence/deadline", frames: 3, intervalMs: 0 }, {});
 
@@ -67,10 +69,10 @@ it("carries the host's reason when fewer frames landed than were asked for", asy
 });
 
 it("says nothing about stopping when every frame landed", async () => {
-  vi.mocked(invoke).mockImplementation(async (command) => {
-    if (command !== "window_record") return undefined;
-    return { frames: 3, requested: 3 };
-  });
+  recordWindowFrames.mockReturnValueOnce(Object.assign(Promise.resolve(3), {
+    ready: Promise.resolve(),
+    stopped: Promise.resolve(undefined),
+  }));
 
   const result = await execute("window.record", { dir: "/evidence/complete", frames: 3, intervalMs: 0 }, {});
   const data = (result as { data: Record<string, unknown> }).data;
