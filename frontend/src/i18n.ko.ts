@@ -1106,7 +1106,7 @@ export const ko = {
   "cmd.workspace.update.desc": "워크스페이스 설정을 한꺼번에 갱신합니다. 생략한 필드는 그대로 두고, \"\" 는 덮어쓰기를 지웁니다. root 는 바꿀 수 없습니다.",
   "cmd.workspace.update.param.title": "별칭 (빈 문자열은 무시합니다)",
   "cmd.process.list.desc": "앱이 플러그인을 위해 시작한 자식 프로세스를 반환합니다. 각 항목에는 핸들 id, OS pid, 창, 명령, 실행 상태가 포함됩니다. 읽기 전용입니다.",
-  "cmd.process.inventory.desc": "설치된 owner가 발행한 revision 기반 process snapshot을 읽습니다. 소유권은 명시적이며 workstation을 스캔하거나 이름으로 추정하지 않습니다.",
+  "cmd.process.inventory.desc": "설치된 owner가 발행한 revision 기반 process snapshot을 읽습니다. 소유권은 명시적이며 workstation을 스캔하거나 이름을 추정하지 않습니다.",
   "cmd.process.list.param.alive": "실행 중인 항목만 반환",
   "cmd.process.list.param.window": "이 창 라벨이 띄운 항목만",
   "cmd.tab.label.set.param.viewKey": "viewKey '<pluginId>.<viewId>'",

@@ -10,7 +10,7 @@ import (
 	"github.com/soksak-ai/soksak-core/core/sidecar"
 )
 
-// terminalProcessInventorySource is an adapter at the application boundary. It knows only the
+// terminalProcessInventorySource is an adapter at the application boundary. It uses only the
 // public PTY wire and the sidecar host; it never imports the PTY implementation.
 type terminalProcessInventorySource struct{ units terminalUnitHost }
 

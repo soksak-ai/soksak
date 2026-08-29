@@ -3,6 +3,8 @@ package process
 import (
 	"fmt"
 	"sort"
+
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // OwnedProcess is the generic process record shared by Core and external owners. Ownership is
@@ -56,14 +58,14 @@ func (manager *Manager) Inventory() (Inventory, error) {
 	}
 	for _, source := range manager.deps.InventorySources {
 		if source == nil {
-			return Inventory{}, fmt.Errorf("process inventory source is nil")
+			return Inventory{}, i18n.Errorf("process.inventory.nilSource", nil)
 		}
 		owner, err := source.Inventory()
 		if err != nil {
 			return Inventory{}, err
 		}
 		if owner.Owner == "" {
-			return Inventory{}, fmt.Errorf("process inventory owner is empty")
+			return Inventory{}, i18n.Errorf("process.inventory.ownerEmpty", nil)
 		}
 		owners = append(owners, owner)
 	}

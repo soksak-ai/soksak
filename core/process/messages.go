@@ -75,5 +75,13 @@ func init() {
 			EN: `argument "{name}" is null; omit it or send a value`,
 			KO: `인자 "{name}" 이(가) null 입니다 — 생략하거나 값을 보내십시오`,
 		},
+		"process.inventory.nilSource": {
+			EN: "process inventory contains a nil owner source",
+			KO: "process inventory에 nil owner source가 있습니다",
+		},
+		"process.inventory.ownerEmpty": {
+			EN: "process inventory owner is empty",
+			KO: "process inventory owner가 비어 있습니다",
+		},
 	})
 }
