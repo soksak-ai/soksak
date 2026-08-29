@@ -42,16 +42,3 @@ func announceWindowReady(writer io.Writer, resolved identity.Resolved, pid int, 
 		Window: window,
 	})
 }
-
-func announceRendererReady(writer io.Writer, resolved identity.Resolved, pid int, window string) error {
-	return json.NewEncoder(writer).Encode(struct {
-		controlReadyEvent
-		Window string `json:"window"`
-	}{
-		controlReadyEvent: controlReadyEvent{
-			Event: "soksak.renderer.ready", Protocol: 1,
-			Socket: resolved.Socket, Identifier: resolved.Identifier, PID: pid,
-		},
-		Window: window,
-	})
-}

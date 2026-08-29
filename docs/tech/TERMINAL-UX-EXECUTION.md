@@ -317,9 +317,9 @@ use `SOKSAK_PRESENTATION=capture-only`. Only the unattended `system-native-input
 lock under the Core repository for their whole lifetime. It serializes those gates because the
 current Wails runtime cannot host two test GUI processes safely. `soksak.host.ready` means the
 process control plane is registered. `soksak.window.ready` includes the label of a framework window
-that reached `WindowRuntimeReady`. `soksak.renderer.ready` includes the window whose complete
-renderer command catalogue was accepted. A caller waits for the narrowest event its next operation
-requires; none of these paths polls. Cleanup inventories and stops exact test-owned open and
+that reached `WindowRuntimeReady`. A caller that needs renderer commands then calls the existing
+event-driven `window_renderer_wait` barrier for that exact label. A caller waits for the narrowest
+event or barrier its next operation requires; none of these paths polls. Cleanup inventories and stops exact test-owned open and
 recorded sidecars, calls app.shutdown.commit, and proves graceful application exit.
 
 Discover command schemas from the running binary. Do not infer them from old examples. Discover

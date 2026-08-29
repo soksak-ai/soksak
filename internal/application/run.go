@@ -237,11 +237,6 @@ func Run(assets embed.FS) error {
 					log.Printf("window readiness event failed: %v", err)
 				}
 			},
-			RendererReady: func(window string) {
-				if err := announceRendererReady(os.Stdout, resolved, os.Getpid(), window); err != nil {
-					log.Printf("renderer readiness event failed: %v", err)
-				}
-			},
 			PluginAssetRoots: func() ([]string, error) { return installedPluginRoots(resolved.Home) },
 		})
 	})

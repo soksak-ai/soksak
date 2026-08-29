@@ -63,21 +63,3 @@ func TestWindowReadinessAnnouncementNamesTheRuntimeReadyWindow(t *testing.T) {
 		t.Fatalf("readiness event=%+v", event)
 	}
 }
-
-func TestRendererReadinessAnnouncementNamesTheDeclaredWindow(t *testing.T) {
-	var output bytes.Buffer
-	resolved := identity.Resolved{Socket: "<local-evidence>/soksak-ready.sock", Identifier: "com.soksak.ready"}
-	if err := announceRendererReady(&output, resolved, 42, "win-renderer"); err != nil {
-		t.Fatal(err)
-	}
-	var event struct {
-		controlReadyEvent
-		Window string `json:"window"`
-	}
-	if err := json.Unmarshal(bytes.TrimSpace(output.Bytes()), &event); err != nil {
-		t.Fatal(err)
-	}
-	if event.Event != "soksak.renderer.ready" || event.Window != "win-renderer" || event.Identifier != resolved.Identifier {
-		t.Fatalf("readiness event=%+v", event)
-	}
-}
