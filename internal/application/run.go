@@ -262,10 +262,12 @@ type terminalUnitHost interface {
 
 func terminalSurfaceLinks(units terminalUnitHost) terminalsurface.Links {
 	var next atomic.Uint64
-	return terminalsurface.Links{Send: func(unit, command string, request map[string]any) (map[string]any, error) {
+	return terminalsurface.Links{Start: func(unit string) error {
 		if _, err := units.Start(unit); err != nil {
-			return nil, fmt.Errorf("start %s for terminal surface: %w", unit, err)
+			return fmt.Errorf("start %s for terminal surface: %w", unit, err)
 		}
+		return nil
+	}, Send: func(unit, command string, request map[string]any) (map[string]any, error) {
 		// The service socket expects its request under args.request. Flat control-plane args
 		// decode as an empty service request.
 		payload, err := json.Marshal(request)
