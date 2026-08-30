@@ -124,6 +124,7 @@ export const PluginViewHost = memo(function PluginViewHost({
   ctxRef.current = {
     projectId,
     root,
+    containerGeneration: generation,
     paneId,
     viewId: viewId ?? null,
     boundViewId: boundViewId ?? null,

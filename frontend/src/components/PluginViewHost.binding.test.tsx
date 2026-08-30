@@ -99,6 +99,7 @@ describe("PluginViewHost — a changed binding is delivered to the view", () => 
     });
     renderWith("v-a");
     const updatesAfterMount = log.updates.length;
+    expect(log.mounts[0]?.containerGeneration).toBeGreaterThan(0);
 
     renderWith("v-b");
 

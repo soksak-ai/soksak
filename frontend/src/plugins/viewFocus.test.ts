@@ -8,6 +8,7 @@ import { ViewFocusCoordinator } from "./viewFocus";
 const context = {
   projectId: "wsp-aaaaaa",
   root: null,
+  containerGeneration: 1,
   paneId: null,
   viewId: null,
   boundViewId: null,

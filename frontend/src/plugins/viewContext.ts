@@ -32,6 +32,7 @@ export type ViewContextAxis = "binding" | "seed";
 export const VIEW_CONTEXT_AXIS = {
   projectId: "binding",
   root: "binding",
+  containerGeneration: "binding",
   paneId: "binding",
   viewId: "binding",
   boundViewId: "binding",

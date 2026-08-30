@@ -18,6 +18,9 @@ export interface ViewPresentation {
 export interface PluginViewContext {
   projectId: string;
   root: string | null;
+  // Monotonic owner identity for this mounted container. A native declaration must use this
+  // generation so an event or surface left by an older provider mount cannot satisfy readiness.
+  containerGeneration: number;
   // The terminal pane this view tracks (the cwd-tracking target). Sidebar = cwdTabOf (the focused
   // terminal of the active group), other placements = null. Used with app.terminal.getCwd/onCwd for
   // cwd tracking (contract A13/S7). null when there is none.
