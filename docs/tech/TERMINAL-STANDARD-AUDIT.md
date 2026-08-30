@@ -216,9 +216,9 @@ as history and negative lines as bottom. Fresh installed rows produced:
 | Provider | Selection | `scroll(lines=10)` | Status/read/pixel | Verdict |
 | --- | --- | --- | --- | --- |
 | Alacritty 0.0.39 | RED in the final closure: two fresh panes advanced PTY output but canonical frames contained no runs | RED/unknown | blank surface with cursor/selection overlay only | provider RED |
-| Ghostty 0.0.36 | empty engine selection | `10/56/pinned` | `ROW065..071`, pixels inspected | scroll GREEN, selection RED |
-| Kitty 0.0.33 | empty engine selection | `10/54/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
-| Shitty 0.0.32 | empty engine selection | `10/52/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
+| Ghostty 0.0.37 | exact `SELECT_GHOSTTY_24680`; copy and independent clipboard read matched 20 characters | `10/52/pinned` | `GROW042..071`, selection and scroll pixels inspected | selection/copy/scroll GREEN |
+| Kitty 0.0.34 | exact `SELECT_KITTY_24680`; copy and independent clipboard read matched 18 characters | `10/54/pinned` | `KROW042..071`, selection and scroll pixels inspected | selection/copy/scroll GREEN |
+| Shitty 0.0.33 | exact `SELECT_SHITTY_24680`; copy and independent clipboard read matched 19 characters | `10/54/pinned` | `SROW042..071`, selection and scroll pixels inspected | selection/copy/scroll GREEN |
 | VT100 0.0.36 | exact `SELECT_VT100_1234567890`; copy and independent clipboard read matched 23 characters | `10/54/pinned` | selection pixels inspected; scroll state matched command/status | selection/copy GREEN; scroll state GREEN, viewport regression OPEN |
 | WezTerm 0.0.36 | exact `SELECT_WEZTERM_24680`; copy and independent clipboard read matched 20 characters | `10/136/pinned` | `WZROW042..071`, selection and scroll pixels inspected | selection/copy/scroll GREEN |
 
@@ -226,8 +226,26 @@ The initial five GREEN scroll rows returned the same offset and `followMode` thr
 status; their captured viewports showed rows 42 through 71. VT100 selection became GREEN after fork
 commit `d557ec1` exposed signed logical-row text without moving the viewport and Sidecar 0.0.36
 owned the selection endpoints and ranges. Its later 80-row run returned `10/54/pinned` but painted
-an empty viewport, so that scroll pixel row remains OPEN. Selection remains RED for Ghostty, Kitty
-and Shitty, and the Alacritty frame regression must be fixed before its rows can be judged.
+an empty viewport, so that scroll pixel row remains OPEN. The six native selection rows are GREEN;
+the Alacritty frame regression must be fixed before its current closure can be judged.
+
+Ghostty Sidecar 0.0.37 uses libghostty-vt selection gestures, terminal-owned tracked selection,
+selection formatting and native containment. Kitty Sidecar 0.0.34 uses the selected Kitty fork's
+`Screen` selection modes, text and row-range methods through its provider SDK. Shitty Sidecar
+0.0.33 uses the selected Vterm and Screen selection surface for logical rows, including history.
+Each owner RED first failed at its explicit unimplemented refusal. The same owner gates now cover
+simple, semantic, line and extend behavior; none of the three substitutes a generic Kit range.
+
+Vision 0.0.49 selects those exact releases. Installed public DOM drags, selection commands, copy
+commands and independent clipboard reads returned the marker lengths in the table. The focus-free
+captures showed each engine-owned selection. Each exact process then produced 80 numbered rows;
+the scroll command and public status agreed on `offset=10/pinned`, Plugin read returned rows 42
+through 71, and the three composed native captures showed the same rows. The immutable local release
+digests are `58cebbd9ed083e5aa53ed3697dcc332c0bc0a7c7ebfef9fed6689d3acd0a64bd`
+for Ghostty, `255447965971867b0f62d382ccefa3d40031b2c6de4ba410eb95eb7f2cf43c85`
+for Kitty, `884679ae72e877e674b95df9371b1dde6504fb41236ae1fb0ffe638f6b0f58d6`
+for Shitty and `2a7be50dfab36ae3db06bbfe7acb2bb9b503f6c7280194e8ce23a54dde1acdd0`
+for Vision 0.0.49.
 
 WezTerm Sidecar 0.0.36 owns simple, line, block and extend selection over the rows materialized by
 its selected engine. Its owner RED first failed because the provider returned no selection; the

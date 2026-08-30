@@ -204,9 +204,9 @@ Vision 0.0.34는 적용 응답을 반환하며, Sidecar Kit 0.0.30은 양수를 
 | Provider | Selection | `scroll(lines=10)` | Status/read/pixel | 판정 |
 | --- | --- | --- | --- | --- |
 | Alacritty 0.0.39 | 최종 closure RED: fresh pane 두 개에서 PTY output은 전진했지만 canonical frame run이 전부 비어 있음 | RED/unknown | cursor/selection overlay만 있는 빈 surface | provider RED |
-| Ghostty 0.0.36 | engine selection 비어 있음 | `10/56/pinned` | `ROW065..071`, pixel 확인 | scroll GREEN, selection RED |
-| Kitty 0.0.33 | engine selection 비어 있음 | `10/54/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
-| Shitty 0.0.32 | engine selection 비어 있음 | `10/52/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
+| Ghostty 0.0.37 | 정확한 `SELECT_GHOSTTY_24680`; copy와 독립 clipboard read가 20자로 일치 | `10/52/pinned` | `GROW042..071`, selection·scroll pixel 확인 | selection/copy/scroll GREEN |
+| Kitty 0.0.34 | 정확한 `SELECT_KITTY_24680`; copy와 독립 clipboard read가 18자로 일치 | `10/54/pinned` | `KROW042..071`, selection·scroll pixel 확인 | selection/copy/scroll GREEN |
+| Shitty 0.0.33 | 정확한 `SELECT_SHITTY_24680`; copy와 독립 clipboard read가 19자로 일치 | `10/54/pinned` | `SROW042..071`, selection·scroll pixel 확인 | selection/copy/scroll GREEN |
 | VT100 0.0.36 | 정확한 `SELECT_VT100_1234567890`; copy와 독립 clipboard read가 23자로 일치 | `10/54/pinned` | selection pixel 확인, scroll command/status 일치 | selection/copy GREEN, scroll 상태 GREEN·viewport regression OPEN |
 | WezTerm 0.0.36 | 정확한 `SELECT_WEZTERM_24680`; copy와 독립 clipboard read가 20자로 일치 | `10/136/pinned` | `WZROW042..071`, selection·scroll pixel 확인 | selection/copy/scroll GREEN |
 
@@ -214,8 +214,25 @@ Vision 0.0.34는 적용 응답을 반환하며, Sidecar Kit 0.0.30은 양수를 
 viewport는 42~71행을 보였습니다. VT100 selection은 fork commit `d557ec1`이 viewport를 움직이지 않는
 signed logical-row text API를 노출하고 Sidecar 0.0.36이 selection endpoint·range를 소유하면서 GREEN이
 됐습니다. 이후 80행 실행은 `10/54/pinned`를 반환했지만 viewport pixel이 비어 있어 scroll pixel row는
-OPEN입니다. Ghostty, Kitty, Shitty selection은 계속 RED이며 Alacritty frame regression을 먼저 해결해야
-그 provider row를 판정할 수 있습니다.
+OPEN입니다. native selection 여섯 행은 GREEN입니다. 현재 Alacritty closure 판정 전에 frame regression을
+해결해야 합니다.
+
+Ghostty Sidecar 0.0.37은 libghostty-vt selection gesture, terminal-owned tracked selection, selection
+formatting, native containment를 사용합니다. Kitty Sidecar 0.0.34는 선택된 Kitty fork의 `Screen` selection
+mode, text, row-range method를 provider SDK를 통해 사용합니다. Shitty Sidecar 0.0.33은 선택된 Vterm과
+Screen의 logical row selection surface를 history까지 사용합니다. 각 owner RED는 명시적인 unimplemented
+refusal에서 먼저 실패했습니다. 같은 owner gate가 이제 simple, semantic, line, extend 동작을 검증하며
+세 provider 모두 generic Kit range를 대신 사용하지 않습니다.
+
+Vision 0.0.49는 해당 exact release를 선택합니다. 설치 제품의 공개 DOM drag, selection command, copy
+command, 독립 clipboard read가 표의 marker 길이와 일치했습니다. focus-free capture에서 각 engine-owned
+selection을 확인했습니다. 같은 exact process가 번호 row 80개를 만든 뒤 scroll command와 공개 status는
+`offset=10/pinned`로 일치했고 Plugin read와 세 합성 native capture는 모두 42~71행을 보여 줬습니다.
+불변 local release digest는 Ghostty
+`58cebbd9ed083e5aa53ed3697dcc332c0bc0a7c7ebfef9fed6689d3acd0a64bd`, Kitty
+`255447965971867b0f62d382ccefa3d40031b2c6de4ba410eb95eb7f2cf43c85`, Shitty
+`884679ae72e877e674b95df9371b1dde6504fb41236ae1fb0ffe638f6b0f58d6`, Vision 0.0.49
+`2a7be50dfab36ae3db06bbfe7acb2bb9b503f6c7280194e8ce23a54dde1acdd0`입니다.
 
 WezTerm Sidecar 0.0.36은 선택된 engine이 materialize한 row 위에서 simple, line, block, extend selection을
 소유합니다. owner RED는 provider가 selection을 반환하지 않아 먼저 실패했고, 같은 이름의 test가 이제
