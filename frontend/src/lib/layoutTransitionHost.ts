@@ -137,8 +137,8 @@ export function viewLayoutMoves(
 
 /** Translation and snap-only projection ownership derived from the same solved arrangements. */
 export function viewLayoutChange(
-  from: { station: number; focusId: string | null; cells: Array<{ id: string; rect: { left: number; top: number; width: number; height: number } }> },
-  to: { station: number; focusId: string | null; cells: Array<{ id: string; rect: { left: number; top: number; width: number; height: number } }> },
+  from: { railPresent: boolean; station: number; focusId: string | null; cells: Array<{ id: string; rect: { left: number; top: number; width: number; height: number } }> },
+  to: { railPresent: boolean; station: number; focusId: string | null; cells: Array<{ id: string; rect: { left: number; top: number; width: number; height: number } }> },
   groups: readonly LayoutViewGroup[],
   hostWidthPx: number,
   railWidthPx: number,
@@ -157,7 +157,13 @@ export function viewLayoutChange(
       .filter((viewId) => !targetIds.has(viewId))
       .map((viewId) => ({ viewId }));
   };
-  const projectionShapeChanged = from.cells.length !== to.cells.length || from.cells.some((cell) => {
+  // Rail presence changes every pane's physical box even when its percentage cell is byte-for-byte
+  // identical: the inserted width appears or disappears from the shared row. Treat it as one
+  // projection shape transaction so browser and terminal native surfaces are staged before the DOM
+  // width commit instead of showing one mismatched frame.
+  const railPresenceChanged = from.railPresent !== to.railPresent;
+  const projectionShapeChanged = railPresenceChanged
+    || from.cells.length !== to.cells.length || from.cells.some((cell) => {
     const next = to.cells.find(({ id }) => id === cell.id);
     return !next
       || !Object.is(cell.rect.top, next.rect.top)
@@ -177,7 +183,7 @@ export function viewLayoutChange(
   const groupsById = new Map(groups.map((group) => [group.id, group]));
   const projectionParticipants = to.cells.flatMap((cell) => {
     const previous = from.cells.find(({ id }) => id === cell.id);
-    const shapeChanged = !previous
+    const shapeChanged = railPresenceChanged || !previous
       || !Object.is(previous.rect.top, cell.rect.top)
       || !Object.is(previous.rect.width, cell.rect.width)
       || !Object.is(previous.rect.height, cell.rect.height);

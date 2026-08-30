@@ -515,10 +515,12 @@ export function arrangementMoves<L>(
 
 /** Whether two solved projections differ in visible geometry, including snap-only membership/size changes. */
 export function projectionGeometryChanged<L>(
-  from: Pick<Arrangement<L>, "station" | "cells">,
-  to: Pick<Arrangement<L>, "station" | "cells">,
+  from: Pick<Arrangement<L>, "railPresent" | "station" | "cells">,
+  to: Pick<Arrangement<L>, "railPresent" | "station" | "cells">,
 ): boolean {
-  if (!Object.is(from.station, to.station) || from.cells.length !== to.cells.length) return true;
+  if (from.railPresent !== to.railPresent
+    || !Object.is(from.station, to.station)
+    || from.cells.length !== to.cells.length) return true;
   return from.cells.some((cell, index) => {
     const next = to.cells[index];
     return !next

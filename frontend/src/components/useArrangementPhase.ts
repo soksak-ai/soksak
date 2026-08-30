@@ -122,6 +122,7 @@ function arrangementKey<L>(a: Arrangement<L> | null): string {
     .map((c) => `${c.id}@${c.rect.left.toFixed(3)}`)
     .join(",");
   return [
+    a.railPresent ? "rail" : "no-rail",
     a.station.toFixed(3),
     cells,
     a.focusId ?? "",
