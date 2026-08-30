@@ -21,6 +21,14 @@ The same HWND boundary reports the document content extent: Windows reads the cl
 content-size fallback because non-client chrome makes it a different rectangle. `ui.verify` treats
 an unavailable content rect as unanswered rather than silently comparing against that frame.
 
+## Inactive tab targets
+
+An inactive `tab` target is activated only for the read. Core waits for the target tab's public DOM
+presentation commit, then uses the same event-driven layout and native presentation barrier as
+`ui.layout.wait-settled`. Pixel capture starts only after both stages settle. Core restores the
+previous active tab and space after the read and on settlement or capture failure. This path uses no
+sleep or polling and has no renderer-specific branch.
+
 ## Verification
 
 Local tests inject native frames and verify exact decoded PNG pixels, padded strides, DPI crops,

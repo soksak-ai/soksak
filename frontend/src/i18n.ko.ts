@@ -900,7 +900,7 @@ export const ko = {
   "cmd.capture.calibration.desc": "잘린 창 전환 동안 크롬 픽셀과 임베디드 표면 픽셀을 견주는 데 쓰는, 고정된 64×40 DOM 합성기 눈금자 셋을 보이거나 감추거나 조회합니다. 같은 가시성을 다시 적용하는 것은 멱등입니다.",
   "cmd.capture.calibration.param.visible": "true=보임, false=제거. 생략하면 현재 상태를 조회합니다",
   "cmd.capture.motion-anchors.desc": "노출된 DOM 탭 슬롯에 유한한 E2E 픽셀 앵커를 붙입니다. 각 앵커는 자기 슬롯의 레이아웃 변환을 물려받으므로, 같은 색의 페이지 표식은 기록된 모든 PNG 에서 x 좌표를 공유해야 합니다. 빈 anchors 배열을 주면 모든 앵커를 멱등하게 제거합니다.",
-  "cmd.window.snapshot.desc": "창에 포커스를 주지 않고 내용을 PNG로 캡처합니다. capture-only에서는 보이도록 적용된 모든 네이티브 표면을 각 소유자에게서 캡처하고 applied 사각형, alpha, layer에 따라 합성합니다. 보이는 표면의 그림이 빠지면 불완전한 이미지를 반환하지 않고 실패합니다. 상위 폴더는 자동으로 만듭니다. 자르기와 저장은 자유롭게 조합됩니다: rect(CSS px, 창 좌표 — ui.measure 와 같은 공간), node(ui.tree 의 노출 주소), tab(콘텐츠 탭 id) 이 영역을 고르고, path 는 저장하며 base64:true 는 인라인으로 반환합니다. 활성이 아닌 탭을 캡처하면 그 순간 활성화했다가 원래 활성이던 것을 되돌리므로 화면은 있던 자리로 돌아옵니다. path 도 base64 도 없으면 잘린 캡처는 그래도 인라인으로 반환합니다.",
+  "cmd.window.snapshot.desc": "창에 포커스를 주지 않고 내용을 PNG로 캡처합니다. capture-only에서는 보이도록 적용된 모든 네이티브 표면을 각 소유자에게서 캡처하고 applied 사각형, alpha, layer에 따라 합성합니다. 보이는 표면의 그림이 빠지면 불완전한 이미지를 반환하지 않고 실패합니다. 상위 폴더는 자동으로 만듭니다. 자르기와 저장은 자유롭게 조합됩니다: rect(CSS px, 창 좌표 — ui.measure 와 같은 공간), node(ui.tree 의 노출 주소), tab(콘텐츠 탭 id) 이 영역을 고르고, path 는 저장하며 base64:true 는 인라인으로 반환합니다. 활성이 아닌 탭은 DOM과 native presentation이 정착한 뒤 캡처하고 이전 탭으로 되돌리고 종료합니다. path 도 base64 도 없으면 잘린 캡처는 그래도 인라인으로 반환합니다.",
   "cmd.window.snapshot.param.rect": "자를 영역 {x,y,w,h} (CSS px, 창 좌표 — ui.measure 공간). path 와 함께 쓰면 잘라낸 것을 저장합니다.",
   "cmd.window.snapshot.param.node": "캡처할 노출 주소(ui.tree) — 그 rect 는 대신 재어 줍니다. 좌표를 계산하지 않고 한 패널이나 요소를 잡을 때 씁니다.",
   "cmd.window.snapshot.param.tab": "캡처할 콘텐츠 탭 id. 활성이 아닌 탭은 화면 밖에 주차되므로, 그 순간 탭(과 그 스페이스)을 활성화했다가 원래 활성이던 것을 되돌립니다.",

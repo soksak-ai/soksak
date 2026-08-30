@@ -20,6 +20,14 @@ rect를 읽고 `GetDpiForWindow`로 device pixel을 DIP로 변환합니다. Wind
 chrome이 포함된 다른 사각형이므로 content size fallback으로 사용하지 않습니다.
 `ui.verify`는 content rect를 읽지 못하면 frame과 비교한 척하지 않고 unanswered로 판정합니다.
 
+## 비활성 탭 대상
+
+비활성 `tab` 대상은 읽는 동안만 활성화합니다. Core는 대상 탭의 공개 DOM presentation commit을
+기다린 다음 `ui.layout.wait-settled`와 같은 event 기반 layout 및 native presentation barrier를
+사용합니다. 두 단계가 정착한 뒤에만 pixel capture를 시작합니다. 읽기가 끝나거나 settlement 또는
+capture가 실패하면 이전 활성 탭과 space를 복원합니다. 이 경로는 sleep, polling, renderer별 분기를
+사용하지 않습니다.
+
 ## 검증
 
 로컬 테스트는 native frame을 주입하여 decode한 PNG pixel, padding stride, DPI crop, 빈 crop,
