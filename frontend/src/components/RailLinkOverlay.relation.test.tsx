@@ -24,7 +24,10 @@ vi.stubGlobal("localStorage", {
 
 vi.mock("../state/theme", () => ({
   useTheme: (select: (state: unknown) => unknown) =>
-    select({ spec: { relation: { radius: 12, strokeWidth: 1.5 } } }),
+    select({
+      colors: { acc: "#5aa2ff" },
+      spec: { relation: { radius: 12, strokeWidth: 1.5, stroke: "var(--acc)" } },
+    }),
 }));
 // Only the translation is replaced. A mock of the whole module has to grow every time i18n gains
 // an export, and the failure then names the mock rather than the change that caused it.

@@ -930,6 +930,8 @@ export const ko = {
   "msg.surface.composition": "브라우저 화면의 위치 차이: 최대 {worst}px",
   "msg.surface.composition.history": "브라우저 화면 이동 기록 {n}개",
   "msg.surface.composition.history.since": "sinceUnixMs는 유한한 수여야 합니다",
+  "cmd.surface.decorations.desc": "브라우저와 터미널 네이티브 화면 위에서 포커스 및 레일 관계선을 그리는 Core 소유의 입력 투과 장식 평면을 확인합니다.",
+  "msg.surface.decorations": "네이티브 장식: {layer}에 선 {n}개",
   "cmd.layout.trace.start.desc": "모든 영역·판·네이티브 표면의 정렬을 창 안에서 애니메이션 프레임마다 한 번씩 ms 밀리초(최대 10000) 동안 기록합니다. 평면을 통해 읽으면 왕복 비용이 들고 프레임을 놓치지만, 이것은 하나도 놓치지 않습니다. 답은 첫 프레임을 기다리며, 창이 그리고 있지 않으면 거절합니다 — 가림 감지가 켜진 채 가려진 창은 아무것도 기록하지 않습니다. layout.trace.read 로 되읽습니다. 시작하면 직전 추적이 담고 있던 것은 버립니다.",
   "cmd.layout.trace.start.param.ms": "기록할 시간 (1..10000)",
   "cmd.layout.trace.wait.desc": "녹화 하나가 끝날 때까지 기다립니다. 시작이 답한 run 을 주십시오. 끝은 알려지는 것이지 찾는 것이 아닙니다 — 이 명령은 읽기 전에 구독하므로 그 사이에 끝난 녹화도 놓치지 않으며, 폴링하지 않습니다. 이미 끝난 run 을 물으면 즉시 답하므로 두 번 물어도 같은 답입니다. 어떻게 끝났는지도 함께 반환합니다: elapsed 는 제 시계대로, stopped 는 누가 멈춰서, replaced 는 다음 녹화가 시작해서입니다.",

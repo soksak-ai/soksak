@@ -925,6 +925,8 @@ export const en: Record<MsgKey, string> = {
   "msg.surface.composition": "Native composition: worst drift {worst}px",
   "msg.surface.composition.history": "{n, plural, one {# browser movement} other {# browser movements}}",
   "msg.surface.composition.history.since": "sinceUnixMs must be a finite number",
+  "cmd.surface.decorations.desc": "Read the Core-owned pointer-transparent native decoration plane that carries focus and rail-relation strokes above browser and terminal child surfaces.",
+  "msg.surface.decorations": "Native decorations: {n} strokes on {layer}",
   "cmd.layout.trace.start.desc": "Record the alignment of every region, pane and native surface once per animation frame, inside the window, for ms milliseconds (max 10000). A reading taken through the plane costs a round trip and misses frames; this misses none. The answer waits for the first frame and refuses if the window is not drawing — a covered window with occlusion detection on records nothing. Read it back with layout.trace.read. Starting discards whatever the last trace held.",
   "cmd.layout.trace.start.param.ms": "How long to record (1..10000)",
   "cmd.layout.trace.wait.desc": "Wait until one recording has ended. Pass the run the start answered. The end is announced rather than looked for — this subscribes before it reads, so a recording that ends in between is not missed, and it never polls. Asking about a run that already ended answers at once, so asking twice answers the same. It states how it ended: elapsed on its own clock, stopped by somebody, replaced by the next recording.",

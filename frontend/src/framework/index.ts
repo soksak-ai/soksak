@@ -17,6 +17,8 @@ export type {
   AppFramework,
   FrameworkNotification,
   FrameworkWindowHandle,
+  NativeDecoration,
+  NativeDecorationReceipt,
   Stream,
   TitlebarCompositionFacet,
   TitlebarCompositionProvision,
@@ -62,6 +64,12 @@ export function resetNativeSurfaces(): Promise<void> {
 export function clearNativeSurfaces(): Promise<void> {
   return framework.clearNativeSurfaces();
 }
+
+/** Replace/read the selected framework's final Core decoration plane. */
+export const commitNativeDecorations: AppFramework["commitNativeDecorations"] =
+  (decorations) => framework.commitNativeDecorations(decorations);
+export const nativeDecorationStatus: AppFramework["nativeDecorationStatus"] =
+  () => framework.nativeDecorationStatus();
 
 // ── Named re-exports — call sites use these without naming a framework ─────────────
 export const invoke: AppFramework["invoke"] = (cmd, args) => framework.invoke(cmd, args);

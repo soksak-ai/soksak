@@ -5,10 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RailLinkOverlay } from "./RailLinkOverlay";
 import type { RailRelationState } from "../lib/railArrangement";
 import { useSettings } from "../state/settings";
+import {
+  __resetNativeDecorationsForTest,
+  nativeDecorationFacts,
+} from "../lib/nativeDecorations";
 
 vi.mock("../state/theme", () => ({
   useTheme: (select: (state: unknown) => unknown) =>
-    select({ spec: { relation: { radius: 12, strokeWidth: 1.5 } } }),
+    select({
+      colors: { acc: "#5aa2ff" },
+      spec: { relation: { radius: 12, strokeWidth: 1.5, stroke: "var(--acc)" } },
+    }),
 }));
 vi.mock("../i18n", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../i18n")>()),
@@ -43,6 +50,7 @@ const relation = (
 
 describe("RailLinkOverlay — live grid tracking", () => {
   beforeEach(() => {
+    __resetNativeDecorationsForTest();
     observed = undefined;
     hostSize = { width: 1200, height: 800 };
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
@@ -56,6 +64,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
   });
 
   afterEach(() => {
+    __resetNativeDecorationsForTest();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
@@ -124,6 +133,34 @@ describe("RailLinkOverlay — live grid tracking", () => {
     const overlay = host.querySelector<HTMLElement>(".rail-link-overlay");
     expect(overlay?.dataset).toMatchObject({ borderMode: "none", pathCount: "0" });
     expect(overlay?.querySelector("svg")).toBeNull();
+    act(() => root.unmount());
+  });
+
+  it("publishes the same rounded union path to the final native plane", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(
+      <RailLinkOverlay
+        contentId="spc-aaaaaa"
+        relation={relation()}
+        railWidth={300}
+        railStation={50}
+        targetRect={{ left: 50, top: 0, width: 25, height: 50 }}
+        nativeVisible
+      />,
+    ));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    const native = nativeDecorationFacts().decorations;
+    expect(native).toHaveLength(1);
+    expect(native[0]).toMatchObject({
+      id: "relation/spc-aaaaaa/union",
+      strokeWidth: 1.5,
+      dash: [],
+    });
+    // Q is the rounded corner command consumed by the AppKit CAShapeLayer path bridge.
+    expect(native[0].path).toContain(" Q ");
     act(() => root.unmount());
   });
 

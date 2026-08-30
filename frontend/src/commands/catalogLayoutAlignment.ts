@@ -7,7 +7,8 @@ import { readAlignment } from "../lib/layoutAlignment";
 import { layoutTrace, startLayoutTrace, whenLayoutTraceEnds } from "../lib/layoutTrace";
 import { presentationNowUnixMs } from "../lib/presentationClock";
 import { nativeTimelineVerdict, type TimelineNativeSample } from "../lib/nativeTimelineVerdict";
-import { invoke } from "../framework";
+import { invoke, nativeDecorationStatus } from "../framework";
+import { nativeDecorationFacts } from "../lib/nativeDecorations";
 import * as CompositorService from "../../bindings/github.com/min-median-max/wails-service-native-compositor/service";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { register } from "./registry";
@@ -21,6 +22,26 @@ export function registerLayoutAlignmentCatalog(): void {
     message: (d) => tmsg("msg.surface.composition", { worst: Number(d.worst ?? 0) }),
     examples: ["surface.composition"],
     handler: () => invoke("surface.composition"),
+  });
+
+  register("surface.decorations", {
+    description: key("cmd.surface.decorations.desc"),
+    triggers: { ko: "네이티브 포커스 관계 보더 최상단 장식" },
+    params: {},
+    returns: "{ window, sequence, count, supported, layer, declarations:[{id,path,strokeWidth,dash}] }",
+    message: (data) => tmsg("msg.surface.decorations", {
+      n: Number(data.count ?? 0), layer: String(data.layer ?? ""),
+    }),
+    examples: ["surface.decorations"],
+    handler: async () => ({
+      ...(await nativeDecorationStatus()),
+      declarations: nativeDecorationFacts().decorations.map((decoration) => ({
+        id: decoration.id,
+        path: decoration.path,
+        strokeWidth: decoration.strokeWidth,
+        dash: decoration.dash,
+      })),
+    }),
   });
 
   register("surface.composition.history", {

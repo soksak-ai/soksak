@@ -19,7 +19,7 @@ describe("what a motion takes off the screen", () => {
     // The frame is drawn and registered with the tracker that interpolates the cells, so it is one
     // frame that moves rather than two that appear and vanish.
     expect(group).toContain('data-node={`layout/frame/${group.id}`}');
-    expect(group).toContain('data-node={`layout/focus-boundary/${content.activePaneId}`}');
+    expect(group).toContain('node={`layout/focus-boundary/${content.activePaneId}`}');
     expect(group).not.toContain("decoration.structuralFrames");
     expect(group).not.toContain("decoration.focusBoundary");
     expect(app).not.toContain("decoration.railSurface");
@@ -45,9 +45,9 @@ describe("content view effective visibility", () => {
     const source = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
     expect(source).toContain('className="pane-focus-boundary"');
     expect(source).toContain('key={`focus-frame-${content.activePaneId}`}');
-    expect(source).toContain('data-node={`layout/focus-boundary/${content.activePaneId}`}');
+    expect(source).toContain('node={`layout/focus-boundary/${content.activePaneId}`}');
     // Registered with the tracker that interpolates the cells, so it moves rather than blinking.
-    expect(source).toMatch(/pane-focus-boundary[\s\S]{0,200}|ref=\{rectMotion\.ref\}[\s\S]{0,200}pane-focus-boundary/);
+    expect(source).toContain("trackRef={rectMotion.ref}");
     expect(source).not.toMatch(/pane-focus-boundary[^\n]*flip-move/);
     expect(source).not.toMatch(/className=\{`pane-border\$\{[\s\S]{0,180}focus/);
   });

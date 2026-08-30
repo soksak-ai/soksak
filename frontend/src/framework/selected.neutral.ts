@@ -56,6 +56,14 @@ export const selectedFramework: AppFramework = {
   presentWindow: async () => {},
   resetNativeSurfaces: async () => {},
   clearNativeSurfaces: async () => {},
+  commitNativeDecorations: async (decorations) => ({
+    window: "", sequence: 0, count: decorations.length,
+    supported: false, layer: "dom-only",
+  }),
+  nativeDecorationStatus: async () => ({
+    window: "", sequence: 0, count: 0,
+    supported: false, layer: "dom-only",
+  }),
   // The neutral adapter has no screen — there is nowhere to apply a zoom factor, so this does nothing.
   setWindowZoom: async () => {},
   invoke: unsupported,

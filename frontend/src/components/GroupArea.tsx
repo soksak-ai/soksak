@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { moduleState } from "../lib/moduleState";
 import { execute } from "../commands/registry";
 import { rafThrottle } from "../lib/rafThrottle";
@@ -65,6 +65,12 @@ import {
   type LineMove,
 } from "../state/verticalLines";
 import { viewTravelPresentation } from "../lib/viewTravelPresentation";
+import { roundedOrthogonalPath } from "../lib/railLinkShape";
+import {
+  cssColorRGBA,
+  replaceNativeDecorations,
+  strokeDecoration,
+} from "../lib/nativeDecorations";
 
 // Render the content area as editor groups. Two core principles:
 // 1) Keep the body (terminal/editor) separate from the group tree structure, in a "persistent body layer" keyed
@@ -103,6 +109,100 @@ export const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 
 
 // Full rect a cell or slot occupies when maximized (% of the content area).
 const FULL_RECT = { left: 0, top: 0, width: 100, height: 100 };
+
+function cornerFocusPath(rect: DOMRect, strokeWidth: number): string {
+  const half = strokeWidth / 2;
+  const left = rect.left + half;
+  const right = rect.right - half;
+  const top = rect.top + HEADER_PX - 1;
+  const bottom = rect.bottom - STATUS_PX + 1;
+  const arm = 14;
+  return [
+    `M ${left} ${top} L ${left + arm} ${top}`,
+    `M ${right - arm} ${top} L ${right} ${top}`,
+    `M ${left} ${bottom} L ${left + arm} ${bottom}`,
+    `M ${right - arm} ${bottom} L ${right} ${bottom}`,
+    `M ${left} ${top} L ${left} ${top + arm}`,
+    `M ${left} ${bottom - arm} L ${left} ${bottom}`,
+    `M ${right} ${top} L ${right} ${top + arm}`,
+    `M ${right} ${bottom - arm} L ${right} ${bottom}`,
+  ].join(" ");
+}
+
+function NativeFocusBoundary({
+  owner,
+  node,
+  style,
+  trackRef,
+  active,
+}: {
+  owner: string;
+  node: string;
+  style: CSSProperties;
+  trackRef: (element: HTMLElement | null) => void;
+  active: boolean;
+}) {
+  const elementRef = useRef<HTMLDivElement | null>(null);
+  const focusIndicator = useSettings((state) => state.focusIndicator);
+  const accent = useTheme((state) => state.colors.acc);
+  const attach = useCallback((element: HTMLDivElement | null) => {
+    elementRef.current = element;
+    trackRef(element);
+  }, [trackRef]);
+  const update = useCallback(() => {
+    const element = elementRef.current;
+    const color = cssColorRGBA(accent);
+    if (!active || !element || !color) {
+      replaceNativeDecorations(owner, []);
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      replaceNativeDecorations(owner, []);
+      return;
+    }
+    const strokeWidth = 1;
+    let path: string;
+    if (focusIndicator === "corners") {
+      path = cornerFocusPath(rect, strokeWidth);
+    } else {
+      const half = strokeWidth / 2;
+      const points = [
+        { x: rect.left + half, y: rect.top + half },
+        { x: rect.right - half, y: rect.top + half },
+        { x: rect.right - half, y: rect.bottom - half },
+        { x: rect.left + half, y: rect.bottom - half },
+      ];
+      const radius = Number.parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0;
+      path = roundedOrthogonalPath(points, radius);
+    }
+    replaceNativeDecorations(owner, [
+      strokeDecoration(`${owner}/stroke`, path, color, strokeWidth),
+    ]);
+  }, [accent, active, focusIndicator, owner]);
+
+  useLayoutEffect(() => {
+    update();
+    const element = elementRef.current;
+    if (!active || !element) return () => replaceNativeDecorations(owner, []);
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      replaceNativeDecorations(owner, []);
+    };
+  }, [active, owner, update]);
+
+  return (
+    <div
+      ref={attach}
+      className="pane-focus-boundary"
+      data-node={node}
+      data-native-decoration={active ? "focus-boundary" : undefined}
+      style={style}
+    />
+  );
+}
 
 // Content cell layout = the shared machine (computeSplitLayout). Maps the leaf value (Pane) to cell.group.
 // [Deduplication] Shares the same layout and hit test as the left sidebar (splitLayout.ts).
@@ -876,11 +976,12 @@ export const GroupArea = memo(function GroupArea({
       {!replaceGeometry && displayCells
         .filter(({ group }) => group.id === content.activePaneId)
         .map(({ rect }) => (
-          <div
+          <NativeFocusBoundary
             key={`focus-frame-${content.activePaneId}`}
-            ref={rectMotion.ref}
-            className="pane-focus-boundary"
-            data-node={`layout/focus-boundary/${content.activePaneId}`}
+            owner={`focus/${projectId}/${content.id}`}
+            node={`layout/focus-boundary/${content.activePaneId}`}
+            trackRef={rectMotion.ref}
+            active={surfaceActive && !traveling && !replaceGeometry}
             style={cellVars(rect, content.activePaneId)}
           />
         ))}

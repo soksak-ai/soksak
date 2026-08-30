@@ -114,6 +114,27 @@ export interface FrameworkNotification {
   onAction(cb: (action: { extra?: Record<string, unknown> }) => void): Promise<Unlisten>;
 }
 
+/** One Core-owned stroke in the pointer-transparent native plane above provider children. */
+export interface NativeDecoration {
+  id: string;
+  /** Absolute CSS top-left points; M/L/Q/Z only. */
+  path: string;
+  strokeR: number;
+  strokeG: number;
+  strokeB: number;
+  strokeA: number;
+  strokeWidth: number;
+  dash: number[];
+}
+
+export interface NativeDecorationReceipt {
+  window: string;
+  sequence: number;
+  count: number;
+  supported: boolean;
+  layer: "native-above-surfaces" | "dom-only" | "not-committed" | "unavailable";
+}
+
 export interface AppFramework {
   /**
    * Deliver an event to this window's subscribers **directly** — without crossing the framework.
@@ -232,6 +253,11 @@ export interface AppFramework {
   resetNativeSurfaces(): Promise<void>;
   /** Stop watching and destroy this window's native children — for a window that is about to go. */
   clearNativeSurfaces(): Promise<void>;
+
+  /** Replaces the full Core-decoration snapshot for this window. */
+  commitNativeDecorations(decorations: NativeDecoration[]): Promise<NativeDecorationReceipt>;
+  /** Reads the last native ordering receipt; it does not infer from DOM z-index. */
+  nativeDecorationStatus(): Promise<NativeDecorationReceipt>;
 
   /**
    * Apply one zoom factor to everything this window shows.

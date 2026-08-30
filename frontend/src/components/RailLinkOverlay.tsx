@@ -12,6 +12,11 @@ import {
 } from "../lib/railLinkShape";
 import { useSettings } from "../state/settings";
 import { useTheme } from "../state/theme";
+import {
+  cssColorRGBA,
+  replaceNativeDecorations,
+  strokeDecoration,
+} from "../lib/nativeDecorations";
 
 /**
  * The last measured host size — the seam that keeps a remount from producing a 0 frame.
@@ -67,6 +72,7 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
   railStation,
   targetRect,
   projected = false,
+  nativeVisible = false,
 }: {
   contentId: string;
   /** The public state produced by the arrangement resolver — this component does not re-judge the relation or border branch. */
@@ -78,9 +84,13 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
   targetRect: RailRect | null;
   /** Whether this adjacency was formed by focus-near projection (replacement) — the only input for the seam line. */
   projected?: boolean;
+  /** Only the active workspace contributes to the window-owned native plane. */
+  nativeVisible?: boolean;
 }) {
   const radius = useTheme((state) => state.spec.relation.radius);
   const strokeWidth = useTheme((state) => state.spec.relation.strokeWidth);
+  const relationStroke = useTheme((state) => state.spec.relation.stroke);
+  const accent = useTheme((state) => state.colors.acc);
   const railRelation = useSettings((state) => state.railRelation);
   const railFill = useSettings((state) => state.railFill);
   const railSeamStyle = useSettings((state) => state.railSeamStyle);
@@ -198,6 +208,94 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
   const independentPanelPath = independent && boxes
     ? independentBoxPath(boxes.panel, size.width, size.height, strokeWidth, radius)
     : "";
+
+  useLayoutEffect(() => {
+    const owner = `relation/${contentId}`;
+    const host = hostRef.current;
+    const strokeValue = !railPullFocused && railSolidColor
+      ? railSolidColor
+      : relationStroke.includes("var(--acc)")
+        ? accent
+        : relationStroke;
+    const color = cssColorRGBA(strokeValue);
+    const strokeVisible = railRelation === "stroke" || (railRelation === "moment" && flash);
+    if (!nativeVisible || !host || !boxes || !color || !strokeVisible) {
+      replaceNativeDecorations(owner, []);
+      return () => replaceNativeDecorations(owner, []);
+    }
+    const origin = host.getBoundingClientRect();
+    const shift = (points: Array<{ x: number; y: number }>) => points.map((point) => ({
+      x: point.x + origin.left,
+      y: point.y + origin.top,
+    }));
+    const decorations = [];
+    if (independent) {
+      for (const [name, box] of [["rail", boxes.rail], ["pane", boxes.panel]] as const) {
+        const points = insetClippedEdges([
+          { x: box.x, y: box.y },
+          { x: box.x + box.width, y: box.y },
+          { x: box.x + box.width, y: box.y + box.height },
+          { x: box.x, y: box.y + box.height },
+        ], size.width, size.height, strokeWidth / 2);
+        decorations.push(strokeDecoration(
+          `${owner}/${name}`,
+          roundedOrthogonalPath(shift(points), radius),
+          color,
+          strokeWidth,
+        ));
+      }
+    } else if (polygon) {
+      const inset = shift(insetClippedEdges(
+        polygon,
+        size.width,
+        size.height,
+        strokeWidth / 2,
+      ));
+      const full = roundedOrthogonalPath(inset, radius);
+      if (projected && railSeamStyle === "edge") {
+        const split = splitRightEdgeRounded(inset, radius);
+        if (split) {
+          decorations.push(strokeDecoration(`${owner}/rest`, split.solid, color, strokeWidth));
+          decorations.push(strokeDecoration(
+            `${owner}/edge`,
+            `M ${split.edge[0].x} ${split.edge[0].y} L ${split.edge[1].x} ${split.edge[1].y}`,
+            color,
+            strokeWidth,
+            [4, 4],
+          ));
+        } else {
+          decorations.push(strokeDecoration(`${owner}/union`, full, color, strokeWidth));
+        }
+      } else {
+        decorations.push(strokeDecoration(`${owner}/union`, full, color, strokeWidth));
+      }
+      if (projected && railSeamStyle === "seam") {
+        const eps = 1;
+        const seamX = Math.abs(boxes.rail.x + boxes.rail.width - boxes.panel.x) < eps
+          ? boxes.panel.x
+          : Math.abs(boxes.panel.x + boxes.panel.width - boxes.rail.x) < eps
+            ? boxes.rail.x
+            : null;
+        const y0 = Math.max(boxes.rail.y, boxes.panel.y);
+        const y1 = Math.min(boxes.rail.y + boxes.rail.height, boxes.panel.y + boxes.panel.height);
+        if (seamX !== null && y1 > y0) {
+          decorations.push(strokeDecoration(
+            `${owner}/seam`,
+            `M ${seamX + origin.left} ${y0 + origin.top} L ${seamX + origin.left} ${y1 + origin.top}`,
+            color,
+            strokeWidth,
+            [4, 4],
+          ));
+        }
+      }
+    }
+    replaceNativeDecorations(owner, decorations);
+    return () => replaceNativeDecorations(owner, []);
+  }, [
+    accent, boxes, contentId, flash, independent, nativeVisible, polygon, projected,
+    radius, railPullFocused, railRelation, railSeamStyle, railSolidColor, relationStroke,
+    size.height, size.width, strokeWidth,
+  ]);
 
   return (
     <div

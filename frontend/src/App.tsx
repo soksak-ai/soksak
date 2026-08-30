@@ -602,6 +602,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                 railStation={effectiveRailRelation.station}
                 targetRect={effectiveRailRelation.targetRect}
                 projected={arrangement?.swapped ?? false}
+                nativeVisible={isActiveWorkspace}
               />
             ) : undefined
           }
