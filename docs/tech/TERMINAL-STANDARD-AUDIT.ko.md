@@ -253,3 +253,28 @@ terminal Plugin label에서 만듭니다. Vision 0.0.40은 public status의 `eng
 `Vision Terminal read/scroll`을 반환했습니다. 이 hot Plugin replacement 직후 첫
 `scroll(offset=10)`은 offset 0을 반환했고, 다음 `scroll(lines=10)`은 `10/52/pinned`를 반환하고
 게시했습니다. 따라서 hot-reload scroll readiness는 OPEN이며 clean-run row에 포함하지 않습니다.
+
+## Native remount 소유권 — 2026-08-30
+
+Hot-reload scroll RED에는 서로 독립적인 원인 네 개가 있었고 각 owner에서 수정했습니다.
+
+- Plugin Kit이 아직 history를 게시하지 않은 renderer의 0을 상한으로 absolute offset을 잘랐습니다.
+  Kit 0.0.96은 음수가 아닌 absolute request를 authoritative clamp owner인 renderer에 그대로 보냅니다.
+- Mount된 Plugin view가 container generation을 공개하지 않았습니다. Core는 public view context에 이를
+  게시하고 Kit 0.0.97은 renderer까지 전달합니다.
+- Surface pane이 mount 즉시 live로 보고됐습니다. Kit 0.0.98은 surface presenter의 generation-owned
+  `ready` promise를 기다리며 timer나 polling loop를 사용하지 않습니다.
+- Vision의 이전 presenter가 공용 surface id를 통해 `surface.stop`을 보냈습니다. 이는 두 번째 lifetime
+  writer였고 remount 뒤 새 generation을 중지할 수 있었습니다. Vision 0.0.45는 presenter dispose에서
+  stop을 보내지 않으며 compositor declaration removal만 teardown을 소유합니다.
+
+Terminal-surface service는 declaration generation과 내부 lifecycle generation을 분리합니다. State와
+Plugin event는 declaration generation을 전달하고 stale remove 방지는 lifecycle generation을 사용합니다.
+`terminal_surface_status`는 두 값을 모두 게시하고 blocked generation의 정확한 error를 보존하며,
+still-live owner보다 새 replacement가 실패한 경우도 함께 게시합니다. Start 성공은 generation이 든 lifecycle
+state event를 한 번 발행하므로 remount presenter가 무관한 다음 output frame을 기다리지 않습니다.
+
+설치한 VT100 실행에서 앱 복원은 declaration generation 2/lifecycle 1로 live가 됐습니다. 같은 version의
+disable→enable 뒤에는 declaration generation 14/lifecycle 5로 live를 유지했고 첫 `scroll(offset=10)`이
+`10/52/pinned`를 반환했습니다. Plugin read는 43~71행을 반환했습니다. Composed capture는 42~71행을
+실제로 보였고 전후 `windowFocused=false`를 유지했습니다. Hot-remount scroll readiness row는 GREEN입니다.

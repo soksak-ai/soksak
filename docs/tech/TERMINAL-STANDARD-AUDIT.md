@@ -271,3 +271,30 @@ read/scroll` while public status continued to report `engineId=vt100`. Immediate
 Plugin replacement, the first `scroll(offset=10)` returned offset zero; a following
 `scroll(lines=10)` returned and published `10/52/pinned`. Hot-reload scroll readiness is therefore
 OPEN and is not covered by the clean-run row.
+
+## Native remount ownership — 2026-08-30
+
+The hot-reload scroll RED had four independent causes, each fixed at its owner:
+
+- Plugin Kit clamped an absolute offset against a renderer's not-yet-published history size. Kit
+  0.0.96 sends the non-negative absolute request to the renderer, which owns the authoritative clamp.
+- A mounted Plugin view did not expose its container generation. Core now publishes that generation
+  in the public view context and Kit 0.0.97 passes that exact value to the renderer.
+- A surface pane was reported live immediately at mount. Kit 0.0.98 waits for the surface presenter's
+  generation-owned `ready` promise; no timer or polling loop participates.
+- Vision disposed an old presenter by sending `surface.stop` through the shared surface id. That was
+  a second lifetime writer: after a remount it could stop the new generation. Vision 0.0.45 sends no
+  stop from presenter disposal; the compositor declaration removal is the sole teardown owner.
+
+The terminal-surface service now separates declaration generation from its internal lifecycle
+generation. State and Plugin events carry declaration generation; stale remove protection uses
+lifecycle generation. `terminal_surface_status` reports both, retains blocked generations and their
+exact errors, and also reports a failed replacement beside a still-live owner. A successful Start
+emits one generation-bearing lifecycle state event, so a remounted presenter does not wait for an
+unrelated future output frame.
+
+In the installed VT100 run, application restore reached declaration generation 2/lifecycle 1. A
+same-version disable→enable then reached declaration generation 14/lifecycle 5, remained live, and
+the first `scroll(offset=10)` returned `10/52/pinned`. Plugin read returned rows 43 through 71. The
+composed capture visibly showed rows 42 through 71 and kept `windowFocused=false` before and after.
+This closes the hot-remount scroll readiness row.
