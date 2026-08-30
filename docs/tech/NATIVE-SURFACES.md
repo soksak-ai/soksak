@@ -447,6 +447,13 @@ added an explicit `tab` target, and browser 0.0.11 extends that target to every 
 Runtime `navigate(tab=...)` and `status(tab=...)` returned the matching webview IDs for both tabs;
 the 0.0.11 candidate has 51 tests GREEN and is locally published immutably.
 
+Browser 0.0.12 was rebuilt from its clean owner checkout through `make attest` with SDK 0.0.18.
+The generated `main.js` check, typecheck, 51 tests, two-candidate byte comparison, package receipt,
+and native attestation all passed. Publishing that independently generated release to the existing
+immutable local version returned `unchanged`, digest
+`2f9a12b7601d89be9326c0c9f784c707982b4ba2502af832fa8ce70700dde6a0`. Browser frontend output is
+therefore a declared release artifact, not a mutable source-directory or remembered `dist` input.
+
 ### Border geometry observation — 2026-08-30
 
 In isolated browser release 0.0.9 on an arm64 Core build, the selected workspace reported the

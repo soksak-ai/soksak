@@ -477,6 +477,12 @@ navigation은 같은 pane의 여러 tab을 구분하지 못한다는 RED를 확�
 runtime `navigate(tab=...)`와 `status(tab=...)`가 두 tab의 일치하는 webview ID를 반환했으며,
 0.0.11 candidate는 51개 테스트가 GREEN이고 local immutable release로 저장됐습니다.
 
+Browser 0.0.12는 clean owner checkout에서 SDK 0.0.18의 `make attest`로 다시 생성했습니다. Generated
+`main.js` check, typecheck, 51개 test, 두 candidate byte 비교, package receipt, native attestation이 모두
+통과했습니다. 독립적으로 생성한 release를 같은 immutable local version에 publish한 결과는
+`unchanged`, digest `2f9a12b7601d89be9326c0c9f784c707982b4ba2502af832fa8ce70700dde6a0`이었습니다.
+Browser frontend output은 mutable source directory나 기억한 `dist`가 아니라 선언된 release artifact입니다.
+
 ### 보더 geometry 관측 — 2026-08-30
 
 arm64 Core의 격리 browser release 0.0.9에서 선택한 workspace의 browser surface는
