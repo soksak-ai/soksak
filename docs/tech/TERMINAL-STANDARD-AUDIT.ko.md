@@ -182,3 +182,34 @@ Copy는 허가된 host clipboard에 selection을 쓰며 독립 clipboard read가
 Status의 follow/pinned 상태, wheel의 local-scroll/PTy 단일 route, mouse-reporting 충돌, 설치된 모든 provider의
 같은 drag/copy/scroll 검사가 끝날 때까지 전체 matrix는 RED입니다. Command 이름, source 존재, screenshot
 하나만으로는 통과가 아닙니다.
+
+## Native selection·scroll matrix — 2026-08-30
+
+Vision 0.0.35는 Contract 0.0.19, Plugin Kit 0.0.94, Sidecar Kit 0.0.30으로 만든 Sidecar 6개를
+소비합니다. 각 owner가 release를 attest했고 local store는 `published` 뒤 `unchanged`를 반환했습니다.
+renderer reload에서 stale compositor sequence가 드러났으며 compositor commit `5fe697e`는 거부 응답의
+backend sequence floor를 채택하고 현재 full inventory를 재선언합니다. 설치 runtime hot reload는
+composition sequence 18→38, surface 7개, `worst=0`, unapplied/undeclared 0을 보고했습니다.
+
+첫 native drag는 `focused` 값 누락을 드러냈습니다. Vision 0.0.33은 input을 focus한 뒤 정확한
+`surface.focus {focused:true}` transaction을 기다리고 pointer를 전달합니다. Alacritty는 이후
+`SELECT_ALACRITTY_1234567890`을 선택했고 selection, copy, 독립 clipboard read가 같은 27자를 반환했으며
+capture에서 engine 소유 선택 범위를 직접 확인했습니다.
+
+Native scroll은 두 공통 결함을 드러냈습니다. Vision은 비동기 surface 응답 전에 반환했고 Sidecar Kit은
+양수 lines를 bottom 방향으로 해석했습니다. Plugin Kit 0.0.94는 remote scroll 완료를 기다리고,
+Vision 0.0.34는 적용 응답을 반환하며, Sidecar Kit 0.0.30은 양수를 history, 음수를 bottom으로
+정의합니다. Fresh 설치 row 결과는 다음과 같습니다.
+
+| Provider | Selection | `scroll(lines=10)` | Status/read/pixel | 판정 |
+| --- | --- | --- | --- | --- |
+| Alacritty 0.0.39 | 최종 closure RED: fresh pane 두 개에서 PTY output은 전진했지만 canonical frame run이 전부 비어 있음 | RED/unknown | cursor/selection overlay만 있는 빈 surface | provider RED |
+| Ghostty 0.0.36 | engine selection 비어 있음 | `10/56/pinned` | `ROW065..071`, pixel 확인 | scroll GREEN, selection RED |
+| Kitty 0.0.33 | engine selection 비어 있음 | `10/54/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
+| Shitty 0.0.32 | engine selection 비어 있음 | `10/52/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
+| VT100 0.0.35 | engine selection 비어 있음 | `10/52/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
+| WezTerm 0.0.35 | engine selection 비어 있음 | `10/52/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
+
+GREEN인 scroll 5개 row는 command와 status에서 같은 offset·`followMode`를 반환했고 capture viewport는
+42~71행을 보였습니다. Selection은 provider 5개에서 계속 RED이며, Alacritty frame regression을 먼저
+해결해야 그 provider의 selection·scroll row를 판정할 수 있습니다.

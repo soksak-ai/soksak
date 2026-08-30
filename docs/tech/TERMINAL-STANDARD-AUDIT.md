@@ -193,3 +193,35 @@ The complete matrix remains RED until status publishes follow/pinned state, whee
 exactly one local-scroll or PTY route, mouse-reporting conflicts are verified, and every installed
 provider passes the same drag/copy/scroll assertions. A command name, source presence, or screenshot
 alone is not a pass.
+
+## Native selection and scroll matrix — 2026-08-30
+
+Vision 0.0.35 consumes Contract 0.0.19, Plugin Kit 0.0.94 and six Sidecars built from Sidecar Kit
+0.0.30. Every release was attested by its owner and the local store returned `published` followed by
+`unchanged`. A renderer reload initially exposed a stale compositor sequence; compositor commit
+`5fe697e` adopts the backend sequence floor from the refusal and replays the full current inventory.
+The installed hot reload advanced composition sequence 18→38 with seven surfaces, `worst=0`, and no
+unapplied or undeclared surface.
+
+The first native drag exposed a missing `focused` value. Vision 0.0.33 now focuses the input and
+awaits the exact `surface.focus {focused:true}` transaction before pointer delivery. Alacritty then
+selected `SELECT_ALACRITTY_1234567890`; `selection`, `copy`, and an independent clipboard read all
+returned the same 27 characters, and the capture visibly showed the engine-owned range.
+
+Native scroll exposed two shared defects. Vision returned before the asynchronous surface reply,
+and Sidecar Kit interpreted positive lines toward the bottom. Plugin Kit 0.0.94 awaits remote
+renderer scroll; Vision 0.0.34 returns the applied reply; Sidecar Kit 0.0.30 defines positive lines
+as history and negative lines as bottom. Fresh installed rows produced:
+
+| Provider | Selection | `scroll(lines=10)` | Status/read/pixel | Verdict |
+| --- | --- | --- | --- | --- |
+| Alacritty 0.0.39 | RED in the final closure: two fresh panes advanced PTY output but canonical frames contained no runs | RED/unknown | blank surface with cursor/selection overlay only | provider RED |
+| Ghostty 0.0.36 | empty engine selection | `10/56/pinned` | `ROW065..071`, pixels inspected | scroll GREEN, selection RED |
+| Kitty 0.0.33 | empty engine selection | `10/54/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
+| Shitty 0.0.32 | empty engine selection | `10/52/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
+| VT100 0.0.35 | empty engine selection | `10/52/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
+| WezTerm 0.0.35 | empty engine selection | `10/52/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
+
+The five GREEN scroll rows returned the same offset and `followMode` through command and status; the
+captured viewports showed rows 42 through 71. Selection remains RED for five providers, and the
+Alacritty frame regression must be fixed before its selection or scroll row can be judged.
