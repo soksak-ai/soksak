@@ -19,7 +19,7 @@ PTY owner는 이제 `process.inventory`로 실행 중인 shell snapshot을 공�
 `process.observe` stream으로 shell과 descendant 시작/갱신/종료 event를 보냅니다. Core도 owner 구현을 읽지 않고
 주입된 source를 합산하는 `process.inventory`를 공개하고 애플리케이션 연결 지점에서 public contract로
 PTY source를 연결합니다. PTY가 실행 중이 아닐 때 inventory read가 새로 시작하지 않습니다. PTY
-0.0.22, Core event relay, Process Monitor 0.0.14가 polling 없이 descendant 시작·종료 전달과 설치 후
+0.0.22, Core event relay, Process Monitor 0.0.15가 polling 없이 descendant 시작·종료 전달과 설치 후
 시각 acceptance를 닫았습니다. 남은 process-monitor gate는 측정된 sidebar resize sequence이며,
 terminal/browser tab 전환 절반은 GREEN입니다.
 
@@ -176,12 +176,13 @@ snapshot과 event interface로 공개합니다. Immutable local release digest�
 `81e25abf`는 선언된 PTY unit이 시작될 때 `process.observe`를 구독하고 public
 `process.inventory.changed` event를 relay합니다. PTY source tree나 process 구현을 읽지 않습니다.
 
-Process Monitor 0.0.14는 이 event stream을 축약하고 `status`와 event 기반 `wait` command를
+Process Monitor 0.0.15는 이 event stream을 축약하고 `status`와 event 기반 `wait` command를
 공개합니다. `wait`는 owner, 낮은 revision 경계, 선택적인 정확한 process count를 받습니다. 축약된
 state로만 완료하며 timer는 polling loop가 아니라 bounded failure deadline입니다. Owner RED에서는
 parameter schema를 선언하지 않은 handler가 `INVALID_PARAMS`로 거부됐고, GREEN은 모든 parameter를
-public registry에 선언합니다. Immutable release는 `published` 뒤 `unchanged`였으며 digest는
-`910d514294b060267347589e73653e9a2c243c9c643d2a865ad9bcead0600d63`입니다.
+public registry에 선언합니다. 두 번째 RED에서는 deadline이 generic `INTERNAL`로 보였고 GREEN은
+기계 판독 가능한 `TIMEOUT` code를 반환합니다. Immutable release는 `published` 뒤 `unchanged`였으며
+digest는 `491a3088fda7e2046c5a58e29bf2b28e56802ec5ae3e0e6f37cff20d10a45561`입니다.
 
 격리 capture-only 설치의 baseline은 owner revision 8, shell record 4개였습니다. `refresh`를
 호출하지 않고 `sleep 60` 하나를 시작하자 revision 9, record 5개에서 `wait`가 완료됐습니다. 같은

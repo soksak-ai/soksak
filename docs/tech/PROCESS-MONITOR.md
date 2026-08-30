@@ -19,7 +19,7 @@ The PTY owner now exposes its running shell snapshot through `process.inventory`
 `process.observe` stream for shell and descendant start/update/end events. Core now exposes `process.inventory` and accepts
 injected owner sources without reading their implementation, and wires the PTY source through the
 public contract at the application boundary. The source is not started by an inventory read when
-no PTY is running. PTY 0.0.22, Core's event relay, and Process Monitor 0.0.14 close descendant
+no PTY is running. PTY 0.0.22, Core's event relay, and Process Monitor 0.0.15 close descendant
 start/end delivery and installed visual acceptance without polling. The remaining process-monitor
 gate is a measured sidebar-resize sequence; the terminal/browser tab-transition half is GREEN.
 
@@ -181,13 +181,14 @@ monotonic owner ledger through snapshot and event interfaces. Its immutable loca
 subscribes to `process.observe` when the declared PTY unit starts and relays the public
 `process.inventory.changed` event; it does not read the PTY source tree or process implementation.
 
-Process Monitor 0.0.14 reduces that event stream and exposes `status` plus an event-driven `wait`
+Process Monitor 0.0.15 reduces that event stream and exposes `status` plus an event-driven `wait`
 command. `wait` requires an owner, a lower revision bound, and optionally an exact process count.
 It resolves only from the reduced state; its timer is a bounded failure deadline, never a polling
 loop. The owner RED showed that a handler without a declared command schema was rejected as
-`INVALID_PARAMS`; the GREEN declares every parameter in the public registry. The immutable release
-was accepted as `published` and then `unchanged`, digest
-`910d514294b060267347589e73653e9a2c243c9c643d2a865ad9bcead0600d63`.
+`INVALID_PARAMS`; the GREEN declares every parameter in the public registry. A second RED exposed a
+deadline as generic `INTERNAL`; the GREEN returns the machine-readable `TIMEOUT` code. The immutable
+release was accepted as `published` and then `unchanged`, digest
+`491a3088fda7e2046c5a58e29bf2b28e56802ec5ae3e0e6f37cff20d10a45561`.
 
 In an isolated capture-only installation, the baseline was owner revision 8 with four shell
 records. Without calling `refresh`, starting one `sleep 60` resolved `wait` at revision 9 with five
