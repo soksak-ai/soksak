@@ -153,6 +153,45 @@ func (service *nativePresentationService) Commit(snapshot compositor.Snapshot) (
 	return receipt, nil
 }
 
+// Explicit delegates keep the generated TypeScript surface auditable against this Go type. Promoted
+// methods are callable at runtime, but the repository gate deliberately does not infer an embedded
+// dependency's API as this service's declared API.
+func (service *nativePresentationService) CoverIn(window string) map[string]compositor.Cover {
+	return service.Service.CoverIn(window)
+}
+
+func (service *nativePresentationService) Deliver(id string, message map[string]any) (map[string]any, error) {
+	return service.Service.Deliver(id, message)
+}
+
+func (service *nativePresentationService) Drain() (int, int, error) {
+	return service.Service.Drain()
+}
+
+func (service *nativePresentationService) History(window string, sinceUnixMs float64) []compositor.Composition {
+	return service.Service.History(window, sinceUnixMs)
+}
+
+func (service *nativePresentationService) Kinds() []compositor.SurfaceKind {
+	return service.Service.Kinds()
+}
+
+func (service *nativePresentationService) Latest(window string) compositor.Composition {
+	return service.Service.Latest(window)
+}
+
+func (service *nativePresentationService) Status(window string) compositor.Receipt {
+	return service.Service.Status(window)
+}
+
+func (service *nativePresentationService) SurfaceAt(window string, x, y float64) string {
+	return service.Service.SurfaceAt(window, x, y)
+}
+
+func (service *nativePresentationService) Windows() []string {
+	return service.Service.Windows()
+}
+
 // UnitReaper is something this host ends when the application quits. The name is all the host needs:
 // what it holds and why is the unit's own business.
 type UnitReaper interface {

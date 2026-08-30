@@ -24,7 +24,9 @@ export function Commit(snapshot: nativesurface$0.Snapshot): $CancellablePromise<
 }
 
 /**
- * CoverIn answers what lies over every surface of one window, keyed by surface id.
+ * Explicit delegates keep the generated TypeScript surface auditable against this Go type. Promoted
+ * methods are callable at runtime, but the repository gate deliberately does not infer an embedded
+ * dependency's API as this service's declared API.
  */
 export function CoverIn(window: string): $CancellablePromise<{ [_ in string]?: nativesurface$0.Cover }> {
     return $Call.ByID(2263669131, window).then(($result: any) => {
@@ -32,117 +34,44 @@ export function CoverIn(window: string): $CancellablePromise<{ [_ in string]?: n
     });
 }
 
-/**
- * Deliver forwards a message to the backend that owns a surface.
- * 
- * The inventory is the only record of what exists, so a message for an id nobody declared is
- * refused here. Forwarding it would ask the backend to invent a surface, and a backend that obliges
- * holds one the compositor does not know about — the undeclared surface a ledger-only check never
- * sees, because the ledger is what it walks.
- */
 export function Deliver(id: string, message: { [_ in string]?: any }): $CancellablePromise<{ [_ in string]?: any }> {
     return $Call.ByID(1961491570, id, message).then(($result: any) => {
         return $$createType3($result);
     });
 }
 
-/**
- * Drain takes every surface down and answers how many came down, how many are
- * still held, and what stopped it.
- * 
- * Two numbers because they are two claims. "Four came down" and "none are left"
- * are different facts, and the second is the one that matters: a surface still
- * held when the process exits is a native child outliving its parent. A drain
- * that worked and reported nothing could not be part of the receipt
- * `app_shutdown_prepare` answers, which is why the command that quits the
- * application was declared unserved (measured 2026-08-16: `sok
- * app.shutdown.commit` answered INTERNAL).
- * 
- * Idempotent, and a second call answers zero: a count that repeated itself
- * would report work that did not happen.
- * 
- * Every window is emptied, and a window that held nothing needs no window
- * handle to be emptied — a drain that refused on an already-closed window would
- * leave the windows after it in the map still holding surfaces.
- */
 export function Drain(): $CancellablePromise<[number, number]> {
     return $Call.ByID(317344533);
 }
 
-/**
- * History answers the last retained successful application before sinceUnixMs as a baseline, then
- * every application at or after it, in apply order. A DOM trace whose first frame precedes the first
- * motion Apply still needs to know what the native layer already held; omitting that baseline calls
- * the first displayed frame unobserved. An exact timestamp starts at the first sample carrying that
- * timestamp. Wall-clock milliseconds are not a unique cursor: multiple applies can share one, and
- * dropping an equal-time sample would make the trace lossy. Sequence preserves their apply order.
- * 
- * The compositor owns this timeline because it is the only layer that observes Apply itself;
- * reconstructing it from frontend responses measures bridge return order instead.
- */
 export function History(window: string, sinceUnixMs: number): $CancellablePromise<nativesurface$0.Composition[]> {
     return $Call.ByID(4008767403, window, sinceUnixMs).then(($result: any) => {
         return $$createType5($result);
     });
 }
 
-/**
- * Kinds is every surface kind this compositor can place. It answers what is wired, not what exists.
- */
 export function Kinds(): $CancellablePromise<nativesurface$0.SurfaceKind[]> {
     return $Call.ByID(2725844316).then(($result: any) => {
         return $$createType6($result);
     });
 }
 
-/**
- * Latest answers one window's last commit as a composition.
- * 
- * Per window. One window's inventory is no answer about another's: a
- * window-blind reading answers two windows with the same single surface at the
- * same rectangle and zero drift while only one of them holds it.
- */
 export function Latest(window: string): $CancellablePromise<nativesurface$0.Composition> {
     return $Call.ByID(1983586762, window).then(($result: any) => {
         return $$createType4($result);
     });
 }
 
-/**
- * Status answers one window's applied inventory.
- */
 export function Status(window: string): $CancellablePromise<nativesurface$0.Receipt> {
     return $Call.ByID(197140955, window).then(($result: any) => {
         return $$createType0($result);
     });
 }
 
-/**
- * SurfaceAt names the surface a point lands on, or "" for a point on none.
- * 
- * A surface is composited above the document, so a click inside one is delivered to it and the page
- * above never sees it. Whoever needs to know which surface that was has the point and nothing else,
- * and this service is what holds every surface's rectangle in the coordinate contract they are
- * declared in (A2, CSS top-left). Walking the native view tree instead re-derives that fact in
- * whatever coordinate space the walker happens to be in — measured 2026-08-17, a first attempt did
- * exactly that and landed short by the title bar's height.
- * 
- * The applied rectangle, not the declared one: the point came from the screen, and what is on the
- * screen is what the native layer applied.
- * 
- * Topmost wins, by layer and then by the order the inventory declared them, which is the order they
- * are composited in. A point inside two overlapping surfaces belongs to the one a person sees.
- */
 export function SurfaceAt(window: string, x: number, y: number): $CancellablePromise<string> {
     return $Call.ByID(3442354533, window, x, y);
 }
 
-/**
- * Windows names every window this service has accepted a commit for, sorted.
- * 
- * A reader that has to know the window names in advance cannot sweep, and a
- * surface in a window nobody thought to ask about is the one that goes missing.
- */
 export function Windows(): $CancellablePromise<string[]> {
     return $Call.ByID(564122126).then(($result: any) => {
         return $$createType7($result);

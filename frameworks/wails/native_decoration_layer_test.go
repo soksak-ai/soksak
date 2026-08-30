@@ -7,7 +7,7 @@ import (
 )
 
 // A DOM outline cannot cover an AppKit child surface. The final focus/relation
-// stroke therefore belongs to one Core-owned native plane above every provider
+// Core therefore draws the stroke in one native plane above every provider
 // surface. The plane is generic: browser and terminal are inputs underneath it,
 // never branches in its implementation.
 func TestNativeDecorationPlaneIsAboveEveryChildSurface(t *testing.T) {

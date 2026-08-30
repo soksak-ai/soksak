@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // NativeDecoration is one pointer-transparent stroke drawn in the window's
@@ -53,12 +54,12 @@ type preparedNativeDecoration struct {
 
 func pathNumber(tokens []string, at *int) (float64, error) {
 	if *at >= len(tokens) {
-		return 0, fmt.Errorf("native decoration path ends before coordinate %d", *at)
+		return 0, i18n.Errorf("wails.decoration.pathCoordinateMissing", map[string]string{"index": strconv.Itoa(*at)})
 	}
 	value, err := strconv.ParseFloat(tokens[*at], 64)
 	*at++
 	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
-		return 0, fmt.Errorf("native decoration path coordinate %q is not finite", tokens[*at-1])
+		return 0, i18n.Errorf("wails.decoration.pathCoordinateInvalid", map[string]string{"value": tokens[*at-1]})
 	}
 	return value, nil
 }
@@ -66,7 +67,7 @@ func pathNumber(tokens []string, at *int) (float64, error) {
 func parseNativeDecorationPath(path string) ([]nativePathCommand, error) {
 	tokens := strings.Fields(path)
 	if len(tokens) == 0 {
-		return nil, fmt.Errorf("native decoration path is empty")
+		return nil, i18n.Errorf("wails.decoration.pathEmpty", nil)
 	}
 	commands := make([]nativePathCommand, 0, len(tokens)/3)
 	for at := 0; at < len(tokens); {
@@ -100,7 +101,7 @@ func parseNativeDecorationPath(path string) ([]nativePathCommand, error) {
 		case "Z":
 			command.op = nativePathClose
 		default:
-			return nil, fmt.Errorf("native decoration path operation %q is not M, L, Q or Z", op)
+			return nil, i18n.Errorf("wails.decoration.pathOperation", map[string]string{"operation": op})
 		}
 		if err != nil {
 			return nil, err
@@ -108,7 +109,7 @@ func parseNativeDecorationPath(path string) ([]nativePathCommand, error) {
 		commands = append(commands, command)
 	}
 	if commands[0].op != nativePathMove {
-		return nil, fmt.Errorf("native decoration path does not begin with M")
+		return nil, i18n.Errorf("wails.decoration.pathStart", nil)
 	}
 	return commands, nil
 }
@@ -118,10 +119,10 @@ func prepareNativeDecorations(decorations []NativeDecoration) ([]preparedNativeD
 	ids := make(map[string]struct{}, len(decorations))
 	for _, decoration := range decorations {
 		if decoration.ID == "" {
-			return nil, fmt.Errorf("native decoration id is empty")
+			return nil, i18n.Errorf("wails.decoration.idEmpty", nil)
 		}
 		if _, duplicate := ids[decoration.ID]; duplicate {
-			return nil, fmt.Errorf("native decoration id %q is duplicated", decoration.ID)
+			return nil, i18n.Errorf("wails.decoration.idDuplicate", map[string]string{"id": decoration.ID})
 		}
 		ids[decoration.ID] = struct{}{}
 		channels := []float64{
@@ -129,15 +130,15 @@ func prepareNativeDecorations(decorations []NativeDecoration) ([]preparedNativeD
 		}
 		for _, channel := range channels {
 			if !isFiniteBetween(channel, 0, 1) {
-				return nil, fmt.Errorf("native decoration %q has a colour channel outside 0..1", decoration.ID)
+				return nil, i18n.Errorf("wails.decoration.color", map[string]string{"id": decoration.ID})
 			}
 		}
 		if !isFiniteBetween(decoration.StrokeWidth, 0.5, 8) {
-			return nil, fmt.Errorf("native decoration %q has a stroke width outside 0.5..8", decoration.ID)
+			return nil, i18n.Errorf("wails.decoration.strokeWidth", map[string]string{"id": decoration.ID})
 		}
 		for _, dash := range decoration.Dash {
 			if !isFiniteBetween(dash, 0.1, 1000) {
-				return nil, fmt.Errorf("native decoration %q has an invalid dash", decoration.ID)
+				return nil, i18n.Errorf("wails.decoration.dash", map[string]string{"id": decoration.ID})
 			}
 		}
 		commands, err := parseNativeDecorationPath(decoration.Path)
@@ -182,11 +183,11 @@ func newNativeDecorationStore(windows func(string) unsafe.Pointer) *nativeDecora
 
 func (store *nativeDecorationStore) apply(window string, decorations []preparedNativeDecoration) (bool, int, error) {
 	if store == nil || store.windows == nil {
-		return false, 0, fmt.Errorf("native decoration host is unavailable")
+		return false, 0, i18n.Errorf("wails.decoration.hostUnavailable", nil)
 	}
 	handle := store.windows(window)
 	if handle == nil {
-		return false, 0, fmt.Errorf("native decoration window %q has no native lifetime", window)
+		return false, 0, i18n.Errorf("wails.decoration.windowUnavailable", map[string]string{"window": window})
 	}
 	return applyNativeDecorations(handle, decorations)
 }
@@ -269,7 +270,7 @@ func RegisterNativeDecorations(registry *control.Registry, host NativeDecoration
 				return nil, err
 			}
 			if host == nil {
-				return nil, fmt.Errorf("native decoration host is unavailable")
+				return nil, i18n.Errorf("wails.decoration.hostUnavailable", nil)
 			}
 			return host.Commit(window, decorations)
 		},

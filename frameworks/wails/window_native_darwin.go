@@ -11,7 +11,7 @@ package wails
 import "C"
 
 import (
-	"fmt"
+	"strconv"
 	"sync"
 	"unsafe"
 
@@ -24,7 +24,7 @@ func applyNativeDecorations(window unsafe.Pointer, decorations []preparedNativeD
 	if len(decorations) > 0 {
 		memory := C.malloc(C.size_t(len(decorations)) * C.size_t(C.sizeof_SoksakNativeDecoration))
 		if memory == nil {
-			return true, 0, fmt.Errorf("allocating native decorations")
+			return true, 0, i18n.Errorf("wails.decoration.allocation", map[string]string{"kind": "snapshot"})
 		}
 		allocations = append(allocations, memory)
 		native = (*C.SoksakNativeDecoration)(memory)
@@ -44,7 +44,7 @@ func applyNativeDecorations(window unsafe.Pointer, decorations []preparedNativeD
 				for _, allocation := range allocations {
 					C.free(allocation)
 				}
-				return true, 0, fmt.Errorf("allocating native decoration path")
+				return true, 0, i18n.Errorf("wails.decoration.allocation", map[string]string{"kind": "path"})
 			}
 			allocations = append(allocations, commandMemory)
 			rows[index].commands = (*C.SoksakNativePathCommand)(commandMemory)
@@ -62,7 +62,7 @@ func applyNativeDecorations(window unsafe.Pointer, decorations []preparedNativeD
 					for _, allocation := range allocations {
 						C.free(allocation)
 					}
-					return true, 0, fmt.Errorf("allocating native decoration dash")
+					return true, 0, i18n.Errorf("wails.decoration.allocation", map[string]string{"kind": "dash"})
 				}
 				allocations = append(allocations, dashMemory)
 				rows[index].dash = (*C.double)(dashMemory)
@@ -80,7 +80,7 @@ func applyNativeDecorations(window unsafe.Pointer, decorations []preparedNativeD
 	}()
 	var applied C.int
 	if status := C.soksakApplyNativeDecorations(window, native, C.int(len(decorations)), &applied); status != 0 {
-		return true, 0, fmt.Errorf("native decoration plane refused with status %d", int(status))
+		return true, 0, i18n.Errorf("wails.decoration.nativeRefused", map[string]string{"status": strconv.Itoa(int(status))})
 	}
 	return true, int(applied), nil
 }
