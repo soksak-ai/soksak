@@ -113,6 +113,20 @@ focus left and right edges changed from uniform `(238,238,238)` to accent-bearin
 rail-plus-pane union was visible on all outer edges, and a 30-frame browser-tab switch completed in one
 switch frame with zero flicker, blank, overlap or native-mismatch frames.
 
+The finite linked-rail resize used 70 composed frames. The outer left, right, top and bottom bands each
+had `changedFrames=0`; a band inside the rail also had zero changed frames, and the whole work region
+had `nearBlank=0`. The matching compositor history retained 264 samples, included both interactive and
+settled commits, and reported maximum drift 0 with zero failures, unapplied, undeclared or misparented
+surfaces across every intermediate width.
+
+The same plane was then measured over a live terminal surface. The surface-only RED was uniform terminal
+ground at luminance `0.088`. With the Core stroke last, the left and right probes read mean luminance
+`0.354`, minimum `0.088`, maximum `0.616`; the top and bottom edge probes had the same range. A probe on
+the formerly uniform lower band retained the ground mean but now had maximum `0.616`, proving the stroke
+survived there too. A 30-frame switch between two deliberately different full-surface terminal colours
+completed in one switch frame with zero flicker, blank, overlap or native-mismatch frames. The non-key
+capture remained `windowFocused=false` before and after.
+
 ## D1c. A surface reports the pointer, and the core moves the focus
 
 A page receives its own clicks and the document above it never sees them, so a click inside a

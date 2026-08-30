@@ -103,6 +103,18 @@ live browser를 지나는 포커스 왼쪽·오른쪽 edge probe는 균일한 `(
 rounded union은 바깥쪽 edge 전체에 보였습니다. 브라우저 탭 30프레임 전환도 switch frame 1개, flicker·blank·
 overlap·native mismatch frame 0개로 끝났습니다.
 
+연결된 rail의 유한 resize는 합성 프레임 70개를 기록했습니다. 바깥쪽 왼쪽·오른쪽·위쪽·아래쪽 띠는 모두
+`changedFrames=0`이었고 rail 안쪽 띠도 변경 프레임 0개, 작업 영역 전체는 `nearBlank=0`이었습니다. 같은
+구간의 compositor history는 중간 폭 전체에서 sample 264개와 interactive·settled commit을 모두 보유했고,
+최대 drift 0, failure·unapplied·undeclared·misparented surface 0개를 답했습니다.
+
+같은 평면을 live terminal surface 위에서도 측정했습니다. surface만 있던 RED는 휘도 `0.088`의 균일한
+terminal 바탕이었습니다. Core 선을 마지막에 그린 뒤 왼쪽과 오른쪽 probe는 평균 휘도 `0.354`, 최소
+`0.088`, 최대 `0.616`을 읽었고 위쪽과 아래쪽 edge probe도 같은 범위를 보였습니다. 이전에 균일했던
+아래쪽 띠의 probe도 바탕 평균은 유지하면서 최대 `0.616`을 기록해 선이 남아 있음을 증명했습니다. 서로
+다른 full-surface 색을 둔 terminal 둘의 30프레임 전환은 switch frame 1개, flicker·blank·overlap·native
+mismatch frame 0개로 끝났습니다. non-key capture는 전후 모두 `windowFocused=false`를 유지했습니다.
+
 ## D1c. 표면은 포인터를 보고하고, 코어가 포커스를 옮긴다
 
 페이지는 자기 클릭을 직접 받고 그 위의 문서는 그것을 전혀 보지 못하므로, 브라우저 안을 클릭해도
