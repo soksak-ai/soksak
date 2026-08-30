@@ -64,6 +64,10 @@ Local 사이드카 릴리즈는 registry 릴리즈와 같은 manifest, target �
 대한 동시 open 은 하나의 시작 작업을 공유하고 같은 성공 또는 실패 결과를 받습니다. 다른 시크릿 선언은
 기다리기 전에 거부합니다.
 
+공개 `sidecar.status` 명령은 이 Core 세대가 liveness 검사 뒤 열어 둔 유닛을
+`{ units: [{ name, version, process, pid }] }`로 반환합니다. 기록된 유닛을 채택하거나 유닛을 시작하지
+않으며 transport 주소, 진단, token, secret 선언을 반환하지 않습니다.
+
 ## S5. 수명
 
 채널을 놓으면 그 호출자의 연결만 닫히고 사이드카는 멈추지 않습니다. 애플리케이션 종료도 복원 가능한

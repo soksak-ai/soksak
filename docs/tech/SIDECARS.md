@@ -70,6 +70,10 @@ another version or executable path is ended before the selected unit starts; mat
 sidecar id or its stable development directory is forbidden. The saved process announcement records
 that version, so a later Core generation applies the same rule before adoption.
 
+The public `sidecar.status` command returns `{ units: [{ name, version, process, pid }] }` for units
+this Core generation holds open after a liveness check. It does not adopt a recorded unit, start a
+unit, or return transport addresses, diagnostics, tokens, or secret declarations.
+
 ## S5. Lifetime
 
 Releasing a channel closes that caller's connection and does not stop the sidecar. Application
