@@ -243,7 +243,7 @@ describe("effective rail relation — one rule for the renderer and the publishe
   it("an arrangement with no standing rail is none/0 even when the region preference is open", () => {
     // `regionOpen` is only the person's preference. The selected plugin has no relation unless its
     // set actually stands in the rail. Passing the preference as a second truth made state.tree
-    // publish a bound tab and an adjacent union for an element the arrangement says is absent.
+    // publish a bound tab and an adjacent union for an element the arrangement records as absent.
     const resolved = relation(
       solve(threeColumns(), "b", { railOpen: false }),
       "flow",

@@ -85,13 +85,13 @@ receipt에 맞춰 stage해야 합니다. 마지막 순서는 `tab.switchScan.nat
 
 ## D1b.1. Core 장식은 마지막 네이티브 평면이다
 
-포커스 경계나 rail 관계 외곽선은 provider 내용이 아니라 Core chrome입니다. DOM의 `z-index:7` 또는 `8`로
+포커스 표시선이나 rail 관계 외곽선은 provider 내용이 아니라 Core chrome입니다. DOM의 `z-index:7` 또는 `8`로
 그려도 AppKit 자식 위에 놓이지 않습니다. 2026-08-30 연결된 브라우저에서 실측했을 때 자식 위쪽의 선은
 accent 색이었지만 자식 안쪽의 왼쪽·오른쪽·아래쪽 probe는 모두 페이지의 흰색이었습니다. 터미널도 자기의
 어두운 표면으로 같은 실패를 만들었습니다. provider마다 inset을 두면 두 종류가 서로 다르게 실패할 뿐입니다.
 
 따라서 Core는 입력을 통과시키는 범용 네이티브 장식 평면 하나를 소유합니다. 제한된 절대 경로 어휘 `M`,
-`L`, `Q`, `Z`를 받아 `CAShapeLayer`로 그리며 브라우저 또는 터미널 분기를 전혀 두지 않습니다. ordered
+`L`, `Q`, `Z`를 받아 `CAShapeLayer`로 그리며 브라우저와 터미널 종류에 관계없이 같은 경로를 씁니다. ordered
 presentation service는 완전한 surface inventory commit 뒤에 이 지속 평면을 매번 마지막으로 올립니다.
 장식만 바뀌면 이벤트로 합쳐지고 직렬화된 writer가 전체 snapshot 하나를 교체합니다. `surface.decorations`는
 선언과 `layer:native-above-surfaces`를 포함한 네이티브 receipt를 노출합니다. 타이머와 폴링은 없습니다.

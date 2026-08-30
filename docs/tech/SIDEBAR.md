@@ -119,8 +119,8 @@ capture of that day. Two readers now share the rule: the plane that draws the pl
 reported to the native hit test for the surface underneath it, which would otherwise take clicks
 away from that surface for a strip nobody sees.
 
-The preference and the solved fact are not interchangeable. `regionOpen.rail` says that the person
-wants the place open; `Arrangement.railPresent` says that the selected tab's plugin has a linked set
+The preference and the solved fact are not interchangeable. `regionOpen.rail` records the person's
+open preference; `Arrangement.railPresent` records that the selected tab's plugin has a linked set
 which actually stands there. The latter is the only input to relation resolution. Selecting a plugin
 with no linked set therefore publishes `boundTabId:null`, `borderMode:none`, `pathCount:0`, even while
 a departing strip is retained for its closing frame. A visible departure is not permission to attempt
