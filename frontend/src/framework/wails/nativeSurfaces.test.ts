@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test" }));
 
 const commits: Array<{ window: string; sequence: number; interactive: boolean; surfaces: unknown[] }> = [];
-vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/service", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice", () => ({
   Commit: vi.fn(async (snapshot: { window: string; sequence: number; interactive: boolean; surfaces: unknown[] }) => {
     commits.push({ window: snapshot.window, sequence: snapshot.sequence, interactive: snapshot.interactive, surfaces: snapshot.surfaces });
     return { sequence: snapshot.sequence, accepted: true, surfaces: snapshot.surfaces };

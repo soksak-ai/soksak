@@ -9,7 +9,7 @@ import { presentationNowUnixMs } from "../lib/presentationClock";
 import { nativeTimelineVerdict, type TimelineNativeSample } from "../lib/nativeTimelineVerdict";
 import { invoke, nativeDecorationStatus } from "../framework";
 import { nativeDecorationFacts } from "../lib/nativeDecorations";
-import * as CompositorService from "../../bindings/github.com/min-median-max/wails-service-native-compositor/service";
+import * as CompositorService from "../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { register } from "./registry";
 

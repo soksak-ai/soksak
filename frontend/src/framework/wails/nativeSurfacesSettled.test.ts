@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // A command that performs its work and never replies is a dead command from outside. The sequence is
 // still the test, not elapsed time: what changes is that a wait which cannot finish names the two
 // numbers rather than never returning.
-vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/service", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice", () => ({
   Commit: vi.fn(async () => ({ sequence: 0, accepted: true, surfaces: [] })),
 }));
 vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/models", () => ({

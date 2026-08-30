@@ -13,7 +13,7 @@ const { settled, declared } = vi.hoisted(() => ({
   settled: vi.fn(async () => undefined),
   declared: vi.fn(async () => undefined),
 }));
-vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/service", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice", () => ({
   Commit: vi.fn(async (snapshot: { sequence: number }) => ({ sequence: snapshot.sequence, accepted: true, surfaces: [] })),
   Deliver: vi.fn(async (id: string, message: Record<string, unknown>) => {
     if (refuse) throw refuse;

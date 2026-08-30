@@ -19,7 +19,7 @@ vi.mock("../../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test"
 
 let answer: (value: unknown) => void = () => {};
 let calls = 0;
-vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/service", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice", () => ({
   Commit: vi.fn(() => { calls++; return new Promise((resolve) => { answer = resolve; }); }),
   Latest: vi.fn(async () => ({ surfaces: [] })),
 }));

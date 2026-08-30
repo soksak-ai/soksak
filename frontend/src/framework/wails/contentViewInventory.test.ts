@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const latest = vi.hoisted(() => vi.fn());
 
-vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/service", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice", () => ({
   Deliver: vi.fn(),
   Latest: latest,
 }));

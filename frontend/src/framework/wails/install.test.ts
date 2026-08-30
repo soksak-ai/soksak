@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // window needs a name for that first commit to be made at all.
 vi.mock("../../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test" }));
 
-vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/service", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice", () => ({
   Commit: vi.fn(async () => ({ sequence: 1, accepted: true, surfaces: [] })),
 }));
 vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/models", () => ({

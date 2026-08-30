@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const delivered: Array<{ id: string; message: Record<string, unknown> }> = [];
 let refuse: Error | null = null;
-vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/service", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice", () => ({
   Commit: vi.fn(async (snapshot: { sequence: number }) => ({ sequence: snapshot.sequence, accepted: true, surfaces: [] })),
   Deliver: vi.fn(async (id: string, message: Record<string, unknown>) => {
     if (refuse) throw refuse;

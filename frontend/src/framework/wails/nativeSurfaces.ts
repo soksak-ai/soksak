@@ -5,7 +5,7 @@ import type {
   NativeSurfacePresentation,
 } from "@min-median-max/wails-service-native-compositor";
 
-import * as CompositorService from "../../../bindings/github.com/min-median-max/wails-service-native-compositor/service";
+import * as CompositorService from "../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice";
 import { Snapshot } from "../../../bindings/github.com/min-median-max/wails-service-native-compositor/models";
 import { noteAppliedSurfaces } from "../../lib/contentViews";
 import { presentationNowUnixMs } from "../../lib/presentationClock";
