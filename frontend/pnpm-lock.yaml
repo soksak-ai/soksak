@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@min-median-max/wails-service-native-compositor':
-        specifier: github:min-median-max/wails-service-native-compositor#a8012c3f9bcc
-        version: https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/a8012c3f9bcc7b028659d2cc132689d03c4e573c
+        specifier: github:min-median-max/wails-service-native-compositor#5fe697ed673d
+        version: https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/5fe697ed673db3d68272fd1744131d8fffb01c4e
       '@soksak/soksak-spec':
         specifier: 0.0.48
         version: 0.0.48
@@ -282,8 +282,8 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
-  '@min-median-max/wails-service-native-compositor@https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/a8012c3f9bcc7b028659d2cc132689d03c4e573c':
-    resolution: {gitHosted: true, integrity: sha512-2NhpRA8JoA81IlwFI5jczCaHaBlP4fEUe4pAIrKXdXr89/0xwQqGxg0EyltdDppuCw1nnd+Y/DUdPsNa0e6e/A==, tarball: https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/a8012c3f9bcc7b028659d2cc132689d03c4e573c}
+  '@min-median-max/wails-service-native-compositor@https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/5fe697ed673db3d68272fd1744131d8fffb01c4e':
+    resolution: {gitHosted: true, integrity: sha512-ogWr+Nva/eECPo22rtewMNZx4ot5fdbWxmE+5VXokxMzhGGyB400lyTb4DQdbOXsbANqe2xCtpTq9dt0Unnpqg==, tarball: https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/5fe697ed673db3d68272fd1744131d8fffb01c4e}
     version: 0.0.1
     engines: {node: 26.7.0}
 
@@ -1227,7 +1227,7 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@min-median-max/wails-service-native-compositor@https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/a8012c3f9bcc7b028659d2cc132689d03c4e573c': {}
+  '@min-median-max/wails-service-native-compositor@https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/5fe697ed673db3d68272fd1744131d8fffb01c4e': {}
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
