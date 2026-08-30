@@ -28,7 +28,7 @@ func TestFrameStateIsForwardedAlwaysAndEmittedAtMostTenPerSecond(t *testing.T) {
 	var emitted []any
 	moment := time.Unix(0, 0)
 	notify := terminalStateNotifier(
-		func(_ string, seq uint64) { noted = append(noted, seq) },
+		func(_ string, seq uint64) (uint64, bool) { noted = append(noted, seq); return 7, true },
 		func(_ string, payload any) { emitted = append(emitted, payload) },
 		func() time.Time { return moment },
 	)
@@ -44,7 +44,7 @@ func TestFrameStateIsForwardedAlwaysAndEmittedAtMostTenPerSecond(t *testing.T) {
 		t.Fatalf("two emits expected (first and after the window), got %d", len(emitted))
 	}
 	payload, shaped := emitted[1].(map[string]any)
-	if !shaped || payload["pane"] != "tab-1.1" || payload["sequence"] != uint64(3) {
+	if !shaped || payload["pane"] != "tab-1.1" || payload["sequence"] != uint64(3) || payload["generation"] != uint64(7) {
 		t.Fatalf("the state payload names the pane and its sequence: %#v", emitted[1])
 	}
 }
@@ -52,7 +52,7 @@ func TestFrameStateIsForwardedAlwaysAndEmittedAtMostTenPerSecond(t *testing.T) {
 func TestAThrottledFinalFrameIsEmittedAtTheWindowEnd(t *testing.T) {
 	emitted := make(chan map[string]any, 2)
 	notify := terminalStateNotifier(
-		func(string, uint64) {},
+		func(string, uint64) (uint64, bool) { return 9, true },
 		func(_ string, payload any) { emitted <- payload.(map[string]any) },
 		time.Now,
 	)
@@ -61,7 +61,7 @@ func TestAThrottledFinalFrameIsEmittedAtTheWindowEnd(t *testing.T) {
 	notify("tab-1.1", 2)
 	select {
 	case payload := <-emitted:
-		if payload["sequence"] != uint64(2) {
+		if payload["sequence"] != uint64(2) || payload["generation"] != uint64(9) {
 			t.Fatalf("trailing state sequence = %#v", payload["sequence"])
 		}
 	case <-time.After(250 * time.Millisecond):

@@ -217,7 +217,7 @@ func Run(options Options) error {
 	// shell and its render off the commit path, and the ring's frames land on
 	// the pane's own host view.
 	terminalSessions := wireTerminalSessions(
-		terminalBackend, options.Identity, options.TerminalLinks, options.TerminalUnitStarts,
+		terminalBackend, options.Identity, options.TerminalLinks, options.TerminalUnitStarts, options.Bridge.Emit,
 	)
 	registerTerminalSurfaceStatus(options.Registry, terminalSessions)
 	wireTerminalChannel(terminalBackend, terminalSessions, options.Identity, options.Bridge.Emit)
@@ -524,6 +524,7 @@ func wireTerminalSessions(
 	identity string,
 	links terminalsurface.Links,
 	subscribe func(func(string)) func(),
+	emit func(event string, payload any),
 ) *terminalsurface.Sessions {
 	sessions := terminalsurface.NewSessions(identity, links)
 	backend.UseSessions(sessions)
@@ -537,6 +538,17 @@ func wireTerminalSessions(
 				// Recovery is an explicit new declaration/rehydrate, not a timer.
 				if err := sessions.Start(map[string]string(source), generation); err != nil {
 					log.Printf("terminal pane %s did not open: %v", source["pane"], err)
+					return
+				}
+				if emit != nil {
+					for _, status := range sessions.Status() {
+						if status["pane"] == source["pane"] && status["generation"] == generation {
+							emit("terminal-surface:state", map[string]any{
+								"pane": source["pane"], "sequence": status["sequence"], "generation": generation,
+							})
+							break
+						}
+					}
 				}
 			}()
 			return
@@ -556,23 +568,24 @@ func wireTerminalSessions(
 // (V13: pushed on change, bounded). The sessions always hear the frame — only
 // the event is limited.
 func terminalStateNotifier(
-	note func(pane string, seq uint64),
+	note func(pane string, seq uint64) (generation uint64, held bool),
 	emit func(event string, payload any),
 	now func() time.Time,
 ) func(pane string, seq uint64) {
 	var mu sync.Mutex
 	last := map[string]time.Time{}
 	type pendingState struct {
-		seq   uint64
-		timer *time.Timer
+		seq        uint64
+		generation uint64
+		timer      *time.Timer
 	}
 	pending := map[string]*pendingState{}
-	emitState := func(pane string, seq uint64) {
-		emit("terminal-surface:state", map[string]any{"pane": pane, "sequence": seq})
+	emitState := func(pane string, seq, generation uint64) {
+		emit("terminal-surface:state", map[string]any{"pane": pane, "sequence": seq, "generation": generation})
 	}
 	return func(pane string, seq uint64) {
-		note(pane, seq)
-		if emit == nil {
+		generation, held := note(pane, seq)
+		if emit == nil || !held {
 			return
 		}
 		mu.Lock()
@@ -581,8 +594,9 @@ func terminalStateNotifier(
 			remaining := 100*time.Millisecond - moment.Sub(held)
 			if queued := pending[pane]; queued != nil {
 				queued.seq = seq
+				queued.generation = generation
 			} else {
-				queued := &pendingState{seq: seq}
+				queued := &pendingState{seq: seq, generation: generation}
 				pending[pane] = queued
 				queued.timer = time.AfterFunc(remaining, func() {
 					mu.Lock()
@@ -594,8 +608,9 @@ func terminalStateNotifier(
 					delete(pending, pane)
 					last[pane] = now()
 					trailing := queued.seq
+					trailingGeneration := queued.generation
 					mu.Unlock()
-					emitState(pane, trailing)
+					emitState(pane, trailing, trailingGeneration)
 				})
 			}
 			mu.Unlock()
@@ -607,7 +622,7 @@ func terminalStateNotifier(
 		}
 		last[pane] = moment
 		mu.Unlock()
-		emitState(pane, seq)
+		emitState(pane, seq, generation)
 	}
 }
 

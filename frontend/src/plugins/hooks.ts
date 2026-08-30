@@ -76,7 +76,7 @@ export interface PluginEventMap {
   // A native terminal surface signalled a painted frame (V13: pushed on change,
   // at most ten per second per pane). sequence is the pane's frame sequence —
   // the surface owner's evidence that its pixels moved.
-  "terminal-surface.state": { pane: string; sequence: number };
+  "terminal-surface.state": { pane: string; sequence: number; generation: number };
   // Panel divider drag gesture start (true) / end (false) — a layout-internal gesture channel
   // isomorphic with window.live-resize (window edge). The signal a native surface adapter uses to
   // separate move from resize and to start/end its own placement transition. Emitted by the GroupArea
@@ -392,12 +392,9 @@ export function startPluginHooks(): void {
 
   // Validate terminal-surface:state before publishing the typed plugin event.
   void currentWindow()
-    .listen<{ pane?: unknown; sequence?: unknown }>("terminal-surface:state", (event) => {
-      const pane = event.payload?.pane;
-      const sequence = event.payload?.sequence;
-      if (typeof pane === "string" && typeof sequence === "number") {
-        emitPluginEvent("terminal-surface.state", { pane, sequence });
-      }
+    .listen<{ pane?: unknown; sequence?: unknown; generation?: unknown }>("terminal-surface:state", (event) => {
+      const payload = terminalSurfaceStatePayload(event.payload);
+      if (payload) emitPluginEvent("terminal-surface.state", payload);
     })
     .catch(() => {
       // A framework without native surface events emits no terminal surface state.
@@ -568,6 +565,15 @@ export function startPluginHooks(): void {
   listenThisWindow<PluginEventMap["webview.health"]>("webview-health", (e) => {
     emitPluginEvent("webview.health", e.payload);
   });
+}
+
+export function terminalSurfaceStatePayload(value: {
+  pane?: unknown; sequence?: unknown; generation?: unknown;
+} | null | undefined): PluginEventMap["terminal-surface.state"] | null {
+  if (typeof value?.pane !== "string" || !Number.isSafeInteger(value.sequence)
+    || Number(value.sequence) < 0 || !Number.isSafeInteger(value.generation)
+    || Number(value.generation) < 1) return null;
+  return { pane: value.pane, sequence: Number(value.sequence), generation: Number(value.generation) };
 }
 
 // The workspace {id, root} of a pane. null when not found. root is a window-independent stable
