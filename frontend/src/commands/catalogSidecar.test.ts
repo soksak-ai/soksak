@@ -10,7 +10,54 @@ import { registerSidecarCatalog } from "./catalogSidecar";
 import { execute, getSpec, unregister } from "./registry";
 import { createEnvironmentEventHandler, setEnvironmentEventHandler } from "../state/environmentEvents";
 
-const REGISTERED = ["sidecar.request", "sidecar.install.local.plan", "sidecar.install.local", "sidecar.develop", "sidecar.remove"];
+const REGISTERED = ["sidecar.status", "sidecar.request", "sidecar.install.local.plan", "sidecar.install.local", "sidecar.develop", "sidecar.remove"];
+
+describe("sidecar.status", () => {
+  beforeEach(() => invoke.mockReset());
+  afterEach(() => { for (const name of REGISTERED) unregister(name); });
+
+  it("publishes exact running identities without transport or secret fields", async () => {
+    registerSidecarCatalog();
+    invoke.mockResolvedValueOnce({
+      open: [{
+        name: "soksak-sidecar-terminal-alacritty",
+        version: "0.0.42",
+        process: "/installed/alacritty/dist/project-sidecar-terminal-alacritty",
+        pid: 42,
+        address: "/private/run/alacritty.sock",
+        protocol: 2,
+        processLabel: "project",
+        stderr: ["private diagnostic"],
+        token: "private token",
+        secretNames: "private names",
+      }],
+      recorded: [],
+      ended: [],
+    });
+
+    const result = await execute("sidecar.status", {}, {});
+
+    expect(invoke).toHaveBeenCalledWith("sidecar_status");
+    expect(result).toEqual(expect.objectContaining({
+      ok: true,
+      data: {
+        units: [{
+          name: "soksak-sidecar-terminal-alacritty",
+          version: "0.0.42",
+          process: "/installed/alacritty/dist/project-sidecar-terminal-alacritty",
+          pid: 42,
+        }],
+      },
+    }));
+    expect(getSpec("sidecar.status")).toMatchObject({
+      params: {},
+      returns: "{ units: [{ name, version, process, pid }] }",
+      windowScoped: false,
+      errors: ["INTERNAL"],
+      examples: ["sidecar.status"],
+    });
+  });
+});
 
 describe("sidecar.request", () => {
   beforeEach(() => invoke.mockReset());
