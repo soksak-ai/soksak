@@ -505,6 +505,16 @@ browser↔terminal 24/30-frame scans each completed in one switch frame with zer
 overlap, native mismatch, cancelled motion, or incomplete motion frames. A non-key composed capture
 showed the browser plus all four tab headers and kept `windowFocused=false` before and after.
 
+The same installed state passed the shared composition and border gates. `surface.inventory`
+reported four declarations and four accepted surfaces with zero ghosts, unowned, unapplied, or
+orphaned entries. `surface.composition` reported zero drift and zero misparented surfaces for all
+three terminal surfaces and the browser surface. `layout.verify` measured the pane and its focus
+boundary at the same `(5,87,989,525)` rectangle with `worst=0`; terminal and browser Plugin bodies
+both measured `(5,120,989,468)`. The browser webview alone begins at `y=151` with height 437 because
+the declared 31px browser chrome occupies `y=120..151`; this is Plugin content layout, not a
+compositor inset. `ui.validate` checked 34 border rules over 14 elements with zero violations, and
+the composed capture showed the complete focused outline on all four outer edges.
+
 Measured 2026-08-16 on macOS at 999×535 and again at 1200×800: one browser
 surface, `worst` 0 through a split, a gutter resize, maximize and restore.
 

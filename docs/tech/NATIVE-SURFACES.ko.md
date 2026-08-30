@@ -530,3 +530,11 @@ browser tab을 열었습니다. Browser disable→enable 교체 뒤에도 Core P
 보고했습니다. Terminal↔terminal 세 번과 browser↔terminal 세 번의 24/30-frame scan은 모두 switch
 frame 하나, flicker·blank·overlap·native mismatch·cancelled motion·incomplete motion 0이었습니다.
 Non-key composed capture에는 browser와 tab header 네 개가 보였고 전후 `windowFocused=false`였습니다.
+
+같은 설치 상태는 공통 composition·border gate도 통과했습니다. `surface.inventory`는 declaration 네 개와
+accepted surface 네 개, ghost·unowned·unapplied·orphan 0을 보고했습니다. `surface.composition`은 terminal
+surface 세 개와 browser surface 모두 drift 0, misparented 0이었습니다. `layout.verify`가 pane과 focus
+boundary를 같은 `(5,87,989,525)`로 측정했고 `worst=0`이었습니다. Terminal과 browser Plugin body도 모두
+`(5,120,989,468)`이었습니다. Browser webview만 `y=151`, height 437인 이유는 선언된 31px browser chrome이
+`y=120..151`을 사용하기 때문이며 compositor inset이 아닙니다. `ui.validate`는 element 14개에서 border
+rule 34개를 검사해 violation 0을 보고했고 composed capture에서 focused outline 네 변이 모두 보였습니다.
