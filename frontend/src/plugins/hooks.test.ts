@@ -3,6 +3,7 @@ import {
   emitPathsDropped,
   emitPluginEvent,
   onPluginEvent,
+  processInventoryEventPayload,
   startPluginHooks,
   type PluginEventMap,
 } from "./hooks";
@@ -35,6 +36,20 @@ describe("paths.dropped event", () => {
       grants: [{ id: "drop-a", kind: "file" }],
     }]);
     expect(JSON.stringify(received)).not.toContain("/tmp/");
+  });
+});
+
+describe("process inventory event", () => {
+  it("accepts one owner event and rejects an unowned process", () => {
+    const valid = {
+      revision: 2, kind: "started" as const,
+      process: {
+        id: "pty-session-2", owner: "soksak-sidecar-pty", pid: 42, parentPid: 7,
+        command: "/bin/zsh -l", state: "running" as const, startedAtUnixMs: 10,
+      },
+    };
+    expect(processInventoryEventPayload(valid)).toEqual(valid);
+    expect(processInventoryEventPayload({ ...valid, process: { ...valid.process, owner: "" } })).toBeNull();
   });
 });
 

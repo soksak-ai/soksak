@@ -212,6 +212,8 @@ func Run(assets embed.FS) error {
 		if err := announceControlReady(os.Stdout, resolved, os.Getpid()); err != nil {
 			log.Printf("control readiness event failed: %v", err)
 		}
+		stopProcessEvents := observeTerminalProcessEvents(units, bridge.Emit)
+		defer stopProcessEvents()
 		return wails.Run(wails.Options{
 			Assets:        assets,
 			Identity:      resolved.Identifier,

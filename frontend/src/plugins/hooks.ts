@@ -77,6 +77,15 @@ export interface PluginEventMap {
   // at most ten per second per pane). sequence is the pane's frame sequence —
   // the surface owner's evidence that its pixels moved.
   "terminal-surface.state": { pane: string; sequence: number; generation: number };
+  "process.inventory.changed": {
+    revision: number;
+    kind: "started" | "updated" | "ended";
+    process: {
+      id: string; owner: string; window?: string; pane?: string; cwd?: string;
+      pid: number; parentPid: number; command: string; state: "running" | "ended";
+      startedAtUnixMs: number; endedAtUnixMs?: number;
+    };
+  };
   // Panel divider drag gesture start (true) / end (false) — a layout-internal gesture channel
   // isomorphic with window.live-resize (window edge). The signal a native surface adapter uses to
   // separate move from resize and to start/end its own placement transition. Emitted by the GroupArea
@@ -176,6 +185,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "window.live-resize",
   "window.gone",
   "terminal-surface.state",
+  "process.inventory.changed",
   "layout.resize-gesture",
   "layout.reflow",
   "layout.travel-finished",
@@ -203,6 +213,7 @@ export const EVENT_PERMISSIONS: Partial<
   activity: "terminal",
   // Surface render progress requires the surface permission.
   "terminal-surface.state": "surface",
+  "process.inventory.changed": "terminal",
 };
 
 type AnyListener = (payload: never) => void;
@@ -544,6 +555,11 @@ export function startPluginHooks(): void {
     },
   );
 
+  safeListen<unknown>("process-inventory-changed", (e) => {
+    const payload = processInventoryEventPayload(e.payload);
+    if (payload) emitPluginEvent("process.inventory.changed", payload);
+  });
+
   // App (this window) active → plugin event. Only "window-focus" emit_to'd to this window is received
   // (a global listen would also receive other windows' focus and fire app.focus wrongly). See the
   // lib/windowEvents header.
@@ -565,6 +581,27 @@ export function startPluginHooks(): void {
   listenThisWindow<PluginEventMap["webview.health"]>("webview-health", (e) => {
     emitPluginEvent("webview.health", e.payload);
   });
+}
+
+export function processInventoryEventPayload(
+  value: unknown,
+): PluginEventMap["process.inventory.changed"] | null {
+  if (!value || typeof value !== "object") return null;
+  const event = value as Record<string, unknown>;
+  if (!Number.isSafeInteger(event.revision) || Number(event.revision) < 1
+    || (event.kind !== "started" && event.kind !== "updated" && event.kind !== "ended")
+    || !event.process || typeof event.process !== "object") return null;
+  const process = event.process as Record<string, unknown>;
+  if (typeof process.id !== "string" || process.id === ""
+    || typeof process.owner !== "string" || process.owner === ""
+    || !Number.isSafeInteger(process.pid) || Number(process.pid) < 1
+    || !Number.isSafeInteger(process.parentPid) || Number(process.parentPid) < 0
+    || typeof process.command !== "string"
+    || (process.state !== "running" && process.state !== "ended")
+    || !Number.isSafeInteger(process.startedAtUnixMs)
+    || (["window", "pane", "cwd"] as const).some((field) => process[field] !== undefined && typeof process[field] !== "string")
+    || (process.endedAtUnixMs !== undefined && !Number.isSafeInteger(process.endedAtUnixMs))) return null;
+  return value as PluginEventMap["process.inventory.changed"];
 }
 
 export function terminalSurfaceStatePayload(value: {
