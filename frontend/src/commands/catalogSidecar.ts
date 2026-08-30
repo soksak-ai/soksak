@@ -6,7 +6,30 @@ import { writeDevelopRecord } from "./develop";
 import { writeEnvironmentRevision, type HostEnvironment } from "../state/environmentEvents";
 import { publishActivity } from "../state/activityFeed";
 
+interface RunningSidecarStatus {
+  name: string;
+  version: string;
+  process: string;
+  pid: number;
+}
+
 export function registerSidecarCatalog(): void {
+  register("sidecar.status", {
+    description: key("cmd.sidecar.status.desc"),
+    params: {},
+    windowScoped: false,
+    returns: "{ units: [{ name, version, process, pid }] }",
+    message: (data) => tmsg("msg.sidecar.status", { n: ((data.units as unknown[]) ?? []).length }),
+    errors: ["INTERNAL"],
+    examples: ["sidecar.status"],
+    handler: async () => {
+      const status = await invoke<{ open: RunningSidecarStatus[] }>("sidecar_status");
+      return {
+        units: status.open.map(({ name, version, process, pid }) => ({ name, version, process, pid })),
+      };
+    },
+  });
+
   register("sidecar.install.local.plan", {
     description: key("cmd.sidecar.install.local.plan.desc"),
     params: {

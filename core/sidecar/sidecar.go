@@ -123,7 +123,8 @@ type Open struct {
 
 type UnitStatus struct {
 	Open
-	Stderr []string `json:"stderr,omitempty"`
+	Process string   `json:"process,omitempty"`
+	Stderr  []string `json:"stderr,omitempty"`
 }
 
 // Host starts units and holds them open.
@@ -278,6 +279,7 @@ func (host *Host) Running() []UnitStatus {
 	for _, open := range started {
 		status := UnitStatus{Open: open}
 		if held := host.open[open.Name]; held != nil {
+			status.Process = held.path
 			status.Stderr = held.stderr.snapshot()
 		}
 		result = append(result, status)
