@@ -48,3 +48,34 @@ func TestSurfaceCommitRaisesTheDecorationPlaneLast(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeDecorationPathAcceptsThePublishedRoundedSubset(t *testing.T) {
+	commands, err := parseNativeDecorationPath("M 0.5 0.5 L 9.5 0.5 Q 10 0.5 10 1 L 10 9 Z M 2 2 L 4 2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]int, 0, len(commands))
+	for _, command := range commands {
+		got = append(got, command.op)
+	}
+	want := []int{
+		nativePathMove, nativePathLine, nativePathQuad, nativePathLine,
+		nativePathClose, nativePathMove, nativePathLine,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("path operations = %v, want %v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("path operations = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestNativeDecorationPathRefusesAnythingOutsideTheContract(t *testing.T) {
+	for _, path := range []string{"", "L 1 1", "M 0 0 C 1 1 2 2 3 3", "M NaN 0"} {
+		if _, err := parseNativeDecorationPath(path); err == nil {
+			t.Errorf("path %q was accepted", path)
+		}
+	}
+}
