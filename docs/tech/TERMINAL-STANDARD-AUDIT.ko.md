@@ -226,11 +226,6 @@ selection command, copy command, 독립 clipboard read가 같은 20자를 반환
 `scroll(lines=10)`은 `10/136/pinned`, Plugin read는 42~71행을 반환했으며 합성 native capture도 해당 row를
 보여 줬습니다. drag, copy, capture, scroll 전후 Sidecar PID는 바뀌지 않았습니다.
 
-같은 실행은 별도 관측 command RED도 드러냈습니다. 빠른 80-row burst는 이미 read와 scroll이 가능했지만
-`wait(contains=WZROW080)`은 timeout이 났습니다. 독립 read로 판정한 selection·scroll 증거는 유효합니다.
-이 결과를 timing workaround로 사용하지 않습니다. event 소유 `wait` transaction은 등록 시점의 현재
-state read와 이후 frame notification 사이에서 조건을 놓칠 수 없을 때까지 OPEN입니다.
-
 ## 최초 output 증거 — 2026-08-30
 
 PTY Sidecar 0.0.20은 기존 output ring에서 bounded `pty.tail` 증거를 노출합니다. 응답은 retained floor,

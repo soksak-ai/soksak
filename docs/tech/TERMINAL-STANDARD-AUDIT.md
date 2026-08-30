@@ -239,12 +239,6 @@ remained non-key. The same process then produced 80 numbered rows; `scroll(lines
 `10/136/pinned`, Plugin read returned rows 42 through 71, and the composed native capture showed
 those rows. The Sidecar PID remained unchanged across drag, copy, capture and scroll.
 
-The same run exposed a separate observation-command RED: a rapid 80-row burst was already readable
-and scrollable, but `wait(contains=WZROW080)` timed out. This does not invalidate the selection or
-scroll evidence, which was read independently, and it is not accepted as a timing workaround.
-The event-owned `wait` transaction remains OPEN until its current-state read and subsequent frame
-notification cannot miss the condition at their registration boundary.
-
 ## Initial-output evidence — 2026-08-30
 
 PTY Sidecar 0.0.20 exposes bounded `pty.tail` evidence from the existing output ring. The response
