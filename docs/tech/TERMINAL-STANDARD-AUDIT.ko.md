@@ -304,3 +304,34 @@ state event를 한 번 발행하므로 remount presenter가 무관한 다음 out
 disable→enable 뒤에는 declaration generation 14/lifecycle 5로 live를 유지했고 첫 `scroll(offset=10)`이
 `10/52/pinned`를 반환했습니다. Plugin read는 43~71행을 반환했습니다. Composed capture는 42~71행을
 실제로 보였고 전후 `windowFocused=false`를 유지했습니다. Hot-remount scroll readiness row는 GREEN입니다.
+
+## 입력 시 selection 종료 — 2026-08-30
+
+설치된 Vision 0.0.50에서 `COPY_BACKSPACE_ABCDE`와 `한글복사테스트`를 각각 선택·복사·붙여넣고
+노출된 terminal input node로 Backspace를 보냈습니다. Alacritty engine frame은 ASCII 마지막 글자와
+폭 2인 한글 마지막 cell을 정확히 제거했지만, paste와 Backspace 뒤에도 `selection`은 복사한 text를
+그대로 반환했습니다. 따라서 재현된 화면 훼손은 남아 있던 engine-owned selection overlay였고
+Backspace parser나 실제 grid가 훼손된 것은 아니었습니다.
+
+Vision 0.0.51은 활성 selection이 있으면 첫 confirmed `surface.input`보다 먼저
+`surface.selection {action:"clear"}`를 직렬화합니다. 이름 있는 presenter RED는 `surface.input`만
+관측했고 같은 테스트의 GREEN은 정확히 `selection clear -> input` transaction을 관측합니다. Owner
+전체 gate는 32개 테스트를 통과했습니다. Immutable local release는 `published` 뒤 `unchanged`였고
+digest는 `da557123859ee681f4de27c4d59098a10c3e3f8c75c113a0df585ac34638fec8`입니다.
+
+설치된 capture-only 환경은 8개 component local closure로 Vision 0.0.51을 선택했습니다. 같은 한글
+복사·붙여넣기 뒤 `selection`은 Backspace 전에 빈 문자열을 반환했습니다. Backspace는 마지막 한글
+cell만 제거했고 선택했던 output row에는 overlay가 남지 않았습니다. 전후 composed capture를 직접
+확인했으며 두 capture 모두 `windowFocused=false`였습니다.
+
+## Prepared observer retained prefix — 2026-08-30
+
+PTY 0.0.21은 실행 중 session pump에 prepared observer를 연결하는 동작을 원자화합니다. Opened frame이 retained
+floor를 알리고 retained prefix가 뒤따른 다음에만 live output이 올 수 있습니다. 결정적 owner RED는
+보존된 prompt를 잃었고 GREEN은 다음 live bytes보다 먼저 같은 bytes를 받습니다. 설치 앱 재시작에서
+보존된 PTY는 401 bytes를 보고했고 새 Alacritty session도 같은 401 observed bytes, `0..401` range,
+SHA-256과 prompt가 든 full frame을 보고했습니다. Retained-prefix 전달 자체는 이 증거로 닫힙니다.
+
+같은 restart capture는 별개의 size-ordering 결함도 드러냈습니다. Shell이 surface의 실측 126-column
+resize보다 먼저 기본 80 column에서 첫 prompt를 출력해, observer 연결 뒤 prompt가 80번째 column에 남았습니다.
+이 initial-size ordering은 OPEN이며 retained replay나 provider parser 문제로 묶어서는 안 됩니다.

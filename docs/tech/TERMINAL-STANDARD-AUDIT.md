@@ -326,3 +326,38 @@ same-version disable→enable then reached declaration generation 14/lifecycle 5
 the first `scroll(offset=10)` returned `10/52/pinned`. Plugin read returned rows 43 through 71. The
 composed capture visibly showed rows 42 through 71 and kept `windowFocused=false` before and after.
 This closes the hot-remount scroll readiness row.
+
+## Selection retirement on input — 2026-08-30
+
+An installed Vision 0.0.50 reproduction selected and copied both an ASCII marker and a seven-syllable
+wide-cell marker, pasted each value, and then sent Backspace through the
+exposed terminal input node. Alacritty's engine frame removed exactly the final ASCII character and
+the final wide Hangul cell, but `selection` still returned the copied text after paste and
+Backspace. The stale engine-owned selection overlay was therefore the reproducible corruption
+boundary; Backspace parsing and the underlying grid were not corrupt.
+
+Vision 0.0.51 serializes an active `surface.selection {action:"clear"}` before the first confirmed
+`surface.input`. Its named presenter RED observed only `surface.input`; the same test is GREEN with
+the exact `selection clear -> input` transaction. The complete owner gate passes 32 tests. The
+immutable local release was accepted as `published` and then `unchanged` with digest
+`da557123859ee681f4de27c4d59098a10c3e3f8c75c113a0df585ac34638fec8`.
+
+The installed capture-only environment selected Vision 0.0.51 through an eight-component local
+closure. After the same Hangul copy and paste, `selection` returned an empty string before
+Backspace. Backspace then removed exactly the final Hangul cell, the selected output row had no
+selection overlay, and the composed before/after captures were inspected while
+`windowFocused=false`.
+
+## Prepared-observer retained prefix — 2026-08-30
+
+PTY 0.0.21 makes adoption of a prepared observer atomic with the running session pump: the opened
+frame names the retained floor, the retained prefix follows, and only then may live output follow.
+The deterministic owner RED lost the retained prompt; GREEN receives its exact bytes before the
+next live bytes. In an installed app restart, the preserved PTY reported 401 retained bytes and the
+new Alacritty session reported the same 401 observed bytes, range `0..401`, SHA-256 and a full frame
+containing the prompt. This closes retained-prefix delivery itself.
+
+The composed restart capture also exposed a separate size-ordering defect: the shell emitted its
+first prompt at the default 80 columns before the surface's measured 126-column resize, leaving the
+prompt at column 80 after adoption. That initial-size ordering remains OPEN and must not be grouped
+with retained replay or excused as a provider parser failure.
