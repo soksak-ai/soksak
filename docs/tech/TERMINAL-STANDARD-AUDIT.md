@@ -228,3 +228,31 @@ commit `d557ec1` exposed signed logical-row text without moving the viewport and
 owned the selection endpoints and ranges. Its later 80-row run returned `10/54/pinned` but painted
 an empty viewport, so that scroll pixel row remains OPEN. Selection remains RED for Ghostty, Kitty,
 Shitty and WezTerm, and the Alacritty frame regression must be fixed before its rows can be judged.
+
+## Initial-output evidence — 2026-08-30
+
+PTY Sidecar 0.0.20 exposes bounded `pty.tail` evidence from the existing output ring. The response
+names the retained floor and through sequence, returned byte count, and base64 bytes; it neither
+reads a private runtime file nor creates a second output owner. Sidecar Kit 0.0.31 makes the consumer
+boundary equally observable through `terminal.status`: cumulative observed output bytes and the last
+observation's source range, byte count, and SHA-256 are reported with the existing event and output
+sequences.
+
+The original Alacritty RED is now bounded precisely. The PTY ring retained 401 bytes containing the
+shell prompt, while the same pane's first full `terminal.frame` reported output sequence 401 and 30
+empty rows. Feeding the observed control-sequence shape directly to the Alacritty owner preserved
+the prompt, including across a shrink-and-expand resize. A later command rendered normally in the
+same pane. The defect is therefore an intermittent initial lifecycle or delivery failure, not proof
+that the engine cannot parse the prompt and not a compositor paint failure.
+
+A clean Vision 0.0.38 closure selected PTY 0.0.20 and Alacritty 0.0.40. Three fresh panes each
+reported 401 observed bytes, zero gaps, matching final observation ranges, and a full frame containing
+the prompt. Each pane accepted a distinct marker after tab activation. Three measured tab switches
+were one clean frame with zero flicker, blank, overlap, or native-receipt mismatch. After application
+restart, all three exact sessions reattached with their markers and prompts intact. Both composed
+captures remained non-key and were inspected.
+
+Alacritty initial output remains OPEN: 0.0.40 adds evidence and owner guards but no behavioral change,
+so one clean run cannot erase the earlier RED. Completion requires a named lifecycle test that
+deterministically reproduces the empty initial full frame and turns GREEN under the same scheduling
+boundary.
