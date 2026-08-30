@@ -177,7 +177,7 @@ snapshot과 event interface로 공개합니다. Immutable local release digest�
 `process.inventory.changed` event를 relay합니다. PTY source tree나 process 구현을 읽지 않습니다.
 
 Process Monitor 0.0.15는 이 event stream을 축약하고 `status`와 event 기반 `wait` command를
-공개합니다. `wait`는 owner, 낮은 revision 경계, 선택적인 정확한 process count를 받습니다. 축약된
+공개합니다. `wait`는 owner, 최소 revision, 선택적인 정확한 process count를 받습니다. 축약된
 state로만 완료하며 timer는 polling loop가 아니라 bounded failure deadline입니다. Owner RED에서는
 parameter schema를 선언하지 않은 handler가 `INVALID_PARAMS`로 거부됐고, GREEN은 모든 parameter를
 public registry에 선언합니다. 두 번째 RED에서는 deadline이 generic `INTERNAL`로 보였고 GREEN은
