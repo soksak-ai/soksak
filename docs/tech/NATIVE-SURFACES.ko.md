@@ -83,6 +83,26 @@ alpha·layer 변경은 실제 compositor receipt를 기다립니다. signature�
 필드 전체를 포함합니다. 이것만으로 탭 전환이 원자화되지는 않습니다. DOM presentation commit도 그
 receipt에 맞춰 stage해야 합니다. 마지막 순서는 `tab.switchScan.nativeMismatchFrames`가 판정합니다.
 
+## D1b.1. Core 장식은 마지막 네이티브 평면이다
+
+포커스 경계나 rail 관계 외곽선은 provider 내용이 아니라 Core chrome입니다. DOM의 `z-index:7` 또는 `8`로
+그려도 AppKit 자식 위에 놓이지 않습니다. 2026-08-30 연결된 브라우저에서 실측했을 때 자식 위쪽의 선은
+accent 색이었지만 자식 안쪽의 왼쪽·오른쪽·아래쪽 probe는 모두 페이지의 흰색이었습니다. 터미널도 자기의
+어두운 표면으로 같은 실패를 만들었습니다. provider마다 inset을 두면 두 종류가 서로 다르게 실패할 뿐입니다.
+
+따라서 Core는 입력을 통과시키는 범용 네이티브 장식 평면 하나를 소유합니다. 제한된 절대 경로 어휘 `M`,
+`L`, `Q`, `Z`를 받아 `CAShapeLayer`로 그리며 브라우저 또는 터미널 분기를 전혀 두지 않습니다. ordered
+presentation service는 완전한 surface inventory commit 뒤에 이 지속 평면을 매번 마지막으로 올립니다.
+장식만 바뀌면 이벤트로 합쳐지고 직렬화된 writer가 전체 snapshot 하나를 교체합니다. `surface.decorations`는
+선언과 `layer:native-above-surfaces`를 포함한 네이티브 receipt를 노출합니다. 타이머와 폴링은 없습니다.
+
+capture-only도 하나의 compositor입니다. 문서와 provider 그림으로 창을 재구성한 다음 같은 Core 장식 snapshot을
+마지막에 그립니다. provider loop 전에 그리면 가림 결함이 그대로 재현됐습니다. 변경 뒤 격리 설치 실행에서
+live browser를 지나는 포커스 왼쪽·오른쪽 edge probe는 균일한 `(238,238,238)`에서 accent가 포함된 평균
+약 `(160,163,231)`, 최소 휘도 `0.378`로 바뀌었고 composed note는 장식 두 개를 기록했습니다. rail과 pane의
+rounded union은 바깥쪽 edge 전체에 보였습니다. 브라우저 탭 30프레임 전환도 switch frame 1개, flicker·blank·
+overlap·native mismatch frame 0개로 끝났습니다.
+
 ## D1c. 표면은 포인터를 보고하고, 코어가 포커스를 옮긴다
 
 페이지는 자기 클릭을 직접 받고 그 위의 문서는 그것을 전혀 보지 못하므로, 브라우저 안을 클릭해도

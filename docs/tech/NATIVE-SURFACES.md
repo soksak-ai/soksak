@@ -90,6 +90,29 @@ signature excludes frame coordinates and includes every presentation field. This
 not sufficient for an atomic tab switch: the DOM presentation commit must also be staged against that
 receipt. `tab.switchScan.nativeMismatchFrames` remains the verdict for that final ordering.
 
+## D1b.1. Core decoration is the final native plane
+
+A focus boundary or rail-relation outline is Core chrome, not provider content. Drawing it at DOM
+`z-index:7` or `8` does not place it over an AppKit child. Measured 2026-08-30 with a linked browser,
+the top segment above the child was accent-coloured while left, right and bottom probes inside the
+child were uniformly the page's white. The terminal produced the same failure with its own dark
+surface. A provider-specific inset would merely make two kinds fail differently.
+
+Core therefore owns one generic, pointer-transparent native decoration plane. It accepts the bounded
+absolute path vocabulary `M`, `L`, `Q`, `Z`, paints it with `CAShapeLayer`, and contains no browser or
+terminal branch. The ordered presentation service raises that persistent plane after every complete
+surface inventory commit; decoration-only changes replace one full snapshot through an event-coalesced,
+serial writer. `surface.decorations` exposes the declarations and the native receipt, including
+`layer:native-above-surfaces`. No timer or polling loop participates.
+
+Capture-only is a compositor too. It reconstructs a window from the document and provider pictures,
+then paints the same Core decoration snapshot last. Painting before the provider loop reproduced the
+occlusion exactly. In the isolated installed run after the change, probes through a live browser at the
+focus left and right edges changed from uniform `(238,238,238)` to accent-bearing means near
+`(160,163,231)` with minimum luminance `0.378`; the composed note named two decorations. The rounded
+rail-plus-pane union was visible on all outer edges, and a 30-frame browser-tab switch completed in one
+switch frame with zero flicker, blank, overlap or native-mismatch frames.
+
 ## D1c. A surface reports the pointer, and the core moves the focus
 
 A page receives its own clicks and the document above it never sees them, so a click inside a

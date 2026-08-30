@@ -107,6 +107,17 @@ rail 은 두 조건을 다 물었고 오른쪽 측면은 열려 있는지만 물
 규칙을 씁니다. 위치를 그리는 평면과, 그 아래 표면을 위해 네이티브 히트 테스트에 보고하는 구멍입니다.
 그렇지 않으면 아무도 보지 못하는 띠가 그 표면에서 클릭을 가져갑니다.
 
+선호와 계산된 사실은 바꿔 쓸 수 없습니다. `regionOpen.rail` 은 사람이 그 위치를 열고 싶다는 뜻이고,
+`Arrangement.railPresent` 는 선택된 탭의 플러그인에 실제로 연결된 묶음이 있어 그 위치에 선다는 뜻입니다.
+관계 계산은 두 번째 값만 읽습니다. 따라서 연결된 묶음이 없는 플러그인을 선택하면 닫히는 프레임에 이전
+띠가 남아 있어도 `boundTabId:null`, `borderMode:none`, `pathCount:0` 을 게시합니다. 떠나는 띠가 보인다는
+사실은 새 탭을 향해 인접 관계를 시도할 권한이 아닙니다.
+
+rail 존재 여부는 arrangement phase identity와 projection transaction에도 포함됩니다. 선두의 깨끗한 선에서는
+rail이 있는 해와 없는 해의 station 및 백분율 셀이 같아도 실제 pane 사각형은 rail 폭 전체만큼 다릅니다.
+브라우저와 터미널 pane presentation은 DOM 폭 commit 전에 그 변경에 맞춰 stage합니다. 존재 여부만 바뀐
+변경이 관계없는 다음 geometry 변경까지 기다려서는 안 됩니다.
+
 ---
 
 ## S5. 표면은 자기 alpha 로 어두워진다

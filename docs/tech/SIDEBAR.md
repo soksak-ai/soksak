@@ -119,6 +119,19 @@ capture of that day. Two readers now share the rule: the plane that draws the pl
 reported to the native hit test for the surface underneath it, which would otherwise take clicks
 away from that surface for a strip nobody sees.
 
+The preference and the solved fact are not interchangeable. `regionOpen.rail` says that the person
+wants the place open; `Arrangement.railPresent` says that the selected tab's plugin has a linked set
+which actually stands there. The latter is the only input to relation resolution. Selecting a plugin
+with no linked set therefore publishes `boundTabId:null`, `borderMode:none`, `pathCount:0`, even while
+a departing strip is retained for its closing frame. A visible departure is not permission to attempt
+adjacency against the new tab.
+
+Rail presence is also part of the arrangement phase identity and projection transaction. At a leading
+clean line, present and absent arrangements may have the same station and percentage cells while their
+physical pane boxes differ by the whole rail width. Browser and terminal pane presentations are staged
+against that change before the DOM width commit; a presence-only change is not allowed to wait for an
+unrelated geometry update.
+
 ---
 
 ## S5. A surface is dimmed by its own alpha
