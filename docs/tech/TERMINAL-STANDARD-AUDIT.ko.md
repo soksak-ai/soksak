@@ -221,11 +221,11 @@ OPEN입니다. Ghostty, Kitty, Shitty, WezTerm selection은 계속 RED이며 Ala
 
 PTY Sidecar 0.0.20은 기존 output ring에서 bounded `pty.tail` 증거를 노출합니다. 응답은 retained floor,
 through sequence, 반환 byte 수, base64 byte를 밝히며 private runtime file을 읽거나 두 번째 output owner를
-만들지 않습니다. Sidecar Kit 0.0.31은 consumer 경계도 `terminal.status`로 관측 가능하게 만듭니다.
+만들지 않습니다. Sidecar Kit 0.0.31은 consumer가 실제로 받은 byte도 `terminal.status`로 게시합니다.
 기존 event·output sequence와 함께 누적 관측 output byte 수, 마지막 observation의 source range, byte 수,
 SHA-256을 게시합니다.
 
-기존 Alacritty RED의 경계가 정확히 좁혀졌습니다. PTY ring은 shell prompt가 든 401 byte를 보존했지만,
+기존 Alacritty RED의 원인은 다음 두 관측 사이로 좁혀졌습니다. PTY ring은 shell prompt가 든 401 byte를 보존했지만,
 같은 pane의 첫 full `terminal.frame`은 output sequence 401과 비어 있는 30개 row를 반환했습니다. 관측된
 control-sequence 형태를 Alacritty owner에 직접 feed하면 shrink-expand resize를 거쳐도 prompt가 남았습니다.
 같은 pane에 나중에 보낸 command는 정상 렌더됐습니다. 따라서 이 결함은 간헐적인 최초 lifecycle 또는
@@ -238,14 +238,14 @@ flicker, blank, overlap, native receipt mismatch가 0이었습니다. 앱 재시
 prompt가 유지됐습니다. 두 composed capture는 모두 non-key 상태를 유지했고 직접 확인했습니다.
 
 Alacritty 최초 output은 계속 OPEN입니다. 0.0.40은 증거와 owner guard만 추가했으며 동작 변경이 없으므로
-한 번의 clean run으로 이전 RED를 지울 수 없습니다. 동일 scheduling 경계에서 빈 최초 full frame을
+한 번의 clean run으로 이전 RED를 지울 수 없습니다. 동일한 scheduling 순서에서 빈 최초 full frame을
 결정적으로 재현하고 GREEN으로 바꾸는 이름 있는 lifecycle test가 있어야 완료됩니다.
 
 VT100 0.0.37은 같은 observable Sidecar Kit을 사용하며 shifted viewport의 80행 burst owner guard를
 추가했습니다. 깨끗하게 설치한 Vision 0.0.39 실행에서 terminal은 source byte 1,368개를 gap 0으로
 소비했고 `scroll(lines=10)`은 `10/52/pinned`를 반환했습니다. Full provider frame은 42~71행,
 Plugin read는 43~71행을 포함했고 non-key composed capture에서도 그 행을 확인했습니다. 이는 clean-run
-scroll row의 GREEN이며, scheduling 경계가 결정적이 되기 전까지 이전 blank lifecycle 관측은 유효합니다.
+scroll row의 GREEN이며, 동일한 실행 순서를 결정적으로 재현하기 전까지 이전 blank lifecycle 관측은 유효합니다.
 
 같은 실행은 truthful-label 결함도 드러냈습니다. VT100 pane의 command가 `alacritty terminal
 read/scroll`로 보고됐습니다. Plugin Kit 0.0.95는 static command description을 default engine이 아니라
