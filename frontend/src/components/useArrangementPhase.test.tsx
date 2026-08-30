@@ -113,6 +113,7 @@ function Probe({
       data-traveling={phase.traveling ? "1" : "0"}
       data-moves={phase.moves.map((m) => m.id).join(",")}
       data-station={String(phase.displayed?.station ?? "")}
+      data-rail-present={phase.displayed?.railPresent ? "1" : "0"}
       data-content={String(phase.displayed === arrangement ? "live" : "stale")}
       data-values={phase.displayed ? valuesOf(phase.displayed.displayLayout).map((value) => `${value.id}:${value.content ?? ""}`).join("|") : ""}
       data-glide={phase.glide ? "1" : "0"}
@@ -424,6 +425,28 @@ describe("useArrangementPhase", () => {
     act(() => root.render(<Probe arrangement={to} scopeId={scopeOf(to)} />));
     // Not a travel (nothing to move) — so it must be current with no wait.
     expect(el().dataset.traveling).toBe("0");
+    expect(el().dataset.content).toBe("live");
+  });
+
+  it("a rail-presence-only solution replaces the displayed transaction", () => {
+    // At the leading clean line both solves have station 0 and identical cells. Presence still
+    // changes visible geometry by a full rail width. Leaving it out of the phase identity kept a
+    // linked set on screen after unlinking until some unrelated geometry changed.
+    const standing = solve(twoColumns, "a");
+    const absent = solveArrangement<G>({
+      layout: twoColumns,
+      focusId: "a",
+      placement: { mode: "flow" },
+      railOpen: false,
+    });
+    expect(standing.station).toBe(absent.station);
+    expect(standing.cells).toEqual(absent.cells);
+
+    act(() => root.render(<Probe arrangement={standing} scopeId={scopeOf(standing)} />));
+    expect(el().dataset.railPresent).toBe("1");
+    act(() => root.render(<Probe arrangement={absent} scopeId={scopeOf(absent)} />));
+
+    expect(el().dataset.railPresent).toBe("0");
     expect(el().dataset.content).toBe("live");
   });
 
