@@ -359,5 +359,18 @@ containing the prompt. This closes retained-prefix delivery itself.
 
 The composed restart capture also exposed a separate size-ordering defect: the shell emitted its
 first prompt at the default 80 columns before the surface's measured 126-column resize, leaving the
-prompt at column 80 after adoption. That initial-size ordering remains OPEN and must not be grouped
-with retained replay or excused as a provider parser failure.
+prompt at column 80 after adoption. Surface Contract 0.0.9 now defines side-effect-free
+`surface.measure`; Sidecar Kit 0.0.32 implements it from the same renderer font metrics used by
+`surface.open`; terminal-surface service `b2d591b` orders a fresh pane as
+`measure -> observer preparation -> PTY open -> engine subscription -> surface open`. The measured
+grid is passed unchanged to every process-facing step, and a contradictory `surface.open` grid is
+refused.
+
+Vision 0.0.52 selects Alacritty Sidecar 0.0.41, whose immutable release digest is
+`15be80bb6b199856446cbf2ea94bccd8acf4c991c5dba9b3c0825b6185adaba4`; the Vision release digest is
+`2ebf654acc771ccc1ae12049339a50fdb08b8f7f259fa3121f28004daa7c89f6`. In a fresh isolated
+installed product, three panes independently reported PTY, engine and surface grids of `126x30`,
+352 observed bytes, zero gaps, and a first non-empty row exactly at row 0 with cursor `[0,14]`.
+No row contained the former 80-column padding. The composed capture showed the prompt at the left
+edge and kept `windowFocused=false` before and after. This closes initial-size ordering for the
+Alacritty row; other providers must consume the same Kit before their rows inherit this result.

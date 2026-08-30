@@ -334,4 +334,15 @@ SHA-256과 prompt가 든 full frame을 보고했습니다. Retained-prefix 전�
 
 같은 restart capture는 별개의 size-ordering 결함도 드러냈습니다. Shell이 surface의 실측 126-column
 resize보다 먼저 기본 80 column에서 첫 prompt를 출력해, observer 연결 뒤 prompt가 80번째 column에 남았습니다.
-이 initial-size ordering은 OPEN이며 retained replay나 provider parser 문제로 묶어서는 안 됩니다.
+Surface Contract 0.0.9는 side effect가 없는 `surface.measure`를 정의하고 Sidecar Kit 0.0.32는
+`surface.open`과 같은 renderer font metrics로 이를 구현합니다. terminal-surface service `b2d591b`는
+새 pane을 `measure -> observer 준비 -> PTY open -> engine 구독 -> surface open` 순서로 시작합니다.
+실측 grid를 모든 process-facing 단계에 그대로 전달하며 `surface.open`이 다른 grid를 답하면 거부합니다.
+
+Vision 0.0.52는 Alacritty Sidecar 0.0.41을 선택합니다. Sidecar immutable release digest는
+`15be80bb6b199856446cbf2ea94bccd8acf4c991c5dba9b3c0825b6185adaba4`, Vision digest는
+`2ebf654acc771ccc1ae12049339a50fdb08b8f7f259fa3121f28004daa7c89f6`입니다. 새 격리 설치 제품에서
+pane 세 개가 각각 PTY, engine, surface grid `126x30`, observed bytes 352, gap 0을 보고했고 첫 non-empty
+row는 모두 row 0, cursor는 `[0,14]`였습니다. 이전 80-column padding은 어느 row에도 없었습니다.
+Composed capture에서 prompt가 왼쪽에 그려졌고 전후 `windowFocused=false`였습니다. Alacritty row의
+initial-size ordering은 GREEN이며 다른 provider는 같은 Kit을 소비한 뒤 각 row에서 다시 판정합니다.
