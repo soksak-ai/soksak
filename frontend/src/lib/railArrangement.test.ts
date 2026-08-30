@@ -165,12 +165,10 @@ describe("effective rail relation — one rule for the renderer and the publishe
   const relation = (
     arrangement: ReturnType<typeof solve>,
     placement: "flow" | "pin",
-    railOpen = true,
   ) => resolveEffectiveRailRelation({
     contentId: "c1",
     arrangement,
     placement,
-    railOpen,
   });
 
   it("PIN adjacent-left, adjacent-right and detached resolve to union/1, union/1 and independent/2", () => {
@@ -224,9 +222,9 @@ describe("effective rail relation — one rule for the renderer and the publishe
     const resolved = relation(
       solve(threeColumns(), "b", {
         placement: { mode: "pin", station: 100 / 3 },
+        railOpen: false,
       }),
       "pin",
-      false,
     );
     expect(resolved.state).toEqual({
       source: "none",
@@ -249,7 +247,6 @@ describe("effective rail relation — one rule for the renderer and the publishe
     const resolved = relation(
       solve(threeColumns(), "b", { railOpen: false }),
       "flow",
-      true,
     );
 
     expect(resolved.state).toMatchObject({
@@ -274,7 +271,6 @@ describe("effective rail relation — one rule for the renderer and the publishe
       placement: "flow",
       // The departure strip can still be on screen for its closing frame. Visibility is not a
       // link owned by the newly selected plugin.
-      railOpen: true,
     });
 
     expect(resolved.state).toMatchObject({
@@ -297,7 +293,6 @@ describe("effective rail relation — one rule for the renderer and the publishe
       displayed,
       destination,
       placement: "flow",
-      railOpen: true,
     });
 
     expect(resolved.state).toMatchObject({
@@ -323,7 +318,6 @@ describe("effective rail relation — one rule for the renderer and the publishe
       destination,
       // The actual order: activation's rail-binding store write arrived after the focus commit.
       placement: "flow",
-      railOpen: true,
     });
 
     expect(resolved.state).toMatchObject({

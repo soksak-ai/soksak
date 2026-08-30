@@ -422,7 +422,6 @@ const WorkspacePlane = memo(function WorkspacePlane({
         displayed: arrangement,
         destination: solved,
         placement: placement.mode,
-        railOpen: displayedRailOpen,
         station: renderedStation,
       })
     : null;

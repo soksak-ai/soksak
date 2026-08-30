@@ -175,14 +175,17 @@ export function resolveEffectiveRailRelation<
   contentId: string;
   arrangement: Arrangement<L> | null | undefined;
   placement: RailPlacement["mode"];
-  railOpen: boolean;
   /** The actual value the renderer passes when the displayed station differs briefly from the solution's committed station, as during a drag. */
   station?: number;
 }): EffectiveRailRelation<L, T> {
   const none = (): EffectiveRailRelation<L, T> =>
     noneRailRelation(input.contentId, input.placement);
   const arrangement = input.arrangement;
-  if (!input.railOpen || !arrangement) return none();
+  // Presence is part of the solved arrangement. A raw `regionOpen` preference is not equivalent:
+  // the selected plugin can have no linked set, in which case no rail, binding or adjacency exists.
+  // Accepting a second boolean let state.tree publish union/1 while this same arrangement said the
+  // rail was absent.
+  if (!arrangement?.railPresent) return none();
 
   const panes = leavesOf(arrangement.displayLayout);
   const visibleIds = new Set(arrangement.cells.map((cell) => cell.id));
@@ -248,7 +251,6 @@ export function resolvePresentedRailRelation<
   displayed: Arrangement<L> | null | undefined;
   destination: Arrangement<L> | null | undefined;
   placement: RailPlacement["mode"];
-  railOpen: boolean;
   station?: number;
 }): PresentedRailRelation<L, T> {
   // FLOW presentation is owned by the destination focus: the displayed solve is still the departing
@@ -260,14 +262,22 @@ export function resolvePresentedRailRelation<
   const station = useDestination
     ? input.destination?.station ?? 0
     : input.station ?? input.displayed?.station ?? 0;
+  // The destination is the selected tab's solution and therefore owns whether a relation exists.
+  // The displayed solution may still retain the departing strip for a closing frame; that visual
+  // lifetime is not permission to bind it to a newly selected plugin with no linked set.
+  const selectedRailPresent = input.destination?.railPresent
+    ?? input.displayed?.railPresent
+    ?? false;
+  const resolved = selectedRailPresent
+    ? resolveEffectiveRailRelation<T, L>({
+        contentId: input.contentId,
+        arrangement: useDestination ? input.destination : input.displayed,
+        placement: input.placement,
+        station,
+      })
+    : noneRailRelation<L, T>(input.contentId, input.placement);
   return {
-    ...resolveEffectiveRailRelation({
-      contentId: input.contentId,
-      arrangement: useDestination ? input.destination : input.displayed,
-      placement: input.placement,
-      railOpen: input.railOpen,
-      station,
-    }),
+    ...resolved,
     station,
   };
 }

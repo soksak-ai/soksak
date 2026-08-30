@@ -361,7 +361,6 @@ function serializeSpace(
   activeSpaceId: string,
   /** The solve for this space (arrangement solver). An inactive space with no rail is null — the canonical order as is. */
   arrangement: Arrangement<Pane> | null,
-  railOpen = true,
   railPlacement: RailPlacement["mode"] = "flow",
 ) {
   const displayLayout = arrangement?.displayLayout ?? c.layout;
@@ -408,7 +407,6 @@ function serializeSpace(
     contentId: c.id,
     arrangement,
     placement: railPlacement,
-    railOpen,
   }).state;
   return {
     id: c.id,
@@ -482,7 +480,6 @@ function serializeTree() {
             c,
             t.activeSpaceId,
             c.id === t.activeSpaceId ? arrangement : null,
-            t.regionOpen.rail,
             railPosition.mode,
           ),
         ),
@@ -614,7 +611,6 @@ export function registerCatalog(): void {
       if (!t) return notFound("msg.workspace.notFound");
       const solved = projectArrangement(t);
       if (!solved) return notFound("msg.space.notFound");
-      const railOpen = t.regionOpen.rail;
       // Which pane the rail is grouped with, from the same solve the screen draws. The command
       // answered the station and the cells and said nothing about the grouping, so an outline drawn
       // around the wrong pane could only be reported by looking at it (measured 2026-08-19).
@@ -622,7 +618,6 @@ export function registerCatalog(): void {
         contentId: t.activeSpaceId,
         arrangement: solved,
         placement: (t.railPlacement ?? DEFAULT_RAIL_PLACEMENT).mode,
-        railOpen,
       }).state;
       return {
         projectId: t.id,
@@ -636,7 +631,7 @@ export function registerCatalog(): void {
         // they do not move, they dim. A hand-written list drops one entry every time the contract grows
         // (measured 2026-08-02: this spot omitted betweenIds, so the command could not report that fact).
         betweenIds: solved.betweenIds,
-        railOpen,
+        railOpen: solved.railPresent,
         cells: solved.cells.map((cell) => ({
           id: cell.id,
           rect: {
@@ -1948,7 +1943,6 @@ export function registerCatalog(): void {
         c,
         t.activeSpaceId,
         arrangement,
-        t.regionOpen.rail,
         (t.railPlacement ?? DEFAULT_RAIL_PLACEMENT).mode,
       );
       return {
