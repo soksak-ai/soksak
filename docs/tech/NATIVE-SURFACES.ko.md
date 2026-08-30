@@ -503,3 +503,24 @@ veil이 누적되지 않음을 증명했습니다.
 `(5,87,489.5,525)`, 오른쪽은 `(504.5,87,489.5,525)`입니다. 두 pane에서 양방향으로 실행한 네 번의
 30-frame browser↔terminal scan은 모두 switch frame 하나로 끝났고 flicker, blank, overlap, native
 mismatch, cancelled motion, incomplete motion frame이 모두 0이었습니다.
+
+### Plugin 교체 중 native display 수명 — 2026-08-30
+
+격리 설치 제품에서 terminal surface 세 개를 실행한 채 Browser 0.0.12를 enable하자 Core가
+`SIGSEGV`로 종료됐습니다. Channel frame callback의 `soksakChannelDisplay`와 compositor의
+`soksakTerminalSurfaceRemove`가 같은 borrowed native view에 동시에 접근했습니다. Terminal engine,
+Browser, PTY의 결함이 아니라 native object 수명 경쟁이었습니다.
+
+terminal-surface service `ec576f9`는 두 규칙을 시행합니다. Backend는 native driver가 view 소유권을
+넘겨받아 release하기 전에 channel binding을 제거합니다. Frame callback은 channel mutex를 잡은 동안
+bound view와 IOSurface를 각각 retain하고, mutex를 푼 뒤 main thread에서 display하고 두 short lease를
+release합니다. 이름 있는 RED는 native release가 unbind보다 먼저 실행됐음을 증명했고 GREEN은
+unbind가 release보다 먼저이며 display lease는 channel lock 안에서 얻고 display는 lock 밖에서 실행함을
+증명했습니다. Service owner 전체 gate는 GREEN입니다.
+
+수정된 Core는 Browser가 enabled인 동일 environment에서 terminal tab 세 개를 복원하고 Example Domain
+browser tab을 열었습니다. Browser disable→enable 교체 뒤에도 Core PID는 같았습니다.
+`surface.inventory`는 state view 네 개와 applied surface 네 개, ghost·unowned·unapplied·orphan 0을
+보고했습니다. Terminal↔terminal 세 번과 browser↔terminal 세 번의 24/30-frame scan은 모두 switch
+frame 하나, flicker·blank·overlap·native mismatch·cancelled motion·incomplete motion 0이었습니다.
+Non-key composed capture에는 browser와 tab header 네 개가 보였고 전후 `windowFocused=false`였습니다.

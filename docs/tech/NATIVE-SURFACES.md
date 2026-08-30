@@ -475,6 +475,29 @@ The focused pane frame and focus-boundary rectangles were equal in both halves: 
 directions in both panes, each completed in one switch frame with zero flicker, blank, overlap,
 native mismatch, cancelled motion, or incomplete motion frames.
 
+### Native display lifetime under Plugin replacement — 2026-08-30
+
+An isolated installed product held three live terminal surfaces and then enabled Browser 0.0.12.
+The Core process terminated with `SIGSEGV` while a channel frame callback ran
+`soksakChannelDisplay` and the compositor concurrently ran `soksakTerminalSurfaceRemove` for the
+same borrowed native view. The failure was a native lifetime race, not a terminal engine, Browser,
+or PTY failure.
+
+Terminal-surface service `ec576f9` establishes two ownership rules. The backend unbinds a channel
+view before the native driver transfers and releases it. A frame callback retains both the bound
+view and its IOSurface while holding the channel mutex, releases the mutex, displays on the main
+thread, and then releases both short leases. The named RED proved the native release previously ran
+before unbind; GREEN proves unbind precedes release and the display lease is acquired under the
+channel lock but displayed after unlocking. The complete service owner gate is GREEN.
+
+The corrected Core restored the same three terminal tabs with Browser already enabled, opened an
+Example Domain browser tab, and remained on the same Core PID through a Browser disable→enable
+replacement. `surface.inventory` then reported four state views and four applied surfaces with no
+ghosts, unowned, unapplied, or orphaned entries. Three terminal↔terminal and three
+browser↔terminal 24/30-frame scans each completed in one switch frame with zero flicker, blank,
+overlap, native mismatch, cancelled motion, or incomplete motion frames. A non-key composed capture
+showed the browser plus all four tab headers and kept `windowFocused=false` before and after.
+
 Measured 2026-08-16 on macOS at 999×535 and again at 1200×800: one browser
 surface, `worst` 0 through a split, a gutter resize, maximize and restore.
 
