@@ -219,6 +219,7 @@ func Run(options Options) error {
 	terminalSessions := wireTerminalSessions(
 		terminalBackend, options.Identity, options.TerminalLinks, options.TerminalUnitStarts,
 	)
+	registerTerminalSurfaceStatus(options.Registry, terminalSessions)
 	wireTerminalChannel(terminalBackend, terminalSessions, options.Identity, options.Bridge.Emit)
 
 	surfaceComposition := NewCompositorSource(nativeCompositor)
@@ -608,4 +609,24 @@ func terminalStateNotifier(
 		mu.Unlock()
 		emitState(pane, seq)
 	}
+}
+
+func registerTerminalSurfaceStatus(registry *control.Registry, sessions *terminalsurface.Sessions) {
+	registry.MustRegister(control.Command{
+		Name: "terminal_surface_status", Owner: control.OwnerFramework,
+		Handler: func(args control.Args) (any, error) {
+			window, err := surfaceWindow(args)
+			if err != nil {
+				return nil, err
+			}
+			status := sessions.Status()
+			filtered := make([]map[string]any, 0, len(status))
+			for _, pane := range status {
+				if pane["window"] == window {
+					filtered = append(filtered, pane)
+				}
+			}
+			return map[string]any{"panes": filtered}, nil
+		},
+	})
 }

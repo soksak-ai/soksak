@@ -1,9 +1,26 @@
 package wails
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
+
+	terminalsurface "github.com/min-median-max/wails-service-terminal-surface"
+	"github.com/soksak-ai/soksak-core/core/control"
 )
+
+func TestTerminalSurfaceStatusIsAWindowScopedPublicObservation(t *testing.T) {
+	registry := control.NewRegistry()
+	registerTerminalSurfaceStatus(registry, terminalsurface.NewSessions("test", terminalsurface.Links{}))
+	answer, err := registry.Invoke("terminal_surface_status", control.Args{"window": json.RawMessage(`"win-a"`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status := answer.(map[string]any)
+	if panes := status["panes"].([]map[string]any); len(panes) != 0 {
+		t.Fatalf("empty service status = %#v", panes)
+	}
+}
 
 // Session state receives every frame. Plugin events are limited to one per pane per 100 ms.
 func TestFrameStateIsForwardedAlwaysAndEmittedAtMostTenPerSecond(t *testing.T) {
