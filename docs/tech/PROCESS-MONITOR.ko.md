@@ -142,3 +142,29 @@ monitor는 `side` surface에 `process-monitor` view 하나를 제공한다. Core
 
 여섯 gate가 모두 GREEN이 되기 전에는 process-monitor sidebar를 명시적으로 미구현 capability로
 남긴다.
+
+## Vision cwd와 설치 monitor 증거 — 2026-08-30
+
+Native Vision 경로에는 별도 cwd 누락이 있었습니다. Plugin Kit 0.0.99는 pane의 선언된 initial cwd를
+`TerminalPresenterOptions`로 전달하고 Vision 0.0.53은 service가 PTY를 열기 전에 public terminal surface
+source에 이를 기록합니다. Kit RED에는 cwd가 없었고 GREEN은 exact project root를 받았습니다. Kit 0.0.99는
+local Registry와 immutable store에 publish됐고 digest는
+`5c5a352f68c9453ea2774dabc1fcdb194fae4683ce3700e64ba3209d8acc7e13`입니다. Vision 0.0.53은
+`published` 뒤 `unchanged`, digest `89bf593e5ee2dbc211bfd9ec2a5491eb5e82f14c057bf1e3ff37b4a4f1de0f9c`였습니다.
+
+Process Monitor 0.0.9는 이전 PTY record가 optional `cwd`를 생략하면 crash했습니다. Process Monitor
+0.0.10은 그런 record를 project에 귀속하지 않고 exposed view에 `PROCESS_CWD_UNAVAILABLE: <count>`를
+게시합니다. 이름 있는 RED는 `undefined.startsWith`로 실패했고 GREEN은 project match 없이 missing field
+수를 반환합니다. Immutable release digest는
+`0daa9e60ed6b42984985d702fb740fde247593fa6100596c9b61faf724649120`입니다.
+
+격리 설치 제품은 File Tree 0.0.3과 Process Monitor 0.0.10을 한 left section set으로 조합했습니다.
+두 view key가 `sections.list`와 `sidebar.tree`에 나타났고 File Tree는 project를 표시했으며 monitor는
+`bootPhase=ready`, `overlayReason=none`이었습니다. 새 Vision 0.0.53 terminal은 exact workspace root를
+`process.inventory`에 게시했습니다. `sleep 20 &` 실행 뒤 owned shell과 descendant record가 stable ID,
+parent PID, command, 같은 cwd, `running`을 보고했고 non-key capture에서 live terminal 옆에 두 record가
+보였습니다. 이전에 복원된 session은 explicit missing-cwd count로만 나타났습니다.
+
+설치 snapshot, project filtering, shell, descendant, local Registry, 기본 sidebar composition row는
+GREEN입니다. Live descendant change 전달과 유한 sidebar/tab transition recording은 OPEN입니다. Monitor는
+명시적 refresh command만 사용하고 polling하지 않습니다.

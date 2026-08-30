@@ -145,3 +145,31 @@ another sidebar. The view receives only the generic process snapshot/events and 
    the sole verdict.
 
 Until all six gates are GREEN, the process-monitor sidebar remains an explicitly missing capability.
+
+## Vision cwd and installed monitor evidence — 2026-08-30
+
+The native Vision path had a separate cwd omission. Plugin Kit 0.0.99 now passes the pane's declared
+initial cwd through `TerminalPresenterOptions`; Vision 0.0.53 writes it into the public terminal
+surface source before the service opens the PTY. The Kit RED received no cwd; GREEN receives the
+exact project root. Kit 0.0.99 was published to the local Registry and immutable store with digest
+`5c5a352f68c9453ea2774dabc1fcdb194fae4683ce3700e64ba3209d8acc7e13`. Vision 0.0.53 was accepted as
+`published` then `unchanged`, digest
+`89bf593e5ee2dbc211bfd9ec2a5491eb5e82f14c057bf1e3ff37b4a4f1de0f9c`.
+
+Process Monitor 0.0.9 crashed when an older, valid PTY record omitted optional `cwd`.
+Process Monitor 0.0.10 treats such a record as unattributable instead of dereferencing it and
+publishes `PROCESS_CWD_UNAVAILABLE: <count>` in its exposed view. Its named RED failed with
+`undefined.startsWith`; GREEN returns no project match and counts the missing field. The release is
+immutable with digest `0daa9e60ed6b42984985d702fb740fde247593fa6100596c9b61faf724649120`.
+
+An isolated installed product composed File Tree 0.0.3 and Process Monitor 0.0.10 in one left-side
+section set. Both view keys appeared in `sections.list` and `sidebar.tree`; the file tree visibly
+rendered the project, and the monitor view reached `bootPhase=ready`, `overlayReason=none`. A new
+Vision 0.0.53 terminal published its exact workspace root in `process.inventory`. Running
+`sleep 20 &` produced the owned shell and descendant records with stable IDs, parent PID, command,
+the same cwd and `running`; the non-key capture showed both records beside the live terminal.
+Older restored sessions remained visible only as the explicit missing-cwd count.
+
+This closes the installed snapshot, project filtering, shell, descendant, local-registry and basic
+sidebar-composition rows. Live descendant change delivery and finite sidebar/tab transition
+recording remain OPEN; the monitor still uses its explicit refresh command and does not poll.
