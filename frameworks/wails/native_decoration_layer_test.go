@@ -22,6 +22,8 @@ func TestNativeDecorationPlaneIsAboveEveryChildSurface(t *testing.T) {
 		"- (BOOL)isFlipped { return YES; }",
 		"CAShapeLayer",
 		"[content addSubview:overlay positioned:NSWindowAbove relativeTo:nil]",
+		"overlay.layer.zPosition = 1000000",
+		"if (content.subviews.lastObject != overlay)",
 	}
 	for _, fragment := range required {
 		if !strings.Contains(text, fragment) {

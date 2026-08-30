@@ -111,6 +111,13 @@ int soksakApplyNativeDecorations(void *nsWindow,
     if (overlay.superview != content || content.subviews.lastObject != overlay) {
       [content addSubview:overlay positioned:NSWindowAbove relativeTo:nil];
     }
+    // The receipt may name the final plane only after AppKit reads it back in the final sibling
+    // position. A successful add with another child still above it is the original failure.
+    if (content.subviews.lastObject != overlay) {
+      status = 4;
+      [CATransaction commit];
+      return;
+    }
     *applied = count;
     [CATransaction commit];
   };
