@@ -8,7 +8,6 @@
 import { invoke, frameworkPath } from "../framework";
 import { tmsg, key} from "../i18n";
 import { contentViewHost, hasContentViewHost } from "../lib/contentViews";
-import { isLayoutMotionActive, onLayoutMotion } from "../lib/layoutMotion";
 import { resolveExposed } from "./catalogDom";
 import { surfaceRectOf } from "../lib/surfaceRect";
 import { register } from "./registry";
@@ -32,6 +31,8 @@ import {
 import { CAPTURE_CALIBRATION_ID, setCaptureCalibration } from "./captureCalibration";
 import { setCaptureMotionAnchors } from "./captureMotionAnchors";
 import { captureWindowPixels } from "./windowCapture";
+import { waitForTabPresentationCommit } from "./waitForDomCommit";
+import { waitLayoutSettled } from "./waitLayoutSettled";
 
 /** The native capture service returns a receipt object. Older adapters returned the path directly;
  *  both carry one path, and no other shape is accepted or stringified. */
@@ -57,22 +58,6 @@ function nodeOfTab(projectId: string, viewId: string): string {
     window: currentWindowLabel(),
     workspace: projectId,
     chrome: `layout/tab/${viewId}`,
-  });
-}
-
-/**
- * Until layout motion ends — the end arrives as an event.
- *
- * Already stopped: answers immediately (idempotent). In progress: waits for one end notification.
- */
-function settledLayout(): Promise<void> {
-  if (!isLayoutMotionActive()) return Promise.resolve();
-  return new Promise((resolve) => {
-    const off = onLayoutMotion((active) => {
-      if (active) return;
-      off();
-      resolve();
-    });
   });
 }
 
@@ -197,14 +182,15 @@ async function resolveRegion(p: Record<string, unknown>): Promise<Region | Refus
         if (prevView) back.setActiveView(loc.workspace.id, prevView);
         if (prevSpace) back.setActiveContent(loc.workspace.id, prevSpace);
       };
-      // Switching moves the layout — the shot must come after the slot is at its final position.
-      //
-      // The wait **ends on an event.** rAF is unusable (rAF stops for an occluded window, and
-      // capturing while the window is not in front is the point of this command — measured
-      // 2026-07-31: a 30-second timeout, and even the restore did not run). A numeric timer is not
-      // used either (whatever number is written has no basis). Layout motion announces its own start
-      // and end, so the wait is on that end.
-      await settledLayout();
+      try {
+        // State activation precedes React's public tab commit. The native presentation barrier must
+        // start after that commit or it can confirm the previous surface inventory.
+        await waitForTabPresentationCommit(loc.tab.id);
+        await waitLayoutSettled(4_000, loc.workspace.id);
+      } catch (error) {
+        restore();
+        throw error;
+      }
     }
     tabId = loc.tab.id;
     nodeAddr = nodeOfTab(loc.workspace.id, loc.tab.id);

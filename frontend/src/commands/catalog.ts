@@ -112,7 +112,7 @@ import {
 } from "../lib/workspaceRoot";
 import { contentViewHost, hasContentViewHost } from "../lib/contentViews";
 import { nextFrame } from "../lib/nextFrame";
-import { waitForDomCommit } from "./waitForDomCommit";
+import { waitForDomCommit, waitForTabPresentationCommit } from "./waitForDomCommit";
 import {
   runSwitchScan,
   type SwitchScanActivationReceipt,
@@ -1721,12 +1721,6 @@ export function registerCatalog(): void {
       phase: "committed",
       mode: receipt.entry.mode === "snap" ? "snap" : "glide",
     };
-  };
-  const waitForTabPresentationCommit = async (viewId: string): Promise<void> => {
-    const node = (): HTMLElement | undefined => [...document.querySelectorAll<HTMLElement>(
-      '[data-node^="layout/tab/"]',
-    )].find((candidate) => candidate.dataset.node === `layout/tab/${viewId}`);
-    await waitForDomCommit(() => node()?.dataset.contentVisible === "true");
   };
   const activateForSwitchScan = async (
     command: "space.activate" | "tab.activate",

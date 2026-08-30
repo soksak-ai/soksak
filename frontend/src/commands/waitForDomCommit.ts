@@ -30,3 +30,11 @@ export function waitForDomCommit(
     if (predicate()) finish();
   });
 }
+
+/** Completes when the addressed tab is the content presentation committed by React. */
+export function waitForTabPresentationCommit(viewId: string): Promise<void> {
+  const node = (): HTMLElement | undefined => [...document.querySelectorAll<HTMLElement>(
+    '[data-node^="layout/tab/"]',
+  )].find((candidate) => candidate.dataset.node === `layout/tab/${viewId}`);
+  return waitForDomCommit(() => node()?.dataset.contentVisible === "true");
+}
