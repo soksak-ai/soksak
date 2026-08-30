@@ -14,7 +14,12 @@ import (
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
+func applyNativeDecorations(unsafe.Pointer, []preparedNativeDecoration) (bool, int, error) {
+	return false, 0, nil
+}
+
 var ErrRevealWithoutKeyUnsupported = i18n.Errorf("wails.window.revealWithoutKeyUnsupported", nil)
+
 func orderWindowFrontWithoutKey(window unsafe.Pointer) error {
 	if window == nil {
 		return i18n.Errorf("wails.window.noNativeLifetimeFront", nil)

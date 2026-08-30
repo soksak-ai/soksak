@@ -8,6 +8,10 @@ import (
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
+func applyNativeDecorations(unsafe.Pointer, []preparedNativeDecoration) (bool, int, error) {
+	return false, 0, nil
+}
+
 // ErrRevealWithoutKeyUnsupported is returned where no focus-free reveal exists.
 //
 // This framework's only reveal takes the keyboard, and there is no portable way
@@ -15,6 +19,7 @@ import (
 // window steal the focus from whatever the user is doing and report that it did
 // not — so the platform is named instead.
 var ErrRevealWithoutKeyUnsupported = i18n.Errorf("wails.window.revealWithoutKeyUnsupported", nil)
+
 // ErrActivationUnsupported is returned where no application activation request
 // exists. A window brought forward while the application stays in the
 // background receives no keys, and reporting success would leave the caller

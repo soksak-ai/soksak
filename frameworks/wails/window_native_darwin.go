@@ -11,11 +11,79 @@ package wails
 import "C"
 
 import (
+	"fmt"
 	"sync"
 	"unsafe"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
+
+func applyNativeDecorations(window unsafe.Pointer, decorations []preparedNativeDecoration) (bool, int, error) {
+	var native *C.SoksakNativeDecoration
+	allocations := make([]unsafe.Pointer, 0, 1+len(decorations)*3)
+	if len(decorations) > 0 {
+		memory := C.malloc(C.size_t(len(decorations)) * C.size_t(C.sizeof_SoksakNativeDecoration))
+		if memory == nil {
+			return true, 0, fmt.Errorf("allocating native decorations")
+		}
+		allocations = append(allocations, memory)
+		native = (*C.SoksakNativeDecoration)(memory)
+		rows := unsafe.Slice(native, len(decorations))
+		for index, decoration := range decorations {
+			identifier := C.CString(decoration.ID)
+			allocations = append(allocations, unsafe.Pointer(identifier))
+			rows[index].identifier = identifier
+			rows[index].strokeR = C.double(decoration.StrokeR)
+			rows[index].strokeG = C.double(decoration.StrokeG)
+			rows[index].strokeB = C.double(decoration.StrokeB)
+			rows[index].strokeA = C.double(decoration.StrokeA)
+			rows[index].strokeWidth = C.double(decoration.StrokeWidth)
+			rows[index].commandCount = C.int(len(decoration.commands))
+			commandMemory := C.malloc(C.size_t(len(decoration.commands)) * C.size_t(C.sizeof_SoksakNativePathCommand))
+			if commandMemory == nil {
+				for _, allocation := range allocations {
+					C.free(allocation)
+				}
+				return true, 0, fmt.Errorf("allocating native decoration path")
+			}
+			allocations = append(allocations, commandMemory)
+			rows[index].commands = (*C.SoksakNativePathCommand)(commandMemory)
+			commands := unsafe.Slice((*C.SoksakNativePathCommand)(commandMemory), len(decoration.commands))
+			for commandIndex, command := range decoration.commands {
+				commands[commandIndex] = C.SoksakNativePathCommand{
+					op: C.int(command.op), x1: C.double(command.x1), y1: C.double(command.y1),
+					x2: C.double(command.x2), y2: C.double(command.y2),
+				}
+			}
+			rows[index].dashCount = C.int(len(decoration.Dash))
+			if len(decoration.Dash) > 0 {
+				dashMemory := C.malloc(C.size_t(len(decoration.Dash)) * C.size_t(C.sizeof_double))
+				if dashMemory == nil {
+					for _, allocation := range allocations {
+						C.free(allocation)
+					}
+					return true, 0, fmt.Errorf("allocating native decoration dash")
+				}
+				allocations = append(allocations, dashMemory)
+				rows[index].dash = (*C.double)(dashMemory)
+				dash := unsafe.Slice((*C.double)(dashMemory), len(decoration.Dash))
+				for dashIndex, value := range decoration.Dash {
+					dash[dashIndex] = C.double(value)
+				}
+			}
+		}
+	}
+	defer func() {
+		for _, allocation := range allocations {
+			C.free(allocation)
+		}
+	}()
+	var applied C.int
+	if status := C.soksakApplyNativeDecorations(window, native, C.int(len(decorations)), &applied); status != 0 {
+		return true, 0, fmt.Errorf("native decoration plane refused with status %d", int(status))
+	}
+	return true, int(applied), nil
+}
 
 var windowInputMonitorOwner struct {
 	sync.RWMutex

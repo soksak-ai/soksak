@@ -8,6 +8,7 @@ package wails
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -108,7 +109,7 @@ func macActivation(presentation PresentationMode) application.ActivationPolicy {
 // path, which names the window it is a capture of.
 func hostServices(
 	reapers *reaperService,
-	nativeCompositor *compositor.Service,
+	nativeCompositor *nativePresentationService,
 	webviewSurface *webviewsurface.Service,
 	capture *CaptureService,
 	control *ControlService,
@@ -120,6 +121,36 @@ func hostServices(
 		application.NewService(capture),
 		application.NewService(control),
 	}
+}
+
+// nativePresentationService keeps the provider inventory service name and API,
+// but closes one missing ordering edge: after every native provider has applied
+// its children, Core's pointer-transparent decoration plane is raised last.
+// Embedding preserves every compositor method and its existing binding surface.
+type nativePresentationService struct {
+	*compositor.Service
+	decorations NativeDecorationHost
+}
+
+func (service *nativePresentationService) ServiceName() string {
+	if service == nil || service.Service == nil {
+		return "wails-service-native-compositor"
+	}
+	return service.Service.ServiceName()
+}
+
+func (service *nativePresentationService) Commit(snapshot compositor.Snapshot) (compositor.Receipt, error) {
+	receipt, err := service.Service.Commit(snapshot)
+	if err != nil {
+		return receipt, err
+	}
+	decorations := service.decorations
+	if decorations != nil {
+		if err := decorations.Reapply(snapshot.Window); err != nil {
+			return receipt, fmt.Errorf("native decoration ordering fence: %w", err)
+		}
+	}
+	return receipt, nil
 }
 
 // UnitReaper is something this host ends when the application quits. The name is all the host needs:
@@ -205,6 +236,10 @@ func Run(options Options) error {
 	// applied. The service list below registers the same value.
 	terminalBackend := terminalsurface.NewBackend()
 	nativeCompositor := compositor.NewService(nativeWindow, surfaceBackends(webviewBackend, terminalBackend))
+	decorations := newNativeDecorationStore(nativeWindow)
+	nativePresentation := &nativePresentationService{
+		Service: nativeCompositor, decorations: decorations,
+	}
 	// One reader of the last commit, shared by the surface commands and the capture. Two would
 	// answer from two moments, and the capture would draw a page at a rectangle the numbers say it
 	// is not at.
@@ -229,7 +264,7 @@ func Run(options Options) error {
 		Description: appDescription,
 		Services: hostServices(
 			&reaperService{name: "session-reaper", reapers: options.Reapers},
-			nativeCompositor,
+			nativePresentation,
 			webviewsurface.NewService(webviewBackend),
 			NewCaptureService(controlPlaneWindow, func() unsafe.Pointer {
 				return nativeWindow(controlPlaneWindow)
@@ -283,7 +318,8 @@ func Run(options Options) error {
 		Frames: func(stream string, frame any) {
 			options.Bridge.Emit(control.StreamEvent, control.StreamFrame{Stream: stream, Frame: frame})
 		},
-		NativeParent: func(name string) bool { return nativeWindow(name) != nil },
+		NativeParent:      func(name string) bool { return nativeWindow(name) != nil },
+		NativeDecorations: decorations,
 		// Quitting is two calls: reap and answer, then quit once the answer has
 		// been delivered. Both halves were declared unserved with the reason
 		// "this build quits without a prepare phase", which was false — the two

@@ -11,6 +11,35 @@
 
 #include <stdbool.h>
 
+typedef struct {
+  int op;
+  double x1;
+  double y1;
+  double x2;
+  double y2;
+} SoksakNativePathCommand;
+
+typedef struct {
+  const char *identifier;
+  const SoksakNativePathCommand *commands;
+  int commandCount;
+  double strokeR;
+  double strokeG;
+  double strokeB;
+  double strokeA;
+  double strokeWidth;
+  const double *dash;
+  int dashCount;
+} SoksakNativeDecoration;
+
+// Replaces the complete pointer-transparent decoration plane and raises it
+// above every current child surface. Coordinates are CSS points from the
+// content area's top-left. applied receives the number of shape layers.
+int soksakApplyNativeDecorations(void *nsWindow,
+                                 const SoksakNativeDecoration *decorations,
+                                 int count,
+                                 int *applied);
+
 // Order the window in front of every other window in this application without
 // making it the key window. Plain front ordering is not used: an occluded
 // window can have its display callbacks suspended, and then it never paints a

@@ -40,6 +40,10 @@ type HostDeps struct {
 	// NativeParent reports whether the named window's native container exists
 	// right now.
 	NativeParent func(window string) bool
+	// NativeDecorations owns the pointer-transparent plane above every provider
+	// surface. It is separate from Composition: one places Core chrome, the other
+	// records plugin-owned surfaces.
+	NativeDecorations NativeDecorationHost
 	// Dispatch delivers one request to one window's page.
 	Dispatch func(target, event string, payload any) error
 }
@@ -71,6 +75,7 @@ func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
 	// Each window has its own theme, so the colour goes to the window that
 	// requested it rather than to the one this host happened to capture.
 	RegisterBackground(registry, deps.Host)
+	RegisterNativeDecorations(registry, deps.NativeDecorations)
 	RegisterSurface(registry, SurfaceDeps{
 		Composition:  deps.Composition,
 		NativeParent: deps.NativeParent,

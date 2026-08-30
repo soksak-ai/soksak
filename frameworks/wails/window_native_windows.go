@@ -9,6 +9,10 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/w32"
 )
 
+func applyNativeDecorations(unsafe.Pointer, []preparedNativeDecoration) (bool, int, error) {
+	return false, 0, nil
+}
+
 func orderWindowFrontWithoutKey(window unsafe.Pointer) error {
 	if window == nil {
 		return i18n.Errorf("wails.window.noNativeLifetimeFront", nil)
@@ -43,6 +47,7 @@ func presentCaptureOnlyWindow(window unsafe.Pointer) error {
 }
 
 var ErrActivationUnsupported = i18n.Errorf("wails.window.activationUnsupported", nil)
+
 func activateApplication() error { return ErrActivationUnsupported }
 
 var ErrTitleUnsupported = i18n.Errorf("wails.window.titleUnsupported", nil)
