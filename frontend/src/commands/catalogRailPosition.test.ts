@@ -23,14 +23,18 @@ import {
   layoutSettlementFacts,
 } from "../lib/layoutSettlement";
 
-const group = (id: string, viewId: string = `${id}-view`): Pane => ({
+const group = (
+  id: string,
+  viewId: string = `${id}-view`,
+  pluginId: string = "test.plugin",
+): Pane => ({
   id,
   tabs: viewId
     ? [{
         id: viewId,
         kind: "plugin",
         title: id,
-        pluginId: "test.plugin",
+        pluginId,
         view: "main",
       }]
     : [],
@@ -358,6 +362,45 @@ describe("state.tree — the solution is a public fact", () => {
       boundPaneId: null,
       relationId: "rail-relation/spc-aaaaaa/none",
       placement: "pin",
+      connected: false,
+      side: "detached",
+      borderMode: "none",
+      pathCount: 0,
+    });
+  });
+
+  it("states none/0 when the rail preference is open but the selected tab's plugin has no linked set", async () => {
+    const unlinked = workspace({ mode: "flow" });
+    unlinked.spaces[0] = {
+      ...unlinked.spaces[0],
+      activePaneId: "pan-bbbbbb",
+      layout: {
+        type: "split",
+        id: "spl-aaaaaa",
+        dir: "row",
+        sizes: [0.5, 0.5],
+        children: [
+          { type: "leaf", value: group("pan-aaaaaa", "tab-aaaaaa") },
+          {
+            type: "leaf",
+            value: group("pan-bbbbbb", "tab-bbbbbb", "test.unlinked"),
+          },
+        ],
+      },
+    };
+    useSessions.setState({ workspaces: [unlinked], activeId: unlinked.id });
+
+    const tree = await execute("state.tree", {}, {});
+    const relation = (tree.data as {
+      workspaces: Array<{ spaces: Array<{ railRelation: unknown }> }>;
+    }).workspaces[0].spaces[0].railRelation;
+
+    expect(relation).toEqual({
+      source: "none",
+      boundTabId: null,
+      boundPaneId: null,
+      relationId: "rail-relation/spc-aaaaaa/none",
+      placement: "flow",
       connected: false,
       side: "detached",
       borderMode: "none",

@@ -28,6 +28,7 @@ vi.stubGlobal("ResizeObserver", class {
 });
 
 const PLUGIN = "plg-a";
+const OTHER_PLUGIN = "plg-b";
 
 const view = (surfaces: ("side" | "tab")[]) => ({
   id: "tree",
@@ -63,14 +64,17 @@ describe("a region draws the set standing in it", () => {
     host.remove();
   });
 
-  const render = (region: "left" | "rail" | "right") =>
+  const render = (
+    region: "left" | "rail" | "right",
+    focusedPluginId: string | null = PLUGIN,
+  ) =>
     act(() => {
       root.render(
         <SectionSetHost
           region={region}
           workspace={useSessions.getState().workspaces[0]!}
           paneId=""
-          focusedPluginId={PLUGIN}
+          focusedPluginId={focusedPluginId}
         />,
       );
     });
@@ -106,6 +110,31 @@ describe("a region draws the set standing in it", () => {
     stand("rail");
     render("rail");
     expect(host.textContent).toContain("Files");
+  });
+
+  it("switches the standing rail set on the selected tab's plugin in the same render", () => {
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
+    useViewRegistry.getState().register(
+      OTHER_PLUGIN,
+      { ...view(["side"]), title: { en: "Processes", ko: "Processes" } },
+      { mount: () => {} },
+    );
+    const files = useSectionSets.getState().create("files");
+    const processes = useSectionSets.getState().create("processes");
+    useSectionSets.getState().arrange(files.id, [`${PLUGIN}.tree`]);
+    useSectionSets.getState().arrange(processes.id, [`${OTHER_PLUGIN}.tree`]);
+    useSectionSets.getState().link(PLUGIN, "rail", files.id);
+    useSectionSets.getState().link(OTHER_PLUGIN, "rail", processes.id);
+
+    render("rail", PLUGIN);
+    expect(host.textContent).toContain("Files");
+    expect(host.textContent).not.toContain("Processes");
+
+    render("rail", OTHER_PLUGIN);
+    expect(host.textContent).not.toContain("Files");
+    expect(host.textContent).toContain("Processes");
+    expect(host.querySelector<HTMLElement>(".sidebar-body")?.dataset.regionStanding)
+      .toBe(processes.id);
   });
 
   it("draws nothing in the place the link does not name", () => {

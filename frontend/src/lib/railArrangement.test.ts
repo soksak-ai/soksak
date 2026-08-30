@@ -242,6 +242,52 @@ describe("effective rail relation — one rule for the renderer and the publishe
     expect(resolved.targetRect).toBeNull();
   });
 
+  it("an arrangement with no standing rail is none/0 even when the region preference is open", () => {
+    // `regionOpen` is only the person's preference. The selected plugin has no relation unless its
+    // set actually stands in the rail. Passing the preference as a second truth made state.tree
+    // publish a bound tab and an adjacent union for an element the arrangement says is absent.
+    const resolved = relation(
+      solve(threeColumns(), "b", { railOpen: false }),
+      "flow",
+      true,
+    );
+
+    expect(resolved.state).toMatchObject({
+      boundTabId: null,
+      boundPaneId: null,
+      source: "none",
+      connected: false,
+      borderMode: "none",
+      pathCount: 0,
+    });
+    expect(resolved.targetRect).toBeNull();
+  });
+
+  it("a visible departing rail does not attempt adjacency against an unlinked destination tab", () => {
+    const displayed = solve(threeColumns(), "a", { railOpen: true });
+    const destination = solve(threeColumns(), "b", { railOpen: false });
+
+    const resolved = resolvePresentedRailRelation({
+      contentId: "c1",
+      displayed,
+      destination,
+      placement: "flow",
+      // The departure strip can still be on screen for its closing frame. Visibility is not a
+      // link owned by the newly selected plugin.
+      railOpen: true,
+    });
+
+    expect(resolved.state).toMatchObject({
+      boundTabId: null,
+      boundPaneId: null,
+      source: "none",
+      connected: false,
+      borderMode: "none",
+      pathCount: 0,
+    });
+    expect(resolved.targetRect).toBeNull();
+  });
+
   it("a FLOW click commit does not mix the old displayed station with the new binding — it draws the destination solve's outline at once", () => {
     const layout = oneOverTwo();
     const displayed = solve(layout, "top");
