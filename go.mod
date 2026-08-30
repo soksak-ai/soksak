@@ -8,7 +8,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/min-median-max/wails-service-native-compositor v0.0.0-20260830000110-5fe697ed673d
-	github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260830022831-036d24869269
+	github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260830023320-f0698f0ec0de
 	github.com/min-median-max/wails-service-webview-surface v0.0.0-20260829233931-bf938fc3e1d4
 	github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f
 	github.com/soksak-ai/soksak-contract-control v0.0.0-20260829002406-d37e5c3cc521
