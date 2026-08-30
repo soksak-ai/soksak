@@ -26,7 +26,7 @@ static SoksakNativeDecorationOverlay *soksakDecorationOverlay(NSView *content) {
   SoksakNativeDecorationOverlay *overlay =
       [[SoksakNativeDecorationOverlay alloc] initWithFrame:content.bounds];
   overlay.wantsLayer = YES;
-  overlay.layer.geometryFlipped = YES;
+  overlay.layer.zPosition = 1000000;
   overlay.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
   [content addSubview:overlay positioned:NSWindowAbove relativeTo:nil];
   [overlay release];
@@ -79,7 +79,6 @@ int soksakApplyNativeDecorations(void *nsWindow,
       const SoksakNativeDecoration *decoration = &decorations[index];
       CAShapeLayer *shape = [CAShapeLayer layer];
       shape.frame = overlay.bounds;
-      shape.geometryFlipped = YES;
       shape.contentsScale = scale;
       shape.fillColor = nil;
       shape.strokeColor = [NSColor colorWithSRGBRed:decoration->strokeR

@@ -1,4 +1,5 @@
 import type { AppliedSurface } from "../lib/contentViews";
+import type { NativeDecoration } from "../framework";
 
 export interface SurfacePicturePlacement {
   id: string;
@@ -18,6 +19,7 @@ export interface ComposedCapture extends DocumentCapture {
     nativeComposed: boolean;
     surfaces: number;
     drawn: number;
+    decorations: number;
   };
 }
 
@@ -67,6 +69,7 @@ export async function composeNativeSurfacePictures(
   region: { x: number; y: number; w: number; h: number },
   surfaces: readonly AppliedSurface[],
   picture: (id: string) => Promise<string | null>,
+  decorations: readonly NativeDecoration[] = [],
 ): Promise<DocumentCapture | ComposedCapture> {
   if (capture.note.documentOnly !== true) return capture;
   const placements = nativeSurfacePicturePlacements(region, surfaces);
@@ -79,6 +82,7 @@ export async function composeNativeSurfacePictures(
         nativeComposed: true,
         surfaces: 0,
         drawn: 0,
+        decorations: 0,
       },
     };
   }
@@ -127,6 +131,22 @@ export async function composeNativeSurfacePictures(
       );
     }
   }
+  // Core chrome is the final native plane. Capture-only reconstructs the compositor picture from
+  // the document and provider pixels, so it must finish with the same decoration snapshot after
+  // every provider image. Drawing it before this loop exactly reproduces the defect: browser and
+  // terminal pixels overwrite the left, right and bottom focus/relation strokes.
+  context.save();
+  context.scale(scaleX, scaleY);
+  context.translate(-region.x, -region.y);
+  for (const decoration of decorations) {
+    context.strokeStyle = `rgba(${decoration.strokeR * 255}, ${decoration.strokeG * 255}, ${decoration.strokeB * 255}, ${decoration.strokeA})`;
+    context.lineWidth = decoration.strokeWidth;
+    context.lineJoin = "round";
+    context.lineCap = "butt";
+    context.setLineDash(decoration.dash);
+    context.stroke(new Path2D(decoration.path));
+  }
+  context.restore();
   context.globalAlpha = 1;
   const encoded = canvas.toDataURL("image/png");
   const prefix = "data:image/png;base64,";
@@ -139,6 +159,7 @@ export async function composeNativeSurfacePictures(
       nativeComposed: true,
       surfaces: placements.length,
       drawn: placements.length,
+      decorations: decorations.length,
     },
   };
 }

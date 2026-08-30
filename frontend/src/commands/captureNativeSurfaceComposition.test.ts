@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { nativeSurfacePicturePaint, nativeSurfacePicturePlacements } from "./captureNativeSurfaceComposition";
 
 describe("capture-only native surface composition", () => {
+  it("paints Core native decorations after every provider image", () => {
+    const source = readFileSync(resolve(import.meta.dirname, "captureNativeSurfaceComposition.ts"), "utf8");
+    const surfacePaint = source.indexOf("context.drawImage(\n      image,");
+    const decorationPaint = source.indexOf("context.stroke(new Path2D(decoration.path))");
+    expect(surfacePaint).toBeGreaterThan(0);
+    expect(decorationPaint).toBeGreaterThan(surfacePaint);
+  });
+
   it("paints the native picture opaquely and applies declared dim once above it", () => {
     expect(nativeSurfacePicturePaint(1)).toEqual({ pictureAlpha: 1, veilAlpha: 0 });
     expect(nativeSurfacePicturePaint(0.5)).toEqual({ pictureAlpha: 1, veilAlpha: 0.5 });

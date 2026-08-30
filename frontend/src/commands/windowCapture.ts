@@ -5,6 +5,7 @@ import {
   composeNativeSurfacePictures,
   type DocumentCapture,
 } from "./captureNativeSurfaceComposition";
+import { nativeDecorationFacts } from "../lib/nativeDecorations";
 
 export async function captureWindowPixels(
   rect?: { x: number; y: number; w: number; h: number },
@@ -24,6 +25,7 @@ export async function captureWindowPixels(
         region,
         await host.appliedSurfaces(),
         (id) => host.picture(id),
+        nativeDecorationFacts().decorations,
       );
     },
     (presentation) => invoke("window_capture_restore", { ordered: presentation.ordered }).then(() => undefined),
