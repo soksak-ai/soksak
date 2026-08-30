@@ -207,9 +207,12 @@ Vision 0.0.34는 적용 응답을 반환하며, Sidecar Kit 0.0.30은 양수를 
 | Ghostty 0.0.36 | engine selection 비어 있음 | `10/56/pinned` | `ROW065..071`, pixel 확인 | scroll GREEN, selection RED |
 | Kitty 0.0.33 | engine selection 비어 있음 | `10/54/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
 | Shitty 0.0.32 | engine selection 비어 있음 | `10/52/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
-| VT100 0.0.35 | engine selection 비어 있음 | `10/52/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
+| VT100 0.0.36 | 정확한 `SELECT_VT100_1234567890`; copy와 독립 clipboard read가 23자로 일치 | `10/54/pinned` | selection pixel 확인, scroll command/status 일치 | selection/copy GREEN, scroll 상태 GREEN·viewport regression OPEN |
 | WezTerm 0.0.35 | engine selection 비어 있음 | `10/52/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
 
-GREEN인 scroll 5개 row는 command와 status에서 같은 offset·`followMode`를 반환했고 capture viewport는
-42~71행을 보였습니다. Selection은 provider 5개에서 계속 RED이며, Alacritty frame regression을 먼저
-해결해야 그 provider의 selection·scroll row를 판정할 수 있습니다.
+최초 GREEN인 scroll 5개 row는 command와 status에서 같은 offset·`followMode`를 반환했고 capture
+viewport는 42~71행을 보였습니다. VT100 selection은 fork commit `d557ec1`이 viewport를 움직이지 않는
+signed logical-row text API를 노출하고 Sidecar 0.0.36이 selection endpoint·range를 소유하면서 GREEN이
+됐습니다. 이후 80행 실행은 `10/54/pinned`를 반환했지만 viewport pixel이 비어 있어 scroll pixel row는
+OPEN입니다. Ghostty, Kitty, Shitty, WezTerm selection은 계속 RED이며 Alacritty frame regression을 먼저
+해결해야 그 provider row를 판정할 수 있습니다.

@@ -219,9 +219,12 @@ as history and negative lines as bottom. Fresh installed rows produced:
 | Ghostty 0.0.36 | empty engine selection | `10/56/pinned` | `ROW065..071`, pixels inspected | scroll GREEN, selection RED |
 | Kitty 0.0.33 | empty engine selection | `10/54/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
 | Shitty 0.0.32 | empty engine selection | `10/52/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
-| VT100 0.0.35 | empty engine selection | `10/52/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
+| VT100 0.0.36 | exact `SELECT_VT100_1234567890`; copy and independent clipboard read matched 23 characters | `10/54/pinned` | selection pixels inspected; scroll state matched command/status | selection/copy GREEN; scroll state GREEN, viewport regression OPEN |
 | WezTerm 0.0.35 | empty engine selection | `10/52/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
 
-The five GREEN scroll rows returned the same offset and `followMode` through command and status; the
-captured viewports showed rows 42 through 71. Selection remains RED for five providers, and the
-Alacritty frame regression must be fixed before its selection or scroll row can be judged.
+The initial five GREEN scroll rows returned the same offset and `followMode` through command and
+status; their captured viewports showed rows 42 through 71. VT100 selection became GREEN after fork
+commit `d557ec1` exposed signed logical-row text without moving the viewport and Sidecar 0.0.36
+owned the selection endpoints and ranges. Its later 80-row run returned `10/54/pinned` but painted
+an empty viewport, so that scroll pixel row remains OPEN. Selection remains RED for Ghostty, Kitty,
+Shitty and WezTerm, and the Alacritty frame regression must be fixed before its rows can be judged.
