@@ -5,6 +5,6 @@
   },
   "terminalSurface": {
     "repository": "https://github.com/min-median-max/wails-service-terminal-surface",
-    "commit": "b2d591b42746e586d7ea60d1653bd2472f452adb"
+    "commit": "ec576f92780439113121042c8e13a43ea09d6170"
   }
 }
