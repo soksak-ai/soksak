@@ -16,12 +16,12 @@ state를 읽지 않는다.
 Core의 기존 `process.list`는 Core process manager가 시작한 child만 반환한다. terminal shell은
 `soksak-sidecar-pty`가 소유하므로 실행 중인 terminal에서 `process.list = []`가 나올 수 있다.
 PTY owner는 이제 `process.inventory`로 실행 중인 shell snapshot을 공개하고 bounded
-`process.observe` stream으로 shell 시작/종료 event를 보냅니다. Core도 owner 구현을 읽지 않고
+`process.observe` stream으로 shell과 descendant 시작/갱신/종료 event를 보냅니다. Core도 owner 구현을 읽지 않고
 주입된 source를 합산하는 `process.inventory`를 공개하고 애플리케이션 연결 지점에서 public contract로
-PTY source를 연결합니다. PTY가 실행 중이 아닐 때 inventory read가 새로 시작하지 않습니다. 자식
-프로세스 전체, updated event, 설치 후 시각 acceptance는 아직 없습니다. 첫 읽기 전용 snapshot
-consumer인 local Plugin `soksak-plugin-process-monitor` 0.0.9은 package했지만 폴링하지 않으며,
-이 gate가 끝나기 전에는 완성 monitor로 배포하지 않습니다.
+PTY source를 연결합니다. PTY가 실행 중이 아닐 때 inventory read가 새로 시작하지 않습니다. PTY
+0.0.22, Core event relay, Process Monitor 0.0.14가 polling 없이 descendant 시작·종료 전달과 설치 후
+시각 acceptance를 닫았습니다. 남은 process-monitor gate는 측정된 sidebar resize sequence이며,
+terminal/browser tab 전환 절반은 GREEN입니다.
 
 2026-08-30 격리 설치에서 monitor 0.0.6과 이미 설치된 File Tree 모두 section frame과 탭은 보였지만
 section 배치 뒤 provider DOM이 없었습니다. `ui.plugin-view.overlay`는 `registryPresent=true`,
@@ -166,5 +166,32 @@ parent PID, command, 같은 cwd, `running`을 보고했고 non-key capture에서
 보였습니다. 이전에 복원된 session은 explicit missing-cwd count로만 나타났습니다.
 
 설치 snapshot, project filtering, shell, descendant, local Registry, 기본 sidebar composition row는
-GREEN입니다. Live descendant change 전달과 유한 sidebar/tab transition recording은 OPEN입니다. Monitor는
-명시적 refresh command만 사용하고 polling하지 않습니다.
+GREEN입니다. 명시적 `refresh` command는 operator recovery이며 live path가 아닙니다.
+
+## 이벤트 기반 설치 acceptance — 2026-08-30
+
+PTY 0.0.22는 Darwin process-event watcher로 descendant 관측을 소유하고 같은 monotonic owner ledger를
+snapshot과 event interface로 공개합니다. Immutable local release digest는
+`78611e24e0b8c1989e67b4409a80ecf9105fe4814823873f6a39253d2d236385`입니다. Core source
+`81e25abf`는 선언된 PTY unit이 시작될 때 `process.observe`를 구독하고 public
+`process.inventory.changed` event를 relay합니다. PTY source tree나 process 구현을 읽지 않습니다.
+
+Process Monitor 0.0.14는 이 event stream을 축약하고 `status`와 event 기반 `wait` command를
+공개합니다. `wait`는 owner, 낮은 revision 경계, 선택적인 정확한 process count를 받습니다. 축약된
+state로만 완료하며 timer는 polling loop가 아니라 bounded failure deadline입니다. Owner RED에서는
+parameter schema를 선언하지 않은 handler가 `INVALID_PARAMS`로 거부됐고, GREEN은 모든 parameter를
+public registry에 선언합니다. Immutable release는 `published` 뒤 `unchanged`였으며 digest는
+`910d514294b060267347589e73653e9a2c243c9c643d2a865ad9bcead0600d63`입니다.
+
+격리 capture-only 설치의 baseline은 owner revision 8, shell record 4개였습니다. `refresh`를
+호출하지 않고 `sleep 60` 하나를 시작하자 revision 9, record 5개에서 `wait`가 완료됐습니다. 같은
+PID를 종료하자 다음 `wait`가 revision 10, record 4개에서 완료됐습니다. 두 번째 시작은 revision
+11에 도달했고 focus를 주지 않은 native-composed capture에서 terminal 옆에 shell 4개와 owner가
+공개한 `sleep 60` descendant가 보였습니다. Cleanup은 revision 12, record 4개에 도달했습니다. 따라서
+snapshot, Core relay, plugin reducer, public wait command, rendered row가 같은 owner revision에
+합의합니다.
+
+설치 window에서 linked terminal/browser sidebar set도 양방향으로 전환했습니다. 각 방향은 한 frame에
+settled됐고 flicker·blank·overlap·native-mismatch frame은 모두 0이었습니다. 이로써 gate 6의 tab
+전환 절반은 닫혔습니다. 유한 sidebar resize recording은 여전히 OPEN이며 static capture로
+추정하지 않습니다.

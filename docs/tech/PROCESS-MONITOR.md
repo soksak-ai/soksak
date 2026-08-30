@@ -16,12 +16,12 @@ terminal plugin's private state.
 Core's existing `process.list` reports only children started by Core's process manager. A terminal
 shell is owned by `soksak-sidecar-pty`, so a running terminal can correctly have `process.list = []`.
 The PTY owner now exposes its running shell snapshot through `process.inventory` and a bounded
-`process.observe` stream for shell start/end events. Core now exposes `process.inventory` and accepts
+`process.observe` stream for shell and descendant start/update/end events. Core now exposes `process.inventory` and accepts
 injected owner sources without reading their implementation, and wires the PTY source through the
 public contract at the application boundary. The source is not started by an inventory read when
-no PTY is running. Descendant coverage, updated events, and installed visual acceptance remain open.
-A first read-only snapshot consumer is packaged as local Plugin `soksak-plugin-process-monitor` 0.0.9;
-it does not poll and is not a complete monitor until those gates exist.
+no PTY is running. PTY 0.0.22, Core's event relay, and Process Monitor 0.0.14 close descendant
+start/end delivery and installed visual acceptance without polling. The remaining process-monitor
+gate is a measured sidebar-resize sequence; the terminal/browser tab-transition half is GREEN.
 
 The 2026-08-30 isolated installation of monitor 0.0.6 and the already-installed File Tree both
 showed the sidebar frame and tab but no provider-owned DOM after section placement. `ui.plugin-view.overlay`
@@ -171,5 +171,33 @@ the same cwd and `running`; the non-key capture showed both records beside the l
 Older restored sessions remained visible only as the explicit missing-cwd count.
 
 This closes the installed snapshot, project filtering, shell, descendant, local-registry and basic
-sidebar-composition rows. Live descendant change delivery and finite sidebar/tab transition
-recording remain OPEN; the monitor still uses its explicit refresh command and does not poll.
+sidebar-composition rows. The explicit `refresh` command remains operator recovery, not a live path.
+
+## Event-driven installed acceptance — 2026-08-30
+
+PTY 0.0.22 owns descendant observation with a Darwin process-event watcher and publishes the same
+monotonic owner ledger through snapshot and event interfaces. Its immutable local release digest is
+`78611e24e0b8c1989e67b4409a80ecf9105fe4814823873f6a39253d2d236385`. Core source `81e25abf`
+subscribes to `process.observe` when the declared PTY unit starts and relays the public
+`process.inventory.changed` event; it does not read the PTY source tree or process implementation.
+
+Process Monitor 0.0.14 reduces that event stream and exposes `status` plus an event-driven `wait`
+command. `wait` requires an owner, a lower revision bound, and optionally an exact process count.
+It resolves only from the reduced state; its timer is a bounded failure deadline, never a polling
+loop. The owner RED showed that a handler without a declared command schema was rejected as
+`INVALID_PARAMS`; the GREEN declares every parameter in the public registry. The immutable release
+was accepted as `published` and then `unchanged`, digest
+`910d514294b060267347589e73653e9a2c243c9c643d2a865ad9bcead0600d63`.
+
+In an isolated capture-only installation, the baseline was owner revision 8 with four shell
+records. Without calling `refresh`, starting one `sleep 60` resolved `wait` at revision 9 with five
+records. Terminating the same PID resolved the next `wait` at revision 10 with four records. A second
+start reached revision 11, and a focus-free native-composed capture visibly showed the four shells
+and the owned `sleep 60` descendant beside the terminal. Cleanup reached revision 12 with four records. Thus
+snapshot, Core relay, plugin reducer, public wait command, and rendered row agree on the same owner
+revisions.
+
+Linked terminal and browser sidebar sets were also switched in an installed window. Each direction
+settled in one frame with zero flicker, blank, overlap, or native-mismatch frames. That closes the
+tab-transition half of gate 6. A finite sidebar-resize recording remains OPEN and is not inferred
+from the static capture.
