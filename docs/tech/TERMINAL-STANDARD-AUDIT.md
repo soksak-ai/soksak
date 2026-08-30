@@ -256,3 +256,18 @@ Alacritty initial output remains OPEN: 0.0.40 adds evidence and owner guards but
 so one clean run cannot erase the earlier RED. Completion requires a named lifecycle test that
 deterministically reproduces the empty initial full frame and turns GREEN under the same scheduling
 boundary.
+
+VT100 0.0.37 consumes the same observable Sidecar Kit and adds an owner guard for an 80-row burst at
+a shifted viewport. In a clean installed Vision 0.0.39 run, the terminal consumed 1,368 source bytes
+with zero gaps, `scroll(lines=10)` returned `10/52/pinned`, the full provider frame contained rows
+42 through 71, the Plugin read contained rows 43 through 71, and the non-key composed capture showed
+those rows. This is a GREEN clean-run scroll row; the earlier blank lifecycle observation remains
+relevant until the scheduling boundary is deterministic.
+
+The same run exposed a truthful-label defect: commands executed by a VT100 pane were reported as
+`alacritty terminal read/scroll`. Plugin Kit 0.0.95 derives static command descriptions from the
+terminal Plugin label rather than its default engine. Vision 0.0.40 then returned `Vision Terminal
+read/scroll` while public status continued to report `engineId=vt100`. Immediately after that hot
+Plugin replacement, the first `scroll(offset=10)` returned offset zero; a following
+`scroll(lines=10)` returned and published `10/52/pinned`. Hot-reload scroll readiness is therefore
+OPEN and is not covered by the clean-run row.

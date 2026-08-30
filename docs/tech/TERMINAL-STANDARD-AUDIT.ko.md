@@ -240,3 +240,16 @@ prompt가 유지됐습니다. 두 composed capture는 모두 non-key 상태를 �
 Alacritty 최초 output은 계속 OPEN입니다. 0.0.40은 증거와 owner guard만 추가했으며 동작 변경이 없으므로
 한 번의 clean run으로 이전 RED를 지울 수 없습니다. 동일 scheduling 경계에서 빈 최초 full frame을
 결정적으로 재현하고 GREEN으로 바꾸는 이름 있는 lifecycle test가 있어야 완료됩니다.
+
+VT100 0.0.37은 같은 observable Sidecar Kit을 사용하며 shifted viewport의 80행 burst owner guard를
+추가했습니다. 깨끗하게 설치한 Vision 0.0.39 실행에서 terminal은 source byte 1,368개를 gap 0으로
+소비했고 `scroll(lines=10)`은 `10/52/pinned`를 반환했습니다. Full provider frame은 42~71행,
+Plugin read는 43~71행을 포함했고 non-key composed capture에서도 그 행을 확인했습니다. 이는 clean-run
+scroll row의 GREEN이며, scheduling 경계가 결정적이 되기 전까지 이전 blank lifecycle 관측은 유효합니다.
+
+같은 실행은 truthful-label 결함도 드러냈습니다. VT100 pane의 command가 `alacritty terminal
+read/scroll`로 보고됐습니다. Plugin Kit 0.0.95는 static command description을 default engine이 아니라
+terminal Plugin label에서 만듭니다. Vision 0.0.40은 public status의 `engineId=vt100`을 유지하면서
+`Vision Terminal read/scroll`을 반환했습니다. 이 hot Plugin replacement 직후 첫
+`scroll(offset=10)`은 offset 0을 반환했고, 다음 `scroll(lines=10)`은 `10/52/pinned`를 반환하고
+게시했습니다. 따라서 hot-reload scroll readiness는 OPEN이며 clean-run row에 포함하지 않습니다.
