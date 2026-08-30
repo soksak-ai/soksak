@@ -220,14 +220,30 @@ as history and negative lines as bottom. Fresh installed rows produced:
 | Kitty 0.0.33 | empty engine selection | `10/54/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
 | Shitty 0.0.32 | empty engine selection | `10/52/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
 | VT100 0.0.36 | exact `SELECT_VT100_1234567890`; copy and independent clipboard read matched 23 characters | `10/54/pinned` | selection pixels inspected; scroll state matched command/status | selection/copy GREEN; scroll state GREEN, viewport regression OPEN |
-| WezTerm 0.0.35 | empty engine selection | `10/52/pinned` | rows and pixels inspected | scroll GREEN, selection RED |
+| WezTerm 0.0.36 | exact `SELECT_WEZTERM_24680`; copy and independent clipboard read matched 20 characters | `10/136/pinned` | `WZROW042..071`, selection and scroll pixels inspected | selection/copy/scroll GREEN |
 
 The initial five GREEN scroll rows returned the same offset and `followMode` through command and
 status; their captured viewports showed rows 42 through 71. VT100 selection became GREEN after fork
 commit `d557ec1` exposed signed logical-row text without moving the viewport and Sidecar 0.0.36
 owned the selection endpoints and ranges. Its later 80-row run returned `10/54/pinned` but painted
-an empty viewport, so that scroll pixel row remains OPEN. Selection remains RED for Ghostty, Kitty,
-Shitty and WezTerm, and the Alacritty frame regression must be fixed before its rows can be judged.
+an empty viewport, so that scroll pixel row remains OPEN. Selection remains RED for Ghostty, Kitty
+and Shitty, and the Alacritty frame regression must be fixed before its rows can be judged.
+
+WezTerm Sidecar 0.0.36 owns simple, line, block and extend selection over the rows materialized by
+its selected engine. Its owner RED first failed because the provider returned no selection; the
+same named test now returns the exact text and row range without a generic Kit fallback. Vision
+0.0.46 selects that immutable Sidecar. In the installed capture-only environment, a public DOM drag
+selected `SELECT_WEZTERM_24680`; the selection command, copy command and independent clipboard read
+returned the same 20 characters. The native selection pixels were inspected while the window
+remained non-key. The same process then produced 80 numbered rows; `scroll(lines=10)` returned
+`10/136/pinned`, Plugin read returned rows 42 through 71, and the composed native capture showed
+those rows. The Sidecar PID remained unchanged across drag, copy, capture and scroll.
+
+The same run exposed a separate observation-command RED: a rapid 80-row burst was already readable
+and scrollable, but `wait(contains=WZROW080)` timed out. This does not invalidate the selection or
+scroll evidence, which was read independently, and it is not accepted as a timing workaround.
+The event-owned `wait` transaction remains OPEN until its current-state read and subsequent frame
+notification cannot miss the condition at their registration boundary.
 
 ## Initial-output evidence — 2026-08-30
 

@@ -208,14 +208,28 @@ Vision 0.0.34는 적용 응답을 반환하며, Sidecar Kit 0.0.30은 양수를 
 | Kitty 0.0.33 | engine selection 비어 있음 | `10/54/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
 | Shitty 0.0.32 | engine selection 비어 있음 | `10/52/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
 | VT100 0.0.36 | 정확한 `SELECT_VT100_1234567890`; copy와 독립 clipboard read가 23자로 일치 | `10/54/pinned` | selection pixel 확인, scroll command/status 일치 | selection/copy GREEN, scroll 상태 GREEN·viewport regression OPEN |
-| WezTerm 0.0.35 | engine selection 비어 있음 | `10/52/pinned` | row·pixel 확인 | scroll GREEN, selection RED |
+| WezTerm 0.0.36 | 정확한 `SELECT_WEZTERM_24680`; copy와 독립 clipboard read가 20자로 일치 | `10/136/pinned` | `WZROW042..071`, selection·scroll pixel 확인 | selection/copy/scroll GREEN |
 
 최초 GREEN인 scroll 5개 row는 command와 status에서 같은 offset·`followMode`를 반환했고 capture
 viewport는 42~71행을 보였습니다. VT100 selection은 fork commit `d557ec1`이 viewport를 움직이지 않는
 signed logical-row text API를 노출하고 Sidecar 0.0.36이 selection endpoint·range를 소유하면서 GREEN이
 됐습니다. 이후 80행 실행은 `10/54/pinned`를 반환했지만 viewport pixel이 비어 있어 scroll pixel row는
-OPEN입니다. Ghostty, Kitty, Shitty, WezTerm selection은 계속 RED이며 Alacritty frame regression을 먼저
-해결해야 그 provider row를 판정할 수 있습니다.
+OPEN입니다. Ghostty, Kitty, Shitty selection은 계속 RED이며 Alacritty frame regression을 먼저 해결해야
+그 provider row를 판정할 수 있습니다.
+
+WezTerm Sidecar 0.0.36은 선택된 engine이 materialize한 row 위에서 simple, line, block, extend selection을
+소유합니다. owner RED는 provider가 selection을 반환하지 않아 먼저 실패했고, 같은 이름의 test가 이제
+generic Kit fallback 없이 정확한 text와 row range를 반환합니다. Vision 0.0.46은 그 불변 Sidecar를
+선택합니다. 설치된 capture-only environment에서 공개 DOM drag는 `SELECT_WEZTERM_24680`을 선택했고,
+selection command, copy command, 독립 clipboard read가 같은 20자를 반환했습니다. window가 non-key인
+상태에서 native selection pixel을 직접 확인했습니다. 같은 process가 이어서 번호 row 80개를 만들었고,
+`scroll(lines=10)`은 `10/136/pinned`, Plugin read는 42~71행을 반환했으며 합성 native capture도 해당 row를
+보여 줬습니다. drag, copy, capture, scroll 전후 Sidecar PID는 바뀌지 않았습니다.
+
+같은 실행은 별도 관측 command RED도 드러냈습니다. 빠른 80-row burst는 이미 read와 scroll이 가능했지만
+`wait(contains=WZROW080)`은 timeout이 났습니다. 독립 read로 판정한 selection·scroll 증거는 유효합니다.
+이 결과를 timing workaround로 사용하지 않습니다. event 소유 `wait` transaction은 등록 시점의 현재
+state read와 이후 frame notification 사이에서 조건을 놓칠 수 없을 때까지 OPEN입니다.
 
 ## 최초 output 증거 — 2026-08-30
 
