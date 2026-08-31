@@ -9,6 +9,7 @@ const state = moduleState("lib/nativeDecorations#registry", () => ({
   scheduled: false,
   running: false,
   dirty: false,
+  presentationVisible: true,
   lastSignature: "",
   lastReceipt: null as NativeDecorationReceipt | null,
   error: null as string | null,
@@ -26,7 +27,10 @@ async function flush(): Promise<NativeDecorationReceipt | null> {
   if (state.running || !state.dirty) return state.lastReceipt;
   state.running = true;
   state.dirty = false;
-  const decorations = snapshot();
+  // Declarations remain owned by their components while a DOM overlay is open. Only their native
+  // presentation is suppressed: the AppKit plane is necessarily above the document, so applying
+  // even one stroke would put Core chrome above the modal that currently owns presentation.
+  const decorations = state.presentationVisible ? snapshot() : [];
   const signature = JSON.stringify(decorations);
   if (signature === state.lastSignature) {
     state.running = false;
@@ -78,12 +82,32 @@ export function replaceNativeDecorations(
   schedule();
 }
 
+/**
+ * Selects whether the declared Core decorations are presented in the final native plane.
+ *
+ * This is one window-level presentation fact, not a rule each focus/relation producer re-creates.
+ * A false value commits an empty snapshot while retaining declarations, so the latest geometry is
+ * restored atomically when the overlay closes. The caller drives it from the overlay state edge;
+ * there is no timer or polling path.
+ */
+export function setNativeDecorationPresentationVisible(visible: boolean): void {
+  if (state.presentationVisible === visible) return;
+  state.presentationVisible = visible;
+  schedule();
+}
+
 export function nativeDecorationFacts(): {
   decorations: NativeDecoration[];
+  presentationVisible: boolean;
   receipt: NativeDecorationReceipt | null;
   error: string | null;
 } {
-  return { decorations: snapshot(), receipt: state.lastReceipt, error: state.error };
+  return {
+    decorations: snapshot(),
+    presentationVisible: state.presentationVisible,
+    receipt: state.lastReceipt,
+    error: state.error,
+  };
 }
 
 /** Test reset also commits the empty ownership map on the next event edge. */
@@ -92,6 +116,7 @@ export function __resetNativeDecorationsForTest(): void {
   state.scheduled = false;
   state.running = false;
   state.dirty = false;
+  state.presentationVisible = true;
   state.lastSignature = "";
   state.lastReceipt = null;
   state.error = null;

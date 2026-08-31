@@ -28,20 +28,24 @@ export function registerLayoutAlignmentCatalog(): void {
     description: key("cmd.surface.decorations.desc"),
     triggers: { ko: "네이티브 포커스 관계 보더 최상단 장식" },
     params: {},
-    returns: "{ window, sequence, count, supported, layer, declarations:[{id,path,strokeWidth,dash}] }",
+    returns: "{ window, sequence, count, supported, layer, presentationVisible, declarations:[{id,path,strokeWidth,dash}] }",
     message: (data) => tmsg("msg.surface.decorations", {
       n: Number(data.count ?? 0), layer: String(data.layer ?? ""),
     }),
     examples: ["surface.decorations"],
-    handler: async () => ({
-      ...(await nativeDecorationStatus()),
-      declarations: nativeDecorationFacts().decorations.map((decoration) => ({
-        id: decoration.id,
-        path: decoration.path,
-        strokeWidth: decoration.strokeWidth,
-        dash: decoration.dash,
-      })),
-    }),
+    handler: async () => {
+      const facts = nativeDecorationFacts();
+      return {
+        ...(await nativeDecorationStatus()),
+        presentationVisible: facts.presentationVisible,
+        declarations: facts.decorations.map((decoration) => ({
+          id: decoration.id,
+          path: decoration.path,
+          strokeWidth: decoration.strokeWidth,
+          dash: decoration.dash,
+        })),
+      };
+    },
   });
 
   register("surface.composition.history", {

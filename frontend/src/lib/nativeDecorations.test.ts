@@ -5,6 +5,7 @@ import {
   cssColorRGBA,
   nativeDecorationFacts,
   replaceNativeDecorations,
+  setNativeDecorationPresentationVisible,
   strokeDecoration,
 } from "./nativeDecorations";
 
@@ -46,6 +47,38 @@ describe("native decoration inventory", () => {
     await Promise.resolve();
 
     expect(nativeDecorationFacts().decorations.map(({ id }) => id)).toEqual(["relation/a"]);
+  });
+
+  it("keeps declarations but applies an empty native plane while a DOM overlay owns presentation", async () => {
+    const blue = cssColorRGBA("#5aa2ff")!;
+    replaceNativeDecorations("focus", [
+      strokeDecoration("focus/a", "M 0 0 L 1 1", blue, 1),
+    ]);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(nativeDecorationFacts()).toMatchObject({
+      presentationVisible: true,
+      decorations: [{ id: "focus/a" }],
+      receipt: { count: 1 },
+    });
+
+    setNativeDecorationPresentationVisible(false);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(nativeDecorationFacts()).toMatchObject({
+      presentationVisible: false,
+      decorations: [{ id: "focus/a" }],
+      receipt: { count: 0 },
+    });
+
+    setNativeDecorationPresentationVisible(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(nativeDecorationFacts()).toMatchObject({
+      presentationVisible: true,
+      decorations: [{ id: "focus/a" }],
+      receipt: { count: 1 },
+    });
   });
 
   it("converts theme colors into numeric sRGB channels", () => {

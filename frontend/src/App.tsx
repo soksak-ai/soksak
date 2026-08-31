@@ -52,6 +52,7 @@ import { NotifyHost } from "./ui/NotifyHost";
 import { MotionDebug } from "./components/MotionDebug";
 import { PluginHeaderActions } from "./ui/PluginHeaderActions";
 import { useUi } from "./state/ui";
+import { setNativeDecorationPresentationVisible } from "./lib/nativeDecorations";
 import { useT } from "./i18n";
 import { useBootPhase } from "./state/bootPhase";
 import {
@@ -975,12 +976,20 @@ function WebviewHealthBadges() {
 
 function App() {
   const t = useT();
+  const overlayCount = useUi((s) => s.overlayCount);
   const settingsSection = useUi((s) => s.settingsSection);
   const setSettingsSection = useUi((s) => s.setSettingsSection);
   const workspaceTabPosition = useSettings((s) => s.workspaceTabPosition);
   const contentTabPosition = useSettings((s) => s.contentTabPosition);
   const leftSidebarMode = useSettings((s) => s.leftSidebarMode);
   const rightSidebarMode = useSettings((s) => s.rightSidebarMode);
+
+  // DOM overlays own the final presentation while open. Native child surfaces are hidden by the
+  // selected framework, and the generic Core decoration plane is committed empty here. Its
+  // declarations stay intact and the newest snapshot returns on the closing state edge.
+  useLayoutEffect(() => {
+    setNativeDecorationPresentationVisible(overlayCount === 0);
+  }, [overlayCount]);
 
   // The theme system (token slots) is the single source — the theme engine applies CSS variables and structural attributes.
   const effectiveMode = useTheme((s) => s.effectiveMode);

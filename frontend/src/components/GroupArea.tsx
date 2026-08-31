@@ -129,7 +129,7 @@ function cornerFocusPath(rect: DOMRect, strokeWidth: number): string {
   ].join(" ");
 }
 
-function NativeFocusBoundary({
+export function NativeFocusBoundary({
   owner,
   node,
   style,
@@ -182,7 +182,6 @@ function NativeFocusBoundary({
   }, [accent, active, focusIndicator, owner]);
 
   useLayoutEffect(() => {
-    update();
     const element = elementRef.current;
     if (!active || !element) return () => replaceNativeDecorations(owner, []);
     const observer = new ResizeObserver(update);
@@ -192,6 +191,11 @@ function NativeFocusBoundary({
       replaceNativeDecorations(owner, []);
     };
   }, [active, owner, update]);
+
+  // Position-only layout commits do not notify ResizeObserver. Project on every React geometry
+  // commit before paint as well; unchanged snapshots are deduplicated by nativeDecorations.
+  // The observer above remains the event source for external size changes that do not render Core.
+  useLayoutEffect(() => update());
 
   return (
     <div
