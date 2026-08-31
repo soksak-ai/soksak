@@ -31,7 +31,7 @@ G0 부터 G5 까지는 완료 기준이지 구현 단계가 아닙니다. 각각
 | `go test ./core/...` | 코어가 창 없이 명령에 답함 |
 | `sok ui.tree` | 닿을 수 있는 모든 노드가 `data-node` 를 포함함 |
 | `sok window.snapshot` | 포커스를 가져가지 않고 PNG 를 씀 |
-| `min-median-max/soksak-terminal-tests` 설치 UI 스위트 | 발행된 플러그인을 Core 로 설치하고, 정상 상태의 정렬·덮임·캡처·녹화를 검증함 |
+| `tests/soksak-terminal-tests` 설치 UI 스위트 | 발행된 플러그인을 Core 로 설치하고, 정상 상태의 정렬·덮임·캡처·녹화를 검증함 |
 
 계약: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`CONTROL-PROTOCOL.md`](CONTROL-PROTOCOL.md),
 [`MESSAGE-PROTOCOL.md`](MESSAGE-PROTOCOL.md), [`NAMING.md`](NAMING.md),
@@ -60,7 +60,7 @@ G0 부터 G5 까지는 완료 기준이지 구현 단계가 아닙니다. 각각
 | 증거 | 사례마다 그림 하나, 그 사례의 녹화에서 보관 |
 
 각 항목은 사람이 검사가 묻지 않은 것을 본 날 추가됐습니다. 설치 제품 확인은
-`min-median-max/soksak-terminal-tests` 의 것이며 이 코어 저장소의 것이 아닙니다.
+`tests/soksak-terminal-tests` 의 것이며 이 코어 저장소의 것이 아닙니다.
 
 이 검사는 시계가 아니라 창 자신의 이벤트를 기다립니다. 클릭마다 `causeTraceId` 를 찍고,
 `layout.transaction.wait` 가 클릭이 발행된 저널 sequence 이후의 그 트랜잭션 하나를 기다립니다.
@@ -151,11 +151,11 @@ pane 안의 실제 로그인 shell 을 밖에서 구동합니다. `sok term.exec
 | `sweep_gate_test.go` | 번역 일괄 작업은 코드를 바꾸지 않는다 |
 | `internal/repositorygate/observation_gate_test.go` | 빌드가 관측한다고 주장하는 것을 실제로 서비스한다 |
 | `docs_carried_gate_test.go` | 이월된 문서는 검토 전에 계약으로 인용되지 않는다 |
-| `min-median-max/soksak-terminal-tests` 인벤토리 | environment 가 fleet manifest 의 정확한 plugin·sidecar 버전을 절대 경로와 일반 manifest 로 선언한다 |
-| `min-median-max/soksak-terminal-tests` 명령 스위트 | 모든 터미널 플러그인이 열리고, 읽고, 쓰고, 크기를 바꾸고, 유니코드와 256 KiB 출력을 처리하고, DOM·접근성을 노출하고, 캡처와 녹화 파일을 만든다 |
-| `min-median-max/soksak-terminal-tests` 수명주기 스위트 | 모든 터미널이 재시작을 넘어 자기 shell PID 와 분리 중 출력을 보존하고, 지속 archive 를 복원하며, archived 입력을 거부한다 |
-| `min-median-max/soksak-terminal-tests` UI 스위트 | 플러그인 거부 수가 0, `ui.verify` 통과, 표면 덮임 0, 정상 상태 표면 어긋남 최대 2px |
-| `min-median-max/soksak-terminal-tests` 구분 증거 | 모든 resize 와 대량 출력 실행이 DOM·크기 사실과 함께 PTY·복구·renderer 의 절대 출력 sequence, 복구 gap, 처음 전진하지 않은 구분을 기록한다 |
+| `tests/soksak-terminal-tests` 인벤토리 | environment 가 fleet manifest 의 정확한 plugin·sidecar 버전을 절대 경로와 일반 manifest 로 선언한다 |
+| `tests/soksak-terminal-tests` 명령 스위트 | 모든 터미널 플러그인이 열리고, 읽고, 쓰고, 크기를 바꾸고, 유니코드와 256 KiB 출력을 처리하고, DOM·접근성을 노출하고, 캡처와 녹화 파일을 만든다 |
+| `tests/soksak-terminal-tests` 수명주기 스위트 | 모든 터미널이 재시작을 넘어 자기 shell PID 와 분리 중 출력을 보존하고, 지속 archive 를 복원하며, archived 입력을 거부한다 |
+| `tests/soksak-terminal-tests` UI 스위트 | 플러그인 거부 수가 0, `ui.verify` 통과, 표면 덮임 0, 정상 상태 표면 어긋남 최대 2px |
+| `tests/soksak-terminal-tests` 구분 증거 | 모든 resize 와 대량 출력 실행이 DOM·크기 사실과 함께 PTY·복구·renderer 의 절대 출력 sequence, 복구 gap, 처음 전진하지 않은 구분을 기록한다 |
 | 불변 fleet fingerprint | Registry 와 모든 release.json 의 크기·SHA, 그리고 OS·target 이 하나의 결정적 identity 를 이룬다. 입력 하나가 바뀌면 이전 GREEN 은 무효다 |
 
 ---
@@ -187,7 +187,7 @@ pane 안의 실제 로그인 shell 을 밖에서 구동합니다. `sok term.exec
   자기가 선언한 명령에 답하면서 아무 일도 하지 않는 사이드카, 한쪽이 bind 하는데 다른 쪽이 닿지 못하는
   주소가 그렇습니다.
 
-  그런 테스트는 `min-median-max/soksak-terminal-tests` 에 둡니다. 그 저장소가 설치된 호스트와 사이드카
+  그런 테스트는 `tests/soksak-terminal-tests` 에 둡니다. 그 저장소가 설치된 호스트와 사이드카
   쌍을 소유하므로, 어느 소유자 저장소도 다른 쪽에 의존할 필요가 없습니다.
 
 - **i18n 소유 규칙은 진술됐고 강제되지 않습니다.** `REPO-LAYOUT.md` L1b 는 메시지가 그 메시지의

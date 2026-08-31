@@ -31,7 +31,7 @@ contract is in its own canonical document, linked below.
 | `go test ./core/...` | the core answers commands with no window |
 | `sok ui.tree` | every reachable node includes `data-node` |
 | `sok window.snapshot` | writes a PNG without taking focus |
-| `min-median-max/soksak-terminal-tests` installed UI suite | released plugins are installed through Core; steady-state alignment, coverage, capture, and recording are verified |
+| `tests/soksak-terminal-tests` installed UI suite | released plugins are installed through Core; steady-state alignment, coverage, capture, and recording are verified |
 
 Contracts: [`ARCHITECTURE.md`](ARCHITECTURE.md), [`CONTROL-PROTOCOL.md`](CONTROL-PROTOCOL.md),
 [`MESSAGE-PROTOCOL.md`](MESSAGE-PROTOCOL.md), [`NAMING.md`](NAMING.md),
@@ -60,8 +60,8 @@ move between its three panes is a test of its own, run by name. What it refuses:
 | every address | one node each — two places had written their cells under the same name |
 | the evidence | a picture per case, kept from the recording of that case |
 
-Each of those was added the day a person saw what the gate did not ask. Installed-product checks
-belong to `min-median-max/soksak-terminal-tests`, not this core repository.
+Each of those was added after a missing assertion was identified. Installed-product checks
+belong to `tests/soksak-terminal-tests`, not this core repository.
 
 It waits on the window's own events, not on a clock. Each click stamps a `causeTraceId` and
 `layout.transaction.wait` waits for that one transaction after the journal sequence the click was
@@ -154,11 +154,11 @@ has watched fail is a claim, not a gate.
 | `sweep_gate_test.go` | a translation sweep changes no code |
 | `internal/repositorygate/observation_gate_test.go` | what the build claims to observe, it serves |
 | `docs_carried_gate_test.go` | a carried document is not cited as contract before its review |
-| `min-median-max/soksak-terminal-tests` inventory | the environment declares the fleet manifest's exact plugin and sidecar versions, with absolute paths and regular manifests |
-| `min-median-max/soksak-terminal-tests` command suite | every terminal plugin opens, reads, writes, resizes, handles Unicode and 256 KiB output, exposes DOM/accessibility, and produces capture and recording files |
-| `min-median-max/soksak-terminal-tests` lifecycle suite | every terminal preserves its shell PID and detached output across restart, restores a durable archive, and rejects archived input |
-| `min-median-max/soksak-terminal-tests` UI suite | plugin rejection count is zero, `ui.verify` passes, surface coverage is zero, and steady-state surface drift is at most 2px |
-| `min-median-max/soksak-terminal-tests` boundary evidence | every resize and high-output run records DOM/size facts plus PTY, recovery and renderer absolute output sequences, recovery gaps, and the first boundary that did not advance |
+| `tests/soksak-terminal-tests` inventory | the environment declares the fleet manifest's exact plugin and sidecar versions, with absolute paths and regular manifests |
+| `tests/soksak-terminal-tests` command suite | every terminal plugin opens, reads, writes, resizes, handles Unicode and 256 KiB output, exposes DOM/accessibility, and produces capture and recording files |
+| `tests/soksak-terminal-tests` lifecycle suite | every terminal preserves its shell PID and detached output across restart, restores a durable archive, and rejects archived input |
+| `tests/soksak-terminal-tests` UI suite | plugin rejection count is zero, `ui.verify` passes, surface coverage is zero, and steady-state surface drift is at most 2px |
+| `tests/soksak-terminal-tests` boundary evidence | every resize and high-output run records DOM/size facts plus PTY, recovery and renderer absolute output sequences, recovery gaps, and the first boundary that did not advance |
 | immutable fleet fingerprint | Registry and every release.json size/SHA plus OS/target form one deterministic identity; changing any input invalidates the prior GREEN |
 
 ---
@@ -193,7 +193,7 @@ Written here so it is not rediscovered (L2).
   a sidecar that answers a command it declared and does nothing for, an address one binds and the other
   cannot reach.
 
-  Such a test is placed in `min-median-max/soksak-terminal-tests`, which owns the installed host and sidecar
+  Such a test is placed in `tests/soksak-terminal-tests`, which owns the installed host and sidecar
   pair without making either owner repository depend on the other.
 
 - **The i18n ownership rule is stated and unenforced.** `REPO-LAYOUT.md` L1b states a message is owned

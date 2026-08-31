@@ -20,7 +20,7 @@ What has to pass, and what a test is for here.
 | `verify:headless` | `go test ./core/...` — the core answers with no window |
 | `verify:windows` | `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...` |
 | `verify:frontend` | `pnpm typecheck`, `pnpm test` |
-| installed fleet | owned by `min-median-max/soksak-terminal-tests`; installs immutable releases through Core |
+| installed fleet | owned by `tests/soksak-terminal-tests`; installs immutable releases through Core |
 
 Owner tests run in their repositories. Core does not execute sibling source or infer checkout
 locations. Cross-repository product verification consumes released artifacts through the installer

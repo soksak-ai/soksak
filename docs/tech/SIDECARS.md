@@ -118,5 +118,5 @@ secret set is rejected.
   protocol and conformance;
 - `soksak-spec` tests and publishes the sidecar manifest format;
 - core tests environment binding resolution, path safety, process lifetime, adoption and opaque relay;
-- min-median-max/soksak-terminal-tests tests installed multi-provider behavior and never builds owner
+- `tests/soksak-terminal-tests` tests installed multi-provider behavior and never builds owner
   source trees.

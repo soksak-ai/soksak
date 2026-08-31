@@ -19,7 +19,7 @@ canonical: docs/manual/TESTING.md
 | `verify:headless` | `go test ./core/...` |
 | `verify:windows` | `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...` |
 | `verify:frontend` | `pnpm typecheck`, `pnpm test` |
-| installed fleet | `min-median-max/soksak-terminal-tests`가 소유하며 Core로 immutable release를 설치 |
+| installed fleet | `tests/soksak-terminal-tests`가 소유하며 Core로 immutable release를 설치 |
 
 Owner test는 각 repository에서 실행합니다. Core는 형제 source를 실행하거나 checkout 위치를 추론하지
 않습니다. 저장소를 넘는 제품 검증은 설치기와 `environment.json` 을 지나 릴리즈 산출물을

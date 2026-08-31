@@ -110,5 +110,5 @@ Sidecar에 대한 종료 요청입니다. 스트림은 별도 id를 사용하며
   테스트합니다.
 - `soksak-spec` 이 사이드카 manifest 형식을 테스트하고 게시합니다.
 - 코어는 environment 결합 해석, 경로 안전성, 프로세스 수명, 채택, 불투명 중계를 테스트합니다.
-- min-median-max/soksak-terminal-tests 는 설치된 다중 provider 동작을 테스트하며 소유자 소스 트리를
+- `tests/soksak-terminal-tests` 는 설치된 다중 provider 동작을 테스트하며 소유자 소스 트리를
   빌드하지 않습니다.

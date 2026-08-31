@@ -28,6 +28,12 @@ func TestActiveDocumentsDescribeOnlyTheCurrentProduct(t *testing.T) {
 		"stays deleted",
 		"until 20",
 	}
+	externalOwnerNarration := []string{
+		"min-median-max/",
+		"another terminal product",
+		"upstream fork",
+		"provider source",
+	}
 
 	err := filepath.WalkDir("docs", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -44,7 +50,7 @@ func TestActiveDocumentsDescribeOnlyTheCurrentProduct(t *testing.T) {
 		if documentKind(text) == "changelog" {
 			return nil
 		}
-		for _, forbidden := range append(retiredIdentifiers, historicalNarration...) {
+		for _, forbidden := range append(append(retiredIdentifiers, historicalNarration...), externalOwnerNarration...) {
 			if strings.Contains(text, forbidden) {
 				t.Errorf("%s preserves product history through %q", path, forbidden)
 			}
