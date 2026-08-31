@@ -283,7 +283,7 @@ packages:
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
   '@soksak/soksak-service-native-compositor@https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af':
-    resolution: {gitHosted: true, integrity: sha512-9DLpaEh+iMyzCBxcHRwA3lm5CQcX73Jf6bUZvySv3+gaNvi87FnjHgxZmRJ9Svh3bza9UYrOzb5IdagBpctYeQ==, tarball: https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af}
+    resolution: {gitHosted: true, integrity: sha512-11N1WJHyOsAwGJuGTAmIv+AhsKT7YdYIaXDOPy+pavyiykhTkRt2BB1dkpDGqlDOVjAZpO7fmkB3KkGxhKjIjw==, tarball: https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af}
     version: 0.0.1
     engines: {node: 26.7.0}
 
