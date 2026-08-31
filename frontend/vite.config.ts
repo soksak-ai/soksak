@@ -18,9 +18,13 @@ function enforceChunkBudget(): Plugin {
   };
 }
 
+export function chunkBudgetPlugins(mode: string): Plugin[] {
+  return mode === "production" ? [enforceChunkBudget()] : [];
+}
+
 // The build picks which framework backs the alias. No fallback bundles both implementations and
 // chooses by a runtime marker — the unselected implementation must be absent from the bundle graph.
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   build: {
     rolldownOptions: {
       output: {
@@ -42,5 +46,5 @@ export default defineConfig({
     port: Number(process.env.WAILS_VITE_PORT) || 9245,
     strictPort: true,
   },
-  plugins: [react(), wails("./bindings"), enforceChunkBudget()],
-});
+  plugins: [react(), wails("./bindings"), ...chunkBudgetPlugins(mode)],
+}));
