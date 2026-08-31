@@ -15,6 +15,7 @@
 //   restore never rewrites a separate line the user placed outside the runtime rule (0.75 to 1.5).
 
 import { computeSplitLayout, type LayoutDivider } from "../lib/splitLayout";
+import { CHROME_BANDS } from "../lib/chromeBands";
 import { resizeSplitTree, type SplitTree } from "./splitTree";
 
 // Minimum pane fraction (relative to that split's span) — single source for the drag clamp and the normalization guard.
@@ -22,7 +23,10 @@ export const MIN_PANE_FRAC = 0.08;
 // A pane must retain its fixed chrome plus at least one CSS pixel of body. The
 // fraction is calculated from the actual split span at gesture time; a fixed
 // fraction alone can still collapse the native viewport in a short split.
-export const MIN_PANE_BODY_PX = 1;
+// Native providers need two complete common chrome bands: one for the first
+// content row and one for compositor rounding/inset. This is a contract floor,
+// not a provider-specific value.
+export const MIN_PANE_BODY_PX = CHROME_BANDS.header * 2;
 
 export function minPaneFracForSpan(
   spanPx: number,

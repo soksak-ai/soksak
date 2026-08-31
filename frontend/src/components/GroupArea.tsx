@@ -76,6 +76,7 @@ import {
   strokeDecoration,
 } from "../lib/nativeDecorations";
 import { dividerSurfaceGeometry } from "../lib/dividerSurfaceGeometry";
+import { paneChromeExtentPx } from "../lib/paneChrome";
 import { stageNativeSurfaceGeometry } from "../framework/wails/nativeSurfaces";
 import { createDividerResizeTransaction } from "../lib/dividerResizeTransaction";
 import { afterFramePaint } from "../lib/afterFramePaint";
@@ -440,6 +441,39 @@ export const GroupArea = memo(function GroupArea({
     () => computeLayout(displayLayout),
     [displayLayout],
   );
+  // Measure provider-owned chrome after each committed layout. A native
+  // surface can be composited outside the document while its declaration
+  // remains in this pane; retaining the last positive measurement makes the
+  // next drag use the same public geometry instead of guessing a plugin size.
+  const paneChromePxRef = useRef(CHROME_TOP + STATUS_PX);
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const fallback = CHROME_TOP + STATUS_PX;
+    paneChromePxRef.current = fallback;
+    const insetPx = Number.parseFloat(
+      getComputedStyle(container).getPropertyValue("--pane-inset"),
+    );
+    const measure = () => {
+      // A surface may report zero while its native receipt is being applied.
+      // Keep the last positive provider extent for this committed layout; a
+      // new layout resets it above before measuring again.
+      paneChromePxRef.current = Math.max(
+        paneChromePxRef.current,
+        paneChromeExtentPx(container, fallback, Number.isFinite(insetPx) ? insetPx : 0),
+      );
+      container.dataset.paneChromePx = String(paneChromePxRef.current);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    for (const surface of container.querySelectorAll<HTMLElement>(
+      "[data-native-surface][data-native-surface-id]",
+    )) {
+      observer.observe(surface);
+    }
+    return () => observer.disconnect();
+  }, [content.id, cells.length, nativeSurfaceViewIds.join("\u0000")]);
   // Maximize (maximizedTabId): one tab takes the whole space. The split tree is
   // unchanged — only cells and frames are redrawn as that single group (full rect), and the slots of the
   // remaining groups stay hidden (session preservation: terminal and webview mounts are never broken).
@@ -717,7 +751,10 @@ export const GroupArea = memo(function GroupArea({
     // same chrome contract used by the pane and keep one body pixel.
     const minPaneFrac =
       d.dir === "col"
-        ? minPaneFracForSpan(splitPx, CHROME_TOP + STATUS_PX)
+        ? minPaneFracForSpan(
+            splitPx,
+            paneChromePxRef.current,
+          )
         : MIN_PANE_FRAC;
     ms.resizeDragActive = true; // Only after the real drag start is confirmed (the early-return above does not lock).
     emitResizeGesture(true);

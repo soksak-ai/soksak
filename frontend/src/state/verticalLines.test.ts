@@ -22,7 +22,11 @@ describe("minimum pane fraction", () => {
   });
 
   it("keeps the established base fraction when the split is tall enough", () => {
-    expect(minPaneFracForSpan(1000, 57)).toBe(MIN_PANE_FRAC);
+    expect(minPaneFracForSpan(1000, 57)).toBeCloseTo(0.123, 10);
+  });
+
+  it("reserves one common chrome band for the first native content row", () => {
+    expect(minPaneFracForSpan(535, 57)).toBeCloseTo((57 + 66) / 535, 10);
   });
 });
 
