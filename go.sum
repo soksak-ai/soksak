@@ -359,8 +359,6 @@ github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9/go.mod h1:ytm+dh2ShxYePv/d5xxSH7bDrd+pQzM5e2rGUyXeD9w=
 github.com/soksak-ai/soksak-contract-surface v0.0.0-20260830044243-f3c3b22f7808 h1:eUDfyirMKFatjHsVIx3eg1Lc5ya+t6T25fRMujbPBMY=
 github.com/soksak-ai/soksak-contract-surface v0.0.0-20260830044243-f3c3b22f7808/go.mod h1:wXRo6E+0QlXIKNKVcVjCseH67D27OtG2Zp7M74d0iPo=
-github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828170819-d66aebf6e732 h1:1QGjP2pFsT0qAIFcFXa4PkBO3eLPYAfRzY5ErUhzqoc=
-github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260828170819-d66aebf6e732/go.mod h1:IfcO4wTw2RDCPvUz+x92mqUt3J/5lkJe4rn9FiyINFI=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260831164722-e60c675b0880 h1:D4OahauCTqzYmtJjT6Amff4UhCkZMRiYS0lwKAuYhs8=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260831164722-e60c675b0880/go.mod h1:IfcO4wTw2RDCPvUz+x92mqUt3J/5lkJe4rn9FiyINFI=
 github.com/spf13/cast v1.10.0 h1:h2x0u2shc1QuLHfxi+cTJvs30+ZAHOGRic8uyGTDWxY=
