@@ -88,11 +88,12 @@ DOM overlay is active, native surfaces and native decorations are both absent fr
 The declarations remain available for the close transaction but cannot appear above the overlay in
 `window.snapshot` or `window.record`.
 
-When capture orders an occluded capture-only window, WebKit can complete the first document snapshot
-with pixels from before the order change. `window_capture_present` completes and discards exactly one
-document snapshot before it returns. The following `window_snapshot_region` request returns the
-requested pixels. This preparation runs only when the window was ordered. It does not inspect pixels,
-retry, poll, or activate the application. Capture metadata includes `presentationOrdered`.
+WebKit can complete the first capture-only document snapshot after a document change with pixels from
+before that change. `window_capture_present` completes and discards exactly one document snapshot
+before it returns. The following `window_snapshot_region` request returns the requested pixels. This
+preparation runs for every capture-only read and never runs for interactive compositor capture. It
+does not inspect pixels, retry, poll, or activate the application. Capture metadata includes
+`presentationOrdered`.
 
 Interactive delivery separates geometry from presentation ownership. A snapshot that changes only
 frames may return without making the bridge receipt own the next document frame. A change to surface

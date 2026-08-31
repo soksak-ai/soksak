@@ -63,7 +63,7 @@ func TestCaptureOnlyReadsTheDocumentAndDeclaresTheMissingNativeChildren(t *testi
 	}
 }
 
-func TestOrderedCaptureOnlyPresentationCompletesOneDocumentSnapshot(t *testing.T) {
+func TestCaptureOnlyPresentationCompletesOneDocumentSnapshot(t *testing.T) {
 	handle := byte(1)
 	service := NewCaptureService("main", func() unsafe.Pointer { return unsafe.Pointer(&handle) }, PresentationCaptureOnly)
 	documentCaptures := 0
@@ -75,17 +75,27 @@ func TestOrderedCaptureOnlyPresentationCompletesOneDocumentSnapshot(t *testing.T
 		return solidPNG(t, 2, 2, background), nil
 	}
 
-	if err := service.preparePresentedDocument(unsafe.Pointer(&handle), false); err != nil {
-		t.Fatal(err)
-	}
-	if documentCaptures != 0 {
-		t.Fatalf("visible presentation performed %d document captures", documentCaptures)
-	}
-	if err := service.preparePresentedDocument(unsafe.Pointer(&handle), true); err != nil {
+	if err := service.prepareDocumentCapture(unsafe.Pointer(&handle)); err != nil {
 		t.Fatal(err)
 	}
 	if documentCaptures != 1 {
-		t.Fatalf("ordered capture-only presentation performed %d document captures", documentCaptures)
+		t.Fatalf("capture-only presentation performed %d document captures", documentCaptures)
+	}
+}
+
+func TestInteractivePresentationDoesNotReadTheDocument(t *testing.T) {
+	handle := byte(1)
+	service := NewCaptureService("main", func() unsafe.Pointer { return unsafe.Pointer(&handle) }, PresentationInteractive)
+	documentCaptures := 0
+	service.captureDocument = func(unsafe.Pointer, Rect) ([]byte, error) {
+		documentCaptures++
+		return solidPNG(t, 2, 2, background), nil
+	}
+	if err := service.prepareDocumentCapture(unsafe.Pointer(&handle)); err != nil {
+		t.Fatal(err)
+	}
+	if documentCaptures != 0 {
+		t.Fatalf("interactive presentation performed %d document captures", documentCaptures)
 	}
 }
 

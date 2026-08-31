@@ -67,7 +67,7 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 				return nil, err
 			}
 			ordered := PresentWindowForCapture(handle)
-			if err := service.preparePresentedDocument(handle, ordered); err != nil {
+			if err := service.prepareDocumentCapture(handle); err != nil {
 				RestoreWindowAfterCapture(handle, ordered)
 				return nil, err
 			}
