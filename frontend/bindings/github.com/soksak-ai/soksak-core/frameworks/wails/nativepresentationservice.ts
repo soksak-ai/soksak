@@ -15,7 +15,7 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as nativesurface$0 from "../../../../soksak-ai/soksak-service-native-compositor/models.js";
+import * as nativesurface$0 from "../../../soksak-service-native-compositor/models.js";
 
 export function Commit(snapshot: nativesurface$0.Snapshot): $CancellablePromise<nativesurface$0.Receipt> {
     return $Call.ByID(273482336, snapshot).then(($result: any) => {

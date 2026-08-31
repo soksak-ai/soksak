@@ -7,7 +7,7 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as nativesurface$0 from "../wails-service-native-compositor/models.js";
+import * as nativesurface$0 from "../soksak-service-native-compositor/models.js";
 
 export class SurfaceStatus {
     "id": string;
