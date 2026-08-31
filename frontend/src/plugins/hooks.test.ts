@@ -174,8 +174,8 @@ describe("window.live-resize event", () => {
 describe("layout.resize-gesture event", () => {
   // Exposes the pane divider drag gesture (start/end) on the plugin events channel.
   // A layout-internal gesture channel with the same shape as window.live-resize (the window edge)
-  // — the signal a native surface provider (browser) uses to defer bounds commits during a drag
-  // and show a freeze frame. No permission required (a non-sensitive lifecycle signal).
+  // lets a provider coalesce its own rendering work, but every native geometry preview still
+  // applies through the compositor. No permission required (a non-sensitive lifecycle signal).
   it("delivers the active toggle in order — true when the drag starts, false when it ends", () => {
     const got: boolean[] = [];
     const d = onPluginEvent("layout.resize-gesture", (p) => got.push(p.active));

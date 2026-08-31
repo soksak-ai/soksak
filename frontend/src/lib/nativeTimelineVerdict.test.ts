@@ -30,6 +30,32 @@ describe("DOM frames joined to compositor-owned native Apply time", () => {
     expect(verdict.longestWrongMs).toBe(16);
   });
 
+  it("rejects a moved host whose browser viewport remains at the previous drag width", () => {
+    const verdict = nativeTimelineVerdict(
+      [{
+        atUnixMs: 116,
+        drawn: true,
+        surfaces: [{
+          id: "browser",
+          visible: true,
+          dom: { x: 0, y: 20, w: 160, h: 80 },
+        }],
+      }],
+      [{
+        appliedAtUnixMs: 110,
+        surfaces: [{
+          id: "browser",
+          appliedVisible: true,
+          // The clipping host followed the pane, so this alone looks correct.
+          applied: { x: 0, y: 20, w: 160, h: 80 },
+          // WKWebView is what displays the page; it is still at the pre-drag width.
+          settled: { x: 0, y: 20, w: 100, h: 80 },
+        }],
+      }],
+    );
+    expect(verdict).toMatchObject({ wrongFrames: 1, worstOff: 60 });
+  });
+
   it("does not call an unobserved native instant correct", () => {
     const verdict = nativeTimelineVerdict([frame(100, 0)], []);
     expect(verdict).toMatchObject({ comparedFrames: 0, unmatchedFrames: 1 });

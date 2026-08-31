@@ -90,6 +90,13 @@ signature excludes frame coordinates and includes every presentation field. This
 not sufficient for an atomic tab switch: the DOM presentation commit must also be staged against that
 receipt. `tab.switchScan.nativeMismatchFrames` remains the verdict for that final ordering.
 
+Interactive does not mean deferred geometry. Every divider preview commits the complete declared
+rectangle to each native kind before that preview is judged: terminal host frame, browser host frame
+and browser `WKWebView` viewport. `layout.trace.native` joins every drawn DOM frame to the latest
+completed compositor Apply and compares both `applied` and provider `settled` rectangles when the
+provider exposes the latter. A moved clipping host with a stale page viewport therefore fails the
+same frame with `wrongFrames > 0`; mouse-up cannot turn those earlier frames into a pass.
+
 ## D1b.1. Core decoration is the final native plane
 
 A focus boundary or rail-relation outline is Core chrome, not provider content. Drawing it at DOM

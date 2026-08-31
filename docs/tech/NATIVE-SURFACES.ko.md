@@ -83,6 +83,13 @@ alpha·layer 변경은 실제 compositor receipt를 기다립니다. signature�
 필드 전체를 포함합니다. 이것만으로 탭 전환이 원자화되지는 않습니다. DOM presentation commit도 그
 receipt에 맞춰 stage해야 합니다. 마지막 순서는 `tab.switchScan.nativeMismatchFrames`가 판정합니다.
 
+interactive는 geometry 적용 연기를 뜻하지 않습니다. divider preview마다 terminal host frame, browser host
+frame, browser `WKWebView` viewport를 포함한 완전한 선언 rectangle을 각 native kind에 적용한 뒤 그 preview를
+판정합니다. `layout.trace.native`는 그려진 DOM frame마다 그 시각 이전의 최신 compositor Apply를 결합하고,
+provider가 `settled` rectangle을 노출하면 `applied`와 `settled`를 모두 비교합니다. 따라서 clipping host만
+이동하고 page viewport가 이전 크기에 남은 frame은 즉시 `wrongFrames > 0`으로 실패하며, mouse-up 뒤의
+정상 frame이 앞선 실패를 지우지 않습니다.
+
 ## D1b.1. Core 장식은 마지막 네이티브 평면이다
 
 포커스 표시선이나 rail 관계 외곽선은 provider 내용이 아니라 Core chrome입니다. DOM의 `z-index:7` 또는 `8`로

@@ -231,11 +231,10 @@ const titleOf = (v: Tab | undefined): string => (v ? viewDisplayTitle(v) : "");
 const ms = moduleState("components/GroupArea.#state", () => ({
   resizeDragActive: false,
 }));
-// Report the divider drag gesture fact to two consumer layers (the core has no meaning for it — only the fact):
-// (1) the plugin events channel (layout.resize-gesture) — the basis on which this window's view providers (browser
-//     plugin etc.) defer native bounds commits during the drag and show a freeze frame.
-// (2) the core relay (webview_resize_gesture) — notifies engine sidecar (CEF) surfaces outside the core layer of the
-//     same fact (same shape as the surface-occluded pattern of webview_overlay_active).
+// Report the divider drag gesture fact to both consumers of the common layout phase:
+// (1) plugins receive layout.resize-gesture so they can coalesce provider-owned rendering work;
+// (2) a framework with out-of-document surfaces marks every geometry snapshot interactive while continuing to
+//     apply each preview rectangle. Interactive is not permission to hold native bounds until release.
 // Called only behind the ms.resizeDragActive guard, so start and end always pair.
 function emitResizeGesture(active: boolean): void {
   // Delegated to the single truth layoutMotion — edge pairing holds even when drag, travel and FLIP overlap.

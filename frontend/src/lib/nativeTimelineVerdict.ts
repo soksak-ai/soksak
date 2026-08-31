@@ -8,7 +8,14 @@ export interface TimelineDomFrame {
 
 export interface TimelineNativeSample {
   appliedAtUnixMs: number;
-  surfaces: Array<{ id: string; appliedVisible: boolean; applied: TimelineRect }>;
+  surfaces: Array<{
+    id: string;
+    appliedVisible: boolean;
+    /** Native host rectangle presented in the window. */
+    applied: TimelineRect;
+    /** Provider viewport rectangle when it is distinct and observable. */
+    settled?: TimelineRect;
+  }>;
 }
 
 export interface NativeTimelineVerdict {
@@ -16,6 +23,8 @@ export interface NativeTimelineVerdict {
   unmatchedFrames: number;
   wrongFrames: number;
   worstOff: number;
+  worstAppliedOff: number;
+  worstSettledOff: number;
   longestWrongMs: number;
   maxAppliedAgeMs: number;
   nativeSamples: number;
@@ -41,6 +50,8 @@ export function nativeTimelineVerdict(
   let unmatchedFrames = 0;
   let wrongFrames = 0;
   let worstOff = 0;
+  let worstAppliedOff = 0;
+  let worstSettledOff = 0;
   let maxAppliedAgeMs = 0;
   let wrongStartedAt: number | null = null;
   let lastWrongAt = 0;
@@ -63,7 +74,15 @@ export function nativeTimelineVerdict(
       const nativeSurface = applied.get(surface.id);
       if (!nativeSurface?.appliedVisible) continue;
       frameCompared = true;
-      frameOff = Math.max(frameOff, rectOff(surface.dom, nativeSurface.applied));
+      const appliedOff = rectOff(surface.dom, nativeSurface.applied);
+      // A correctly moved clipping host is not sufficient: the provider viewport is what renders
+      // the content. When a backend exposes it, both rectangles must match this frame's DOM box.
+      const settledOff = nativeSurface.settled
+        ? rectOff(surface.dom, nativeSurface.settled)
+        : appliedOff;
+      worstAppliedOff = Math.max(worstAppliedOff, appliedOff);
+      worstSettledOff = Math.max(worstSettledOff, settledOff);
+      frameOff = Math.max(frameOff, appliedOff, settledOff);
     }
     if (!frameCompared) {
       unmatchedFrames += 1;
@@ -83,6 +102,6 @@ export function nativeTimelineVerdict(
   }
   return {
     comparedFrames, unmatchedFrames, wrongFrames, worstOff, longestWrongMs,
-    maxAppliedAgeMs, nativeSamples: ordered.length,
+    worstAppliedOff, worstSettledOff, maxAppliedAgeMs, nativeSamples: ordered.length,
   };
 }

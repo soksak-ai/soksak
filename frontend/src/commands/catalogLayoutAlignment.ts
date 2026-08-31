@@ -180,7 +180,7 @@ export function registerLayoutTraceCatalog(): void {
         default: 0,
       },
     },
-    returns: "{ comparedFrames, unmatchedFrames, wrongFrames, worstOff, longestWrongMs, maxAppliedAgeMs, nativeSamples, tolerance } — drawn DOM frames joined to the latest compositor Apply at or before that frame",
+    returns: "{ comparedFrames, unmatchedFrames, wrongFrames, worstOff, worstAppliedOff, worstSettledOff, longestWrongMs, maxAppliedAgeMs, nativeSamples, tolerance } — drawn DOM frames joined to the latest compositor Apply at or before that frame; both the native host and provider viewport must match",
     message: (d) => tmsg("msg.layout.trace.native", {
       off: Number(d.worstOff ?? 0),
       wrong: Number(d.wrongFrames ?? 0),
@@ -210,6 +210,14 @@ export function registerLayoutTraceCatalog(): void {
             w: surface.applied.width,
             h: surface.applied.height,
           },
+          ...(surface.settled ? {
+            settled: {
+              x: surface.settled.x,
+              y: surface.settled.y,
+              w: surface.settled.width,
+              h: surface.settled.height,
+            },
+          } : {}),
         })),
       }));
       return { ...nativeTimelineVerdict(trace.frames, native, tolerance), tolerance };
