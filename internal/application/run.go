@@ -8,6 +8,7 @@ package application
 
 import (
 	"embed"
+	"errors"
 	"log"
 	"net"
 	"os"
@@ -126,6 +127,16 @@ func Run(assets embed.FS) error {
 		},
 		ResolveBindings: func() (map[string]string, error) {
 			return coreenvironment.SelectedSidecarBindings(resolved.Home)
+		},
+		ResolveDependencyEnvironment: func(consumer string) (map[string]string, error) {
+			runtime, err := coreenvironment.ResolveSidecarDependencyInterface(resolved.Home, consumer, ptycontract.InterfaceID, ptycontract.InterfaceVersion)
+			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					return nil, nil
+				}
+				return nil, err
+			}
+			return map[string]string{controlwire.PTYDependencyNameEnvironment: filepath.Base(runtime.Process)}, nil
 		},
 	})
 	resolvePTYOwner := func() (terminalProcessOwner, error) {

@@ -351,8 +351,8 @@ github.com/smartystreets/goconvey v1.8.1 h1:qGjIddxOk4grTu9JPOU31tVfq3cNdBlNa5sS
 github.com/smartystreets/goconvey v1.8.1/go.mod h1:+/u4qLyY6x1jReYOp7GOM2FSt8aP9CzCZL03bI28W60=
 github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f h1:8N2Q1/QmbjqJ1D+6Xf+WcOXievG9/P3kpGs4e7ZlrkU=
 github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f/go.mod h1:8mZL8RI8c0G/S2VMvBj1t845gWwopw2xrqF96eaXM8U=
-github.com/soksak-ai/soksak-contract-control v0.0.0-20260829002406-d37e5c3cc521 h1:UleRDAZTw4m6Scy3HAX0WgwNS5ES1Vh56QGRQ1pirhs=
-github.com/soksak-ai/soksak-contract-control v0.0.0-20260829002406-d37e5c3cc521/go.mod h1:attu3HRIL9ErRVPXHEj20rrsPswUyqH53HEMd7qXyWw=
+github.com/soksak-ai/soksak-contract-control v0.0.0-20260831165210-51a4b7cbb369 h1:GgpbUoEEVBBBGoi7qi0mdNVpwqv3Uakm2ZbnEBNin10=
+github.com/soksak-ai/soksak-contract-control v0.0.0-20260831165210-51a4b7cbb369/go.mod h1:attu3HRIL9ErRVPXHEj20rrsPswUyqH53HEMd7qXyWw=
 github.com/soksak-ai/soksak-contract-pty v0.0.0-20260831161848-6fa2f6c277e9 h1:QCVHe2j+JNOdauct92BtRgCgJi5uHYmptJ5AZ/WvB0M=
 github.com/soksak-ai/soksak-contract-pty v0.0.0-20260831161848-6fa2f6c277e9/go.mod h1:u591ly839/wznZbPb/yeWSbSvK22MFujozhchwp0oa4=
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9 h1:pgAA1NyDuK5daROyjR4aG5dPshemXlWu0XvOZkqS9tI=

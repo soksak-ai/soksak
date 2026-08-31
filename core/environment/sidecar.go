@@ -112,6 +112,42 @@ func ResolveSelectedSidecar(home, id string) (SidecarRuntime, error) {
 	return resolveSidecarRecord(id, value, value.Version)
 }
 
+// ResolveSidecarDependencyInterface resolves a consumer's declared Sidecar dependency by the
+// required interface. The consumer manifest owns the dependency list; callers do not select a
+// provider by implementation id.
+func ResolveSidecarDependencyInterface(home, consumerID, interfaceID, interfaceVersion string) (SidecarRuntime, error) {
+	value, exists, err := Read(home)
+	if err != nil {
+		return SidecarRuntime{}, err
+	}
+	if !exists {
+		return SidecarRuntime{}, os.ErrNotExist
+	}
+	consumer, found := value.Sidecars[consumerID]
+	if !found {
+		return SidecarRuntime{}, os.ErrNotExist
+	}
+	manifest, err := readRecordManifest("sidecar", consumerID, consumer)
+	if err != nil {
+		return SidecarRuntime{}, err
+	}
+	for _, dependency := range manifest.RuntimeDependencies.Sidecars {
+		if dependency.ID == "" || dependency.Version == "" {
+			continue
+		}
+		provider, err := ResolveSelectedSidecar(home, dependency.ID)
+		if err != nil || provider.Version != dependency.Version {
+			continue
+		}
+		for _, iface := range provider.Interfaces {
+			if iface.ID == interfaceID && iface.Version == interfaceVersion {
+				return provider, nil
+			}
+		}
+	}
+	return SidecarRuntime{}, os.ErrNotExist
+}
+
 // ResolveSidecarForPlugin resolves sidecar for consumer. consumer must name an
 // installed plugin at its effective version; otherwise os.ErrNotExist. A broken
 // development consumer is refused with environment.develop.directoryUnavailable.

@@ -98,6 +98,9 @@ type Deps struct {
 	// ResolveBindings reads the current environment's Sidecar component-id to materialized process
 	// name map immediately before a child starts. It is separate from the child's own process name.
 	ResolveBindings func() (map[string]string, error)
+	// ResolveDependencyEnvironment resolves environment entries for a consumer's declared
+	// dependencies. Nil means no dependency-specific environment is required.
+	ResolveDependencyEnvironment func(consumer string) (map[string]string, error)
 }
 
 // DefaultReadyWithin is how long a unit has to print its first line.
@@ -487,6 +490,24 @@ func (host *Host) startResolved(
 	if err != nil {
 		return Open{}, err
 	}
+	dependencyEnv := map[string]string{}
+	if host.deps.ResolveDependencyEnvironment != nil {
+		resolvedEnv, resolveErr := host.deps.ResolveDependencyEnvironment(name)
+		if resolveErr != nil {
+			return Open{}, resolveErr
+		}
+		for key, value := range resolvedEnv {
+			dependencyEnv[key] = value
+		}
+	}
+	childEnv := map[string]string{
+		controlwire.ProcessLabelEnvironment:    host.deps.ProcessLabel,
+		controlwire.SidecarNameEnvironment:     filepath.Base(path),
+		controlwire.SidecarBindingsEnvironment: string(bindingBytes),
+	}
+	for key, value := range dependencyEnv {
+		childEnv[key] = value
+	}
 	child, err := host.deps.Spawner.Start(process.Spec{
 		Path: path,
 		// The home is passed rather than read. A unit that derived its own would answer for a
@@ -495,11 +516,7 @@ func (host *Host) startResolved(
 		Env: process.ChildEnvironmentWithSecrets(
 			host.deps.Environment,
 			host.deps.Home,
-			map[string]string{
-				controlwire.ProcessLabelEnvironment:    host.deps.ProcessLabel,
-				controlwire.SidecarNameEnvironment:     filepath.Base(path),
-				controlwire.SidecarBindingsEnvironment: string(bindingBytes),
-			},
+			childEnv,
 			secrets,
 		),
 		Group: true,

@@ -33,6 +33,14 @@ type runtimeDependencies struct {
 	Sidecars []PluginRef `json:"sidecars"`
 }
 
+func runtimeDependencyRefs(refs []platformspec.Reference) []PluginRef {
+	result := make([]PluginRef, len(refs))
+	for i, ref := range refs {
+		result[i] = PluginRef{ID: ref.ID, Version: ref.Version}
+	}
+	return result
+}
+
 // pluginManifest is the decode target for plugin.json.
 type pluginManifest struct {
 	ID                  string              `json:"id"`
@@ -58,7 +66,7 @@ func parseManifest(kind, root string) (recordManifest, error) {
 		if err != nil {
 			return recordManifest{}, fmt.Errorf("%s: %w", filepath.Join(root, manifestName(kind)), err)
 		}
-		return recordManifest{Body: body, ID: manifest.ID, Version: manifest.Version, Interfaces: manifest.Interfaces, Process: manifest.Process, ProcessRole: manifest.ProcessRole}, nil
+		return recordManifest{Body: body, ID: manifest.ID, Version: manifest.Version, RuntimeDependencies: runtimeDependencies{Sidecars: runtimeDependencyRefs(manifest.RuntimeDependencies.Sidecars), Plugins: runtimeDependencyRefs(manifest.RuntimeDependencies.Plugins)}, Interfaces: manifest.Interfaces, Process: manifest.Process, ProcessRole: manifest.ProcessRole}, nil
 	}
 	var manifest pluginManifest
 	if err := json.Unmarshal(body, &manifest); err != nil {
