@@ -66,6 +66,7 @@ import {
   collectLineGroup,
   equalizeLineGroup,
   moveLineGroup,
+  resizeDeltaBounds,
   type LineMove,
 } from "../state/verticalLines";
 import { viewTravelPresentation } from "../lib/viewTravelPresentation";
@@ -800,10 +801,8 @@ export const GroupArea = memo(function GroupArea({
         return;
       }
       let delta = (ev.clientY - startPos) / splitPx;
-      delta = Math.max(
-        -(startSizes[i] - minPaneFrac),
-        Math.min(startSizes[i + 1] - minPaneFrac, delta),
-      );
+      const bounds = resizeDeltaBounds(startSizes, i, minPaneFrac);
+      delta = Math.max(bounds.min, Math.min(bounds.max, delta));
       const sizes = [...startSizes];
       sizes[i] = startSizes[i] + delta;
       sizes[i + 1] = startSizes[i + 1] - delta;

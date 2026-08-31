@@ -28,6 +28,17 @@ export const MIN_PANE_FRAC = 0.08;
 // not a provider-specific value.
 export const MIN_PANE_BODY_PX = CHROME_BANDS.header * 2;
 
+/** Delta limits for a two-child split. A persisted pane below the new floor
+ * must still be expandable; only its shrinking direction is constrained. */
+export function resizeDeltaBounds(startSizes: number[], index: number, minFrac: number): { min: number; max: number } {
+  const first = startSizes[index] ?? 0;
+  const second = startSizes[index + 1] ?? 0;
+  return {
+    min: -(first - minFrac),
+    max: second < minFrac ? 1 - first : second - minFrac,
+  };
+}
+
 export function minPaneFracForSpan(
   spanPx: number,
   chromePx: number,

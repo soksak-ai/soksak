@@ -12,7 +12,14 @@ import {
   lineGroupRange,
   moveLineGroup,
   normalizeVerticalLines,
+  resizeDeltaBounds,
 } from "./verticalLines";
+
+describe("resizeDeltaBounds", () => {
+  it("allows expansion when the adjacent pane starts below the current floor", () => {
+    expect(resizeDeltaBounds([0.747, 0.253], 0, 0.267).max).toBeCloseTo(0.253);
+  });
+});
 
 describe("minimum pane fraction", () => {
   it("keeps the body positive when a split is shorter than its fixed chrome", () => {
