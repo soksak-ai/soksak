@@ -15,13 +15,13 @@ canonical: docs/tech/GATES.CHANGELOG.md
 Core가 plugin 동작을 다시 정의하게 했습니다.
 
 Commit `fde267ac5860b4e9ed7dc4e2abd16bdcc576610f`은 설치 제품 검증을
-`min-median-max/soksak-terminal-tests`로 옮기며 fixture를 제거했습니다. 하지만 Taskfile 항목 네
+`tests/soksak-terminal-tests`로 옮기며 fixture를 제거했습니다. 하지만 Taskfile 항목 네
 개가 삭제된 테스트 이름을 계속 호출했습니다. Go 는 `-run` 과 일치하는 테스트가 없어도 패키지를 성공으로
 종료하므로 이 task들은 거짓 GREEN이 됐습니다.
 
-남은 task 를 제거했습니다. Core 는 소유자 테스트와 수명주기 복원 검사를 유지하고 외부 suite 가 Core 를
+남은 task 를 제거했습니다. Core 는 소유자 테스트와 수명주기 복원 검사를 유지하고 설치 제품 suite 가 Core 를
 통해 immutable release를 설치해 fleet composition을 검증합니다. Frame-by-frame rail과 section motion은
-외부 suite가 구현할 때까지 명시적으로 미완료입니다.
+설치 제품 suite가 구현할 때까지 명시적으로 미완료입니다.
 
 ## 증거
 

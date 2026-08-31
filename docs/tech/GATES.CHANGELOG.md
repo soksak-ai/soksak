@@ -15,11 +15,11 @@ and terminal-fleet system tests. That made checkout topology part of product ver
 Core restate plugin behavior.
 
 Commit `fde267ac5860b4e9ed7dc4e2abd16bdcc576610f` removed those fixtures when installed-product
-verification moved to `min-median-max/soksak-terminal-tests`. Four Taskfile entries remained and
+verification moved to `tests/soksak-terminal-tests`. Four Taskfile entries remained and
 named deleted tests. Go reports a successful package when `-run` matches no test, so those tasks
 became false GREENs.
 
-The stale tasks were removed. Core keeps its owner tests and lifecycle restore gate; the external
+The stale tasks were removed. Core keeps its owner tests and lifecycle restore gate; the installed-product
 suite installs immutable releases through Core and owns fleet composition. Frame-by-frame rail and
 section motion remains explicitly not done until that suite implements it.
 

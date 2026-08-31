@@ -47,6 +47,11 @@ func TestActiveDocumentsDescribeOnlyTheCurrentProduct(t *testing.T) {
 			return readErr
 		}
 		text := strings.ToLower(string(body))
+		for _, forbidden := range externalOwnerNarration {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s preserves external owner wording through %q", path, forbidden)
+			}
+		}
 		if documentKind(text) == "changelog" {
 			return nil
 		}
