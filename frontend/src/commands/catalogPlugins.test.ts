@@ -88,6 +88,13 @@ describe("plugin.conformance registration (discoverability)", () => {
 });
 
 describe("plugin installation observation", () => {
+  it("publishes the batch dependency-version refusal", () => {
+    expect(getSpec("plugin.install.local.batch.plan")?.errors)
+      .toContain("DEPENDENCY_VERSION_CONFLICT");
+    expect(getSpec("plugin.install.local.batch")?.errors)
+      .toContain("DEPENDENCY_VERSION_CONFLICT");
+  });
+
   it("starts a transaction without binding its lifetime to the renderer RPC", () => {
     expect(getSpec("plugin.install")?.params.timeoutMs).toBeUndefined();
     expect(getSpec("plugin.install")?.returns).toContain("phase");

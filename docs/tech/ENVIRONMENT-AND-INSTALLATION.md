@@ -96,8 +96,10 @@ immutable store layout. Skipping compilation never permits a source-directory ru
 
 When two or more installed Plugins must move a shared exact dependency to a new version, they are
 installation roots of one transaction. `plugin.install.local.batch.plan` resolves every root from
-one addressed store, rejects duplicate or conflicting release identities, and hashes the sorted
-root set plus the complete union closure. `plugin.install.local.batch` re-resolves that same plan
+one addressed store and selects exactly one version for each component kind and id. If two closures
+select different versions, it returns `DEPENDENCY_VERSION_CONFLICT` with every conflicting id,
+version and root before calculating a plan digest. It also rejects duplicate or conflicting release
+identities, then hashes the sorted root set plus the complete union closure. `plugin.install.local.batch` re-resolves that same plan
 and stages every distinct Plugin and Sidecar once before one environment revision commit. Updating
 the roots one at a time, editing `environment.json`, or temporarily removing a dependent Plugin is
 not a valid migration path.

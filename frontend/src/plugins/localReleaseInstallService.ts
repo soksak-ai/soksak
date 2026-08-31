@@ -12,10 +12,32 @@ type LocalRoot = ReleaseCoordinates & ReleaseReference;
 
 export class DependencyVersionConflict extends Error {
   readonly code = "DEPENDENCY_VERSION_CONFLICT";
-  constructor(readonly conflict: { pluginId: string; pluginVersion: string; sidecarId: string; requiredVersion: string; requestedVersion: string }) {
-    super(`${conflict.pluginId}@${conflict.pluginVersion} requires Sidecar ${conflict.sidecarId} ${conflict.requiredVersion}; requested ${conflict.requestedVersion}`);
+  readonly conflicts: DependencyConflict[];
+  readonly conflict: DependencyConflict;
+  constructor(conflict: DependencyConflict | DependencyConflict[]) {
+    const conflicts = Array.isArray(conflict) ? conflict : [conflict];
+    const message = conflicts.map((item) => "kind" in item
+      ? `${item.kind} ${item.id} selects incompatible versions ${item.versions.join(", ")}`
+      : `${item.pluginId}@${item.pluginVersion} requires Sidecar ${item.sidecarId} ${item.requiredVersion}; requested ${item.requestedVersion}`
+    ).join("; ");
+    super(message);
+    this.conflicts = conflicts;
+    this.conflict = conflicts[0];
   }
 }
+
+type DependencyConflict = {
+  pluginId: string;
+  pluginVersion: string;
+  sidecarId: string;
+  requiredVersion: string;
+  requestedVersion: string;
+} | {
+  kind: ReturnType<typeof releaseIdentity>["kind"];
+  id: string;
+  versions: string[];
+  requiredBy: Array<{ pluginId: string; pluginVersion: string; version: string }>;
+};
 
 async function requireSidecarCompatibleWithInstalledPlugins(sidecarId: string, requestedVersion: string): Promise<void> {
   const records = await invoke<InstalledPluginManifest[]>("plugin_manifest_list");
@@ -57,12 +79,20 @@ async function digestPlan(releases: ReleaseDocument[]): Promise<string> {
 }
 
 // The root bytes are read once; every dependency is read from the same store by its coordinates.
-async function resolveLocal(store: string, id: string, version: string, kind: ReleaseCoordinates["kind"]): Promise<{ plan: LocalInstallPlan; root: LocalRoot }> {
+async function resolveLocalClosure(store: string, id: string, version: string, kind: ReleaseCoordinates["kind"]): Promise<{ releases: ReleaseDocument[]; root: LocalRoot }> {
   const root = await localRoot(store, kind, id, version);
   const resolve = localStoreReleaseResolver(store, readLocal);
   const read: ReleaseRead = (release) => release.kind === kind && release.id === id && release.version === version ? Promise.resolve(root.body) : resolve(release);
   const releases = await loadReleaseClosure(root.reference, read, kind);
-  return { plan: { digest: await digestPlan(releases), store, id, version, releases }, root: root.reference };
+  return { releases, root: root.reference };
+}
+
+async function resolveLocal(store: string, id: string, version: string, kind: ReleaseCoordinates["kind"]): Promise<{ plan: LocalInstallPlan; root: LocalRoot }> {
+  const resolved = await resolveLocalClosure(store, id, version, kind);
+  return {
+    plan: { digest: await digestPlan(resolved.releases), store, id, version, releases: resolved.releases },
+    root: resolved.root,
+  };
 }
 
 export const planLocalPlugin = async (store: string, id: string, version: string) => (await resolveLocal(store, id, version, "plugin")).plan;
@@ -70,9 +100,54 @@ async function resolveLocalPlugins(store: string, requested: LocalPluginRoot[]):
   if (requested.length < 2) throw new Error("a multi-plugin transaction requires at least two roots");
   const roots = [...requested].sort((a, b) => a.id.localeCompare(b.id));
   if (new Set(roots.map(({ id }) => id)).size !== roots.length) throw new Error("a multi-plugin transaction contains a duplicate root");
-  const resolved = await Promise.all(roots.map(({ id, version }) => resolveLocal(store, id, version, "plugin")));
+  const resolved = await Promise.all(roots.map(({ id, version }) => resolveLocalClosure(store, id, version, "plugin")));
+
+  // One installed environment can select one version of a component id. A release identity includes
+  // version, so keying the union by kind:id@version accepts two incompatible releases as if they
+  // were unrelated. Detect the conflict on kind+id before building or digesting the transaction.
+  const selections = new Map<string, {
+    kind: ReturnType<typeof releaseIdentity>["kind"];
+    id: string;
+    versions: Map<string, Array<{ pluginId: string; pluginVersion: string; version: string }>>;
+  }>();
+  for (let index = 0; index < resolved.length; index += 1) {
+    const root = roots[index];
+    for (const release of resolved[index].releases) {
+      const identity = releaseIdentity(release);
+      const key = `${identity.kind}:${identity.id}`;
+      const selected: {
+        kind: ReturnType<typeof releaseIdentity>["kind"];
+        id: string;
+        versions: Map<string, Array<{ pluginId: string; pluginVersion: string; version: string }>>;
+      } = selections.get(key) ?? {
+        kind: identity.kind,
+        id: identity.id,
+        versions: new Map<string, Array<{ pluginId: string; pluginVersion: string; version: string }>>(),
+      };
+      const requiredBy = selected.versions.get(identity.version) ?? [];
+      if (!requiredBy.some((value) => value.pluginId === root.id && value.pluginVersion === root.version)) {
+        requiredBy.push({ pluginId: root.id, pluginVersion: root.version, version: identity.version });
+      }
+      selected.versions.set(identity.version, requiredBy);
+      selections.set(key, selected);
+    }
+  }
+  const conflicts: DependencyConflict[] = [...selections.values()]
+    .filter((selection) => selection.versions.size > 1)
+    .sort((left, right) => `${left.kind}:${left.id}`.localeCompare(`${right.kind}:${right.id}`))
+    .map((selection) => ({
+      kind: selection.kind,
+      id: selection.id,
+      versions: [...selection.versions.keys()].sort(),
+      requiredBy: [...selection.versions.values()].flat().sort((left, right) =>
+        `${left.pluginId}@${left.pluginVersion}:${left.version}`.localeCompare(
+          `${right.pluginId}@${right.pluginVersion}:${right.version}`,
+        )),
+    }));
+  if (conflicts.length > 0) throw new DependencyVersionConflict(conflicts);
+
   const releases = new Map<string, ReleaseDocument>();
-  for (const item of resolved) for (const release of item.plan.releases) {
+  for (const item of resolved) for (const release of item.releases) {
     const identity = releaseIdentity(release);
     const key = `${identity.kind}:${identity.id}@${identity.version}`;
     const previous = releases.get(key);
@@ -110,6 +185,11 @@ export async function installLocalPlugin(store: string, id: string, version: str
     else report({ phase: "failed", completed: 0, total: plan.releases.length, error: result.message });
     return result;
   } catch (cause) {
+    if (cause instanceof DependencyVersionConflict) {
+      const message = cause.message;
+      report({ phase: "failed", completed: 0, total: 0, error: message });
+      return { ok: false, code: cause.code, message, errors: cause.conflicts.map((conflict) => JSON.stringify(conflict)) };
+    }
     const message = cause instanceof Error ? cause.message : String(cause);
     report({ phase: "failed", completed: 0, total: 0, error: message });
     return { ok: false, code: "LOCAL_RELEASE_INVALID", message, errors: [message] };
@@ -135,6 +215,11 @@ export async function installLocalPlugins(store: string, roots: LocalPluginRoot[
     else report({ phase: "failed", completed: 0, total: plan.releases.length, error: result.message });
     return result;
   } catch (cause) {
+    if (cause instanceof DependencyVersionConflict) {
+      const message = cause.message;
+      report({ phase: "failed", completed: 0, total: 0, error: message });
+      return { ok: false, code: cause.code, message, errors: cause.conflicts.map((conflict) => JSON.stringify(conflict)) };
+    }
     const message = cause instanceof Error ? cause.message : String(cause);
     report({ phase: "failed", completed: 0, total: 0, error: message });
     return { ok: false, code: "LOCAL_RELEASE_INVALID", message, errors: [message] };

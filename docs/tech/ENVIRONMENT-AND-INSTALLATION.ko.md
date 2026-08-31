@@ -86,7 +86,9 @@ digest 검증과 불변 store 구조를 사용합니다. compile을 생략해도
 
 설치된 Plugin 둘 이상이 공유 exact dependency를 새 버전으로 함께 옮겨야 하면 그 Plugin들은 하나의
 transaction root 집합입니다. `plugin.install.local.batch.plan`은 명시한 store 하나에서 모든 root를
-해결하고 중복·충돌 release identity를 거부하며, 정렬한 root 집합과 전체 합집합 closure를 hash합니다.
+해결하고 component kind와 id마다 version 하나만 선택합니다. closure 둘이 서로 다른 version을 선택하면
+plan digest를 계산하기 전에 충돌하는 모든 id, version, root와 함께 `DEPENDENCY_VERSION_CONFLICT`를
+반환합니다. 또한 중복·충돌 release identity를 거부하고 정렬한 root 집합과 전체 합집합 closure를 hash합니다.
 `plugin.install.local.batch`는 같은 plan을 다시 해결하고 서로 다른 Plugin과 Sidecar를 각각 한 번만
 stage한 뒤 environment revision을 한 번 commit합니다. root를 하나씩 갱신하거나 `environment.json`을
 직접 편집하거나 dependent Plugin을 잠시 제거하는 방식은 올바른 migration이 아닙니다.

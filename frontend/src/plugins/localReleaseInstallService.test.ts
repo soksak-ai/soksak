@@ -87,6 +87,55 @@ describe("local release planning and installation", () => {
     }));
   });
 
+  it("refuses two roots that select different versions of the same Sidecar id", async () => {
+    const sidecarV2Body = JSON.stringify({
+      ...JSON.parse(sidecarBody),
+      version: "0.0.2",
+      source: {
+        repository: `https://github.com/soksak-ai/${SIDECAR}`,
+        commit: "d".repeat(40),
+      },
+    });
+    const sidecarV2 = {
+      id: SIDECAR,
+      version: "0.0.2",
+      size: sidecarV2Body.length,
+      sha256: await hash(sidecarV2Body),
+    };
+    peerBody = JSON.stringify({
+      ...JSON.parse(peerBody),
+      runtimeDependencies: { sidecars: [sidecarV2] },
+    });
+    invoke.mockImplementation(async (command: string, args: { id: string; version: string }) => {
+      if (command === "plugin_manifest_list") return [];
+      if (command === "sidecar_status") return { open: [], recorded: [] };
+      const body = args.id === PLUGIN
+        ? pluginBody
+        : args.id === PEER
+          ? peerBody
+          : args.version === "0.0.2"
+            ? sidecarV2Body
+            : sidecarBody;
+      return { found: true, body, size: body.length, sha256: await hash(body) };
+    });
+
+    await expect(planLocalPlugins("/store", [
+      { id: PLUGIN, version: "0.0.1" },
+      { id: PEER, version: "0.0.1" },
+    ])).rejects.toMatchObject({
+      code: "DEPENDENCY_VERSION_CONFLICT",
+      conflicts: [{
+        kind: "sidecar",
+        id: SIDECAR,
+        versions: ["0.0.1", "0.0.2"],
+        requiredBy: [
+          { pluginId: PLUGIN, pluginVersion: "0.0.1", version: "0.0.1" },
+          { pluginId: PEER, pluginVersion: "0.0.1", version: "0.0.2" },
+        ],
+      }],
+    });
+  });
+
   it("refuses a stale plan before invoking the installer", async () => {
     const result = await installLocalPlugin("/store", PLUGIN, "0.0.1", "0".repeat(64));
     expect(result).toMatchObject({ ok: false, code: "LOCAL_INSTALL_PLAN_CHANGED" });

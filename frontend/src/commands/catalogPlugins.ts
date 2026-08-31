@@ -54,7 +54,14 @@ import { publishActivity } from "../state/activityFeed";
 import { awaitViewMounted } from "../plugins/viewFocus";
 import { runtimePluginRequirements } from "../plugins/runtimeDependencies";
 import { pluginInstallProgress, waitForPluginInstallPhase, type PluginInstallPhase } from "../plugins/registryInstallProgress";
-import { installLocalPlugin, installLocalPlugins, planLocalPlugin, planLocalPlugins, type LocalPluginRoot } from "../plugins/localReleaseInstallService";
+import {
+  DependencyVersionConflict,
+  installLocalPlugin,
+  installLocalPlugins,
+  planLocalPlugin,
+  planLocalPlugins,
+  type LocalPluginRoot,
+} from "../plugins/localReleaseInstallService";
 import { writeDevelopRecord } from "./develop";
 
 // Installed/dev runtime → dependency graph node (based on manifest dependencies).
@@ -730,9 +737,23 @@ export function registerPluginCatalog(): void {
     },
     returns: "{ digest,store,roots:[{id,version}],releases:[{kind,id,version,artifacts:[{target,file,size,sha256}]}] }",
     message: (d) => tmsg("msg.plugin.install.local.plan", { id: "batch", n: ((d.releases as unknown[]) ?? []).length }),
-    errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "INTERNAL"],
+    errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "DEPENDENCY_VERSION_CONFLICT", "INTERNAL"],
     examples: [`plugin.install.local.batch.plan '{"store":"/absolute/releases","plugins":[{"id":"<plugin-id-a>","version":"0.0.1"},{"id":"<plugin-id-b>","version":"0.0.1"}]}'`],
-    handler: async (p) => planLocalPlugins(String(p.store), localRoots(p.plugins)),
+    handler: async (p) => {
+      try {
+        return await planLocalPlugins(String(p.store), localRoots(p.plugins));
+      } catch (cause) {
+        if (cause instanceof DependencyVersionConflict) {
+          return {
+            ok: false,
+            code: cause.code,
+            message: cause.message,
+            conflicts: cause.conflicts,
+          };
+        }
+        throw cause;
+      }
+    },
   });
 
   register("plugin.install.local.batch", {
@@ -744,7 +765,7 @@ export function registerPluginCatalog(): void {
     },
     returns: "{ id,version,revision }",
     message: (d) => tmsg("msg.plugin.install.local", { id: String(d.id), version: String(d.version) }),
-    errors: ["INVALID_PARAMS", "LOCAL_RELEASE_INVALID", "LOCAL_INSTALL_PLAN_CHANGED", "VERSION_ARTIFACT_CONFLICT", "INTERNAL"],
+    errors: ["INVALID_PARAMS", "DEPENDENCY_VERSION_CONFLICT", "LOCAL_RELEASE_INVALID", "LOCAL_INSTALL_PLAN_CHANGED", "VERSION_ARTIFACT_CONFLICT", "INTERNAL"],
     examples: [`plugin.install.local.batch '{"store":"/absolute/releases","plugins":[{"id":"<plugin-id-a>","version":"0.0.1"},{"id":"<plugin-id-b>","version":"0.0.1"}],"planDigest":"<sha256>"}'`],
     danger: "destructive",
     handler: async (p) => installLocalPlugins(String(p.store), localRoots(p.plugins), String(p.planDigest)),
