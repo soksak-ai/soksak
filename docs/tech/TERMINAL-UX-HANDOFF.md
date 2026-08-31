@@ -432,10 +432,9 @@ byte-identical; canonical tree receipt `86f83d4c` and the Sidecar build, repeate
 conformance cases are GREEN. Other native targets and the new owner-only benchmark contract closure
 remain unverified.
 
-Release blockers outside implementation are also explicit: `soksak-terminal-tests` still is defined
-under the product-specific `min-median-max` module/reusable-workflow identity and needs a real
-repository ownership decision before changing refs; `soksak-contract-registry` has no LICENSE and
-requires an owner-selected license. Do not invent either value locally.
+Release blockers outside implementation are also explicit: `soksak-terminal-tests` still requires
+an ownership decision before changing repository references; `soksak-contract-registry` has no
+LICENSE and requires an owner-selected license. Do not invent either value locally.
 
 The remaining acceptance blocker is not a timeout or implementation fallback: WebKit requires an
 active key window for native keyboard delivery. Local capture-only runs must not violate the user's

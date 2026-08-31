@@ -417,8 +417,7 @@ archive 를 쓰며, 디버그 데이터에서 노드 작업 경로를 제거합�
 사이드카 빌드, 반복 stage, 적합성 8개가 GREEN 입니다. 다른 네이티브 target 과 새 소유자 전용
 benchmark 계약 closure 는 아직 검증하지 않았습니다.
 
-구현 밖의 릴리즈 차단점도 적어 둡니다. `soksak-terminal-tests` 는 제품 전용인데 아직
-`min-median-max` module·reusable-workflow identity 아래에 있으므로, ref 를 바꾸기 전에 실제 저장소
+구현 밖의 릴리즈 차단점도 적어 둡니다. `soksak-terminal-tests` 는 저장소 참조를 바꾸기 전에
 소유 결정이 필요합니다. `soksak-contract-registry` 에는 LICENSE 가 없으며 소유자가 라이선스를 골라야
 합니다. 두 값 모두 로컬에서 지어내지 않습니다.
 
