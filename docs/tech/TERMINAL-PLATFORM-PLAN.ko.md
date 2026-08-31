@@ -105,7 +105,7 @@ projection, 네이티브 표면 binding 을 구현할 수 있습니다. 터미�
 ## 적합성 어휘와 소유
 
 규범 문서는 `canonical state`, `conformance case`, `reference state` 를 씁니다. `Golden` 은 규범
-용어가 아닙니다. reference state 는 외부 명세 또는 명시된 계약 결정을 인용합니다. 후보 엔진의 출력은
+용어가 아닙니다. reference state 는 계약의 규범 입력 또는 명시된 계약 결정을 기록합니다. 후보 엔진의 출력은
 증거이며 권위가 아닙니다.
 
 계약은 그 계약만 정의하는 경우에 자기 schema, conformance case, reference state, 단언을 담을 수

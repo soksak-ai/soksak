@@ -110,7 +110,7 @@ represented portably without loss.
 ## Conformance vocabulary and ownership
 
 Normative documents use `canonical state`, `conformance case` and `reference state`. `Golden` is
-not a normative term. Reference states cite an external specification or an explicit contract
+not a normative term. Reference states record the contract's normative input or an explicit contract
 decision. Candidate engine output is evidence and never authority.
 
 A contract may contain its own schema, conformance cases, reference states and assertions when they
