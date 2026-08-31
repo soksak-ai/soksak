@@ -7,7 +7,7 @@ tool github.com/wailsapp/wails/v3/cmd/wails3
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/min-median-max/wails-service-native-compositor v0.0.0-20260830000110-5fe697ed673d
+	github.com/min-median-max/wails-service-native-compositor v0.0.0-20260831144944-6ff28c0c7f5e
 	github.com/min-median-max/wails-service-terminal-surface v0.0.0-20260831113500-7011b96a4c1a
 	github.com/min-median-max/wails-service-webview-surface v0.0.0-20260831092551-7c31a326020d
 	github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f

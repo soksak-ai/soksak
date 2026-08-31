@@ -1,6 +1,7 @@
 import { nativeSurfaceDOMRuntime, startNativeSurfaceObserver } from "@min-median-max/wails-service-native-compositor";
 import type {
   NativeSurfaceCommit,
+  NativeSurfaceFrame,
   NativeSurfaceObserverController,
   NativeSurfacePresentation,
 } from "@min-median-max/wails-service-native-compositor";
@@ -168,6 +169,15 @@ export async function stageNativeSurfacePresentation(
     return owner !== null && visibleViewIds.has(owner);
   });
   return { sequence: receipt.sequence, visibleViewIds: [...visibleViewIds].sort() };
+}
+
+/** Applies target surface rectangles before React publishes the matching document layout. */
+export async function stageNativeSurfaceGeometry(
+  frames: ReadonlyMap<string, NativeSurfaceFrame>,
+): Promise<{ sequence: number; ids: string[] }> {
+  if (!controller) throw new Error("native surface observer is not installed");
+  const receipt = await controller.stageGeometry(frames);
+  return { sequence: receipt.sequence, ids: [...frames.keys()].sort() };
 }
 
 /** Re-applies the current DOM presentation after a staged transaction is cancelled. */

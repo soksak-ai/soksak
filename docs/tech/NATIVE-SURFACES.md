@@ -117,6 +117,21 @@ callback returns, and a background window may pause animation. The landing previ
 `ui.tree`, `surface.composition`, and `ui.motion` verify the result: pane, slot, and native surface
 rectangles agree, declared/applied drift is zero, and a divider preview creates zero FLIP animations.
 
+Divider resize uses an explicit geometry transaction. Core calculates target rectangles from the
+next split layout and the fixed offsets currently reported inside each pane. The native compositor
+applies that full inventory first. Core applies the matching store and DOM update immediately after
+the receipt. While one application runs, the transaction retains only the latest pending pointer
+value. It starts each native application in a task posted by the preceding document frame, which
+leaves a complete frame interval for the receipt and DOM update. The task has a finite 50ms failure
+limit for a document that produces no animation frame; it does not poll.
+
+Surface coordinates use the same 0.01 CSS-pixel precision as the public layout trace. This removes
+floating-point serialization residue from the actual command values instead of increasing the trace
+tolerance. A non-key 16-step, 800ms divider run with concurrent 36-frame recording produced 108
+compared frames, 97 compositor samples, `wrongFrames=0`, `worstAppliedOff=0`, and
+`worstSettledOff=0` at tolerance 0. The recorded intermediate frames showed the terminal, browser
+viewport, and pane lines at the same split position.
+
 An inactive document applies command-driven layout changes without FLIP. WebKit does not advance
 WAAPI in a non-key window, so an animation created there can retain the previous rectangle after
 state and native geometry contain the new rectangle. `layoutRectMotion` checks `document.hasFocus()`

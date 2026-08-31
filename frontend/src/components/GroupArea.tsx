@@ -58,7 +58,7 @@ import {
   spanMoveAcross,
   type ArrangementMove,
 } from "../lib/railArrangement";
-import type { SplitTree } from "../state/splitTree";
+import { resizeSplitTree, type SplitTree } from "../state/splitTree";
 import {
   MIN_PANE_FRAC,
   collectLineGroup,
@@ -73,6 +73,10 @@ import {
   replaceNativeDecorations,
   strokeDecoration,
 } from "../lib/nativeDecorations";
+import { dividerSurfaceGeometry } from "../lib/dividerSurfaceGeometry";
+import { stageNativeSurfaceGeometry } from "../framework/wails/nativeSurfaces";
+import { createDividerResizeTransaction } from "../lib/dividerResizeTransaction";
+import { afterFramePaint } from "../lib/afterFramePaint";
 
 // Render the content area as editor groups. Two core principles:
 // 1) Keep the body (terminal/editor) separate from the group tree structure, in a "persistent body layer" keyed
@@ -714,10 +718,26 @@ export const GroupArea = memo(function GroupArea({
     const startX = d.rect.left;
     // Store commits are capped at once per frame (principles 3 and 4) — mousemove exceeds 60Hz.
     // The whole group lands in one commit (resizeSplits) — the line is not fragmented even in an intermediate state.
-    const commitResize = rafThrottle((moves: LineMove[]) => {
-      resizeGeometryPending.current = true;
-      resizeSplits(projectId, moves);
+    const resizeTransaction = createDividerResizeTransaction<LineMove[]>({
+      beforeStage: afterFramePaint,
+      stage: async (next) => {
+        const targetLayout = next.reduce(
+          (layout, move) => resizeSplitTree(layout, move.splitId, move.sizes),
+          displayLayout,
+        );
+        const targetCells = computeLayout(targetLayout).cells.map((cell) => ({
+          id: cell.group.id,
+          rect: cell.rect,
+        }));
+        const frames = dividerSurfaceGeometry(cont, targetCells, railStation, railWidthPx);
+        if (frames.size > 0) await stageNativeSurfaceGeometry(frames);
+      },
+      apply: (next) => commitDomLayout(() => {
+        resizeGeometryPending.current = true;
+        resizeSplits(projectId, next);
+      }),
     });
+    const commitResize = rafThrottle((moves: LineMove[]) => resizeTransaction.submit(moves));
     const onMove = (ev: Pick<MouseEvent, "clientX" | "clientY">) => {
       if (d.dir === "row") {
         const targetX = startX + ((ev.clientX - startPos) / totalPx) * 100;
@@ -736,7 +756,7 @@ export const GroupArea = memo(function GroupArea({
     };
     let ended = false;
     let stopNativeInput = () => {};
-    const onUp = () => {
+    const onUp = async () => {
       if (ended) return;
       ended = true;
       // Settle not only the store's final ratio but the React DOM that consumed it. Emitting the end right after a
@@ -747,26 +767,27 @@ export const GroupArea = memo(function GroupArea({
       // external event updates, so issuing it after flushSync lets the resize phase close before the command's
       // render and turns the landing into an ordinary FLIP. A live slot then starts at its previous top while
       // taking the new height. Commit both writes while resize motion still owns immediate geometry.
-      commitDomLayout(() => {
-        commitResize.flush();
-        gesture.end();
-      });
+      commitResize.flush();
       window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("mouseup", onUp as unknown as EventListener);
       stopNativeInput();
       document.body.style.cursor = "";
-      ms.resizeDragActive = false;
-      // Report the end after flush (the final layout commit) — subscribers (the browser provider) trust the slot
-      // rect at this point as final and commit bounds once.
-      emitResizeGesture(false);
+      try {
+        await resizeTransaction.drain();
+        commitDomLayout(() => gesture.end());
+      } finally {
+        ms.resizeDragActive = false;
+        // Report the end after the final document commit and native receipt.
+        emitResizeGesture(false);
+      }
     };
     window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("mouseup", onUp as unknown as EventListener);
     stopNativeInput = listenThisWindow<NativePointerEdge>("window.input.pointer", (event) => {
       if (event.payload.phase === "move") {
         onMove({ clientX: event.payload.x, clientY: event.payload.y });
       } else if (event.payload.phase === "up") {
-        onUp();
+        void onUp();
       }
     });
     document.body.style.cursor = d.dir === "row" ? "col-resize" : "row-resize";

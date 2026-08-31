@@ -11,7 +11,7 @@ describe("window.input — discoverable native input diagnostics", () => {
     ["window.input.mark", ["text"]],
     ["window.input.pointer.wait", ["sequence", "timeoutMs"]],
     ["window.input.pointer.inject", ["x", "y"]],
-    ["window.input.pointer.drag", ["fromX", "fromY", "toX", "toY", "steps"]],
+    ["window.input.pointer.drag", ["fromX", "fromY", "toX", "toY", "steps", "durationMs"]],
     ["window.input.pointer.click", [
       "x", "y", "recordDir", "recordFrames", "recordIntervalMs", "recordLeadMs", "recordMaxBytes", "traceAddresses",
     ]],

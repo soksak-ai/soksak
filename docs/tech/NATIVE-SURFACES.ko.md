@@ -107,6 +107,19 @@ animation을 중지할 수 있습니다. 마지막 preview와 단일 `pane.resiz
 전에 하나의 동기 DOM transaction에서 실행합니다. `ui.tree`, `surface.composition`, `ui.motion`으로 pane,
 slot, native surface rectangle 일치, declared/applied drift 0, divider preview의 FLIP animation 0을 검증합니다.
 
+Divider resize는 명시적인 geometry transaction을 사용합니다. Core는 다음 split layout과 각 pane 내부에서
+현재 보고된 고정 offset으로 target rectangle을 계산합니다. Native compositor는 전체 inventory를 먼저
+적용합니다. Core는 receipt 직후 동일한 store와 DOM 변경을 적용합니다. 하나의 적용이 실행되는 동안
+transaction은 최신 pending pointer 값만 유지합니다. 각 native 적용은 이전 document frame이 게시한
+task에서 시작하므로 receipt와 DOM 변경에 하나의 완전한 frame 간격을 제공합니다. Document가 animation
+frame을 생성하지 않을 때를 위해 task에 유한한 50ms 실패 제한이 있으며 polling은 사용하지 않습니다.
+
+Surface 좌표는 공개 layout trace와 동일한 0.01 CSS pixel 정밀도를 사용합니다. Trace tolerance를 늘리지
+않고 실제 command 값에서 floating-point 직렬화 잔여값을 제거합니다. Non-key 상태에서 16 step, 800ms
+divider 실행과 36 frame 녹화를 동시에 수행한 결과 tolerance 0에서 compared frame 108개, compositor sample
+97개, `wrongFrames=0`, `worstAppliedOff=0`, `worstSettledOff=0`을 반환했습니다. 녹화의 중간 frame에서
+terminal, browser viewport, pane line이 동일한 split 위치에 표시됐습니다.
+
 비활성 document는 command로 변경된 layout을 FLIP 없이 적용합니다. WebKit은 non-key window에서 WAAPI를
 진행하지 않으므로, 그 상태에서 생성한 animation은 state와 native geometry가 새 rectangle을 포함한 뒤에도
 이전 rectangle을 유지할 수 있습니다. `layoutRectMotion`은 FLIP 생성 시 `document.hasFocus()`를 확인합니다.

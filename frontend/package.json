@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@min-median-max/wails-service-native-compositor": "github:min-median-max/wails-service-native-compositor#5fe697ed673d",
+    "@min-median-max/wails-service-native-compositor": "github:min-median-max/wails-service-native-compositor#6ff28c0c7f5e",
     "@soksak/soksak-spec": "0.0.48",
     "@wailsio/runtime": "3.0.0-beta.12",
     "pngjs": "^7.0.0",
