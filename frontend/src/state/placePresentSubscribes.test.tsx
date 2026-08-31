@@ -30,7 +30,7 @@ describe("the left edge as a reader sees it", () => {
 
   beforeEach(() => {
     useSectionSets.setState({
-      sets: [{ id: "set-a", title: "one", sections: [] }],
+      sets: [{ id: "set-a", title: "one", sections: ["plugin.view"] }],
       byPlugin: {},
       left: null,
     });

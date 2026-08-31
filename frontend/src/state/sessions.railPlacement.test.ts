@@ -52,6 +52,16 @@ beforeEach(() => {
 });
 
 describe("position PIN guards the clean grid line", () => {
+  it("does not solve a rail for an open link whose set has no sections", () => {
+    const workspace = twoColumnWorkspace();
+    workspace.regionOpen = { ...workspace.regionOpen, rail: true };
+    const empty = useSectionSets.getState().create("empty");
+    useSectionSets.getState().link("fixture", "rail", empty.id);
+    useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
+
+    expect(projectArrangement(workspace)!.railPresent).toBe(false);
+  });
+
   it("rejects a horizontal resize that would move the pinned line", () => {
     const workspace = twoColumnWorkspace();
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });

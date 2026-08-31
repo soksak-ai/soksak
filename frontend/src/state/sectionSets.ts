@@ -200,18 +200,21 @@ export const useSectionSets = moduleState("state/sectionSets#store", () =>
   }),
 );
 
-/** Whether a place is present: the person has it open and a set stands there.
+/** Whether a place is present: it is open and its linked set contains sections.
  *
- *  A place open with nothing in it reserves its width and draws nothing, which reads as a view that
- *  failed. The rail asked this and the right did not until 2026-08-17, so the right stood empty in
- *  every capture of that day. One rule, all three places.
+ *  An empty set is an unconfigured record. It does not reserve width or enter
+ *  adjacency calculations; otherwise an open link renders a blank rail.
  */
 export function placePresent(
   open: boolean,
   place: SectionPlace,
   focusedPluginId: string | null,
 ): boolean {
-  return open && standingSet(place, focusedPluginId) !== null;
+  const set = standingSet(place, focusedPluginId);
+  // A newly created set has no sections until it is configured. It is a stored
+  // record, not a visible sidebar, so it must not reserve width or enter rail
+  // adjacency calculations.
+  return open && set !== null && set.sections.length > 0;
 }
 
 /** The set standing in a region, given the plugin of the focused view. null = none stands, and then
@@ -266,14 +269,18 @@ export function standingSet(place: SectionPlace, focusedPluginId: string | null)
  * nothing at width 0, and appeared when the place was toggled off and on. The toggle forced the
  * recompute the store change should have caused.
  *
- * The whole question is asked here, so there is nothing to keep in step.
+ * The whole question is asked here, including whether the set has sections,
+ * so there is nothing to keep in step.
  */
 export function usePlacePresent(
   open: boolean,
   place: SectionPlace,
   focusedPluginId: string | null,
 ): boolean {
-  return useSectionSets((s) => open && standingSetIn(s, place, focusedPluginId) !== null);
+  return useSectionSets((s) => {
+    const set = standingSetIn(s, place, focusedPluginId);
+    return open && set !== null && set.sections.length > 0;
+  });
 }
 
 /** The same standing with one place settled — a set stands there, or nothing does. */

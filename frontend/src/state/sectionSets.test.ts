@@ -33,6 +33,7 @@ describe("section sets — who stands where", () => {
   it("stands in the region the link names and in no other", async () => {
     const m = await load();
     const set = m.useSectionSets.getState().create("work");
+    m.useSectionSets.getState().arrange(set.id, ["plugin.view"]);
     m.useSectionSets.getState().link("plg-a", "right", set.id);
 
     expect(m.standingSet("right", "plg-a")?.id).toBe(set.id);
@@ -109,6 +110,7 @@ describe("section sets — who stands where", () => {
   it("a place is present only when it is open and a set stands there", async () => {
     const m = await load();
     const set = m.useSectionSets.getState().create("work");
+    m.useSectionSets.getState().arrange(set.id, ["plugin.view"]);
     m.useSectionSets.getState().link("plg-a", "right", set.id);
 
     expect(m.placePresent(true, "right", "plg-a")).toBe(true);
@@ -118,6 +120,15 @@ describe("section sets — who stands where", () => {
     expect(m.placePresent(true, "right", "plg-b")).toBe(false);
     // Standing, and the person closed it.
     expect(m.placePresent(false, "right", "plg-a")).toBe(false);
+  });
+
+  it("does not reserve a place for an empty set", async () => {
+    const m = await load();
+    const empty = m.useSectionSets.getState().create("empty");
+    m.useSectionSets.getState().link("plg-a", "rail", empty.id);
+
+    expect(m.standingSet("rail", "plg-a")?.sections).toEqual([]);
+    expect(m.placePresent(true, "rail", "plg-a")).toBe(false);
   });
 
   it("removing a set takes its links with it", async () => {

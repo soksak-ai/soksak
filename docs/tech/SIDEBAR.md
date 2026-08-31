@@ -104,18 +104,18 @@ the station on the focused pane's left clean line, alternating 0 and 50 with
 clean lines at 0, 50 and 100. Under PIN, focusing another pane wrote no
 arrangement record at all — nothing changed to record.
 
-## S3. An empty rail is the frame, not a gap
+## S3. An unconfigured rail does not reserve a gap
 
-The rail's body comes from a plugin. With none installed the rail is empty, and
-that is a settled state rather than a missing one. No hardcoded body and no
-stub: a placeholder is a plugin the core wrote, which is the lock-in A1 exists
-to prevent.
+The rail's body comes from a configured section set. With no set, or with an
+empty set, the rail is absent: it reserves no width and does not participate in
+adjacency. No hardcoded body and no stub is used. A set becomes present only
+after it contains at least one section.
 
-## S4. A place is present when it is open and a set stands in it
+## S4. A place is present when it is open and a configured set stands in it
 
 Both terms, all three places, one function — `placePresent` in `state/sectionSets.ts`. A place a
-person opened with nothing standing in it reserves its width and draws nothing, and a strip of
-reserved nothing reads as a view that failed to draw.
+person opened with no configured sections reserves no width and draws nothing; an empty set is a
+stored configuration record, not a visible sidebar.
 
 The rail asked both terms and the right edge asked only whether it was open, so the right stood
 empty whenever it had been opened once — measured 2026-08-17, visible as a dark strip in every

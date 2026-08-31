@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { moduleState } from "../lib/moduleState";
 import { issueId } from "./ids";
-import { byPlace, focusedPluginOf, standingSet, type SectionPlace } from "./sectionSets";
+import { byPlace, focusedPluginOf, placePresent, type SectionPlace } from "./sectionSets";
 import { noteActivation } from "../lib/motionDebug";
 import {
   DEFAULT_RAIL_PLACEMENT,
@@ -715,7 +715,7 @@ export function projectArrangement(
    */
   pullFocused = useSettings.getState().railPullFocused,
   /** The actual standing rail. React passes its subscribed value; imperative callers read the same section-set rule. */
-  railPresent = workspace.regionOpen.rail && standingSet("rail", focusedPluginOf(workspace)) !== null,
+  railPresent = placePresent(workspace.regionOpen.rail, "rail", focusedPluginOf(workspace)),
 ): Arrangement<Pane> | null {
   const content =
     workspace.spaces.find((item) => item.id === workspace.activeSpaceId) ??
