@@ -42,9 +42,7 @@ environment.json 에서 확인합니다.
 | soksak-specs/ | 공개 schema 와 validator 의 정본입니다. 공개 상태나 명령 모양을 바꾸면 소비자보다 먼저 고칩니다. |
 | soksak-plugin-registry/ | 공개된 plugin 릴리즈 참조입니다. 구현과 릴리즈 뒤의 metadata 를 받으며 터미널 동작을 소유하지 않습니다. |
 | wails-services/ | Wails 호스트 서비스입니다. 네이티브 컴포지터와 webview 표면을 책임집니다. |
-| forks/ | 직접 유지하는 upstream fork 입니다. `origin` 은 소유 fork, `upstream` 은 원본이며, 유지 branch 이름에 upstream 버전이 들어갑니다. 제품 빌드는 이 경로가 아니라 공개 저장소와 정확한 commit 을 씁니다. |
-| libraries/ | xterm-addon-webkit-ime 처럼 직접 만든 재사용 라이브러리입니다. upstream fork 가 아닙니다. |
-| externals/ | 고치지 않는 제3자 비교 소스입니다. |
+| libraries/ | 이 workspace가 소유하는 재사용 라이브러리입니다. |
 | tests/ | 제품 전용 시스템·인수 저장소입니다. |
 | local/ | 개발 전용으로 고정한 런타임, 소스 체크아웃, 테스트 입력, 작업 상태입니다. 제품 코드와 테스트가 여기서 의존을 탐색해서는 안 됩니다. |
 | evidence/ | 생성된 스크린샷과 녹화입니다. 제품 소스가 아니며 구현과 함께 commit 하지 않습니다. |
@@ -92,7 +90,6 @@ environment.json 에서 확인합니다.
 ├── soksak-specs/soksak-spec/                     공개 schema 와 validator
 ├── wails-services/wails-service-native-compositor/ 네이티브 합성 적용
 ├── soksak-plugin-registry/                       공개된 plugin 참조
-├── forks/shitty/                                  upstream 버전 13 유지 fork
 ├── libraries/xterm-addon-webkit-ime/              직접 만든 WebKit IME 라이브러리
 └── tests/soksak-terminal-tests/                   설치 제품 시스템 테스트
 ~~~
@@ -100,7 +97,7 @@ environment.json 에서 확인합니다.
 프레임 제공자 plugin 저장소는 어댑터이며 터미널 동작의 복제본 일곱 개가 아닙니다. 공유 동작은 먼저
 해당 kit 이나 계약에 반영합니다. 제공자 저장소는 제공자 고유의 어댑터 결함이 측정으로 확인된
 경우에만 고칩니다. 사이드카 저장소는 타이밍이나 프레임 증거가 생성기 또는 전송을 원인으로 지목한
-경우에만 고칩니다. 설치 제품 동작은 소유 저장소에 집중된 RED 가 생긴 뒤에만 외부 시스템 테스트에
+경우에만 고칩니다. 설치 제품 동작은 소유 저장소에 집중된 RED 가 생긴 뒤에만 시스템 테스트에
 반영합니다.
 
 ## 결함 소유
@@ -110,7 +107,7 @@ environment.json 에서 확인합니다.
 | 1–4, 8: 속도, 포커스, 커서, 입력, 색 | soksak-kits/soksak-kit-plugin-terminal | xterm plugin 은 비교 renderer 입니다. 측정 결과 프레임 생성이나 전송이 원인일 때만 사이드카를 고칩니다. 계약이나 spec 은 필요한 공개 관측면만 고칩니다. |
 | 5–7: picker·모달·사이드바에서 화면이 사라짐 | soksak-core 프론트엔드의 표시·레이아웃 상태 | 네이티브 표면 적용이 선언된 Core 상태와 다를 때만 wails-service-native-compositor 를 고칩니다. |
 | 9: macOS 닫기 버튼 | soksak-core/frameworks/wails 와 Core 창 수명주기 | 네이티브 이벤트 구분을 Wails 서비스가 소유하는 경우에만 그 서비스를 고칩니다. |
-| 10: 테스트 간섭 | soksak-core/internal/application 의 검사와 애플리케이션 소유 | Core 가 소유한 격리 runner 밖에서 사용자에게 보이는 애플리케이션을 실행하는 경우에만 외부 시스템 테스트를 고칩니다. |
+| 10: 테스트 간섭 | soksak-core/internal/application 의 검사와 애플리케이션 소유 | Core 가 소유한 격리 runner 밖에서 사용자에게 보이는 애플리케이션을 실행하는 경우에만 시스템 테스트를 고칩니다. |
 
 터미널 plugin 저장소에 포커스·입력·테마·성능 수정을 복제해서는 안 됩니다. 공통 매트릭스로 필요성이
 증명된 제공자 어댑터 변경과, 공통 구현 릴리즈 뒤의 정확한 의존·릴리즈 metadata 만 반영합니다.
@@ -282,26 +279,26 @@ enable했으며 네 transaction이 모두 성공했고 설치된 두 Plugin은 e
 `frames=3`을 반환하고 화면이 정지해 같은 SHA-256인 589,723-byte PNG 세 개를 썼으며, 각 이미지에 두
 terminal과 selection이 보였습니다. 전후 모두 `windowFocused=false`였습니다.
 
-Ghostty 0.0.34도 복사한 protocol 구현이 아니라 fork된 libghostty-vt mouse encoder로 같은 pointer 행을
+Ghostty 0.0.34도 provider mouse encoder로 같은 pointer 행을
 통과했습니다. v7 batch와 exact PTY hex는 `TERMINAL-STANDARD-AUDIT.ko.md`에 기록했습니다. 536,524-byte
 합성 capture는 window를 non-key로 유지했고 결과와 cursor를 직접 확인했습니다. Ghostty selection과
 wheel은 열려 있습니다.
 
-Kitty 0.0.31도 provider ABI가 공개한 fork의 live `Screen` encoder로 같은 pointer 행을 통과했습니다.
+Kitty 0.0.31도 provider ABI가 공개한 live `Screen` encoder로 같은 pointer 행을 통과했습니다.
 Exact closure identity와 PTY 증거는 `TERMINAL-STANDARD-AUDIT.ko.md`에 기록했습니다. 289,925-byte 합성
 capture는 window를 non-key로 유지했고 결과와 cursor를 보여 줬습니다. Kitty selection과 wheel은
 열려 있습니다.
 
-Shitty 0.0.30도 provider ABI가 공개한 fork의 기존 live `encodeMouseProtocol` 경로로 pointer 행을
+Shitty 0.0.30도 provider ABI가 공개한 live `encodeMouseProtocol` 경로로 pointer 행을
 통과했습니다. Exact closure, PTY byte, non-key 합성 capture는
 `TERMINAL-STANDARD-AUDIT.ko.md`에 기록했습니다. Shitty selection과 wheel은 열려 있습니다. 첫 실행의
 render 손실 원인은 Core가 이름 기반 시작에서 선택된 sidecar version을 버린 것입니다. Core는 이제
 name, version, process를 함께 해석하고 held pane 복구용 process-generation event를 공개합니다. 다시
 빌드한 v7은 최초 시작부터 exact Shitty 0.0.30을 유지하고 pointer 행을 반복 통과했습니다.
 
-VT100 0.0.33은 이어서 fork의 live `Screen` mouse encoder로 같은 행을 통과했습니다. Exact closure,
+VT100 0.0.33은 이어서 live `Screen` mouse encoder로 같은 행을 통과했습니다. Exact closure,
 PTY, capture 증거는 `TERMINAL-STANDARD-AUDIT.ko.md`에 기록했습니다. VT100 selection, wheel과 실패한
-첫 hot-install 시작은 열려 있습니다. WezTerm 0.0.33은 fork 변경 없이 기존
+첫 hot-install 시작은 열려 있습니다. WezTerm 0.0.33은 별도 provider 변경 없이 기존
 `TerminalState::mouse_event` API로 pointer 행을 통과했습니다. Native pointer 여섯 행은 모두
 GREEN이며 selection, wheel과 나머지 표준 행은 열려 있습니다.
 
@@ -357,7 +354,7 @@ Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboa
 - 깨끗한 후보 closure 는 capture-only parity 매트릭스와 표시 매트릭스를 통과했습니다. 네이티브
   AppKit 포인터·키보드 인증은 사람이 없는 runner 를 켜야 하므로 별도 검사입니다.
 
-임시 터미널 계약과 터미널 kit archive 로 만든 후보 증거는 무효입니다. kit 의 소스 manifest 가 외부
+임시 터미널 계약과 터미널 kit archive 로 만든 후보 증거는 무효입니다. kit 의 소스 manifest 가 다른
 로컬 archive 를 쓰도록 임시로 바뀌었고, pnpm 이 그 의존을 lockfile 에 로컬 절대 경로와 상위 상대
 경로 두 형태로 기록했습니다. 소스 파일을 되돌려도 오염된 metadata 로 이미 만든 archive 와 하류
 증거는 복구되지 않습니다.
@@ -413,10 +410,9 @@ Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboa
 을 호출합니다. 기록된 소스 수준 arm64 검사는 GREEN 이지만, Darwin arm64·x86_64·universal, Linux
 arm64·x86_64, Windows x86_64 전체 네이티브 매트릭스는 아직 실행하지 않았습니다.
 
-Shitty 빌드 의존은 이름에 upstream 버전 13이 들어간 유지 fork branch
-`min-median-max/shitty:soksak-provider-13` 입니다. commit `a5f8785f` 는 내장 버전을 소스 commit
-epoch 에서 만들고, 결정적 정적 archive 를 쓰며, 디버그 데이터에서 노드 작업 경로를 제거합니다.
-사이드카의 `build-dependencies.json` 이 그 정확한 commit 과 Python·LLVM·Ragel 버전을 소유합니다.
+Shitty 빌드 의존은 사이드카의 `build-dependencies.json` 이 정확한 source revision과 Python·LLVM·Ragel
+version으로 선언합니다. commit `a5f8785f` 는 내장 버전을 소스 commit epoch 에서 만들고, 결정적 정적
+archive 를 쓰며, 디버그 데이터에서 노드 작업 경로를 제거합니다.
 시간대가 다른 독립 arm64 SDK 빌드 두 번이 바이트 단위로 같았고, 정본 트리 receipt `86f83d4c`,
 사이드카 빌드, 반복 stage, 적합성 8개가 GREEN 입니다. 다른 네이티브 target 과 새 소유자 전용
 benchmark 계약 closure 는 아직 검증하지 않았습니다.

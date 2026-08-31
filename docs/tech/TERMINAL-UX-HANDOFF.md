@@ -43,9 +43,7 @@ components are resolved from environment.json.
 | soksak-specs/ | Canonical public schemas and validators. A public state or command shape changes here before consumers. |
 | soksak-plugin-registry/ | Published plugin release references. It receives release metadata after implementation and release; it owns no terminal behavior. |
 | wails-services/ | Wails host services. Native compositor and webview-surface ownership is here. |
-| forks/ | Maintained upstream forks. `origin` is the owned fork, `upstream` is the original, and the maintained branch names the upstream version. Product builds still use the public repository and exact commit, never this path. |
-| libraries/ | Independently authored reusable libraries such as xterm-addon-webkit-ime. They are not upstream forks. |
-| externals/ | Unmodified third-party comparison source. |
+| libraries/ | Reusable libraries owned by this workspace. |
 | tests/ | Product-specific system and acceptance repositories. |
 | local/ | Developer-only pinned runtimes, source checkouts, test inputs and work state. Product code and tests must not discover dependencies here. |
 | evidence/ | Generated screenshots and recordings. It is not product source and is not committed as implementation. |
@@ -65,7 +63,7 @@ symlink. Cross-repository consumption uses published packages or the declared en
 ~/soksak/wails3beta/
 ├── soksak-core/                                  application and host integration
 ├── soksak-plugins/
-│   ├── soksak-plugin-terminal-xterm/             byte renderer and comparison baseline
+│   ├── soksak-plugin-terminal-xterm/             byte renderer and baseline
 │   ├── soksak-plugin-terminal-alacritty/         frame-provider adapter
 │   ├── soksak-plugin-terminal-ghostty/           frame-provider adapter
 │   ├── soksak-plugin-terminal-kitty/             frame-provider adapter
@@ -93,8 +91,7 @@ symlink. Cross-repository consumption uses published packages or the declared en
 ├── soksak-specs/soksak-spec/                     public schemas and validators
 ├── wails-services/wails-service-native-compositor/ native composition application
 ├── soksak-plugin-registry/                       released plugin references
-├── forks/shitty/                                  maintained upstream-version-13 provider fork
-├── libraries/xterm-addon-webkit-ime/              independently authored WebKit IME library
+├── libraries/xterm-addon-webkit-ime/              WebKit IME library
 └── tests/soksak-terminal-tests/                   installed-product system tests
 ~~~
 
@@ -102,7 +99,7 @@ The frame-provider plugin repositories are adapters, not seven copies of termina
 behavior first enters the appropriate kit or contract. A provider repository changes only when its
 adapter has a measured provider-specific defect. A sidecar repository changes only when timing or
 frame evidence identifies the producer or transport. Installed-product behavior is placed in the
-external system tests only after the owning repository has a focused RED.
+system tests only after the owning repository has a focused RED.
 
 ## Defect ownership
 
@@ -111,7 +108,7 @@ external system tests only after the owning repository has a focused RED.
 | 1–4 and 8: speed, focus, cursor, input, color | soksak-kits/soksak-kit-plugin-terminal | The Xterm plugin is the comparison renderer. A sidecar changes only if measurements identify frame generation or transport as the cause. Contracts or specs change only for a required public observation surface. |
 | 5–7: picker, modal and sidebar blanking | soksak-core frontend visibility and layout state | wails-service-native-compositor changes only where native-surface application differs from the declared Core state. |
 | 9: macOS close button | soksak-core/frameworks/wails and Core window lifecycle | A Wails service changes only if the native event boundary is owned there. |
-| 10: test interference | soksak-core/internal/application gates and application ownership | External system tests change only if they launch a user-visible application outside the Core-owned isolated runner. |
+| 10: test interference | soksak-core/internal/application gates and application ownership | System tests change only if they launch a user-visible application outside the Core-owned isolated runner. |
 
 Terminal plugin repositories must not receive copied focus, input, theme or performance fixes. They
 receive only provider-specific adapter changes proven necessary by the shared matrix, plus truthful
@@ -292,26 +289,26 @@ three-frame v7 run returned `frames=3`, wrote three 589,723-byte PNGs with the s
 the screen was static, visibly retained both terminals and the selection, and kept
 `windowFocused=false` before and after.
 
-Ghostty 0.0.34 passed the same named pointer row through the forked libghostty-vt mouse encoder,
-not a copied protocol implementation. The v7 batch and exact PTY hex are recorded in
+Ghostty 0.0.34 passed the same named pointer row through its provider mouse encoder. The v7 batch and
+exact PTY hex are recorded in
 `TERMINAL-STANDARD-AUDIT.md`; its 536,524-byte composed capture kept the window non-key and visibly
 showed the result and cursor. Ghostty selection and wheel remain open.
 
-Kitty 0.0.31 then passed the same pointer row through its forked live `Screen` encoder exposed by
+Kitty 0.0.31 then passed the same pointer row through its live `Screen` encoder exposed by
 the provider ABI. Exact closure identity and PTY evidence are in `TERMINAL-STANDARD-AUDIT.md`; the
 289,925-byte composed capture kept the window non-key and showed the result and cursor. Kitty
 selection and wheel remain open.
 
-Shitty 0.0.30 passed the pointer row through the fork's existing live `encodeMouseProtocol` path
+Shitty 0.0.30 passed the pointer row through its live `encodeMouseProtocol` path
 exposed by its provider ABI. Its exact closure, PTY bytes, and non-key composed capture are recorded
 in `TERMINAL-STANDARD-AUDIT.md`. Shitty selection and wheel remain open. The first-run render loss
 was caused by Core discarding the selected sidecar version during name-based startup. Core now
 resolves name, version and process together and publishes process-generation events for held-pane
 recovery. The rebuilt v7 retained exact Shitty 0.0.30 from first start and repeated the pointer row.
-VT100 0.0.33 then passed the same row through the fork's live `Screen` mouse encoder. Exact closure,
+VT100 0.0.33 then passed the same row through its live `Screen` mouse encoder. Exact closure,
 PTY and capture evidence are in `TERMINAL-STANDARD-AUDIT.md`. VT100 selection, wheel and the failed
 first hot-install start remain open. WezTerm 0.0.33 then passed the pointer row through its existing
-`TerminalState::mouse_event` API without a fork change. All six native pointer rows are GREEN;
+`TerminalState::mouse_event` API without a provider change. All six native pointer rows are GREEN;
 selection, wheel and the remaining standard rows stay open.
 
 No release train has started. Theme, native focus/cursor/keyboard, visibility, performance and the
@@ -369,7 +366,7 @@ Current unpublished candidates:
   pointer/keyboard certification remains separate because it must activate an unattended runner.
 
 Candidate evidence created from the temporary terminal-contract and terminal-kit archives is
-invalid. The kit source manifest was temporarily changed to an external local archive and pnpm
+invalid. The kit source manifest was temporarily changed to a local archive and pnpm
 serialized that dependency into its lockfile as both an absolute temporary locator and a
 parent-relative locator. Reverting the source files did not restore archives or downstream evidence
 already created from the contaminated metadata.
@@ -427,11 +424,10 @@ the two Wails framework services. Tool versions remain in ecosystem owner files;
 them and call the same Make targets. Source-level arm64 gates are GREEN where recorded, but the full
 Darwin arm64/x86_64/universal, Linux arm64/x86_64 and Windows x86_64 native matrices have not run.
 
-The Shitty build dependency is the maintained fork branch
-`min-median-max/shitty:soksak-provider-13`, which names upstream version 13. Commit `a5f8785f`
-derives the embedded version from the source commit epoch, uses deterministic static archives and
-removes node-work paths from debug data. The Sidecar `build-dependencies.json` owns that exact
-commit and Python/LLVM/Ragel versions. Two independent arm64 SDK builds in different timezones were
+The Shitty build dependency is declared by the Sidecar `build-dependencies.json`, including the exact
+source revision and Python/LLVM/Ragel versions. Commit `a5f8785f` derives the embedded version from the
+source commit epoch, uses deterministic static archives and removes node-work paths from debug data.
+Two independent arm64 SDK builds in different timezones were
 byte-identical; canonical tree receipt `86f83d4c` and the Sidecar build, repeated stage and eight
 conformance cases are GREEN. Other native targets and the new owner-only benchmark contract closure
 remain unverified.
