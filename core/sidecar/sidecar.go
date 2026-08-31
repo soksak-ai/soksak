@@ -743,7 +743,7 @@ func (host *Host) end(held *unit) error {
 		}
 	}
 	if held.open.PID > 0 {
-		return signalPID(held.open.PID)
+		return stopPID(held.open.PID, host.deps.ReadyWithin)
 	}
 	return nil
 }

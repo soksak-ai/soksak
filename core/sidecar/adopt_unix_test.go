@@ -70,8 +70,9 @@ func TestASecondRunCanIdempotentlyStopAnOwnedUnitWithoutStartingIt(t *testing.T)
 	runtimeRoot := shortHome(t)
 	stageUnit(t, home, "fake-unit", fakeUnitSource)
 	deps := Deps{
-		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{}, Environment: os.Environ(),
-		Dial: dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
+		Home: home, Runtime: runtimeRoot, Spawner: process.OSSpawner{},
+		Environment: append(os.Environ(), "SOKSAK_TEST_STOP_DELAY=500ms"),
+		Dial:        dialUnix, ReadyWithin: 10 * time.Second, ResolveUnit: testSidecarResolver(home),
 	}
 	first := NewHost(deps)
 	started, err := first.Start("fake-unit")
@@ -86,8 +87,9 @@ func TestASecondRunCanIdempotentlyStopAnOwnedUnitWithoutStartingIt(t *testing.T)
 	if err := second.Stop("fake-unit"); err != nil {
 		t.Fatalf("stopping the recorded unit: %v", err)
 	}
-	if err := waitUntilUnreachable(started.Address, 5*time.Second); err != nil {
-		t.Fatal(err)
+	if conn, err := dialUnix(started.Address); err == nil {
+		_ = conn.Close()
+		t.Fatalf("unit at %s accepts connections after Stop returned", started.Address)
 	}
 	if err := second.Stop("fake-unit"); err != nil {
 		t.Fatalf("repeated stop is not idempotent: %v", err)

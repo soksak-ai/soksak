@@ -396,13 +396,25 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"time"
 )
 
 func main() {
 	flag.String("home", "", "")
 	runtimeRoot := flag.String("runtime", "", "")
 	flag.Parse()
+	if delay, err := time.ParseDuration(os.Getenv("SOKSAK_TEST_STOP_DELAY")); err == nil && delay > 0 {
+		stopping := make(chan os.Signal, 1)
+		signal.Notify(stopping, syscall.SIGTERM)
+		go func() {
+			<-stopping
+			time.Sleep(delay)
+			os.Exit(0)
+		}()
+	}
 	run := *runtimeRoot
 	os.MkdirAll(run, 0o700)
 	address := filepath.Join(run, "fake-unit.sock")

@@ -5,12 +5,25 @@ package sidecar
 import (
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
 	"golang.org/x/sys/windows"
 )
 
 func signalPID(pid int) error {
+	if pid <= 0 {
+		return i18n.Errorf("sidecar.invalidAdoptedPID", map[string]string{"pid": strconv.Itoa(pid)})
+	}
+	handle, err := windows.OpenProcess(windows.PROCESS_TERMINATE, false, uint32(pid))
+	if err != nil {
+		return err
+	}
+	defer windows.CloseHandle(handle)
+	return windows.TerminateProcess(handle, 1)
+}
+
+func stopPID(pid int, within time.Duration) error {
 	if pid <= 0 {
 		return i18n.Errorf("sidecar.invalidAdoptedPID", map[string]string{"pid": strconv.Itoa(pid)})
 	}
@@ -22,12 +35,15 @@ func signalPID(pid int) error {
 	if err := windows.TerminateProcess(handle, 1); err != nil {
 		return err
 	}
-	status, err := windows.WaitForSingleObject(handle, 10_000)
+	timeoutMillis := uint32((within + time.Millisecond - 1) / time.Millisecond)
+	status, err := windows.WaitForSingleObject(handle, timeoutMillis)
 	if err != nil {
 		return err
 	}
 	if status != windows.WAIT_OBJECT_0 {
-		return i18n.Errorf("sidecar.adoptedStopTimeout", map[string]string{"pid": strconv.Itoa(pid), "seconds": "10"})
+		return i18n.Errorf("sidecar.adoptedStopTimeout", map[string]string{
+			"pid": strconv.Itoa(pid), "seconds": stopTimeoutSeconds(within),
+		})
 	}
 	return nil
 }
