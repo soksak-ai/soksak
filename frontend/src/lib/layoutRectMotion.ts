@@ -136,6 +136,13 @@ export function createRectMotionTracker(decorationScope = "global"): RectMotionT
   // every frame. That is what "they move together" means when one of them is not in the document,
   // and it is the reason the interpolation is a rectangle rather than a displacement.
   const startFlip = (el: HTMLElement, was: Snap, now: Snap): void => {
+    // WebKit does not advance WAAPI for an inactive window. Starting FLIP in that state leaves the
+    // element at the previous rectangle while application state already contains the new rectangle.
+    // Apply the committed layout directly. A later active commit uses this rectangle as its baseline.
+    if (!document.hasFocus()) {
+      noteRectMotionSkip(el.dataset.node ?? el.className, "inactive-document");
+      return;
+    }
     // A box that holds something alive travels, and takes its size at once.
     //
     // Interpolating a size is every box inside it laid out again on each frame of the motion: a

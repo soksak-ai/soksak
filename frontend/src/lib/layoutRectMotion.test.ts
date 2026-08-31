@@ -20,6 +20,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRectMotionTracker, registerRectMotionExclusion } from "./layoutRectMotion";
 import { motionJourneys, setMotionDebug } from "./motionDebug";
 
+beforeEach(() => {
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
+});
+
 function rectOf(x: number, y: number, w: number, h: number): DOMRect {
   return {
     x,
@@ -271,6 +275,37 @@ describe("a viewport resize is not layout motion", () => {
     t.flush();
 
     expect(animate, "a viewport reflow was promoted to per-element motion").not.toHaveBeenCalled();
+  });
+});
+
+describe("a layout change in an inactive document", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    setMotionDebug({ hold: false, scale: 1 });
+    vi.mocked(document.hasFocus).mockReturnValue(false);
+  });
+
+  it("applies the final rectangle without creating an animation that cannot advance", () => {
+    const t = createRectMotionTracker();
+    const { el, move } = laidOut(100, 50);
+    const animate = vi.fn(() => ({
+      cancel: vi.fn(),
+      pause: vi.fn(),
+      play: vi.fn(),
+      currentTime: 0,
+      playbackRate: 1,
+      playState: "running",
+    }));
+    Object.defineProperty(el, "animate", { configurable: true, value: animate });
+    t.ref(el);
+    t.flush();
+
+    move(200, 0);
+    t.flush();
+
+    expect(animate, "the inactive document created a layout animation").not.toHaveBeenCalled();
+    expect(el.style.left).toBe("");
+    expect(el.getBoundingClientRect()).toMatchObject({ x: 200, y: 0, width: 100, height: 50 });
   });
 });
 

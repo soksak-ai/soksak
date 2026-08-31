@@ -105,6 +105,12 @@ callback returns, and a background window may pause animation. The landing previ
 `ui.tree`, `surface.composition`, and `ui.motion` verify the result: pane, slot, and native surface
 rectangles agree, declared/applied drift is zero, and a divider preview creates zero FLIP animations.
 
+An inactive document applies command-driven layout changes without FLIP. WebKit does not advance
+WAAPI in a non-key window, so an animation created there can retain the previous rectangle after
+state and native geometry contain the new rectangle. `layoutRectMotion` checks `document.hasFocus()`
+when it creates FLIP. A false result records `layout-rect-skipped(inactive-document)` and keeps the
+committed rectangle as the next baseline. This uses the current window state and does not use polling.
+
 ## D1b.1. Core decoration is the final native plane
 
 A focus boundary or rail-relation outline is Core chrome, not provider content. Drawing it at DOM

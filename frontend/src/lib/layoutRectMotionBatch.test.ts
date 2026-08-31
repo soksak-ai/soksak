@@ -15,7 +15,7 @@
 //
 // Reads together, writes after. One layout for the set rather than one per element — and one
 // instant for every rect, which is what the readings elsewhere in this build already require.
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRectMotionTracker } from "./layoutRectMotion";
 
 /** An element that records when it is measured and when it is written to. */
@@ -43,6 +43,7 @@ function member(order: string[], name: string): HTMLElement {
 describe("a flush over several elements", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
   });
 
   it("reads every rect before it writes to any of them", () => {

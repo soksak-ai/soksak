@@ -97,6 +97,12 @@ animation을 중지할 수 있습니다. 마지막 preview와 단일 `pane.resiz
 전에 하나의 동기 DOM transaction에서 실행합니다. `ui.tree`, `surface.composition`, `ui.motion`으로 pane,
 slot, native surface rectangle 일치, declared/applied drift 0, divider preview의 FLIP animation 0을 검증합니다.
 
+비활성 document는 command로 변경된 layout을 FLIP 없이 적용합니다. WebKit은 non-key window에서 WAAPI를
+진행하지 않으므로, 그 상태에서 생성한 animation은 state와 native geometry가 새 rectangle을 포함한 뒤에도
+이전 rectangle을 유지할 수 있습니다. `layoutRectMotion`은 FLIP 생성 시 `document.hasFocus()`를 확인합니다.
+false이면 `layout-rect-skipped(inactive-document)`를 기록하고 commit된 rectangle을 다음 기준값으로 사용합니다.
+현재 window 상태를 직접 사용하며 polling은 사용하지 않습니다.
+
 ## D1b.1. Core 장식은 마지막 네이티브 평면이다
 
 포커스 표시선이나 rail 관계 외곽선은 provider 내용이 아니라 Core chrome입니다. DOM의 `z-index:7` 또는 `8`로
