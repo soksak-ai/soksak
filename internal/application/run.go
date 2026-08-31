@@ -19,6 +19,7 @@ import (
 	"fmt"
 	terminalsurface "github.com/min-median-max/wails-service-terminal-surface"
 	controlwire "github.com/soksak-ai/soksak-contract-control"
+	ptycontract "github.com/soksak-ai/soksak-contract-pty"
 	"github.com/soksak-ai/soksak-core/core/activity"
 	"github.com/soksak-ai/soksak-core/core/boot"
 	"github.com/soksak-ai/soksak-core/core/control"
@@ -127,6 +128,13 @@ func Run(assets embed.FS) error {
 			return coreenvironment.SelectedSidecarBindings(resolved.Home)
 		},
 	})
+	resolvePTYOwner := func() (terminalProcessOwner, error) {
+		runtime, err := coreenvironment.ResolveSelectedSidecarInterface(resolved.Home, ptycontract.InterfaceID, ptycontract.InterfaceVersion)
+		if err != nil {
+			return terminalProcessOwner{}, err
+		}
+		return terminalProcessOwner{Unit: runtime.ID, Owner: filepath.Base(runtime.Process)}, nil
+	}
 
 	// Started before the registry so `watch_dir` is either served or refused by name from the first
 	// command, never accepted and silently dead.
@@ -187,7 +195,7 @@ func Run(assets embed.FS) error {
 			// assuming a live pid is the child it started.
 			Reaper:        nil,
 			ProcessSink:   processEventSink{bridge: bridge},
-			ProcessOwners: []process.InventorySource{terminalProcessInventorySource{units: units}},
+			ProcessOwners: []process.InventorySource{terminalProcessInventorySource{units: units, owner: resolvePTYOwner}},
 		})
 		units.SetSecrets(wired.Secrets)
 	}
@@ -212,7 +220,7 @@ func Run(assets embed.FS) error {
 		if err := announceControlReady(os.Stdout, resolved, os.Getpid()); err != nil {
 			log.Printf("control readiness event failed: %v", err)
 		}
-		stopProcessEvents := observeTerminalProcessEvents(units, bridge.Emit)
+		stopProcessEvents := observeTerminalProcessEvents(units, resolvePTYOwner, bridge.Emit)
 		defer stopProcessEvents()
 		return wails.Run(wails.Options{
 			Assets:        assets,

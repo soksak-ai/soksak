@@ -10,6 +10,7 @@ func init() {
 		"environment.develop.directoryUnavailable": {EN: "development {kind} {id}: directory {path} is unavailable: {error}", KO: "개발 {kind} {id}: 디렉터리 {path}을(를) 사용할 수 없습니다: {error}"},
 		"environment.develop.sidecarArtifactStale": {EN: "ARTIFACT_STALE: development sidecar {id} at {path}: {error}", KO: "ARTIFACT_STALE: 개발 사이드카 {id} ({path}): {error}"},
 		"environment.sidecar.noInstallationRecord": {EN: "sidecar {id} has no installation record", KO: "사이드카 {id}의 설치 레코드가 없습니다"},
+		"environment.sidecar.interfaceAmbiguous":   {EN: "selected sidecar interface {id}@{version} has more than one provider", KO: "선택된 사이드카 인터페이스 {id}@{version}에 공급자가 둘 이상 있습니다"},
 		"environment.remove.pathOutsideHome":       {EN: "artifact path {path} is not under {home}/components; the record is kept", KO: "아티팩트 경로 {path}이(가) {home}/components 아래에 있지 않습니다; 레코드는 유지됩니다"},
 		"environment.remove.pathSymlink":           {EN: "artifact path {path}: {link} is a symlink; the record is kept", KO: "아티팩트 경로 {path}: {link}이(가) 심볼릭 링크입니다; 레코드는 유지됩니다"},
 		"environment.remove.notFound":              {EN: "no {kind} record for id {id}", KO: "id {id}의 {kind} 레코드가 없습니다"},

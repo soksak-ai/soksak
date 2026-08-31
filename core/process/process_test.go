@@ -57,8 +57,8 @@ func TestRegisterServesExactlySixCoreCommands(t *testing.T) {
 }
 
 func TestProcessInventoryAggregatesAnInjectedOwner(t *testing.T) {
-	source := fakeInventorySource{value: OwnerInventory{Owner: "soksak-sidecar-pty", Revision: 4, Processes: []OwnedProcess{{
-		ID: "pty-session-7", Owner: "soksak-sidecar-pty", PID: 123, ParentPID: 99,
+	source := fakeInventorySource{value: OwnerInventory{Owner: "fixture-project-pty-owner", Revision: 4, Processes: []OwnedProcess{{
+		ID: "pty-session-7", Owner: "fixture-project-pty-owner", PID: 123, ParentPID: 99,
 		Command: "/bin/zsh -l", State: "running", StartedAtUnixMs: 1700000000000,
 	}}}}
 	manager := NewManager(Deps{InventorySources: []InventorySource{source}})

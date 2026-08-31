@@ -14,6 +14,7 @@ import (
 type processObserverUnits struct {
 	started func(sidecar.Open)
 	streams int
+	name    string
 }
 
 func (units *processObserverUnits) ObserveStarted(listener func(sidecar.Open)) func() {
@@ -25,14 +26,17 @@ func (units *processObserverUnits) Stream(name string, request controlwire.Reque
 	controlwire.Response, io.ReadCloser, error,
 ) {
 	units.streams++
-	event := `{"revision":2,"kind":"started","process":{"id":"pty-session-2","owner":"soksak-sidecar-pty","pid":42,"parentPid":7,"command":"/bin/zsh -l","state":"running","startedAtUnixMs":10}}` + "\n"
+	units.name = name
+	event := `{"revision":2,"kind":"started","process":{"id":"pty-session-2","owner":"fixture-project-sidecar-pty","pid":42,"parentPid":7,"command":"/bin/zsh -l","state":"running","startedAtUnixMs":10}}` + "\n"
 	return controlwire.Response{Ok: true}, io.NopCloser(bytes.NewBufferString(event)), nil
 }
 
 func TestPTYProcessObserverRelaysThePublicEventStream(t *testing.T) {
 	units := &processObserverUnits{}
 	received := make(chan ptycontract.ProcessEvent, 1)
-	stop := observeTerminalProcessEvents(units, func(name string, payload any) {
+	stop := observeTerminalProcessEvents(units, func() (terminalProcessOwner, error) {
+		return terminalProcessOwner{Unit: fixturePTYUnit, Owner: fixturePTYOwner}, nil
+	}, func(name string, payload any) {
 		if name != "process-inventory-changed" {
 			t.Errorf("event name = %q", name)
 			return
@@ -43,10 +47,10 @@ func TestPTYProcessObserverRelaysThePublicEventStream(t *testing.T) {
 	if units.started == nil {
 		t.Fatal("observer did not subscribe to unit starts")
 	}
-	units.started(sidecar.Open{Name: ptycontract.SidecarName})
+	units.started(sidecar.Open{Name: fixturePTYUnit})
 	select {
 	case event := <-received:
-		if units.streams != 1 || event.Revision != 2 || event.Process.ID != "pty-session-2" {
+		if units.streams != 1 || units.name != fixturePTYUnit || event.Revision != 2 || event.Process.ID != "pty-session-2" {
 			t.Fatalf("streams=%d event=%+v", units.streams, event)
 		}
 	case <-time.After(time.Second):

@@ -2,7 +2,9 @@ package application
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	ptycontract "github.com/soksak-ai/soksak-contract-pty"
@@ -12,27 +14,42 @@ import (
 
 // terminalProcessInventorySource is an adapter at the application boundary. It uses only the
 // public PTY wire and the sidecar host; it never imports the PTY implementation.
-type terminalProcessInventorySource struct{ units terminalUnitHost }
+type terminalProcessInventorySource struct {
+	units terminalUnitHost
+	owner func() (terminalProcessOwner, error)
+}
+
+type terminalProcessOwner struct {
+	Unit  string
+	Owner string
+}
 
 func (source terminalProcessInventorySource) Inventory() (process.OwnerInventory, error) {
+	resolved, err := source.owner()
+	if errors.Is(err, os.ErrNotExist) {
+		return process.OwnerInventory{Processes: []process.OwnedProcess{}}, nil
+	}
+	if err != nil {
+		return process.OwnerInventory{}, err
+	}
 	started, canList := source.units.(interface{ Started() []sidecar.Open })
 	if canList {
 		present := false
 		for _, unit := range started.Started() {
-			if unit.Name == ptycontract.SidecarName {
+			if unit.Name == resolved.Unit {
 				present = true
 				break
 			}
 		}
 		if !present {
-			return process.OwnerInventory{Owner: ptycontract.SidecarName, Processes: []process.OwnedProcess{}}, nil
+			return process.OwnerInventory{Owner: resolved.Owner, Processes: []process.OwnedProcess{}}, nil
 		}
 	}
 	payload, err := json.Marshal(map[string]any{})
 	if err != nil {
 		return process.OwnerInventory{}, err
 	}
-	response, err := source.units.Send(ptycontract.SidecarName, controlwire.Request{
+	response, err := source.units.Send(resolved.Unit, controlwire.Request{
 		ID: "process-inventory", Command: ptycontract.CommandProcessInventory,
 		Args: map[string]json.RawMessage{"request": payload},
 	})
@@ -56,7 +73,7 @@ func (source terminalProcessInventorySource) Inventory() (process.OwnerInventory
 	if answer.Code != "" && answer.Code != "OK" {
 		return process.OwnerInventory{}, fmt.Errorf("%s: %s", ptycontract.CommandProcessInventory, answer.Code)
 	}
-	owner := process.OwnerInventory{Owner: ptycontract.SidecarName, Revision: answer.Data.Revision, Processes: make([]process.OwnedProcess, 0, len(answer.Data.Processes))}
+	owner := process.OwnerInventory{Owner: resolved.Owner, Revision: answer.Data.Revision, Processes: make([]process.OwnedProcess, 0, len(answer.Data.Processes))}
 	for _, value := range answer.Data.Processes {
 		owner.Processes = append(owner.Processes, process.OwnedProcess{
 			ID: value.ID, Owner: value.Owner, Window: value.Window, Pane: value.Pane,

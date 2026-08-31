@@ -72,18 +72,18 @@ func TestTheSessionsSpeakThroughTheInjectedLinks(t *testing.T) {
 
 	err := sessions.Start(map[string]string{
 		"window": "win-1", "pane": "tab-1.1",
-		"ptyUnit": "soksak-sidecar-pty", "engineUnit": "soksak-sidecar-terminal-alacritty",
+		"ptyUnit": "fixture-pty-provider", "engineUnit": "fixture-terminal-provider",
 		"pixelW": "100", "pixelH": "100", "scale": "2",
 		"fontFamily": "Menlo", "fontPt": "13", "theme": "{}", "shell": "/bin/zsh",
 	}, 1, 1)
 	if err == nil {
 		t.Fatal("the fake refuses every call; Start cannot succeed")
 	}
-	wantStarts := []string{"soksak-sidecar-pty", "soksak-sidecar-terminal-alacritty"}
+	wantStarts := []string{"fixture-pty-provider", "fixture-terminal-provider"}
 	if !reflect.DeepEqual(starts, wantStarts) {
 		t.Fatalf("started units=%v want=%v", starts, wantStarts)
 	}
-	if len(calls) == 0 || calls[0] != "soksak-sidecar-terminal-alacritty:terminal.rehydrate" {
+	if len(calls) == 0 || calls[0] != "fixture-terminal-provider:terminal.rehydrate" {
 		t.Fatalf("the session did not open with the engine's rehydrate: %v", calls)
 	}
 }

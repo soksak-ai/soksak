@@ -38,7 +38,7 @@ func TestAUnitIsStartedByItsAnnouncementAndRelayedTo(t *testing.T) {
 		ReadyWithin: 10 * time.Second,
 		ResolveUnit: testSidecarResolver(home),
 		ResolveBindings: func() (map[string]string, error) {
-			return map[string]string{"soksak-sidecar-pty": "soksakv7-sidecar-pty"}, nil
+			return map[string]string{"fixture-pty-provider": "fixture-project-pty-owner"}, nil
 		},
 	})
 	t.Cleanup(func() { host.StopAll() })

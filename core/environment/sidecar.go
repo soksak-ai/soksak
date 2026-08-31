@@ -3,6 +3,7 @@ package environment
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
@@ -15,6 +16,47 @@ type SidecarRuntime struct {
 	Version    string
 	Interfaces []platformspec.Reference
 	Process    string
+}
+
+// ResolveSelectedSidecarInterface finds the one selected sidecar whose own manifest declares ref.
+// environment.json supplies the installed records; the manifests supply the capability relation.
+func ResolveSelectedSidecarInterface(home, interfaceID, interfaceVersion string) (SidecarRuntime, error) {
+	ref := platformspec.Reference{ID: interfaceID, Version: interfaceVersion}
+	value, exists, err := Read(home)
+	if err != nil {
+		return SidecarRuntime{}, err
+	}
+	if !exists {
+		return SidecarRuntime{}, os.ErrNotExist
+	}
+	ids := make([]string, 0, len(value.Sidecars))
+	for id := range value.Sidecars {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	var selected *SidecarRuntime
+	for _, id := range ids {
+		runtime, err := resolveSidecarRecord(id, value.Sidecars[id], value.Sidecars[id].Version)
+		if err != nil {
+			return SidecarRuntime{}, err
+		}
+		for _, candidate := range runtime.Interfaces {
+			if candidate != ref {
+				continue
+			}
+			if selected != nil {
+				return SidecarRuntime{}, i18n.Errorf("environment.sidecar.interfaceAmbiguous", map[string]string{
+					"id": ref.ID, "version": ref.Version,
+				})
+			}
+			copy := runtime
+			selected = &copy
+		}
+	}
+	if selected == nil {
+		return SidecarRuntime{}, os.ErrNotExist
+	}
+	return *selected, nil
 }
 
 // SelectedSidecarBindings returns the exact materialized process name for every Sidecar selected

@@ -33,7 +33,7 @@ func TestTerminalSurfaceExposesExactStartAndSendAsSeparateOperations(t *testing.
 	if links.Start == nil {
 		t.Fatal("terminal surface link exposes no exact unit starter")
 	}
-	if err := links.Start("soksak-sidecar-pty"); err != nil {
+	if err := links.Start("fixture-pty-provider"); err != nil {
 		t.Fatal(err)
 	}
 	if err := links.Start("soksak-sidecar-terminal-wezterm"); err != nil {
@@ -47,7 +47,7 @@ func TestTerminalSurfaceExposesExactStartAndSendAsSeparateOperations(t *testing.
 		t.Fatalf("answer=%v", answer)
 	}
 	want := []string{
-		"start:soksak-sidecar-pty",
+		"start:fixture-pty-provider",
 		"start:soksak-sidecar-terminal-wezterm",
 		"send:soksak-sidecar-terminal-wezterm:surface.state",
 	}

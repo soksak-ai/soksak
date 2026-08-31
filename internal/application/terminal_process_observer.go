@@ -16,12 +16,17 @@ type terminalProcessEventUnits interface {
 	Stream(string, controlwire.Request) (controlwire.Response, io.ReadCloser, error)
 }
 
-func observeTerminalProcessEvents(units terminalProcessEventUnits, emit func(string, any)) func() {
+func observeTerminalProcessEvents(units terminalProcessEventUnits, owner func() (terminalProcessOwner, error), emit func(string, any)) func() {
 	var mu sync.Mutex
 	readers := make(map[io.ReadCloser]struct{})
 	stopped := false
 	unsubscribe := units.ObserveStarted(func(open sidecar.Open) {
-		if open.Name != ptycontract.SidecarName {
+		resolved, err := owner()
+		if err != nil {
+			log.Printf("process owner unavailable: %v", err)
+			return
+		}
+		if open.Name != resolved.Unit {
 			return
 		}
 		go func() {
@@ -29,7 +34,7 @@ func observeTerminalProcessEvents(units terminalProcessEventUnits, emit func(str
 			if err != nil {
 				return
 			}
-			response, reader, err := units.Stream(ptycontract.SidecarName, controlwire.Request{
+			response, reader, err := units.Stream(resolved.Unit, controlwire.Request{
 				ID: "process-observe", Command: ptycontract.CommandProcessObserve,
 				Args: map[string]json.RawMessage{"request": request},
 			})

@@ -13,11 +13,11 @@ import (
 func TestSidecarCommitRefusesWhenProjectNameWasNotInjected(t *testing.T) {
 	home := t.TempDir()
 	archive := tgz(t,
-		archiveEntry{name: "sidecar.json", body: `{"id":"soksak-sidecar-pty","version":"0.0.1","processRole":"sidecar-pty","interface":[{"id":"soksak-spec-sidecar-pty","version":"0.0.1"}],"process":"dist/soksak-sidecar-pty"}`},
-		archiveEntry{name: "dist/soksak-sidecar-pty", body: "binary"},
+		archiveEntry{name: "sidecar.json", body: `{"id":"fixture-pty-provider","version":"0.0.1","processRole":"sidecar-pty","interface":[{"id":"fixture-pty-interface","version":"0.0.1"}],"process":"dist/fixture-pty-provider"}`},
+		archiveEntry{name: "dist/fixture-pty-provider", body: "binary"},
 	)
 	manager := NewTransactionManager(filepath.Join(home, ".transactions"), memoryFetcher{body: archive}, nil)
-	identity := ArtifactIdentity{Kind: "sidecar", ID: "soksak-sidecar-pty", Version: "0.0.1"}
+	identity := ArtifactIdentity{Kind: "sidecar", ID: "fixture-pty-provider", Version: "0.0.1"}
 	transaction, err := manager.Begin("official", identity)
 	if err != nil {
 		t.Fatal(err)
@@ -27,8 +27,8 @@ func TestSidecarCommitRefusesWhenProjectNameWasNotInjected(t *testing.T) {
 		RegistryID:    "official",
 		Identity:      identity,
 		Artifact: Artifact{
-			File: "soksak-sidecar-pty.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive),
-			Format: "tgz", Manifest: "sidecar.json", Entrypoints: []string{"sidecar.json", "dist/soksak-sidecar-pty"},
+			File: "fixture-pty-provider.tgz", Size: uint64(len(archive)), SHA256: sha256Hex(archive),
+			Format: "tgz", Manifest: "sidecar.json", Entrypoints: []string{"sidecar.json", "dist/fixture-pty-provider"},
 		},
 	})
 	if err != nil {
@@ -38,7 +38,7 @@ func TestSidecarCommitRefusesWhenProjectNameWasNotInjected(t *testing.T) {
 		TransactionID: transaction.TransactionID, ExpectedRevision: 0, Home: home,
 		Components: []VerifiedComponent{{
 			Kind: "sidecar", ID: identity.ID, Version: identity.Version, Target: "aarch64-apple-darwin",
-			RegistryID: "official", SourceRepository: "https://github.com/soksak-ai/soksak-sidecar-pty",
+			RegistryID: "official", SourceRepository: "https://example.invalid/fixture-pty-provider",
 			SourceCommit: strings.Repeat("a", 40), ArtifactSHA256: staged.SHA256, StagedHandle: staged.Handle,
 		}},
 	})
