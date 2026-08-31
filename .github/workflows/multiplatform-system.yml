@@ -92,10 +92,10 @@ jobs:
           compression-level: 0
   darwin-candidate-native-input:
     needs: darwin-build
-    uses: soksak-ai/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@3d32a954d4d3c34cda6eb50e9f5f25fbaceb771d
+    uses: soksak-ai/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@514086a78a1d52fc8f50cfd712be68b48a635cf9
     with:
       tests_repository: soksak-ai/soksak-terminal-tests
-      tests_ref: 3d32a954d4d3c34cda6eb50e9f5f25fbaceb771d
+      tests_ref: 514086a78a1d52fc8f50cfd712be68b48a635cf9
       core_artifact_name: core-darwin-arm64-artifact
       core_source_commit: ${{ github.sha }}
   linux-build:
@@ -131,8 +131,8 @@ jobs:
           compression-level: 0
   windows-system:
     needs: windows-build
-    uses: soksak-ai/soksak-terminal-tests/.github/workflows/windows-system.yml@6ea6109abc286f5ecfbde7b2460af51586e16267
-    with: { tests_ref: 6ea6109abc286f5ecfbde7b2460af51586e16267 }
+    uses: soksak-ai/soksak-terminal-tests/.github/workflows/windows-system.yml@514086a78a1d52fc8f50cfd712be68b48a635cf9
+    with: { tests_ref: 514086a78a1d52fc8f50cfd712be68b48a635cf9 }
   darwin-system:
     needs: [darwin-build, darwin-compose]
     strategy:
@@ -159,9 +159,9 @@ jobs:
             architecture: x86_64
             target: x86_64-apple-darwin
             variant: universal
-    uses: soksak-ai/soksak-terminal-tests/.github/workflows/darwin-system.yml@6ea6109abc286f5ecfbde7b2460af51586e16267
+    uses: soksak-ai/soksak-terminal-tests/.github/workflows/darwin-system.yml@514086a78a1d52fc8f50cfd712be68b48a635cf9
     with:
-      tests_ref: 6ea6109abc286f5ecfbde7b2460af51586e16267
+      tests_ref: 514086a78a1d52fc8f50cfd712be68b48a635cf9
       runner: ${{ matrix.runner }}
       artifact: ${{ matrix.artifact }}
       architecture: ${{ matrix.architecture }}
@@ -179,9 +179,9 @@ jobs:
           - runner: ubuntu-24.04-arm
             architecture: arm64
             target: aarch64-unknown-linux-gnu
-    uses: soksak-ai/soksak-terminal-tests/.github/workflows/linux-system.yml@6ea6109abc286f5ecfbde7b2460af51586e16267
+    uses: soksak-ai/soksak-terminal-tests/.github/workflows/linux-system.yml@514086a78a1d52fc8f50cfd712be68b48a635cf9
     with:
-      tests_ref: 6ea6109abc286f5ecfbde7b2460af51586e16267
+      tests_ref: 514086a78a1d52fc8f50cfd712be68b48a635cf9
       runner: ${{ matrix.runner }}
       architecture: ${{ matrix.architecture }}
       target: ${{ matrix.target }}
