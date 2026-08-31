@@ -8,9 +8,9 @@ canonical: self
 
 ## G1. Local source is canonical
 
-The active source in each canonical workspace checkout defines the current product. Historical GitHub
-branches, tags, releases, and framework implementations do not impose compatibility on it. A current
-contract accepts only its canonical shape.
+The active source in each canonical workspace checkout defines the current product. Historical refs,
+releases, and paused components do not change the current contract. A current contract accepts only
+its canonical shape.
 
 ## G2. Independent repositories
 
@@ -21,27 +21,24 @@ An independently released library may retain a version maintenance branch when t
 supported source line rather than a completed change branch. Its name includes the library version,
 and its tip remains reachable from a permanent local and remote ref.
 
-## G3. Forks
+## G3. Versioned product lines
 
-A fork keeps the upstream default branch for upstream synchronization. Soksak improvements remain on
-a separate branch and are never merged into that default branch merely to simplify branch lists. The
-branch name includes the upstream component version; when upstream publishes no version, it includes the
-exact source commit. Consumers pin the exact improvement commit. An upstream version change creates a
-newly verified improvement line, and an upstreamable change is proposed upstream.
+Each independently released component has one declared source line for each supported version. The
+version is recorded in its manifest and release artifact. Consumers select a version through their
+environment manifest; a new release does not alter an installed environment.
 
-## G4. Historical repositories
+## G4. Paused repositories
 
-A retired framework implementation is source history, not a release target. Its repository is archived;
-existing commits, improvement branches, tags, and releases remain readable. It runs no Actions and gains
-no new tag, release, compatibility patch, or migration. Current products do not register it as installable.
+A paused component remains available for source inspection and its existing release artifacts remain
+readable. While paused, it receives no source change, release, compatibility patch, or migration. Current
+products do not register a paused component as installable.
 
 ## G5. No source loss
 
 Before a branch, repository name, or worktree is removed, every tip must have a permanent retained ref:
-the canonical branch, a versioned fork-improvement branch, a historical repository branch, or a non-release
-archive/ tag. Patch equivalence permits deleting a duplicate branch only when the exact source tip is
-retained elsewhere or intentionally recorded by an archive/ ref. Product release workflows trigger only
-on v*; an archive/ tag never publishes a product.
+the canonical branch, a supported version branch, or a retained historical ref. Patch equivalence permits
+deleting a duplicate branch only when the exact source tip is retained elsewhere or intentionally recorded
+by a non-release ref. Product release workflows trigger only on declared release tags.
 
 ## G6. Standards do not move to meet an implementation
 
