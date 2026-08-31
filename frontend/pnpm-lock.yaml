@@ -282,11 +282,6 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
-  '@soksak/soksak-service-native-compositor@https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af':
-    resolution: {gitHosted: true, integrity: sha512-11N1WJHyOsAwGJuGTAmIv+AhsKT7YdYIaXDOPy+pavyiykhTkRt2BB1dkpDGqlDOVjAZpO7fmkB3KkGxhKjIjw==, tarball: https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af}
-    version: 0.0.1
-    engines: {node: 26.7.0}
-
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     resolution: {integrity: sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ==}
     engines: {node: ^22.20 || ^24.12 || >=25}
@@ -527,6 +522,11 @@ packages:
     resolution: {integrity: sha512-zD6NdeWEByGE9QF9vCrlJ5YQB4oq9q91kPZS37Jwj5hOkvR1lTBSpsKhKDw4IJtbQ35LsTS1HD9DZYGKIshU1Q==}
     cpu: [x64]
     os: [win32]
+
+  '@soksak/soksak-service-native-compositor@https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af':
+    resolution: {gitHosted: true, integrity: sha512-11N1WJHyOsAwGJuGTAmIv+AhsKT7YdYIaXDOPy+pavyiykhTkRt2BB1dkpDGqlDOVjAZpO7fmkB3KkGxhKjIjw==, tarball: https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af}
+    version: 0.0.1
+    engines: {node: 26.7.0}
 
   '@soksak/soksak-spec@0.0.52':
     resolution: {integrity: sha512-SCKkrmcaWTeJHqO31IB3qcOuSfOnjHtIxwuCA9+XfCIU+NNIFjd30NpQOyyoCUG+JK82raicbvQ9+KxfaRg9ew==}
@@ -1227,8 +1227,6 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@soksak/soksak-service-native-compositor@https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af': {}
-
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
@@ -1352,6 +1350,8 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.62.4':
     optional: true
+
+  '@soksak/soksak-service-native-compositor@https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af': {}
 
   '@soksak/soksak-spec@0.0.52': {}
 
