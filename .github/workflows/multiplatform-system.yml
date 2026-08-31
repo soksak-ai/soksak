@@ -92,9 +92,9 @@ jobs:
           compression-level: 0
   darwin-candidate-native-input:
     needs: darwin-build
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@3d32a954d4d3c34cda6eb50e9f5f25fbaceb771d
+    uses: soksak-ai/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@3d32a954d4d3c34cda6eb50e9f5f25fbaceb771d
     with:
-      tests_repository: min-median-max/soksak-terminal-tests
+      tests_repository: soksak-ai/soksak-terminal-tests
       tests_ref: 3d32a954d4d3c34cda6eb50e9f5f25fbaceb771d
       core_artifact_name: core-darwin-arm64-artifact
       core_source_commit: ${{ github.sha }}
@@ -131,7 +131,7 @@ jobs:
           compression-level: 0
   windows-system:
     needs: windows-build
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/windows-system.yml@6ea6109abc286f5ecfbde7b2460af51586e16267
+    uses: soksak-ai/soksak-terminal-tests/.github/workflows/windows-system.yml@6ea6109abc286f5ecfbde7b2460af51586e16267
     with: { tests_ref: 6ea6109abc286f5ecfbde7b2460af51586e16267 }
   darwin-system:
     needs: [darwin-build, darwin-compose]
@@ -159,7 +159,7 @@ jobs:
             architecture: x86_64
             target: x86_64-apple-darwin
             variant: universal
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/darwin-system.yml@6ea6109abc286f5ecfbde7b2460af51586e16267
+    uses: soksak-ai/soksak-terminal-tests/.github/workflows/darwin-system.yml@6ea6109abc286f5ecfbde7b2460af51586e16267
     with:
       tests_ref: 6ea6109abc286f5ecfbde7b2460af51586e16267
       runner: ${{ matrix.runner }}
@@ -179,7 +179,7 @@ jobs:
           - runner: ubuntu-24.04-arm
             architecture: arm64
             target: aarch64-unknown-linux-gnu
-    uses: min-median-max/soksak-terminal-tests/.github/workflows/linux-system.yml@6ea6109abc286f5ecfbde7b2460af51586e16267
+    uses: soksak-ai/soksak-terminal-tests/.github/workflows/linux-system.yml@6ea6109abc286f5ecfbde7b2460af51586e16267
     with:
       tests_ref: 6ea6109abc286f5ecfbde7b2460af51586e16267
       runner: ${{ matrix.runner }}

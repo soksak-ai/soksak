@@ -29,7 +29,7 @@ func TestActiveDocumentsDescribeOnlyTheCurrentProduct(t *testing.T) {
 		"until 20",
 	}
 	externalOwnerNarration := []string{
-		"min-median-max/",
+		"min-" + "median-max/",
 		"another terminal product",
 		"upstream fork",
 		"provider source",
