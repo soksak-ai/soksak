@@ -2892,11 +2892,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     },
   });
 
-  // What is where and how large at the stopped position — scanned in one pass.
-  //
-  // ui.measure measures one node. Reading an instant requires seeing several nodes of that moment at
-  // once: which vertical line is where, how wide the panel is, how large the slots and surfaces inside
-  // it are. Several round trips let the state move in between, so different moments end up compared.
+  // Measure text, position, size, and requested styles for multiple nodes in one command.
   register("ui.snapshot.dom", {
     description: key("cmd.ui.snapshot.dom.desc"),
     triggers: { ko: "돔 일괄 측정 스냅샷 좌표 폭 한번에 관측 선 위치" },
@@ -2912,7 +2908,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       "ui.snapshot.dom",
       'ui.snapshot.dom \'{"filter":"pane","props":["backgroundColor"]}\'',
     ],
-    returns: "{ count, nodes: [{ address, nodePath, rect, style? }] }",
+    returns: "{ count, nodes: [{ address?, selector?, nodePath?, text, rect, style? }] }",
     message: (d) => tmsg("msg.ui.snapshot.dom", { count: String(d.count ?? 0) }),
     errors: ["INVALID_PARAMS"],
     handler: (p) => {
@@ -2933,6 +2929,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         nodes.push({
           address,
           nodePath: n.nodePath,
+          text: el.textContent ?? "",
           rect: { x: +r.x.toFixed(2), y: +r.y.toFixed(2), w: +r.width.toFixed(2), h: +r.height.toFixed(2) },
           ...(props.length > 0 ? { style } : {}),
         });
@@ -2956,7 +2953,8 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
           }
           nodes.push({
             selector: sel,
-            // When one selector matches several, which is which must be separable — a mark is included.
+            text: el.textContent ?? "",
+            // The mark distinguishes multiple elements that match the same selector.
             mark:
               el.getAttribute("data-content-view") ??
               el.getAttribute("data-node") ??

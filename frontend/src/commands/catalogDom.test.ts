@@ -2366,3 +2366,26 @@ describe("ui.measure — the scroll axis", () => {
     expect(data.style.position).toBe("static");
   });
 });
+
+describe("ui.snapshot.dom — selector observation", () => {
+  it("returns the exact text content for every selector match", async () => {
+    const first = document.createElement("span");
+    first.className = "workspace-tab-title";
+    first.textContent = "workspace 1";
+    const second = document.createElement("span");
+    second.className = "workspace-tab-title";
+    second.textContent = "workspace 2";
+    document.body.append(first, second);
+
+    const result = await execute("ui.snapshot.dom", { selector: ".workspace-tab-title" }, {});
+
+    expect(result.ok).toBe(true);
+    expect(result.data).toMatchObject({
+      count: 2,
+      nodes: [
+        { selector: ".workspace-tab-title", text: "workspace 1" },
+        { selector: ".workspace-tab-title", text: "workspace 2" },
+      ],
+    });
+  });
+});
