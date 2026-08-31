@@ -18,29 +18,21 @@ wails3beta/
 ├── soksak-sidecars/    plugin 소유 process별 독립 repository
 ├── soksak-contracts/   공유 공개 계약과 acceptance suite
 ├── wails-services/     이 project가 작성한 Wails service
-├── forks/              직접 유지하는 upstream fork
 ├── libraries/          직접 만든 재사용 library
-├── externals/          수정하지 않는 제3자 source
 ├── tests/              제품 전용 system 및 acceptance repository
 └── backup/             어떤 build도 참조하지 않는 제거 material
 ```
 
 다음 규칙이 이 구조를 만듭니다.
 
-1. Folder 이름이 ownership과 수정 정책을 드러냅니다. `forks/`는 직접 유지하는 upstream fork,
-   `libraries/` 는 직접 만든 재사용 라이브러리, `externals/` 는 고치지 않는 제3자 소스,
-   `tests/`는 Soksak 제품 전용 system 및 acceptance repository입니다. Product dependency는 계속
-   정확한 공개 release를 사용합니다.
+1. Folder 이름이 ownership과 수정 정책을 드러냅니다. `libraries/`는 이 workspace가 소유하는
+   재사용 라이브러리이고 `tests/`는 Soksak 제품 전용 system 및 acceptance repository입니다.
+   Product dependency는 각 제품 manifest가 선언한 version을 사용합니다.
 2. Plugin은 끌 수 있는 기능입니다. 공유 plugin code, 공개 contract, plugin process는 각각 독립
    version repository입니다. Wails service는 host를 확장하며 plugin처럼 끌 수 없습니다.
-3. Upstream release는 정확히 pin합니다. Wails Go, CLI, frontend runtime dependency 변경은 별도
-   근거와 commit을 갖습니다.
+3. Framework, CLI, frontend runtime dependency는 product manifest가 선언한 정확한 version을
+   사용합니다. Version 변경은 명시적인 product 변경입니다.
 4. `backup/`은 모든 build와 gate에서 보이지 않습니다. Build에 필요한 것은 이곳에 넣지 않습니다.
-
-`forks/` repository의 remote와 branch 계약은 하나입니다. `origin`은 유지하는 fork,
-`upstream`은 원본 repository를 가리킵니다. 유지 branch 이름에는 upstream version을 포함합니다.
-임시 기능 branch 는 GREEN 뒤 해당 버전 branch 에 합치고 제거합니다. 같은 upstream 릴리즈
-line을 유지하는 branch 두 개를 남기지 않습니다.
 
 Workspace 구조는 authoring 구조이지 runtime discovery가 아닙니다. Application은 plugin, sidecar,
 kit, contract, spec을 `environment.json`에서 해석하며 형제 폴더를 scan하지 않습니다. 각 repository는
@@ -50,24 +42,23 @@ kit, contract, spec을 `environment.json`에서 해석하며 형제 폴더를 sc
 ## L1b. Message는 그 내용의 owner가 소유합니다
 
 모든 것을 위한 registry 하나가 아니라 owner마다 하나의 registry를 둡니다. Application 문장은
-application에, plugin과 sidecar 문장은 각 repository에 있습니다. 외부 tree는 다른 tree의 registry에
-문장을 선언하지 않습니다.
+application에, plugin과 sidecar 문장은 각 repository에 있습니다. 각 repository는 다른 repository의
+registry에 문장을 선언하지 않습니다.
 
 컴포넌트는 target, 연산, 빠진 사실을 보고하고, 그것을 담는 애플리케이션이 사용자 문장을
 구성합니다. 이 규칙은 wording과 fact의 소유권을 분리하며 component를 한 application에 강결합하지
 않게 합니다.
 
-## L1a. 다른 tree의 material은 copy한 뒤 copy가 위치를 결정합니다
+## L1a. Source와 artifact
 
-다른 곳에서 온 repository는 이 workspace에 copy하며 원본 upstream에는 쓰지 않습니다. 유지 fork는
-`origin` 에만 쓰고 고치지 않는 외부 소스에는 쓰지 않습니다. 실행 중인 소스 트리는 읽는 동안
-바뀔 수 있고, 읽을 수 있는 path는 실수로 쓸 수도 있기 때문입니다.
+각 product repository가 source, build input, release artifact를 소유합니다. Product component는
+제품 종류 폴더에, acceptance code는 `tests/`에 둡니다. 역사로만 보존하는 material은 `backup/`에
+두며 build와 gate는 이를 읽지 않습니다. Workspace path는 dependency locator가 아니며 manifest와
+local release store만 dependency source입니다.
 
-제품 컴포넌트는 자기 제품 종류 폴더에 넣습니다. 유지하는 upstream fork 는 `forks/`, 직접 만든
-재사용 라이브러리는 `libraries/`, 고치지 않는 비교 소스는 `externals/`, 제품 인수 코드는
-`tests/`에 둡니다. 역사로만 보존하는 material은 `backup/`에 두며 build와 gate는 이를 보지
-않습니다. 이 workspace path는 dependency locator가 아닙니다. Produced artifact는 copy하지 않고
-symlink도 어느 방향으로도 사용하지 않습니다.
+Produced artifact는 소유 repository가 생성합니다. Release는 environment manifest가 선택한
+artifact만 사용하며 추적되지 않은 파일로 대체하지 않습니다. Symbolic link는 사용하지 않고,
+선언된 path를 그대로 해석하며 실패 시 확인한 path를 보고합니다.
 
 ## L2. Application 내부
 
