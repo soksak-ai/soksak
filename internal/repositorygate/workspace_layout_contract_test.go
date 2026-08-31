@@ -6,19 +6,18 @@ import (
 	"testing"
 )
 
-func TestWorkspaceLayoutSeparatesForksLibrariesExternalsAndTests(t *testing.T) {
+func TestWorkspaceLayoutSeparatesProviderSourcesLibrariesInputsAndTests(t *testing.T) {
 	checks := map[string][]string{
 		"docs/tech/REPO-LAYOUT.md": {
-			"forks/", "maintained upstream forks",
-			"libraries/", "independently authored reusable libraries",
-			"externals/", "unmodified third-party source",
+			"forks/", "preserved provider sources",
+			"libraries/", "independently owned reusable libraries",
+			"externals/", "declared external inputs",
 			"tests/", "product-specific system and acceptance repositories",
-			"origin` names the maintained fork", "upstream` names the original repository",
-			"branch name includes the upstream version",
+			"source ref names the preserved revision", "revision name includes the source version",
 		},
 		"docs/tech/REPO-LAYOUT.ko.md": {
 			"forks/", "libraries/", "externals/", "tests/",
-			"`origin`", "`upstream`", "upstream version",
+			"revision", "workspace path", "manifest",
 		},
 	}
 	for path, required := range checks {

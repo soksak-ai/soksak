@@ -16,8 +16,8 @@ func TestRepositoryGovernanceDefinesSourcePreservation(t *testing.T) {
 		"Local source is canonical",
 		"Independent repositories",
 		"version maintenance branch",
-		"Forks",
-		"Historical repositories",
+		"Preserved provider sources",
+		"Historical source",
 		"No source loss",
 		"archive/",
 	} {

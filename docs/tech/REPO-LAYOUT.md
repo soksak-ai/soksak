@@ -20,6 +20,8 @@ wails3beta/
 ├── soksak-contracts/   shared public contracts and acceptance suites
 ├── wails-services/     Wails services this project wrote
 ├── libraries/          reusable libraries owned by this workspace
+├── forks/              preserved provider sources with declared revisions
+├── externals/          declared external inputs, never product source
 ├── tests/              product-specific system and acceptance repositories
 └── backup/             removed material, referenced by no build
 ```
@@ -27,14 +29,17 @@ wails3beta/
 These rules produce this:
 
 1. Ownership and modification policy are visible in the folder name. `libraries/` contains reusable
-   libraries owned by this workspace; `tests/` contains Soksak-specific system and acceptance
-   repositories. Product dependencies use the versions declared by each product manifest.
+   independently owned reusable libraries; `tests/` contains Soksak-specific system and acceptance
+   repositories. `forks/` contains preserved provider sources and `externals/` contains declared
+   external inputs. Product dependencies use the versions declared by each product manifest.
 2. A plugin adds a feature and can be switched off (A8). Shared plugin code, public contracts and
    plugin processes remain independently versioned repositories. A Wails service extends the host and
    cannot be switched off as a plugin. These are different kinds, so they are different folders.
 3. Framework, CLI, and frontend runtime dependencies use the exact versions declared by the product
    manifest. A version change is an explicit product change (see NATIVE-LAYER.md).
 4. `backup/` is invisible to every build and gate. Anything the build needs is not in it.
+5. A source ref names the preserved revision; a revision name includes the source version. No path
+   in this workspace is inferred from an unrecorded provider name.
 
 The workspace layout is an authoring layout, not runtime discovery. The application resolves
 plugins, sidecars, kits, contracts, and specs from `environment.json` and never scans these sibling
