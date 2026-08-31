@@ -15,7 +15,7 @@ import { localize, useT } from "../i18n";
 //     cells — the portal escapes all stacking/clipping and stays on top.
 //   - Close = outside pointerdown (capture) + Escape. mouseLeave close was dropped (it closed on
 //     a graze, and it never closed at all when the mouse never entered the menu).
-//   - Hides the browser webview while open (the native layer covers the DOM menu).
+//   - Hides native pane surfaces while open so the menu remains fully visible.
 
 // Menu tree node — keeps registration order (a category's position = its first entry's position).
 interface MenuNode {
@@ -97,8 +97,8 @@ export function ProgramMenu({
   onClose: () => void;
 }) {
   const t = useT();
-  // The menu occupies a bounded chrome rectangle and does not cover native pane surfaces.
-  useOverlayActive(true, false);
+  // Native pane surfaces are hidden while the menu is open; their presentation returns on close.
+  useOverlayActive(true);
   const menuRef = useRef<HTMLDivElement>(null);
   // Position corrected into the viewport after measuring, plus whether the submenu flips.
   const [place, setPlace] = useState({ left: pos.left, top: pos.top, flip: false });
