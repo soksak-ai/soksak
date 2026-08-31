@@ -119,7 +119,13 @@ interface PhaseState<L> {
 function arrangementKey<L>(a: Arrangement<L> | null): string {
   if (!a) return "";
   const cells = a.cells
-    .map((c) => `${c.id}@${c.rect.left.toFixed(3)}`)
+    .map((c) => [
+      c.id,
+      c.rect.left.toFixed(3),
+      c.rect.top.toFixed(3),
+      c.rect.width.toFixed(3),
+      c.rect.height.toFixed(3),
+    ].join("@"))
     .join(",");
   return [
     a.railPresent ? "rail" : "no-rail",

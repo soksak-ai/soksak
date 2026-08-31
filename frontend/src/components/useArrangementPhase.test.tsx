@@ -63,6 +63,13 @@ const threeColumns: SplitTree<G> = {
   sizes: [1 / 3, 1 / 3, 1 / 3],
   children: [leaf("a"), leaf("b"), leaf("c")],
 };
+const twoRows = (top: number): SplitTree<G> => ({
+  type: "split",
+  id: "c",
+  dir: "col",
+  sizes: [top, 1 - top],
+  children: [leaf("a"), leaf("b")],
+});
 
 const solve = (layout: SplitTree<G>, focusId: string) =>
   solveArrangement<G>({
@@ -116,6 +123,7 @@ function Probe({
       data-rail-present={phase.displayed?.railPresent ? "1" : "0"}
       data-content={String(phase.displayed === arrangement ? "live" : "stale")}
       data-values={phase.displayed ? valuesOf(phase.displayed.displayLayout).map((value) => `${value.id}:${value.content ?? ""}`).join("|") : ""}
+      data-rects={phase.displayed?.cells.map((cell) => `${cell.id}:${cell.rect.top},${cell.rect.height}`).join("|") ?? ""}
       data-glide={phase.glide ? "1" : "0"}
       data-preparing={phase.preparing ? "1" : "0"}
       data-starting={phase.starting ? "1" : "0"}
@@ -200,6 +208,17 @@ afterEach(() => {
 });
 
 describe("useArrangementPhase", () => {
+  it("applies a vertical split size change", () => {
+    const at = solve(twoRows(0.5), "a");
+    act(() => root.render(<Probe arrangement={at} scopeId={scopeOf(at)} />));
+    expect(el().dataset.rects).toBe("a:0,50|b:50,50");
+
+    const resized = solve(twoRows(0.35), "a");
+    act(() => root.render(<Probe arrangement={resized} scopeId={scopeOf(resized)} />));
+
+    expect(el().dataset.content).toBe("live");
+    expect(el().dataset.rects).toBe("a:0,35|b:35,65");
+  });
   it("a React render claims the intent transaction already started at the same revision and does not call fallback prepare again", async () => {
     const at = solve(twoColumns, "a");
     const to = solve(twoColumns, "b");
