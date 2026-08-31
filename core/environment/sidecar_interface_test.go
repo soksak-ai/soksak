@@ -61,3 +61,22 @@ func TestSelectedSidecarInterfaceRefusesAmbiguousProviders(t *testing.T) {
 		t.Fatalf("error=%v", err)
 	}
 }
+
+func TestSelectedSidecarBindingsUseInterfaceIDs(t *testing.T) {
+	home := t.TempDir()
+	value := Empty()
+	ref := platformspec.Reference{ID: "fixture-pty-interface", Version: "0.0.2"}
+	installInterfaceFixture(t, &value, "implementation-provider", ref)
+	writeJSON(t, filepath.Join(home, File), value)
+
+	bindings, err := SelectedSidecarBindings(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := bindings[ref.ID]; got == "" {
+		t.Fatalf("bindings=%v: interface id is not exposed", bindings)
+	}
+	if _, found := bindings["implementation-provider"]; found {
+		t.Fatalf("bindings=%v: implementation id leaked into dependency surface", bindings)
+	}
+}
