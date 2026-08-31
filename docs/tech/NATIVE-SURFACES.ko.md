@@ -90,6 +90,13 @@ provider가 `settled` rectangle을 노출하면 `applied`와 `settled`를 모두
 이동하고 page viewport가 이전 크기에 남은 frame은 즉시 `wrongFrames > 0`으로 실패하며, mouse-up 뒤의
 정상 frame이 앞선 실패를 지우지 않습니다.
 
+각 divider preview는 layout 상태 변경에 즉시 geometry 표식을 설정합니다. 해당 React layout commit은
+그 표식을 소비하고 FLIP animation 없이 새 rectangle을 기록합니다. 표식은 callback 실행 시간이 아니라
+상태 변경과 연결됩니다. React commit은 native input callback 반환 뒤에 실행될 수 있고 background 창은
+animation을 중지할 수 있습니다. 마지막 preview와 단일 `pane.resize` command는 resize-motion 종료 event
+전에 하나의 동기 DOM transaction에서 실행합니다. `ui.tree`, `surface.composition`, `ui.motion`으로 pane,
+slot, native surface rectangle 일치, declared/applied drift 0, divider preview의 FLIP animation 0을 검증합니다.
+
 ## D1b.1. Core 장식은 마지막 네이티브 평면이다
 
 포커스 표시선이나 rail 관계 외곽선은 provider 내용이 아니라 Core chrome입니다. DOM의 `z-index:7` 또는 `8`로

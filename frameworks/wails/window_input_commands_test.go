@@ -33,6 +33,11 @@ func (h *inputHostFixture) InjectInputPointer(window string, x, y float64) (Wind
 	return WindowPointerInjectionReceipt{Sequence: 9, Posted: true, InputRoute: "contract-injection", X: x, Y: y}, nil
 }
 
+func (h *inputHostFixture) InjectInputPointerDrag(window string, fromX, fromY, toX, toY float64, steps int) (WindowPointerDragReceipt, error) {
+	h.window = window
+	return WindowPointerDragReceipt{Sequence: 10, Posted: true, InputRoute: "contract-injection", FromX: fromX, FromY: fromY, ToX: toX, ToY: toY, Steps: steps}, nil
+}
+
 func (h *inputHostFixture) ClickInputPointer(window string, x, y float64) (WindowPointerClickReceipt, error) {
 	h.window = window
 	return WindowPointerClickReceipt{
@@ -96,6 +101,7 @@ func TestWindowInputCommandsExposeNativeControlStatusAndClick(t *testing.T) {
 		served[command.Name] = true
 	}
 	for _, name := range []string{
+		"window_input_pointer_drag",
 		"window_input_pointer_click",
 		"window_input_key_press",
 		"window_native_close_status",

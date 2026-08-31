@@ -13,8 +13,8 @@ import (
 const windowInputPointerEvent = "window.input.pointer"
 const windowNativeCloseEvent = "window.native-close-requested"
 
-// WindowPointerReceipt records a pointer edge before WebKit processes DOM delivery.
-// Sequence identifies one down/up pair.
+// WindowPointerReceipt records pointer input before WebKit processes DOM delivery.
+// Sequence identifies one down/move/up operation.
 type WindowPointerReceipt struct {
 	Sequence uint64  `json:"sequence"`
 	Phase    string  `json:"phase"`
@@ -267,7 +267,7 @@ func (monitor *windowInputMonitor) deliver(native uintptr, sequence uint64, phas
 }
 
 func (monitor *windowInputMonitor) deliverWithSource(native uintptr, sequence uint64, phase, source string, x, y, atUnixMs float64) error {
-	if phase != "down" && phase != "up" {
+	if phase != "down" && phase != "move" && phase != "up" {
 		return i18n.Errorf("wails.input.invalidPhase", map[string]string{"phase": phase})
 	}
 	window := monitor.lookup(native)
@@ -289,11 +289,13 @@ func (monitor *windowInputMonitor) deliverWithSource(native uintptr, sequence ui
 		monitor.mu.Unlock()
 		return i18n.Errorf("wails.input.monitorInactive", nil)
 	}
-	if _, duplicate := monitor.delivered[key]; duplicate {
-		monitor.mu.Unlock()
-		return nil
+	if phase != "move" {
+		if _, duplicate := monitor.delivered[key]; duplicate {
+			monitor.mu.Unlock()
+			return nil
+		}
+		monitor.delivered[key] = struct{}{}
 	}
-	monitor.delivered[key] = struct{}{}
 	// A sequence has only two edges. Once an up arrives, older keys no longer
 	// participate in idempotency and can be discarded without a growing ledger.
 	if phase == "up" {

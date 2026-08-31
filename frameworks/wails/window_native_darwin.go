@@ -100,8 +100,11 @@ func soksakWindowInputPointer(window unsafe.Pointer, sequence C.ulonglong, phase
 		return
 	}
 	edge := "down"
-	if phase == 1 {
+	switch phase {
+	case 1:
 		edge = "up"
+	case 2:
+		edge = "move"
 	}
 	monitor.enqueue(windowPointerEnvelope{
 		native: uintptr(window), sequence: uint64(sequence), phase: edge, source: "system",

@@ -487,13 +487,16 @@ void *soksakInstallWindowInputMonitor(void) {
   __block unsigned long long sequence = 0;
   __block unsigned long long gesture = 0;
   id token = [NSEvent
-      addLocalMonitorForEventsMatchingMask:(NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp)
+      addLocalMonitorForEventsMatchingMask:(NSEventMaskLeftMouseDown |
+                                            NSEventMaskLeftMouseDragged |
+                                            NSEventMaskLeftMouseUp)
       handler:^NSEvent *(NSEvent *event) {
         NSWindow *window = event.window;
         NSView *content = window.contentView;
         if (window == nil || content == nil) return event;
 
-        int phase = event.type == NSEventTypeLeftMouseDown ? 0 : 1;
+        int phase = event.type == NSEventTypeLeftMouseDown ? 0
+                  : event.type == NSEventTypeLeftMouseUp ? 1 : 2;
         if (phase == 0 || gesture == 0) {
           CGEventRef native = event.CGEvent;
           int64_t posted = native == NULL ? 0
@@ -509,7 +512,7 @@ void *soksakInstallWindowInputMonitor(void) {
         NSPoint closePoint = close == nil
             ? NSZeroPoint
             : [close convertPoint:event.locationInWindow fromView:nil];
-        BOOL nativeClose = close != nil && close.isEnabled && !close.isHidden &&
+        BOOL nativeClose = phase != 2 && close != nil && close.isEnabled && !close.isHidden &&
             NSPointInRect(closePoint, close.bounds);
         BOOL consumed = nativeClose && soksakWindowNativeClosePointer(
             (__bridge void *)window, gesture, phase, local.x, top, atUnixMs);

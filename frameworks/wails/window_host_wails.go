@@ -185,6 +185,29 @@ func (h *wailsHost) InjectInputPointer(name string, x, y float64) (WindowPointer
 	}, nil
 }
 
+func (h *wailsHost) InjectInputPointerDrag(name string, fromX, fromY, toX, toY float64, steps int) (WindowPointerDragReceipt, error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return WindowPointerDragReceipt{}, i18n.Errorf("wails.host.noInputWindow", map[string]string{"window": name})
+	}
+	sequence := (uint64(1) << 40) + windowInputClickSequence.Add(1)
+	native := uintptr(window.NativeWindow())
+	now := float64(time.Now().UnixMilli())
+	h.inputMonitor.enqueue(windowPointerEnvelope{native: native, sequence: sequence, phase: "down", source: "contract-injection", x: fromX, y: fromY, atUnixMs: now})
+	for step := 1; step <= steps; step++ {
+		fraction := float64(step) / float64(steps)
+		x := fromX + (toX-fromX)*fraction
+		y := fromY + (toY-fromY)*fraction
+		h.inputMonitor.enqueue(windowPointerEnvelope{native: native, sequence: sequence, phase: "move", source: "contract-injection", x: x, y: y, atUnixMs: now})
+	}
+	h.inputMonitor.enqueue(windowPointerEnvelope{native: native, sequence: sequence, phase: "up", source: "contract-injection", x: toX, y: toY, atUnixMs: now})
+	return WindowPointerDragReceipt{
+		Sequence: sequence, Posted: true, InputRoute: "contract-injection",
+		CursorPositionMayChange: false, FromX: fromX, FromY: fromY, ToX: toX, ToY: toY,
+		Steps: steps, WindowFocused: window.IsFocused(),
+	}, nil
+}
+
 func (h *wailsHost) ClickInputPointer(name string, x, y float64) (WindowPointerClickReceipt, error) {
 	window, addressable := h.live(name)
 	if !addressable {

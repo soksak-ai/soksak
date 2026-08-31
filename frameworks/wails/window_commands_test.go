@@ -98,6 +98,9 @@ func (h *fakeHost) WaitInputPointer(uint64, time.Duration) (WindowPointerReceipt
 func (h *fakeHost) InjectInputPointer(string, float64, float64) (WindowPointerInjectionReceipt, error) {
 	return WindowPointerInjectionReceipt{}, nil
 }
+func (h *fakeHost) InjectInputPointerDrag(string, float64, float64, float64, float64, int) (WindowPointerDragReceipt, error) {
+	return WindowPointerDragReceipt{}, nil
+}
 func (h *fakeHost) ClickInputPointer(string, float64, float64) (WindowPointerClickReceipt, error) {
 	return WindowPointerClickReceipt{}, nil
 }

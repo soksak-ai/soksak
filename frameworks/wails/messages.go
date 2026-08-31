@@ -47,8 +47,12 @@ func init() {
 			KO: "sequence {sequence}의 mouseup이 {timeout} 안에 확인되지 않았습니다",
 		},
 		"wails.input.invalidPhase": {
-			EN: "pointer phase must be down or up: {phase}",
-			KO: "포인터 phase는 down 또는 up이어야 합니다: {phase}",
+			EN: "pointer phase must be down, move or up: {phase}",
+			KO: "포인터 phase는 down, move 또는 up이어야 합니다: {phase}",
+		},
+		"wails.input.invalidSteps": {
+			EN: "pointer drag steps must be between 1 and 120: {steps}",
+			KO: "포인터 드래그 steps는 1 이상 120 이하여야 합니다: {steps}",
 		},
 		"wails.input.windowUnknown": {
 			EN: "the pointer event has no associated window",

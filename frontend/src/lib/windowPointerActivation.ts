@@ -3,7 +3,7 @@ import { activateExposedInputTarget } from "./viewActivation";
 
 export interface NativePointerEdge {
   sequence: number;
-  phase: "down" | "up";
+  phase: "down" | "move" | "up";
   source: "system" | "contract-injection";
   x: number;
   y: number;
@@ -59,6 +59,7 @@ export class WindowPointerActivationCoordinator {
   }
 
   observeNative(edge: NativePointerEdge): void {
+    if (edge.phase === "move") return;
     if (edge.phase === "down") {
       this.pending = {
         edge,
@@ -98,7 +99,7 @@ export class WindowPointerActivationCoordinator {
   ): WindowPointerActivationState {
     return {
       sequence: edge.sequence,
-      phase: edge.phase,
+      phase: edge.phase === "up" ? "up" : "down",
       source: edge.source,
       x: edge.x,
       y: edge.y,

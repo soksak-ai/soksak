@@ -1318,6 +1318,26 @@ describe("ui.input.drag — realtime reproduction surface", () => {
     expect(seen).toEqual(["mousedown", "mousemove", "mousemove", "mouseup"]);
   });
 
+  it("delivers gutter continuation through the native pointer contract", async () => {
+    mountNode(`<div data-node="btn" data-wv-occlusion="pane-gutter">drag</div>`);
+    const node = document.querySelector<HTMLElement>("[data-node=btn]")!;
+    vi.spyOn(node, "getBoundingClientRect").mockReturnValue({
+      x: 10, y: 20, left: 10, top: 20, right: 110, bottom: 70,
+      width: 100, height: 50, toJSON: () => ({}),
+    });
+    vi.mocked(frameworkInvoke).mockResolvedValueOnce({ sequence: 41 });
+
+    await execute("ui.input.drag", { from: ADDR, x: 7, y: 9, dx: 0, dy: 60, steps: 3 }, {});
+
+    expect(frameworkInvoke).toHaveBeenCalledWith("window_input_pointer_drag", {
+      fromX: 17,
+      fromY: 29,
+      toX: 17,
+      toY: 89,
+      steps: 3,
+    });
+  });
+
   it("starts a drag as one primary-button click", async () => {
     mountNode(`<div data-node="btn">drag</div>`);
     const node = document.querySelector<HTMLElement>("[data-node=btn]")!;

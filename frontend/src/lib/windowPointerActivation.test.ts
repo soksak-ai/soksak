@@ -82,4 +82,13 @@ describe("native pointer activation carrier", () => {
     expect(schedule).not.toHaveBeenCalled();
     expect(activate).toHaveBeenCalledTimes(1);
   });
+
+  it("does not complete activation when a drag position is received", () => {
+    const activate = vi.fn(() => true);
+    const coordinator = new WindowPointerActivationCoordinator(() => document.body, activate);
+    coordinator.observeNative(edge("down"));
+    coordinator.observeNative({ ...edge("down"), phase: "move", x: 80 });
+    expect(coordinator.snapshot()).toMatchObject({ phase: "down", sequence: 7 });
+    expect(activate).not.toHaveBeenCalled();
+  });
 });

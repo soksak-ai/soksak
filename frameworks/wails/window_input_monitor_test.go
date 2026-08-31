@@ -35,6 +35,32 @@ func TestWindowInputMonitorPublishesOneObservableEdgePerNativeSequence(t *testin
 	}
 }
 
+func TestWindowInputMonitorPublishesEveryDragPosition(t *testing.T) {
+	var events []WindowPointerReceipt
+	monitor := newWindowInputMonitor(
+		func(uintptr) string { return "win-a" },
+		func(_ string, _ string, payload any) error {
+			events = append(events, payload.(WindowPointerReceipt))
+			return nil
+		},
+	)
+	monitor.active = true
+	for _, input := range []struct {
+		phase string
+		x     float64
+	}{{"down", 10}, {"move", 20}, {"move", 30}, {"up", 30}} {
+		if err := monitor.deliver(1, 8, input.phase, input.x, 40, 1000+input.x); err != nil {
+			t.Fatalf("deliver %s: %v", input.phase, err)
+		}
+	}
+	if len(events) != 4 {
+		t.Fatalf("events = %+v", events)
+	}
+	if events[1].Phase != "move" || events[1].X != 20 || events[2].X != 30 {
+		t.Fatalf("drag positions = %+v", events[1:3])
+	}
+}
+
 func TestWindowInputClickWaitsForItsExactObservedMouseUp(t *testing.T) {
 	monitor := newWindowInputMonitor(func(uintptr) string { return "win-a" }, func(string, string, any) error { return nil })
 	monitor.active = true

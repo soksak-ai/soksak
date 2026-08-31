@@ -30,6 +30,8 @@ import { useLayoutGeometryReflow } from "../lib/layoutGeometryReflow";
 import { gutterAddress, gutterOwnerOf } from "../lib/gutterAddress";
 import { beginGesture } from "../lib/gesture";
 import { commitDomLayout } from "../lib/domLayoutCommit";
+import { listenThisWindow } from "../lib/windowEvents";
+import type { NativePointerEdge } from "../lib/windowPointerActivation";
 import { useT } from "../i18n";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
@@ -330,6 +332,10 @@ export const GroupArea = memo(function GroupArea({
   // over a pane is drawn under the page in it — and there the page does step aside, and its picture,
   // which is in the document, stands in its place. That is the overlay term of the presentation.
   const rectMotion = useRef(createRectMotionTracker(`${projectId}/${content.id}`)).current;
+  // A divider preview owns immediate geometry. This marker travels with the state write until the
+  // corresponding React layout commit consumes it; the native input callback may already have ended
+  // by then, especially when the window is not focused and React batches the external event.
+  const resizeGeometryPending = useRef(false);
   const displayLayout = solvedLayout ?? content.layout;
   const focusProjectionApplied = displayLayout !== content.layout;
   const traveling = (moves?.length ?? 0) > 0;
@@ -465,7 +471,10 @@ export const GroupArea = memo(function GroupArea({
   // every interpolation before it played — measured 2026-08-17, `ui.motion` held 64 journeys and
   // not one finished, so a pane, a tab and the surface under it jumped to their destination.
   useLayoutEffect(() => {
-    timed("panes.flush", () => rectMotion.flush(replaceGeometry ? "replace" : "animate"));
+    timed("panes.flush", () => {
+      rectMotion.flush(replaceGeometry || resizeGeometryPending.current ? "replace" : "animate");
+      resizeGeometryPending.current = false;
+    });
     // The signature is the whole dependency: every field in it is one the tracker reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geometrySignature]);
@@ -705,10 +714,11 @@ export const GroupArea = memo(function GroupArea({
     const startX = d.rect.left;
     // Store commits are capped at once per frame (principles 3 and 4) — mousemove exceeds 60Hz.
     // The whole group lands in one commit (resizeSplits) — the line is not fragmented even in an intermediate state.
-    const commitResize = rafThrottle((moves: LineMove[]) =>
-      resizeSplits(projectId, moves),
-    );
-    const onMove = (ev: MouseEvent) => {
+    const commitResize = rafThrottle((moves: LineMove[]) => {
+      resizeGeometryPending.current = true;
+      resizeSplits(projectId, moves);
+    });
+    const onMove = (ev: Pick<MouseEvent, "clientX" | "clientY">) => {
       if (d.dir === "row") {
         const targetX = startX + ((ev.clientX - startPos) / totalPx) * 100;
         commitResize(moveLineGroup(lineGroup, targetX).moves);
@@ -724,15 +734,26 @@ export const GroupArea = memo(function GroupArea({
       sizes[i + 1] = startSizes[i + 1] - delta;
       gesture.move(sizes);
     };
+    let ended = false;
+    let stopNativeInput = () => {};
     const onUp = () => {
+      if (ended) return;
+      ended = true;
       // Settle not only the store's final ratio but the React DOM that consumed it. Emitting the end right after a
       // plain rafThrottle.flush makes the Tauri consumer read the departure slot rect while the DOM widens only on
       // the next commit, leaving a black gap on the release frame. This contract is the meaning of the end event,
       // not a framework workaround — Electron sees the same final DOM with no separate compositing.
-      commitDomLayout(() => commitResize.flush());
-      gesture.end();
+      // The landing command is part of the same geometry transaction as the last preview. React batches
+      // external event updates, so issuing it after flushSync lets the resize phase close before the command's
+      // render and turns the landing into an ordinary FLIP. A live slot then starts at its previous top while
+      // taking the new height. Commit both writes while resize motion still owns immediate geometry.
+      commitDomLayout(() => {
+        commitResize.flush();
+        gesture.end();
+      });
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      stopNativeInput();
       document.body.style.cursor = "";
       ms.resizeDragActive = false;
       // Report the end after flush (the final layout commit) — subscribers (the browser provider) trust the slot
@@ -741,6 +762,13 @@ export const GroupArea = memo(function GroupArea({
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+    stopNativeInput = listenThisWindow<NativePointerEdge>("window.input.pointer", (event) => {
+      if (event.payload.phase === "move") {
+        onMove({ clientX: event.payload.x, clientY: event.payload.y });
+      } else if (event.payload.phase === "up") {
+        onUp();
+      }
+    });
     document.body.style.cursor = d.dir === "row" ? "col-resize" : "row-resize";
   };
 

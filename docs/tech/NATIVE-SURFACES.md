@@ -97,6 +97,14 @@ completed compositor Apply and compares both `applied` and provider `settled` re
 provider exposes the latter. A moved clipping host with a stale page viewport therefore fails the
 same frame with `wrongFrames > 0`; mouse-up cannot turn those earlier frames into a pass.
 
+Each divider preview marks its layout state write as immediate geometry. The matching React layout
+commit consumes that marker and records the new rectangles without creating FLIP animation. The
+marker is associated with the state write, not callback duration: React may commit after the native input
+callback returns, and a background window may pause animation. The landing preview and the single
+`pane.resize` command execute in one synchronous DOM transaction before the resize-motion end event.
+`ui.tree`, `surface.composition`, and `ui.motion` verify the result: pane, slot, and native surface
+rectangles agree, declared/applied drift is zero, and a divider preview creates zero FLIP animations.
+
 ## D1b.1. Core decoration is the final native plane
 
 A focus boundary or rail-relation outline is Core chrome, not provider content. Drawing it at DOM

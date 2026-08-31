@@ -50,6 +50,21 @@ type WindowPointerInjectionReceipt struct {
 	WindowFocused           bool    `json:"windowFocused"`
 }
 
+// WindowPointerDragReceipt records a finite pointer sequence delivered through
+// the platform-to-frontend input contract. It does not move the system cursor.
+type WindowPointerDragReceipt struct {
+	Sequence                uint64  `json:"sequence"`
+	Posted                  bool    `json:"posted"`
+	InputRoute              string  `json:"inputRoute"`
+	CursorPositionMayChange bool    `json:"cursorPositionMayChange"`
+	FromX                   float64 `json:"fromX"`
+	FromY                   float64 `json:"fromY"`
+	ToX                     float64 `json:"toX"`
+	ToY                     float64 `json:"toY"`
+	Steps                   int     `json:"steps"`
+	WindowFocused           bool    `json:"windowFocused"`
+}
+
 // WindowPointerClickReceipt records a native-window mouse down/up pair. The
 // route names the platform boundary that accepted the pair; it is never a DOM
 // event-dispatch alias.
@@ -82,6 +97,7 @@ type WindowInputHost interface {
 	InputState(window string) (WindowInputState, error)
 	SetMarkedText(window, text string) (WindowInputState, error)
 	InjectInputPointer(window string, x, y float64) (WindowPointerInjectionReceipt, error)
+	InjectInputPointerDrag(window string, fromX, fromY, toX, toY float64, steps int) (WindowPointerDragReceipt, error)
 	ClickInputPointer(window string, x, y float64) (WindowPointerClickReceipt, error)
 	PressInputKey(window, key string, ctrl, meta, shift, alt bool) (WindowKeyPressReceipt, error)
 	WaitInputPointer(sequence uint64, timeout time.Duration) (WindowPointerReceipt, error)
@@ -157,6 +173,41 @@ func RegisterWindowInput(registry *control.Registry, host WindowInputHost) {
 				return nil, i18n.Errorf("wails.input.negativeCoordinates", map[string]string{"x": strconv.FormatFloat(x, 'f', -1, 64), "y": strconv.FormatFloat(y, 'f', -1, 64)})
 			}
 			return host.InjectInputPointer(name, x, y)
+		},
+	})
+	registry.MustRegister(control.Command{Name: "window_input_pointer_drag", Owner: control.OwnerFramework,
+		Handler: func(args control.Args) (any, error) {
+			name, err := window(args)
+			if err != nil {
+				return nil, err
+			}
+			fromX, err := control.Arg[float64](args, "fromX")
+			if err != nil {
+				return nil, err
+			}
+			fromY, err := control.Arg[float64](args, "fromY")
+			if err != nil {
+				return nil, err
+			}
+			toX, err := control.Arg[float64](args, "toX")
+			if err != nil {
+				return nil, err
+			}
+			toY, err := control.Arg[float64](args, "toY")
+			if err != nil {
+				return nil, err
+			}
+			steps, err := control.Arg[int](args, "steps")
+			if err != nil {
+				return nil, err
+			}
+			if fromX < 0 || fromY < 0 || toX < 0 || toY < 0 {
+				return nil, i18n.Errorf("wails.input.negativeCoordinates", map[string]string{"x": strconv.FormatFloat(fromX, 'f', -1, 64), "y": strconv.FormatFloat(fromY, 'f', -1, 64)})
+			}
+			if steps < 1 || steps > 120 {
+				return nil, i18n.Errorf("wails.input.invalidSteps", map[string]string{"steps": strconv.Itoa(steps)})
+			}
+			return host.InjectInputPointerDrag(name, fromX, fromY, toX, toY, steps)
 		},
 	})
 	registry.MustRegister(control.Command{Name: "window_input_pointer_click", Owner: control.OwnerFramework,

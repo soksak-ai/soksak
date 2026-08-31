@@ -3404,7 +3404,18 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // mousedown goes to the grabbed element. Move/up start at its document: document-level
       // selection listeners receive them, and event bubbling also serves window-level gutter listeners.
       fire("mousedown", fromPt.x, fromPt.y, fromR.el);
-      if (dist >= 5) {
+      const nativeGutterContinuation =
+        dist >= 5 && fromR.el.getAttribute("data-wv-occlusion") === "pane-gutter";
+      if (nativeGutterContinuation) {
+        const receipt = await invoke<{ sequence: number }>("window_input_pointer_drag", {
+          fromX: fromPt.x,
+          fromY: fromPt.y,
+          toX: toPt.x,
+          toY: toPt.y,
+          steps: totalMoves,
+        });
+        await invoke("window_input_pointer_wait", { sequence: receipt.sequence, timeoutMs: 2000 });
+      } else if (dist >= 5) {
         const points = pointsFrom(fromPt);
         for (const [index, point] of points.entries()) {
           fire(
@@ -3420,7 +3431,9 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
           }
         }
       }
-      fire("mouseup", toPt.x, toPt.y, fromR.el.ownerDocument);
+      if (!nativeGutterContinuation) {
+        fire("mouseup", toPt.x, toPt.y, fromR.el.ownerDocument);
+      }
       const recordingResult = recording
         ? await recording.report
         : { status: "not-requested" as const, mode: "realtime" as const };
