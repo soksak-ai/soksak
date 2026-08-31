@@ -4,7 +4,7 @@
 // commands on that axis stay in one block so "what can be asked of a window" reads in one place.
 //
 // The catalog owns the shared resolvers (`windowTarget`, `P`, `notFound`) — redefining them here
-// would fork the same rule per file (omitted label = the addressed target).
+// would duplicate the same rule per file (omitted label = the addressed target).
 import { invoke, currentWindow, clearNativeSurfaces, windowByLabel } from "../framework";
 import { tmsg, key} from "../i18n";
 import { register } from "./registry";

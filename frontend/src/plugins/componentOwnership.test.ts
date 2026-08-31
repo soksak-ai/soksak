@@ -51,7 +51,7 @@ describe("component ownership standard", () => {
       "installed unit",
       "engine units",
       "unit identity",
-      "upstream unit baseline",
+      "obsolete unit baseline",
     ]) expect(document).not.toContain(phrase);
   });
 

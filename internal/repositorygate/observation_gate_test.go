@@ -26,8 +26,8 @@ import (
 // trusting the wrong one.
 var enablesMCP = regexp.MustCompile(`(-tags[= ]|tags:\s*|BUILD_TAGS[=:]\s*)["']?[a-z,]*\bmcp\b`)
 
-// Directories that are not this product's to legislate: the vendored framework
-// is upstream's, and the rest are build outputs.
+// Directories that are not this product's to legislate: the framework directory
+// and generated output directories are excluded from this source scan.
 //
 // bin is excluded from the source scan and checked separately below. Measured
 // 2026-08-15: this gate passed while bin/app-mcp sat in the tree, built with
@@ -109,7 +109,7 @@ func TestTheMCPGateRecognisesHowTheTagIsSwitchedOn(t *testing.T) {
 		`// The framework's MCP server is experimental.`,
 		`go build -tags production .`,
 		`mcpServer := somethingElse()`,
-		`- mcp_tools_enabled.go is upstream's`,
+		`- mcp_tools_enabled.go is outside this product's source scan`,
 	} {
 		if enablesMCP.MatchString(line) {
 			t.Errorf("the gate objects to something harmless: %s", line)
