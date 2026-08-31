@@ -27,7 +27,7 @@ non-null override를 보존하며, reset 뒤 현재 base가 나타나야 합니�
 | Shitty | 42×30 live; output 270+, frames consumed 7+, paint 6+ | `#123456/#234567/#345678`, ANSI 1 `#456789` 정확히 일치 | GREEN; override가 모두 null이고 현재 base 복원 | GREEN | 이 행 GREEN |
 | VT100 | 즉시 입력과 다른 tab 왕복 뒤에도 42×30 live | 정확히 일치 | GREEN | GREEN | 이 행 GREEN |
 | WezTerm | 즉시 입력과 다른 tab 왕복 뒤에도 42×30 live | 정확히 일치 | GREEN | GREEN | 이 행 GREEN |
-| Xterm.js 6.0.0 fork | 59×29 live, 다른 tab 왕복 뒤 39×29 | `#123456/#234567/#345678`, ANSI 1 `#456789` 정확히 일치 | GREEN; 현재 light base 복원 | GREEN | 이 행 GREEN |
+| Xterm renderer 6.0.0 | 59×29 live, 다른 tab 왕복 뒤 39×29 | `#123456/#234567/#345678`, ANSI 1 `#456789` 정확히 일치 | GREEN; 현재 light base 복원 | GREEN | 이 행 GREEN |
 
 Alacritty는 dark→light에서 override를 유지하고 reset 후 light base로 돌아오는 것도 통과했습니다. 상태를
 사실대로 만들기 위해 두 결함을 수정했습니다. Frame event limiter는 마지막 event를 한 번 전달하고,
@@ -57,10 +57,10 @@ barrier로 인정하지 않습니다.
 
 Xterm.js 6.0.0에는 effective color 공개면이 없었습니다. `options.theme`은 host base이고 OSC가 바꾼
 `ThemeService.colors`는 private였습니다. `_core`를 읽으면 Plugin이 내부 object graph에 결합하므로
-`min-median-max/xterm.js` fork가 read-only `effectiveTheme` snapshot을 공개합니다. OSC color parse·apply·
-reset은 계속 engine이 소유합니다. Fork는 host base theme 변경 중 active OSC override를 유지하고 reset
+Xterm renderer가 read-only `effectiveTheme` snapshot을 공개합니다. OSC color parse·apply·
+reset은 계속 engine이 소유합니다. Renderer는 host base theme 변경 중 active OSC override를 유지하고 reset
 뒤 새 base를 드러냅니다. Owner gate는 unit test 2,324개, API lint, 실제 Chrome set/reset을 통과했습니다.
-Fork는 `@soksak/xterm@6.0.0`으로 build·Registry publish되고 `@xterm/xterm` npm alias로 소비합니다.
+Renderer는 `@soksak/xterm@6.0.0`으로 build·Registry publish되고 `@xterm/xterm` npm alias로 소비합니다.
 Consumer Git prepare·codeload locator·private API 접근은 없습니다. Xterm Plugin 0.0.54는 native provider와
 같은 runtime state, dark→light, reset, tab switch, pixel 검증을 통과했습니다.
 
@@ -69,15 +69,15 @@ Consumer Git prepare·codeload locator·private API 접근은 없습니다. Xter
 | Provider | Engine API | Owner byte | 설치 PTY | Pixel | 판정 |
 | --- | --- | --- | --- | --- | --- |
 | Alacritty 0.0.37 | `alacritty_terminal` mode와 provider encoder | SGR press/drag/release/free-motion, legacy modifier와 release | exact down/drag/up hex, sequence 3 | GREEN | 이 행 GREEN |
-| Ghostty 0.0.34 | fork된 libghostty-vt `GhosttyMouseEncoder`와 `GhosttyMouseEvent` | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | 이 행 GREEN |
-| Kitty 0.0.31 | provider ABI를 통한 fork된 Kitty `Screen` mouse encoder | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | 이 행 GREEN |
-| Shitty 0.0.30 | provider ABI를 통한 fork된 Shitty `encodeMouseProtocol` | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | 이 행 GREEN |
-| VT100 0.0.33 | fork된 vt100-rust live `Screen::encode_mouse_event` | SGR press/drag/release/free-motion, legacy, UTF-8 | exact down/drag/up hex, sequence 3 | GREEN | 이 행 GREEN |
+| Ghostty 0.0.34 | provider `GhosttyMouseEncoder`와 `GhosttyMouseEvent` | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | 이 행 GREEN |
+| Kitty 0.0.31 | provider ABI를 통한 Kitty `Screen` mouse encoder | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | 이 행 GREEN |
+| Shitty 0.0.30 | provider ABI를 통한 Shitty `encodeMouseProtocol` | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | 이 행 GREEN |
+| VT100 0.0.33 | provider `Screen::encode_mouse_event` | SGR press/drag/release/free-motion, legacy, UTF-8 | exact down/drag/up hex, sequence 3 | GREEN | 이 행 GREEN |
 | WezTerm 0.0.33 | 기존 `TerminalState::mouse_event`와 동기 raw writer tap | SGR press/drag/release/free-motion, legacy, UTF-8 | exact down/drag/up hex, sequence 3 | GREEN | 이 행 GREEN |
 
 Ghostty는 terminal mouse encoder를 복사하지 않습니다. Owner는 engine encoder 하나와 재사용 event를
 유지하고 live `GhosttyTerminal`에서 mode와 format을 갱신한 뒤 action, button, modifier, position을
-fork C API에 전달합니다. v7 불변 release digest는 Ghostty
+provider C API에 전달합니다. v7 불변 release digest는 Ghostty
 `ed39380c51cdd09ae499d56b728b8c09aa1b24f975eb7f4db8ae8a11ed961225`, Vision
 `f38eed4cfcf2c55b33e724490fe928a80b0791c850f8bf634d7f00b597dc3ed3`, Xterm
 `d863e11c3c253d53f780be9c11d1d9655b14a03e006f7392e2453ebe7120a601`입니다. Batch plan
@@ -90,7 +90,7 @@ prompt, cursor를 직접 확인했고 capture 전후 모두 `windowFocused=false
 이 행은 Ghostty selection이나 wheel을 인증하지 않습니다. 두 engine API는 명시적인 owner refusal로
 남아 있으며 열린 selection/scroll matrix에 포함됩니다.
 
-Kitty도 같은 ownership 규칙을 따릅니다. Fork commit
+Kitty도 같은 ownership 규칙을 따릅니다. Provider revision
 `9df1e0b7c5b93e933e877c36ee45ae62935c9b48`은 기존 live `Screen` mouse encoder를
 `kitty_provider_pointer`로 공개합니다. Sidecar는 정규화된 사실만 전달하며 protocol encoder를 담지
 않습니다. v7 불변 release digest는 Kitty
@@ -103,7 +103,7 @@ route, sequence, 마지막 write count를 만들었습니다. 289,925-byte 합�
 cursor를 직접 확인했고 `windowFocused=false`는 바뀌지 않았습니다. Kitty selection과 wheel은 열려
 있습니다.
 
-Shitty도 같은 engine-owner 계약을 따릅니다. Fork commit
+Shitty도 같은 engine-owner 계약을 따릅니다. Provider revision
 `dbc42af98907fadd5b057d2922b890b2725c016c`은 기존 live `encodeMouseProtocol` 경로를
 `soksak_shitty_terminal_pointer`로 공개합니다. Sidecar는 정규화된 사실을 이 ABI로 전달하며 terminal
 protocol encoder를 담지 않습니다. v7 불변 release digest는 Shitty
@@ -129,7 +129,7 @@ pointer sequence 3과 shell hex
 제거됐습니다. Generation-reopen 보완은 owner test를 통과했으며 이 결과가 임의의 multi-pane process
 교체에 대한 runtime 인증은 아닙니다.
 
-VT100은 protocol 구현을 engine fork에 둡니다. Fork commit
+VT100은 protocol 구현을 provider에 둡니다. Provider revision
 `c5cc944741d422f94ef898d7efe79edff609feb2`은 parser의 live mode와 encoding을 읽는
 `Screen::encode_mouse_event`를 추가합니다. Sidecar는 정규화된 사실만 전달하며 mouse encoder를 담지
 않습니다. v7 불변 release digest는 VT100
@@ -145,7 +145,7 @@ selection과 wheel은 열려 있습니다. 첫 live-install 시작은 process를
 막았으며 clean application boot 뒤 exact 0.0.33이 시작됐습니다. Hot-install startup은 OPEN이며 이
 pointer 행으로 인증하지 않습니다.
 
-WezTerm에는 fork 변경이 필요하지 않았습니다. 기존 `TerminalState::mouse_event`가 live mode, button
+WezTerm에는 provider 변경이 필요하지 않았습니다. 기존 `TerminalState::mouse_event`가 live mode, button
 state, SGR, UTF-8, legacy encoding을 소유합니다. Sidecar는 정규화된 `MouseEvent`를 전달하고 그 동기
 호출이 만든 raw writer byte만 읽습니다. v7 불변 release digest는 WezTerm
 `aa67ee9711b82d2507dc30572e7300d91db667dcdb5cfc50c9414c3ae869147f`, Vision
@@ -211,14 +211,14 @@ Vision 0.0.34는 적용 응답을 반환하며, Sidecar Kit 0.0.30은 양수를 
 | WezTerm 0.0.36 | 정확한 `SELECT_WEZTERM_24680`; copy와 독립 clipboard read가 20자로 일치 | `10/136/pinned` | `WZROW042..071`, selection·scroll pixel 확인 | selection/copy/scroll GREEN |
 
 최초 GREEN인 scroll 5개 row는 command와 status에서 같은 offset·`followMode`를 반환했고 capture
-viewport는 42~71행을 보였습니다. VT100 selection은 fork commit `d557ec1`이 viewport를 움직이지 않는
+viewport는 42~71행을 보였습니다. VT100 selection은 provider revision `d557ec1`이 viewport를 움직이지 않는
 signed logical-row text API를 노출하고 Sidecar 0.0.36이 selection endpoint·range를 소유하면서 GREEN이
 됐습니다. 이후 80행 실행은 `10/54/pinned`를 반환했지만 viewport pixel이 비어 있어 scroll pixel row는
 OPEN입니다. native selection 여섯 행은 GREEN입니다. 현재 Alacritty closure 판정 전에 frame regression을
 해결해야 합니다.
 
 Ghostty Sidecar 0.0.37은 libghostty-vt selection gesture, terminal-owned tracked selection, selection
-formatting, native containment를 사용합니다. Kitty Sidecar 0.0.34는 선택된 Kitty fork의 `Screen` selection
+formatting, native containment를 사용합니다. Kitty Sidecar 0.0.34는 선택된 Kitty provider의 `Screen` selection
 mode, text, row-range method를 provider SDK를 통해 사용합니다. Shitty Sidecar 0.0.33은 선택된 Vterm과
 Screen의 logical row selection surface를 history까지 사용합니다. 각 owner RED는 명시적인 unimplemented
 refusal에서 먼저 실패했습니다. 같은 owner gate가 이제 simple, semantic, line, extend 동작을 검증하며

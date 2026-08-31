@@ -30,7 +30,7 @@ base after reset.
 | Shitty | live at 42×30; output 270+, frames consumed 7+, paint 6+ | exact `#123456/#234567/#345678`, ANSI 1 `#456789` | GREEN; all overrides null and current base restored | GREEN | GREEN for this row |
 | VT100 | live at 42×30 across immediate input and an away/back tab switch | exact values | GREEN | GREEN | GREEN for this row |
 | WezTerm | live at 42×30 across immediate input and an away/back tab switch | exact values | GREEN | GREEN | GREEN for this row |
-| Xterm.js 6.0.0 fork | live at 59×29 and 39×29 after an away/back tab switch | exact `#123456/#234567/#345678`, ANSI 1 `#456789` | GREEN; current light base restored | GREEN | GREEN for this row |
+| Xterm renderer 6.0.0 | live at 59×29 and 39×29 after an away/back tab switch | exact `#123456/#234567/#345678`, ANSI 1 `#456789` | GREEN; current light base restored | GREEN | GREEN for this row |
 
 Alacritty additionally passed dark→light with overrides retained, then reset to the light base. Two
 defects were required to make status truthful: the frame-event limiter now emits one trailing event,
@@ -62,10 +62,10 @@ escape sequence; matching the shell's echoed command text is not accepted as an 
 
 Xterm.js 6.0.0 had no public effective-color surface: `options.theme` is the host base and its
 OSC-updated `ThemeService.colors` was private. Reading `_core` would couple the Plugin to an internal
-object graph, so the `min-median-max/xterm.js` fork exposes a read-only `effectiveTheme` snapshot.
-The engine still parses, applies and resets every OSC color. The fork also preserves active OSC
+object graph, so the Xterm renderer exposes a read-only `effectiveTheme` snapshot.
+The engine still parses, applies and resets every OSC color. The renderer also preserves active OSC
 overrides when the host base theme changes; reset reveals that new base. Its owner gate passes 2,324
-unit tests, API lint and a real Chrome set/reset test. The fork is built as `@soksak/xterm@6.0.0`,
+unit tests, API lint and a real Chrome set/reset test. The renderer is built as `@soksak/xterm@6.0.0`,
 published through the Registry, and consumed as the `@xterm/xterm` npm alias; consumer Git prepare,
 codeload locators and private API access are absent. Xterm Plugin 0.0.54 then passed the same runtime
 state, dark→light, reset, tab-switch and pixel checks as the native providers.
@@ -75,15 +75,15 @@ state, dark→light, reset, tab-switch and pixel checks as the native providers.
 | Provider | Engine API | Owner bytes | Installed PTY | Pixel | Verdict |
 | --- | --- | --- | --- | --- | --- |
 | Alacritty 0.0.37 | `alacritty_terminal` modes plus provider encoder | SGR press/drag/release/free-motion; legacy modifiers and release | exact down/drag/up hex, sequence 3 | GREEN | GREEN for this row |
-| Ghostty 0.0.34 | forked libghostty-vt `GhosttyMouseEncoder` and `GhosttyMouseEvent` | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | GREEN for this row |
-| Kitty 0.0.31 | forked Kitty `Screen` mouse encoder through provider ABI | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | GREEN for this row |
-| Shitty 0.0.30 | forked Shitty `encodeMouseProtocol` through provider ABI | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | GREEN for this row |
-| VT100 0.0.33 | forked vt100-rust live `Screen::encode_mouse_event` | SGR press/drag/release/free-motion; legacy and UTF-8 | exact down/drag/up hex, sequence 3 | GREEN | GREEN for this row |
+| Ghostty 0.0.34 | provider `GhosttyMouseEncoder` and `GhosttyMouseEvent` | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | GREEN for this row |
+| Kitty 0.0.31 | provider `Screen` mouse encoder through provider ABI | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | GREEN for this row |
+| Shitty 0.0.30 | provider `encodeMouseProtocol` through provider ABI | SGR press/drag/release/free-motion | exact down/drag/up hex, sequence 3 | GREEN | GREEN for this row |
+| VT100 0.0.33 | provider `Screen::encode_mouse_event` | SGR press/drag/release/free-motion; legacy and UTF-8 | exact down/drag/up hex, sequence 3 | GREEN | GREEN for this row |
 | WezTerm 0.0.33 | existing `TerminalState::mouse_event` and synchronous raw writer tap | SGR press/drag/release/free-motion; legacy and UTF-8 | exact down/drag/up hex, sequence 3 | GREEN | GREEN for this row |
 
 Ghostty does not copy a terminal mouse encoder. Its owner keeps one engine encoder and reusable
 event, refreshes mode and format from the live `GhosttyTerminal`, and submits action, button,
-modifiers and position through the fork's C API. The immutable v7 release digests are Ghostty
+modifiers and position through the provider C API. The immutable v7 release digests are Ghostty
 `ed39380c51cdd09ae499d56b728b8c09aa1b24f975eb7f4db8ae8a11ed961225`, Vision
 `f38eed4cfcf2c55b33e724490fe928a80b0791c850f8bf634d7f00b597dc3ed3`, and Xterm
 `d863e11c3c253d53f780be9c11d1d9655b14a03e006f7392e2453ebe7120a601`. Batch plan
@@ -96,7 +96,7 @@ result hex, prompt and cursor; capture kept `windowFocused=false` before and aft
 This row does not certify Ghostty selection or wheel. Those engine APIs remain explicit owner
 refusals and stay in the open selection/scroll matrix.
 
-Kitty follows the same ownership rule. Fork commit
+Kitty follows the same ownership rule. Provider revision
 `9df1e0b7c5b93e933e877c36ee45ae62935c9b48` exposes the existing live `Screen` mouse encoder through
 `kitty_provider_pointer`; the Sidecar supplies normalized facts and contains no protocol encoder.
 The immutable v7 release digests are Kitty
@@ -109,7 +109,7 @@ sequence, and final write count as the preceding rows. A 289,925-byte composed s
 result, prompt, and cursor while `windowFocused=false` remained unchanged. Kitty selection and wheel
 remain open.
 
-Shitty follows the same engine-owner contract. Fork commit
+Shitty follows the same engine-owner contract. Provider revision
 `dbc42af98907fadd5b057d2922b890b2725c016c` exposes the existing live
 `encodeMouseProtocol` path through `soksak_shitty_terminal_pointer`; the Sidecar maps normalized
 facts into that ABI and contains no terminal protocol encoder. The immutable v7 release digests are
@@ -137,7 +137,7 @@ sequence 3. Its 156,257-byte composed snapshot retained the result, prompt and b
 generation-reopen fallback is owner-tested and is not a runtime certification of arbitrary
 multi-pane process replacement.
 
-VT100 keeps the protocol implementation in its engine fork. Fork commit
+VT100 keeps the protocol implementation in its provider. Provider revision
 `c5cc944741d422f94ef898d7efe79edff609feb2` adds `Screen::encode_mouse_event`, which reads the
 parser's live mode and encoding; the Sidecar maps normalized facts and contains no mouse encoder.
 The immutable v7 release digests are VT100
@@ -153,7 +153,7 @@ selection and wheel remain open. The first live-install start did not create a p
 shutdown; a clean application boot started exact 0.0.33. Hot-install startup remains OPEN and this
 pointer row does not certify it.
 
-WezTerm required no fork change. Its existing `TerminalState::mouse_event` owns live mode, button
+WezTerm required no provider change. Its existing `TerminalState::mouse_event` owns live mode, button
 state and SGR, UTF-8 and legacy encoding. The Sidecar sends normalized `MouseEvent` values and reads
 only the raw writer bytes produced by that synchronous call. The immutable v7 release digests are
 WezTerm `aa67ee9711b82d2507dc30572e7300d91db667dcdb5cfc50c9414c3ae869147f`, Vision
@@ -223,14 +223,14 @@ as history and negative lines as bottom. Fresh installed rows produced:
 | WezTerm 0.0.36 | exact `SELECT_WEZTERM_24680`; copy and independent clipboard read matched 20 characters | `10/136/pinned` | `WZROW042..071`, selection and scroll pixels inspected | selection/copy/scroll GREEN |
 
 The initial five GREEN scroll rows returned the same offset and `followMode` through command and
-status; their captured viewports showed rows 42 through 71. VT100 selection became GREEN after fork
+status; their captured viewports showed rows 42 through 71. VT100 selection became GREEN after a provider
 commit `d557ec1` exposed signed logical-row text without moving the viewport and Sidecar 0.0.36
 owned the selection endpoints and ranges. Its later 80-row run returned `10/54/pinned` but painted
 an empty viewport, so that scroll pixel row remains OPEN. The six native selection rows are GREEN;
 the Alacritty frame regression must be fixed before its current closure can be judged.
 
 Ghostty Sidecar 0.0.37 uses libghostty-vt selection gestures, terminal-owned tracked selection,
-selection formatting and native containment. Kitty Sidecar 0.0.34 uses the selected Kitty fork's
+selection formatting and native containment. Kitty Sidecar 0.0.34 uses the selected Kitty provider's
 `Screen` selection modes, text and row-range methods through its provider SDK. Shitty Sidecar
 0.0.33 uses the selected Vterm and Screen selection surface for logical rows, including history.
 Each owner RED first failed at its explicit unimplemented refusal. The same owner gates now cover
