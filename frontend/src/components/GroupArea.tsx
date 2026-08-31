@@ -80,6 +80,7 @@ import { paneChromeExtentPx } from "../lib/paneChrome";
 import { stageNativeSurfaceGeometry } from "../framework/wails/nativeSurfaces";
 import { createDividerResizeTransaction } from "../lib/dividerResizeTransaction";
 import { afterFramePaint } from "../lib/afterFramePaint";
+import { appliedResizeSizes, beginResizeGesture, computedResizeSizes, endResizeGesture, moveResizeGesture } from "../lib/resizeGestureFacts";
 
 // Render the content area as editor groups. Two core principles:
 // 1) Keep the body (terminal/editor) separate from the group tree structure, in a "persistent body layer" keyed
@@ -757,6 +758,7 @@ export const GroupArea = memo(function GroupArea({
           )
         : MIN_PANE_FRAC;
     ms.resizeDragActive = true; // Only after the real drag start is confirmed (the early-return above does not lock).
+    beginResizeGesture(gutterKey(d) ?? `${d.splitId}:${d.index}`, e.clientX, e.clientY);
     emitResizeGesture(true);
     const startPos = d.dir === "row" ? e.clientX : e.clientY;
     const startSizes = [...d.sizes];
@@ -784,12 +786,14 @@ export const GroupArea = memo(function GroupArea({
         if (frames.size > 0) await stageNativeSurfaceGeometry(frames);
       },
       apply: (next) => commitDomLayout(() => {
+        appliedResizeSizes(next[0]?.sizes ?? []);
         resizeGeometryPending.current = true;
         resizeSplits(projectId, next);
       }),
     });
     const commitResize = rafThrottle((moves: LineMove[]) => resizeTransaction.submit(moves));
     const onMove = (ev: Pick<MouseEvent, "clientX" | "clientY">) => {
+      moveResizeGesture(ev.clientX, ev.clientY);
       if (d.dir === "row") {
         const targetX = startX + ((ev.clientX - startPos) / totalPx) * 100;
         commitResize(moveLineGroup(lineGroup, targetX).moves);
@@ -803,6 +807,7 @@ export const GroupArea = memo(function GroupArea({
       const sizes = [...startSizes];
       sizes[i] = startSizes[i] + delta;
       sizes[i + 1] = startSizes[i + 1] - delta;
+      computedResizeSizes(sizes);
       gesture.move(sizes);
     };
     let ended = false;
@@ -810,6 +815,7 @@ export const GroupArea = memo(function GroupArea({
     const onUp = async () => {
       if (ended) return;
       ended = true;
+      endResizeGesture();
       // Settle not only the store's final ratio but the React DOM that consumed it. Emitting the end right after a
       // plain rafThrottle.flush makes the Tauri consumer read the departure slot rect while the DOM widens only on
       // the next commit, leaving a black gap on the release frame. This contract is the meaning of the end event,

@@ -56,6 +56,7 @@ import {
 } from "../lib/presentationSettlement";
 import { stackingPathOf, type StackingComputedStyle } from "../lib/stackingOrder";
 import { windowPointerActivationState } from "../lib/windowPointerActivation";
+import { resizeGestureFacts } from "../lib/resizeGestureFacts";
 
 type FocusTraceEntry = {
   t: number;
@@ -2463,11 +2464,12 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     description: key("cmd.ui.layout.status.desc"),
     triggers: { ko: "레이아웃 거래 상태 장벽 진단 정착 리비전 애니메이션" },
     params: {},
-    returns: "{ settled, motion, settlement, settlementEvents:[{key,phase:'invalidated'|'settled',revision,clock,atUnixMs}], arrangementPhases:[{ownerKey,current,displayed,phase,preparationTargetKey,lastFailure}], transitionIntents:{owners:[{ownerKey,active,queued}],events:[{sequence,ownerKey,revision,generation,phase,reason?,transactionId?,failure?}],maxEvents}, decorationMotions:[{scope,receipt:{status,owner,generation,sequence,activeAnimations}}], decorationClearance:{owners:[{transactionId,status,producer,railRole,railVisibility,callbackCount,clearedAtUnixUs?,failure?,sequence}],events,maxEvents}, animations, contentViewLabels, presentationPending:[{owner:'content'|'view',stage?,labels,startedAtUnixMs,elapsedMs}] }",
+    returns: "{ settled, motion, settlement, resizeGesture:{phase,gutter,moveCount,startX,startY,lastX,lastY}, settlementEvents:[{key,phase:'invalidated'|'settled',revision,clock,atUnixMs}], arrangementPhases:[{ownerKey,current,displayed,phase,preparationTargetKey,lastFailure}], transitionIntents:{owners:[{ownerKey,active,queued}],events:[{sequence,ownerKey,revision,generation,phase,reason?,transactionId?,failure?}],maxEvents}, decorationMotions:[{scope,receipt:{status,owner,generation,sequence,activeAnimations}}], decorationClearance:{owners:[{transactionId,status,producer,railRole,railVisibility,callbackCount,clearedAtUnixUs?,failure?,sequence}],events,maxEvents}, animations, contentViewLabels, presentationPending:[{owner:'content'|'view',stage?,labels,startedAtUnixMs,elapsedMs}] }",
     message: () => tmsg("msg.ui.motion"),
     examples: ["ui.layout.status"],
     handler: () => ({
       ...layoutSettlementStatus(useSessions.getState().activeId || undefined),
+      resizeGesture: resizeGestureFacts(),
       decorationMotions: layoutDecorationMotionFacts(),
       decorationClearance: layoutDecorationClearanceFacts(),
     }),
