@@ -75,6 +75,15 @@ footer are one row. Measured 2026-08-15 on this build: the content header was
 along the whole seam. The misalignment looked like a different defect in each
 theme, because each theme drew it in a different colour.
 
+## R1b. Pane inset bounds every layer of a pane group
+
+The sidebar, content panes, and their relation decoration use the same inner
+rectangle: the host rectangle inset by `--pane-inset` on all four sides. A
+decoration must not use the host edge while the surfaces it describes use the
+inner edge. Doing so draws an unrelated seam through the gap and makes the
+sidebar's right inset disappear. The exposed relation geometry is therefore
+measured from the inset origin and ends at the inset outer bound.
+
 ## R2. Flex owns alignment
 
 A band is `display: flex; align-items: center`. Making something *look* centred

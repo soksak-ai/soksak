@@ -21,6 +21,7 @@ describe("rail link relation shapes", () => {
       300,
       50,
       { left: 50, top: 0, width: 25, height: 50 },
+      0,
     );
     expect(boxes).toEqual({
       rail: { x: 450, y: 0, width: 300, height: 800 },
@@ -116,12 +117,27 @@ describe("right edge split (option B — dashed outer edge, rounding preserved)"
  *  later. The argument is gone, so there is no place left to get it wrong. */
 describe("panel area — the host is the reference", () => {
   it("the panel area is the host minus the rail only", () => {
-    const b = railLinkBoxes(1000, 500, 100, 0, { left: 0, top: 0, width: 100, height: 100 });
+    const b = railLinkBoxes(1000, 500, 100, 0, { left: 0, top: 0, width: 100, height: 100 }, 0);
     expect(b?.panel.width).toBe(900);
   });
 
   it("a full-width box ends at the host right edge — anything shorter leaves the border short of the panel", () => {
-    const b = railLinkBoxes(1000, 500, 100, 0, { left: 0, top: 0, width: 100, height: 100 });
+    const b = railLinkBoxes(1000, 500, 100, 0, { left: 0, top: 0, width: 100, height: 100 }, 0);
     expect((b?.panel.x ?? 0) + (b?.panel.width ?? 0)).toBe(1000);
+  });
+
+  it("uses the pane inset as the shared origin and outer bound for the rail and linked panel", () => {
+    const b = railLinkBoxes(
+      999,
+      535,
+      320,
+      0,
+      { left: 0, top: 0, width: 100, height: 30 },
+      5,
+    );
+    expect(b).toEqual({
+      rail: { x: 5, y: 5, width: 320, height: 525 },
+      panel: { x: 325, y: 5, width: 669, height: 157.5 },
+    });
   });
 });

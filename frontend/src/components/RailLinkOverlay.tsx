@@ -69,6 +69,7 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
   contentId,
   relation,
   railWidth,
+  paneInset,
   railStation,
   targetRect,
   projected = false,
@@ -78,6 +79,8 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
   /** The public state produced by the arrangement resolver — this component does not re-judge the relation or border branch. */
   relation: RailRelationState;
   railWidth: number;
+  /** Shared pane-grid inset. Relation geometry and pane geometry use the same inner rectangle. */
+  paneInset: number;
   /** The width pushed in from the right — with a pushing sidebar the board is that much narrower. Omit it and
    *  the projection stretches, the cell runs outside the host and the path goes diagonal. */
   railStation: number;
@@ -186,6 +189,7 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
         railWidth,
         railStation,
         targetRect,
+        paneInset,
       )
     : null;
   const polygon = boxes && relation.borderMode === "union"
@@ -310,6 +314,7 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
       data-relation-id={relation.relationId}
       data-border-mode={relation.borderMode}
       data-path-count={relation.pathCount}
+      data-pane-inset={paneInset}
       // Measure the drawn box from outside — the border exists only inside the SVG path, so there was nowhere to
       // ask "where was it drawn". Without it the answer gets eyeballed. Host-relative px, one fact as "x,y,w,h".
       // The rail box and the board box are different things — not put in one bag. When the seam wobbles, the

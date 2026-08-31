@@ -82,6 +82,7 @@ function overlayProps(overrides: Partial<{
     contentId: "c1",
     relation,
     railWidth: 300,
+    paneInset: 0,
     railStation,
     targetRect,
   };

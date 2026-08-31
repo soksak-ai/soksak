@@ -600,6 +600,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
                 contentId={activeContent.id}
                 relation={effectiveRailRelation.state}
                 railWidth={sidebarW}
+                paneInset={railPaneInset}
                 railStation={effectiveRailRelation.station}
                 targetRect={effectiveRailRelation.targetRect}
                 projected={arrangement?.swapped ?? false}

@@ -66,22 +66,26 @@ export function railLinkBoxes(
   railWidth: number,
   station: number,
   target: RailRect,
+  paneInset: number,
 ): { rail: PixelBox; panel: PixelBox } | null {
-  if (hostWidth <= 0 || hostHeight <= 0 || railWidth <= 0) return null;
+  const inset = Math.max(0, paneInset);
+  const innerWidth = hostWidth - inset * 2;
+  const innerHeight = hostHeight - inset * 2;
+  if (innerWidth <= 0 || innerHeight <= 0 || railWidth <= 0) return null;
   // The host is the reference — do not subtract the right-placed rail again here (the host is already narrow).
-  const projected = projectRailRect(target, station, hostWidth, railWidth);
+  const projected = projectRailRect(target, station, innerWidth, railWidth);
   return {
     rail: {
-      x: railLeftPx(hostWidth, railWidth, station),
-      y: 0,
+      x: inset + railLeftPx(innerWidth, railWidth, station),
+      y: inset,
       width: railWidth,
-      height: hostHeight,
+      height: innerHeight,
     },
     panel: {
-      x: projected.left,
-      y: (target.top / 100) * hostHeight,
+      x: inset + projected.left,
+      y: inset + (target.top / 100) * innerHeight,
       width: projected.width,
-      height: (target.height / 100) * hostHeight,
+      height: (target.height / 100) * innerHeight,
     },
   };
 }

@@ -79,6 +79,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
         contentId="spc-aaaaaa"
         relation={relation()}
         railWidth={300}
+        paneInset={0}
         railStation={50}
         targetRect={{ left: 50, top: 0, width, height: 50 }}
       />
@@ -126,7 +127,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
           borderMode: "none",
           pathCount: 0,
         })}
-        railWidth={300} railStation={0}
+        railWidth={300} paneInset={0} railStation={0}
         targetRect={null}
       />,
     ));
@@ -145,6 +146,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
         contentId="spc-aaaaaa"
         relation={relation()}
         railWidth={300}
+        paneInset={0}
         railStation={50}
         targetRect={{ left: 50, top: 0, width: 25, height: 50 }}
         nativeVisible
@@ -171,6 +173,7 @@ describe("projected-adjacency marking", () => {
       contentId="spc-aaaaaa"
       relation={relation()}
       railWidth={300}
+      paneInset={0}
       railStation={50}
       targetRect={{ left: 50, top: 0, width: 25, height: 50 }}
       projected={projected}
