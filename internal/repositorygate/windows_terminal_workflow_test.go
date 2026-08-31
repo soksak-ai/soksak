@@ -89,7 +89,7 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 		t.Fatal("candidate system-test owner ref must be one exact lowercase commit")
 	}
 	for _, platform := range []string{"windows", "darwin", "linux"} {
-		if !strings.Contains(s, "min-median-max/soksak-terminal-tests/.github/workflows/"+platform+"-system.yml@"+testsRef) {
+		if !strings.Contains(s, "soksak-ai/soksak-terminal-tests/.github/workflows/"+platform+"-system.yml@"+testsRef) {
 			t.Errorf("%s fleet workflow is not pinned", platform)
 		}
 	}
@@ -130,8 +130,8 @@ func TestMultiplatformWorkflowBuildsAndDelegatesEveryNativeTarget(t *testing.T) 
 	for _, required := range []string{
 		"darwin-candidate-native-input:",
 		"needs: darwin-build",
-		"min-median-max/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@" + candidateTestsRef,
-		"tests_repository: min-median-max/soksak-terminal-tests",
+		"soksak-ai/soksak-terminal-tests/.github/workflows/darwin-candidate-native-input.yml@" + candidateTestsRef,
+		"tests_repository: soksak-ai/soksak-terminal-tests",
 		"tests_ref: " + candidateTestsRef,
 		"core_artifact_name: core-darwin-arm64-artifact",
 		"core_source_commit: ${{ github.sha }}",
