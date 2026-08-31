@@ -62,6 +62,7 @@ import {
 import { resizeSplitTree, type SplitTree } from "../state/splitTree";
 import {
   MIN_PANE_FRAC,
+  minPaneFracForSpan,
   collectLineGroup,
   equalizeLineGroup,
   moveLineGroup,
@@ -710,6 +711,14 @@ export const GroupArea = memo(function GroupArea({
         : contRect.height;
     const splitPx = (totalPx * d.spanPct) / 100;
     if (splitPx <= 0) return;
+    // The percentage floor alone is insufficient for a short vertical split:
+    // the pane can retain 8% while its header and status consume the whole
+    // box, leaving a zero-height native viewport. Derive the floor from the
+    // same chrome contract used by the pane and keep one body pixel.
+    const minPaneFrac =
+      d.dir === "col"
+        ? minPaneFracForSpan(splitPx, CHROME_TOP + STATUS_PX)
+        : MIN_PANE_FRAC;
     ms.resizeDragActive = true; // Only after the real drag start is confirmed (the early-return above does not lock).
     emitResizeGesture(true);
     const startPos = d.dir === "row" ? e.clientX : e.clientY;
@@ -751,8 +760,8 @@ export const GroupArea = memo(function GroupArea({
       }
       let delta = (ev.clientY - startPos) / splitPx;
       delta = Math.max(
-        -(startSizes[i] - MIN_PANE_FRAC),
-        Math.min(startSizes[i + 1] - MIN_PANE_FRAC, delta),
+        -(startSizes[i] - minPaneFrac),
+        Math.min(startSizes[i + 1] - minPaneFrac, delta),
       );
       const sizes = [...startSizes];
       sizes[i] = startSizes[i] + delta;

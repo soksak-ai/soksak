@@ -6,12 +6,25 @@ import {
   LINE_GROUP_EPS,
   LINE_SNAP_EPS,
   MIN_PANE_FRAC,
+  minPaneFracForSpan,
   collectLineGroup,
   equalizeLineGroup,
   lineGroupRange,
   moveLineGroup,
   normalizeVerticalLines,
 } from "./verticalLines";
+
+describe("minimum pane fraction", () => {
+  it("keeps the body positive when a split is shorter than its fixed chrome", () => {
+    // Content header + status is 57px. At a 30.8px split span, the old 8%
+    // clamp produced a pane with no native viewport at all.
+    expect(minPaneFracForSpan(30.8, 57)).toBeCloseTo(0.5, 10);
+  });
+
+  it("keeps the established base fraction when the split is tall enough", () => {
+    expect(minPaneFracForSpan(1000, 57)).toBe(MIN_PANE_FRAC);
+  });
+});
 
 // Vertical no-split proposition — a clean vertical line has one identity across the full height.
 // Dragging any segment moves the whole line, and a drag can move a line but never split it.

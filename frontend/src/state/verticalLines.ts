@@ -19,6 +19,21 @@ import { resizeSplitTree, type SplitTree } from "./splitTree";
 
 // Minimum pane fraction (relative to that split's span) — single source for the drag clamp and the normalization guard.
 export const MIN_PANE_FRAC = 0.08;
+// A pane must retain its fixed chrome plus at least one CSS pixel of body. The
+// fraction is calculated from the actual split span at gesture time; a fixed
+// fraction alone can still collapse the native viewport in a short split.
+export const MIN_PANE_BODY_PX = 1;
+
+export function minPaneFracForSpan(
+  spanPx: number,
+  chromePx: number,
+  bodyPx: number = MIN_PANE_BODY_PX,
+  baseFrac: number = MIN_PANE_FRAC,
+): number {
+  if (!Number.isFinite(spanPx) || spanPx <= 0) return baseFrac;
+  const requiredPx = Math.max(0, chromePx) + Math.max(0, bodyPx);
+  return Math.max(baseFrac, Math.min(0.5, requiredPx / spanPx));
+}
 // Companion grouping tolerance (%p) — the range taken as one line at gesture start (runtime rule).
 export const LINE_GROUP_EPS = 0.75;
 // Restore normalization tolerance (%p) — the range that snaps fragmented lines of a marker-less old snapshot to
