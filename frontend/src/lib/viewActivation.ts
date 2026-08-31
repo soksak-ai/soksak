@@ -17,7 +17,13 @@ export function activatePaneIntent(paneId: string): boolean {
   const pane = space ? allGroups(space.layout).find((item) => item.id === paneId) : null;
   if (!pane) return false;
   const target = pane.activeTabId;
-  if (space?.activePaneId === paneId && activeSessionViewId() === target) return false;
+  // Re-clicking the active pane is a focus repair, not an idempotent no-op. The view may have
+  // lost DOM focus while the session state stayed unchanged; route the same target through the
+  // coordinator so the provider restores its input owner without writing session state.
+  if (space?.activePaneId === paneId && activeSessionViewId() === target) {
+    if (target) transferViewFocus(target, target, () => undefined);
+    return true;
+  }
   if (target) {
     transferViewFocus(activeSessionViewId(), target, () =>
       void execute("pane.activate", { pane: paneId }, {}),
