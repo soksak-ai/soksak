@@ -13,7 +13,7 @@ export async function captureWindowPixels(
   return captureAfterPresentation(
     window,
     () => invoke<{ ordered: boolean }>("window_capture_present", {}),
-    async () => {
+    async (presentation) => {
       const shot = await invoke<DocumentCapture>(
         "window_snapshot_region",
         rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
@@ -21,7 +21,7 @@ export async function captureWindowPixels(
       const region = rect ?? { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
       const host = contentViewHost();
       const background = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
-      return composeNativeSurfacePictures(
+      const capture = await composeNativeSurfacePictures(
         shot,
         region,
         await host.appliedSurfaces(),
@@ -29,6 +29,10 @@ export async function captureWindowPixels(
         background,
         nativeDecorationFacts().presentedDecorations,
       );
+      return {
+        ...capture,
+        note: { ...capture.note, presentationOrdered: presentation.ordered },
+      };
     },
     (presentation) => invoke("window_capture_restore", { ordered: presentation.ordered }).then(() => undefined),
   );

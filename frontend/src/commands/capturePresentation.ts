@@ -38,13 +38,13 @@ async function prepareRenderers(root: Window): Promise<void> {
 export async function captureAfterPresentation<T>(
   root: Window,
   present: () => Promise<CapturePresentation>,
-  capture: () => Promise<T>,
+  capture: (presentation: CapturePresentation) => Promise<T>,
   restore: (presentation: CapturePresentation) => Promise<void>,
 ): Promise<T> {
   const presentation = await present();
   try {
     await prepareRenderers(root);
-    return await capture();
+    return await capture(presentation);
   } finally {
     await restore(presentation);
   }

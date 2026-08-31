@@ -81,6 +81,12 @@ browser를 선택했습니다. `surface.inventory`의 ghosts, unowned, unapplied
 native surface와 native decoration은 합성 PNG에서 모두 제외됩니다. 선언은 닫기 transaction을 위해 유지하지만
 `window.snapshot` 또는 `window.record`에서 overlay 위에 표시할 수 없습니다.
 
+캡처가 가려진 capture-only window를 정렬하면 WebKit은 순서 변경 전 pixel로 첫 document snapshot을
+완료할 수 있습니다. `window_capture_present`는 document snapshot을 정확히 한 번 완료하고 폐기한 뒤
+반환합니다. 다음 `window_snapshot_region` 요청이 요청한 pixel을 반환합니다. 이 준비는 window를 정렬한
+경우에만 실행합니다. pixel 검사, 재시도, polling, application 활성화는 수행하지 않습니다. 캡처 metadata는
+`presentationOrdered`를 포함합니다.
+
 interactive 전달은 geometry와 presentation 소유권을 분리합니다. frame만 바뀐 snapshot은 bridge receipt가
 다음 document frame을 소유하지 않아도 반환할 수 있습니다. surface id·generation·kind·source·visibility·
 alpha·layer 변경은 실제 compositor receipt를 기다립니다. signature는 frame 좌표를 제외하고 presentation

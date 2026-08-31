@@ -86,6 +86,21 @@ func (service *CaptureService) target() (unsafe.Pointer, error) {
 	return handle, nil
 }
 
+// preparePresentedDocument completes one document snapshot after an occluded capture-only window
+// is ordered. WebKit can complete that first request with pixels from before the order change. The
+// completion is the readiness signal; the following window_snapshot_region request returns the
+// requested pixels. Interactive capture reads the compositor and requires no document preparation.
+func (service *CaptureService) preparePresentedDocument(handle unsafe.Pointer, ordered bool) error {
+	if !ordered || service.presentation != PresentationCaptureOnly {
+		return nil
+	}
+	if service.captureDocument == nil {
+		return i18n.Errorf("wails.capture.unsupportedPlatform", nil)
+	}
+	_, err := service.captureDocument(handle, Whole)
+	return err
+}
+
 // Snapshot writes a PNG of the whole window and answers with where it landed.
 //
 // The path is returned rather than assumed, so a caller verifies from the

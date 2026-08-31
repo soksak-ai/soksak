@@ -63,6 +63,32 @@ func TestCaptureOnlyReadsTheDocumentAndDeclaresTheMissingNativeChildren(t *testi
 	}
 }
 
+func TestOrderedCaptureOnlyPresentationCompletesOneDocumentSnapshot(t *testing.T) {
+	handle := byte(1)
+	service := NewCaptureService("main", func() unsafe.Pointer { return unsafe.Pointer(&handle) }, PresentationCaptureOnly)
+	documentCaptures := 0
+	service.captureDocument = func(got unsafe.Pointer, rect Rect) ([]byte, error) {
+		if got != unsafe.Pointer(&handle) || rect != Whole {
+			t.Fatalf("preparation target=%p rect=%+v", got, rect)
+		}
+		documentCaptures++
+		return solidPNG(t, 2, 2, background), nil
+	}
+
+	if err := service.preparePresentedDocument(unsafe.Pointer(&handle), false); err != nil {
+		t.Fatal(err)
+	}
+	if documentCaptures != 0 {
+		t.Fatalf("visible presentation performed %d document captures", documentCaptures)
+	}
+	if err := service.preparePresentedDocument(unsafe.Pointer(&handle), true); err != nil {
+		t.Fatal(err)
+	}
+	if documentCaptures != 1 {
+		t.Fatalf("ordered capture-only presentation performed %d document captures", documentCaptures)
+	}
+}
+
 func TestUnsupportedPlatformIsNamed(t *testing.T) {
 	// The sentinel exists so a caller can tell "not implemented here" from
 	// "the capture failed", rather than reading a message.

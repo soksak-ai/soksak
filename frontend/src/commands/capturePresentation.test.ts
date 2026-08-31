@@ -5,6 +5,7 @@ import { captureAfterPresentation } from "./capturePresentation";
 
 it("captures after every visible renderer acknowledges and always restores ordering", async () => {
   const order: string[] = [];
+  let captureOrdered: boolean | null = null;
   const visible = document.createElement("div");
   visible.dataset.contentVisible = "true";
   document.body.append(visible);
@@ -19,11 +20,16 @@ it("captures after every visible renderer acknowledges and always restores order
     const result = await captureAfterPresentation(
       window,
       async () => { order.push("present"); return { ordered: true }; },
-      async () => { order.push("capture"); return 7; },
+      async (presentation) => {
+        captureOrdered = presentation.ordered;
+        order.push("capture");
+        return 7;
+      },
       async () => { order.push("restore"); },
     );
     expect(result).toBe(7);
     expect(order).toEqual(["present", "renderer", "capture", "restore"]);
+    expect(captureOrdered).toBe(true);
     expect(target).toBe(visible);
   } finally {
     window.removeEventListener("soksak:capture-prepare", listener);
