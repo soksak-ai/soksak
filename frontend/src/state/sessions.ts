@@ -1991,9 +1991,14 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = err("TARGET_NOT_FOUND", tmsg("panel.notFound", { groupId: targetGroupId }));
         return s;
       }
-      // With program given, that program's view; unset or unregistered gives an empty group
-      // (empty panel — pure skeleton).
+      // Omitted program explicitly requests an empty pane. An explicit unavailable program is a
+      // refusal, not the same request: silently replacing it with an empty pane leaves a structural
+      // mutation after the caller's requested content failed to resolve.
       const v = program ? newViewFor(program) : null;
+      if (program && !v) {
+        r = err("TARGET_NOT_FOUND", tmsg("program.notFound", { program }));
+        return s;
+      }
       const fresh = makeGroup(v ?? undefined);
       r = ok({ groupId: fresh.id, ...(v ? idsOfView(v) : {}) });
       return {

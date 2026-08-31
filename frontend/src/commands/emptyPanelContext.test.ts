@@ -117,4 +117,18 @@ describe("pane.split has no default program", () => {
       mounted: false,
     });
   });
+
+  it("rejects an explicit unavailable program without creating a blank pane", async () => {
+    const before = allGroups(
+      useSessions.getState().workspaces[0].spaces[0].layout,
+    ).map((pane) => pane.id);
+    const r = await execute("pane.split", {
+      side: "left", program: "terminal-not-installed", mountTimeoutMs: 0,
+    }, {});
+    expect(r).toMatchObject({ ok: false, code: "TARGET_NOT_FOUND" });
+    const after = allGroups(
+      useSessions.getState().workspaces[0].spaces[0].layout,
+    ).map((pane) => pane.id);
+    expect(after).toEqual(before);
+  });
 });
