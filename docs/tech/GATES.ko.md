@@ -234,7 +234,7 @@ pane 안의 실제 로그인 shell 을 밖에서 구동합니다. `sok term.exec
   이후 실행 전부와 대조합니다. 전체 스위트 열 몇 번과 그 검사 단독 실행 열 몇 번 중 어느 것도 죽지
   않았습니다.
 
-  스택은 둘 중 두 번째에서 한 번 잡혔고, 고정한 upstream Wails 릴리즈의 요청 경로를 지목합니다.
+  스택은 둘 중 두 번째에서 한 번 잡혔고, 고정한 Wails dependency의 요청 경로를 지목합니다.
   `internal/assetserver/assetserver_webview.go:50`, `AssetServer.ServeWebViewRequest` 가 만든
   goroutine 입니다. 그 읽기도 잘린 채 도착했습니다. 검사는 로그의 꼬리를 보관하는데 크래시는 첫 줄에
   이유를 적으므로, 이유 자체는 한 번도 본 적이 없습니다. 지금은 이유 쪽부터 보관하며, 그 뒤로 그것을
