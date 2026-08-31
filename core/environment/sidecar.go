@@ -59,9 +59,9 @@ func ResolveSelectedSidecarInterface(home, interfaceID, interfaceVersion string)
 	return *selected, nil
 }
 
-// SelectedSidecarBindings returns the exact materialized process name for every interface provided
-// by a Sidecar selected by environment.json. Implementation IDs never cross this dependency
-// surface; consumers select a contract interface and receive its installed process endpoint.
+// SelectedSidecarBindings returns the exact materialized process name for every Sidecar selected
+// by environment.json. It is the dependency discovery surface passed to Sidecars; callers do not
+// derive names from component ids or executable locations.
 func SelectedSidecarBindings(home string) (map[string]string, error) {
 	value, exists, err := Read(home)
 	if err != nil {
@@ -76,14 +76,7 @@ func SelectedSidecarBindings(home string) (map[string]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, iface := range runtime.Interfaces {
-			if _, exists := bindings[iface.ID]; exists {
-				return nil, i18n.Errorf("environment.sidecar.interfaceAmbiguous", map[string]string{
-					"id": iface.ID, "version": iface.Version,
-				})
-			}
-			bindings[iface.ID] = filepath.Base(runtime.Process)
-		}
+		bindings[id] = filepath.Base(runtime.Process)
 	}
 	return bindings, nil
 }
