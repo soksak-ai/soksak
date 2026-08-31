@@ -62,6 +62,19 @@ func TestWindowsCanStopAnAdoptedSidecarAndWaitForExit(t *testing.T) {
 	}
 }
 
+func TestWindowsInstallerOmitsUnusedFileAssociationMacros(t *testing.T) {
+	installer := readText(t, "build/windows/nsis/wails_tools.nsh")
+	for _, forbidden := range []string{
+		"!macro APP_ASSOCIATE ",
+		"!macro APP_UNASSOCIATE ",
+		"gist.github.com",
+	} {
+		if strings.Contains(installer, forbidden) {
+			t.Errorf("Windows installer carries unused file-association source through %q", forbidden)
+		}
+	}
+}
+
 func TestCrossBuilderConsumesOnePinnedFrontendAndBuildsBothBinaries(t *testing.T) {
 	dockerfile := readText(t, "build/docker/Dockerfile.cross")
 	for _, forbidden := range []string{"npm install", "npm run build"} {
