@@ -167,7 +167,7 @@ without exposing plaintext to JavaScript, and injects a provider key only into t
 The shared kit proves authenticated checkpoint round trips, plaintext absence on disk and corrupt
 checkpoint rejection. Complete archived recovery remains a product gate for all six providers.
 
-The Shitty upstream baseline currently has one independent RED:
+The Shitty provider baseline currently has one independent RED:
 `Pty::OwnerDeathReleasesBlockedIoAndHangsUpChild` reproducibly leaves its blocked writer active
 after owner release. This failure is not caused by the terminal snapshot interface and must be fixed
 without weakening or excluding the test.

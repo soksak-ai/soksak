@@ -160,7 +160,7 @@ checkpoint 키를 생성하며, 제공자 키를 그 사이드카 프로세스�
 checkpoint 왕복, 디스크 평문 부재, 손상된 checkpoint 거부를 증명합니다. 완전한 archived 복구는 제공자
 여섯 개 모두에 대해 제품 검사 항목으로 남아 있습니다.
 
-Shitty upstream 기준선에는 독립된 RED 하나가 있습니다.
+Shitty 제공자 기준선에는 독립된 RED 하나가 있습니다.
 `Pty::OwnerDeathReleasesBlockedIoAndHangsUpChild` 는 소유자 release 뒤에도 막힌 writer 를 재현 가능하게
 남깁니다. 이 실패는 터미널 스냅샷 인터페이스가 원인이 아니며, 테스트를 약화하거나 제외하지 않고
 고쳐야 합니다.
