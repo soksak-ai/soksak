@@ -109,7 +109,7 @@ export function ProgramMenu({
   useEffect(() => {
     // Capture phase — close is guaranteed even under another handler's stopPropagation. The click
     // that opened the menu finishes before this effect attaches, so there is no immediate close.
-    const onPointerDown = (e: PointerEvent) => {
+    const onOutsidePointer = (e: Event) => {
       if (!menuRef.current?.contains(e.target as Node)) onClose();
     };
     const onKeyDown = (e: KeyboardEvent) => {
@@ -118,10 +118,12 @@ export function ProgramMenu({
         onClose();
       }
     };
-    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("pointerdown", onOutsidePointer, true);
+    window.addEventListener("mousedown", onOutsidePointer, true);
     window.addEventListener("keydown", onKeyDown, true);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("pointerdown", onOutsidePointer, true);
+      window.removeEventListener("mousedown", onOutsidePointer, true);
       window.removeEventListener("keydown", onKeyDown, true);
     };
   }, [onClose]);
