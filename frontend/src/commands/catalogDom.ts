@@ -3413,6 +3413,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
           toX: toPt.x,
           toY: toPt.y,
           steps: totalMoves,
+          durationMs,
         });
         await invoke("window_input_pointer_wait", { sequence: receipt.sequence, timeoutMs: 2000 });
       } else if (dist >= 5) {

@@ -54,6 +54,10 @@ func init() {
 			EN: "pointer drag steps must be between 1 and 120: {steps}",
 			KO: "포인터 드래그 steps는 1 이상 120 이하여야 합니다: {steps}",
 		},
+		"wails.input.invalidDuration": {
+			EN: "pointer drag durationMs must be between 0 and 10000: {duration}",
+			KO: "포인터 드래그 durationMs는 0 이상 10000 이하여야 합니다: {duration}",
+		},
 		"wails.input.windowUnknown": {
 			EN: "the pointer event has no associated window",
 			KO: "포인터 이벤트에 연결된 창이 없습니다",

@@ -9,8 +9,9 @@ import (
 )
 
 type inputHostFixture struct {
-	window string
-	marked string
+	window         string
+	marked         string
+	dragDurationMs int
 }
 
 func (h *inputHostFixture) InputState(window string) (WindowInputState, error) {
@@ -33,9 +34,10 @@ func (h *inputHostFixture) InjectInputPointer(window string, x, y float64) (Wind
 	return WindowPointerInjectionReceipt{Sequence: 9, Posted: true, InputRoute: "contract-injection", X: x, Y: y}, nil
 }
 
-func (h *inputHostFixture) InjectInputPointerDrag(window string, fromX, fromY, toX, toY float64, steps int) (WindowPointerDragReceipt, error) {
+func (h *inputHostFixture) InjectInputPointerDrag(window string, fromX, fromY, toX, toY float64, steps, durationMs int) (WindowPointerDragReceipt, error) {
 	h.window = window
-	return WindowPointerDragReceipt{Sequence: 10, Posted: true, InputRoute: "contract-injection", FromX: fromX, FromY: fromY, ToX: toX, ToY: toY, Steps: steps}, nil
+	h.dragDurationMs = durationMs
+	return WindowPointerDragReceipt{Sequence: 10, Posted: true, InputRoute: "contract-injection", FromX: fromX, FromY: fromY, ToX: toX, ToY: toY, Steps: steps, DurationMs: durationMs}, nil
 }
 
 func (h *inputHostFixture) ClickInputPointer(window string, x, y float64) (WindowPointerClickReceipt, error) {
@@ -139,6 +141,25 @@ func TestWindowInputCommandsExposeNativePointerAndKeyboardReceipts(t *testing.T)
 	pressed := keyboard.(WindowKeyPressReceipt)
 	if !pressed.Delivered || pressed.InputRoute != "native-fixture" || pressed.Key != "x" {
 		t.Fatalf("keyboard receipt = %+v", pressed)
+	}
+}
+
+func TestWindowInputPointerDragForwardsFiniteDuration(t *testing.T) {
+	registry := control.NewRegistry()
+	host := &inputHostFixture{}
+	RegisterWindowInput(registry, host)
+	caller := control.Args{control.CallerWindowArgument: jsonString("win-a")}
+	answer, err := registry.Invoke("window_input_pointer_drag", mergeControlArgs(caller, control.Args{
+		"fromX": json.RawMessage("10"), "fromY": json.RawMessage("20"),
+		"toX": json.RawMessage("10"), "toY": json.RawMessage("80"),
+		"steps": json.RawMessage("3"), "durationMs": json.RawMessage("300"),
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt := answer.(WindowPointerDragReceipt)
+	if host.dragDurationMs != 300 || receipt.DurationMs != 300 {
+		t.Fatalf("duration host=%d receipt=%+v", host.dragDurationMs, receipt)
 	}
 }
 

@@ -990,6 +990,7 @@ export const ko = {
   "cmd.window.input.pointer.drag.param.toX": "창 콘텐츠 왼쪽 기준 종료 좌표.",
   "cmd.window.input.pointer.drag.param.toY": "창 콘텐츠 위쪽 기준 종료 좌표.",
   "cmd.window.input.pointer.drag.param.steps": "1 이상 120 이하의 move 이벤트 수.",
+  "cmd.window.input.pointer.drag.param.durationMs": "0 이상 10000 이하의 전체 전달 시간(밀리초).",
   "cmd.window.input.pointer.click.desc": "application을 활성화하거나 system pointer를 움직이지 않고 지정한 창의 WKWebView에 AppKit mouse down/up 한 쌍을 전달합니다. Application과 대상 window가 이미 active/key여야 합니다. DOM event dispatch가 아닙니다.",
   "cmd.window.input.pointer.click.param.x": "창 콘텐츠 왼쪽 기준 좌표(ui.measure와 동일한 좌표계).",
   "cmd.window.input.pointer.click.param.y": "창 콘텐츠 위쪽 기준 좌표(ui.measure와 동일한 좌표계).",

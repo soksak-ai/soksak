@@ -985,6 +985,7 @@ export const en: Record<MsgKey, string> = {
   "cmd.window.input.pointer.drag.param.toX": "End coordinate from the left edge of the window content.",
   "cmd.window.input.pointer.drag.param.toY": "End coordinate from the top edge of the window content.",
   "cmd.window.input.pointer.drag.param.steps": "Move event count from 1 through 120.",
+  "cmd.window.input.pointer.drag.param.durationMs": "Total delivery duration in milliseconds from 0 through 10000.",
   "cmd.window.input.pointer.click.desc": "Deliver an AppKit mouse down/up pair to the addressed window's WKWebView without activating the application or moving the system pointer. The application and target window must already be active and key. This is not DOM event dispatch.",
   "cmd.window.input.pointer.click.param.x": "Coordinate from the left edge of the window content (same coordinate system as ui.measure).",
   "cmd.window.input.pointer.click.param.y": "Coordinate from the top edge of the window content (same coordinate system as ui.measure).",

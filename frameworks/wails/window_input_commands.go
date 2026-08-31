@@ -62,6 +62,7 @@ type WindowPointerDragReceipt struct {
 	ToX                     float64 `json:"toX"`
 	ToY                     float64 `json:"toY"`
 	Steps                   int     `json:"steps"`
+	DurationMs              int     `json:"durationMs"`
 	WindowFocused           bool    `json:"windowFocused"`
 }
 
@@ -97,7 +98,7 @@ type WindowInputHost interface {
 	InputState(window string) (WindowInputState, error)
 	SetMarkedText(window, text string) (WindowInputState, error)
 	InjectInputPointer(window string, x, y float64) (WindowPointerInjectionReceipt, error)
-	InjectInputPointerDrag(window string, fromX, fromY, toX, toY float64, steps int) (WindowPointerDragReceipt, error)
+	InjectInputPointerDrag(window string, fromX, fromY, toX, toY float64, steps, durationMs int) (WindowPointerDragReceipt, error)
 	ClickInputPointer(window string, x, y float64) (WindowPointerClickReceipt, error)
 	PressInputKey(window, key string, ctrl, meta, shift, alt bool) (WindowKeyPressReceipt, error)
 	WaitInputPointer(sequence uint64, timeout time.Duration) (WindowPointerReceipt, error)
@@ -207,7 +208,14 @@ func RegisterWindowInput(registry *control.Registry, host WindowInputHost) {
 			if steps < 1 || steps > 120 {
 				return nil, i18n.Errorf("wails.input.invalidSteps", map[string]string{"steps": strconv.Itoa(steps)})
 			}
-			return host.InjectInputPointerDrag(name, fromX, fromY, toX, toY, steps)
+			durationMs, err := control.OptionalArg(args, "durationMs", 0)
+			if err != nil {
+				return nil, err
+			}
+			if durationMs < 0 || durationMs > 10000 {
+				return nil, i18n.Errorf("wails.input.invalidDuration", map[string]string{"duration": strconv.Itoa(durationMs)})
+			}
+			return host.InjectInputPointerDrag(name, fromX, fromY, toX, toY, steps, durationMs)
 		},
 	})
 	registry.MustRegister(control.Command{Name: "window_input_pointer_click", Owner: control.OwnerFramework,

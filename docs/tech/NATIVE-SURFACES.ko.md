@@ -388,6 +388,13 @@ deadline, byte budget을 명시합니다. v7 3-frame 실행은 화면이 변하�
 PNG 세 개를 썼고, 각 frame에 두 native terminal과 selection이 들어 있었습니다. 전후 window input은
 non-key를 유지했습니다.
 
+## D4c. Native divider 주입은 요청 시간을 유지한다
+
+`ui.input.drag`는 native pane divider에 지정한 `steps`와 `durationMs`를
+`window_input_pointer_drag`에 전달합니다. Framework는 down 한 번, 지정한 유한 시간 동안 지정한 수의
+move, up 한 번을 전달합니다. 이 명령은 window focus와 system pointer 위치를 변경하지 않습니다. 따라서
+녹화된 drag는 최종 ratio만이 아니라 중간 DOM과 native-surface geometry도 측정할 수 있습니다.
+
 ## V0a. `sok layout.trace` 가 모든 프레임이 보유한 것이다
 
 평면을 지나는 읽기 한 번은 왕복 비용이 듭니다 — 이 머신에서 15 에서 25ms 이고 프레임은 16.7ms 입니다.

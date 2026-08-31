@@ -185,7 +185,7 @@ func (h *wailsHost) InjectInputPointer(name string, x, y float64) (WindowPointer
 	}, nil
 }
 
-func (h *wailsHost) InjectInputPointerDrag(name string, fromX, fromY, toX, toY float64, steps int) (WindowPointerDragReceipt, error) {
+func (h *wailsHost) InjectInputPointerDrag(name string, fromX, fromY, toX, toY float64, steps, durationMs int) (WindowPointerDragReceipt, error) {
 	window, addressable := h.live(name)
 	if !addressable {
 		return WindowPointerDragReceipt{}, i18n.Errorf("wails.host.noInputWindow", map[string]string{"window": name})
@@ -194,7 +194,11 @@ func (h *wailsHost) InjectInputPointerDrag(name string, fromX, fromY, toX, toY f
 	native := uintptr(window.NativeWindow())
 	now := float64(time.Now().UnixMilli())
 	h.inputMonitor.enqueue(windowPointerEnvelope{native: native, sequence: sequence, phase: "down", source: "contract-injection", x: fromX, y: fromY, atUnixMs: now})
+	stepDelay := time.Duration(durationMs) * time.Millisecond / time.Duration(steps)
 	for step := 1; step <= steps; step++ {
+		if stepDelay > 0 {
+			time.Sleep(stepDelay)
+		}
 		fraction := float64(step) / float64(steps)
 		x := fromX + (toX-fromX)*fraction
 		y := fromY + (toY-fromY)*fraction
@@ -204,7 +208,7 @@ func (h *wailsHost) InjectInputPointerDrag(name string, fromX, fromY, toX, toY f
 	return WindowPointerDragReceipt{
 		Sequence: sequence, Posted: true, InputRoute: "contract-injection",
 		CursorPositionMayChange: false, FromX: fromX, FromY: fromY, ToX: toX, ToY: toY,
-		Steps: steps, WindowFocused: window.IsFocused(),
+		Steps: steps, DurationMs: durationMs, WindowFocused: window.IsFocused(),
 	}, nil
 }
 

@@ -1327,7 +1327,9 @@ describe("ui.input.drag — realtime reproduction surface", () => {
     });
     vi.mocked(frameworkInvoke).mockResolvedValueOnce({ sequence: 41 });
 
-    await execute("ui.input.drag", { from: ADDR, x: 7, y: 9, dx: 0, dy: 60, steps: 3 }, {});
+    await execute("ui.input.drag", {
+      from: ADDR, x: 7, y: 9, dx: 0, dy: 60, steps: 3, durationMs: 300,
+    }, {});
 
     expect(frameworkInvoke).toHaveBeenCalledWith("window_input_pointer_drag", {
       fromX: 17,
@@ -1335,6 +1337,7 @@ describe("ui.input.drag — realtime reproduction surface", () => {
       toX: 17,
       toY: 89,
       steps: 3,
+      durationMs: 300,
     });
   });
 

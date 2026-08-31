@@ -711,13 +711,15 @@ export function registerWindowCatalog(): void {
       toX: { type: "number", description: key("cmd.window.input.pointer.drag.param.toX"), required: true },
       toY: { type: "number", description: key("cmd.window.input.pointer.drag.param.toY"), required: true },
       steps: { type: "number", description: key("cmd.window.input.pointer.drag.param.steps"), required: true },
+      durationMs: { type: "number", description: key("cmd.window.input.pointer.drag.param.durationMs"), default: 0 },
     },
-    returns: "{ sequence, posted:true, inputRoute:'contract-injection', cursorPositionMayChange:false, fromX, fromY, toX, toY, steps }",
+    returns: "{ sequence, posted:true, inputRoute:'contract-injection', cursorPositionMayChange:false, fromX, fromY, toX, toY, steps, durationMs }",
     message: (d) => tmsg("msg.window.input.pointer.drag", { sequence: String(d.sequence ?? "") }),
     errors: ["INVALID_PARAMS"],
-    examples: ["window.input.pointer.drag window=win-example fromX=400 fromY=200 toX=400 toY=320 steps=8"],
+    examples: ["window.input.pointer.drag window=win-example fromX=400 fromY=200 toX=400 toY=320 steps=8 durationMs=240"],
     handler: async (p) => invoke("window_input_pointer_drag", {
       fromX: p.fromX, fromY: p.fromY, toX: p.toX, toY: p.toY, steps: p.steps,
+      durationMs: p.durationMs ?? 0,
     }),
   });
 

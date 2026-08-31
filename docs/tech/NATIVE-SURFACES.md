@@ -432,6 +432,14 @@ interval, frame count, per-frame deadline and byte budget. A v7 three-frame run 
 589,723-byte PNGs with the same SHA-256 because the screen did not change; each frame contained both
 native terminals and the selection, and window input remained non-key before and after.
 
+## D4c. Native divider injection preserves the requested duration
+
+`ui.input.drag` forwards `steps` and `durationMs` to `window_input_pointer_drag` for a native pane
+divider. The framework delivers one down, the requested move count over the requested finite
+duration, and one up. The command does not focus the window or move the system pointer. A recorded
+drag can therefore measure intermediate DOM and native-surface geometry instead of only the final
+ratio.
+
 ## V0a. `sok layout.trace` is what every frame held
 
 One reading through the plane costs a round trip — 15 to 25ms on this machine — and a frame is
