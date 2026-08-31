@@ -68,6 +68,10 @@ Refusal is by name. A set holding a view that is defined only on a tab is refuse
 with that view named — dropped silently, the person reads it as the plugin
 failing rather than as the set being wrong.
 
+`sections.link` verifies the DOM inside the exact workspace selected by the command. Multiple
+workspace planes can remain mounted in one window. The command returns success only after that
+workspace reports the filtered section list in `data-region-sections`.
+
 ---
 
 # S. Standing

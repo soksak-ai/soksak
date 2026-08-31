@@ -30,6 +30,12 @@ const invalid = (message: string) => ({
   message,
 });
 
+const workspaceNotFound = () => ({
+  ok: false as const,
+  code: "TARGET_NOT_FOUND" as const,
+  message: tmsg("msg.workspace.notFound"),
+});
+
 /**
  * Waits until the region declares it is standing the set now linked to it.
  *
@@ -38,11 +44,21 @@ const invalid = (message: string) => ({
  * functions the host calls — the standing set, filtered to the views that live beside the work —
  * because a second way of deciding what stands is a second answer to one question.
  */
-async function waitForPlaceToStand(place: SectionPlace, stands: SectionSet | null): Promise<void> {
+export async function waitForPlaceToStand(
+  workspaceId: string,
+  place: SectionPlace,
+  stands: SectionSet | null,
+): Promise<void> {
   const beside = new Set(viewsOnSurface("side").map((view) => view.key));
   const wanted = (stands?.sections ?? []).filter((section) => beside.has(section)).join(" ");
   await waitForDomCommit(() => {
-    const host = document.querySelector<HTMLElement>(`[data-region="${place}"] .sidebar-body`);
+    const plane = [...document.querySelectorAll<HTMLElement>("[data-workspace-plane]")]
+      .find((candidate) => candidate.dataset.workspacePlane === workspaceId);
+    const region = plane
+      ? [...plane.querySelectorAll<HTMLElement>("[data-region]")]
+          .find((candidate) => candidate.dataset.region === place)
+      : null;
+    const host = region?.querySelector<HTMLElement>(".sidebar-body");
     // No host is a place standing nothing, which is the same as an empty declaration.
     if (!host) return wanted === "";
     return host.dataset.regionSections === wanted;
@@ -206,7 +222,9 @@ export function registerSectionsCatalog(): void {
         const refusal = refuseUnplaced(set);
         if (refusal) return invalid(refusal);
       }
-      const focused = focusedPluginOf(resolveWorkspace(p, ctx));
+      const workspace = resolveWorkspace(p, ctx);
+      if (!workspace) return workspaceNotFound();
+      const focused = focusedPluginOf(workspace);
       const before = standingSet(place, focused);
       useSectionSets.getState().link(plugin, place, id ?? null);
       const after = standingSet(place, focused);
@@ -214,7 +232,7 @@ export function registerSectionsCatalog(): void {
       // nothing on screen, and a caller that waits for a frame on every link waits out its own
       // timeout — the same fact tab.activate answers under the name `moved`.
       const moved = (before?.id ?? null) !== (after?.id ?? null);
-      if (moved) await waitForPlaceToStand(place, after);
+      if (moved) await waitForPlaceToStand(workspace.id, place, after);
       return { plugin, set: id ?? null, place, moved };
     },
   });
@@ -241,11 +259,13 @@ export function registerSectionsCatalog(): void {
         const refusal = refuseUnplaced(set);
         if (refusal) return invalid(refusal);
       }
-      const before = standingSet("left", focusedPluginOf(resolveWorkspace(p, ctx)));
+      const workspace = resolveWorkspace(p, ctx);
+      if (!workspace) return workspaceNotFound();
+      const before = standingSet("left", focusedPluginOf(workspace));
       useSectionSets.getState().standLeft(id ?? null);
-      const after = standingSet("left", focusedPluginOf(resolveWorkspace(p, ctx)));
+      const after = standingSet("left", focusedPluginOf(workspace));
       const moved = (before?.id ?? null) !== (after?.id ?? null);
-      if (moved) await waitForPlaceToStand("left", after);
+      if (moved) await waitForPlaceToStand(workspace.id, "left", after);
       return { left: id ?? null, moved };
     },
   });

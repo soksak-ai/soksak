@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { refuseUnplaced } from "./catalogSections";
+import { refuseUnplaced, waitForPlaceToStand } from "./catalogSections";
 import { useViewRegistry } from "../plugins/viewRegistry";
 import type { ViewSurface } from "../plugins/spec";
 
@@ -54,5 +54,19 @@ describe("a set standing beside the work", () => {
     const refusal = refuseUnplaced(setOf("plg-a.tree", "plg-b.tree", "plg-c.tree"));
     expect(refusal).toContain("plg-b.tree");
     expect(refusal).toContain("plg-c.tree");
+  });
+
+  it("checks the addressed workspace when another workspace has the same region", async () => {
+    useViewRegistry.getState().register("plg-a", view(["side"]), { mount: () => {} });
+    document.body.innerHTML = `
+      <section data-workspace-plane="wsp-inactive">
+        <aside data-region="rail"><div class="sidebar-body" data-region-sections=""></div></aside>
+      </section>
+      <section data-workspace-plane="wsp-active" data-workspace-active="1">
+        <aside data-region="rail"><div class="sidebar-body" data-region-sections="plg-a.tree"></div></aside>
+      </section>`;
+
+    await expect(waitForPlaceToStand("wsp-active", "rail", setOf("plg-a.tree")))
+      .resolves.toBeUndefined();
   });
 });
