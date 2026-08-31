@@ -94,7 +94,15 @@ accent 색이었지만 자식 안쪽의 왼쪽·오른쪽·아래쪽 probe는 �
 `L`, `Q`, `Z`를 받아 `CAShapeLayer`로 그리며 브라우저와 터미널 종류에 관계없이 같은 경로를 씁니다. ordered
 presentation service는 완전한 surface inventory commit 뒤에 이 지속 평면을 매번 마지막으로 올립니다.
 장식만 바뀌면 이벤트로 합쳐지고 직렬화된 writer가 전체 snapshot 하나를 교체합니다. `surface.decorations`는
-선언과 `layer:native-above-surfaces`를 포함한 네이티브 receipt를 노출합니다. 타이머와 폴링은 없습니다.
+선언과 `layer:native-above-surfaces`를 포함한 네이티브 receipt를 노출합니다. `presentationVisible`은 선언과
+실제 표시를 분리합니다. DOM 오버레이가 열리면 그 상태 edge가 빈 장식 snapshot을 적용하는 동안에도 선언은
+최신 기하를 계속 받으며, 닫는 edge가 가장 최신 snapshot을 복원합니다. 이 규칙은 어느 기능도 provider로
+옮기지 않고 모달을 provider surface와 Core border 모두보다 위에 놓습니다. 타이머와 폴링은 없습니다.
+
+이 평면은 입력을 받지 않습니다(`hitTest:`는 `nil`을 반환합니다). divider만 resize 대상과 기하 소유자이고,
+focus border는 그 결과 panel rectangle과 같은 위치에 그려집니다. `ResizeObserver`는 크기만 보고 위치는 보고하지 않으므로,
+위치만 바뀌는 Core render는 paint 전에 rectangle 위치로 다시 그립니다. 외부 크기 변경은 계속 observer event로
+들어옵니다.
 
 capture-only도 하나의 compositor입니다. 문서와 provider 그림으로 창을 재구성한 다음 같은 Core 장식 snapshot을
 마지막에 그립니다. provider loop 전에 그리면 가림 결함이 그대로 재현됐습니다. 변경 뒤 격리 설치 실행에서

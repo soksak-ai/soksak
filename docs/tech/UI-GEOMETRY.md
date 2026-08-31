@@ -276,6 +276,17 @@ owns three facts rather than one:
    the applied pixels. `ParkedPicture` draws those pixels in the still-visible
    DOM slot and releases them only after the live surface is applied again. An inactive
    chain releases both the surface and picture because another view owns those pixels.
+4. **Decoration presentation.** Focus and relation strokes remain declared by their
+   Core owners, but the final native decoration plane is committed empty while a DOM
+   overlay owns presentation. The closing state edge reapplies the newest declaration
+   snapshot. This is the only possible ordering on a host where that native plane is
+   above the document; leaving it applied would put a border above the modal.
+
+A frame and focus border receive no pointer input. The divider alone owns resize input
+and layout mutation; a border is only a projection of the panel's committed rectangle.
+Position-only React geometry commits reproject that rectangle before paint, while
+`ResizeObserver` covers external size changes that happen without a Core render. Neither
+path polls.
 
 For an in-document terminal, content remains live and no parked picture is
 needed. For an out-of-document browser, the picture is visible and inactive

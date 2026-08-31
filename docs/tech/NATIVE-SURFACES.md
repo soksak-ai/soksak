@@ -103,7 +103,16 @@ absolute path vocabulary `M`, `L`, `Q`, `Z`, paints it with `CAShapeLayer`, and 
 terminal branch. The ordered presentation service raises that persistent plane after every complete
 surface inventory commit; decoration-only changes replace one full snapshot through an event-coalesced,
 serial writer. `surface.decorations` exposes the declarations and the native receipt, including
-`layer:native-above-surfaces`. No timer or polling loop participates.
+`layer:native-above-surfaces`. `presentationVisible` separates those declarations from their applied
+presentation. When a DOM overlay opens, its state edge commits an empty decoration snapshot while the
+declarations continue to receive current geometry; the close edge restores the newest snapshot. This
+places the modal above both provider surfaces and Core borders without moving either feature into a
+provider. No timer or polling loop participates.
+
+The plane receives no input (`hitTest:` returns `nil`). A divider is the sole resize target and geometry
+owner; the focus border is a projection of the resulting panel rectangle. A position-only Core render
+reprojects that rectangle before paint because `ResizeObserver` reports size, not position. External size
+changes still arrive through that observer.
 
 Capture-only is a compositor too. It reconstructs a window from the document and provider pictures,
 then paints the same Core decoration snapshot last. Painting before the provider loop reproduced the
