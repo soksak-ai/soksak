@@ -193,13 +193,8 @@ func Register(registry *control.Registry, deps Registration) {
 		})
 	}
 
-	// Releasing and stopping are two questions and they were one command.
-	//
-	// A plugin that is disabled, a view that unmounts, a channel that is released — every one of
-	// those is this application finishing with a unit, and none of them is the unit's work being
-	// over. A unit is a process precisely so it outlives the application, and a release that ended
-	// it would undo the only reason it is one: measured 2026-08-20, disabling a plugin ended the
-	// shells its unit held.
+	// Channel release does not stop a unit. Plugin disable and view unmount release their channels;
+	// application shutdown and sidecar_stop stop the process.
 	serve("sidecar_release", func(args control.Args) (any, error) {
 		name, err := control.Arg[string](args, "name")
 		if err != nil {

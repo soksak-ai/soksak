@@ -46,8 +46,8 @@ and a new patch version is published after the responsible invariant has a RED t
   observation, recovery observation, or rendered frame. A plain timeout is not sufficient evidence.
 - Disk capacity is checked before toolchain installation or multi-target builds. Only regenerable caches
   and build outputs are cleaned; source files and user data are never used as capacity.
-- An explicit sidecar stop returns only after an adopted process has exited. Application shutdown
-  remains a release, not a stop; the two lifecycle meanings stay separate.
+- An explicit sidecar stop returns only after the process has exited. Application shutdown stops
+  every Sidecar tracked by the application and fails if any process remains.
 
 ## Repository ownership
 

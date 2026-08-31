@@ -293,10 +293,8 @@ func (host *Host) Running() []UnitStatus {
 // A unit already open is answered with, not started again. Two processes behind one name is a
 // process nothing can reach and nothing ends.
 //
-// A unit this host did not start is found before one is started. That is the whole point of a unit
-// being a process: it outlives the application, so an application coming back finds it still there
-// with everything it held. Starting a second one instead would leave the first holding children
-// nobody can reach — and the first is the one with the work in it.
+// A process record can remain after an unclean application termination. Start verifies that record
+// before starting another process with the same unit name.
 func (host *Host) Start(name string) (Open, error) {
 	return host.StartWithSecrets(name, "", nil)
 }
@@ -653,10 +651,8 @@ func judge(name, expectedProcessLabel, line string) (announcement, error) {
 
 // Release lets go of a unit without ending it.
 //
-// This is what a caller that has finished with a unit does, and it is not Stop. A unit is a process
-// so that it outlives the application: a plugin that is disabled, a view that unmounts, a channel
-// that is released — none of those are reasons to end shells somebody is working in, and a release
-// that ended one would undo the reason the unit is a process at all.
+// This is what a caller that has finished with a channel does, and it is not Stop. Plugin disable
+// and view unmount do not define application shutdown.
 //
 // The record stays, so the next Start finds the unit rather than beginning a second one.
 func (host *Host) Release(name string) error {
@@ -701,21 +697,38 @@ func (host *Host) Stop(name string) error {
 	return host.end(held)
 }
 
-// StopAll ends every unit this host holds and answers how many.
-func (host *Host) StopAll() int {
+func (host *Host) stopAll() (int, error) {
 	host.mu.Lock()
-	held := make([]*unit, 0, len(host.open))
+	type namedUnit struct {
+		name string
+		unit *unit
+	}
+	held := make([]namedUnit, 0, len(host.open))
 	for name, one := range host.open {
-		held = append(held, one)
-		host.forget(name)
+		held = append(held, namedUnit{name: name, unit: one})
 		delete(host.open, name)
 		host.closeLinkLocked(name)
 	}
 	host.mu.Unlock()
-	for _, one := range held {
-		_ = host.end(one)
+	stopped := 0
+	var first error
+	for _, entry := range held {
+		if err := host.end(entry.unit); err != nil {
+			if first == nil {
+				first = err
+			}
+			continue
+		}
+		host.forget(entry.name)
+		stopped++
 	}
-	return len(held)
+	return stopped, first
+}
+
+// StopAll stops every unit tracked by this host and returns the successful count.
+func (host *Host) StopAll() int {
+	stopped, _ := host.stopAll()
+	return stopped
 }
 
 // end signals a unit and leaves the reaping to whoever owns it.
@@ -850,34 +863,27 @@ func trim(value string) string {
 	return value
 }
 
-// ServiceShutdown lets go of every unit and ends none of them.
-//
-// It called StopAll until 2026-08-20, which ended every unit as the application quit — and that is
-// the one moment a unit exists to survive. A shell that dies when the application does is a shell
-// that could have been in the application, and the whole shape above it, the record, the adoption
-// and the release that is not an end, buys nothing.
-//
-// What is left behind is a running process and a record naming it, which is exactly what the next
-// run reads: it connects, greets, and finds the shells still there.
-//
-// So nothing here ends a unit, and nothing else does either. A unit is ended by `sidecar_stop`,
-// which is a statement that its work is over. An application quitting is not that statement.
+// ServiceShutdown stops every unit before the application exits.
 func (host *Host) ServiceShutdown() error {
+	_, _ = host.stopAll()
 	host.mu.Lock()
-	for name := range host.open {
-		delete(host.open, name)
-	}
-	for name := range host.links {
-		host.closeLinkLocked(name)
-	}
 	streams := host.streams
 	host.streams = nil
 	host.mu.Unlock()
 
-	// The connections do go. They are this process's file descriptors and nothing outside it can
-	// use them; the unit sees a reader leave, which is a thing it already handles.
 	for _, held := range streams {
 		_ = held.Close()
 	}
-	return nil
+
+	recorded, err := host.Recorded()
+	if err != nil {
+		return err
+	}
+	var first error
+	for _, entry := range recorded {
+		if err := host.Stop(entry.Name); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
 }

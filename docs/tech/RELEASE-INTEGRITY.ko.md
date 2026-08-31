@@ -45,8 +45,8 @@
   처음 진행하지 않은 지점을 기록한다. 일반 timeout만으로는 완료 근거가 되지 않는다.
 - toolchain 설치나 다중 target 빌드 전에 디스크 용량을 확인한다. 다시 만들 수 있는 캐시와 빌드
   산출물만 명시적으로 정리하며 소스 파일과 사용자 데이터는 용량 확보에 쓰지 않는다.
-- 명시적 sidecar stop은 adopt된 process가 종료된 뒤 반환한다. Application shutdown은 stop이 아니라
-  release이며 두 lifecycle 의미를 분리한다.
+- 명시적 sidecar stop은 process가 종료된 뒤 반환한다. Application shutdown은 애플리케이션이 추적하는
+  모든 Sidecar를 종료하며 process가 남으면 실패한다.
 
 ## 저장소별 소유권
 

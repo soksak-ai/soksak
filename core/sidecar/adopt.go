@@ -16,9 +16,8 @@ import (
 
 // Finding a unit this host did not start.
 //
-// A unit is a process so that it outlives the application. An application that came back and started
-// a second one would leave the first holding everything — shells, connections, whatever it was
-// keeping — with nothing able to reach it, and the second would look healthy the whole time.
+// An unclean application termination can leave a Sidecar process and record. A later application
+// verifies that process before it starts another process with the same unit name.
 //
 // What is recorded is only what this host was told: the address the unit announced and the token it
 // announced with it. Nothing is derived. A later run reads its own record, connects, and greets; if

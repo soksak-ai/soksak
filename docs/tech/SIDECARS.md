@@ -77,24 +77,21 @@ unit, or return transport addresses, diagnostics, tokens, or secret declarations
 ## S5. Lifetime
 
 Releasing a channel closes that caller's connection and does not stop the sidecar. Application
-shutdown also releases connections without ending sidecars that own restorable work. A later
-application generation reads the saved process announcement, reconnects, performs the greeting and
-uses the same process.
+shutdown stops every Sidecar tracked by that application and removes each process record after
+process exit. A shutdown failure prevents a successful shutdown result.
 Channel release does not remove the process from host status or prevent an explicit
 `sidecar_stop`; those operations address process lifetime, not channel lifetime.
 
-A saved announcement is ownership state, not disposable stale data. A later generation determines
-its state by connecting and greeting: a valid owner is adopted, an unreachable owner record is
-removed, and an invalid or unreadable record is reported without guessing. Normal shutdown and test
-cleanup use the public lifecycle operations and verify zero test-owned leaks. Moving sockets or
-records to another directory is incident-evidence preservation only; it is never a runtime recovery,
-cleanup, or development-source mechanism.
+A process record can remain after an unclean application termination. A later application checks
+the recorded process by connecting and completing the greeting. It reuses a valid process only
+during cleanup or recovery, removes a record for an unavailable process, and rejects an invalid
+record. Normal shutdown and test cleanup verify that no application-owned Sidecar remains.
 
 `sidecar_stop` is the explicit operation that terminates a sidecar. It returns only after the
 operating system reports process exit. Darwin uses a kqueue process notification, Linux uses a
 pidfd notification, and Windows uses `WaitForSingleObject`. The operation fails on timeout and does
-not poll process state. Plugin disable, view unmount, and application restart are not stop requests.
-Streams have separate ids and close independently.
+not poll process state. Plugin disable and view unmount are not stop requests. Application shutdown
+is a stop request for every tracked Sidecar. Streams have separate ids and close independently.
 
 Open means something answers there. A held unit whose address refuses a connection has gone: reading
 the inventory forgets it, and the next request starts the unit again from the arguments that started
