@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	terminalsurface "github.com/min-median-max/wails-service-terminal-surface"
+	terminalsurface "github.com/soksak-ai/soksak-service-terminal-surface"
 )
 
 // wireTerminalChannel checks the surface channel in and hands it to the

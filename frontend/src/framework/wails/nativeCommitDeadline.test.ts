@@ -23,7 +23,7 @@ vi.mock("../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nat
   Commit: vi.fn(() => { calls++; return new Promise((resolve) => { answer = resolve; }); }),
   Latest: vi.fn(async () => ({ surfaces: [] })),
 }));
-vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/models", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/soksak-service-native-compositor/models", () => ({
   Snapshot: { createFrom: (value: unknown) => value },
 }));
 

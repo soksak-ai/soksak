@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	terminalsurface "github.com/min-median-max/wails-service-terminal-surface"
+	terminalsurface "github.com/soksak-ai/soksak-service-terminal-surface"
 )
 
 func TestTerminalUnitGenerationEventsAreInjectedIntoTheHost(t *testing.T) {

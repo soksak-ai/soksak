@@ -19,7 +19,7 @@ vi.mock("../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nat
     return { sequence: snapshot.sequence, accepted: true, surfaces: snapshot.surfaces };
   }),
 }));
-vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/models", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/soksak-service-native-compositor/models", () => ({
   Snapshot: { createFrom: (value: unknown) => value },
 }));
 vi.stubGlobal("ResizeObserver", class {

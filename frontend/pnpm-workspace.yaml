@@ -9,4 +9,4 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - "@soksak/*"
   - "@soksak-ai/*"
-  - "@min-median-max/*"
+  - "@soksak/*"

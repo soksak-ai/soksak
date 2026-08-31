@@ -1,4 +1,4 @@
-import type { NativeSurfaceFrame } from "@min-median-max/wails-service-native-compositor";
+import type { NativeSurfaceFrame } from "@soksak/soksak-service-native-compositor";
 import { projectRailCssRect } from "./railPlacement";
 
 export interface DividerTargetCell {

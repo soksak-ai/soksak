@@ -1,13 +1,13 @@
-import { nativeSurfaceDOMRuntime, startNativeSurfaceObserver } from "@min-median-max/wails-service-native-compositor";
+import { nativeSurfaceDOMRuntime, startNativeSurfaceObserver } from "@soksak/soksak-service-native-compositor";
 import type {
   NativeSurfaceCommit,
   NativeSurfaceFrame,
   NativeSurfaceObserverController,
   NativeSurfacePresentation,
-} from "@min-median-max/wails-service-native-compositor";
+} from "@soksak/soksak-service-native-compositor";
 
 import * as CompositorService from "../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice";
-import { Snapshot } from "../../../bindings/github.com/min-median-max/wails-service-native-compositor/models";
+import { Snapshot } from "../../../bindings/github.com/soksak-ai/soksak-service-native-compositor/models";
 import { noteAppliedSurfaces } from "../../lib/contentViews";
 import { presentationNowUnixMs } from "../../lib/presentationClock";
 import { nextFrame } from "../../lib/nextFrame";

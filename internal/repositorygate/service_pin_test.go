@@ -27,7 +27,7 @@ func TestNativeSurfaceConsumersUseTheDeclaredCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 	commit := selection.NativeCompositor.Commit
-	if selection.NativeCompositor.Repository != "https://github.com/min-median-max/wails-service-native-compositor" ||
+	if selection.NativeCompositor.Repository != "https://github.com/soksak-ai/soksak-service-native-compositor" ||
 		!regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(commit) {
 		t.Fatal("native compositor selection is not an exact repository commit")
 	}
@@ -36,16 +36,16 @@ func TestNativeSurfaceConsumersUseTheDeclaredCommits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !regexp.MustCompile(`(?m)^\s*github[.]com/min-median-max/wails-service-native-compositor\s+v\S+-` + commit[:12] + `$`).Match(goMod) {
-		t.Fatalf("Go compositor dependency does not use %s", commit)
+	if !regexp.MustCompile(`(?m)^\s*github[.]com/soksak-ai/soksak-service-native-compositor\s+v0\.0\.1$`).Match(goMod) {
+		t.Fatal("Go compositor dependency does not use release v0.0.1")
 	}
 	terminalCommit := selection.TerminalSurface.Commit
-	if selection.TerminalSurface.Repository != "https://github.com/min-median-max/wails-service-terminal-surface" ||
+	if selection.TerminalSurface.Repository != "https://github.com/soksak-ai/soksak-service-terminal-surface" ||
 		!regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(terminalCommit) {
 		t.Fatal("terminal surface selection is not an exact repository commit")
 	}
-	if !regexp.MustCompile(`(?m)^\s*github[.]com/min-median-max/wails-service-terminal-surface\s+v\S+-` + terminalCommit[:12] + `$`).Match(goMod) {
-		t.Fatalf("Go terminal surface dependency does not use %s", terminalCommit)
+	if !regexp.MustCompile(`(?m)^\s*github[.]com/soksak-ai/soksak-service-terminal-surface\s+v0\.0\.1$`).Match(goMod) {
+		t.Fatal("Go terminal surface dependency does not use release v0.0.1")
 	}
 
 	packageBytes, err := os.ReadFile("frontend/package.json")
@@ -58,7 +58,7 @@ func TestNativeSurfaceConsumersUseTheDeclaredCommits(t *testing.T) {
 	if err := json.Unmarshal(packageBytes, &packageManifest); err != nil {
 		t.Fatal(err)
 	}
-	dependency := packageManifest.Dependencies["@min-median-max/wails-service-native-compositor"]
+	dependency := packageManifest.Dependencies["@soksak/soksak-service-native-compositor"]
 	if !strings.HasSuffix(dependency, "#"+commit[:12]) {
 		t.Fatalf("frontend compositor dependency does not use %s", commit)
 	}

@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice", () => ({
   Commit: vi.fn(async () => ({ sequence: 0, accepted: true, surfaces: [] })),
 }));
-vi.mock("../../../bindings/github.com/min-median-max/wails-service-native-compositor/models", () => ({
+vi.mock("../../../bindings/github.com/soksak-ai/soksak-service-native-compositor/models", () => ({
   Snapshot: { createFrom: (value: unknown) => value },
 }));
 vi.stubGlobal("ResizeObserver", class {

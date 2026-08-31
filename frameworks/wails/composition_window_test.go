@@ -4,7 +4,7 @@ import (
 	"testing"
 	"unsafe"
 
-	compositor "github.com/min-median-max/wails-service-native-compositor"
+	compositor "github.com/soksak-ai/soksak-service-native-compositor"
 )
 
 // A surface is attached to the window that declared it.

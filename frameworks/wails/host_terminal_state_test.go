@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	terminalsurface "github.com/min-median-max/wails-service-terminal-surface"
+	terminalsurface "github.com/soksak-ai/soksak-service-terminal-surface"
 	"github.com/soksak-ai/soksak-core/core/control"
 )
 

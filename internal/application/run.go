@@ -18,7 +18,7 @@ import (
 
 	"encoding/json"
 	"fmt"
-	terminalsurface "github.com/min-median-max/wails-service-terminal-surface"
+	terminalsurface "github.com/soksak-ai/soksak-service-terminal-surface"
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	ptycontract "github.com/soksak-ai/soksak-contract-pty"
 	"github.com/soksak-ai/soksak-core/core/activity"

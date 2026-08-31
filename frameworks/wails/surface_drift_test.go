@@ -4,7 +4,7 @@ import (
 	"testing"
 	"unsafe"
 
-	compositor "github.com/min-median-max/wails-service-native-compositor"
+	compositor "github.com/soksak-ai/soksak-service-native-compositor"
 )
 
 // The difference between the two halves is subtracted once, by the compositor.

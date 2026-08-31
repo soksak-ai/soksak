@@ -1,10 +1,10 @@
 {
   "nativeCompositor": {
-    "repository": "https://github.com/min-median-max/wails-service-native-compositor",
-    "commit": "6ff28c0c7f5e02e01ec0a6f31a57609b8c158bcd"
+    "repository": "https://github.com/soksak-ai/soksak-service-native-compositor",
+    "commit": "44675b6a02afec148d868fe9ca36c7782a9748af"
   },
   "terminalSurface": {
-    "repository": "https://github.com/min-median-max/wails-service-terminal-surface",
-    "commit": "7011b96a4c1a0da4fbfe2fa837bd0cdc65c5e6f0"
+    "repository": "https://github.com/soksak-ai/soksak-service-terminal-surface",
+    "commit": "525f347fb1391216fe2a63e475dfa8e248435a2d"
   }
 }

@@ -5,7 +5,7 @@ package wails
 import (
 	"log"
 
-	terminalsurface "github.com/min-median-max/wails-service-terminal-surface"
+	terminalsurface "github.com/soksak-ai/soksak-service-terminal-surface"
 )
 
 // This platform has no surface channel; the refusal is logged by name once at
