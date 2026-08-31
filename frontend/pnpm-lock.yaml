@@ -12,8 +12,8 @@ importers:
         specifier: github:min-median-max/wails-service-native-compositor#6ff28c0c7f5e
         version: https://codeload.github.com/min-median-max/wails-service-native-compositor/tar.gz/6ff28c0c7f5e02e01ec0a6f31a57609b8c158bcd
       '@soksak/soksak-spec':
-        specifier: 0.0.48
-        version: 0.0.48
+        specifier: 0.0.52
+        version: 0.0.52
       '@wailsio/runtime':
         specifier: 3.0.0-beta.12
         version: 3.0.0-beta.12
@@ -528,8 +528,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@soksak/soksak-spec@0.0.48':
-    resolution: {integrity: sha512-n5LwQxWMlwmN6kIau78q/3XlEf1nslbWIUDE5mbXFzmEJbsfA9qs6np4L34ArpxwKgAtp2dMaRkT/1CZdJCbwA==}
+  '@soksak/soksak-spec@0.0.52':
+    resolution: {integrity: sha512-SCKkrmcaWTeJHqO31IB3qcOuSfOnjHtIxwuCA9+XfCIU+NNIFjd30NpQOyyoCUG+JK82raicbvQ9+KxfaRg9ew==}
     engines: {node: 26.7.0}
     hasBin: true
 
@@ -1353,7 +1353,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.4':
     optional: true
 
-  '@soksak/soksak-spec@0.0.48': {}
+  '@soksak/soksak-spec@0.0.52': {}
 
   '@tabler/icons@3.46.0': {}
 
