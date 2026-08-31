@@ -68,6 +68,7 @@ describe("native decoration inventory", () => {
     expect(nativeDecorationFacts()).toMatchObject({
       presentationVisible: false,
       decorations: [{ id: "focus/a" }],
+      presentedDecorations: [],
       receipt: { count: 0 },
     });
 
@@ -77,6 +78,7 @@ describe("native decoration inventory", () => {
     expect(nativeDecorationFacts()).toMatchObject({
       presentationVisible: true,
       decorations: [{ id: "focus/a" }],
+      presentedDecorations: [{ id: "focus/a" }],
       receipt: { count: 1 },
     });
   });

@@ -98,12 +98,15 @@ export function setNativeDecorationPresentationVisible(visible: boolean): void {
 
 export function nativeDecorationFacts(): {
   decorations: NativeDecoration[];
+  presentedDecorations: NativeDecoration[];
   presentationVisible: boolean;
   receipt: NativeDecorationReceipt | null;
   error: string | null;
 } {
+  const decorations = snapshot();
   return {
-    decorations: snapshot(),
+    decorations,
+    presentedDecorations: state.presentationVisible ? decorations : [],
     presentationVisible: state.presentationVisible,
     receipt: state.lastReceipt,
     error: state.error,

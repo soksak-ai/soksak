@@ -77,6 +77,10 @@ browser를 선택했습니다. `surface.inventory`의 ghosts, unowned, unapplied
 슬롯은 `ui.tree` 로 `contentVisible`, `surfaceVisible`, `visibilityReason` 을 노출하고, `state.health`
 는 오버레이 개수를 노출합니다.
 
+캡처 합성은 유지된 선언 목록이 아니라 현재 표시 중인 장식 목록을 사용합니다. DOM overlay가 활성 상태이면
+native surface와 native decoration은 합성 PNG에서 모두 제외됩니다. 선언은 닫기 transaction을 위해 유지하지만
+`window.snapshot` 또는 `window.record`에서 overlay 위에 표시할 수 없습니다.
+
 interactive 전달은 geometry와 presentation 소유권을 분리합니다. frame만 바뀐 snapshot은 bridge receipt가
 다음 document frame을 소유하지 않아도 반환할 수 있습니다. surface id·generation·kind·source·visibility·
 alpha·layer 변경은 실제 compositor receipt를 기다립니다. signature는 frame 좌표를 제외하고 presentation

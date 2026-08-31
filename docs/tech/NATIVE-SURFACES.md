@@ -83,6 +83,11 @@ under a modal and during sidebar motion. Combining the live surface and its pixe
 blank pane. The tab slot exposes `contentVisible`, `surfaceVisible` and `visibilityReason` through
 `ui.tree`; `state.health` exposes the overlay count.
 
+Capture composition uses the presented decoration set, not the retained declaration set. While a
+DOM overlay is active, native surfaces and native decorations are both absent from the composed PNG.
+The declarations remain available for the close transaction but cannot appear above the overlay in
+`window.snapshot` or `window.record`.
+
 Interactive delivery separates geometry from presentation ownership. A snapshot that changes only
 frames may return without making the bridge receipt own the next document frame. A change to surface
 id, generation, kind, source, visibility, alpha or layer waits for the real compositor receipt. The

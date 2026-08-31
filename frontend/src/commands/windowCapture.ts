@@ -27,7 +27,7 @@ export async function captureWindowPixels(
         await host.appliedSurfaces(),
         (id) => host.picture(id),
         background,
-        nativeDecorationFacts().decorations,
+        nativeDecorationFacts().presentedDecorations,
       );
     },
     (presentation) => invoke("window_capture_restore", { ordered: presentation.ordered }).then(() => undefined),

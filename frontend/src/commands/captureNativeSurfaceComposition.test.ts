@@ -4,6 +4,12 @@ import { resolve } from "node:path";
 import { nativeSurfacePicturePaint, nativeSurfacePicturePlacements } from "./captureNativeSurfaceComposition";
 
 describe("capture-only native surface composition", () => {
+  it("uses only decorations currently presented by the native plane", () => {
+    const source = readFileSync(resolve(import.meta.dirname, "windowCapture.ts"), "utf8");
+    expect(source).toContain("nativeDecorationFacts().presentedDecorations");
+    expect(source).not.toContain("nativeDecorationFacts().decorations");
+  });
+
   it("paints Core native decorations after every provider image", () => {
     const source = readFileSync(resolve(import.meta.dirname, "captureNativeSurfaceComposition.ts"), "utf8");
     const backgroundPaint = source.indexOf("context.fillStyle = background");
