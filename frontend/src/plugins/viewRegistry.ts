@@ -72,7 +72,7 @@ export interface PluginViewContext {
   // Content placements only. A section has no tab of its own to activate.
   requestFocus: () => void;
   // Sidebar tab badge of this view (unread marker). number = count, "dot" = dot, null = clear.
-  // Per-window, since each window has its own store (based on that window's active workspace).
+  // Per-window, since each window has its own store for its active workspace.
   // Recompute the data with app.data.watch.
   setBadge: (badge: number | "dot" | null) => void;
   // Status report of this view (R1) — into sessions view.status. null = withdraw. Valid only for

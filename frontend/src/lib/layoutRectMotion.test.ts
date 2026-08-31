@@ -311,7 +311,7 @@ describe("a layout change in an inactive document", () => {
 
 describe("the interpolation exclusion is not the core's", () => {
   // Re-legislated 2026-08-03 — the old rule was "never key the hole exclusion on the framework
-  // axis", based on the 2026-08-02 measurement: an in-DOM guest left old pixels at the end of the
+  // axis", from the 2026-08-02 measurement: an in-DOM guest left old pixels at the end of the
   // interpolation.
   //
   // **That basis is gone.** Back then the guest hung on a global layer and was pushed by

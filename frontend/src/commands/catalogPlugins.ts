@@ -64,7 +64,7 @@ import {
 } from "../plugins/localReleaseInstallService";
 import { writeDevelopRecord } from "./develop";
 
-// Installed/dev runtime → dependency graph node (based on manifest dependencies).
+// Installed/dev runtime → dependency graph node (from manifest dependencies).
 function depNodes(): DepNode[] {
   return Object.values(usePlugins.getState().plugins).map((p) => ({
     id: p.manifest.id,

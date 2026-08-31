@@ -28,10 +28,9 @@ import { unmetNeeds, type EngineProvision, type PluginManifest } from "./spec";
  * The service declaration separates a resident service from ordinary Sidecar use. Both use exact
  * runtime dependency releases; the service declaration adds the service interface and lifecycle.
  *
- * Permissions do not separate them either. A permission is **a door left open**, not a trace of
- * passage — measured (2026-07-31): one plugin over-declared the `sidecar` permission while
- * actually being a service model that uses app.process only, and the first cut based on
- * permissions dropped that headless plugin entirely on Electron.
+ * Permissions do not separate them. A permission declaration does not identify the runtime
+ * process type. Measurement (2026-07-31) found one plugin that declared `sidecar` while using
+ * only app.process; the permission-based implementation omitted that headless plugin on Electron.
  *
  * The evidence of a service model is the `service` declaration — the spec already reserves that
  * field for exactly this meaning (`service: { interface }`). When it is present, the plugin's sole
