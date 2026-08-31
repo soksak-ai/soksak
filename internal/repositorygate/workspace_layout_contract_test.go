@@ -6,18 +6,15 @@ import (
 	"testing"
 )
 
-func TestWorkspaceLayoutSeparatesProviderSourcesLibrariesInputsAndTests(t *testing.T) {
+func TestWorkspaceLayoutDescribesProductRepositories(t *testing.T) {
 	checks := map[string][]string{
 		"docs/tech/REPO-LAYOUT.md": {
-			"forks/", "preserved provider sources",
-			"libraries/", "independently owned reusable libraries",
-			"externals/", "declared external inputs",
-			"tests/", "product-specific system and acceptance repositories",
-			"source ref names the preserved revision", "revision name includes the source version",
+			"soksak-plugins/", "soksak-kits/", "soksak-sidecars/", "soksak-contracts/",
+			"libraries/", "tests/", "environment.json",
 		},
 		"docs/tech/REPO-LAYOUT.ko.md": {
-			"forks/", "libraries/", "externals/", "tests/",
-			"revision", "workspace path", "manifest",
+			"soksak-plugins/", "soksak-kits/", "soksak-sidecars/", "soksak-contracts/",
+			"libraries/", "tests/", "manifest",
 		},
 	}
 	for path, required := range checks {
@@ -29,6 +26,11 @@ func TestWorkspaceLayoutSeparatesProviderSourcesLibrariesInputsAndTests(t *testi
 		for _, value := range required {
 			if !strings.Contains(text, value) {
 				t.Errorf("%s omits %q", path, value)
+			}
+		}
+		for _, forbidden := range []string{"forks/", "externals/", "preserved provider", "declared external input", "source ref"} {
+			if strings.Contains(strings.ToLower(text), strings.ToLower(forbidden)) {
+				t.Errorf("%s contains obsolete external-source wording %q", path, forbidden)
 			}
 		}
 	}

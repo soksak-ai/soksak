@@ -19,8 +19,6 @@ wails3beta/
 ├── soksak-contracts/   공유 공개 계약과 acceptance suite
 ├── wails-services/     이 project가 작성한 Wails service
 ├── libraries/          직접 만든 재사용 library
-├── forks/              버전이 선언된 보존된 공급자 소스
-├── externals/          선언된 외부 입력. 제품 source가 아님
 ├── tests/              제품 전용 system 및 acceptance repository
 └── backup/             어떤 build도 참조하지 않는 제거 material
 ```
@@ -29,15 +27,12 @@ wails3beta/
 
 1. Folder 이름이 ownership과 수정 정책을 드러냅니다. `libraries/`는 이 workspace가 소유하는
    재사용 라이브러리이고 `tests/`는 Soksak 제품 전용 system 및 acceptance repository입니다.
-   `forks/`는 보존된 공급자 소스이고 `externals/`는 선언된 외부 입력입니다. Product dependency는
-   각 제품 manifest가 선언한 version을 사용합니다.
+   Product dependency는 각 제품 manifest가 선언한 version을 사용합니다.
 2. Plugin은 끌 수 있는 기능입니다. 공유 plugin code, 공개 contract, plugin process는 각각 독립
    version repository입니다. Wails service는 host를 확장하며 plugin처럼 끌 수 없습니다.
 3. Framework, CLI, frontend runtime dependency는 product manifest가 선언한 정확한 version을
    사용합니다. Version 변경은 명시적인 product 변경입니다.
 4. `backup/`은 모든 build와 gate에서 보이지 않습니다. Build에 필요한 것은 이곳에 넣지 않습니다.
-5. 소스 ref는 보존된 revision을 지정하고, revision 이름은 source version을 포함합니다. 선언되지 않은
-   공급자 이름을 사용해 workspace path를 추측하지 않습니다.
 
 Workspace 구조는 authoring 구조이지 runtime discovery가 아닙니다. Application은 plugin, sidecar,
 kit, contract, spec을 `environment.json`에서 해석하며 형제 폴더를 scan하지 않습니다. 각 repository는
