@@ -77,11 +77,11 @@ browser를 선택했습니다. `surface.inventory`의 ghosts, unowned, unapplied
 이 사실들이 분리된 이유는 소유자가 다르기 때문입니다. 합쳤을 때 모달 아래의 모든 DOM 터미널과 사이드바
 움직임 중의 터미널이 숨겨졌습니다. live surface 와 그 픽셀 대체본을 합쳤을 때는 pane 이 비었습니다. 탭
 슬롯은 `ui.tree` 로 `contentVisible`, `surfaceVisible`, `visibilityReason` 을 노출하고, `state.health`
-는 오버레이 개수를 노출합니다.
+는 입력을 막는 오버레이 개수와 native 차단 개수를 함께 노출합니다.
 
-캡처 합성은 유지된 선언 목록이 아니라 현재 표시 중인 장식 목록을 사용합니다. DOM overlay가 활성 상태이면
-native surface와 native decoration은 합성 PNG에서 모두 제외됩니다. 선언은 닫기 transaction을 위해 유지하지만
-`window.snapshot` 또는 `window.record`에서 overlay 위에 표시할 수 없습니다.
+캡처 합성은 유지된 선언 목록이 아니라 현재 표시 중인 장식 목록을 사용합니다. 선언된 geometry가 native pane을
+가리는 overlay만 native parking을 요청하며, 제한된 메뉴는 요청하지 않습니다. Parking을 요청한 경우에도 surface
+picture가 성공한 뒤에만 native surface와 native decoration을 합성 PNG에서 제외합니다.
 
 WebKit은 document 변경 후 첫 capture-only document snapshot을 변경 전 pixel로 완료할 수 있습니다.
 `window_capture_present`는 document snapshot을 정확히 한 번 완료하고 폐기한 뒤 반환합니다. 다음

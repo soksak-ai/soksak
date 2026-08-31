@@ -84,12 +84,12 @@ active browser declarations intrinsic-true while Core presentation selected only
 These facts are separate because they have separate owners. Combining them hid every DOM terminal
 under a modal and during sidebar motion. Combining the live surface and its pixel substitute left a
 blank pane. The tab slot exposes `contentVisible`, `surfaceVisible` and `visibilityReason` through
-`ui.tree`; `state.health` exposes the overlay count.
+`ui.tree`; `state.health` exposes both the input-blocking overlay count and the native-occlusion count.
 
-Capture composition uses the presented decoration set, not the retained declaration set. While a
-DOM overlay is active, native surfaces and native decorations are both absent from the composed PNG.
-The declarations remain available for the close transaction but cannot appear above the overlay in
-`window.snapshot` or `window.record`.
+Capture composition uses the presented decoration set, not the retained declaration set. Only an
+overlay whose declared geometry covers native panes requests native parking; bounded menus do not.
+When parking is requested, native surfaces and native decorations are absent from the composed PNG
+only after a successful surface picture is available.
 
 WebKit can complete the first capture-only document snapshot after a document change with pixels from
 before that change. `window_capture_present` completes and discards exactly one document snapshot
