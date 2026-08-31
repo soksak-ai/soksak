@@ -32,4 +32,14 @@ describe("native surface DOM ownership facts", () => {
       },
     ]);
   });
+
+  it("reports a surface hidden by its public presentation ancestor", () => {
+    document.body.innerHTML = `
+      <section data-surface-visible="false" data-tab-id="tab-browser">
+        <div data-native-surface="webview" data-native-surface-id="webview.win-test.tab-browser"
+          data-native-generation="1" data-native-visible="true"></div>
+      </section>`;
+
+    expect(nativeSurfaceDomFacts()[0]?.declaredVisible).toBe(false);
+  });
 });

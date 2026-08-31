@@ -333,12 +333,19 @@ export function nativeSurfaceDomFacts(doc: Document = document): NativeSurfaceDo
       return Number.isFinite(value) ? value : null;
     };
     const visible = el.dataset.nativeVisible;
+    let presented: boolean | null = visible === "true" ? true : visible === "false" ? false : null;
+    for (let current: HTMLElement | null = el; current; current = current.parentElement) {
+      if (current.dataset.surfaceVisible === "false") {
+        presented = false;
+        break;
+      }
+    }
     return {
       id: el.dataset.nativeSurfaceId ?? "",
       kind: el.dataset.nativeSurface ?? "",
       ownerViewId: compositionOwnerViewId(el),
       generation: number(el.dataset.nativeGeneration),
-      declaredVisible: visible === "true" ? true : visible === "false" ? false : null,
+      declaredVisible: presented,
       declaredAlpha: number(el.dataset.nativeAlpha),
       layer: number(el.dataset.nativeLayer),
       rect: {
