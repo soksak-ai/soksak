@@ -90,8 +90,11 @@ cleanup use the public lifecycle operations and verify zero test-owned leaks. Mo
 records to another directory is incident-evidence preservation only; it is never a runtime recovery,
 cleanup, or development-source mechanism.
 
-sidecar.stop is the explicit operation that ends a sidecar. A plugin disable, view unmount or app
-restart is not a stop request. Streams have their own ids and can close independently.
+`sidecar_stop` is the explicit operation that terminates a sidecar. It returns only after the
+operating system reports process exit. Darwin uses a kqueue process notification, Linux uses a
+pidfd notification, and Windows uses `WaitForSingleObject`. The operation fails on timeout and does
+not poll process state. Plugin disable, view unmount, and application restart are not stop requests.
+Streams have separate ids and close independently.
 
 Open means something answers there. A held unit whose address refuses a connection has gone: reading
 the inventory forgets it, and the next request starts the unit again from the arguments that started
