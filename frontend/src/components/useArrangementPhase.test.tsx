@@ -469,6 +469,59 @@ describe("useArrangementPhase", () => {
     expect(el().dataset.content).toBe("live");
   });
 
+  it("closes each intent when consecutive rail-presence changes have no cell movement", async () => {
+    const standing = solve(twoColumns, "a");
+    const absent = solveArrangement<G>({
+      layout: twoColumns,
+      focusId: "a",
+      placement: { mode: "flow" },
+      railOpen: false,
+    });
+    expect(arrangementMoves(standing, absent)).toEqual([]);
+
+    const commits: string[] = [];
+    registerLayoutTransitionIntentHost("workspace-presence", {
+      prepare: async ({ revision }) => transition("glide", async () => {
+        commits.push(`revision-${revision}`);
+      }),
+    });
+    act(() => root.render(
+      <Probe arrangement={standing} scopeId="scope-present" settlementKey="workspace-presence" />,
+    ));
+
+    const firstRevision = invalidateLayout("workspace-presence");
+    expect(publishLayoutTransitionIntent({
+      ownerKey: "workspace-presence",
+      revision: firstRevision,
+      from: standing,
+      to: absent,
+    })).toBe(true);
+    act(() => root.render(
+      <Probe arrangement={absent} scopeId="scope-absent" settlementKey="workspace-presence" />,
+    ));
+    await act(async () => {});
+
+    expect(commits).toEqual(["revision-1"]);
+    expect(layoutTransitionIntentFacts().owners).toEqual([]);
+    expect(layoutSettlementFacts("workspace-presence")).toEqual({ active: false, pending: [] });
+
+    const secondRevision = invalidateLayout("workspace-presence");
+    expect(publishLayoutTransitionIntent({
+      ownerKey: "workspace-presence",
+      revision: secondRevision,
+      from: absent,
+      to: standing,
+    })).toBe(true);
+    act(() => root.render(
+      <Probe arrangement={standing} scopeId="scope-present" settlementKey="workspace-presence" />,
+    ));
+    await act(async () => {});
+
+    expect(commits).toEqual(["revision-1", "revision-2"]);
+    expect(layoutTransitionIntentFacts().owners).toEqual([]);
+    expect(layoutSettlementFacts("workspace-presence")).toEqual({ active: false, pending: [] });
+  });
+
   it("a maximize projection delta with zero translation still prepares the target before adopting it", async () => {
     const at = solve(twoColumns, "a");
     const maximized = solveArrangement<G>({

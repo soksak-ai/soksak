@@ -134,7 +134,9 @@ Rail presence is also part of the arrangement phase identity and projection tran
 clean line, present and absent arrangements may have the same station and percentage cells while their
 physical pane boxes differ by the whole rail width. Browser and terminal pane presentations are staged
 against that change before the DOM width commit; a presence-only change is not allowed to wait for an
-unrelated geometry update.
+unrelated geometry update. If that transaction has no cell movement, its native commit is the terminal
+event: the exact intent and layout revision settle there instead of waiting for a visual-motion callback
+that cannot occur.
 
 ---
 

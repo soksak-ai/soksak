@@ -120,7 +120,9 @@ rail 은 두 조건을 다 물었고 오른쪽 측면은 열려 있는지만 물
 rail 존재 여부는 arrangement phase identity와 projection transaction에도 포함됩니다. 선두의 깨끗한 선에서는
 rail이 있는 해와 없는 해의 station 및 백분율 셀이 같아도 실제 pane 사각형은 rail 폭 전체만큼 다릅니다.
 브라우저와 터미널 pane presentation은 DOM 폭 commit 전에 그 변경에 맞춰 stage합니다. 존재 여부만 바뀐
-변경이 관계없는 다음 geometry 변경까지 기다려서는 안 됩니다.
+변경이 관계없는 다음 geometry 변경까지 기다려서는 안 됩니다. 이 transaction에 cell 이동이 없다면 native
+commit이 종료 event입니다. 정확한 intent와 layout revision은 발생할 수 없는 시각 이동 callback을 기다리지
+않고 그 commit에서 settle합니다.
 
 ---
 

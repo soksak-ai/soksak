@@ -307,7 +307,11 @@ export function useArrangementPhase<L extends { id: string }>(
   // Handling a new solution — plane changed: re-anchor immediately; geometry unchanged: apply
   // immediately; mid-travel: queue; stopped with geometry changed: start a journey.
   useLayoutEffect(() => {
-    if (!samePlane) {
+    const intentPrepared = settlementKey && currentSettlementRevision > 0
+      ? claimLayoutTransitionIntent(settlementKey, currentSettlementRevision)
+      : null;
+    const intentRevision = intentPrepared ? currentSettlementRevision : null;
+    if (!samePlane && !intentPrepared) {
       // Applying the old line set's station to the new plane runs the rail through a panel — the
       // start geometry is not consumed and the new plane is used as is.
       adopt();
@@ -326,18 +330,20 @@ export function useArrangementPhase<L extends { id: string }>(
       } : p);
       return;
     }
-    if (currentKey === displayedKey && !contentChanged) return;
+    if (currentKey === displayedKey && !contentChanged && !intentPrepared) return;
     if (acceptWithoutTravel.current) {
       acceptWithoutTravel.current = false;
-      adopt();
-      return;
+      if (!intentPrepared) {
+        adopt();
+        return;
+      }
     }
     // Unchanged geometry is not a journey — content (view composition) goes to the newest at once.
     // The phase holds geometry only.
     const geometryChanged = current && phase.displayed
       ? projectionGeometryChanged(phase.displayed, current)
       : false;
-    if (!geometryChanged) {
+    if (!geometryChanged && !intentPrepared) {
       adopt();
       return;
     }
@@ -348,10 +354,6 @@ export function useArrangementPhase<L extends { id: string }>(
     const from = phase.displayed;
     const target = latest.current;
     const prepare = latestPrepareTravel.current;
-    const intentPrepared = settlementKey && currentSettlementRevision > 0
-      ? claimLayoutTransitionIntent(settlementKey, currentSettlementRevision)
-      : null;
-    const intentRevision = intentPrepared ? currentSettlementRevision : null;
     if ((prepare || intentPrepared) && from && target) {
       if (preparation.current.key === currentKey) return;
       const serial = ++preparation.current.serial;
@@ -501,14 +503,25 @@ export function useArrangementPhase<L extends { id: string }>(
         if (intentOwnerKey && intentRevision) {
           if (prepared.mode === "snap") {
             finishLayoutTransitionIntent(intentOwnerKey, intentRevision, { reason: "snap-committed" });
+          } else if (!traveling) {
+            finishLayoutTransitionIntent(intentOwnerKey, intentRevision, {
+              reason: "glide-committed-without-motion",
+              transactionId: prepared.transactionId,
+            });
           } else {
             travelingIntent.current = { ownerKey: intentOwnerKey, revision: intentRevision };
           }
         }
         if (prepared.mode === "glide" && settlementKey && settlementRevision) {
-          travelingSettlement.current = { ownerKey: settlementKey, revision: settlementRevision };
+          if (traveling) {
+            travelingSettlement.current = { ownerKey: settlementKey, revision: settlementRevision };
+          } else {
+            settleLayout(settlementKey, settlementRevision);
+          }
         }
-        if (prepared.mode === "glide") travelingTransaction.current = prepared.transactionId;
+        if (prepared.mode === "glide" && traveling) {
+          travelingTransaction.current = prepared.transactionId;
+        }
         if (!receipt || !mounted.current) return;
         setPhase((current) => current.displayed === phase.displayed
           ? { ...current, starting: false, startAtUnixUs: receipt.startAtUnixUs }
@@ -553,7 +566,7 @@ export function useArrangementPhase<L extends { id: string }>(
         presentationCommits.current = Math.max(0, presentationCommits.current - 1);
         if (mounted.current) publishPresentationCommit((revision) => revision + 1);
       });
-  }, [phase.displayed, domCandidateParticipant, settlementKey]);
+  }, [phase.displayed, domCandidateParticipant, settlementKey, traveling]);
 
   useEffect(() => () => {
     mounted.current = false;
