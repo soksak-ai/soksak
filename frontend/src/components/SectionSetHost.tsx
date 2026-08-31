@@ -328,6 +328,7 @@ export const SectionSetHost = memo(function SectionSetHost({
           >
             <SidebarLeaf
               region={region}
+              paneIndex={i}
               group={group}
               workspace={workspace}
               paneId={paneId}
@@ -374,6 +375,7 @@ export const SectionSetHost = memo(function SectionSetHost({
 // One leaf = the tab row (that group's views) + the active view body. keep-alive: opened views stay mounted, display toggles.
 function SidebarLeaf({
   region,
+  paneIndex,
   group,
   workspace,
   paneId,
@@ -384,6 +386,8 @@ function SidebarLeaf({
   /** The region this leaf is drawn in. It was written `left` at the view host below, so a section
    *  the right region drew answered `left` when asked where it is — measured 2026-08-17. */
   region: SidebarRegion;
+  /** Public pane axis. Split leaves must not collapse onto one region-only body address. */
+  paneIndex: number;
   group: SidebarGroup;
   workspace: Workspace;
   paneId: string;
@@ -451,7 +455,7 @@ function SidebarLeaf({
           );
         })}
       </div>
-      <div className="sidebar-body-stack" data-node={`body/${region}`}>
+      <div className="sidebar-body-stack" data-node={`body/${region}/${paneIndex}`}>
         {hosted.map((k) => (
           <div
             key={k}

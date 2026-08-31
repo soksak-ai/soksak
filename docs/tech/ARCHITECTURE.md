@@ -154,6 +154,10 @@ All of these are hard.
   address that can only be read is a picture, and a picture is not a seam — two
   builds that answer the same tree and behave differently are indistinguishable
   through it.
+- **C2a.** Every exposed DOM address is unique in one window. Repeated regions
+  add their pane axis to the address; a split must never make two elements
+  answer the same region-only path. `ui.tree.duplicates` must therefore be
+  empty before an exposed surface is accepted.
 - **C3.** A plugin crosses another plugin boundary only through declarations.
   It never reads another plugin's DOM, internal state, file layout or load order.
 

@@ -106,6 +106,41 @@ describe("a region draws the set standing in it", () => {
     expect(host.textContent).toContain("mounted");
   });
 
+  it("gives every exposed node a unique address when one region has split panes", () => {
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
+    useViewRegistry.getState().register(OTHER_PLUGIN, view(["side"]), { mount: () => {} });
+    const set = useSectionSets.getState().create("work");
+    const first = `${PLUGIN}.tree`;
+    const second = `${OTHER_PLUGIN}.tree`;
+    useSectionSets.getState().arrange(set.id, [first, second]);
+    useSectionSets.getState().standLeft(set.id);
+
+    const current = useSessions.getState().workspaces[0]!;
+    useSessions.setState({
+      workspaces: [{
+        ...current,
+        sidebarLayouts: {
+          ...current.sidebarLayouts,
+          left: {
+            type: "split",
+            id: "spl-sidebar",
+            dir: "col",
+            sizes: [0.4, 0.6],
+            children: [
+              { type: "leaf", value: { viewKeys: [first], activeViewKey: first } },
+              { type: "leaf", value: { viewKeys: [second], activeViewKey: second } },
+            ],
+          },
+        },
+      }],
+    });
+
+    render("left");
+    const addresses = [...host.querySelectorAll<HTMLElement>("[data-node]")]
+      .map((node) => node.dataset.node);
+    expect(new Set(addresses).size).toBe(addresses.length);
+  });
+
   it("draws the linked section in the rail", () => {
     stand("rail");
     render("rail");
