@@ -27,12 +27,7 @@ Each independently released component has one declared source line for each supp
 version is recorded in its manifest and release artifact. Consumers select a version through their
 environment manifest; a new release does not alter an installed environment.
 
-## G3a. Preserved provider sources
-
-Provider source trees retained for build or audit use are stored under `forks/` with an explicit source
-revision. They are inputs, not product owners, and no product description attributes current behavior to them.
-
-## G3b. Historical source
+## G3a. Historical source
 
 Completed source retained only for audit is stored under `archive/` or a permanent historical ref. It is
 excluded from builds and does not change the active product contract.

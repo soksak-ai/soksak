@@ -81,7 +81,7 @@ that on the same date and the gate landed against it.
 | [`tech/SIDEBAR.md`](tech/SIDEBAR.md) | The three places a sidebar stands in and the two surfaces a view is drawn on, where the rail stands and what moves when focus does — FLOW and PIN, the travel journal, and the focus lighting read as addresses |
 | [`tech/SIDEBAR.CHANGELOG.md`](tech/SIDEBAR.CHANGELOG.md) | Why plugins declare surfaces while workspaces own placement |
 | [`tech/REPO-LAYOUT.md`](tech/REPO-LAYOUT.md) | Which folder declares what, the workspace and the application tree, two binaries, where a document goes |
-| [`tech/REPOSITORY-GOVERNANCE.md`](tech/REPOSITORY-GOVERNANCE.md) | Canonical branches, fork improvement lines, historical archives, and the no-source-loss rule |
+| [`tech/REPOSITORY-GOVERNANCE.md`](tech/REPOSITORY-GOVERNANCE.md) | Canonical branches, version lines, historical archives, and the no-source-loss rule |
 | [`tech/BUILD-TOOLCHAIN.md`](tech/BUILD-TOOLCHAIN.md) | Tool version owners, discovery, preparation, upgrades and precondition failures |
 | [`tech/IDENTITY.md`](tech/IDENTITY.md) | One derivation for home, socket, CLI name and axis; the core reads no ambient; one backend per home |
 | [`tech/ENVIRONMENT-AND-INSTALLATION.md`](tech/ENVIRONMENT-AND-INSTALLATION.md) | Runtime component environment, local/registry release transport, and installer ownership |
