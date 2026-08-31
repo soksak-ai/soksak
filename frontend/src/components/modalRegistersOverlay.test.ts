@@ -38,8 +38,8 @@ describe("a component that draws a modal", () => {
 
   it("the window presentation gate places every DOM overlay above native decorations", () => {
     const app = readFileSync(join(process.cwd(), "src", "App.tsx"), "utf8");
-    expect(app).toContain("const overlayCount = useUi((s) => s.overlayCount)");
-    expect(app).toContain("setNativeDecorationPresentationVisible(overlayCount === 0)");
+    expect(app).toContain("const nativeOverlayCount = useUi((s) => s.nativeOverlayCount)");
+    expect(app).toContain("setNativeDecorationPresentationVisible(nativeOverlayCount === 0)");
   });
 
 });

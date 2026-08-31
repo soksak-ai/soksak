@@ -2,8 +2,8 @@ import { useLayoutEffect } from "react";
 import { moduleState } from "../lib/moduleState";
 import { create } from "zustand";
 
-// Transient UI state. overlayCount: counter for how long a DOM overlay
-// (modal/menu/dropdown/drag) is up (nest-safe).
+// Transient UI state. overlayCount counts every input-blocking DOM overlay;
+// nativeOverlayCount counts only overlays whose geometry covers native surfaces.
 //
 // **Do not call the framework here.** Blocking the mouse on surfaces below while an overlay is
 // up is the concern of a framework whose content is outside the document — content inside the
@@ -17,8 +17,9 @@ import { create } from "zustand";
 
 interface UiState {
   overlayCount: number;
-  pushOverlay: () => void;
-  popOverlay: () => void;
+  nativeOverlayCount: number;
+  pushOverlay: (nativeOccludes?: boolean) => void;
+  popOverlay: (nativeOccludes?: boolean) => void;
   // Consent modal preview (plugin.consent.preview command) — plugin id to show for settings/checks. null = closed.
   // Rendered at App level (regardless of sidebar mount). Does not activate (check only).
   consentPreviewId: string | null;
@@ -40,14 +41,21 @@ interface UiState {
 export const useUi = moduleState("state/ui#store", () =>
   create<UiState>((set) => ({
   overlayCount: 0,
+  nativeOverlayCount: 0,
   consentPreviewId: null,
   setConsentPreview: (id) => set({ consentPreviewId: id }),
   settingsSection: null,
   setSettingsSection: (s) => set({ settingsSection: s }),
   pluginManagerOpen: false,
   setPluginManagerOpen: (open) => set({ pluginManagerOpen: open }),
-  pushOverlay: () => set((s) => ({ overlayCount: s.overlayCount + 1 })),
-  popOverlay: () => set((s) => ({ overlayCount: Math.max(0, s.overlayCount - 1) })),
+  pushOverlay: (nativeOccludes = true) => set((s) => ({
+    overlayCount: s.overlayCount + 1,
+    nativeOverlayCount: s.nativeOverlayCount + (nativeOccludes ? 1 : 0),
+  })),
+  popOverlay: (nativeOccludes = true) => set((s) => ({
+    overlayCount: Math.max(0, s.overlayCount - 1),
+    nativeOverlayCount: Math.max(0, s.nativeOverlayCount - (nativeOccludes ? 1 : 0)),
+  })),
 })),
 );
 
@@ -61,12 +69,12 @@ export const useUi = moduleState("state/ui#store", () =>
 // Pass whether the overlay is showing when its component is mounted for the whole session. Two were
 // registered unconditionally and held the count at 2 with nothing open, which parked every view in
 // the window — `state.health` answers `overlays` so that is readable from outside.
-export function useOverlayActive(active = true): void {
+export function useOverlayActive(active = true, nativeOccludes = true): void {
   const push = useUi((s) => s.pushOverlay);
   const pop = useUi((s) => s.popOverlay);
   useLayoutEffect(() => {
     if (!active) return;
-    push();
-    return () => pop();
-  }, [active, push, pop]);
+    push(nativeOccludes);
+    return () => pop(nativeOccludes);
+  }, [active, nativeOccludes, push, pop]);
 }

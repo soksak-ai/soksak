@@ -50,14 +50,13 @@ export function registerHealthCatalog(): void {
       }
       // Record it before the verdict — recorded later, that turn's degraded excludes the ledger.
       noteLedgerAudit(ledger);
-      // Overlays decide whether anything is drawn at all: a native surface is composited above the
-      // document, so `surfaceShown` hides every view while one is open. A count nothing can read is
-      // a reason for a blank window that nobody can name — measured 2026-08-17, the manager closed
-      // and every pane stayed empty.
+      // The two counts are separate facts: every overlay blocks input, but only an overlay whose
+      // geometry covers a native pane may request native parking.
       return {
         ...commandHealth(catalogJson().length),
         ledger,
         overlays: useUi.getState().overlayCount,
+        nativeOverlays: useUi.getState().nativeOverlayCount,
         parking: {
           pictures: parkedPictures(),
           failures: parkedPictureFailures(),

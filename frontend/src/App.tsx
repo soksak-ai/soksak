@@ -977,7 +977,7 @@ function WebviewHealthBadges() {
 
 function App() {
   const t = useT();
-  const overlayCount = useUi((s) => s.overlayCount);
+  const nativeOverlayCount = useUi((s) => s.nativeOverlayCount);
   const settingsSection = useUi((s) => s.settingsSection);
   const setSettingsSection = useUi((s) => s.setSettingsSection);
   const workspaceTabPosition = useSettings((s) => s.workspaceTabPosition);
@@ -989,8 +989,8 @@ function App() {
   // selected framework, and the generic Core decoration plane is committed empty here. Its
   // declarations stay intact and the newest snapshot returns on the closing state edge.
   useLayoutEffect(() => {
-    setNativeDecorationPresentationVisible(overlayCount === 0);
-  }, [overlayCount]);
+    setNativeDecorationPresentationVisible(nativeOverlayCount === 0);
+  }, [nativeOverlayCount]);
 
   // The theme system (token slots) is the single source — the theme engine applies CSS variables and structural attributes.
   const effectiveMode = useTheme((s) => s.effectiveMode);

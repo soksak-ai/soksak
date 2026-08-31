@@ -321,7 +321,7 @@ export const GroupArea = memo(function GroupArea({
   // A native surface is composited above the document, so no z-index puts it under a modal. The
   // count of open overlays is the fourth layer of `surfaceShown` — nothing read this counter until
   // 2026-08-17, and the plugin manager opened with two browser pages drawn over its card.
-  const overlayed = useUi((s) => s.overlayCount > 0);
+  const overlayed = useUi((s) => s.nativeOverlayCount > 0);
   // One inventory subscription, not one hook per tab. A successful capture advances the revision;
   // this render then changes the declaration from live to parked. Until publication the surface stays
   // applied, so render cannot hide the surface before capture completes.

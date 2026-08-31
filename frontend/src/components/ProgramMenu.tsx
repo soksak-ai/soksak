@@ -97,7 +97,8 @@ export function ProgramMenu({
   onClose: () => void;
 }) {
   const t = useT();
-  useOverlayActive();
+  // The menu occupies a bounded chrome rectangle and does not cover native pane surfaces.
+  useOverlayActive(true, false);
   const menuRef = useRef<HTMLDivElement>(null);
   // Position corrected into the viewport after measuring, plus whether the submenu flips.
   const [place, setPlace] = useState({ left: pos.left, top: pos.top, flip: false });
