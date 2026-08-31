@@ -27,10 +27,18 @@ interface Held {
 const pictures = moduleState("lib/parkedPicture#held", () => new Map<string, Held>());
 const listeners = moduleState("lib/parkedPicture#listeners", () => new Set<() => void>());
 const asking = moduleState("lib/parkedPicture#asking", () => new Set<string>());
+const revision = moduleState("lib/parkedPicture#revision", () => ({ value: 0 }));
+const failures = moduleState("lib/parkedPicture#failures", () => new Map<string, { label: string; reason: string }>());
 
 const announce = (): void => {
+  revision.value += 1;
   for (const listener of listeners) listener();
 };
+
+/** Stable snapshot for one GroupArea subscription to the picture inventory. */
+export function parkedPictureVersion(): number {
+  return revision.value;
+}
 
 /** Subscribe to what is held. */
 export function onParkedPictureChange(listener: () => void): () => void {
@@ -52,6 +60,13 @@ export function parkedPictures(): Array<{ view: string; label: string; bytes: nu
     .sort((a, b) => a.view.localeCompare(b.view));
 }
 
+/** Failed capture attempts remain readable until that view captures successfully. */
+export function parkedPictureFailures(): Array<{ view: string; label: string; reason: string }> {
+  return [...failures.entries()]
+    .map(([view, failure]) => ({ view, ...failure }))
+    .sort((a, b) => a.view.localeCompare(b.view));
+}
+
 /**
  * Takes the picture a view's surface is showing and holds it for that view.
  *
@@ -68,10 +83,18 @@ export async function holdParkedPicture(viewId: string, label: string): Promise<
     const url = await timedAwait("picture", contentViewHost().picture(label));
     if (url) {
       pictures.set(viewId, { url, label });
+      failures.delete(viewId);
+      announce();
+    } else {
+      failures.set(viewId, { label, reason: "surface returned no picture" });
       announce();
     }
-  } catch {
-    // A surface that cannot be pictured leaves none. The pane shows what it showed before.
+  } catch (cause) {
+    failures.set(viewId, {
+      label,
+      reason: cause instanceof Error ? cause.message : String(cause),
+    });
+    announce();
   } finally {
     asking.delete(viewId);
   }
@@ -81,4 +104,11 @@ export async function holdParkedPicture(viewId: string, label: string): Promise<
 export function releaseParkedPicture(viewId: string): void {
   if (!pictures.delete(viewId)) return;
   announce();
+}
+
+/** Removes all parking state when a view closes permanently. */
+export function dropParkedPicture(viewId: string): void {
+  const changed = pictures.delete(viewId) || failures.delete(viewId);
+  asking.delete(viewId);
+  if (changed) announce();
 }

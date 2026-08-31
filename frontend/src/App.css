@@ -2215,6 +2215,9 @@ body::after {
 
 .parked-picture {
   position: absolute;
+  /* The provider body remains mounted under an overlay. Its opaque background is later in DOM
+     order, so the captured pixels need an explicit local layer above that body. */
+  z-index: 1;
   inset: 0;
   width: 100%;
   height: 100%;

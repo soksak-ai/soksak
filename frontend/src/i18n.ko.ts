@@ -925,7 +925,7 @@ export const ko = {
   "cmd.debug.sleep.param.ms": "응답 지연 시간(ms, 기본 3000).",
   "cmd.debug.sleep.param.fail": "ok:true 대신 ok:false 를 반환합니다 (백오프·크래시 경로를 훈련합니다).",
   "cmd.runtime.capabilities.desc": "런타임 기능과 타이틀바 합성 지원 상태를 반환합니다. 기능은 호출하지 않습니다.",
-  "cmd.state.health.desc": "코어 관측 배선이 실행 중인지 보고합니다: 명령 레지스트리 크기, 실행 추적 sink, 활동 허브 발행(attempts/ok/failed/consecutive/lastError/lastStampAt). 응답은 멀쩡해 보이는데 아무것도 기록되지 않을 때 씁니다.",
+  "cmd.state.health.desc": "코어 관측 배선과 overlay parking 상태를 보고합니다: 명령 레지스트리 크기, 실행 추적 sink, 활동 허브 발행, 유지 중인 picture, 캡처 실패. 응답은 멀쩡해 보이는데 기록이 없거나 overlay 아래 native pane이 비었을 때 씁니다.",
   "cmd.layout.alignment.desc": "네이티브 표면과 DOM 영역의 위치를 같은 관측에서 반환합니다. dom은 현재 DOM 사각형, declared는 마지막 선언 사각형, applied는 네이티브에 적용된 사각형입니다. lag=dom-declared, drift=declared-applied, off=dom-applied입니다. regions, panes, sections도 같은 관측에서 반환합니다.",
   "cmd.surface.composition.desc": "브라우저 화면이 패널이 요청한 위치에 실제로 놓였는지 확인합니다. 요청 위치와 실제 위치의 차이, 빠진 화면, 지워지지 않고 남은 화면, 다른 창에 잘못 배치된 화면을 보여 줍니다.",
   "cmd.surface.composition.history.desc": "드래그하는 동안 브라우저 화면이 언제 어디로 이동했는지 순서대로 보여 줍니다. 화면 이동이 실제로 끝난 시각을 기록하므로, 늦게 돌아온 응답 시각을 이동 시각으로 잘못 쓰지 않습니다. 시작 시각 직전의 위치도 함께 보여 주어 첫 장면부터 비교할 수 있습니다.",

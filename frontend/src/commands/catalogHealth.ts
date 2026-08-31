@@ -12,6 +12,7 @@ import { commandHealth, noteActivityPersist, noteLedgerAudit } from "./commandOb
 import { useUi } from "../state/ui";
 import { preferenceStoreContents, preferenceWriteFailures } from "../lib/preferenceStore";
 import { invoke } from "../framework";
+import { parkedPictureFailures, parkedPictures } from "../lib/parkedPicture";
 
 export function registerHealthCatalog(): void {
   register("state.health", {
@@ -19,7 +20,7 @@ export function registerHealthCatalog(): void {
     triggers: { ko: "상태 진단 건강 관측 배선" },
     params: {},
     returns:
-      "{ ready, commands{registered,traceSinkInstalled,emitted,lastEmitAt}, activity{...}, persist{...}, degradedAxes, ledger{minSeq,maxSeq,gaps,timeRegressions,singleWriter,persist} — ledger comes from cored; two processes write the store, so one side alone is not a verdict }",
+      "{ ready, commands{...}, activity{...}, persist{...}, degradedAxes, ledger{...}, overlays, parking{pictures[],failures[]} }",
     message: (d) =>
       tmsg("msg.state.health", {
         n: ((d.degradedAxes as unknown[]) ?? []).length,
@@ -57,6 +58,10 @@ export function registerHealthCatalog(): void {
         ...commandHealth(catalogJson().length),
         ledger,
         overlays: useUi.getState().overlayCount,
+        parking: {
+          pictures: parkedPictures(),
+          failures: parkedPictureFailures(),
+        },
         // The document's own account of its start. The boot script records a failure on the
         // document element and in the console, and neither is a reading: on 2026-08-17 `<html>`
         // carried data-boot-status="failed" while `activity.recent` held zero renderer errors, and

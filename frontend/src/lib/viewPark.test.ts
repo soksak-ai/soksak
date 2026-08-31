@@ -4,7 +4,13 @@
 // the core as "visible" and that workspace's native browser webview stayed on screen after the
 // switch (measured snapshot).
 import { describe, expect, it, vi } from "vitest";
-import { resolveViewVisibility, surfaceShown, viewSurfacePlacement, viewSurfaceStyle } from "./viewPark";
+import {
+  resolveViewVisibility,
+  surfaceShown,
+  viewSurfacePlacement,
+  viewSurfacePlacementForPresentation,
+  viewSurfaceStyle,
+} from "./viewPark";
 
 describe("effective view visibility — all three layers", () => {
   it("an inactive workspace is not visible even when the space and the tab are active", () => {
@@ -67,6 +73,24 @@ describe("view visibility ownership", () => {
 });
 
 describe("viewSurfaceStyle — exclusive (maximize) composition contract", () => {
+  it("keeps an overlay-occluded native surface applied until the parking owner captures it", () => {
+    const presentation = resolveViewVisibility(true, true, true, true, false);
+
+    expect(presentation.surfaceVisible).toBe(false);
+    expect(viewSurfacePlacementForPresentation(presentation, false, false)).toEqual({
+      desiredVisible: true,
+      dim: 0,
+      topology: "visible",
+      declaredPaneFrame: null,
+    });
+    expect(viewSurfacePlacementForPresentation(presentation, false, true)).toEqual({
+      desiredVisible: false,
+      dim: 0,
+      topology: "retained-hidden",
+      declaredPaneFrame: null,
+    });
+  });
+
   it("a travelling layout keeps the live surface under compositor ownership", () => {
     expect(surfaceShown(true, true, true, false, true)).toBe(true);
     expect(surfaceShown(true, true, true, false, false)).toBe(true);

@@ -11,7 +11,7 @@ import { moduleState } from "../lib/moduleState";
 import { contentViewHost, lastAppliedSurfaces } from "./contentViews";
 import { emitPluginEvent } from "../plugins/hooks";
 import { nextFrame } from "./nextFrame";
-import { holdParkedPicture, releaseParkedPicture } from "./parkedPicture";
+import { dropParkedPicture, holdParkedPicture, releaseParkedPicture } from "./parkedPicture";
 import { surfaceLabelOfView } from "./surfaceLabels";
 import { parkedStyle } from "./layerPark";
 import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost";
@@ -124,6 +124,23 @@ export function viewSurfacePlacement(
   return { desiredVisible: false, dim, topology: "retained-hidden", declaredPaneFrame: null };
 }
 
+/**
+ * The declaration sent by a plugin is the applied native inventory, not the overlay parking
+ * transaction. An overlay must first photograph the still-applied surface and only then hide it
+ * through commitViewPresentation. Feeding surfaceVisible here lets the declaration hide the
+ * surface during render, before that photograph can be taken.
+ */
+export function viewSurfacePlacementForPresentation(
+  presentation: ViewPresentation,
+  exclusive: boolean,
+  parkedPictureHeld: boolean,
+  dim: number = 0,
+): PluginViewSurfacePlacement {
+  const appliedVisible = presentation.surfaceVisible
+    || (presentation.contentVisible && !parkedPictureHeld);
+  return viewSurfacePlacement(appliedVisible, exclusive, dim);
+}
+
 // Outside the hot swap boundary — a new table here leaves the filling side treating it as already filled and never refilling.
 const presentationByView = moduleState("lib/viewPark#presentationByView", () => new Map<string, string>());
 export function commitViewPresentation(viewId: string, presentation: ViewPresentation): void {
@@ -191,7 +208,7 @@ export function commitViewPresentation(viewId: string, presentation: ViewPresent
 /** Reclaims state when a view closes permanently (prevents map growth). */
 export function dropViewVisibility(viewId: string): void {
   presentationByView.delete(viewId);
-  releaseParkedPicture(viewId);
+  dropParkedPicture(viewId);
 }
 
 /** How long the picture is held waiting for the page to be back on the screen. */

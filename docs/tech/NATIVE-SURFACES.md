@@ -64,10 +64,13 @@ Core resolves three different facts. `contentVisible` is the active workspace, s
 it controls the DOM slot and never changes because an overlay or layout motion begins.
 `surfaceVisible` additionally excludes an overlay. Layout motion remains a live compositor
 transaction; hiding every surface during motion produced a blank target that had no pixels to capture.
-Core publishes it as `data-surface-visible` on the host tab ancestor;
-the compositor conjoins it with the Plugin-owned intrinsic `data-native-visible`. When content
-remains visible but the live surface does not, `ParkedPicture` preserves the last applied pixels in
-the same slot until the live surface returns. Neither side rewrites the other's declaration.
+Core publishes it as `data-surface-visible` on the host tab ancestor; this field is an observable
+verdict, not a direct writer of the native declaration. Overlay parking has one ordered owner: Core
+keeps the declaration applied, captures the surface, publishes the `ParkedPicture`, and changes the
+declaration to hidden only after publication completes. A failed capture keeps the live declaration
+applied and is reported by `state.health.parking.failures`; it cannot turn failure into a blank pane.
+The picture remains in the same slot until the live surface returns. Neither side rewrites the
+other's declaration.
 
 Intrinsic means provider availability inside the Plugin, not another copy of Core presentation.
 A mounted browser therefore keeps it true. A terminal Workbench may set it false for one of its own

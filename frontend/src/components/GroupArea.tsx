@@ -1,13 +1,14 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { moduleState } from "../lib/moduleState";
 import { execute } from "../commands/registry";
 import { rafThrottle } from "../lib/rafThrottle";
 import {
   commitViewPresentation,
   resolveViewVisibility,
-  viewSurfacePlacement,
+  viewSurfacePlacementForPresentation,
   viewSurfaceStyle,
 } from "../lib/viewPark";
+import { onParkedPictureChange, parkedPicture, parkedPictureVersion } from "../lib/parkedPicture";
 import { Icon } from "../ui/icons/Icon";
 import { GroupStatusBar } from "./GroupStatusBar";
 import { PluginViewHost } from "./PluginViewHost";
@@ -321,6 +322,10 @@ export const GroupArea = memo(function GroupArea({
   // count of open overlays is the fourth layer of `surfaceShown` — nothing read this counter until
   // 2026-08-17, and the plugin manager opened with two browser pages drawn over its card.
   const overlayed = useUi((s) => s.overlayCount > 0);
+  // One inventory subscription, not one hook per tab. A successful capture advances the revision;
+  // this render then changes the declaration from live to parked. Until publication the surface stays
+  // applied, so render cannot hide the surface before capture completes.
+  useSyncExternalStore(onParkedPictureChange, parkedPictureVersion, parkedPictureVersion);
   const t = useT();
   // JS interpolation (FLIP) of command-driven rect changes — on every commit flush compares against the previous rect (layoutRectMotion).
   useRenderCost("render.panes");
@@ -1116,9 +1121,10 @@ export const GroupArea = memo(function GroupArea({
                   // The same dim as the cell, from one place. Recombining the reasons here would
                   // make the veil and the surface disagree, and no veil is painted on the
                   // surface at all.
-                  surfacePlacement={viewSurfacePlacement(
-                    visibility.surfaceVisible,
+                  surfacePlacement={viewSurfacePlacementForPresentation(
+                    visibility,
                     !!maxCell,
+                    parkedPicture(view.id) !== null,
                     dimStrengthOf(group.id),
                   )}
                   command={view.command ?? null}
