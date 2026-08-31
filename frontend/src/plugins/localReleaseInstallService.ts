@@ -210,6 +210,17 @@ export async function installLocalPlugins(store: string, roots: LocalPluginRoot[
   try {
     const { plan, references } = await resolveLocalPlugins(store, roots);
     if (plan.digest !== expectedPlanDigest) { report({ phase: "failed", completed: 0, total: plan.releases.length, error: "local release closure changed after planning" }); return { ok: false, code: "LOCAL_INSTALL_PLAN_CHANGED", message: "local release closure changed after planning" }; }
+    const inUse = await sidecarInstallConflicts(plan.releases);
+    if (inUse.length > 0) {
+      const message = `Sidecars are running or recorded; stop them explicitly with sidecar_stop before installation: ${inUse.map((value) => value.id).join(", ")}`;
+      report({ phase: "failed", completed: 0, total: plan.releases.length, error: message });
+      return {
+        ok: false,
+        code: "SIDECAR_IN_USE",
+        message,
+        errors: inUse.map((value) => JSON.stringify(value)),
+      };
+    }
     const result = await installCertifiedRegistryReleases({ sourceId: "local", localStore: store, roots: references, releases: plan.releases, onProgress: report });
     if (result.ok) { await reconcileEnvironmentRevision(result.revision); report({ phase: "installed", completed: plan.releases.length, total: plan.releases.length }); }
     else report({ phase: "failed", completed: 0, total: plan.releases.length, error: result.message });
@@ -228,9 +239,46 @@ export async function installLocalPlugins(store: string, roots: LocalPluginRoot[
 
 // A Sidecar listed by sidecar_status as open or recorded is in use. Installation, removal, and development
 // registration refuse it with SIDECAR_IN_USE; none of them stops it.
+interface SidecarUseStatus {
+  name: string;
+  version?: string;
+  process?: string;
+  pid?: number;
+}
+
+async function sidecarUseStatus(): Promise<SidecarUseStatus[]> {
+  const status = await invoke<{ open: SidecarUseStatus[]; recorded: SidecarUseStatus[] }>("sidecar_status");
+  const byName = new Map<string, SidecarUseStatus>();
+  for (const entry of [...status.open, ...status.recorded]) byName.set(entry.name, entry);
+  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+async function sidecarInstallConflicts(releases: ReleaseDocument[]): Promise<Array<{
+  id: string;
+  requestedVersion: string;
+  runningVersion: string;
+  process?: string;
+  pid?: number;
+}>> {
+  const requested = new Map(
+    releases
+      .filter((release) => release.kind === "sidecar")
+      .map((release) => [release.id, release.version]),
+  );
+  if (requested.size === 0) return [];
+  return (await sidecarUseStatus())
+    .filter((entry) => requested.has(entry.name))
+    .map((entry) => ({
+      id: entry.name,
+      requestedVersion: requested.get(entry.name)!,
+      runningVersion: entry.version ?? "unknown",
+      ...(entry.process ? { process: entry.process } : {}),
+      ...(entry.pid !== undefined ? { pid: entry.pid } : {}),
+    }));
+}
+
 export async function sidecarInUse(id: string): Promise<boolean> {
-  const status = await invoke<{ open: Array<{ name: string }>; recorded: Array<{ name: string }> }>("sidecar_status");
-  return [...status.open, ...status.recorded].some((entry) => entry.name === id);
+  return (await sidecarUseStatus()).some((entry) => entry.name === id);
 }
 export function sidecarInUseMessage(id: string, operation: "installation" | "removal" | "development"): string {
   return `Sidecar ${id} is running or recorded; stop it explicitly before ${operation}`;

@@ -87,6 +87,34 @@ describe("local release planning and installation", () => {
     }));
   });
 
+  it("refuses a batch install while a selected Sidecar version is still running", async () => {
+    const roots = [{ id: PLUGIN, version: "0.0.1" }, { id: PEER, version: "0.0.1" }];
+    const plan = await planLocalPlugins("/store", roots);
+    const read = invoke.getMockImplementation()!;
+    invoke.mockImplementation(async (command: string, args: { id: string }) => {
+      if (command === "sidecar_status") {
+        return {
+          open: [{
+            name: SIDECAR,
+            version: "0.0.0",
+            process: "/old/sidecar",
+            pid: 77218,
+          }],
+          recorded: [],
+        };
+      }
+      return read(command, args);
+    });
+
+    const result = await installLocalPlugins("/store", roots, plan.digest);
+    expect(result).toMatchObject({
+      ok: false,
+      code: "SIDECAR_IN_USE",
+      errors: [expect.stringContaining(`"requestedVersion":"0.0.1"`)],
+    });
+    expect(installBatch).not.toHaveBeenCalled();
+  });
+
   it("refuses two roots that select different versions of the same Sidecar id", async () => {
     const sidecarV2Body = JSON.stringify({
       ...JSON.parse(sidecarBody),

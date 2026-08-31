@@ -104,6 +104,12 @@ and stages every distinct Plugin and Sidecar once before one environment revisio
 the roots one at a time, editing `environment.json`, or temporarily removing a dependent Plugin is
 not a valid migration path.
 
+The batch installer reads the public `sidecar_status` immediately before staging. Any selected
+Sidecar present in `open` or `recorded` returns `SIDECAR_IN_USE` with its requested version and the
+running version, process and PID. It never writes a newer environment selection over a running older
+unit and never stops one implicitly. The caller explicitly runs `sidecar_stop`, then retries the
+unchanged plan digest; re-resolving the plan closes the interval between planning and installation.
+
 ## Development source
 
 A development record is the same Plugin or Sidecar record shape with `source` set to `development`.

@@ -93,6 +93,8 @@ describe("plugin installation observation", () => {
       .toContain("DEPENDENCY_VERSION_CONFLICT");
     expect(getSpec("plugin.install.local.batch")?.errors)
       .toContain("DEPENDENCY_VERSION_CONFLICT");
+    expect(getSpec("plugin.install.local.batch")?.errors)
+      .toContain("SIDECAR_IN_USE");
   });
 
   it("starts a transaction without binding its lifetime to the renderer RPC", () => {
