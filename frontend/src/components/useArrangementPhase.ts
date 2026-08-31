@@ -71,9 +71,9 @@ export interface ArrangementPhase<L> {
   traveling: boolean;
   /** A framework-external surface is preparing bounds before the target DOM commit. */
   preparing: boolean;
-  /** The target DOM is committed, but the producer start receipt shared with the external surface is pending. */
+  /** The target DOM is committed, but the producer start receipt shared with the native surface is pending. */
   starting: boolean;
-  /** Exact ownership state while the snap target DOM is replaced atomically with the external projection commit. */
+  /** Exact ownership state while the snap target DOM is replaced atomically with the native projection commit. */
   replacing: boolean;
   /**
    * Mode of this journey — glide (panel FLIP + a leaving slot and an arriving slot) or not. Fixed

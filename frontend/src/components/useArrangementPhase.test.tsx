@@ -598,7 +598,7 @@ describe("useArrangementPhase", () => {
     expect(cancel).not.toHaveBeenCalled();
   });
 
-  it("the snap target DOM commit is declared a structural swap until the external projection commit closes", async () => {
+  it("the snap target DOM commit is declared a structural swap until the native projection commit closes", async () => {
     const at = solve(twoColumns, "a");
     const to = solve(threeColumns, "c");
     let finishPrepare!: (prepared: PreparedLayoutTransition) => void;
