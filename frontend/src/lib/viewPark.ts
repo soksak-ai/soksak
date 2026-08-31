@@ -185,17 +185,18 @@ export function commitViewPresentation(viewId: string, presentation: ViewPresent
     // travelling rail can only be shown by taking the surface off the screen — and a pane that goes
     // blank is what a person reads as a view that failed. The picture is what stays in its place.
     void holdParkedPicture(viewId, label)
-      .finally(() => {
-        // It may have come back while the picture was being taken. Hiding it then would park a
-        // surface nobody asked to park.
-        if (presentationByView.get(viewId) === key) commit();
-        else releaseParkedPicture(viewId);
+      .then((captured) => {
+        // A surface without a picture has no document stand-in. Hiding it would turn an overlay
+        // into a blank pane, so it remains applied and the failure stays observable in the picture
+        // failure status. Only a successful capture authorizes the visibility transition.
+        if (presentationByView.get(viewId) !== key) {
+          releaseParkedPicture(viewId);
+        } else if (captured) {
+          commit();
+        }
       })
       .catch((e: unknown) => {
-        // The park still has to happen. A rejection with nobody holding it is an unhandled one, and
-        // the surface it was about to park stays on the screen over whatever was drawn for it.
         console.warn(`[viewPark] parking a picture failed: ${viewId}`, e);
-        if (presentationByView.get(viewId) === key) commit();
       });
   } else {
     // Another tab or space owns these pixels. A stand-in for this view would cover that owner.

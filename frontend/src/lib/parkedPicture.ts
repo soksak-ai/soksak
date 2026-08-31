@@ -75,9 +75,9 @@ export function parkedPictureFailures(): Array<{ view: string; label: string; re
  * surface cannot answer keeps no picture, and the pane is then as blank as it was before — no worse,
  * and the reason is the surface's.
  */
-export async function holdParkedPicture(viewId: string, label: string): Promise<void> {
-  if (!hasContentViewHost() || asking.has(viewId)) return;
-  if (pictures.get(viewId)?.label === label) return;
+export async function holdParkedPicture(viewId: string, label: string): Promise<boolean> {
+  if (!hasContentViewHost() || asking.has(viewId)) return false;
+  if (pictures.get(viewId)?.label === label) return true;
   asking.add(viewId);
   try {
     const url = await timedAwait("picture", contentViewHost().picture(label));
@@ -85,9 +85,11 @@ export async function holdParkedPicture(viewId: string, label: string): Promise<
       pictures.set(viewId, { url, label });
       failures.delete(viewId);
       announce();
+      return true;
     } else {
       failures.set(viewId, { label, reason: "surface returned no picture" });
       announce();
+      return false;
     }
   } catch (cause) {
     failures.set(viewId, {
@@ -95,6 +97,7 @@ export async function holdParkedPicture(viewId: string, label: string): Promise<
       reason: cause instanceof Error ? cause.message : String(cause),
     });
     announce();
+    return false;
   } finally {
     asking.delete(viewId);
   }

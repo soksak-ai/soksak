@@ -225,6 +225,17 @@ describe("a parking commit goes through the content view host", () => {
     expect(order).toEqual(["hide"]);
     expect(seen).toEqual([["browser-win-a-v-1", false]]);
 
+    // A provider that cannot snapshot must not be hidden: there is no document picture to replace
+    // it, and hiding it would produce the blank overlay reported by the running app.
+    pictureAnswer = Promise.resolve(null);
+    dropViewVisibility("v-1");
+    order.length = 0;
+    seen.length = 0;
+    commitViewPresentation("v-1", resolveViewVisibility(true, true, true, true, false));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(order).toEqual(["picture"]);
+    expect(seen).toEqual([]);
+
     // A snapshot requested for motion may finish after the tab became inactive. Its result is stale
     // and cannot put the departing page back over the new active tab.
     let resolvePicture!: (value: string | null) => void;
