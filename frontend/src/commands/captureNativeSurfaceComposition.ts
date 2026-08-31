@@ -69,23 +69,12 @@ export async function composeNativeSurfacePictures(
   region: { x: number; y: number; w: number; h: number },
   surfaces: readonly AppliedSurface[],
   picture: (id: string) => Promise<string | null>,
+  background: string,
   decorations: readonly NativeDecoration[] = [],
 ): Promise<DocumentCapture | ComposedCapture> {
   if (capture.note.documentOnly !== true) return capture;
   const placements = nativeSurfacePicturePlacements(region, surfaces);
-  if (placements.length === 0) {
-    return {
-      png: capture.png,
-      note: {
-        ...capture.note,
-        documentOnly: false,
-        nativeComposed: true,
-        surfaces: 0,
-        drawn: 0,
-        decorations: 0,
-      },
-    };
-  }
+  if (!background) throw new Error("CAPTURE_BACKGROUND_UNAVAILABLE: theme --bg is empty");
   const base = await loadImage(`data:image/png;base64,${capture.png}`);
   const pictures = await Promise.all(placements.map(async (placement) => {
     const source = await picture(placement.id);
@@ -97,6 +86,9 @@ export async function composeNativeSurfacePictures(
   canvas.height = base.naturalHeight;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("VISIBLE_SURFACE_CAPTURE_FAILED: 2d composition is unavailable");
+  context.globalAlpha = 1;
+  context.fillStyle = background;
+  context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(base, 0, 0);
   const scaleX = canvas.width / region.w;
   const scaleY = canvas.height / region.h;

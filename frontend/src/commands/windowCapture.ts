@@ -20,11 +20,13 @@ export async function captureWindowPixels(
       );
       const region = rect ?? { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
       const host = contentViewHost();
+      const background = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
       return composeNativeSurfacePictures(
         shot,
         region,
         await host.appliedSurfaces(),
         (id) => host.picture(id),
+        background,
         nativeDecorationFacts().decorations,
       );
     },

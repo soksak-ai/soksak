@@ -6,8 +6,12 @@ import { nativeSurfacePicturePaint, nativeSurfacePicturePlacements } from "./cap
 describe("capture-only native surface composition", () => {
   it("paints Core native decorations after every provider image", () => {
     const source = readFileSync(resolve(import.meta.dirname, "captureNativeSurfaceComposition.ts"), "utf8");
+    const backgroundPaint = source.indexOf("context.fillStyle = background");
+    const documentPaint = source.indexOf("context.drawImage(base, 0, 0)");
     const surfacePaint = source.indexOf("context.drawImage(\n      image,");
     const decorationPaint = source.indexOf("context.stroke(new Path2D(decoration.path))");
+    expect(backgroundPaint).toBeGreaterThan(0);
+    expect(documentPaint).toBeGreaterThan(backgroundPaint);
     expect(surfacePaint).toBeGreaterThan(0);
     expect(decorationPaint).toBeGreaterThan(surfacePaint);
   });
