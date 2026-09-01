@@ -15,7 +15,7 @@ import { localize, useT } from "../i18n";
 //     cells — the portal escapes all stacking/clipping and stays on top.
 //   - Close = outside pointerdown (capture) + Escape. mouseLeave close was dropped (it closed on
 //     a graze, and it never closed at all when the mouse never entered the menu).
-//   - Hides native pane surfaces while open so the menu remains fully visible.
+//   - Blocks input below while open; native pane surfaces remain presented because the menu does not cover their geometry.
 
 // Menu tree node — keeps registration order (a category's position = its first entry's position).
 interface MenuNode {
