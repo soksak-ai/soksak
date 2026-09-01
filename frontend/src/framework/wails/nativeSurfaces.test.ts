@@ -98,6 +98,28 @@ describe("the native surface observer", () => {
     expect(staged).toEqual({ sequence: commits.at(-1)?.sequence, visibleViewIds: ["tab-b"] });
   });
 
+  it("recommits when the host changes a tab's surface visibility", async () => {
+    const tab = document.createElement("section");
+    tab.dataset.surfaceVisible = "true";
+    const surface = declare("browser.win-main.tab-a");
+    vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 100, bottom: 100,
+      width: 100, height: 100, toJSON: () => ({}),
+    } as DOMRect);
+    tab.append(surface);
+    document.body.append(tab);
+    startNativeSurfaces();
+    await settle();
+    expect((commits.at(-1)?.surfaces as Array<{ visible: boolean }>)[0]?.visible).toBe(true);
+
+    // Modal/overlay presentation is published on the tab wrapper, not on the plugin declaration.
+    // The compositor must observe this contract edge; otherwise a native child remains above the
+    // modal even though the DOM says the tab is hidden.
+    tab.dataset.surfaceVisible = "false";
+    await settle();
+    expect((commits.at(-1)?.surfaces as Array<{ visible: boolean }>)[0]?.visible).toBe(false);
+  });
+
   it("carries the explicit interactive motion edges", async () => {
     startNativeSurfaces();
     await settle();
