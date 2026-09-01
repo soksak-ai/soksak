@@ -611,11 +611,11 @@ invalid evidence.
 
 The isolated development application reproduced a recovery error on 2026-09-01: Vision 0.0.68
 reported `live` and `complete` while the restarted Alacritty surface reported `hostPixels=789x121`,
-`cols=1`, `rows=1`, and no rendered frame. Vision 0.0.69 fixes this at the owner boundary: a matching
+`cols=1`, `rows=1`, and no rendered frame. Terminal Kit 0.0.106 and Vision 0.0.70 fix this at the owner boundary: a matching
 pixel declaration does not suppress the first resize while the owner reports its bootstrap 1x1 grid.
-The presenter RED test and 37-test frontend gate pass. After local installation and application reload,
-the development capture showed the prompt and browser together, and the Alacritty sidecar was recreated
-under the development home. The frozen v8 application and its sidecars were not changed.
+The presenter RED test and 37-test frontend gate pass; the Kit gate passes 159 tests. After local release
+installation and application reload, development captures showed the prompt and browser together,
+including a previously blank tab after activation. The frozen v8 application and its sidecars were not changed.
 
 ### Sidecar end state
 

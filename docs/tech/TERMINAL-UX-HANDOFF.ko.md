@@ -593,10 +593,10 @@ terminal-surface service가 PTY와 engine unit을 모두 선언한 source를 가
 
 2026-09-01 격리 개발 앱에서 복원 오류를 재현했다. Vision 0.0.68은 `live`와 `complete`를
 반환했지만 재시작된 Alacritty surface는 `hostPixels=789x121`, `cols=1`, `rows=1`, 렌더된
-frame 없음으로 보고했다. Vision 0.0.69는 소유자 경계에서 수정했다. pixel 선언이 같아도
+frame 없음으로 보고했다. Terminal Kit 0.0.106과 Vision 0.0.70이 이 조건을 수정했다. pixel 선언이 같아도
 소유자가 bootstrap 1x1을 보고하는 동안 첫 resize를 생략하지 않는다. presenter RED 테스트와
-frontend 37개 테스트가 통과했다. 로컬 설치 후 개발 앱을 재적재하자 캡처에 프롬프트와 브라우저가
-함께 표시되었고 Alacritty sidecar가 개발 home 아래에서 다시 생성되었다. frozen v8 앱과 그
+frontend 37개, Kit 159개 테스트가 통과했다. 로컬 release 설치 후 개발 앱을 재적재하자 기존에
+비어 있던 탭을 활성화한 캡처에도 프롬프트와 브라우저가 함께 표시되었다. frozen v8 앱과 그
 sidecar는 변경하지 않았다.
 
 ### 사이드카 종료 상태
