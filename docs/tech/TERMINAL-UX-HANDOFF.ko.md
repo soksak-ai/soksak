@@ -29,6 +29,14 @@ prompt가 남아 있었습니다. 따라서 이는 shell이 prompt를 중복 출
 surface-state/resize 게시 경주입니다. 수정은 plugin의 RED/GREEN presenter 테스트로 증명 중이며
 frozen v8에는 적용하지 않았습니다.
 
+수정한 terminal-vision plugin의 첫 release 시도에서도 별도 release RED가 드러났습니다. PTY
+0.0.22가 오래된 SDK 0.0.18을 선언해 exact preflight가 exit 78로 중단됐고, 프로필 SDK
+0.0.20으로 선언을 정정한 뒤 PTY release를 다시 만들었습니다. 이어진 Alacritty packaging은
+현재 SDK release validator가 `sidecar.json`을 다섯 key로 닫아 두었지만 workspace 규칙은
+`runtimeDependencies`를 허용하는 충돌 때문에 거부했습니다. 통과를 위해 dependency field를
+삭제하지 않았으며, 남은 engine closure와 plugin 0.0.72를 게시하기 전에 spec/SDK 계약을
+정리해야 합니다.
+
 ## 제보된 결함
 
 열 항목 모두 인수 조건입니다. 제공자 하나나 발생 조건 하나만 고친 결과는 미완입니다.

@@ -30,6 +30,14 @@ the repeated prompts. Therefore the defect is an initial surface-state/resize pu
 not evidence that the shell emitted duplicate prompt text. The fix is being proved in the plugin's
 RED/GREEN presenter test and has not been applied to frozen v8.
 
+The first release attempt for the corrected terminal-vision plugin also exposed a separate release
+RED. PTY 0.0.22 required an obsolete SDK 0.0.18 declaration; its exact preflight stopped at exit
+78, so the declaration was corrected to the profile SDK 0.0.20 and the PTY release was rebuilt.
+The next Alacritty packaging step then rejected the engine `sidecar.json` because the current SDK
+release validator closes that manifest to five keys while the workspace rule permits
+`runtimeDependencies`. No dependency field was deleted to make packaging pass; the spec/SDK
+contract must be resolved before the remaining engine closure and plugin 0.0.72 can be published.
+
 ## Reported defects
 
 All ten items are acceptance requirements. A result that fixes only one provider or one trigger is
