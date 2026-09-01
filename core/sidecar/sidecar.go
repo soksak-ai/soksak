@@ -150,7 +150,9 @@ type Host struct {
 	grants map[string]grant
 	// startedObservers receive one event after this host selects a reachable process generation.
 	startedObservers map[uint64]func(Open)
-	nextObserver     uint64
+	// endedObservers receive one event after a held process stops answering.
+	endedObservers map[uint64]func(Open)
+	nextObserver   uint64
 	// answerWithin bounds how long a caller waits for one request. A unit that took the request and
 	// answered nothing must not hold the caller, and every caller behind it.
 	answerWithin time.Duration
@@ -214,7 +216,7 @@ func NewHost(deps Deps) *Host {
 	}
 	return &Host{
 		deps: deps, open: make(map[string]*unit), starting: make(map[string]*startAttempt),
-		ended: make(map[string]UnitStatus), startedObservers: make(map[uint64]func(Open)),
+		ended: make(map[string]UnitStatus), startedObservers: make(map[uint64]func(Open)), endedObservers: make(map[uint64]func(Open)),
 	}
 }
 
@@ -237,6 +239,33 @@ func (host *Host) notifyStarted(open Open) {
 	host.mu.Lock()
 	observers := make([]func(Open), 0, len(host.startedObservers))
 	for _, observer := range host.startedObservers {
+		observers = append(observers, observer)
+	}
+	host.mu.Unlock()
+	for _, observer := range observers {
+		observer(open)
+	}
+}
+
+// ObserveEnded subscribes to process generations that stop answering. Delivery is event-driven;
+// consumers do not infer process death from a timer or a stale inventory read.
+func (host *Host) ObserveEnded(observer func(Open)) func() {
+	host.mu.Lock()
+	host.nextObserver++
+	id := host.nextObserver
+	host.endedObservers[id] = observer
+	host.mu.Unlock()
+	return func() {
+		host.mu.Lock()
+		delete(host.endedObservers, id)
+		host.mu.Unlock()
+	}
+}
+
+func (host *Host) notifyEnded(open Open) {
+	host.mu.Lock()
+	observers := make([]func(Open), 0, len(host.endedObservers))
+	for _, observer := range host.endedObservers {
 		observers = append(observers, observer)
 	}
 	host.mu.Unlock()
@@ -817,6 +846,7 @@ func (host *Host) drop(name string, held *unit) {
 	host.closeLinkLocked(name)
 	host.mu.Unlock()
 	host.forget(name)
+	host.notifyEnded(held.open)
 }
 
 // forgetWhenGone drops a unit that ended on its own, so the next Start begins a new one rather than
@@ -834,6 +864,7 @@ func (host *Host) forgetWhenGone(name string, held *unit, ended <-chan childExit
 	}
 	host.mu.Unlock()
 	host.forget(name)
+	host.notifyEnded(held.open)
 	close(gone)
 }
 

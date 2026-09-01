@@ -18,7 +18,6 @@ import (
 
 	"encoding/json"
 	"fmt"
-	terminalsurface "github.com/soksak-ai/soksak-service-terminal-surface"
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	ptycontract "github.com/soksak-ai/soksak-contract-pty"
 	"github.com/soksak-ai/soksak-core/core/activity"
@@ -31,6 +30,7 @@ import (
 	"github.com/soksak-ai/soksak-core/core/sidecar"
 	"github.com/soksak-ai/soksak-core/core/store"
 	"github.com/soksak-ai/soksak-core/frameworks/wails"
+	terminalsurface "github.com/soksak-ai/soksak-service-terminal-surface"
 	"strconv"
 	"sync/atomic"
 )
@@ -239,6 +239,9 @@ func Run(assets embed.FS) error {
 			TerminalLinks: terminalSurfaceLinks(units),
 			TerminalUnitStarts: func(listener func(string)) func() {
 				return units.ObserveStarted(func(open sidecar.Open) { listener(open.Name) })
+			},
+			TerminalUnitEnds: func(listener func(string)) func() {
+				return units.ObserveEnded(func(open sidecar.Open) { listener(open.Name) })
 			},
 			CaptureProbe: os.Getenv("SOKSAK_CAPTURE_PROBE"),
 			Registry:     registry,

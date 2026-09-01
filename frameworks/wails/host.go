@@ -76,6 +76,8 @@ type Options struct {
 	// TerminalUnitStarts subscribes to selected sidecar process generations. A replacement process
 	// has no in-memory surfaces, so held declarations rebuild from this event.
 	TerminalUnitStarts func(func(string)) func()
+	// TerminalUnitEnds notifies the surface owner when a selected sidecar stops answering.
+	TerminalUnitEnds func(func(string)) func()
 }
 
 // macActivation is how this launch presents itself to the desktop.
@@ -291,7 +293,7 @@ func Run(options Options) error {
 	// shell and its render off the commit path, and the ring's frames land on
 	// the pane's own host view.
 	terminalSessions := wireTerminalSessions(
-		terminalBackend, options.Identity, options.TerminalLinks, options.TerminalUnitStarts, options.Bridge.Emit,
+		terminalBackend, options.Identity, options.TerminalLinks, options.TerminalUnitStarts, options.TerminalUnitEnds, options.Bridge.Emit,
 	)
 	registerTerminalSurfaceStatus(options.Registry, terminalSessions)
 	wireTerminalChannel(terminalBackend, terminalSessions, options.Identity, options.Bridge.Emit)
@@ -594,16 +596,29 @@ func observeTerminalUnitStarts(restarter terminalUnitRestarter, subscribe func(f
 	})
 }
 
+type terminalUnitEnder interface{ MarkUnitEnded(string) }
+
+func observeTerminalUnitEnds(ender terminalUnitEnder, subscribe func(func(string)) func()) {
+	if subscribe == nil {
+		return
+	}
+	subscribe(func(unit string) { ender.MarkUnitEnded(unit) })
+}
+
 func wireTerminalSessions(
 	backend *terminalsurface.Backend,
 	identity string,
 	links terminalsurface.Links,
 	subscribe func(func(string)) func(),
+	ends func(func(string)) func(),
 	emit func(event string, payload any),
 ) *terminalsurface.Sessions {
 	sessions := terminalsurface.NewSessions(identity, links)
 	backend.UseSessions(sessions)
 	observeTerminalUnitStarts(sessions, subscribe)
+	if ender, ok := any(sessions).(terminalUnitEnder); ok {
+		observeTerminalUnitEnds(ender, ends)
+	}
 	backend.ObservePanes(func(
 		created bool, lifecycleGeneration, declarationGeneration uint64, source compositor.SurfaceSource,
 	) {
