@@ -9,6 +9,6 @@ describe("window edge contract", () => {
   it("uses one complete perimeter rule", () => {
     const rail = BORDER_RULES.find((r) => r.id === "rail-perimeter");
     expect(rail).toBeDefined();
-    expect(rail?.edges).toEqual({ left: "bd", right: "bd" });
+    expect(rail?.edges).toEqual({ top: "bd", right: "bd", bottom: "bd", left: "bd" });
   });
 });

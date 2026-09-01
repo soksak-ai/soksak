@@ -1,4 +1,4 @@
-// Rail vertical borders — exhaustive comparison of contract and implementation.
+// Rail card perimeter — exhaustive comparison of contract and implementation.
 //
 // Two places state the same law independently: the contract table (rail-ground-*/rail-pane-* in
 // borderContract) and the implementation (railEdges.railEdgeWidths). Fixing only one drifts silently, so the
@@ -37,8 +37,8 @@ function probe(el: HTMLElement, open: boolean): ElementProbe {
   const r = Number(el.dataset.borderRight);
   return {
     edges: {
-      top: edge(0),
-      bottom: edge(0),
+      top: edge(Number(el.dataset.borderTop)),
+      bottom: edge(Number(el.dataset.borderBottom)),
       left: edge(l),
       right: edge(r),
     },
@@ -49,11 +49,13 @@ function probe(el: HTMLElement, open: boolean): ElementProbe {
   };
 }
 
-function mount(look: Look, station: number, widths: { left: number; right: number }) {
+function mount(look: Look, station: number, widths: { top: number; right: number; bottom: number; left: number }) {
   document.body.innerHTML = "";
   const el = document.createElement("div");
   el.className = `sidebar rail-${look}`;
   el.dataset.station = String(station);
+  el.dataset.borderTop = String(widths.top);
+  el.dataset.borderBottom = String(widths.bottom);
   el.dataset.borderLeft = String(widths.left);
   el.dataset.borderRight = String(widths.right);
   document.body.appendChild(el);
@@ -98,7 +100,7 @@ describe("rail vertical borders — contract ≡ implementation", () => {
     "closed rail look=%s station=%s paneStyle=%s — zero width, so there is nothing to judge",
     (look, station, style) => {
       const widths = railEdgeWidths(look, false, station, style);
-      expect(widths).toEqual({ left: 0, right: 0 });
+      expect(widths).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
       mount(look, station, widths);
       const r = evaluateRules(RAIL_RULES, env(false, style));
       expect(r.violations).toEqual([]);
@@ -108,11 +110,11 @@ describe("rail vertical borders — contract ≡ implementation", () => {
 
   // Control group: whether this suite actually catches a violation (guards against fake GREEN).
   it.each([
-    ["removing the rail perimeter at ground+card is a violation", "ground" as Look, 50, "card" as PaneStyle, { left: 0, right: 0 }],
-    ["removing the outer rail perimeter at pane+station 0 is a violation", "pane" as Look, 0, "card" as PaneStyle, { left: 0, right: 0 }],
-    ["removing the line at an inner pane station is a violation", "pane" as Look, 50, "card" as PaneStyle, { left: 0, right: 0 }],
+    ["removing the rail perimeter at ground+card is a violation", "ground" as Look, 50, "card" as PaneStyle, { top: 0, right: 0, bottom: 0, left: 0 }],
+    ["removing the outer rail perimeter at pane+station 0 is a violation", "pane" as Look, 0, "card" as PaneStyle, { top: 0, right: 0, bottom: 0, left: 0 }],
+    ["removing the line at an inner pane station is a violation", "pane" as Look, 50, "card" as PaneStyle, { top: 0, right: 0, bottom: 0, left: 0 }],
   ])("%s", (_label, look, station, style, wrong) => {
-    mount(look, station, wrong as { left: number; right: number });
+    mount(look, station, wrong as { top: number; right: number; bottom: number; left: number });
     const r = evaluateRules(RAIL_RULES, env(true, style));
     expect(r.violations.length).toBeGreaterThan(0);
   });

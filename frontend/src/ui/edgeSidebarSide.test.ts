@@ -44,11 +44,10 @@ function order(selector: string): number | null {
 }
 
 describe("an edge sidebar taking room from the body", () => {
-  it("uses the same border contract for the surface gap", () => {
-    const base = blocks(".surface-gap-boundary").join("\n");
-    expect(base).toContain("background: var(--bd)");
-    expect(base).toContain("top: var(--pane-inset, 0px)");
-    expect(base).toContain("bottom: var(--pane-inset, 0px)");
+  it("uses the same rounded card perimeter for the rail", () => {
+    const base = blocks(".sidebar.rail-ground").join("\n") + blocks(".sidebar.rail-pane").join("\n");
+    expect(base).toContain("border: 1px solid var(--bd)");
+    expect(base).toContain("border-radius: 11px");
   });
 
   it("puts the left edge before the body in the flow", () => {

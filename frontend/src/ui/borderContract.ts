@@ -176,7 +176,7 @@ export const BORDER_RULES: readonly BorderRule[] = [
     selector:
       '.sidebar.rail-ground, .sidebar.rail-pane',
     kind: "edges",
-    edges: { left: "bd", right: "bd" },
+    edges: { top: "bd", right: "bd", bottom: "bd", left: "bd" },
     note: tmsg("msg.ui.border.railCardPerimeter"),
   },
   // Each window edge owns the one line facing the work. Written as two entries, not one shared

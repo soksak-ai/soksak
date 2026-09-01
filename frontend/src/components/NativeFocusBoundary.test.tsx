@@ -99,4 +99,25 @@ describe("NativeFocusBoundary geometry projection", () => {
     expect(nativeDecorationFacts().decorations[0]?.path).toContain("10.5");
     act(() => root.unmount());
   });
+
+  it("projects corner focus marks on the measured rect without chrome offsets", async () => {
+    useSettings.setState({ focusIndicator: "corners" });
+    const root = createRoot(host);
+    act(() => root.render(
+      <NativeFocusBoundary
+        owner="focus/corners"
+        node="layout/focus-boundary/corners"
+        trackRef={() => {}}
+        active
+        style={{ left: "10%" }}
+      />,
+    ));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    const path = nativeDecorationFacts().decorations[0]?.path;
+    expect(path).toContain("M 10.5 20.5 L 24.5 20.5");
+    expect(path).toContain("M 10.5 139.5 L 24.5 139.5");
+    expect(path).not.toContain("M 10.5 79");
+    act(() => root.unmount());
+  });
 });

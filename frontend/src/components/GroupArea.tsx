@@ -125,8 +125,11 @@ function cornerFocusPath(rect: DOMRect, strokeWidth: number): string {
   const half = strokeWidth / 2;
   const left = rect.left + half;
   const right = rect.right - half;
-  const top = rect.top + HEADER_PX - 1;
-  const bottom = rect.bottom - STATUS_PX + 1;
+  // getBoundingClientRect() is already in viewport coordinates. Header/status
+  // offsets belong to layout projection, not to the measured decoration rect.
+  // Applying them here double-shifts the native corners outside their pane.
+  const top = rect.top + half;
+  const bottom = rect.bottom - half;
   const arm = 14;
   return [
     `M ${left} ${top} L ${left + arm} ${top}`,

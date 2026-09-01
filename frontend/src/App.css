@@ -717,6 +717,7 @@ body,
   top: var(--pane-inset, 0px);
   bottom: var(--pane-inset, 0px);
   overflow: hidden;
+  box-sizing: border-box;
   /* The rail's card is the pane's card.
      The relation surface strokes the union of the rail and the view it stands
      for, so the two are inside one border already — and inside it they were a
@@ -741,19 +742,8 @@ body,
    independent of direction. */
 .sidebar.rail-ground,
 .sidebar.rail-pane {
-  border-left: 1px solid var(--bd);
-  border-right: 1px solid var(--bd);
-}
-/* A gap is still a boundary between surfaces. It uses the same one-pixel
-   contract as every card edge; only the station anchor changes. */
-.surface-gap-boundary {
-  position: absolute;
-  top: var(--pane-inset, 0px);
-  bottom: var(--pane-inset, 0px);
-  width: 1px;
-  background: var(--bd);
-  pointer-events: none;
-  z-index: 9;
+  border: 1px solid var(--bd);
+  border-radius: 11px;
 }
 /* Rail visual mode (§12-⑤) — ground: a plane lying on the floor rather than a
    split window. Tint and shadow are removed and only the boundary line stays.
@@ -1709,16 +1699,6 @@ body,
   box-shadow: var(--shadow);
 }
 
-/* And the rail takes the same corners as the panes it stands against, per style,
-   for the same reason its card is theirs. */
-:root[data-pane-style="card"] .sidebar,
-:root[data-pane-style="floating"] .sidebar {
-  border-radius: 11px;
-  overflow: hidden;
-}
-:root[data-pane-style="floating"] .sidebar {
-  border-radius: 14px;
-}
 
 /* The foreground frame (z:5) is the card's only border. It lies over the
    terminal and the chrome so all four sides are one 1px line.
