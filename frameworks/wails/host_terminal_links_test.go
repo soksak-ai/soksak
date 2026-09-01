@@ -63,7 +63,7 @@ func TestTheSessionsSpeakThroughTheInjectedLinks(t *testing.T) {
 		return nil, refusedByFake{}
 	}}
 	backend := terminalsurface.NewBackend()
-	sessions := wireTerminalSessions(backend, "install-test", links, nil, nil)
+	sessions := wireTerminalSessions(backend, "install-test", links, nil, nil, nil)
 
 	if err := sessions.Input("tab-1.1", "aa"); err == nil ||
 		!strings.Contains(err.Error(), "is not running") {
