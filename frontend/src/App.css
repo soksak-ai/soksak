@@ -776,7 +776,6 @@ body,
    boundary line is a real sibling of the clipped card, so it remains visible
    in the corridor and can be measured as rail/boundary. */
 .rail-boundary-line {
-  content: "";
   position: absolute;
   top: 0;
   bottom: 0;
