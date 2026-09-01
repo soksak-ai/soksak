@@ -668,12 +668,13 @@ surface provider.
 
 An open RED remains in the live development environment (2026-09-01): the
 `sidecar.status` receipt names PTY 0.0.22 (PID 62680) and Alacritty 0.0.47
-(PID 4286), while `ps` reports `PPID=1` for both. The development cored is
-still alive (PID 53007), so this observation is not evidence of a clean app
-shutdown or of zero orphaned sidecars. It is recorded as an ownership/lifetime
-failure until a RED→GREEN test proves the intended parent and post-shutdown
-process state. The frozen v8 process and its children were not inspected or
-modified by a control command.
+(PID 4286), while `ps` reports `PPID=1` for the PTY and the development app
+(PID 55409) as Alacritty's parent. The development cored (PID 53007) is still
+alive, so the PTY observation is not evidence of a clean app shutdown or of
+zero orphaned sidecars. It is recorded as an ownership/lifetime failure until
+a RED→GREEN test proves the intended parent and post-shutdown process state.
+The frozen v8 process and its children were not inspected or modified by a
+control command.
 
 When a selected PTY or engine process ends, Core emits a unit-ended event. The terminal-surface
 owner consumes that event and marks dependent panes `blocked` with the unit name and error. A pane

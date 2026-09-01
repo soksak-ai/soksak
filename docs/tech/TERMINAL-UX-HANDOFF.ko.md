@@ -646,11 +646,12 @@ native surface 드래그 전체 매트릭스를 닫는 증거는 아니다.
 
 실행 중인 개발 환경에 수명주기 RED가 남아 있다(2026-09-01).
 `sidecar.status`는 PTY 0.0.22(PID 62680)와 Alacritty 0.0.47(PID 4286)을
-보고하지만 `ps`에서는 두 프로세스 모두 `PPID=1`이다. 개발 cored(PID
-53007)는 살아 있으므로 이를 정상 종료나 고아 사이드카 0의 증거로 볼 수
-없다. 의도한 parent와 종료 뒤 프로세스 상태를 RED→GREEN 테스트로 증명할
-때까지 소유권·수명주기 결함으로 추적한다. frozen v8 프로세스와 자식은
-control command로 조사하거나 수정하지 않았다.
+보고한다. `ps`에서 PTY의 `PPID=1`이지만 Alacritty의 parent는 개발 앱
+PID 55409이다. 개발 cored(PID 53007)는 살아 있으므로 PTY 관측을 정상
+종료나 고아 사이드카 0의 증거로 볼 수 없다. 의도한 parent와 종료 뒤
+프로세스 상태를 RED→GREEN 테스트로 증명할 때까지 소유권·수명주기 결함으로
+추적한다. frozen v8 프로세스와 자식은 control command로 조사하거나
+수정하지 않았다.
 
 선택된 PTY 또는 엔진 프로세스가 종료되면 Core가 unit-ended 이벤트를 발행합니다. terminal-surface
 소유자는 이 이벤트를 받아 종속 pane을 unit 이름과 오류가 포함된 `blocked`로 기록합니다. 프로세스가
