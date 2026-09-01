@@ -12,8 +12,8 @@ importers:
         specifier: 0.0.3
         version: 0.0.3
       '@soksak/soksak-spec':
-        specifier: 0.0.52
-        version: 0.0.52
+        specifier: 0.0.53
+        version: 0.0.53
       '@wailsio/runtime':
         specifier: 3.0.0-beta.12
         version: 3.0.0-beta.12
@@ -527,8 +527,8 @@ packages:
     resolution: {integrity: sha512-OVAFwkavMvhk0QVCewcJlzsOo2rtwkGcSCt/5azzElknrkR+/z5WT7669zwCl3KcyJi+7WWCAfenTFTBHOSMCw==}
     engines: {node: 26.7.0}
 
-  '@soksak/soksak-spec@0.0.52':
-    resolution: {integrity: sha512-SCKkrmcaWTeJHqO31IB3qcOuSfOnjHtIxwuCA9+XfCIU+NNIFjd30NpQOyyoCUG+JK82raicbvQ9+KxfaRg9ew==}
+  '@soksak/soksak-spec@0.0.53':
+    resolution: {integrity: sha512-GFp5xYXMXZypg/e++3vZTXUmPik7sV8sWlD8Zhqk2uXmNkEWU3Yweoez4wxrZjrBeygkBvflCiOOJ+Z7DRTQyQ==}
     engines: {node: 26.7.0}
     hasBin: true
 
@@ -1352,7 +1352,7 @@ snapshots:
 
   '@soksak/soksak-service-native-compositor@0.0.3': {}
 
-  '@soksak/soksak-spec@0.0.52': {}
+  '@soksak/soksak-spec@0.0.53': {}
 
   '@tabler/icons@3.46.0': {}
 
