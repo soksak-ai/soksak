@@ -777,8 +777,8 @@ body,
    in the corridor and can be measured as rail/boundary. */
 .rail-boundary-line {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: var(--pane-inset, 0px);
+  bottom: var(--pane-inset, 0px);
   width: 1px;
   background: var(--bd-soft);
   pointer-events: none;

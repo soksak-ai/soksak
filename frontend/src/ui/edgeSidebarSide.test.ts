@@ -49,6 +49,8 @@ describe("an edge sidebar taking room from the body", () => {
     const left = blocks('.rail-boundary-line[data-station="0"]').join("\n");
     const right = blocks('.rail-boundary-line[data-station="100"]').join("\n");
     expect(base).toContain("background: var(--bd-soft)");
+    expect(base).toContain("top: var(--pane-inset, 0px)");
+    expect(base).toContain("bottom: var(--pane-inset, 0px)");
     expect(left).toContain("left: var(--rail-width)");
     expect(right).toContain("right: var(--rail-width)");
   });
