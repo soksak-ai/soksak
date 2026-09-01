@@ -612,6 +612,17 @@ focus 없는 캡처에 prompt가 보였다. 이는 candidate 설치의 증거가
 보였다. 이는 현재 오버레이 transaction의 증거이지 picker·sidebar·modal 전체 매트릭스가
 완료됐다는 뜻은 아니다. 나머지 경우도 같은 정량 측정과 직접 캡처 확인이 필요하다.
 
+### Wails 디바이더 드래그 관측
+
+2026-09-01 실행 중인 개발 창에서 공개 `ui.input.drag` 명령으로
+`gutter/pan-odgf3j/bottom`을 세로 80 CSS 픽셀, 8개 이동 단계로 드래그하고
+포커스를 바꾸지 않는 20프레임 기록을 남겼다. 반환된 gesture facts는
+`moveCount=8`, `applyCount=8`이었고 `computedSizes`와 `appliedSizes`는
+`[0.5009345794,0.4990654206]`로 일치했으며 최종 layout receipt도 같은 두 비율을
+기록했다. 캡처를 직접 확인한 결과 디바이더와 두 pane 외곽선이 하나의 layout
+transaction으로 함께 이동했다. 이는 현재 DOM split의 공개 드래그 경로를 증명하지만,
+Vision 0.0.71이 동의 대기 비활성 상태이므로 native Vision provider GREEN은 아니다.
+
 ### 사이드카 종료 상태
 
 선택된 PTY 또는 엔진 프로세스가 종료되면 Core가 unit-ended 이벤트를 발행합니다. terminal-surface

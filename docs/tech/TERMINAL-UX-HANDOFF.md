@@ -633,6 +633,18 @@ images behind the modal. This is evidence for the current overlay transaction, n
 the full picker/sidebar/modal matrix; the remaining cases still require the same numeric check and
 direct capture inspection.
 
+### Wails divider drag observation
+
+On 2026-09-01 the running development window was exercised through the public
+`ui.input.drag` command against `gutter/pan-odgf3j/bottom`, with an 80 CSS-pixel
+vertical movement, eight move steps, and a 20-frame no-focus recording. The
+returned gesture facts contained `moveCount=8`, `applyCount=8`, matching
+`computedSizes`/`appliedSizes` of `[0.5009345794,0.4990654206]`, and the final
+layout receipt contained the same two ratios. The capture was inspected directly;
+the divider and both pane frames moved as one layout transaction. This proves the
+public drag path for the current DOM split, but is not a native Vision provider
+GREEN while Vision 0.0.71 remains disabled pending consent.
+
 ### Sidecar end state
 
 When a selected PTY or engine process ends, Core emits a unit-ended event. The terminal-surface
