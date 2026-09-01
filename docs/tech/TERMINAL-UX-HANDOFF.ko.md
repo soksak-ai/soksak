@@ -698,3 +698,10 @@ PID 55409이다. 개발 cored(PID 53007)는 살아 있으므로 PTY 관측을 �
 모든 제공자 매트릭스의 RED 가 GREEN 이 되고, 모든 정량 표시 검사와 소유 검사가 통과하며, 스크린샷과
 움직임 녹화를 직접 확인해야 완료입니다. 빌드, 명령 응답, 과거 CI 실행만으로 이 인계를 끝낼 수
 없습니다.
+## 2026-09-01 현재 릴리즈 closure 관측
+
+개발 local release store를 다시 검증한 결과, 활성 store에는 완전한 build receipt를 가진 12개 불변 항목만 있으며, 이전 receipt가 없는 후보는 개인 복구 백업 `.release-backup/legacy-store`에만 보존되어 있다.
+
+현재 terminal Vision 후보는 PTY `0.0.23`, Vision `0.0.73`, SDK `0.0.21`, Spec `0.0.53`을 선택한다. 여섯 engine sidecar도 각각 새 PTY closure와 receipt를 포함한다: Alacritty `0.0.47`, Ghostty `0.0.43`, Kitty `0.0.40`, Shitty `0.0.41`, VT100 `0.0.42`, WezTerm `0.0.41`. 각 release는 `aarch64-apple-darwin` target에서 owner `make release`·attestation을 통과한 뒤 동일한 local store에 publish했다.
+
+이 기록은 release closure와 기계적 gate의 상태만 확정한다. 실행 중인 사용자 앱(v8 포함)의 UI·sidecar 수명주기 GREEN을 의미하지 않는다. PPID 1 부모 없는 sidecar, 전체 terminal 입력/복원/drag 및 compositor 시각 검증은 별도 RED로 계속 추적한다.

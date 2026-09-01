@@ -722,3 +722,11 @@ not repair stale state and no timer is used. The service test and Core package t
 Completion requires all provider-matrix RED tests to become GREEN, all numeric visibility and
 ownership checks to pass, and direct inspection of screenshots and motion recordings. A build,
 command reply or previous CI run alone cannot close this handoff.
+
+## Release closure observed 2026-09-01
+
+The development local release store was re-verified. The active store contains 12 immutable entries with complete build receipts; legacy receipt-less candidates are retained only in the private recovery backup `.release-backup/legacy-store`.
+
+The current terminal Vision candidate selects PTY `0.0.23`, Vision `0.0.73`, SDK `0.0.21`, and Spec `0.0.53`. The six engine sidecars carry that PTY closure: Alacritty `0.0.47`, Ghostty `0.0.43`, Kitty `0.0.40`, Shitty `0.0.41`, VT100 `0.0.42`, and WezTerm `0.0.41`. Each release passed its owner `make release` and attestation for `aarch64-apple-darwin` before publication to the same local store.
+
+This establishes only release closure and mechanical gates. It is not a GREEN claim for any running user app, including v8. Parentless sidecar PPID 1, complete terminal input/recovery/drag, and compositor visual verification remain separate named REDs.
