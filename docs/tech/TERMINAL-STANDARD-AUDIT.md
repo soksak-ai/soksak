@@ -15,6 +15,20 @@ The terminal contract defines required control-sequence behavior and optional im
 capabilities. Each provider proves its declared subset in its own repository; Core does not inspect
 or test provider implementation.
 
+## Wails focus-boundary observation — 2026-09-01
+
+The development Wails window was observed without bringing the OS window forward. After a public
+`ui.input.click` on the active terminal screen, `ui.focus.state` reported the addressed tab as the
+keyboard owner and `delivered=true`. `ui.tree rects=true` then reported `surfaceReady=true` for all
+five mounted terminal surfaces. The active tab (`tab-2mmxbp`) exposed
+`cursorPresentation=engine`, `cursorActive=true`; the four inactive tabs exposed
+`cursorPresentation=hollow-block`, `cursorActive=false`. Each visible native terminal's
+`nativeDeclaredFrame` matched its DOM rect (`205,120,789,121`) in the same observation.
+
+This is GREEN for the public DOM click/focus boundary and the focus-out cursor presentation in this
+capture. It is not a certification of an OS-native mouse click or AppKit keyboard delivery; those
+require a separate no-focus-stealing native-input observation and remain open until measured.
+
 ## Theme row — 2026-08-29
 
 The runtime assertion emits OSC 4/10/11/12 from the shell, reads engine `surface.state`, reads plugin
