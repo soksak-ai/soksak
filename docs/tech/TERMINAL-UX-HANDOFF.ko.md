@@ -605,12 +605,14 @@ focus 없는 캡처에 prompt가 보였다. 이는 candidate 설치의 증거가
 ### Wails 오버레이 관측
 
 2026-09-01 실행 중인 Wails 개발 창에서 `settings-open`을 연 상태를 측정했다. 공개
-`surface.inventory`는 등록된 webview 4개 모두 `declaredVisible=false`,
+`surface.inventory`는 등록된 브라우저 webview 2개 모두 `declaredVisible=false`,
 `effectivelyHidden=true`로 보고했으며 선언 사각형과 적용 사각형의 drift는 0이었다.
 `unapplied`, `ghosts`, `orphans`, `unowned`는 모두 비어 있었고 설정 모달과 공개 노드는 DOM에
-남아 있었다. focus를 주지 않은 `window.snapshot`에서 모달 뒤에 주차된 surface 이미지가
-보였다. 이는 현재 오버레이 transaction의 증거이지 picker·sidebar·modal 전체 매트릭스가
-완료됐다는 뜻은 아니다. 나머지 경우도 같은 정량 측정과 직접 캡처 확인이 필요하다.
+남아 있었다. focus를 주지 않은 `window.snapshot`에서 모달의 dim 레이어 아래 브라우저 surface가
+보였다. Vision 0.0.71은 설치됐지만 동의 전 비활성 상태이므로 다섯 terminal 선언은 의도적으로
+없었다. 따라서 이 캡처는 terminal provider 결과가 아니다. 이는 현재 오버레이 transaction의
+증거이지 picker·sidebar·modal 전체 매트릭스가 완료됐다는 뜻은 아니다. 나머지 경우도 같은
+정량 측정과 직접 캡처 확인이 필요하다.
 
 ### Wails 디바이더 드래그 관측
 
