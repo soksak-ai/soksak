@@ -11,6 +11,16 @@ This document records the ten reported defects, their current evidence on 2026-0
 remaining release boundary. TERMINAL-UX-EXECUTION.md defines the required execution order and
 evidence. A local candidate GREEN is not an immutable-release or unrun native-platform GREEN.
 
+## Current frozen-v8 observation
+
+On 2026-09-01 the existing frozen `soksakv8` identity passed `make project-verify` against
+`/Users/max/.soksakv8`, and its environment selected immutable local artifacts. A focus-free
+`window.snapshot` of `win-cx22wh` nevertheless showed the terminal pane painting repeated
+`workspace1` prompts over one another. This is a visual RED for recovery/output presentation;
+artifact integrity does not close it. The v8 environment remains unchanged while the defect is
+reproduced and fixed in `.soksak-dev`; v8 must be rebuilt from the resulting current closure before
+it can be accepted as a user test snapshot.
+
 ## Reported defects
 
 All ten items are acceptance requirements. A result that fixes only one provider or one trigger is

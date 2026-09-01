@@ -11,6 +11,15 @@ scope: workspace
 실행 순서와 증거는 TERMINAL-UX-EXECUTION.ko.md 가 정의합니다. 로컬 후보의 GREEN 을 불변 릴리즈의
 GREEN 이나 실행하지 않은 네이티브 플랫폼의 GREEN 으로 확대해서는 안 됩니다.
 
+## 현재 frozen-v8 관측
+
+2026-09-01 기존 frozen `soksakv8` identity는 `/Users/max/.soksakv8`를 대상으로
+`make project-verify`를 통과했고 environment도 불변 local artifact를 선택했습니다. 그러나
+포커스를 주지 않은 `win-cx22wh`의 `window.snapshot`에서는 터미널 pane에 `workspace1`
+프롬프트가 여러 번 겹쳐 그려지는 현상이 보였습니다. 이는 복원/출력 표시의 시각적 RED이며
+artifact 무결성만으로 닫히지 않습니다. v8 환경은 그대로 두고 `.soksak-dev`에서 재현·수정한
+뒤 현재 closure로 v8을 다시 만들어야 사용자 테스트 snapshot으로 승인할 수 있습니다.
+
 ## 제보된 결함
 
 열 항목 모두 인수 조건입니다. 제공자 하나나 발생 조건 하나만 고친 결과는 미완입니다.
