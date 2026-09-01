@@ -13,6 +13,19 @@ source에 코드가 있거나 unit test 하나가 통과한 사실만으로 완�
 터미널 계약이 필수 control sequence 동작과 선택적 image protocol capability를 정의합니다. 각 provider는
 자신이 선언한 범위를 자기 저장소에서 증명하며 Core는 provider 구현을 열람하거나 검증하지 않습니다.
 
+## Provider 검증 경계 — 2026-09-01
+
+7개 Wails 터미널 Plugin 저장소를 모두 같은 명시적 local Registry 주소
+(`http://127.0.0.1:4873/`)로 검증했습니다. Alacritty, Ghostty, Kitty, Shitty, VT100, WezTerm,
+Xterm이 모두 exit 0을 반환했고 owner test와 frontend 계약 test가 registry 또는 dependency
+fallback 없이 끝났습니다. 이것은 저장소 수준 빌드 증거일 뿐이며, 설치된 consent 경계, native
+입력 matrix, provider runtime 행의 완료를 의미하지 않습니다.
+
+Kitty build preflight는 프로필의 정확한 toolchain 계약을 따릅니다. Python 3.9.6에서는 준비나
+컴파일 전에 `TOOLCHAIN_MISMATCH`, exit 78을 반환해 중단됐습니다. arm64 프로필이 선택한 Python
+3.14.2에서는 GREEN이었고 같은 `make verify TARGET=aarch64-apple-darwin`이 완료됐습니다.
+낮거나 높거나 아키텍처가 다른 toolchain은 암묵적으로 fallback하지 않고 실행을 중단합니다.
+
 ## Wails 포커스 조건 관측 — 2026-09-01
 
 OS 창을 앞으로 가져오지 않은 개발용 Wails 창에서 관측했습니다. 활성 터미널 화면에 공개
