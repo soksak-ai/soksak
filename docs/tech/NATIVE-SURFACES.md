@@ -143,7 +143,8 @@ committed rectangle as the next baseline. This uses the current window state and
 
 ## D1b.1. Core decoration is the final native plane
 
-A focus boundary or rail-relation outline is Core chrome, not provider content. Drawing it at DOM
+A focus boundary is Core chrome, not provider content. A relation overlay may draw only a projected seam; it never draws
+the rail, pane, or union perimeter. Drawing a card perimeter at DOM
 `z-index:7` or `8` does not place it over an AppKit child. Measured 2026-08-30 with a linked browser,
 the top segment above the child was accent-coloured while left, right and bottom probes inside the
 child were uniformly the page's white. The terminal produced the same failure with its own dark

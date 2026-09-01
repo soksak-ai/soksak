@@ -130,7 +130,8 @@ false이면 `layout-rect-skipped(inactive-document)`를 기록하고 commit된 r
 
 ## D1b.1. Core 장식은 마지막 네이티브 평면이다
 
-포커스 표시선이나 rail 관계 외곽선은 provider 내용이 아니라 Core chrome입니다. DOM의 `z-index:7` 또는 `8`로
+포커스 표시선은 provider 내용이 아니라 Core chrome입니다. 관계 오버레이는 투영 이음매만 표시하며 rail·pane·union
+외곽선은 그리지 않습니다. DOM의 `z-index:7` 또는 `8`로
 그려도 AppKit 자식 위에 놓이지 않습니다. 2026-08-30 연결된 브라우저에서 실측했을 때 자식 위쪽의 선은
 accent 색이었지만 자식 안쪽의 왼쪽·오른쪽·아래쪽 probe는 모두 페이지의 흰색이었습니다. 터미널도 자기의
 어두운 표면으로 같은 실패를 만들었습니다. provider마다 inset을 두면 두 종류가 서로 다르게 실패할 뿐입니다.

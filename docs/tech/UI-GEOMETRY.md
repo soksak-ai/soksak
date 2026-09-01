@@ -285,11 +285,10 @@ owns three facts rather than one:
    the applied pixels. `ParkedPicture` draws those pixels in the still-visible
    DOM slot and releases them only after the live surface is applied again. An inactive
    chain releases both the surface and picture because another view owns those pixels.
-4. **Decoration presentation.** Focus and relation strokes remain declared by their
-   Core owners, but the final native decoration plane is committed empty while a DOM
-   overlay owns presentation. The closing state edge reapplies the newest declaration
-   snapshot. This is the only possible ordering on a host where that native plane is
-   above the document; leaving it applied would put a border above the modal.
+4. **Decoration presentation.** Focus strokes remain declared by the Core owner. A
+   relation overlay may publish only a projected seam; it never publishes a rail,
+   pane, or union perimeter. The card frame is the sole perimeter owner. The final
+   native decoration plane is committed empty while a DOM overlay owns presentation.
 
 A frame and focus border receive no pointer input. The divider alone owns resize input
 and layout mutation; a border is only a projection of the panel's committed rectangle.
