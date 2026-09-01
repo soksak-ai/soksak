@@ -9,7 +9,7 @@ describe("ProgramMenu outside input contract", () => {
     expect(source).toContain('window.addEventListener("mousedown", onOutsidePointer, true)');
   });
 
-  it("occludes native surfaces while the menu is open", () => {
-    expect(source).toContain("useOverlayActive(true);");
+  it("blocks menu input without hiding native surfaces", () => {
+    expect(source).toContain("useOverlayActive(true, false);");
   });
 });

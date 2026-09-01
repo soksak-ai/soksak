@@ -97,8 +97,8 @@ export function ProgramMenu({
   onClose: () => void;
 }) {
   const t = useT();
-  // Native pane surfaces are hidden while the menu is open; their presentation returns on close.
-  useOverlayActive(true);
+  // The menu is a document overlay and does not cover the native pane surface geometry.
+  useOverlayActive(true, false);
   const menuRef = useRef<HTMLDivElement>(null);
   // Position corrected into the viewport after measuring, plus whether the submenu flips.
   const [place, setPlace] = useState({ left: pos.left, top: pos.top, flip: false });
