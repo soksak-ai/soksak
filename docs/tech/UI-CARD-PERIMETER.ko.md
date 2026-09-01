@@ -42,15 +42,20 @@ slot, native perimeter, inspector는 이 `CardRect`를 읽는다. `railStation`,
 `geometryOwner`가 있어야 한다. `geometryOwner`는 하나의 카드에 하나만
 존재해야 한다.
 
-## C4. rail은 카드 perimeter다
+## C4. rail은 카드와 별도의 connector다
 
-rail은 별도 선, gap line, union outline, relation card가 아니다. rail 카드의
-가장 안쪽 바깥 perimeter를 카드 border token으로 그린다. pane과 맞닿는
-경계도 같은 카드 규칙을 사용하며, station에 따라 선 소유자를 바꾸지 않는다.
+rail은 카드 perimeter와 구분되는 별도 연결선이다. rail은 grid의 gap을 지나
+카드 경계를 드나들 수 있으므로, 카드 자체의 border와 동일한 도형으로
+합치면 안 된다.
 
-관계 오버레이는 카드 외곽을 그리지 않는다. 투영으로 실제 카드 사이에
-표시해야 하는 이음매가 계약상 필요할 때만 connector/seam을 표시할 수 있다.
-`rail`, `pane`, `union` perimeter path를 생성하면 계약 위반이다.
+rail의 기하 소유자는 하나의 `rail-connector`로 고정한다. connector의 시작·종료
+점과 굴곡은 canonical `CardRect`의 안쪽 외곽선에서 산출하며, 임의의
+`railStation + railWidth + targetRect` 재계산으로 만들지 않는다. 카드에
+들어가는 접점은 카드 border와 같은 token·stroke 규칙을 사용하고, gap을
+통과하는 선은 connector 규칙을 사용한다.
+
+관계 오버레이는 rail/pane/union 카드 외곽선을 그리지 않는다. rail connector와
+카드 perimeter는 서로 다른 소유자지만 같은 rect·theme revision을 소비한다.
 
 ## C5. 검증 기준
 
@@ -60,6 +65,8 @@ RED는 다음을 기계적으로 검출해야 한다.
 - 하나의 `cardId`에 둘 이상의 `geometryOwner`
 - DOM rect와 native perimeter rect 불일치
 - relation overlay의 rail/pane/union perimeter path 생성
+- 동일한 rail connector를 둘 이상의 레이어가 생성
+- rail connector의 카드 접점이 canonical CardRect perimeter에서 벗어남
 - 테마별 radius·border token 불일치
 
 GREEN은 동일한 `CardRect`와 token으로 DOM/native를 각각 검증하고,
