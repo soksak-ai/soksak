@@ -3,12 +3,7 @@ import type { RailRect } from "../lib/railPlacement";
 import type { RailRelationState } from "../lib/railArrangement";
 import { moduleState } from "../lib/moduleState";
 import {
-  insetClippedEdges,
-  splitRightEdgeRounded,
   railLinkBoxes,
-  railLinkPolygon,
-  roundedOrthogonalPath,
-  type PixelBox,
 } from "../lib/railLinkShape";
 import { useSettings } from "../state/settings";
 import { useTheme } from "../state/theme";
@@ -31,27 +26,6 @@ const lastSizeRef = moduleState("components/RailLinkOverlay#lastSize", () => ({
 interface Size {
   width: number;
   height: number;
-}
-
-function independentBoxPath(
-  box: PixelBox,
-  hostWidth: number,
-  hostHeight: number,
-  strokeWidth: number,
-  radius: number,
-): string {
-  const points = insetClippedEdges(
-    [
-      { x: box.x, y: box.y },
-      { x: box.x + box.width, y: box.y },
-      { x: box.x + box.width, y: box.y + box.height },
-      { x: box.x, y: box.y + box.height },
-    ],
-    hostWidth,
-    hostHeight,
-    strokeWidth / 2,
-  );
-  return roundedOrthogonalPath(points, radius);
 }
 
 // Flash hold time for moment mode (ms) — the CSS transition owns the fade-out after release.
@@ -90,7 +64,6 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
   /** Only the active workspace contributes to the window-owned native plane. */
   nativeVisible?: boolean;
 }) {
-  const radius = useTheme((state) => state.spec.relation.radius);
   const strokeWidth = useTheme((state) => state.spec.relation.strokeWidth);
   const relationStroke = useTheme((state) => state.spec.relation.stroke);
   const accent = useTheme((state) => state.colors.acc);
@@ -180,8 +153,6 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
     return () => clearTimeout(timer);
   }, [railRelation, identity]);
 
-  const independent = relation.borderMode === "independent";
-
   const boxes = targetRect && relation.borderMode !== "none"
     ? railLinkBoxes(
         size.width,
@@ -192,26 +163,9 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
         paneInset,
       )
     : null;
-  const polygon = boxes && relation.borderMode === "union"
-    ? railLinkPolygon(boxes.rail, boxes.panel)
-    : null;
-  const path = polygon
-    ? roundedOrthogonalPath(
-        insetClippedEdges(
-          polygon,
-          size.width,
-          size.height,
-          strokeWidth / 2,
-        ),
-        radius,
-      )
-    : "";
-  const independentRailPath = independent && boxes
-    ? independentBoxPath(boxes.rail, size.width, size.height, strokeWidth, radius)
-    : "";
-  const independentPanelPath = independent && boxes
-    ? independentBoxPath(boxes.panel, size.width, size.height, strokeWidth, radius)
-    : "";
+  // Card perimeter ownership is structural: .sidebar.rail-* and .pane are the
+  // only owners. This relation layer is not another card and must never draw a
+  // second rail/pane/union outline. It may publish the projected seam only.
 
   useLayoutEffect(() => {
     const owner = `relation/${contentId}`;
@@ -228,52 +182,8 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
       return () => replaceNativeDecorations(owner, []);
     }
     const origin = host.getBoundingClientRect();
-    const shift = (points: Array<{ x: number; y: number }>) => points.map((point) => ({
-      x: point.x + origin.left,
-      y: point.y + origin.top,
-    }));
     const decorations = [];
-    if (independent) {
-      for (const [name, box] of [["rail", boxes.rail], ["pane", boxes.panel]] as const) {
-        const points = insetClippedEdges([
-          { x: box.x, y: box.y },
-          { x: box.x + box.width, y: box.y },
-          { x: box.x + box.width, y: box.y + box.height },
-          { x: box.x, y: box.y + box.height },
-        ], size.width, size.height, strokeWidth / 2);
-        decorations.push(strokeDecoration(
-          `${owner}/${name}`,
-          roundedOrthogonalPath(shift(points), radius),
-          color,
-          strokeWidth,
-        ));
-      }
-    } else if (polygon) {
-      const inset = shift(insetClippedEdges(
-        polygon,
-        size.width,
-        size.height,
-        strokeWidth / 2,
-      ));
-      const full = roundedOrthogonalPath(inset, radius);
-      if (projected && railSeamStyle === "edge") {
-        const split = splitRightEdgeRounded(inset, radius);
-        if (split) {
-          decorations.push(strokeDecoration(`${owner}/rest`, split.solid, color, strokeWidth));
-          decorations.push(strokeDecoration(
-            `${owner}/edge`,
-            `M ${split.edge[0].x} ${split.edge[0].y} L ${split.edge[1].x} ${split.edge[1].y}`,
-            color,
-            strokeWidth,
-            [4, 4],
-          ));
-        } else {
-          decorations.push(strokeDecoration(`${owner}/union`, full, color, strokeWidth));
-        }
-      } else {
-        decorations.push(strokeDecoration(`${owner}/union`, full, color, strokeWidth));
-      }
-      if (projected && railSeamStyle === "seam") {
+    if (projected && railSeamStyle === "seam") {
         const eps = 1;
         const seamX = Math.abs(boxes.rail.x + boxes.rail.width - boxes.panel.x) < eps
           ? boxes.panel.x
@@ -290,14 +200,13 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
             strokeWidth,
             [4, 4],
           ));
-        }
-      }
+    }
     }
     replaceNativeDecorations(owner, decorations);
     return () => replaceNativeDecorations(owner, []);
   }, [
-    accent, boxes, contentId, flash, independent, nativeVisible, polygon, projected,
-    radius, railPullFocused, railRelation, railSeamStyle, railSolidColor, relationStroke,
+    accent, boxes, contentId, flash, nativeVisible, projected,
+    railPullFocused, railRelation, railSeamStyle, railSolidColor, relationStroke,
     size.height, size.width, strokeWidth,
   ]);
 
@@ -341,41 +250,9 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
           out — exactly what the user saw (measured 2026-08-02: inward while pushing, outward while
           collapsing, and an exact return). The coordinates are already this element's CSS px, so
           they are drawn without a viewBox: a stale one draws in the wrong place, never distorted. */}
-      {boxes && (path || independent) && (
+      {boxes && projected && railSeamStyle === "seam" && (
         <svg className="rail-link-canvas">
-          {independent ? (
-            <>
-              <path className="rail-link-independent rail-link-independent-rail" d={independentRailPath} />
-              <path className="rail-link-independent rail-link-independent-pane" d={independentPanelPath} />
-            </>
-          ) : projected && railSeamStyle === "edge" ? (() => {
-            // Option B — dashed outer right edge: split only the rightmost edge out of the outline and draw it
-            // dashed, the rest as an open solid line. The closed original path owns the fill (no stroke).
-            const inset = insetClippedEdges(
-              polygon!,
-              size.width,
-              size.height,
-              strokeWidth / 2,
-            );
-            const split = splitRightEdgeRounded(inset, radius);
-            if (!split) return <path className="rail-link-shape" d={path} />;
-            return (
-              <>
-                <path className="rail-link-fill" d={path} />
-                <path className="rail-link-rest" d={split.solid} />
-                <line
-                  className="rail-link-edge"
-                  x1={split.edge[0].x}
-                  y1={split.edge[0].y}
-                  x2={split.edge[1].x}
-                  y2={split.edge[1].y}
-                />
-              </>
-            );
-          })() : (
-            <path className="rail-link-shape rail-link-union" d={path} />
-          )}
-          {!independent && projected && railSeamStyle === "seam" && (() => {
+          {(() => {
             // Replacement-adjacency seam — the internal shared edge of the union outline. Natural adjacency is
             // one body and has no seam; only an adjacency formed by projection (replacement) leaves a "stitch
             // mark" as a dashed line of the same width.

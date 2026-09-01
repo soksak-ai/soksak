@@ -70,7 +70,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
     document.body.innerHTML = "";
   });
 
-  it("recomputes exactly one path on resize and split-ratio change, and exposes the DOM state", () => {
+  it("keeps the relation state tied to the shared layout boxes without drawing a second card", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -87,26 +87,23 @@ describe("RailLinkOverlay — live grid tracking", () => {
 
     act(() => root.render(render(25)));
     const overlay = host.querySelector<HTMLElement>(".rail-link-overlay")!;
-    const first = host.querySelector<SVGPathElement>(".rail-link-shape")!.getAttribute("d");
     expect(overlay.dataset).toMatchObject({
       node: "relation/rail/spc-aaaaaa",
       boundTab: "tab-bbbbbb",
       boundPane: "pan-bbbbbb",
       connected: "true",
     });
-    expect(host.querySelectorAll(".rail-link-shape")).toHaveLength(1);
+    expect(host.querySelectorAll("path")).toHaveLength(0);
 
     act(() => root.render(render(40)));
-    const splitResize = host.querySelector<SVGPathElement>(".rail-link-shape")!.getAttribute("d");
-    expect(splitResize).not.toBe(first);
+    expect(host.querySelectorAll("path")).toHaveLength(0);
 
     hostSize = { width: 1000, height: 700 };
     act(() => observed?.([{ contentRect: {
       ...hostSize, x: 0, y: 0, left: 0, top: 0,
       right: 1000, bottom: 700, toJSON: () => ({}),
     } as DOMRect }]));
-    const windowResize = host.querySelector<SVGPathElement>(".rail-link-shape")!.getAttribute("d");
-    expect(windowResize).not.toBe(splitResize);
+    expect(host.querySelectorAll("path")).toHaveLength(0);
 
     act(() => root.unmount());
   });
@@ -137,7 +134,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
     act(() => root.unmount());
   });
 
-  it("publishes the same rounded union path to the final native plane", async () => {
+  it("does not publish a duplicate union perimeter to the native plane", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -155,14 +152,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
     const native = nativeDecorationFacts().decorations;
-    expect(native).toHaveLength(1);
-    expect(native[0]).toMatchObject({
-      id: "relation/spc-aaaaaa/union",
-      strokeWidth: 1.5,
-      dash: [],
-    });
-    // Q is the rounded corner command consumed by the AppKit CAShapeLayer path bridge.
-    expect(native[0].path).toContain(" Q ");
+    expect(native).toHaveLength(0);
     act(() => root.unmount());
   });
 
@@ -180,15 +170,15 @@ describe("projected-adjacency marking", () => {
     />
   );
 
-  it("edge (default): projected=true renders the outer edge dashed and exposes data-projected", () => {
+  it("edge (default): projected=true still exposes projection state without a second perimeter", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = createRoot(host);
     act(() => root.render(renderProps(true)));
     const overlay = host.querySelector<HTMLElement>(".rail-link-overlay")!;
     expect(overlay.dataset.projected).toBe("true");
-    expect(host.querySelector(".rail-link-edge")).not.toBeNull();
-    expect(host.querySelector(".rail-link-rest")).not.toBeNull();
+    expect(host.querySelector(".rail-link-edge")).toBeNull();
+    expect(host.querySelector(".rail-link-rest")).toBeNull();
     expect(host.querySelector(".rail-link-seam")).toBeNull();
     act(() => root.unmount());
   });

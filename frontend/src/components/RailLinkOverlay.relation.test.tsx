@@ -200,7 +200,15 @@ describe("RailLinkOverlay — the railRelation three-way switch", () => {
     expect(relation?.dataset.side).toBe("right");
   });
 
-  it("a bound panel apart from the pinned rail draws two independent active borders instead of joining them", () => {
+  it("a connected relation does not draw a second union card perimeter", () => {
+    act(() => root.render(<RailLinkOverlay {...overlayProps()} />));
+    const relation = host.querySelector<HTMLElement>(".rail-link-overlay");
+    expect(relation?.dataset.borderMode).toBe("union");
+    expect(relation?.querySelector(".rail-link-union")).toBeNull();
+    expect(relation?.querySelectorAll("path")).toHaveLength(0);
+  });
+
+  it("a bound panel apart from the pinned rail publishes state without drawing duplicate card borders", () => {
     act(() =>
       root.render(
         <RailLinkOverlay
@@ -220,7 +228,7 @@ describe("RailLinkOverlay — the railRelation three-way switch", () => {
     expect(relation?.dataset.borderMode).toBe("independent");
     expect(relation?.dataset.pathCount).toBe("2");
     expect(relation?.dataset.relationId).toBe("rail-relation/c1/g2/v2");
-    expect(relation?.querySelectorAll(".rail-link-independent")).toHaveLength(2);
+    expect(relation?.querySelectorAll(".rail-link-independent")).toHaveLength(0);
     expect(relation?.querySelector(".rail-link-union")).toBeNull();
   });
 
