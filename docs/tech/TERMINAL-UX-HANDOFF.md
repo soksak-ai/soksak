@@ -647,6 +647,14 @@ the divider and both pane frames moved as one layout transaction. This proves th
 public drag path for the current DOM split, but is not a native Vision provider
 GREEN while Vision 0.0.71 remains disabled pending consent.
 
+The perpendicular route was exercised in the same window through
+`gutter/pan-m4cpkn/bottom`: 120 CSS pixels upward, 12 move steps, and a
+20-frame no-focus recording. The receipt reported `moveCount=12` and
+`applyCount=12`; `computedSizes` exactly equalled `appliedSizes`
+(`[0.2766355140,0.7233644860]`). The post-gesture capture was inspected
+directly. This proves the horizontal divider route applies each preview; it
+does not close the broader native-surface drag matrix.
+
 ### Sidecar end state
 
 When a selected PTY or engine process ends, Core emits a unit-ended event. The terminal-surface

@@ -625,6 +625,14 @@ focus 없는 캡처에 prompt가 보였다. 이는 candidate 설치의 증거가
 transaction으로 함께 이동했다. 이는 현재 DOM split의 공개 드래그 경로를 증명하지만,
 Vision 0.0.71이 동의 대기 비활성 상태이므로 native Vision provider GREEN은 아니다.
 
+같은 창에서 반대 축도 확인했다. 공개 `ui.input.drag`로
+`gutter/pan-m4cpkn/bottom`을 위로 120 CSS 픽셀, 12개 이동 단계로 드래그하고
+포커스를 바꾸지 않는 20프레임 기록을 남겼다. 영수증은 `moveCount=12`,
+`applyCount=12`였고 `computedSizes`와 `appliedSizes`가
+`[0.2766355140,0.7233644860]`로 일치했다. 동작 뒤 캡처를 직접 확인했다.
+이는 가로 디바이더 경로가 공개되어 각 preview를 적용한다는 증거이며,
+native surface 드래그 전체 매트릭스를 닫는 증거는 아니다.
+
 ### 사이드카 종료 상태
 
 선택된 PTY 또는 엔진 프로세스가 종료되면 Core가 unit-ended 이벤트를 발행합니다. terminal-surface
