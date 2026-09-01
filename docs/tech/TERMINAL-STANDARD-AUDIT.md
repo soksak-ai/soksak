@@ -15,6 +15,20 @@ The terminal contract defines required control-sequence behavior and optional im
 capabilities. Each provider proves its declared subset in its own repository; Core does not inspect
 or test provider implementation.
 
+## Provider verification boundary — 2026-09-01
+
+The seven Wails terminal Plugin repositories were each verified with the same explicit local
+Registry endpoint (`http://127.0.0.1:4873/`). Alacritty, Ghostty, Kitty, Shitty, VT100, WezTerm and
+Xterm all returned exit 0; their owner tests and frontend contract tests completed without a
+registry or dependency fallback. This is repository-level build evidence only. It does not close
+the installed consent boundary, the native input matrix, or the provider runtime rows below.
+
+Kitty's build preflight is an exact profile contract. With Python 3.9.6 it returned
+`TOOLCHAIN_MISMATCH` and exit 78 before preparation or compilation. With the profile-selected
+Python 3.14.2 on arm64 it returned GREEN and the same `make verify TARGET=aarch64-apple-darwin`
+completed. A lower, newer, or wrong-architecture toolchain is therefore a stopped execution, not
+an implicit fallback.
+
 ## Wails focus-boundary observation — 2026-09-01
 
 The development Wails window was observed without bringing the OS window forward. After a public
