@@ -94,6 +94,8 @@ describe("RailLinkOverlay — live grid tracking", () => {
       connected: "true",
     });
     expect(host.querySelectorAll("path")).toHaveLength(0);
+    expect(overlay.dataset.rail).toBeUndefined();
+    expect(overlay.dataset.box).toBeUndefined();
 
     act(() => root.render(render(40)));
     expect(host.querySelectorAll("path")).toHaveLength(0);

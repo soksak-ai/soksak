@@ -153,7 +153,7 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
     return () => clearTimeout(timer);
   }, [railRelation, identity]);
 
-  const boxes = targetRect && relation.borderMode !== "none"
+  const boxes = projected && targetRect && relation.borderMode !== "none"
     ? railLinkBoxes(
         size.width,
         size.height,
