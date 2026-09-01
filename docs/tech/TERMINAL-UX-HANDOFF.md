@@ -21,6 +21,15 @@ artifact integrity does not close it. The v8 environment remains unchanged while
 reproduced and fixed in `.soksak-dev`; v8 must be rebuilt from the resulting current closure before
 it can be accepted as a user test snapshot.
 
+The public evidence narrowed the RED without changing v8: `surface.inventory` and
+`surface.composition` both reported the terminal declaration applied at `553×934` with zero drift,
+while `terminal_surface_status` reported `tab-imof4c.1` as `live` at `cols=1, rows=1, sequence=1`.
+The no-focus `surface.snapshot` of that exact native surface was a `1×1` PNG (199 bytes), stretched
+by the compositor. The plugin `read` path returned only a newline while the pixels still showed
+the repeated prompts. Therefore the defect is an initial surface-state/resize publication race,
+not evidence that the shell emitted duplicate prompt text. The fix is being proved in the plugin's
+RED/GREEN presenter test and has not been applied to frozen v8.
+
 ## Reported defects
 
 All ten items are acceptance requirements. A result that fixes only one provider or one trigger is

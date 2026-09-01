@@ -20,6 +20,15 @@ GREEN 이나 실행하지 않은 네이티브 플랫폼의 GREEN 으로 확대�
 artifact 무결성만으로 닫히지 않습니다. v8 환경은 그대로 두고 `.soksak-dev`에서 재현·수정한
 뒤 현재 closure로 v8을 다시 만들어야 사용자 테스트 snapshot으로 승인할 수 있습니다.
 
+v8은 변경하지 않은 채 공개 관측으로 RED를 좁혔습니다. `surface.inventory`와
+`surface.composition`은 terminal declaration이 `553×934`, drift 0으로 적용됐다고 보고했지만,
+`terminal_surface_status`는 `tab-imof4c.1`을 `live`, `cols=1`, `rows=1`, `sequence=1`로
+보고했습니다. 포커스 없는 `surface.snapshot`의 정확한 native surface는 199바이트 `1×1` PNG였고
+compositor가 이를 늘려 표시했습니다. plugin `read`는 줄바꿈 하나만 반환했는데 픽셀에는 반복된
+prompt가 남아 있었습니다. 따라서 이는 shell이 prompt를 중복 출력했다는 증거가 아니라 초기
+surface-state/resize 게시 경주입니다. 수정은 plugin의 RED/GREEN presenter 테스트로 증명 중이며
+frozen v8에는 적용하지 않았습니다.
+
 ## 제보된 결함
 
 열 항목 모두 인수 조건입니다. 제공자 하나나 발생 조건 하나만 고친 결과는 미완입니다.
