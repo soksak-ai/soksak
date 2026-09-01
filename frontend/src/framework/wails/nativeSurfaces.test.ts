@@ -113,8 +113,8 @@ describe("the native surface observer", () => {
     expect((commits.at(-1)?.surfaces as Array<{ visible: boolean }>)[0]?.visible).toBe(true);
 
     // Modal/overlay presentation is published on the tab wrapper, not on the plugin declaration.
-    // The compositor must observe this contract edge; otherwise a native child remains above the
-    // modal even though the DOM says the tab is hidden.
+    // The compositor observes this contract edge; without that observation a native child remains
+    // above the modal while the DOM reports the tab as hidden.
     tab.dataset.surfaceVisible = "false";
     await settle();
     expect((commits.at(-1)?.surfaces as Array<{ visible: boolean }>)[0]?.visible).toBe(false);
