@@ -34,8 +34,10 @@ frozen v8에는 적용하지 않았습니다.
 0.0.20으로 선언을 정정한 뒤 PTY release를 다시 만들었습니다. 이어진 Alacritty packaging은
 현재 SDK release validator가 `sidecar.json`을 다섯 key로 닫아 두었지만 workspace 규칙은
 `runtimeDependencies`를 허용하는 충돌 때문에 거부했습니다. 통과를 위해 dependency field를
-삭제하지 않았으며, 남은 engine closure와 plugin 0.0.72를 게시하기 전에 spec/SDK 계약을
-정리해야 합니다.
+삭제하지 않았습니다. 이후 Spec 0.0.53과 SDK 0.0.21에서 계약을 정리해 sidecar intent를
+검증하고 명시한 local release store의 release reference로 구성하도록 했습니다. Alacritty
+0.0.47은 PTY release reference를 포함한 target packaging까지 통과했으며, 나머지 engine
+closure는 각자의 release 실행이 남아 있습니다.
 
 ## 제보된 결함
 

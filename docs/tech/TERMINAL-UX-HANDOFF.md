@@ -35,8 +35,10 @@ RED. PTY 0.0.22 required an obsolete SDK 0.0.18 declaration; its exact preflight
 78, so the declaration was corrected to the profile SDK 0.0.20 and the PTY release was rebuilt.
 The next Alacritty packaging step then rejected the engine `sidecar.json` because the current SDK
 release validator closes that manifest to five keys while the workspace rule permits
-`runtimeDependencies`. No dependency field was deleted to make packaging pass; the spec/SDK
-contract must be resolved before the remaining engine closure and plugin 0.0.72 can be published.
+`runtimeDependencies`. No dependency field was deleted to make packaging pass. The contract was
+then corrected in Spec 0.0.53 and SDK 0.0.21: sidecar intents are validated and resolved against
+the explicit local release store. Alacritty 0.0.47 now packages a target with the PTY release
+reference; the other engine closures still require their own release run.
 
 ## Reported defects
 
