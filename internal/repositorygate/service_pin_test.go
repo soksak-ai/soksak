@@ -58,7 +58,7 @@ func TestNativeSurfaceConsumersUseTheDeclaredCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 	dependency := packageManifest.Dependencies["@soksak/soksak-service-native-compositor"]
-	if dependency != "0.0.2" {
-		t.Fatalf("frontend compositor dependency does not use release 0.0.2: %s", dependency)
+	if dependency != "0.0.3" {
+		t.Fatalf("frontend compositor dependency does not use release 0.0.3: %s", dependency)
 	}
 }
