@@ -12,7 +12,7 @@ require (
 	github.com/soksak-ai/soksak-contract-pty v0.0.0-20260831161848-6fa2f6c277e9
 	github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9
 	github.com/soksak-ai/soksak-service-native-compositor v0.0.1
-	github.com/soksak-ai/soksak-service-terminal-surface v0.0.1
+	github.com/soksak-ai/soksak-service-terminal-surface v0.0.2
 	github.com/soksak-ai/soksak-service-webview-surface v0.0.1
 	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260831164722-e60c675b0880
 	github.com/wailsapp/wails/v3 v3.0.0-beta.12
