@@ -26,9 +26,9 @@ importers:
       react-dom:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
-      react-resizable-panels:
-        specifier: ^4.11.2
-        version: 4.12.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      split-pane:
+        specifier: github:min-median-max/split-pane#44d9f7e8fb7638222f7a0af245764fa071fd8afb
+        version: https://codeload.github.com/min-median-max/split-pane/tar.gz/44d9f7e8fb7638222f7a0af245764fa071fd8afb
       zustand:
         specifier: ^5.0.14
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)
@@ -834,12 +834,6 @@ packages:
     peerDependencies:
       react: ^19.2.8
 
-  react-resizable-panels@4.12.2:
-    resolution: {integrity: sha512-NwY5LCo4WrxVvDh0xoMML6EMLPONP/8ckKcIdpnojxexoatZdjLiRqLJQjQK5CPkd4SYiB/2M5BVrjZBQtOO7Q==}
-    peerDependencies:
-      react: ^18.0.0 || ^19.0.0
-      react-dom: ^18.0.0 || ^19.0.0
-
   react@19.2.8:
     resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
     engines: {node: '>=0.10.0'}
@@ -871,6 +865,11 @@ packages:
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
+
+  split-pane@https://codeload.github.com/min-median-max/split-pane/tar.gz/44d9f7e8fb7638222f7a0af245764fa071fd8afb:
+    resolution: {gitHosted: true, integrity: sha512-CZZtYLaN4XEUHl2dbyK0wxA3BDbUi+W0ZyLyF4PkyCWJQxiYUaJEUZegwHjNnfPRtoxg5QsvtDM58GVs71Wuqg==, tarball: https://codeload.github.com/min-median-max/split-pane/tar.gz/44d9f7e8fb7638222f7a0af245764fa071fd8afb}
+    version: 0.1.0
+    engines: {node: 26.7.0}
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
@@ -1642,11 +1641,6 @@ snapshots:
       react: 19.2.8
       scheduler: 0.27.0
 
-  react-resizable-panels@4.12.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
-    dependencies:
-      react: 19.2.8
-      react-dom: 19.2.8(react@19.2.8)
-
   react@19.2.8: {}
 
   require-from-string@2.0.2: {}
@@ -1712,6 +1706,8 @@ snapshots:
   siginfo@2.0.0: {}
 
   source-map-js@1.2.1: {}
+
+  split-pane@https://codeload.github.com/min-median-max/split-pane/tar.gz/44d9f7e8fb7638222f7a0af245764fa071fd8afb: {}
 
   stackback@0.0.2: {}
 
