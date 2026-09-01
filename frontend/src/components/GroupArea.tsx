@@ -219,6 +219,80 @@ export function NativeFocusBoundary({
   );
 }
 
+/**
+ * Structural pane frame. A DOM border cannot be painted above an opaque native child webview;
+ * the visible stroke therefore is emitted on the same native decoration plane as the focus frame.
+ * The DOM element remains as the document-side frame for non-native content and as the measured
+ * geometry owner, while this component publishes the identical rectangle to the native layer.
+ */
+export function NativePaneBorder({
+  owner,
+  node,
+  style,
+  trackRef,
+  active,
+}: {
+  owner: string;
+  node: string;
+  style: CSSProperties;
+  trackRef: (element: HTMLElement | null) => void;
+  active: boolean;
+}) {
+  const elementRef = useRef<HTMLDivElement | null>(null);
+  const border = useTheme((state) => state.colors.bd);
+  const attach = useCallback((element: HTMLDivElement | null) => {
+    elementRef.current = element;
+    trackRef(element);
+  }, [trackRef]);
+  const update = useCallback(() => {
+    const element = elementRef.current;
+    const color = cssColorRGBA(border);
+    if (!active || !element || !color) {
+      replaceNativeDecorations(owner, []);
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      replaceNativeDecorations(owner, []);
+      return;
+    }
+    const strokeWidth = 1;
+    const half = strokeWidth / 2;
+    const points = [
+      { x: rect.left + half, y: rect.top + half },
+      { x: rect.right - half, y: rect.top + half },
+      { x: rect.right - half, y: rect.bottom - half },
+      { x: rect.left + half, y: rect.bottom - half },
+    ];
+    const radius = Number.parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0;
+    replaceNativeDecorations(owner, [
+      strokeDecoration(`${owner}/stroke`, roundedOrthogonalPath(points, radius), color, strokeWidth),
+    ]);
+  }, [active, border, owner]);
+
+  useLayoutEffect(() => {
+    const element = elementRef.current;
+    if (!active || !element) return () => replaceNativeDecorations(owner, []);
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      replaceNativeDecorations(owner, []);
+    };
+  }, [active, owner, update]);
+  useLayoutEffect(() => update());
+
+  return (
+    <div
+      ref={attach}
+      className="pane-border"
+      data-node={node}
+      data-native-decoration={active ? "pane-border" : undefined}
+      style={style}
+    />
+  );
+}
+
 // Content cell layout = the shared machine (computeSplitLayout). Maps the leaf value (Pane) to cell.group.
 // [Deduplication] Shares the same layout and hit test as the left sidebar (splitLayout.ts).
 export function computeLayout(node: PaneNode): {
@@ -1070,15 +1144,16 @@ export const GroupArea = memo(function GroupArea({
           tracker as the cells, so it is interpolated on the same commit with the same duration: the
           old frame does not deform and the new one does not arrive early, because there is one frame
           and it moves. ── */}
-      {!replaceGeometry && displayCells.map(({ group, rect }) => (
-         <div
-           key={`frame-${group.id}`}
-           ref={rectMotion.ref}
-           className="pane-border"
-           data-node={`layout/frame/${group.id}`}
-           style={cellVars(rect, group.id)}
-         />
-      ))}
+       {!replaceGeometry && displayCells.map(({ group, rect }) => (
+          <NativePaneBorder
+            key={`frame-${group.id}`}
+            owner={`frame/${projectId}/${content.id}/${group.id}`}
+            node={`layout/frame/${group.id}`}
+            trackRef={rectMotion.ref}
+            active={surfaceActive && paneStyle !== "flat"}
+            style={cellVars(rect, group.id)}
+          />
+       ))}
 
       {/* The selection boundary travels with the pane it marks, for the same reason the frame does. */}
       {!replaceGeometry && displayCells

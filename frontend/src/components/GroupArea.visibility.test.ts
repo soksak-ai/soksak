@@ -18,7 +18,7 @@ describe("what a motion takes off the screen", () => {
     const app = readFileSync(resolve(import.meta.dirname, "../App.tsx"), "utf8");
     // The frame is drawn and registered with the tracker that interpolates the cells, so it is one
     // frame that moves rather than two that appear and vanish.
-    expect(group).toContain('data-node={`layout/frame/${group.id}`}');
+    expect(group).toContain('node={`layout/frame/${group.id}`}');
     expect(group).toContain('node={`layout/focus-boundary/${content.activePaneId}`}');
     expect(group).not.toContain("decoration.structuralFrames");
     expect(group).not.toContain("decoration.focusBoundary");
@@ -55,13 +55,22 @@ describe("content view effective visibility", () => {
   it("every structural frame is drawn through a motion, on the tracker that moves the cells", () => {
     const source = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
     expect(source).toContain('className="pane-border"');
-    expect(source).toContain('data-node={`layout/frame/${group.id}`}');
+    expect(source).toContain('node={`layout/frame/${group.id}`}');
     // The condition that took them away for the length of a motion is gone. What is left is the
     // structural snap, where the previous rect is a structure to discard rather than a start point.
     expect(source).toMatch(/\{!replaceGeometry && displayCells\.map/);
     expect(source).not.toContain("decoration.structuralFrames");
     expect(source).not.toMatch(/displayCells\s*\.filter\(\(\{ group \}\) => !traveling \|\| !flipMoves\(group\.id\)\)/);
     expect(source).not.toMatch(/className=\{`pane-border\$\{[^\n]*flip-move/);
+  });
+
+  it("structural frames have a native stroke so their border can remain above a native surface", () => {
+    const source = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
+    // A DOM z-index cannot overtake an AppKit child webview. The structural frame therefore needs
+    // the same native decoration plane as the focus boundary; keeping only pane-border would hide
+    // the border exactly where the native surface is opaque.
+    expect(source).toContain("NativePaneBorder");
+    expect(source).toContain('data-native-decoration={active ? "pane-border" : undefined}');
   });
 
   it("a moving pane keeps its chrome identity, and the nativeSurface slot takes no DOM FLIP", () => {

@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NativeFocusBoundary } from "./GroupArea";
+import { NativeFocusBoundary, NativePaneBorder } from "./GroupArea";
 import {
   __resetNativeDecorationsForTest,
   nativeDecorationFacts,
@@ -31,6 +31,8 @@ describe("NativeFocusBoundary geometry projection", () => {
       function (this: HTMLElement) {
         return this.classList.contains("pane-focus-boundary")
           ? rect
+          : this.classList.contains("pane-border")
+            ? rect
           : ({
               x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0,
               width: 0, height: 0, toJSON: () => ({}),
@@ -75,6 +77,26 @@ describe("NativeFocusBoundary geometry projection", () => {
     const moved = nativeDecorationFacts().decorations[0]?.path;
     expect(moved).toContain("40.5");
     expect(moved).not.toBe(first);
+    act(() => root.unmount());
+  });
+
+  it("publishes a structural pane stroke on the native plane", async () => {
+    const root = createRoot(host);
+    act(() => root.render(
+      <NativePaneBorder
+        owner="frame/wsp-a/spc-a/pan-a"
+        node="layout/frame/pan-a"
+        trackRef={() => {}}
+        active
+        style={{ left: "10%" }}
+      />,
+    ));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(nativeDecorationFacts().decorations).toMatchObject([
+      { id: "frame/wsp-a/spc-a/pan-a/stroke", strokeWidth: 1 },
+    ]);
+    expect(nativeDecorationFacts().decorations[0]?.path).toContain("10.5");
     act(() => root.unmount());
   });
 });
