@@ -1,4 +1,5 @@
 import {
+  insetRailRect,
   projectRailRect,
   railLeftPx,
   type RailRect,
@@ -72,13 +73,15 @@ export function railLinkBoxes(
   const innerWidth = hostWidth - inset * 2;
   const innerHeight = hostHeight - inset * 2;
   if (innerWidth <= 0 || innerHeight <= 0 || railWidth <= 0) return null;
-  // The host is the reference — do not subtract the right-placed rail again here (the host is already narrow).
+  // The host is the reference — the fixed reservation remains, while its visible
+  // rail frame follows the same inset lanes as the linked pane.
   const projected = projectRailRect(target, station, innerWidth, railWidth);
+  const railFrame = insetRailRect(railWidth, inset);
   return {
     rail: {
       x: inset + railLeftPx(innerWidth, railWidth, station),
       y: inset,
-      width: railWidth,
+      width: railFrame.widthPx,
       height: innerHeight,
     },
     panel: {

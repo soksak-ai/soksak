@@ -136,7 +136,7 @@ describe("panel area — the host is the reference", () => {
       5,
     );
     expect(b).toEqual({
-      rail: { x: 5, y: 5, width: 320, height: 525 },
+      rail: { x: 5, y: 5, width: 310, height: 525 },
       panel: { x: 325, y: 5, width: 669, height: 157.5 },
     });
   });

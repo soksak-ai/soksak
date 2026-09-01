@@ -6,6 +6,7 @@ import {
   isCleanRailStation,
   projectRailRect,
   projectRailCssTransition,
+  insetRailRect,
   railLeftPx,
   railStationFromLeftPx,
   snapRailStation,
@@ -72,6 +73,11 @@ describe("left rail clean-line contract", () => {
 });
 
 describe("real-space rail insertion", () => {
+  it("keeps the visible rail frame centered in its fixed reservation", () => {
+    expect(insetRailRect(400, 5)).toEqual({ leftInsetPx: 5, widthPx: 390 });
+    expect(insetRailRect(400, 0)).toEqual({ leftInsetPx: 0, widthPx: 400 });
+  });
+
   it("workspaces a FLOW handoff from the source rect instead of crossing the target rect", () => {
     const source = { left: 50, top: 0, width: 100 / 3, height: 50 };
     const target = { left: 100 / 3, top: 0, width: 100 / 3, height: 50 };
@@ -141,4 +147,3 @@ describe("placement restore parse", () => {
     );
   });
 });
-

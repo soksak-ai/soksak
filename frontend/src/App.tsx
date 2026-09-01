@@ -73,6 +73,7 @@ import { useTheme } from "./state/theme";
 import { hasPtyObservation } from "./terminal/ptyObservationStore";
 import {
   DEFAULT_RAIL_PLACEMENT,
+  insetRailRect,
   railStationFromLeftPx,
   snapRailStation,
 } from "./lib/railPlacement";
@@ -468,6 +469,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // paneStyle) into the rail subtree so the rail header aligns with the pane group header row.
   const paneStyle = useTheme((s) => s.spec.chrome.paneStyle);
   const railPaneInset = PANE_INSET[paneStyle] ?? 0;
+  const railFrame = insetRailRect(displayedRailWidth, railPaneInset);
 
   // Pin = anchor at the current position / unpin = follow focus (flow). Attaching the rail to the function tab is the default.
   const toggleRailPin = useCallback(() => {
@@ -654,8 +656,8 @@ const WorkspacePlane = memo(function WorkspacePlane({
                       // nothing on the screen marks it as one view's rather than the other — measured
                       // 2026-08-17: the left column ended at 414, the sidebar held 420..580,
                       // and the pane it served began at 586. Six points each way.
-                      left: `calc(${rail.station}% - ${(sidebarW * rail.station) / 100}px + var(--pane-inset, 0px))`,
-                      width: displayedRailWidth,
+                      left: `calc(${rail.station}% - ${(sidebarW * rail.station) / 100}px + ${railFrame.leftInsetPx}px)`,
+                      width: railFrame.widthPx,
                       borderLeftWidth: railEdgeWidths(
                         railLook,
                         displayedRailOpen,

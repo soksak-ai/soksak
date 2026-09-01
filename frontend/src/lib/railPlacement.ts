@@ -32,6 +32,21 @@ export interface RailCssRect extends RailRect {
 export const DEFAULT_RAIL_PLACEMENT: RailPlacement = { mode: "flow" };
 export const RAIL_EPSILON = 0.01;
 
+export interface InsetRailRect {
+  leftInsetPx: number;
+  widthPx: number;
+}
+
+/** Visible rail frame inside its fixed reservation; the reservation itself never changes. */
+export function insetRailRect(allocatedWidthPx: number, paneInsetPx: number): InsetRailRect {
+  const width = Math.max(0, Number.isFinite(allocatedWidthPx) ? allocatedWidthPx : 0);
+  const inset = Math.min(
+    width / 2,
+    Math.max(0, Number.isFinite(paneInsetPx) ? paneInsetPx : 0),
+  );
+  return { leftInsetPx: inset, widthPx: width - inset * 2 };
+}
+
 const clampStation = (value: number): number =>
   Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 
