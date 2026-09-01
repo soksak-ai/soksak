@@ -589,6 +589,16 @@ terminal-surface service가 PTY와 engine unit을 모두 선언한 source를 가
 `resolve -> PTY ready -> engine ready -> session` transaction을 따른다. Sidecar 수동 실행이나 이전
 실행에서 남은 process에 의존한 결과는 검증 증거로 인정하지 않는다.
 
+### Native owner bootstrap 재측정
+
+2026-09-01 격리 개발 앱에서 복원 오류를 재현했다. Vision 0.0.68은 `live`와 `complete`를
+반환했지만 재시작된 Alacritty surface는 `hostPixels=789x121`, `cols=1`, `rows=1`, 렌더된
+frame 없음으로 보고했다. Vision 0.0.69는 소유자 경계에서 수정했다. pixel 선언이 같아도
+소유자가 bootstrap 1x1을 보고하는 동안 첫 resize를 생략하지 않는다. presenter RED 테스트와
+frontend 37개 테스트가 통과했다. 로컬 설치 후 개발 앱을 재적재하자 캡처에 프롬프트와 브라우저가
+함께 표시되었고 Alacritty sidecar가 개발 home 아래에서 다시 생성되었다. frozen v8 앱과 그
+sidecar는 변경하지 않았다.
+
 모든 제공자 매트릭스의 RED 가 GREEN 이 되고, 모든 정량 표시 검사와 소유 검사가 통과하며, 스크린샷과
 움직임 녹화를 직접 확인해야 완료입니다. 빌드, 명령 응답, 과거 CI 실행만으로 이 인계를 끝낼 수
 없습니다.
