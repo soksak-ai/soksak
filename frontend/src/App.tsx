@@ -53,6 +53,7 @@ import { MotionDebug } from "./components/MotionDebug";
 import { PluginHeaderActions } from "./ui/PluginHeaderActions";
 import { useUi } from "./state/ui";
 import { setNativeDecorationPresentationVisible } from "./lib/nativeDecorations";
+import { cssColorRGBA, replaceNativeDecorations, strokeDecoration } from "./lib/nativeDecorations";
 import { useT } from "./i18n";
 import { useBootPhase } from "./state/bootPhase";
 import {
@@ -718,12 +719,10 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   )}
                 </div>}
               {displayedRailOpen && rail.visible && (rail.station === 0 || rail.station === 100) && (
-                <div
-                  className="rail-boundary-line"
-                  data-node="rail/boundary"
-                  data-station={rail.station}
-                  data-wv-occlusion="rail"
-                  style={{ "--rail-width": `${displayedRailWidth}px` } as React.CSSProperties}
+                <SurfaceGapBoundary
+                  owner={`${workspace.id}/${rail.station}`}
+                  station={rail.station}
+                  width={displayedRailWidth}
                 />
               )}
             </div>
@@ -863,6 +862,61 @@ function EdgeSidebarPlane({
     </>
   );
 }
+
+/** A single border-contract line in the gap between the rail card and its pane.
+ * The DOM node is the measurable owner; the identical native stroke is the
+ * compositor owner so an opaque native surface cannot hide half the line. */
+const SurfaceGapBoundary = memo(function SurfaceGapBoundary({
+  owner,
+  station,
+  width,
+}: {
+  owner: string;
+  station: number;
+  width: number;
+}) {
+  const elementRef = useRef<HTMLDivElement | null>(null);
+  const border = useTheme((state) => state.colors.bd);
+  const update = useCallback(() => {
+    const element = elementRef.current;
+    const color = cssColorRGBA(border);
+    if (!element || !color) {
+      replaceNativeDecorations(`${owner}/gap-boundary`, []);
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      replaceNativeDecorations(`${owner}/gap-boundary`, []);
+      return;
+    }
+    const x = rect.left + 0.5;
+    replaceNativeDecorations(`${owner}/gap-boundary`, [
+      strokeDecoration(`${owner}/gap-boundary/stroke`, `M ${x} ${rect.top} L ${x} ${rect.bottom}`, color, 1),
+    ]);
+  }, [border, owner]);
+  useLayoutEffect(() => {
+    update();
+    const element = elementRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      replaceNativeDecorations(`${owner}/gap-boundary`, []);
+    };
+  }, [owner, update]);
+  const left = `calc(${station}% + ${(1 - (2 * station) / 100) * width}px)`;
+  return (
+    <div
+      ref={elementRef}
+      className="surface-gap-boundary"
+      data-node="rail/gap-boundary"
+      data-station={station}
+      data-wv-occlusion="rail"
+      style={{ left }}
+    />
+  );
+});
 
 // The terminal pane the workspace sidebar (file tree) follows (= the current cwd source). The pure resolver is
 // sessions.cwdTabOf — here it is called with the PTY observation predicate (hasPtyObservation) injected.

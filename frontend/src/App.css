@@ -736,59 +736,24 @@ body,
      corridor the panes open and close. The rail itself gets no interpolation, no
      fade and no z promotion. */
 }
-/* Ownership of the rail's vertical edges — which side it owns is set by railLook
-   and station (§B2). Until now .sidebar declared both edges unconditionally and
-   JS covered it by forcing the width to 0: the declaration and the law were in
-   two places and neither could check the contract (measured — the validator
-   reported a standing violation, and the violation was real).
-   Ownership is declared here per state, one to one with rail-ground-* and
-   rail-pane-* in borderContract.
-   Do not write `*` followed by `/` after a prefix — the comment closes there and
-   the next block disappears.
-   The final width is written inline by railEdges.railEdgeWidths: it changes every
-   frame while a station is dragged, which a declaration cannot follow. The two
-   state the same law and railEdgeContract.test compares them. */
-/* A ground rail follows the station law too — an edge station omits its outer
-   side and owns only the side facing the body (the same law as rail-pane). The
-   outer edge of the window is not a boundary between surfaces; the OS window
-   frame already draws there (§B2a). */
-.sidebar.rail-ground[data-station="0"] {
-  border-right: 1px solid var(--bd);
-}
-.sidebar.rail-ground[data-station="100"] {
-  border-left: 1px solid var(--bd);
-}
-.sidebar.rail-ground:not([data-station="0"]):not([data-station="100"]) {
+/* One perimeter rule for every rail mode and station. The inline widths from
+   railEdges keep closed rails at zero while this declaration keeps ownership
+   independent of direction. */
+.sidebar.rail-ground,
+.sidebar.rail-pane {
   border-left: 1px solid var(--bd);
   border-right: 1px solid var(--bd);
 }
-.sidebar.rail-pane[data-station="0"] {
-  border-right: 1px solid var(--bd);
-}
-.sidebar.rail-pane[data-station="100"] {
-  border-left: 1px solid var(--bd);
-}
-.sidebar.rail-pane:not([data-station="0"]):not([data-station="100"]) {
-  border-left: 1px solid var(--bd);
-  border-right: 1px solid var(--bd);
-}
-/* At an edge station the card ends one pane inset before its neighbour. The
-   boundary line is a real sibling of the clipped card, so it remains visible
-   in the corridor and can be measured as rail/boundary. */
-.rail-boundary-line {
+/* A gap is still a boundary between surfaces. It uses the same one-pixel
+   contract as every card edge; only the station anchor changes. */
+.surface-gap-boundary {
   position: absolute;
   top: var(--pane-inset, 0px);
   bottom: var(--pane-inset, 0px);
   width: 1px;
-  background: var(--bd-soft);
+  background: var(--bd);
   pointer-events: none;
   z-index: 9;
-}
-.rail-boundary-line[data-station="0"] {
-  left: var(--rail-width);
-}
-.rail-boundary-line[data-station="100"] {
-  right: var(--rail-width);
 }
 /* Rail visual mode (§12-⑤) — ground: a plane lying on the floor rather than a
    split window. Tint and shadow are removed and only the boundary line stays.

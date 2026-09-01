@@ -17,7 +17,7 @@ import { railEdgeWidths } from "./railEdges";
 
 const BD = "rgb(58, 58, 58)";
 const RAIL_RULES = BORDER_RULES.filter(
-  (r) => r.id.startsWith("rail-ground") || r.id.startsWith("rail-pane"),
+  (r) => r.id === "rail-perimeter",
 );
 
 type Look = "pane" | "ground";
@@ -75,15 +75,7 @@ beforeEach(() => {
 
 describe("rail vertical borders — contract ≡ implementation", () => {
   it("the rules exist (if they vanish from the contract table this suite guards nothing)", () => {
-    expect(RAIL_RULES.map((r) => r.id).sort()).toEqual([
-      "rail-ground-delegates",
-      "rail-ground-flat-station-end",
-      "rail-ground-flat-station-inner",
-      "rail-ground-flat-station-start",
-      "rail-pane-station-end",
-      "rail-pane-station-inner",
-      "rail-pane-station-start",
-    ]);
+    expect(RAIL_RULES.map((r) => r.id)).toEqual(["rail-perimeter"]);
   });
 
   const cases: Array<[Look, number, PaneStyle]> = [];
@@ -116,8 +108,8 @@ describe("rail vertical borders — contract ≡ implementation", () => {
 
   // Control group: whether this suite actually catches a violation (guards against fake GREEN).
   it.each([
-    ["drawing a line on ground+card is a double-border violation", "ground" as Look, 50, "card" as PaneStyle, { left: 1, right: 1 }],
-    ["drawing a line on the outer edge of pane+station 0 is a violation", "pane" as Look, 0, "card" as PaneStyle, { left: 1, right: 1 }],
+    ["removing the rail perimeter at ground+card is a violation", "ground" as Look, 50, "card" as PaneStyle, { left: 0, right: 0 }],
+    ["removing the outer rail perimeter at pane+station 0 is a violation", "pane" as Look, 0, "card" as PaneStyle, { left: 0, right: 0 }],
     ["removing the line at an inner pane station is a violation", "pane" as Look, 50, "card" as PaneStyle, { left: 0, right: 0 }],
   ])("%s", (_label, look, station, style, wrong) => {
     mount(look, station, wrong as { left: number; right: number });

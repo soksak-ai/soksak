@@ -167,80 +167,17 @@ export const BORDER_RULES: readonly BorderRule[] = [
     note: tmsg("msg.ui.border.leftSidebarFooterBand"),
   },
 
-  // ── B2 vertical chrome — owns the body-side edge, tone bd ─────────────────
-  // Vertical boundary of the left rail — exactly one owner (the rail itself or the neighbor card).
-  // The old rule (`.sidebar` right unconditionally bd) did not encode this law and produced a
-  // permanent violation, and a permanent violation becomes an alarm nobody reads. That violation
-  // was real: the delegate, the rail card, owned no line (before rail-card-perimeter was added),
-  // so nothing owned the boundary.
-  // Delegation and ownership now pair up, so the state space is declared with no gap (§B8).
-  // Axes: railLook (class rail-ground/rail-pane) × paneStyle × station (data-station).
+  // ── B2 vertical chrome — one rail perimeter owner in every station ────────
+  // Position changes when the rail travels; the perimeter contract does not.
+  // Keeping one rule prevents an edge station from silently dropping its outer
+  // line or delegating it to a different surface.
   {
-    id: "rail-ground-delegates",
+    id: "rail-perimeter",
     selector:
-      '.sidebar.rail-ground[data-station="0"], .sidebar.rail-ground[data-station="100"], .sidebar.rail-ground:not([data-station="0"]):not([data-station="100"])',
-    kind: "edges",
-    edges: { left: "none", right: "none" },
-    when: { paneStyle: ["card", "floating"] },
-    note: tmsg("msg.ui.border.railGroundDelegates"),
-  },
-  // The ground rail follows the station law too — the same law rail-pane already wrote down:
-  // "an edge station omits the outer edge and owns only the body side".
-  //
-  // Previously flat owned both edges unconditionally, on the grounds that "there is no neighbor
-  // card outline, so delegation does not hold". That argument holds only for a **seam between
-  // surfaces**. At the window's outer edge there is nothing to divide from, and the OS window
-  // frame already draws the boundary there (§B2a).
-  //
-  // Measured 2026-08-15 (flat, window width 1000): the rail's left x=0 was drawn and the pane's
-  // right x=1000 was not. Two surfaces treated the same kind of edge differently and the validator
-  // passed both — the contract approved two contradictory conclusions at once (§B8-3).
-  {
-    id: "rail-ground-flat-station-start",
-    selector: '.sidebar.rail-ground[data-station="0"]',
-    kind: "edges",
-    edges: { left: "none", right: "bd" },
-    when: { paneStyle: ["flat"] },
-    note: tmsg("msg.ui.border.railGroundFlatStationStart"),
-  },
-  {
-    id: "rail-ground-flat-station-end",
-    selector: '.sidebar.rail-ground[data-station="100"]',
-    kind: "edges",
-    edges: { left: "bd", right: "none" },
-    when: { paneStyle: ["flat"] },
-    note: tmsg("msg.ui.border.stationEndMirror"),
-  },
-  {
-    id: "rail-ground-flat-station-inner",
-    selector:
-      '.sidebar.rail-ground:not([data-station="0"]):not([data-station="100"])',
+      '.sidebar.rail-ground, .sidebar.rail-pane',
     kind: "edges",
     edges: { left: "bd", right: "bd" },
-    when: { paneStyle: ["flat"] },
-    note: tmsg("msg.ui.border.railGroundFlatStationInner"),
-  },
-  {
-    id: "rail-pane-station-start",
-    selector: '.sidebar.rail-pane[data-station="0"]',
-    kind: "edges",
-    edges: { left: "none", right: "bd" },
-    note: tmsg("msg.ui.border.railPaneStationStart"),
-  },
-  {
-    id: "rail-pane-station-end",
-    selector: '.sidebar.rail-pane[data-station="100"]',
-    kind: "edges",
-    edges: { left: "bd", right: "none" },
-    note: tmsg("msg.ui.border.stationEndMirror"),
-  },
-  {
-    id: "rail-pane-station-inner",
-    selector:
-      '.sidebar.rail-pane:not([data-station="0"]):not([data-station="100"])',
-    kind: "edges",
-    edges: { left: "bd", right: "bd" },
-    note: tmsg("msg.ui.border.railPaneStationInner"),
+    note: tmsg("msg.ui.border.railCardPerimeter"),
   },
   // Each window edge owns the one line facing the work. Written as two entries, not one shared
   // selector, because they own opposite sides — a single rule could only name one of them.
