@@ -111,6 +111,13 @@ empty set, the rail is absent: it reserves no width and does not participate in
 adjacency. No hardcoded body and no stub is used. A set becomes present only
 after it contains at least one section.
 
+The current development window also measured the configured rail after a public
+resizer drag. The rail frame was `x=5,w=400` with its right border at `1px`; its
+body was `x=10,w=389`, leaving the declared 6px inner separation before the rail
+edge. The focus-free capture `/private/tmp/rail-resized.png` shows that gap after
+the width changed from 320px to 400px. This is evidence for the rail/body spacing
+contract, not a completion claim for the broader drag and transition matrix.
+
 ## S4. A place is present when it is open and a configured set stands in it
 
 Both terms, all three places, one function — `placePresent` in `state/sectionSets.ts`. A place a

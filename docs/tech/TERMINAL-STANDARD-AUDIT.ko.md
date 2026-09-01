@@ -13,12 +13,12 @@ source에 코드가 있거나 unit test 하나가 통과한 사실만으로 완�
 터미널 계약이 필수 control sequence 동작과 선택적 image protocol capability를 정의합니다. 각 provider는
 자신이 선언한 범위를 자기 저장소에서 증명하며 Core는 provider 구현을 열람하거나 검증하지 않습니다.
 
-## Provider 검증 경계 — 2026-09-01
+## Provider 검증 범위 — 2026-09-01
 
 7개 Wails 터미널 Plugin 저장소를 모두 같은 명시적 local Registry 주소
 (`http://127.0.0.1:4873/`)로 검증했습니다. Alacritty, Ghostty, Kitty, Shitty, VT100, WezTerm,
 Xterm이 모두 exit 0을 반환했고 owner test와 frontend 계약 test가 registry 또는 dependency
-fallback 없이 끝났습니다. 이것은 저장소 수준 빌드 증거일 뿐이며, 설치된 consent 경계, native
+fallback 없이 끝났습니다. 이것은 저장소 수준 빌드 증거일 뿐이며, 설치된 consent 상태, native
 입력 matrix, provider runtime 행의 완료를 의미하지 않습니다.
 
 Kitty build preflight는 프로필의 정확한 toolchain 계약을 따릅니다. Python 3.9.6에서는 준비나
