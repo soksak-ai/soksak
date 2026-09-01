@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@soksak/soksak-service-native-compositor':
-        specifier: github:soksak-ai/soksak-service-native-compositor#44675b6a02af
-        version: https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af
+        specifier: 0.0.2
+        version: 0.0.2
       '@soksak/soksak-spec':
         specifier: 0.0.52
         version: 0.0.52
@@ -523,9 +523,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@soksak/soksak-service-native-compositor@https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af':
-    resolution: {gitHosted: true, integrity: sha512-11N1WJHyOsAwGJuGTAmIv+AhsKT7YdYIaXDOPy+pavyiykhTkRt2BB1dkpDGqlDOVjAZpO7fmkB3KkGxhKjIjw==, tarball: https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af}
-    version: 0.0.1
+  '@soksak/soksak-service-native-compositor@0.0.2':
+    resolution: {integrity: sha512-XCU1rekvXYxH8jvbA+cOd70bQGRjtMbTrKq+fbfpuJHGQxrJ7ssmbfy83t1Zy6ty2jDDoSzv9zheA+gD6FPeKQ==}
     engines: {node: 26.7.0}
 
   '@soksak/soksak-spec@0.0.52':
@@ -1351,7 +1350,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.4':
     optional: true
 
-  '@soksak/soksak-service-native-compositor@https://codeload.github.com/soksak-ai/soksak-service-native-compositor/tar.gz/44675b6a02afec148d868fe9ca36c7782a9748af': {}
+  '@soksak/soksak-service-native-compositor@0.0.2': {}
 
   '@soksak/soksak-spec@0.0.52': {}
 

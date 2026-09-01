@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"regexp"
-	"strings"
 	"testing"
 )
 
@@ -44,8 +43,8 @@ func TestNativeSurfaceConsumersUseTheDeclaredCommits(t *testing.T) {
 		!regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(terminalCommit) {
 		t.Fatal("terminal surface selection is not an exact repository commit")
 	}
-	if !regexp.MustCompile(`(?m)^\s*github[.]com/soksak-ai/soksak-service-terminal-surface\s+v0\.0\.1$`).Match(goMod) {
-		t.Fatal("Go terminal surface dependency does not use release v0.0.1")
+	if !regexp.MustCompile(`(?m)^\s*github[.]com/soksak-ai/soksak-service-terminal-surface\s+v0\.0\.2$`).Match(goMod) {
+		t.Fatal("Go terminal surface dependency does not use release v0.0.2")
 	}
 
 	packageBytes, err := os.ReadFile("frontend/package.json")
@@ -59,7 +58,7 @@ func TestNativeSurfaceConsumersUseTheDeclaredCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 	dependency := packageManifest.Dependencies["@soksak/soksak-service-native-compositor"]
-	if !strings.HasSuffix(dependency, "#"+commit[:12]) {
-		t.Fatalf("frontend compositor dependency does not use %s", commit)
+	if dependency != "0.0.2" {
+		t.Fatalf("frontend compositor dependency does not use release 0.0.2: %s", dependency)
 	}
 }

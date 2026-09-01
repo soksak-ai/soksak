@@ -569,7 +569,7 @@ ownership 폴링·compositor 우회는 하지 않는다. 계약은 `DOM 선언 e
 
 이 변경 후 첫 격리 v7 실행에서는 별도의 kit geometry 결함도 확인했다. 새 workbench가 host에 삽입되기
 전에 측정되어 `hostPixels=0×0`, `renderSequence=0`을 유지했다. terminal kit은 이제 멈춘 animation frame에
-의존하지 않고 mount transaction의 microtask 경계에서 한 번 layout을 재측정한다
+의존하지 않고 mount transaction의 microtask 단계에서 한 번 layout을 재측정한다
 (`soksak-kit-plugin-terminal` `f36ecb1`, RED→GREEN workbench 테스트). 이 변경을 포함한 Vision 0.0.71은
 kit 0.0.107과 함께 workspace local release store에 게시되었고 exact install plan까지 계산되었다.
 단, 새 plugin 동의가 필요해 dev 창은 아직 비활성 상태다. 동의·실행·focus 없는 캡처를 다시 확인하기
@@ -598,7 +598,7 @@ terminal-surface service가 PTY와 engine unit을 모두 선언한 source를 가
 frame 없음으로 보고했다. presenter는 pixel 선언이 같아도 소유자의 bootstrap 1x1이면 첫 resize를
 생략하지 않도록 이미 검사하고 있다. 새 terminal kit 0.0.107은 여기에 mount transaction 재측정을
 추가했고 Vision 0.0.71에 포함했다. Kit 160개와 Vision frontend 37개 테스트가 통과했다. candidate
-설치 전 window reload라는 RED 경계를 통과하자 다섯 pane이 `100×7`(sequence 2/3)으로 돌아왔고
+설치 전 window reload라는 RED 단계를 통과하자 다섯 pane이 `100×7`(sequence 2/3)으로 돌아왔고
 focus 없는 캡처에 prompt가 보였다. 이는 candidate 설치의 증거가 아니다. frozen v8 앱과 그 sidecar는
 변경하지 않았다.
 

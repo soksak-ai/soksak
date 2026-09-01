@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@soksak/soksak-service-native-compositor": "github:soksak-ai/soksak-service-native-compositor#44675b6a02af",
+    "@soksak/soksak-service-native-compositor": "0.0.2",
     "@soksak/soksak-spec": "0.0.52",
     "@wailsio/runtime": "3.0.0-beta.12",
     "pngjs": "^7.0.0",

@@ -355,8 +355,6 @@ github.com/soksak-ai/soksak-contract-surface v0.0.0-20260830044243-f3c3b22f7808 
 github.com/soksak-ai/soksak-contract-surface v0.0.0-20260830044243-f3c3b22f7808/go.mod h1:wXRo6E+0QlXIKNKVcVjCseH67D27OtG2Zp7M74d0iPo=
 github.com/soksak-ai/soksak-service-native-compositor v0.0.1 h1:6UeJuJHTv6YuZHaMFlhEuRGMf/MvCf0qhKsMyDVc7Ug=
 github.com/soksak-ai/soksak-service-native-compositor v0.0.1/go.mod h1:lSCsP95PK8kAU6cXcGODyDyVcffOyyUjVzYPonpSyI8=
-github.com/soksak-ai/soksak-service-terminal-surface v0.0.1 h1:laoj49OPwlVUxDhoJwbovpVJtmJt5aWNCGVYz09bxbE=
-github.com/soksak-ai/soksak-service-terminal-surface v0.0.1/go.mod h1:eDKLm+1p1XAMVkYi1ojiC6Hh5Za64qJWT+4oTWphMmQ=
 github.com/soksak-ai/soksak-service-terminal-surface v0.0.2 h1:z77+d0n/Bwiq5JR7P5o25Qv1K9XzZJ5z8Y57nVTlS7Y=
 github.com/soksak-ai/soksak-service-terminal-surface v0.0.2/go.mod h1:eDKLm+1p1XAMVkYi1ojiC6Hh5Za64qJWT+4oTWphMmQ=
 github.com/soksak-ai/soksak-service-webview-surface v0.0.1 h1:+ZNraL5mVBPjXr+MZL5N1y9DWtK4xaKImfxlYDDJwCw=

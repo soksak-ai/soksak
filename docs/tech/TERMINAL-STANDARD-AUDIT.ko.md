@@ -13,7 +13,7 @@ source에 코드가 있거나 unit test 하나가 통과한 사실만으로 완�
 터미널 계약이 필수 control sequence 동작과 선택적 image protocol capability를 정의합니다. 각 provider는
 자신이 선언한 범위를 자기 저장소에서 증명하며 Core는 provider 구현을 열람하거나 검증하지 않습니다.
 
-## Wails 포커스 경계 관측 — 2026-09-01
+## Wails 포커스 조건 관측 — 2026-09-01
 
 OS 창을 앞으로 가져오지 않은 개발용 Wails 창에서 관측했습니다. 활성 터미널 화면에 공개
 `ui.input.click`을 실행한 뒤 `ui.focus.state`는 해당 탭을 키보드 소유자로 보고했고
@@ -23,7 +23,7 @@ OS 창을 앞으로 가져오지 않은 개발용 Wails 창에서 관측했습�
 `cursorPresentation=hollow-block`, `cursorActive=false`였습니다. 같은 관측에서 보이는 각
 native 터미널의 `nativeDeclaredFrame`은 DOM rect(`205,120,789,121`)와 일치했습니다.
 
-이 캡처는 공개 DOM 클릭/포커스 경계와 포커스 아웃 커서 표현에 대해서는 GREEN입니다. OS native
+이 캡처는 공개 DOM 클릭/포커스 조건과 포커스 아웃 커서 표현에 대해서는 GREEN입니다. OS native
 마우스 클릭이나 AppKit 키보드 전달 전체를 인증하는 결과는 아닙니다. 창에 포커스를 빼앗지 않는
 native 입력 관측을 별도로 측정하기 전까지 그 범위는 미완료로 둡니다.
 

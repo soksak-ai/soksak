@@ -25,7 +25,7 @@ const scopedDependencies = () => {
 
 test("frontend/package.json declares every @soksak dependency by exact version", () => {
   const found = scopedDependencies();
-  assert.deepEqual(found.map(([, name]) => name), ["@soksak/soksak-spec"]);
+  assert.deepEqual(found.map(([, name]) => name), ["@soksak/soksak-service-native-compositor", "@soksak/soksak-spec"]);
   for (const [section, name, spec] of found) assert.match(spec, STRICT_SEMVER_RE, `${section}.${name}`);
 });
 
@@ -79,7 +79,10 @@ test("Makefile forwards a command-line REGISTRY as the scoped registry flags to 
 });
 
 test("Makefile requires REGISTRY on the command line because the frontend depends on @soksak", () => {
-  const dependency = /REGISTRY required: this package depends on @soksak\/soksak-spec/;
+  const firstDependency = scopedDependencies()[0]?.[1];
+  assert.ok(firstDependency);
+  const escapedDependency = firstDependency.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
+  const dependency = new RegExp(`REGISTRY required: this package depends on ${escapedDependency}`);
   refused(run(["prepare"]), dependency);
   refused(run(["build", "TARGET=aarch64-apple-darwin"]), dependency);
   refused(run(["verify"]), dependency);

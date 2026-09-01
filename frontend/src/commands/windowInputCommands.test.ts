@@ -43,7 +43,7 @@ describe("window.input — discoverable native input diagnostics", () => {
   it("separates native pointer delivery from a UI drag", async () => {
     const result = await execute("command.docs", { name: "window.input.pointer.drag" }, {});
     expect(result).toMatchObject({ ok: true });
-    expect((result as { data: { command: { description: string } } }).data.command.description)
-      .toMatch(/DOM gesture|DOM 드래그/);
+    expect((result as unknown as { data: { command: { description: string } } }).data.command.description)
+      .toMatch(/DOM gesture|DOM \uB4DC\uB798\uADF8/);
   });
 });
