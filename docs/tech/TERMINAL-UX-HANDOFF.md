@@ -673,6 +673,12 @@ An open RED remains in the live development environment (2026-09-01): the
 alive, so the PTY observation is not evidence of a clean app shutdown or of
 zero orphaned sidecars. It is recorded as an ownership/lifetime failure until
 a RED→GREEN test proves the intended parent and post-shutdown process state.
+The process start times narrow the observation: PTY 62680 started at 09:21:29,
+before the current development app 55409 at 10:30:42; Alacritty 4286 started at
+11:08:20 under that app. Thus the current app adopted an already-running PTY;
+the `PPID=1` is evidence of the earlier run's unclean parent loss, not proof
+that this launch detached its own PTY. The lifecycle RED still requires a
+controlled start/shutdown/restart test with fresh identity evidence.
 The frozen v8 process and its children were not inspected or modified by a
 control command.
 
