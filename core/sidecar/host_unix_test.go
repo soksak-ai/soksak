@@ -160,6 +160,18 @@ func TestStartedObserverReceivesEverySelectedProcessGeneration(t *testing.T) {
 	}
 }
 
+func TestEndedObserverReceivesProcessEnd(t *testing.T) {
+	host := NewHost(Deps{})
+	var got Open
+	cancel := host.ObserveEnded(func(open Open) { got = open })
+	defer cancel()
+	expected := Open{Name: "engine-a", PID: 42}
+	host.notifyEnded(expected)
+	if got != expected {
+		t.Fatalf("ended event=%+v want=%+v", got, expected)
+	}
+}
+
 func TestConcurrentStartsShareOneProcess(t *testing.T) {
 	home := shortHome(t)
 	runtimeRoot := shortHome(t)
