@@ -633,6 +633,15 @@ Vision 0.0.71이 동의 대기 비활성 상태이므로 native Vision provider 
 이는 가로 디바이더 경로가 공개되어 각 preview를 적용한다는 증거이며,
 native surface 드래그 전체 매트릭스를 닫는 증거는 아니다.
 
+같은 포커스 없는 개발 창에서 browser native resize도 측정했다. 공개
+`ui.input.drag`로 `gutter/pan-scjodu/right`를 가로 120 CSS 픽셀 이동하고
+12개 단계로 적용했다. 보이는 두 webview의 commit 뒤 선언 프레임과 적용
+프레임은 모두 정확히 일치했다(`drift={x:0,y:0,w:0,h:0}`); 영수증의 폭은
+`468.45`, `237.55` CSS 픽셀로 바뀌었다. 캡처에서 브라우저 내용이 새 폭에
+맞춰 재배치되는 것을 직접 확인했다. 숨은 webview도 계속 숨은 상태로 drift가
+0이었다. 이는 측정한 DOM/browser resize 경우만 닫으며 모든 native provider를
+완료했다는 뜻은 아니다.
+
 ### 사이드카 종료 상태
 
 선택된 PTY 또는 엔진 프로세스가 종료되면 Core가 unit-ended 이벤트를 발행합니다. terminal-surface

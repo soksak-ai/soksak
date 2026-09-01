@@ -655,6 +655,15 @@ The perpendicular route was exercised in the same window through
 directly. This proves the horizontal divider route applies each preview; it
 does not close the broader native-surface drag matrix.
 
+The browser-native resize path was then measured in the same no-focus development
+window. A 120 CSS-pixel horizontal drag over `gutter/pan-scjodu/right` produced
+12 moves and 12 applies. For both visible webviews, the post-commit declaration
+and applied frames matched exactly (`drift={x:0,y:0,w:0,h:0}`); widths changed to
+`468.45` and `237.55` CSS pixels in the receipt. The capture showed the browser
+content reflowing at the new widths. Hidden webviews remained hidden with zero
+drift. This closes only the measured DOM/browser resize case, not every native
+surface provider.
+
 ### Sidecar end state
 
 When a selected PTY or engine process ends, Core emits a unit-ended event. The terminal-surface
