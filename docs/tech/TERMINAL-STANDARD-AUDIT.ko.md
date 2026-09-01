@@ -23,7 +23,7 @@ fallback 없이 끝났습니다. 이것은 저장소 수준 빌드 증거일 뿐
 
 Kitty build preflight는 프로필의 정확한 toolchain 계약을 따릅니다. Python 3.9.6에서는 준비나
 컴파일 전에 `TOOLCHAIN_MISMATCH`, exit 78을 반환해 중단됐습니다. arm64 프로필이 선택한 Python
-3.14.2에서는 GREEN이었고 같은 `make verify TARGET=aarch64-apple-darwin`이 완료됐습니다.
+3.14.2에서는 GREEN이었고 같은 `make verify REGISTRY=http://127.0.0.1:4873/ TARGET=aarch64-apple-darwin`이 완료됐습니다.
 낮거나 높거나 아키텍처가 다른 toolchain은 암묵적으로 fallback하지 않고 실행을 중단합니다.
 
 ## Wails 포커스 조건 관측 — 2026-09-01

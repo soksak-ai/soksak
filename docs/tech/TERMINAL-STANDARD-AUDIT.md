@@ -25,7 +25,7 @@ the installed consent boundary, the native input matrix, or the provider runtime
 
 Kitty's build preflight is an exact profile contract. With Python 3.9.6 it returned
 `TOOLCHAIN_MISMATCH` and exit 78 before preparation or compilation. With the profile-selected
-Python 3.14.2 on arm64 it returned GREEN and the same `make verify TARGET=aarch64-apple-darwin`
+Python 3.14.2 on arm64 it returned GREEN and the same `make verify REGISTRY=http://127.0.0.1:4873/ TARGET=aarch64-apple-darwin`
 completed. A lower, newer, or wrong-architecture toolchain is therefore a stopped execution, not
 an implicit fallback.
 
