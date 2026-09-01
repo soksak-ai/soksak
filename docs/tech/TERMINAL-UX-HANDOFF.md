@@ -39,6 +39,9 @@ release validator closes that manifest to five keys while the workspace rule per
 then corrected in Spec 0.0.53 and SDK 0.0.21: sidecar intents are validated and resolved against
 the explicit local release store. Alacritty 0.0.47 now packages a target with the PTY release
 reference; the other engine closures still require their own release run.
+The development store audit remains RED because its pre-existing PTY 0.0.22 entry predates the
+component-build receipt requirement; it cannot be replaced at the same version because existing
+plugin releases pin that release JSON digest. A new PTY version is required before store-wide GREEN.
 
 ## Reported defects
 

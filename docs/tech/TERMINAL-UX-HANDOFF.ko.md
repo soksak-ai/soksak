@@ -38,6 +38,9 @@ frozen v8에는 적용하지 않았습니다.
 검증하고 명시한 local release store의 release reference로 구성하도록 했습니다. Alacritty
 0.0.47은 PTY release reference를 포함한 target packaging까지 통과했으며, 나머지 engine
 closure는 각자의 release 실행이 남아 있습니다.
+개발 store 전체 audit는 component-build receipt 요구 이전에 생성된 기존 PTY 0.0.22 항목 때문에
+아직 RED입니다. 기존 plugin release가 그 release JSON digest를 고정하므로 같은 버전으로 교체할
+수 없으며, store 전체 GREEN에는 새 PTY 버전이 필요합니다.
 
 ## 제보된 결함
 
