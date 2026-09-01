@@ -984,7 +984,7 @@ export const ko = {
   "cmd.window.input.pointer.inject.desc": "테스트를 위해 플랫폼-프런트엔드 포인터 계약을 호출합니다. 운영체제 입력은 생성하지 않습니다.",
   "cmd.window.input.pointer.inject.param.x": "창 콘텐츠 왼쪽 기준 좌표(ui.measure와 동일한 좌표계).",
   "cmd.window.input.pointer.inject.param.y": "창 콘텐츠 위쪽 기준 좌표(ui.measure와 동일한 좌표계).",
-  "cmd.window.input.pointer.drag.desc": "플랫폼-프런트엔드 포인터 계약으로 유한한 down, move, up 시퀀스를 전달합니다. 시스템 포인터를 이동하거나 창에 포커스를 주지 않습니다.",
+  "cmd.window.input.pointer.drag.desc": "플랫폼-프런트엔드 포인터 계약으로 유한한 down, move, up 시퀀스를 전달합니다. 시스템 포인터를 이동하거나 창에 포커스를 주거나 DOM 드래그를 시작하지 않습니다. 화면 요소를 변경하려면 ui.input.drag를 사용합니다.",
   "cmd.window.input.pointer.drag.param.fromX": "창 콘텐츠 왼쪽 기준 시작 좌표.",
   "cmd.window.input.pointer.drag.param.fromY": "창 콘텐츠 위쪽 기준 시작 좌표.",
   "cmd.window.input.pointer.drag.param.toX": "창 콘텐츠 왼쪽 기준 종료 좌표.",

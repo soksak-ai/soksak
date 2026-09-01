@@ -979,7 +979,7 @@ export const en: Record<MsgKey, string> = {
   "cmd.window.input.pointer.inject.desc": "Invoke the platform-to-frontend pointer contract for testing. This command does not create operating-system input.",
   "cmd.window.input.pointer.inject.param.x": "Coordinate from the left edge of the window content (same coordinate system as ui.measure).",
   "cmd.window.input.pointer.inject.param.y": "Coordinate from the top edge of the window content (same coordinate system as ui.measure).",
-  "cmd.window.input.pointer.drag.desc": "Deliver a finite down, move, and up sequence through the platform-to-frontend pointer contract. This command does not move the system cursor or focus the window.",
+  "cmd.window.input.pointer.drag.desc": "Deliver a finite down, move, and up sequence through the platform-to-frontend pointer contract. This command does not move the system cursor, focus the window, or start a DOM gesture; use ui.input.drag to change a UI element.",
   "cmd.window.input.pointer.drag.param.fromX": "Start coordinate from the left edge of the window content.",
   "cmd.window.input.pointer.drag.param.fromY": "Start coordinate from the top edge of the window content.",
   "cmd.window.input.pointer.drag.param.toX": "End coordinate from the left edge of the window content.",

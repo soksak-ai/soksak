@@ -39,4 +39,11 @@ describe("window.input — discoverable native input diagnostics", () => {
     expect(getSpec("window.input.pointer.click")?.returns).toContain("recording");
     expect(getSpec("window.input.pointer.click")?.returns).toContain("trace");
   });
+
+  it("separates native pointer delivery from a UI drag", async () => {
+    const result = await execute("command.docs", { name: "window.input.pointer.drag" }, {});
+    expect(result).toMatchObject({ ok: true });
+    expect((result as { data: { command: { description: string } } }).data.command.description)
+      .toMatch(/DOM gesture|DOM 드래그/);
+  });
 });
