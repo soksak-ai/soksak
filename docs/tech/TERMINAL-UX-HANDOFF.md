@@ -584,10 +584,13 @@ the isolated v7 rapid tab-switch/input matrix.
 
 The first isolated v7 run after this change also exposed a separate kit geometry defect: a newly
 mounted workbench measured its host before insertion and retained `hostPixels=0×0` with
-`renderSequence=0`. The terminal kit fixes this by scheduling one first-frame layout remeasurement
-(`soksak-kit-plugin-terminal` `7c3261a`, RED→GREEN workbench test). A new Vision/plugin candidate
-closure containing that kit change is required before claiming visual or prompt GREEN; the existing
-v7 and frozen v4 closures do not contain it.
+`renderSequence=0`. The terminal kit now schedules one mount-transaction layout remeasurement at
+the microtask boundary (`soksak-kit-plugin-terminal` `f36ecb1`, RED→GREEN workbench test), so this
+does not depend on a paused animation frame. Vision 0.0.71 was then built against kit 0.0.107 and
+published to the workspace local release store; its exact install plan was computed, but the dev
+window remains disabled until the user approves the newly requested plugin consent. No visual GREEN
+claim is made for that candidate until consent, launch, and a no-focus capture are rechecked. The
+frozen v8 closure was not changed.
 
 ## Project-qualified sidecar identity
 
@@ -609,13 +612,15 @@ invalid evidence.
 
 ### Native owner bootstrap re-fit
 
-The isolated development application reproduced a recovery error on 2026-09-01: Vision 0.0.68
+The isolated development application reproduced a recovery error on 2026-09-01: Vision 0.0.70
 reported `live` and `complete` while the restarted Alacritty surface reported `hostPixels=789x121`,
-`cols=1`, `rows=1`, and no rendered frame. Terminal Kit 0.0.106 and Vision 0.0.70 fix this at the owner boundary: a matching
-pixel declaration does not suppress the first resize while the owner reports its bootstrap 1x1 grid.
-The presenter RED test and 37-test frontend gate pass; the Kit gate passes 159 tests. After local release
-installation and application reload, development captures showed the prompt and browser together,
-including a previously blank tab after activation. The frozen v8 application and its sidecars were not changed.
+`cols=1`, `rows=1`, and no rendered frame. The presenter already rejects that bootstrap grid when
+the pixel declaration is unchanged. The new terminal kit 0.0.107 additionally schedules a
+mount-transaction remeasurement; Vision 0.0.71 bundles it. Kit tests (160) and Vision frontend
+tests (37) pass. Before installing the candidate, a window reload (the pre-candidate RED boundary)
+returned all five panes to `100×7` with sequence 2/3 and a no-focus capture showed the prompt; that
+observation is not evidence that the new candidate is installed. The frozen v8 application and its
+sidecars were not changed.
 
 ### Wails overlay observation
 

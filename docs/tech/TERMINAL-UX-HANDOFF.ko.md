@@ -568,10 +568,12 @@ ownership 폴링·compositor 우회는 하지 않는다. 계약은 `DOM 선언 e
 격리된 v7에서 빠른 탭 전환/입력 매트릭스를 다시 실행해야 한다.
 
 이 변경 후 첫 격리 v7 실행에서는 별도의 kit geometry 결함도 확인했다. 새 workbench가 host에 삽입되기
-전에 측정되어 `hostPixels=0×0`, `renderSequence=0`을 유지했다. terminal kit이 첫 실제 frame에서 한 번
-layout을 재측정하도록 고쳤다(`soksak-kit-plugin-terminal` `7c3261a`, RED→GREEN workbench 테스트).
-이 kit 변경을 포함한 새 Vision/plugin candidate 폐포를 만들기 전에는 시각 또는 프롬프트 GREEN으로
-주장하지 않는다. 기존 v7 및 frozen v4 폐포에는 이 변경이 없다.
+전에 측정되어 `hostPixels=0×0`, `renderSequence=0`을 유지했다. terminal kit은 이제 멈춘 animation frame에
+의존하지 않고 mount transaction의 microtask 경계에서 한 번 layout을 재측정한다
+(`soksak-kit-plugin-terminal` `f36ecb1`, RED→GREEN workbench 테스트). 이 변경을 포함한 Vision 0.0.71은
+kit 0.0.107과 함께 workspace local release store에 게시되었고 exact install plan까지 계산되었다.
+단, 새 plugin 동의가 필요해 dev 창은 아직 비활성 상태다. 동의·실행·focus 없는 캡처를 다시 확인하기
+전에는 이 candidate를 시각 또는 프롬프트 GREEN으로 주장하지 않는다. frozen v8 폐포는 변경하지 않았다.
 
 ## 프로젝트별 sidecar identity
 
@@ -591,13 +593,14 @@ terminal-surface service가 PTY와 engine unit을 모두 선언한 source를 가
 
 ### Native owner bootstrap 재측정
 
-2026-09-01 격리 개발 앱에서 복원 오류를 재현했다. Vision 0.0.68은 `live`와 `complete`를
+2026-09-01 격리 개발 앱에서 복원 오류를 재현했다. Vision 0.0.70은 `live`와 `complete`를
 반환했지만 재시작된 Alacritty surface는 `hostPixels=789x121`, `cols=1`, `rows=1`, 렌더된
-frame 없음으로 보고했다. Terminal Kit 0.0.106과 Vision 0.0.70이 이 조건을 수정했다. pixel 선언이 같아도
-소유자가 bootstrap 1x1을 보고하는 동안 첫 resize를 생략하지 않는다. presenter RED 테스트와
-frontend 37개, Kit 159개 테스트가 통과했다. 로컬 release 설치 후 개발 앱을 재적재하자 기존에
-비어 있던 탭을 활성화한 캡처에도 프롬프트와 브라우저가 함께 표시되었다. frozen v8 앱과 그
-sidecar는 변경하지 않았다.
+frame 없음으로 보고했다. presenter는 pixel 선언이 같아도 소유자의 bootstrap 1x1이면 첫 resize를
+생략하지 않도록 이미 검사하고 있다. 새 terminal kit 0.0.107은 여기에 mount transaction 재측정을
+추가했고 Vision 0.0.71에 포함했다. Kit 160개와 Vision frontend 37개 테스트가 통과했다. candidate
+설치 전 window reload라는 RED 경계를 통과하자 다섯 pane이 `100×7`(sequence 2/3)으로 돌아왔고
+focus 없는 캡처에 prompt가 보였다. 이는 candidate 설치의 증거가 아니다. frozen v8 앱과 그 sidecar는
+변경하지 않았다.
 
 ### Wails 오버레이 관측
 
