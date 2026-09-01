@@ -617,6 +617,13 @@ The presenter RED test and 37-test frontend gate pass. After local installation 
 the development capture showed the prompt and browser together, and the Alacritty sidecar was recreated
 under the development home. The frozen v8 application and its sidecars were not changed.
 
+### Sidecar end state
+
+When a selected PTY or engine process ends, Core emits a unit-ended event. The terminal-surface
+owner consumes that event and marks dependent panes `blocked` with the unit name and error. A pane
+must not remain `live` after its process no longer answers. This is event-driven; status reads do
+not repair stale state and no timer is used. The service test and Core package tests pass.
+
 Completion requires all provider-matrix RED tests to become GREEN, all numeric visibility and
 ownership checks to pass, and direct inspection of screenshots and motion recordings. A build,
 command reply or previous CI run alone cannot close this handoff.
