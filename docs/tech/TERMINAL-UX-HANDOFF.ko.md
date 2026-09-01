@@ -599,6 +599,16 @@ frontend 37개, Kit 159개 테스트가 통과했다. 로컬 release 설치 후 
 비어 있던 탭을 활성화한 캡처에도 프롬프트와 브라우저가 함께 표시되었다. frozen v8 앱과 그
 sidecar는 변경하지 않았다.
 
+### Wails 오버레이 관측
+
+2026-09-01 실행 중인 Wails 개발 창에서 `settings-open`을 연 상태를 측정했다. 공개
+`surface.inventory`는 등록된 webview 4개 모두 `declaredVisible=false`,
+`effectivelyHidden=true`로 보고했으며 선언 사각형과 적용 사각형의 drift는 0이었다.
+`unapplied`, `ghosts`, `orphans`, `unowned`는 모두 비어 있었고 설정 모달과 공개 노드는 DOM에
+남아 있었다. focus를 주지 않은 `window.snapshot`에서 모달 뒤에 주차된 surface 이미지가
+보였다. 이는 현재 오버레이 transaction의 증거이지 picker·sidebar·modal 전체 매트릭스가
+완료됐다는 뜻은 아니다. 나머지 경우도 같은 정량 측정과 직접 캡처 확인이 필요하다.
+
 ### 사이드카 종료 상태
 
 선택된 PTY 또는 엔진 프로세스가 종료되면 Core가 unit-ended 이벤트를 발행합니다. terminal-surface

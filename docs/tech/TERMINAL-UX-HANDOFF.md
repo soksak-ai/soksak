@@ -617,6 +617,17 @@ The presenter RED test and 37-test frontend gate pass; the Kit gate passes 159 t
 installation and application reload, development captures showed the prompt and browser together,
 including a previously blank tab after activation. The frozen v8 application and its sidecars were not changed.
 
+### Wails overlay observation
+
+On 2026-09-01 the running Wails development window was sampled with `settings-open` active. The
+public `surface.inventory` command reported four registered webviews, all with
+`declaredVisible=false` and `effectivelyHidden=true`; their declared and applied rectangles had
+zero drift. `unapplied`, `ghosts`, `orphans`, and `unowned` were all empty, while the settings modal
+and its public nodes remained in the DOM. A no-focus `window.snapshot` showed the parked surface
+images behind the modal. This is evidence for the current overlay transaction, not completion of
+the full picker/sidebar/modal matrix; the remaining cases still require the same numeric check and
+direct capture inspection.
+
 ### Sidecar end state
 
 When a selected PTY or engine process ends, Core emits a unit-ended event. The terminal-surface
