@@ -717,6 +717,15 @@ const WorkspacePlane = memo(function WorkspacePlane({
                     />
                   )}
                 </div>}
+              {displayedRailOpen && rail.visible && (rail.station === 0 || rail.station === 100) && (
+                <div
+                  className="rail-boundary-line"
+                  data-node="rail/boundary"
+                  data-station={rail.station}
+                  data-wv-occlusion="rail"
+                  style={{ "--rail-width": `${displayedRailWidth}px` } as React.CSSProperties}
+                />
+              )}
             </div>
           }
         >
@@ -839,7 +848,10 @@ function EdgeSidebarPlane({
         data-region-open={String(workspace.regionOpen[place])}
         data-wv-occlusion={`sidebar-${place}`}
         data-focus-lighting="exempt"
-        style={{ width: present ? edge.width : 0, [outward]: present ? 1 : 0 }}
+        style={{
+          width: present ? edge.width : 0,
+          [outward]: present ? 1 : 0,
+        } as React.CSSProperties}
       >
         <SectionSetHost
           region={place}

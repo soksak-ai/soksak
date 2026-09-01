@@ -772,6 +772,25 @@ body,
   border-left: 1px solid var(--bd);
   border-right: 1px solid var(--bd);
 }
+/* At an edge station the card ends one pane inset before its neighbour. The
+   boundary line is a real sibling of the clipped card, so it remains visible
+   in the corridor and can be measured as rail/boundary. */
+.rail-boundary-line {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--bd-soft);
+  pointer-events: none;
+  z-index: 9;
+}
+.rail-boundary-line[data-station="0"] {
+  left: var(--rail-width);
+}
+.rail-boundary-line[data-station="100"] {
+  right: var(--rail-width);
+}
 /* Rail visual mode (§12-⑤) — ground: a plane lying on the floor rather than a
    split window. Tint and shadow are removed and only the boundary line stays.
    pane keeps the default above (card tint plus elevation). */

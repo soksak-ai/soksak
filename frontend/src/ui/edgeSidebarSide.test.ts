@@ -44,6 +44,15 @@ function order(selector: string): number | null {
 }
 
 describe("an edge sidebar taking room from the body", () => {
+  it("does not pretend the split rail exists: the boundary is an observable line", () => {
+    const base = blocks(".rail-boundary-line").join("\n");
+    const left = blocks('.rail-boundary-line[data-station="0"]').join("\n");
+    const right = blocks('.rail-boundary-line[data-station="100"]').join("\n");
+    expect(base).toContain("background: var(--bd-soft)");
+    expect(left).toContain("left: var(--rail-width)");
+    expect(right).toContain("right: var(--rail-width)");
+  });
+
   it("puts the left edge before the body in the flow", () => {
     // Everything else in the plane is at the default order 0, so a negative number is what puts
     // this one first without naming the others.
