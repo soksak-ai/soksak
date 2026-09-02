@@ -23,7 +23,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zustand": "^5.0.14",
-    "split-pane": "github:min-median-max/split-pane#683b7dc9dc2912d253036ddedd0fa8dc4db47a70"
+    "split-pane": "github:min-median-max/split-pane#9ce7e8960a27ae96474f32dfc6f8922e79734eef"
   },
   "devDependencies": {
     "@tabler/icons": "^3.44.0",
