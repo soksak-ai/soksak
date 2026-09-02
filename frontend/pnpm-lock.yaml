@@ -27,8 +27,8 @@ importers:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
       split-pane:
-        specifier: github:min-median-max/split-pane#d834f7b260e016cd70bae7c400128a6d67fa539e
-        version: https://codeload.github.com/min-median-max/split-pane/tar.gz/d834f7b260e016cd70bae7c400128a6d67fa539e
+        specifier: github:min-median-max/split-pane#5d43d5097be8d6702587c89e4978646f50718ea0
+        version: https://codeload.github.com/min-median-max/split-pane/tar.gz/5d43d5097be8d6702587c89e4978646f50718ea0
       zustand:
         specifier: ^5.0.14
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)
@@ -866,8 +866,8 @@ packages:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
 
-  split-pane@https://codeload.github.com/min-median-max/split-pane/tar.gz/d834f7b260e016cd70bae7c400128a6d67fa539e:
-    resolution: {gitHosted: true, integrity: sha512-ZPknMDlq2SmKXDlJ28o/zwb8/VFceKqk35pBGXZuQdgYxeGOYyXR3HKXbusqKzuCmS/WvRYlzEGweQuHaaaEGA==, tarball: https://codeload.github.com/min-median-max/split-pane/tar.gz/d834f7b260e016cd70bae7c400128a6d67fa539e}
+  split-pane@https://codeload.github.com/min-median-max/split-pane/tar.gz/5d43d5097be8d6702587c89e4978646f50718ea0:
+    resolution: {gitHosted: true, integrity: sha512-dgS1xCBfuBIRN+r4xF6hDOv5vSI3tbJj5VRI+8wfoDcp33kxoArRpQilQcWn8vD3v7sKKYIQjZyMtQr+ov4z8A==, tarball: https://codeload.github.com/min-median-max/split-pane/tar.gz/5d43d5097be8d6702587c89e4978646f50718ea0}
     version: 0.1.0
     engines: {node: '>=20'}
 
@@ -1707,7 +1707,7 @@ snapshots:
 
   source-map-js@1.2.1: {}
 
-  split-pane@https://codeload.github.com/min-median-max/split-pane/tar.gz/d834f7b260e016cd70bae7c400128a6d67fa539e: {}
+  split-pane@https://codeload.github.com/min-median-max/split-pane/tar.gz/5d43d5097be8d6702587c89e4978646f50718ea0: {}
 
   stackback@0.0.2: {}
 
