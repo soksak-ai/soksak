@@ -27,8 +27,8 @@ importers:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
       split-pane:
-        specifier: github:min-median-max/split-pane#bd70fc994505c594b9cc3a11cbdc7692b8d1f027
-        version: https://codeload.github.com/min-median-max/split-pane/tar.gz/bd70fc994505c594b9cc3a11cbdc7692b8d1f027
+        specifier: github:min-median-max/split-pane#0a39662c14685f505dd4698a32054e25892f5935
+        version: https://codeload.github.com/min-median-max/split-pane/tar.gz/0a39662c14685f505dd4698a32054e25892f5935
       zustand:
         specifier: ^5.0.14
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)
@@ -866,10 +866,10 @@ packages:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
 
-  split-pane@https://codeload.github.com/min-median-max/split-pane/tar.gz/bd70fc994505c594b9cc3a11cbdc7692b8d1f027:
-    resolution: {gitHosted: true, integrity: sha512-mxBYF7lwjypJNn9vkP0GaAyFQdosgrEdui68PkodwhSLhWRRIeldr+mhonizsFDlSb+XO3c+bjAY4pukgpUZKQ==, tarball: https://codeload.github.com/min-median-max/split-pane/tar.gz/bd70fc994505c594b9cc3a11cbdc7692b8d1f027}
+  split-pane@https://codeload.github.com/min-median-max/split-pane/tar.gz/0a39662c14685f505dd4698a32054e25892f5935:
+    resolution: {gitHosted: true, integrity: sha512-hEuHpzwqx4W4/jnScigNSLKJCY80Hs6F8OQtKJJNev1xiGz0n0PctFRUpcAD2YoCytWAKyJYkCI6i8+zKo7yKw==, tarball: https://codeload.github.com/min-median-max/split-pane/tar.gz/0a39662c14685f505dd4698a32054e25892f5935}
     version: 0.1.0
-    engines: {node: 26.7.0}
+    engines: {node: '>=20'}
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
@@ -1707,7 +1707,7 @@ snapshots:
 
   source-map-js@1.2.1: {}
 
-  split-pane@https://codeload.github.com/min-median-max/split-pane/tar.gz/bd70fc994505c594b9cc3a11cbdc7692b8d1f027: {}
+  split-pane@https://codeload.github.com/min-median-max/split-pane/tar.gz/0a39662c14685f505dd4698a32054e25892f5935: {}
 
   stackback@0.0.2: {}
 
