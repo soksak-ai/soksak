@@ -201,7 +201,7 @@ export function normalizeVerticalLines<L>(
   minFrac: number = MIN_PANE_FRAC,
 ): SplitTree<L> {
   if (tree.type === "leaf") return tree;
-  const rows = computeSplitLayout(tree)
+  const rows = computeSplitLayout(tree, { settle: false })
     .gutters.filter((d) => d.dir === "row")
     .sort((a, b) => a.rect.left - b.rect.left || a.rect.top - b.rect.top);
   // Clusters of nearby x (eps relative to the cluster minimum) → line candidates.
@@ -243,9 +243,9 @@ export function normalizeVerticalLines<L>(
   let current: SplitTree<L> = tree;
   let changed = false;
   for (const plan of plans) {
-    const d: LayoutDivider | undefined = computeSplitLayout(
-      current,
-    ).gutters.find(
+    const d: LayoutDivider | undefined = computeSplitLayout(current, {
+      settle: false,
+    }).gutters.find(
       (v) =>
         v.dir === "row" && v.splitId === plan.splitId && v.index === plan.index,
     );

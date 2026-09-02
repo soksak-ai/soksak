@@ -4,6 +4,17 @@
 
 import type { SplitTree } from "../state/splitTree";
 
+/**
+ * How close two split coordinates must be to be the same line, and the least a
+ * pane may be.
+ *
+ * They are stated here because this is where a line's coordinate is settled.
+ * `state/verticalLines.ts` re-exports them so a gesture groups by the same
+ * numbers the layout drew by — one rule, read from one place.
+ */
+export const LINE_EPS = 0.75;
+export const MIN_FRAC = 0.08;
+
 export interface Rect {
   left: number;
   top: number;
@@ -29,7 +40,10 @@ export interface LayoutDivider {
 export type DropZone = "center" | "left" | "right" | "top" | "bottom";
 
 // SplitTree → cells (% coordinates) + split dividers. row = horizontal split, col = vertical split. (Generalized from GroupArea.computeLayout.)
-export function computeSplitLayout<L>(node: SplitTree<L>): {
+export function computeSplitLayout<L>(
+  node: SplitTree<L>,
+  opts: { settle?: boolean } = {},
+): {
   cells: LayoutCell<L>[];
   gutters: LayoutDivider[];
 } {
@@ -77,7 +91,77 @@ export function computeSplitLayout<L>(node: SplitTree<L>): {
     }
   };
   walk(node, { left: 0, top: 0, width: 100, height: 100 });
+  // `settle: false` is for the one caller that settles the tree itself. It has
+  // to see the coordinates the tree holds, not the ones the layout drew.
+  if (opts.settle !== false) settleLines(cells, gutters);
   return { cells, gutters };
+}
+
+/**
+ * A line is one thing, so it stands in one place.
+ *
+ * Each split holds its own sizes, so two splits that divide at the same place
+ * arrive at coordinates a rounding — or a drag that left a segment behind —
+ * apart. Everything downstream then decides with a tolerance whether they are
+ * one line, and while it says they are, they are drawn in two places: the
+ * boundary a gesture grabs is not the boundary anyone sees.
+ *
+ * The coordinate is settled here instead, once, and every segment and every
+ * cell edge reads it.
+ *
+ * A segment whose neighbour is already at the minimum cannot come to the
+ * shared x — moving it would draw a pane smaller than a pane may be. That one
+ * is left where it stands, and is a different line, which is what it is.
+ */
+function settleLines<L>(cells: LayoutCell<L>[], gutters: LayoutDivider[]): void {
+  for (const [dir, near, far] of [
+    ["row", "left", "width"],
+    ["col", "top", "height"],
+  ] as const) {
+    const along = gutters.filter((d) => d.dir === dir);
+    if (along.length < 2) continue;
+
+    const settled = new Map<number, number>();
+    for (const group of cluster(along.map((d) => d.rect[near]))) {
+      // Where every segment at these coordinates can stand, and where the ones
+      // that can reach it are put.
+      const members = along.filter((d) => group.includes(d.rect[near]));
+      const at = group.reduce((n, v) => n + v, 0) / group.length;
+      const reach = members.filter((d) => canStandAt(d, at, near));
+      if (!reach.length) continue;
+      const one = reach.reduce((n, d) => n + d.rect[near], 0) / reach.length;
+      for (const d of reach) settled.set(d.rect[near], one);
+    }
+    if (!settled.size) continue;
+    const move = (v: number) => settled.get(v) ?? v;
+
+    for (const d of along) d.rect[near] = move(d.rect[near]);
+    for (const c of cells) {
+      const from = move(c.rect[near]);
+      const to = move(c.rect[near] + c.rect[far]);
+      c.rect[near] = from;
+      c.rect[far] = to - from;
+    }
+  }
+}
+
+/** Whether a segment can stand at `x` without drawing a pane under the minimum. */
+function canStandAt(d: LayoutDivider, x: number, near: "left" | "top"): boolean {
+  const back = d.rect[near] - Math.max(0, d.sizes[d.index] - MIN_FRAC) * d.spanPct;
+  const on = d.rect[near] + Math.max(0, d.sizes[d.index + 1] - MIN_FRAC) * d.spanPct;
+  return x >= back - 1e-9 && x <= on + 1e-9;
+}
+
+/** Coordinates no further apart than `LINE_EPS`, walked in order. */
+function cluster(values: number[]): number[][] {
+  const sorted = [...new Set(values)].sort((a, b) => a - b);
+  const groups: number[][] = [];
+  for (const v of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && v - last[last.length - 1] <= LINE_EPS) last.push(v);
+    else groups.push([v]);
+  }
+  return groups;
 }
 
 // Pointer (clientX/Y) + container rect → which zone of which cell. (Generalized from GroupArea.hitTest.)
