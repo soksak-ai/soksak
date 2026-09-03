@@ -32,7 +32,7 @@ a command to what already runs, and none replaces a working path with an unfinis
 | --- | --- | --- | --- | --- | --- |
 | 1 | Session state and process state are separated per owner | each owner repository | [x] pty | [x] pty | [x] pty `066e3be` |
 | 2 | The owner's id form does not repeat across its restarts | each owner repository | [ ] | [ ] | [ ] |
-| 3 | The owner writes at creation and at close, atomically | each owner repository | [ ] | [ ] | [ ] |
+| 3 | The owner writes at creation, at stop and at close, atomically | each owner repository | [ ] | [ ] | [ ] |
 | 4 | One session's record is isolated from every other | each owner repository | [ ] | [ ] | [ ] |
 | 5 | One session survives its owner's process exiting | owner + core | [ ] | [ ] | [ ] |
 | 6 | The core records every session id of a view beside its coordinate | `soksak-core` | [ ] | [ ] | [ ] |
@@ -43,7 +43,8 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 11 | A session survives an application restart | `soksak-core` | [ ] | [ ] | [ ] |
 | 12 | An owner restarting notifies its live sessions | contract + core | [ ] | [ ] | [ ] |
 | 13 | The lost-session count is exposed and is zero | `soksak-core` | [ ] | [ ] | [ ] |
-| 14 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [ ] | [ ] | [ ] |
+| 14 | The terminal contract defines where a screen is stored | `soksak-contract-terminal` | [ ] | [ ] | [ ] |
+| 15 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [ ] | [ ] | [ ] |
 
 ---
 
@@ -75,22 +76,29 @@ Red: start a daemon, open a session, restart the daemon, open a session. The two
 Check: the two ids differ. A record written under the first id is refused by the second session
 rather than adopted.
 
-## 3. The owner writes at creation and at close, atomically
+## 3. The owner writes at creation, at stop and at close, atomically
 
 Owner: each owner repository.
 
-Write the creation facts when the session is created and the final state when it closes. Write to a
-temporary file in the same directory and rename over the target.
+Write the creation facts at creation, the final state of every held session when the owner is told
+to stop, and the final state of one session when that session closes. Write to a temporary file in
+the same directory and rename over the target.
+
+The stop write is what a machine power cycle recovers from, and it is the one an owner is most
+likely to omit: quitting the application closes no session (S7), so the close write never fires for
+it. `soksak-sidecar-pty` already handles SIGTERM at `main.go:121` and ends its sessions there; the
+write goes in that path, ahead of the ending.
 
 Measured 2026-09-03: `soksak-sidecar-pty` writes one file, an auth token at `main.go:176`. Its ring
 is memory only. The terminal mirrors serialize `cold_paint`, and no component in this workspace
-stores the result — `storeBlob` has no implementation in the core, the contracts, the sidecars, or
-the plugins. Nothing on either side of a terminal view survives its process today.
+stores the result. Nothing on either side of a terminal view survives its process today.
 
-Red: kill the owner between creation and close; no record exists for the session.
+Red: stop the owner with a session open, start it again. The session is absent, or returns with the
+creation facts alone.
 
-Check: after the kill a record exists with the creation facts. A reader never observes a partial
-record — assert by reading concurrently with a write.
+Check: after a stop and a start the session returns at `full`, and the screen it returns with is
+the screen it had. A reader never observes a partial record — assert by reading concurrently with a
+write. Item 5 covers the uncontrolled exit; this item covers the controlled one.
 
 ## 4. One session's record is isolated from every other
 
@@ -206,13 +214,35 @@ Red: no command reports the count.
 Check: the count is a number and it is zero. A non-zero count names each lost session's owner and
 last coordinate. A session whose owner is not running is absent from the count.
 
-## 14. Handoff is rewritten as a subordinate of S6
+## 14. The terminal contract defines where a screen is stored
+
+Owner: `soksak-contract-terminal`.
+
+`coldPaint` returns the flattened screen and names no destination for it. §7 falls to a seal path
+where the plugin fetches a sealed blob from the daemon, and the active contract states that the
+daemon stores no terminal checkpoint or blob; the mechanism §7 depends on is in the removed draft.
+So the contract defines a serializer with no writer.
+
+Specify where the screen is stored, by whom, and what a reader receives when the store holds
+nothing. The daemon is not the store: it parses no output and owns no grid (S1-3).
+
+Red: the specification defines a serialization and no destination, and §7 depends on a mechanism
+the same specification marks removed.
+
+Check: the specification names one store and one owner for it; §7 depends on no removed mechanism;
+the conformance suite covers a screen written, the owner stopped, and the screen read back.
+
+## 15. Handoff is rewritten as a subordinate of S6
 
 Owner: `soksak-core`.
 
 `COMPONENT-HANDOFF.md` treats process replacement as the subject. Rewrite it so the subject is the
 session: handoff is one way S6 is met, and an owner that stores and restores correctly meets S6
 without it.
+
+State the limit plainly. Descriptor passing keeps a session across a process replacement on a
+running machine and does nothing for a power cycle, because the reference that holds the descriptor
+open is the kernel's. An owner that stores and restores covers both; handoff covers one.
 
 Red: the handoff document states a rule the session document contradicts.
 

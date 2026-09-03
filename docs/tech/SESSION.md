@@ -150,9 +150,15 @@ The owner writes at least at these points:
 
 - **Creation.** The facts needed to create an equivalent session: what was started, where, and with
   what environment.
-- **Close.** The final state.
+- **Stop.** The final state of every session it holds, when the owner is told to stop.
+- **Close.** The final state of one session, when that session closes.
 
-An owner that cannot write more often writes only these two. An owner that writes more often
+Stop and close are different events. Quitting an application detaches its sessions rather than
+closing them (S7), and a machine shutting down stops the owner while closing nothing. An owner
+writing only at creation and close would preserve the creation facts alone across either, and every
+session would return `degraded`.
+
+An owner that cannot write more often writes only these three. An owner that writes more often
 raises what an uncontrolled exit preserves: the state recovered after such an exit is the state at
 the last write, and nothing later.
 
@@ -253,6 +259,11 @@ to the new shell.
 This holds for every session, with no per-owner exception. Machine power-off and process exit are
 the same case here: both end the process, and neither touches a stored record.
 
+The stop write (S4-2) is what makes a power cycle a `full` restore. Passing descriptors to a
+successor does not: a descriptor stays open across its process's exit because the kernel holds a
+reference, and a power cycle ends the kernel. Descriptor passing serves a process replacement on a
+running machine and nothing beyond it.
+
 ### S6-3. When the owner restarts while a session is attached
 
 A session that is `live` when its owner restarts is notified. The core delivers the notification to
@@ -332,6 +343,7 @@ not read an owner's store.
 | A session survives its window closing | Core test: close the window, `session.list` reports `detached` |
 | A session survives its owner's process exiting | Core test with a fake owner: kill it, `session.list` reports `orphaned` |
 | A session survives an application restart | Core test over a fixture index |
+| A session restored after its owner was stopped and started reports `full` | Owner repository test per owner |
 | A session whose owner is not running reports `orphaned`, never `lost` | Core test with no owner process |
 | A close aimed at a session whose owner is not running is refused | Core test |
 | A partial record is never read | Owner repository test per owner |
