@@ -27,6 +27,7 @@ import (
 	"github.com/soksak-ai/soksak-core/core/files"
 	"github.com/soksak-ai/soksak-core/core/identity"
 	"github.com/soksak-ai/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/core/session"
 	"github.com/soksak-ai/soksak-core/core/sidecar"
 	"github.com/soksak-ai/soksak-core/core/store"
 	"github.com/soksak-ai/soksak-core/frameworks/wails"
@@ -168,9 +169,14 @@ func Run(assets embed.FS) error {
 		},
 		Sink: wails.NewSidecarSink(bridge),
 	})
+	// The core reads its own index and puts one question to each owner. It learns nothing about an
+	// owner beyond the name the index holds: a question named per owner would make the core know
+	// which owner it was addressing before it could ask.
+	sessionAsk := session.AskThrough(units.Send)
 	// Filled once the home is ours. Nothing this installation owns — least of
 	// all its database — is touched by a process that has not claimed it.
 	fill := func(kv *store.KV) {
+		session.Register(registry, session.Registration{Reader: kv, Ask: sessionAsk})
 		wired := boot.RegisterCore(registry, boot.Boot{
 			Identity:     resolved,
 			BuildProfile: buildProfile,
