@@ -38,7 +38,7 @@ func AskEitherIn(windows Windows, running func(name string) bool, toUnit, toRend
 // That window is where its view is, so it is tried first. It is also the window most likely to be
 // gone — a session is detached exactly when its window closed — so a window that no longer answers
 // falls to one that is open: the plugin serving that name is the same component in every window,
-// and what it holds does not depend on which one asks.
+// and what it holds does not depend on which one puts the question.
 func (router Router) In(window string) Ask {
 	return func(owner string, sessions []string) (controlwire.SessionReport, error) {
 		if router.running(owner) {
