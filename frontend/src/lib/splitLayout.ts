@@ -102,8 +102,8 @@ export function computeSplitLayout<L>(
  *
  * Each split holds its own sizes, so two splits that divide at the same place
  * arrive at coordinates a rounding — or a drag that left a segment behind —
- * apart. Everything downstream then decides with a tolerance whether they are
- * one line, and while it says they are, they are drawn in two places: the
+ * apart. Everything downstream then applies a tolerance to group them into
+ * one line, and while they are grouped, they are drawn in two places: the
  * boundary a gesture grabs is not the boundary anyone sees.
  *
  * The coordinate is settled here instead, once, and every segment and every

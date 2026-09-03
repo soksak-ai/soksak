@@ -271,6 +271,18 @@ func TestFrontendToolchainCheckReadsPnpmFromItsOwningPackage(t *testing.T) {
 	if arch == "amd64" {
 		arch = "x64"
 	}
+	// The host reported to the script, stubbed alongside the one reported to node so the fixture
+	// states one architecture rather than two.
+	//
+	// uname is not left to the host: measured 2026-09-03, a process this test spawns is told
+	// x86_64 by /usr/bin/uname on an arm64 machine, while runtime.GOARCH is arm64. The script
+	// resolves that disagreement with sysctl, and this fixture stubs sysctl to fail — so leaving
+	// uname to the host makes the fixture contradict itself and the test measures the host's
+	// translation state instead of its own subject, which is where pnpm is read from.
+	machine := runtime.GOARCH
+	if machine == "amd64" {
+		machine = "x86_64"
+	}
 	manifest, err := os.ReadFile("frontend/package.json")
 	if err != nil {
 		t.Fatal(err)
@@ -308,8 +320,9 @@ case "$PWD" in
   *) echo wrong-package-manager ;;
 esac
 `
+	uname := "#!/bin/sh\ncase \"$1\" in -s) echo " + unameSystem(platform) + " ;; -m) echo " + machine + " ;; *) exit 1 ;; esac\n"
 	for name, body := range map[string]string{
-		"node": node, "pnpm": pnpm, "sysctl": "#!/bin/sh\nexit 1\n",
+		"node": node, "pnpm": pnpm, "sysctl": "#!/bin/sh\nexit 1\n", "uname": uname,
 	} {
 		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o755); err != nil {
 			t.Fatal(err)
@@ -394,4 +407,12 @@ esac
 		!strings.Contains(string(output), "nodeRuntime=darwin/arm64") {
 		t.Fatalf("required and actual Apple Silicon architectures were not reported separately: %s", output)
 	}
+}
+
+// unameSystem is what uname -s answers for one Go platform name.
+func unameSystem(platform string) string {
+	if platform == "darwin" {
+		return "Darwin"
+	}
+	return "Linux"
 }

@@ -6,8 +6,8 @@ import type { SplitTree } from "./splitTree";
 
 // The layout contract, as propositions a machine can settle.
 //
-// These are the numbers the split-pane migration has to move. Each one says what must
-// be true of a rendered layout, and each is decided by a measurement rather than by
+// These are the numbers the split-pane migration has to move. Each one states what must
+// be true of a rendered layout, and each is settled by a measurement rather than by
 // looking at the screen. A capture can show that something is wrong; only a number
 // here can say a change fixed it and keeps it fixed.
 //
@@ -27,7 +27,7 @@ const split = (
  * Two stacked rows, each split left/right at very nearly — but not exactly — the same x.
  *
  * `LINE_SNAP_EPS` exists to heal exactly this shape when it is restored from an old
- * snapshot, so it is a state the product knows how to arrive at. A drag reaches it too:
+ * snapshot, so it is a state the product can arrive at, and a drag produces it too:
  * `collectLineGroup` drops a segment whose neighbour is already at minimum width, moves
  * the rest, and leaves that one behind at its own x.
  */
@@ -81,7 +81,7 @@ describe("V1 — a vertical line has one x", () => {
   });
 
   it("the grouping tolerance is what lets two places be called one line", () => {
-    // Inside the tolerance the layout says "one line" while the segments are 0.4 apart.
+    // Inside the tolerance the layout groups them as one line while they are 0.4 apart.
     const together = computeSplitLayout(nearlyAligned(0.3, 0.304));
     expect(collectLineGroup(together.gutters, "top", 0)).toHaveLength(2);
 

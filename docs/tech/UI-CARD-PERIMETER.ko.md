@@ -4,7 +4,7 @@
 사용하기 위한 정본이다. 구현의 현재 상태를 설명하는 문서가 아니라, 구현이
 따라야 하는 계약이다.
 
-## C1. 카드가 유일한 경계 단위다
+## C1. 카드가 유일한 perimeter 단위다
 
 sidebar와 pane은 모두 `layout-card` 구조를 갖는다. 역할을 구분할 때는
 `layout-card--sidebar` 또는 `layout-card--pane` modifier만 추가한다. 역할별로
@@ -21,7 +21,7 @@ layout-card
 
 native surface도 같은 카드 rect와 같은 card token을 소비한다. DOM border가
 native surface에 가려지는 경우에만 같은 rect를 native decoration으로 표시한다.
-이는 다른 경계를 만드는 것이 아니라 동일한 perimeter의 표시 매체를 바꾸는
+이는 다른 perimeter 를 만드는 것이 아니라 동일한 perimeter의 표시 매체를 바꾸는
 것이다.
 
 ## C2. 테마가 카드 모양을 결정한다
@@ -45,7 +45,7 @@ slot, native perimeter, inspector는 이 `CardRect`를 읽는다. `railStation`,
 ## C4. rail은 카드와 별도의 connector다
 
 rail은 카드 perimeter와 구분되는 별도 연결선이다. rail은 grid의 gap을 지나
-카드 경계를 드나들 수 있으므로, 카드 자체의 border와 동일한 도형으로
+카드 perimeter 를 드나들 수 있으므로, 카드 자체의 border와 동일한 도형으로
 합치면 안 된다.
 
 rail의 기하 소유자는 하나의 `rail-connector`로 고정한다. connector의 시작·종료
