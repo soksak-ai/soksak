@@ -44,7 +44,8 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 12 | An owner restarting notifies its live sessions | contract + core | [ ] | [ ] | [ ] |
 | 13 | The lost-session count is exposed and is zero | `soksak-core` | [ ] | [ ] | [ ] |
 | 14 | The terminal contract defines where a screen is stored | `soksak-contract-terminal` | [ ] | [ ] | [ ] |
-| 15 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [ ] | [ ] | [ ] |
+| 15 | The owner records the program that was running | each owner repository | [ ] | [ ] | [ ] |
+| 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [ ] | [ ] | [ ] |
 
 ---
 
@@ -230,9 +231,26 @@ Red: the specification defines a serialization and no destination, and §7 depen
 the same specification marks removed.
 
 Check: the specification names one store and one owner for it; §7 depends on no removed mechanism;
-the conformance suite covers a screen written, the owner stopped, and the screen read back.
+the conformance suite covers a screen written, the owner stopped, and the screen read back. A
+screen read back with no process behind it is presented flattened.
 
-## 15. Handoff is rewritten as a subordinate of S6
+## 15. The owner records the program that was running
+
+Owner: each owner repository.
+
+A screen read as history is not the work continued (S6-3). Record what was running in the session
+so a person can start it again over the same files in the same directory.
+
+`soksak-sidecar-pty` holds `command`, which is the login shell it started and not the program that
+shell then ran. The program is what a continuation needs.
+
+Red: after a restore nothing names the program that was running, so the only offer is a shell.
+
+Check: a session that was running an editor reports that editor and its arguments. Starting it is a
+separate command, and a restore starts no program on its own — assert the process set holds no new
+child across the restore.
+
+## 16. Handoff is rewritten as a subordinate of S6
 
 Owner: `soksak-core`.
 

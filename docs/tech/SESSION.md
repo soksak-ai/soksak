@@ -150,7 +150,9 @@ The owner writes at least at these points:
 
 - **Creation.** The facts needed to create an equivalent session: what was started, where, and with
   what environment.
-- **Stop.** The final state of every session it holds, when the owner is told to stop.
+- **Stop.** The final state of every session it holds, when the owner is told to stop. The owner is
+  alive at a stop, so this write takes its live serialization rather than the degraded form it
+  would fall to after an uncontrolled exit.
 - **Close.** The final state of one session, when that session closes.
 
 Stop and close are different events. Quitting an application detaches its sessions rather than
@@ -252,9 +254,24 @@ deletion rather than by correctness, and the entry is what names the session the
 A process is process state (S3) and no store returns one. The shell that runs after a restore is a
 new shell, started from the creation facts.
 
-A restore therefore returns the screen and not the program that painted it. A full-screen program's
-alternate screen comes back as the grid it left; that program is not running, and the next key goes
-to the new shell.
+A restore therefore returns a screen and never the program that painted it. The owner stores the
+screen whole — the alternate screen a full-screen program drew, the frozen primary under it, the
+cursor, the colours, the modes.
+
+**A screen with no process behind it is presented as history.** An alternate screen is flattened
+into the text flow, and a person reads the record of a program that ran. A full-screen editor drawn
+as though it were live, over a process that ended three days ago, states something false: it takes
+keys that route to a shell and answers none of them as itself. Presenting it that way would make
+the restore a misrepresentation rather than a recovery.
+
+The state is stored whole and the flattening is applied at presentation, where the fact that
+settles it is known: whether a process backs the screen. When one does, the same stored form
+restores the screen live, and that case is the process replacement in
+[`COMPONENT-HANDOFF.md`](COMPONENT-HANDOFF.md).
+
+This limit is imposed, not chosen: restoring a process needs either a kernel checkpoint, which no
+platform this application targets offers, or a snapshot of the whole machine the shell runs in,
+which the host platform gates behind an entitlement it grants no third party.
 
 This holds for every session, with no per-owner exception. Machine power-off and process exit are
 the same case here: both end the process, and neither touches a stored record.
@@ -264,7 +281,20 @@ successor does not: a descriptor stays open across its process's exit because th
 reference, and a power cycle ends the kernel. Descriptor passing serves a process replacement on a
 running machine and nothing beyond it.
 
-### S6-3. When the owner restarts while a session is attached
+### S6-3. Continuing the work
+
+A screen read as history is not the work continued. The creation facts (S4-2) name what was
+started, and an owner that recorded the program running in the session can start that program
+again. That is the continuation a restore honestly offers: the same program, over the same files,
+in the same directory.
+
+Starting it is an explicit act and never part of the restore. A restore that started programs on
+its own would run commands a person did not ask for, three days after they last saw them.
+
+What the program recovers of its own unsaved work is the program's own affair. An editor with a
+swap file restores from it; an owner substitutes for none of that and claims none of it.
+
+### S6-4. When the owner restarts while a session is attached
 
 A session that is `live` when its owner restarts is notified. The core delivers the notification to
 whatever is attached; the response to it is that component's.
@@ -275,7 +305,7 @@ against a degraded restore without knowing it would report state the session doe
 One notification per session. A view attached to a pair receives one for each, and the two outcomes
 can differ: a mirror restores its grid in whole while the shell under it is new.
 
-### S6-4. When the application restarts
+### S6-5. When the application restarts
 
 Sessions are not created or destroyed by an application restart. The core reads its index and
 queries every owner that is running for the outcome of each session the index records for that
@@ -344,6 +374,9 @@ not read an owner's store.
 | A session survives its owner's process exiting | Core test with a fake owner: kill it, `session.list` reports `orphaned` |
 | A session survives an application restart | Core test over a fixture index |
 | A session restored after its owner was stopped and started reports `full` | Owner repository test per owner |
+| A screen restored after a stop equals the screen before it, alternate screen included | Contract conformance test per owner |
+| A screen with no process behind it is presented flattened | Contract conformance test per owner |
+| A restore starts no program on its own | Owner repository test per owner |
 | A session whose owner is not running reports `orphaned`, never `lost` | Core test with no owner process |
 | A close aimed at a session whose owner is not running is refused | Core test |
 | A partial record is never read | Owner repository test per owner |
