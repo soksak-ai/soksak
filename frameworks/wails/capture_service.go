@@ -10,6 +10,8 @@ import (
 	"unsafe"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
+
+	"github.com/soksak-ai/soksak-core/core/atomicfile"
 )
 
 // CaptureService exposes window capture to anything driving this application.
@@ -125,7 +127,7 @@ func (service *CaptureService) SnapshotRegion(path string, rect Rect) (CaptureNo
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return CaptureNote{}, fmt.Errorf("capture could not create %s: %w", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, png, 0o644); err != nil {
+	if err := atomicfile.Publish(path, png, 0o644); err != nil {
 		return CaptureNote{}, fmt.Errorf("capture could not write %s: %w", path, err)
 	}
 	return CaptureNote{Path: path, DocumentOnly: documentOnly}, nil
@@ -174,11 +176,14 @@ func (service *CaptureService) PixelsAt(path string, rect Rect) (CapturePixels, 
 }
 
 // writeCapture puts one capture on disk, creating the directory it names.
+//
+// Published rather than written into: a capture is read as soon as it is taken, and a reader that
+// arrives inside a plain write gets a PNG that is half a file.
 func writeCapture(path string, png []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("capture could not create %s: %w", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, png, 0o644); err != nil {
+	if err := atomicfile.Publish(path, png, 0o644); err != nil {
 		return fmt.Errorf("capture could not write %s: %w", path, err)
 	}
 	return nil

@@ -8,6 +8,8 @@ import (
 
 	coreenvironment "github.com/soksak-ai/soksak-core/core/environment"
 	"github.com/soksak-ai/soksak-core/core/i18n"
+
+	"github.com/soksak-ai/soksak-core/core/atomicfile"
 )
 
 const commitJournalFile = "commit.json"
@@ -88,6 +90,8 @@ func writeCommitJournal(root string, journal commitJournal) error {
 	if err != nil {
 		return err
 	}
+	// Published rather than written into. This journal is read after a crash, which is the moment a
+	// write into it would have been interrupted, so a torn journal is read exactly when it matters.
 	path := filepath.Join(root, journal.TransactionID, commitJournalFile)
-	return os.WriteFile(path, append(body, byte(10)), 0o600)
+	return atomicfile.Publish(path, append(body, byte(10)), 0o600)
 }

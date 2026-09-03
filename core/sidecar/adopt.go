@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
+
+	"github.com/soksak-ai/soksak-core/core/atomicfile"
 )
 
 // Finding a unit this host did not start.
@@ -63,7 +65,7 @@ func (host *Host) remember(name string, open Open, token, secretNames, version, 
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(location, encoded, 0o600)
+	_ = atomicfile.Publish(location, encoded, 0o600)
 }
 
 func (host *Host) forget(name string) { _ = os.Remove(host.recordPath(name)) }

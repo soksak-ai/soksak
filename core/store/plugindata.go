@@ -7,7 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
 	"strings"
+
+	"github.com/soksak-ai/soksak-core/core/atomicfile"
 )
 
 // A plugin's private storage — files, not the database.
@@ -67,34 +70,11 @@ func writePluginData(base, id, key, value string) error {
 	// one, and a write that dies mid-way leaves that on disk permanently. Rename within one
 	// directory is atomic, so a reader sees the whole old value or the whole new one.
 	//
-	// Each write gets its own neighbour rather than one name per process. Measured: with a shared
-	// name, two writes of one key overwrite each other's neighbour and the rename publishes a file
-	// that is half of each — the same splice the plain write produced, moved one step later.
-	//
-	// Two writers still race for which lands last, and that race the caller settles. What this
-	// removes is the third outcome, where neither value is what is on disk.
-	target := pluginValuePath(base, id, key)
-	staged, err := os.CreateTemp(directory, key+pluginValueSuffix+".*.next")
-	if err != nil {
-		return fmt.Errorf("store: staging the %s value of %s: %w", key, id, err)
-	}
-	name := staged.Name()
-	if _, err := staged.WriteString(value); err != nil {
-		staged.Close()
-		os.Remove(name)
+	// Published rather than written into: a reader arriving inside a plain write of this file sees
+	// neither the old value nor the new one, and SESSION.md S4-3 requires a record write to be one
+	// step. A plugin's session record is one of these values.
+	if err := atomicfile.Publish(pluginValuePath(base, id, key), []byte(value), 0o644); err != nil {
 		return fmt.Errorf("store: writing the %s value of %s: %w", key, id, err)
-	}
-	if err := staged.Close(); err != nil {
-		os.Remove(name)
-		return fmt.Errorf("store: writing the %s value of %s: %w", key, id, err)
-	}
-	if err := os.Chmod(name, 0o644); err != nil {
-		os.Remove(name)
-		return fmt.Errorf("store: writing the %s value of %s: %w", key, id, err)
-	}
-	if err := os.Rename(name, target); err != nil {
-		os.Remove(name)
-		return fmt.Errorf("store: publishing the %s value of %s: %w", key, id, err)
 	}
 	return nil
 }

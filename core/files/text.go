@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
+
+	"github.com/soksak-ai/soksak-core/core/atomicfile"
 )
 
 // textReadLimit caps one text read.
@@ -132,5 +134,7 @@ func writeBytes(path string, payload []byte) error {
 			return fmt.Errorf("could not create the parent folder %s: %w", dir, err)
 		}
 	}
-	return os.WriteFile(path, payload, 0o644)
+	// Published rather than written into. This is the person's own file: a write interrupted part
+	// way through leaves neither what they had nor what they saved.
+	return atomicfile.Publish(path, payload, 0o644)
 }
