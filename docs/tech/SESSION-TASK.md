@@ -30,7 +30,7 @@ a command to what already runs, and none replaces a working path with an unfinis
 
 | # | Item | Repository | Red | Implementation | Check |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Session state and process state are separated per owner | each owner repository | [ ] | [ ] | [ ] |
+| 1 | Session state and process state are separated per owner | each owner repository | [x] pty | [x] pty | [x] pty `066e3be` |
 | 2 | The owner's id form does not repeat across its restarts | each owner repository | [ ] | [ ] | [ ] |
 | 3 | The owner writes at creation and at close, atomically | each owner repository | [ ] | [ ] | [ ] |
 | 4 | One session's record is isolated from every other | each owner repository | [ ] | [ ] | [ ] |
