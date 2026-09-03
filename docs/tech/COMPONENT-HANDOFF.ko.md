@@ -82,6 +82,12 @@ adoption 을 acknowledge 한 뒤에만 소켓을 닫고 종료합니다. 실패�
 acknowledge 하지 않는 후속 프로세스는 선행 프로세스를 계속 서비스하게 두고, 선택된 버전은 사용되지
 않습니다.
 
+두 동작은 wire 가 명시해야만 올바릅니다. 후속 프로세스가 adopt 한 descriptor 는 그 프로세스가 만든
+것이 아니므로, 생성 프로세스를 요구하는 동작은 가정하지 말고 명시해야 합니다. wire 는 후속 프로세스가
+adopt 한 descriptor 에 크기를 적용하는 방법을 정합니다. 그리고 후속 프로세스는 자기 artifact 의 버전을
+보고해야 하며, 시작될 때 물려받은 environment 의 버전을 보고하면 안 됩니다. 선행 프로세스의 버전을
+보고하는 후속 프로세스는 다시 불일치로 읽혀 끝없이 자기 교체를 지시받습니다.
+
 이 wire 는 `soksak-contract-pty` 가 소유합니다. `HandoffNone`, `HandoffSafeFDs`, `pty.status` 의
 `handoff` 필드는 이미 있습니다. `pty.handoff` 는 명령 이름만 선언돼 있고 요청과 응답은 아직
 명세되지 않았습니다.

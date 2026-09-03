@@ -137,10 +137,14 @@ Owner: `soksak-contract-pty`.
 deadline. State that target descriptor numbers sit above every source and acknowledgement
 descriptor, and that the successor's ring continues from the coordinates it receives.
 
+Specify how the successor applies a size to a descriptor it adopted, and that the successor reports
+the version of its own artifact rather than a version inherited from the environment it was started
+with.
+
 Red: the specification names the command and defines no wire.
 
-Check: the specification defines both messages and the conformance suite covers the acknowledgement
-and the deadline.
+Check: the specification defines both messages; the conformance suite covers the acknowledgement,
+the deadline, a size applied to an adopted descriptor, and the version the successor reports.
 
 ## 9. fd exchange in the PTY sidecar
 
@@ -152,7 +156,8 @@ level is reported only after the conformance suite passes; a level a build canno
 Red: `pty.status` reports `handoff: 0`.
 
 Check: a session survives the replacement — the shell process id is unchanged, the ring coordinate
-continues, and the output the session produced up to the replacement is readable after it.
+continues, and the output the session produced up to the replacement is readable after it. A size
+applied after the replacement takes effect in the shell. `sidecar.mismatch` is empty after the replacement.
 
 ## 10. `sidecar.restart` at level `fds`
 

@@ -83,6 +83,13 @@ successor acknowledges the adoption, and only then closes its socket and exits. 
 acknowledges failure, or that does not acknowledge within the deadline, leaves the predecessor
 serving and the selected version unused.
 
+Two operations remain correct only if the wire states them. A descriptor the successor adopted was
+not created by the successor, so an operation that requires the creating process must be specified
+rather than assumed: the wire states how the successor applies a size to an adopted descriptor. And
+the successor must report the version of its own artifact, not the version it inherited through the
+environment it was started with; a successor that reports its predecessor's version is read as a
+mismatch again and ordered to replace itself without end.
+
 `soksak-contract-pty` owns this wire. `HandoffNone` and `HandoffSafeFDs` and the `handoff` field of
 `pty.status` already exist there; `pty.handoff` is declared as a command name and its request and
 response are not yet specified.
