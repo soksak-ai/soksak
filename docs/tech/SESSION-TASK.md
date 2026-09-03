@@ -35,7 +35,7 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 3 | The owner writes at creation and at close, atomically | each owner repository | [ ] | [ ] | [ ] |
 | 4 | One session's record is isolated from every other | each owner repository | [ ] | [ ] | [ ] |
 | 5 | One session survives its owner's process exiting | owner + core | [ ] | [ ] | [ ] |
-| 6 | The core records the session id beside the coordinate | `soksak-core` | [ ] | [ ] | [ ] |
+| 6 | The core records every session id of a view beside its coordinate | `soksak-core` | [ ] | [ ] | [ ] |
 | 7 | `session.list` | `soksak-core` | [ ] | [ ] | [ ] |
 | 8 | `session.attach`, `session.detach`, `session.close` | `soksak-core` | [ ] | [ ] | [ ] |
 | 9 | The restore outcome is reported | contract + owner | [ ] | [ ] | [ ] |
@@ -53,6 +53,9 @@ Owner: each owner repository.
 
 List every fact the owner holds per session and classify each as session state or process state
 under S3. A fact recomputable from another fact is neither and is not stored.
+
+A terminal view has two owners (S1-3), so this item runs twice for it: once in the PTY daemon over
+the shell, once in the terminal mirror over the screen. Neither classifies the other's facts.
 
 Red: no such list exists, so the store's contents cannot be judged.
 
@@ -78,6 +81,11 @@ Owner: each owner repository.
 
 Write the creation facts when the session is created and the final state when it closes. Write to a
 temporary file in the same directory and rename over the target.
+
+Measured 2026-09-03: `soksak-sidecar-pty` writes one file, an auth token at `main.go:176`. Its ring
+is memory only. The terminal mirrors serialize `cold_paint`, and no component in this workspace
+stores the result — `storeBlob` has no implementation in the core, the contracts, the sidecars, or
+the plugins. Nothing on either side of a terminal view survives its process today.
 
 Red: kill the owner between creation and close; no record exists for the session.
 
@@ -112,13 +120,14 @@ owner exposes, not by a capture.
 
 Owner: `soksak-core`.
 
-The core records `{ sessionId, viewId }` when a session attaches. A lookup by coordinate that finds
-nothing falls to the recorded id.
+The core records `{ sessionId, viewId }` when a session attaches. One view holds one row per
+session (S1-3), so a terminal view records two. A lookup by coordinate that finds nothing falls to
+the recorded ids.
 
 Red: a coordinate that changed leaves the session unaddressable, while the owner still holds it.
 
-Check: change the coordinate, then reach the session by its recorded id. Measured 2026-08-16 is the
-case this closes.
+Check: change the coordinate, then reach both sessions of a terminal view by their recorded ids.
+Measured 2026-08-16 is the case this closes.
 
 ## 7. `session.list`
 

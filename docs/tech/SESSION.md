@@ -33,9 +33,9 @@ A cache is not a session: losing it costs time, not work.
 
 | Work | Session | Reason |
 | --- | --- | --- |
-| A shell running under a pty | Yes | The process continues with no view; the scrollback and the working directory are needed to reattach |
+| A shell running under a pty | Yes | The process continues with no view; the working directory and the output it produced are needed to reattach |
 | A browser view's page and history | Yes | The navigation history and scroll position are needed to reattach; the owner keeps the page loading while no view shows it |
-| A rendered terminal screen | No | Derived from the shell's output; the shell session is the work here |
+| A terminal screen | Yes | The mirror holds the grid; output past the retained tail no longer reproduces it |
 | A file tree's expanded folders | No | Reconstructed from the filesystem; losing it costs no work |
 | One command sent over the control protocol | No | No state a later attachment needs |
 
@@ -46,6 +46,20 @@ contains and cannot store it correctly.
 
 The core owns the **index**: which sessions exist, which component owns each, and where each was
 last shown. It does not own the state.
+
+### S1-3. One view attaches to more than one session
+
+A terminal view shows two sessions with different owners. The PTY daemon owns the shell: the
+process, the working directory, the output it produced. The terminal mirror owns the screen: the
+grid that output painted, and the alternate screen a full-screen program drew.
+
+They are paired, never merged. Each stores its own state, restores on its own, and returns its own
+outcome. A person sees one terminal; the model holds two sessions, and the attachment record
+(S2-4) holds one row per session against the same view.
+
+The screen is not a derivative the shell can reproduce. The daemon retains a bounded output tail,
+and past that bound the output that painted the top of the screen is gone. The grid the mirror
+holds is the only remaining form of it.
 
 ## S2. Identity
 
@@ -100,8 +114,12 @@ process and is not stored.
 
 | | Session state | Process state |
 | --- | --- | --- |
-| Shell | Working directory, environment the shell was started with, scrollback, screen, exit status | The pty file descriptor, the child process id, the connection to a subscriber |
+| Shell — PTY daemon | Working directory, environment the shell was started with, the retained output tail, exit status | The pty file descriptor, the child process id, the connection to a subscriber |
+| Screen — terminal mirror | The grid, the alternate screen, cursor position and style, the modes a program set | The half-read escape sequence in the parser, the socket to the daemon |
 | Browser view | Address, navigation history, scroll position, form values the page declares as restorable | The renderer process, the network connections, the compositor surface |
+
+An owner classifies only what it holds. The daemon parses no output and therefore owns no grid;
+the mirror runs no shell and therefore owns no working directory.
 
 The owner classifies its own facts as session state or process state. The core does not.
 
@@ -213,6 +231,9 @@ An owner that finished reading its store returns one of these four for every ses
 in its index for that owner. `full` and `degraded` are the fidelities of a restore; `failed` and
 `lost` are the two ways there is no restore.
 
+`full` is about the stored state, never about a process. A restored session always has a new
+process, at every outcome.
+
 A `failed` record is not removed. Removing it discards the only evidence of what was lost, and a
 later attempt against a repaired reader may succeed, which is why the session stays `orphaned`
 rather than becoming `lost`.
@@ -220,7 +241,19 @@ rather than becoming `lost`.
 The core keeps the index entry of a `lost` session. Removing it would drop the count to zero by
 deletion rather than by correctness, and the entry is what names the session the gate counts.
 
-### S6-2. When the owner restarts while a session is attached
+### S6-2. What a restore returns
+
+A process is process state (S3) and no store returns one. The shell that runs after a restore is a
+new shell, started from the creation facts.
+
+A restore therefore returns the screen and not the program that painted it. A full-screen program's
+alternate screen comes back as the grid it left; that program is not running, and the next key goes
+to the new shell.
+
+This holds for every session, with no per-owner exception. Machine power-off and process exit are
+the same case here: both end the process, and neither touches a stored record.
+
+### S6-3. When the owner restarts while a session is attached
 
 A session that is `live` when its owner restarts is notified. The core delivers the notification to
 whatever is attached; the response to it is that component's.
@@ -228,12 +261,16 @@ whatever is attached; the response to it is that component's.
 The notification states the session id and the outcome of the restore. A consumer that resumed
 against a degraded restore without knowing it would report state the session does not have.
 
-### S6-3. When the application restarts
+One notification per session. A view attached to a pair receives one for each, and the two outcomes
+can differ: a mirror restores its grid in whole while the shell under it is new.
+
+### S6-4. When the application restarts
 
 Sessions are not created or destroyed by an application restart. The core reads its index and
 queries every owner that is running for the outcome of each session the index records for that
-owner, including the ones that owner does not hold. It starts no owner to answer a query. A session whose owner is not running stays `orphaned`, and the
-core reports it as awaiting its owner.
+owner, including the ones that owner does not hold. It starts no owner to answer a query. A
+session whose owner is not running stays `orphaned`, and the core reports it as awaiting its
+owner.
 
 An `orphaned` session is not attachable. It becomes `detached` when its owner restores it, and
 attachable then. The core offers every `detached` session.
