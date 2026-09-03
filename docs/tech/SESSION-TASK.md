@@ -342,7 +342,7 @@ kit declares `session` and the browser declares `view` for its page and `none` f
 
 ## 17-2. The recorded modes have a producer and a consumer
 
-Owner: `soksak-kit-plugin-terminal`, and the host PTY capability it reaches the owner through.
+Owner: `soksak-kit-plugin-terminal`, and the host PTY capability between it and the session owner.
 
 `pty.modes` is served by the PTY owner (`control.go`) and defined by the contract, and nothing
 calls it in either direction. Measured 2026-09-04: the only occurrences across the repositories are
@@ -350,9 +350,9 @@ the definition, the handler and a comment. `record.Modes` is empty for every ses
 existed, so S4-5's second half has never happened.
 
 The pieces are all here. The mirror reports its modes — `soksak-kit-sidecar-terminal` answers
-`modes()` and the frame carries them — and `soksak-contract-terminal` encodes them as a
-`ModeReport`. What is missing is the wire: the terminal binding has no modes call, so nothing
-carries a mirror's modes to the owner and nothing reads them back before a replay.
+`modes()` and they travel in the frame — and `soksak-contract-terminal` encodes them as a
+`ModeReport`. What is missing is the wire: the terminal binding has no modes call, so a mirror's
+modes never reach the owner and nothing reads them back before a replay.
 
 Why it matters: a mode set before the retained output begins is in no byte the store holds. A
 rotation drops the half that set it, and the replay then draws into a mirror in the wrong mode —
