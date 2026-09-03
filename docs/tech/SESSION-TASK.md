@@ -45,7 +45,7 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 13 | The lost-session count is exposed and is zero | `soksak-core` | [x] | [x] | [x] `b2c938f` |
 | 14 | The mirror reports the modes a replay cannot rebuild | contract + owner | [x] | [x] | [x] `3d8cbe1` `3cc396d` |
 | 15 | The owner records the program that was running | each owner repository | [x] pty | [x] pty | [x] pty `f16ec9e` |
-| 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [ ] | [ ] | [ ] |
+| 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [x] | [x] | [x] `61ed75c` |
 
 ---
 
