@@ -9,8 +9,8 @@ import (
 
 // Names is every command this group owns, served or not.
 //
-// A build with no store or no way to reach an owner registers none of them, and the difference
-// between "this build reaches no owner" and "this build forgot a command" is only visible if the
+// A build with no store or no route to an owner registers none of them, and the difference between
+// "this build has no route to an owner" and "this build forgot a command" is only visible if the
 // names are still declared.
 func Names() []string {
 	return []string{"session_list"}
@@ -20,8 +20,8 @@ func Names() []string {
 type Registration struct {
 	// Reader is where the index is read from.
 	Reader Reader
-	// Ask puts the session question to one owner. The core knows an owner by the name the index
-	// holds and by nothing else.
+	// Ask puts the session question to one owner. The name the index holds is the whole of what the
+	// core has for an owner.
 	Ask Ask
 }
 
@@ -31,8 +31,8 @@ type Registration struct {
 // command" cannot tell a capability this build does not have from a name it typed wrong.
 func Register(registry *control.Registry, deps Registration) {
 	if deps.Reader == nil || deps.Ask == nil {
-		reason := "this build was given no place to read the session index, or no way to " +
-			"reach the components that own sessions"
+		reason := "this build was given no place to read the session index, or no route to " +
+			"the components that own sessions"
 		for _, name := range Names() {
 			if err := registry.DeclareUnserved(name, reason); err != nil {
 				panic(err)

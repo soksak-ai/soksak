@@ -7,8 +7,8 @@ import (
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 )
 
-// The core asks each owner about the sessions the index says that owner holds, and nothing else. An
-// owner is asked once however many sessions it holds: one round trip per owner, not per session.
+// Each owner is questioned about the sessions the index records for it, and about nothing else.
+// One round trip per owner however many sessions it holds, never one per session.
 func TestEachOwnerIsAskedOnceAboutOnlyItsOwnSessions(t *testing.T) {
 	asked := map[string][]string{}
 	answer := func(owner string, sessions []string) (controlwire.SessionReport, error) {
@@ -61,7 +61,7 @@ func TestAnOwnerThatIsNotRunningLeavesItsSessionsOrphaned(t *testing.T) {
 }
 
 // An unfinished report is not a final one. A session the owner has not looked for yet is orphaned
-// rather than lost, whatever the report says about it.
+// rather than lost, whatever that report holds for it.
 func TestAnUnfinishedReportCountsNothingLost(t *testing.T) {
 	listed, err := List([]Entry{{Session: "7", Owner: "pty"}},
 		func(string, []string) (controlwire.SessionReport, error) {
