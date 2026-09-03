@@ -63,7 +63,7 @@ is, and a row that is not done leaves the item open.
 | 17 | A browser view has an owner that outlives the display | `soksak-sidecar-browser` | [x] | [x] | [x] `8ca578b` `33a199e` |
 | 18 | The session mechanics are held once, not per owner | `soksak-kit-sidecar-session` | [x] | [x] | [x] `a915a88` `113488c` `039cdbb` |
 | 19 | The kit and the browser owner are published and installable | kit + owner + `soksak-spec` | [ ] | [ ] | [ ] |
-| 20 | The browser plugin drives its owner | `soksak-plugin-browser-wails3` | [ ] | [ ] | [ ] |
+| 20 | The browser plugin drives its owner | `soksak-plugin-browser-wails3` | [x] | [x] | [x] `7c17823` `7222699` |
 
 ---
 
@@ -346,13 +346,22 @@ a session survived a stop and a start with its output, its modes and its recorde
 
 Owner: `soksak-kit-sidecar-session`, `soksak-sidecar-browser`, `soksak-spec`.
 
-Both are built and tested and neither is published. A local workspace resolves them; nothing else
-does, so the browser plugin's declared dependency names a version no environment can install.
+Both carry the pipeline and neither is published. A local workspace resolves them; a release build
+reads no workspace, so it resolves the kit from its remote and there is none — which is where this
+item is blocked and why it is open.
 
-Red: the browser plugin declares `soksak-sidecar-browser` and no environment resolves it.
+What is done: both build, both verify on every target platform, and the browser plugin declares the
+owner. What is left is outward: two repositories that do not exist yet, and the release each one
+publishes.
 
-Check: both are built and released by the pipeline every other component uses, `soksak-spec-sidecar-browser`
-is a declared interface, and an environment installs the owner from its manifest.
+Creating a repository is not a thing this work does on its own. It is outward-facing and it is not
+undone by editing a file, so it waits on a word rather than being taken as implied by the item.
+
+Red: a release build of `soksak-sidecar-browser` resolves `soksak-kit-sidecar-session` from its
+remote and finds none.
+
+Check: `make verify` and `make build TARGET=aarch64-apple-darwin` both pass with no workspace, and
+an environment installs the owner from its manifest.
 
 ## 20. The browser plugin drives its owner
 
@@ -365,5 +374,8 @@ a new renderer.
 Red: a page navigates and the owner's record does not change.
 
 Check: navigating updates the owner's record; a view mounted after a restart opens at the address
-the owner holds, with its history and its scroll position; `session.attach` binds the view to the
-owner's session id.
+the owner holds rather than the one the pane was opened with; an owner that is not reachable leaves
+the page working and loses only surviving the window.
+
+An owner not yet installable (item 19) is what a view meets when the sidecar is absent, and the
+path it takes then is the one this item's last check names.
