@@ -7,9 +7,23 @@ scope: workspace
 
 # Component handoff
 
-A sidecar upgrade replaces a running process. What the process holds determines whether the
-replacement costs the user anything. This document defines one declaration every sidecar makes, one
-check the core performs before it replaces anything, and what the core does with each result.
+Subordinate to [`SESSION.md`](SESSION.md). The subject is the session; a process is what a session
+needs to run, and replacing one is a thing that happens to a session rather than a goal of its own.
+
+**Handoff is one way S6 is met and not the only one.** An owner that stores its sessions and
+restores them at start meets S6 without any handoff at all: it writes at creation, as the session
+runs, and at the stop (S4-2), and the next start stands every session back up. Handoff earns its
+place by covering what storing cannot — the session keeps running, so nothing is lost and nothing
+is replayed.
+
+**And it covers less.** A descriptor stays open across its process's exit because the kernel holds
+a reference to what it names, and a power cycle ends that kernel. Handoff serves a process
+replacement on a running machine and nothing beyond it. Storing covers that case and the power
+cycle both, which is why the store is the floor and this is the improvement over it.
+
+A sidecar upgrade replaces a running process. What the process holds determines what the
+replacement costs. This document defines one declaration every sidecar makes, one check the core
+performs before it replaces anything, and what the core does with each result.
 
 Wire definitions belong to each contract repository. Manifest fields belong to `soksak-spec`. This
 document defines the axis the two agree on and the core's behaviour, and names the repository that
@@ -20,9 +34,13 @@ owns each part.
 A sidecar declares how much of its state survives a replacement. The value is a capability, not a
 version, so a new level adds no migration.
 
+The levels are what a replacement costs the sessions the unit holds, read against S6's outcomes:
+`none` restores them from the store as a start would, `state` and `fds` keep them without a
+restore.
+
 | Level | Meaning |
 | --- | --- |
-| `none` | Replacement discards what the process holds. |
+| `none` | Replacement ends the process, and its sessions come back the way any start brings them back: from the store, at whatever S6 outcome the record gives. |
 | `state` | The process serializes its state, and the successor restores it from that serialization. |
 | `fds` | The process passes open file descriptors to the successor, and the successor continues the same kernel objects. |
 
@@ -53,6 +71,10 @@ and is `null` when the unit serves no count. An empty array is the pass conditio
 
 `sidecar.restart` takes one unit name, refuses a name absent from `sidecar.mismatch`, and performs
 the replacement at the declared level. It returns the level it used and the count it carried.
+
+At `none` the sessions are restored rather than kept, so the count is what the restore has to stand
+back up and `session.list` is where the result is read. A unit whose sessions came back `degraded`
+replaced correctly and lost state all the same; the two facts are separate and both are reported.
 
 ## H3. The state path
 
@@ -104,8 +126,11 @@ response are not yet specified.
 | Reading the declaration, asking the unit for its count, ordering the replacement, reporting the result | `soksak-core` |
 | Performing the exchange | each sidecar repository |
 
-The core reads a declaration and a count. It does not know which descriptors a unit holds, what its
+The core reads a declaration and a count. It does not hold which descriptors a unit has, what its
 serialization contains, or which commands its plugin uses.
+
+Session outcomes are not this document's. The core reads them through the one command every session
+owner answers, and [`SESSION.md`](SESSION.md) S6 defines what each means.
 
 ## H6. Gates
 
@@ -118,6 +143,7 @@ serialization contains, or which commands its plugin uses.
 | A predecessor whose successor fails keeps serving | contract repository test, per level |
 | A session survives a `fds` replacement | `soksak-contract-pty` conformance test |
 | A screen survives a `state` replacement | `soksak-contract-terminal` conformance test |
+| A `none` replacement leaves every session in `session.list`, restored | core test over the session index |
 
 The execution order and current state of each item are in
 [`COMPONENT-HANDOFF-TASK.md`](COMPONENT-HANDOFF-TASK.md).

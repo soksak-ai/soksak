@@ -11,6 +11,12 @@ Execution order for [`COMPONENT-HANDOFF.md`](COMPONENT-HANDOFF.md). Each item st
 that owns it, the red that must fail first, and the check that closes it. An item is closed only
 after its check runs and reports the stated result.
 
+**These items come after [`SESSION-TASK.md`](SESSION-TASK.md) closes.** Handoff is one way S6 is
+met, and an owner that stores and restores meets S6 without it: a `none` replacement is correct the
+moment the store is, and it costs a restore rather than the sessions. Building handoff first would
+be building the improvement over a floor that is not there — and every level here would be judged
+against sessions that did not survive an ordinary start either.
+
 ## Rules for this work
 
 - Establish a mechanical red before implementation and confirm it fails for the stated reason.
