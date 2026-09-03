@@ -35,12 +35,12 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 3 | The owner writes at creation, at stop and at close, atomically | each owner repository | [x] pty | [x] pty | [x] pty `66bf962` `1e50f0d` |
 | 4 | One session's record is isolated from every other | each owner repository | [x] pty | [x] pty | [x] pty `71a0b13` |
 | 5 | One session survives its owner's process exiting | owner + core | [x] pty | [x] pty | [x] pty `7fc12af` |
-| 6 | The core records every session id of a view beside its coordinate | `soksak-core` | [x] | [x] | [x] `86681c4` |
+| 6 | The core records every session id of a view beside its coordinate | `soksak-core` | [x] | [x] | [x] `9bc431b` |
 | 7 | `session.list` | `soksak-core` | [x] | [x] | [x] `70c3060` `14bfe6d` |
 | 8 | `session.attach`, `session.detach`, `session.close` | `soksak-core` | [x] | [x] | [x] `be7fdaa` `65e39b4` `8699c40` `7c0321b` |
 | 9 | The restore outcome is reported | contract + owner | [x] pty | [x] pty | [x] pty `b850f86` `0ab78e6` |
-| 10 | A session survives its window closing | `soksak-core` | [ ] | [ ] | [ ] |
-| 11 | A session survives an application restart | `soksak-core` | [ ] | [ ] | [ ] |
+| 10 | A session survives its window closing | `soksak-core` | [x] | [x] | [x] `9bc431b` |
+| 11 | A session survives an application restart | `soksak-core` | [x] | [x] | [x] `9bc431b` |
 | 12 | An owner restarting notifies its live sessions | contract + core | [ ] | [ ] | [ ] |
 | 13 | The lost-session count is exposed and is zero | `soksak-core` | [ ] | [ ] | [ ] |
 | 14 | The mirror reports the modes a replay cannot rebuild | contract + owner | [ ] | [ ] | [ ] |
@@ -134,14 +134,14 @@ owner exposes, not by a capture.
 
 Owner: `soksak-core`.
 
-The core records `{ sessionId, viewId }` when a session attaches. One view holds one row per
-session (S1-3), so a terminal view records two. A lookup by coordinate that finds nothing falls to
-the recorded ids.
+The core records `{ sessionId, owner, viewId, windowLabel }` when a session attaches. It is a record
+of its own, not a field on the view: a view goes away with the window that held it, and a session
+outlives both. A lookup by coordinate that finds nothing falls to the recorded id.
 
 Red: a coordinate that changed leaves the session unaddressable, while the owner still holds it.
 
-Check: change the coordinate, then reach both sessions of a terminal view by their recorded ids.
-Measured 2026-08-16 is the case this closes.
+Check: change the coordinate, then reach the session by its recorded id. Measured 2026-08-16 is the
+case this closes.
 
 ## 7. `session.list`
 
