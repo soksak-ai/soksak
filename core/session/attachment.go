@@ -2,18 +2,28 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 )
 
-// attachmentKey is where the core keeps its index. It is beside the window ledger rather than
-// inside a window's snapshot: a view goes away with the window that held it, and a session outlives
-// both. An attachment stored on the view would take the session out of the index with the window.
-const attachmentKey = "sessions"
+// attachmentPrefix is where the core keeps its index, one key per session.
+//
+// Beside the window ledger rather than inside a window's snapshot: a view goes away with the window
+// that held it, and a session outlives both, so an attachment stored on the view would take the
+// session out of the index with the window.
+//
+// One key per session rather than one document holding them all. A byte that went wrong in a single
+// document took every session out of every listing at once — the all-or-nothing S4-4 refuses for an
+// owner's store, and the core's own index is no different.
+const attachmentPrefix = "sessions/"
 
 // Writer is the slice of the key-value store the index needs to be written through.
 type Writer interface {
 	Reader
 	Set(ns, key, value string) error
+	// Delete removes a key. An attachment written empty is a key that still answers, and a reader
+	// walking the roll would find one it cannot place instead of nothing.
+	Delete(ns, key string) error
 }
 
 // Attachment is one session and where it was last shown.
@@ -33,50 +43,94 @@ type Attachment struct {
 // One attachment per session. A session shown in two places at once is one the index cannot answer
 // "where" for, and every consumer of that answer would then have to pick.
 func Attach(store Writer, attachment Attachment) error {
-	held, err := readAttachments(store)
+	if attachment.Session == "" {
+		return fmt.Errorf("an attachment names no session")
+	}
+	body, err := json.Marshal(attachment)
 	if err != nil {
 		return err
 	}
-	held[attachment.Session] = attachment
-	return writeAttachments(store, held)
+	if err := store.Set(ledgerNamespace, attachmentPrefix+attachment.Session, string(body)); err != nil {
+		return err
+	}
+	return rememberSession(store, attachment.Session)
 }
 
 // Detach removes one session's attachment and ends nothing.
 func Detach(store Writer, session string) error {
-	held, err := readAttachments(store)
-	if err != nil {
+	if err := store.Delete(ledgerNamespace, attachmentPrefix+session); err != nil {
 		return err
 	}
-	if _, present := held[session]; !present {
+	return forgetSession(store, session)
+}
+
+// The roll names which sessions the index holds. The store answers one key at a time, so without it
+// a reader has nowhere to start; it is a list of names and nothing else, so a byte that went wrong
+// in it costs the names and never an attachment's contents.
+const rollKey = "session-roll"
+
+func readRoll(store Reader) []string {
+	raw, found, err := store.Get(ledgerNamespace, rollKey)
+	if err != nil || !found || raw == "" {
 		return nil
 	}
-	delete(held, session)
-	return writeAttachments(store, held)
+	var names []string
+	if err := json.Unmarshal([]byte(raw), &names); err != nil {
+		return nil
+	}
+	return names
 }
 
-func readAttachments(store Reader) (map[string]Attachment, error) {
-	raw, found, err := store.Get(ledgerNamespace, attachmentKey)
-	if err != nil {
-		return nil, err
-	}
-	held := map[string]Attachment{}
-	if !found {
-		return held, nil
-	}
-	if err := json.Unmarshal([]byte(raw), &held); err != nil {
-		// A record that does not parse is refused rather than repaired: one of it and the shape this
-		// build writes is wrong, and neither states which.
-		return nil, err
-	}
-	return held, nil
-}
-
-func writeAttachments(store Writer, held map[string]Attachment) error {
-	body, err := json.Marshal(held)
+func writeRoll(store Writer, names []string) error {
+	sort.Strings(names)
+	body, err := json.Marshal(names)
 	if err != nil {
 		return err
 	}
-	return store.Set(ledgerNamespace, attachmentKey, string(body))
+	return store.Set(ledgerNamespace, rollKey, string(body))
+}
+
+func rememberSession(store Writer, session string) error {
+	names := readRoll(store)
+	for _, held := range names {
+		if held == session {
+			return nil
+		}
+	}
+	return writeRoll(store, append(names, session))
+}
+
+func forgetSession(store Writer, session string) error {
+	names := readRoll(store)
+	kept := make([]string, 0, len(names))
+	for _, held := range names {
+		if held != session {
+			kept = append(kept, held)
+		}
+	}
+	if len(kept) == len(names) {
+		return nil
+	}
+	return writeRoll(store, kept)
+}
+
+// readAttachment answers one session's attachment, and whether it could be read.
+//
+// A record whose stated session does not match the key it was found under is refused rather than
+// repaired: one of the two is wrong and neither states which.
+func readAttachment(store Reader, session string) (Attachment, bool) {
+	raw, found, err := store.Get(ledgerNamespace, attachmentPrefix+session)
+	if err != nil || !found || raw == "" {
+		return Attachment{}, false
+	}
+	var attachment Attachment
+	if err := json.Unmarshal([]byte(raw), &attachment); err != nil {
+		return Attachment{}, false
+	}
+	if attachment.Session != session {
+		return Attachment{}, false
+	}
+	return attachment, true
 }
 
 // shownViews answers which views are the ones their pane shows. A view behind another tab holds its

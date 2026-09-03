@@ -65,8 +65,15 @@ func TestASessionSurvivesAnApplicationRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The application restarted: nothing is open yet, and the store is what came across.
-	restarted := &memoryStore{values: map[string]string{"sessions": store.values["sessions"]}}
+	// The application restarted: nothing is open yet, and the store is what came across. The window
+	// snapshots did not — no window has opened — so what is left is the index alone.
+	restarted := &memoryStore{values: map[string]string{}}
+	for key, value := range store.values {
+		if key == "windows" || key == "window/w-one" {
+			continue
+		}
+		restarted.values[key] = value
+	}
 
 	index, err := ReadIndex(restarted)
 	if err != nil {

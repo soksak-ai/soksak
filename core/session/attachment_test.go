@@ -107,6 +107,11 @@ func (store *memoryStore) Set(_, key, value string) error {
 	return nil
 }
 
+func (store *memoryStore) Delete(_, key string) error {
+	delete(store.values, key)
+	return nil
+}
+
 func activeViewSnapshot(pane, active string, views []string) string {
 	body := `{"workspaces":[{"contents":[{"layout":{"t":"l","v":{"id":"` + pane +
 		`","activeViewId":"` + active + `","views":[`
@@ -117,4 +122,49 @@ func activeViewSnapshot(pane, active string, views []string) string {
 		body += `{"id":"` + view + `"}`
 	}
 	return body + `]}}}]}]}`
+}
+
+// One unreadable attachment costs that session and no other.
+//
+// The index was one document, so a byte that went wrong in it took every session out of every
+// listing at once — the same all-or-nothing S4-4 refuses for an owner's store, applied to the core's
+// own index. A caller then has no sessions rather than one it cannot place.
+func TestOneUnreadableAttachmentCostsThatSessionOnly(t *testing.T) {
+	store := &memoryStore{}
+	for _, attachment := range []Attachment{
+		{Session: "7", Owner: "pty", ViewID: "tab-a"},
+		{Session: "8", Owner: "pty", ViewID: "tab-b"},
+	} {
+		if err := Attach(store, attachment); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// One session's record is what a corrupt byte reaches, and it reaches no other.
+	store.values["sessions/7"] = `{"session":`
+
+	index, err := ReadIndex(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(index) != 1 || index[0].Session != "8" {
+		t.Fatalf("one unreadable attachment left %+v", index)
+	}
+}
+
+// An attachment whose stated session does not match the key it was found under is refused rather
+// than repaired: one of the two is wrong and neither states which.
+func TestAnAttachmentWhoseSessionDoesNotMatchItsKeyIsRefused(t *testing.T) {
+	store := &memoryStore{}
+	if err := Attach(store, Attachment{Session: "7", Owner: "pty", ViewID: "tab-a"}); err != nil {
+		t.Fatal(err)
+	}
+	store.values["sessions/7"] = `{"session":"8","owner":"pty","viewId":"tab-a"}`
+
+	index, err := ReadIndex(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(index) != 0 {
+		t.Fatalf("a record naming another session was read: %+v", index)
+	}
 }

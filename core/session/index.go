@@ -86,13 +86,16 @@ func StateOf(outcome string, known bool, shown bool) string {
 // showed it, and reading the index out of the snapshots would drop a session the moment its window
 // closed. The snapshots answer one thing here — whether a view is the one its pane shows.
 func ReadIndex(reader Reader) ([]Entry, error) {
-	held, err := readAttachments(reader)
-	if err != nil {
-		return nil, err
-	}
+	names := readRoll(reader)
 	shown := shownViews(reader)
-	index := make([]Entry, 0, len(held))
-	for _, attachment := range held {
+	index := make([]Entry, 0, len(names))
+	for _, name := range names {
+		attachment, readable := readAttachment(reader, name)
+		if !readable {
+			// One unreadable attachment costs that session and no other. A reader that refused the
+			// whole index would leave a caller with no sessions rather than one it cannot place.
+			continue
+		}
 		index = append(index, Entry{
 			Session:     attachment.Session,
 			Owner:       attachment.Owner,
