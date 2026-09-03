@@ -25,8 +25,7 @@ is, and a row that is not done leaves the item open.
 | `soksak-sidecar-pty` | Yes | It runs the shell, holds the output, and outlives the application generation |
 | `soksak-sidecar-terminal-*` | No | A mirror turns output into a grid and stores nothing (S1-3). Measured 2026-09-03: none of the six writes a file |
 | `soksak-plugin-terminal-*` | No | Every one declares `soksak-sidecar-pty` as its runtime dependency and shows that owner's sessions |
-| `soksak-sidecar-browser` | Yes | It holds a browser session's address, history and scroll, and outlives the application generation. It draws nothing: a page is in a view inside the application's window, and a view in a window is the property of the process that owns the window |
-| `soksak-plugin-browser-*` | No | Declares `soksak-sidecar-browser` and shows that owner's sessions |
+| `soksak-plugin-browser-wails3` | Yes | It holds a browser session's address, history and scroll in its own store. No process of its own: a page is drawn in a view inside this application's window, so nothing outside this application holds one either way (S1-2) |
 | `soksak-plugin-file-tree`, `soksak-plugin-process-monitor` | No | Reconstructed from the filesystem and from the process table (S1-1) |
 
 ## Rules for this work
@@ -60,10 +59,9 @@ is, and a row that is not done leaves the item open.
 | 14 | The mirror reports the modes a replay cannot rebuild | contract + owner | [x] | [x] | [x] `3d8cbe1` `3cc396d` |
 | 15 | The owner records the program that was running | each owner repository | [x] | [x] | [x] `f16ec9e` |
 | 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [x] | [x] | [x] `61ed75c` |
-| 17 | A browser view has an owner that outlives the display | `soksak-sidecar-browser` | [x] | [x] | [x] `8ca578b` `33a199e` |
-| 18 | The session mechanics are held once, not per owner | `soksak-kit-sidecar-session` | [x] | [x] | [x] `a915a88` `113488c` `039cdbb` |
-| 19 | The kit and the browser owner are published and installable | kit + owner + `soksak-spec` | [ ] | [ ] | [ ] |
-| 20 | The browser plugin drives its owner | `soksak-plugin-browser-wails3` | [x] | [x] | [x] `7c17823` `7222699` |
+| 17 | A browser view has an owner | `soksak-plugin-browser-wails3` | [x] | [x] | [x] `02fe242` |
+| 18 | A plugin can take back what it stored | `soksak-core` | [x] | [x] | [x] `361032f` |
+| 19 | The session question goes wherever the owner runs | `soksak-core` | [x] | [x] | [x] `899a792` |
 
 ---
 
@@ -290,92 +288,57 @@ Red: the handoff document states a rule the session document contradicts.
 Check: every rule in the handoff document is derivable from `SESSION.md`, and the two documents
 state no conflicting rule. `COMPONENT-HANDOFF-TASK.md` items are renumbered under this order.
 
-## 17. A browser view has an owner that outlives the display
+## 17. A browser view has an owner
 
 Owner: `soksak-plugin-browser-wails3`.
 
-S1-1 states a browser view is a session: the navigation history and the scroll position are what a
-later attachment needs, and neither is derivable. Nothing owns it as one. The page is held in a
-native child webview this application's process owns, so the work ends when the window does — it
-fails S1's first property, and S1-2 requires the owner to be a sidecar rather than the core.
+S1-1 states a browser view is a session: the address, the navigation history and the scroll position
+are what a later attachment needs, and none of the three is derivable. Nothing owned it as one, so
+the work ended with the window.
 
-Two ways to close this, and they are not equivalent. Declaring a sidecar that holds the pages gives
-a browser view what a shell already has. Striking the row from S1-1 makes a browser view not a
-session, which contradicts the reason it was written: losing a page's history costs work, not time.
-So the first is the one this item takes.
+The plugin owns it, in its own store, keyed by session rather than by view — a view id is reused
+across restores, so a record under one is a record the next view to take that id reads as its own.
 
-Items 1 to 5, 9 and 15 then run against that owner the way they ran against the PTY daemon. They are
-marked closed here because the owner set they name holds one member; a second member reopens them,
-which is why the set is written down rather than left to the phrase.
-
-Two ways were weighed and one was taken. A sidecar that holds the state gives a browser view what a
-shell already has, and every owner is then questioned the same way. Letting a plugin own sessions
-would have added a second route from the core to an owner and a command name per plugin, which is
-two answers to how an owner is asked — the thing this model removes everywhere else.
+A process of its own was built for this first and taken out again. Its whole job was to hold a small
+record and answer two questions about it: the record survives a restart because it is a file, and
+the core addresses a plugin's commands through the renderer it already delegates to. What it bought
+was uniformity, and what it cost was a process, a repository and a version to keep in step. The
+premise it rested on — that the core cannot question a plugin — was not checked before it was built.
 
 Red: close the window a browser view is in and open it again. The page is a fresh one at the same
 address, with no history behind it and no scroll position.
 
-Check: the page returns with its history and its scroll position after the owner's process exits.
-Measured 2026-09-03 against the built owner: a session opened at one.example, navigated to
-two.example at scroll 250, stopped with SIGTERM, and came back `full` at that address with both
-history entries and the scroll intact.
+Check: a session the store holds is resumed at the address it was left at with its history and its
+scroll; an id the store no longer holds starts a new session rather than showing nothing; a store
+that refuses leaves the page working and reports that the session is not durable.
 
-## 18. The session mechanics are held once, not per owner
+## 18. A plugin can take back what it stored
 
-Owner: `soksak-kit-sidecar-session`.
+Owner: `soksak-core`.
 
-A version in every record name, an atomic write, a refusal when a record's stated id and its path
-disagree, a lock per session rather than per store, a stop write forced to the platter, and the
-two commands every owner answers. Two owners needed all of it, and a copy each is the old path the
-next change has to be made in twice.
+A plugin could write and read and never remove. A record then outlived the thing it was for and
+nothing addressed it — a session that closed, a view that is gone, a key a build stopped writing —
+and the store grew by everything that ever existed with no command able to shrink it.
 
-The kit holds the envelope and the owner holds what a session is: the payload is opaque bytes and
-nothing in the kit reads it, because a kit that parsed it would be a second definition.
+Red: a session closes and its record stays in the plugin's store for the life of the home.
 
-No accept loop. One owner turns a connection into a stream and the other does not, so a loop there
-would carry a hook built for a single user. The kit is parts.
+Check: `plugin_data_delete` removes one value; deleting what was never written is not a failure; a
+key that would address another plugin's data is refused the way a read and a write refuse it.
 
-Red: two owners implement the same six mechanics, and a change to any of them has to be made twice.
+## 19. The session question goes wherever the owner runs
 
-Check: the PTY daemon and the browser owner both take them from the kit, and neither holds its own.
-Both packages green, and the PTY daemon's behaviour is unchanged end to end — measured 2026-09-03:
-a session survived a stop and a start with its output, its modes and its recorded program intact.
+Owner: `soksak-core`.
 
-## 19. The kit and the browser owner are published and installable
+The question went to units and nowhere else, so a component that holds sessions and is not a unit
+could not be asked. Where an owner runs is not what the core is asking: a unit answers over its own
+socket, a plugin answers in the renderer that already delegates its command names to this registry,
+and the command is the same either way.
 
-Owner: `soksak-kit-sidecar-session`, `soksak-sidecar-browser`, `soksak-spec`.
+One name, both places. A name per place would make the core hold where an owner runs before it
+could ask.
 
-Both carry the pipeline and neither is published. A local workspace resolves them; a release build
-reads no workspace, so it resolves the kit from its remote and there is none — which is where this
-item is blocked and why it is open.
+Red: a plugin owns sessions and `session.list` cannot ask it about them.
 
-What is done: both build, both verify on every target platform, and the browser plugin declares the
-owner. What is left is outward: two repositories that do not exist yet, and the release each one
-publishes.
-
-Creating a repository is not a thing this work does on its own. It is outward-facing and it is not
-undone by editing a file, so it waits on a word rather than being taken as implied by the item.
-
-Red: a release build of `soksak-sidecar-browser` resolves `soksak-kit-sidecar-session` from its
-remote and finds none.
-
-Check: `make verify` and `make build TARGET=aarch64-apple-darwin` both pass with no workspace, and
-an environment installs the owner from its manifest.
-
-## 20. The browser plugin drives its owner
-
-Owner: `soksak-plugin-browser-wails3`.
-
-The plugin declares the owner and does not yet speak to it. A page's address, history and scroll are
-observed in the view and have to reach the owner, and a restore has to apply what the owner holds to
-a new renderer.
-
-Red: a page navigates and the owner's record does not change.
-
-Check: navigating updates the owner's record; a view mounted after a restart opens at the address
-the owner holds rather than the one the pane was opened with; an owner that is not reachable leaves
-the page working and loses only surviving the window.
-
-An owner not yet installable (item 19) is what a view meets when the sidecar is absent, and the
-path it takes then is the one this item's last check names.
+Check: a unit owner is asked over the sidecar host and a plugin owner through the registry; both are
+sent `system.sessions`; an owner that answers nowhere refuses rather than reporting an empty report,
+because an empty report is a session counted lost.
