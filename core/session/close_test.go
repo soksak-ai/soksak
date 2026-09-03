@@ -85,3 +85,91 @@ func containsAll(text string, parts ...string) bool {
 	}
 	return true
 }
+
+// A close the owner performed is done, whatever becomes of the index afterwards.
+//
+// The owner's record is gone and the session with it. Reporting failure because the index could not
+// be updated tells a caller the session is still running, and the next listing counts a session
+// nothing can reach as lost — the measured value a gate asserts is zero.
+func TestACloseTheOwnerPerformedIsNotUndoneByTheIndex(t *testing.T) {
+	store := &refusingWriter{}
+	if err := Attach(store.backing(), Attachment{Session: "7", Owner: "pty", ViewID: "tab-a"}); err != nil {
+		t.Fatal(err)
+	}
+	index, err := ReadIndex(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.refuse = true
+
+	result, err := CloseAndForget(store, index, "7",
+		func(string, controlwire.SessionCloseRequest) (controlwire.SessionCloseResult, error) {
+			return controlwire.SessionCloseResult{Session: "7", Closed: true, Held: true}, nil
+		})
+	if err != nil {
+		t.Fatalf("a close the owner performed was reported as failed: %v", err)
+	}
+	if !result.Closed {
+		t.Fatalf("the close answered %+v", result)
+	}
+	if result.Indexed {
+		t.Fatal("an index that refused is reported as updated")
+	}
+}
+
+// A close the owner did not perform leaves the index alone. Removing the attachment would take a
+// running session out of every listing.
+func TestACloseTheOwnerRefusedLeavesTheIndexAlone(t *testing.T) {
+	store := &refusingWriter{}
+	if err := Attach(store.backing(), Attachment{Session: "7", Owner: "pty", ViewID: "tab-a"}); err != nil {
+		t.Fatal(err)
+	}
+	index, err := ReadIndex(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CloseAndForget(store, index, "7",
+		func(string, controlwire.SessionCloseRequest) (controlwire.SessionCloseResult, error) {
+			return controlwire.SessionCloseResult{}, errDown{}
+		}); err == nil {
+		t.Fatal("a close that never reached its owner was accepted")
+	}
+	after, err := ReadIndex(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != 1 {
+		t.Fatalf("a running session left the index: %+v", after)
+	}
+}
+
+type refusingWriter struct {
+	values map[string]string
+	refuse bool
+}
+
+func (store *refusingWriter) backing() Writer { return store }
+
+func (store *refusingWriter) Get(_, key string) (string, bool, error) {
+	value, found := store.values[key]
+	return value, found, nil
+}
+
+func (store *refusingWriter) Set(_, key, value string) error {
+	if store.refuse {
+		return errDown{}
+	}
+	if store.values == nil {
+		store.values = map[string]string{}
+	}
+	store.values[key] = value
+	return nil
+}
+
+func (store *refusingWriter) Delete(_, key string) error {
+	if store.refuse {
+		return errDown{}
+	}
+	delete(store.values, key)
+	return nil
+}

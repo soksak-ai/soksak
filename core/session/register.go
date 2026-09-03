@@ -141,16 +141,7 @@ func Register(registry *control.Registry, deps Registration) {
 			if err != nil {
 				return nil, err
 			}
-			result, err := Close(index, named, deps.Order)
-			if err != nil {
-				return nil, err
-			}
-			// The session is gone, so its attachment names a session nothing can reach. Leaving it
-			// would keep a closed session in every listing.
-			if err := Detach(deps.Store, named); err != nil {
-				return nil, err
-			}
-			return result, nil
+			return CloseAndForget(deps.Store, index, named, deps.Order)
 		},
 	})
 }

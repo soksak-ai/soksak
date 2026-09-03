@@ -50,3 +50,34 @@ func OrderThrough(send Send) Order {
 		return result, err
 	}
 }
+
+// Closed is what a close leaves behind.
+type Closed struct {
+	controlwire.SessionCloseResult
+	// Indexed states that the attachment went with the session. False when the index refused: the
+	// session is ended all the same, and the entry left behind is what a later listing reports.
+	Indexed bool `json:"indexed"`
+}
+
+// CloseAndForget ends one session and takes its attachment.
+//
+// The owner performs the close and the index follows it, in that order and not the other way: the
+// index is the core's note of what exists, and removing the note first would leave a running
+// session nothing addresses if the owner then refused.
+//
+// A close the owner performed is done, whatever becomes of the index afterwards. The record is gone
+// and the session with it, so reporting failure would tell a caller the session is still running —
+// and the next listing would count something nothing can reach as lost, which is the measured value
+// a gate asserts is zero.
+func CloseAndForget(store Writer, index []Entry, session string, order Order) (Closed, error) {
+	result, err := Close(index, session, order)
+	if err != nil {
+		// The owner never ended it, so the attachment stays: taking it out would remove a running
+		// session from every listing.
+		return Closed{}, err
+	}
+	if err := Detach(store, session); err != nil {
+		return Closed{SessionCloseResult: result, Indexed: false}, nil
+	}
+	return Closed{SessionCloseResult: result, Indexed: true}, nil
+}
