@@ -513,6 +513,13 @@ func (r *RendererCommands) forward() func(string, control.Args) (any, error) {
 }
 
 // serving is which windows declared this name, in declaration order.
+// Serving answers which windows declare one command.
+//
+// A delegated command is answered in a window, so a caller that has to name one asks this rather
+// than guessing: a window that never declared the name refuses it, and a window that closed is no
+// longer here.
+func (r *RendererCommands) Serving(name string) []string { return r.serving(name) }
+
 func (r *RendererCommands) serving(name string) []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()

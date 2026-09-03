@@ -183,7 +183,8 @@ func Run(assets embed.FS) error {
 	}
 	throughRenderer := func(owner string, request controlwire.Request) (controlwire.Response, error) {
 		// A plugin serves under the name the host gives its commands, and the name the index holds
-		// is what puts the question in front of the right one.
+		// is what puts the question in front of the right one. The window travels in the args
+		// because a delegated command is answered in one, and one that names none is refused.
 		answer, err := registry.Invoke(
 			session.PluginCommandName(owner, request.Command), control.Args(request.Args))
 		if err != nil {
@@ -191,13 +192,24 @@ func Run(assets embed.FS) error {
 		}
 		return controlwire.Response{Ok: true, Result: answer}, nil
 	}
+	// Which windows answer for one plugin owner. Asked of the renderer rather than assumed: a
+	// window that never declared the name refuses it, and one that closed is no longer here.
+	//
+	// Late-bound because the renderer half does not exist until the framework runs, and this is
+	// built before it.
+	var servingWindows func(string) []string
+	openWindows := func(command string) []string {
+		if servingWindows == nil {
+			return nil
+		}
+		return servingWindows(command)
+	}
 	// Filled once the home is ours. Nothing this installation owns — least of
 	// all its database — is touched by a process that has not claimed it.
 	fill := func(kv *store.KV) {
 		session.Register(registry, session.Registration{
-			Store: kv,
-			Ask:   session.AskEither(unitRunning, units.Send, throughRenderer),
-			Order: session.OrderEither(unitRunning, units.Send, throughRenderer),
+			Store:  kv,
+			Router: session.AskEitherIn(openWindows, unitRunning, units.Send, throughRenderer),
 		})
 		wired := boot.RegisterCore(registry, boot.Boot{
 			Identity:     resolved,
@@ -262,9 +274,10 @@ func Run(assets embed.FS) error {
 		stopProcessEvents := observeTerminalProcessEvents(units, resolvePTYOwner, bridge.Emit)
 		defer stopProcessEvents()
 		return wails.Run(wails.Options{
-			Assets:        assets,
-			Identity:      resolved.Identifier,
-			TerminalLinks: terminalSurfaceLinks(units),
+			ServingWindows: func(reader func(string) []string) { servingWindows = reader },
+			Assets:         assets,
+			Identity:       resolved.Identifier,
+			TerminalLinks:  terminalSurfaceLinks(units),
 			TerminalUnitStarts: func(listener func(string)) func() {
 				return units.ObserveStarted(func(open sidecar.Open) { listener(open.Name) })
 			},

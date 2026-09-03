@@ -8,11 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/boot"
 	"github.com/soksak-ai/soksak-core/core/control"
 	"github.com/soksak-ai/soksak-core/core/files"
 	"github.com/soksak-ai/soksak-core/core/identity"
 	"github.com/soksak-ai/soksak-core/core/process"
+	"github.com/soksak-ai/soksak-core/core/session"
 	"github.com/soksak-ai/soksak-core/core/sidecar"
 	"github.com/soksak-ai/soksak-core/core/store"
 )
@@ -74,6 +76,22 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 			return sidecar.Resolved{Name: "fixture", Version: "0.0.1", Path: "/fixture"}, nil
 		},
 		Sink: discardSidecarOutput{},
+	})
+	// The session group, wired the way Run wires it. Its store and its router come from the
+	// application, and which names register depends on both being present rather than on what they
+	// answer — so a store that holds nothing and a router that answers nowhere are enough.
+	session.Register(registry, session.Registration{
+		Store: emptySessionStore{},
+		Router: session.AskEitherIn(
+			func(string) []string { return nil },
+			func(string) bool { return false },
+			func(string, controlwire.Request) (controlwire.Response, error) {
+				return controlwire.Response{}, nil
+			},
+			func(string, controlwire.Request) (controlwire.Response, error) {
+				return controlwire.Response{}, nil
+			},
+		),
 	})
 	// The same call Run makes. A second list here drifts from that one in both
 	// directions at once and neither side reports it: measured 2026-08-15, this
@@ -240,3 +258,12 @@ func (discardSidecarOutput) EmitSidecarBytes(sidecar.Bytes) sidecar.Delivery {
 	return sidecar.Delivered
 }
 func (discardSidecarOutput) EmitSidecarEnd(sidecar.End) sidecar.Delivery { return sidecar.Delivered }
+
+// emptySessionStore is a store that holds nothing. This gate measures which command names register,
+// never what they answer.
+type emptySessionStore struct{}
+
+func (emptySessionStore) Get(string, string) (string, bool, error) { return "", false, nil }
+func (emptySessionStore) Set(string, string, string) error         { return nil }
+func (emptySessionStore) Delete(string, string) error              { return nil }
+func (emptySessionStore) Keys(string, *string) ([]string, error)   { return nil, nil }

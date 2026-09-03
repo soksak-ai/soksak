@@ -48,6 +48,10 @@ type Options struct {
 	// Bridge is the launcher's late-bound half of the host: the core was handed
 	// its Emit and Live before this framework existed, and Run fills it in.
 	Bridge *Bridge
+	// ServingWindows, when set, is handed a reader of which windows declare one delegated command.
+	// A caller that has to name a window asks it rather than guessing, and it is late-bound for the
+	// same reason the bridge is: the renderer half does not exist until Run builds it.
+	ServingWindows func(func(name string) []string)
 	// Registry answers every command this process serves. The host registers
 	// its window-owning commands onto it; everything else was registered by the
 	// launcher, which is what keeps those answerable with no window at all.
@@ -410,6 +414,11 @@ func Run(options Options) error {
 		Handler: func(control.Args) (any, error) { return bootstrap.status(), nil },
 	})
 
+	// The renderer half exists now, so a caller that has to name a window can read which ones answer
+	// a delegated command.
+	if options.ServingWindows != nil {
+		options.ServingWindows(renderer.Serving)
+	}
 	app.Event.On(rendererDeclareEvent, func(event *application.CustomEvent) {
 		// Sender is stamped by the framework, never by the page. A page that
 		// named itself could name another page and take over its commands.

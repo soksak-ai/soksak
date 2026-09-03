@@ -25,12 +25,10 @@ type Registration struct {
 	// Store is where the index is read from and written to. The core owns the index, so it is the
 	// core's store rather than an owner's.
 	Store Writer
-	// Ask puts the session question to one owner. The name the index holds is the whole of what the
-	// core has for an owner.
-	Ask Ask
-	// Order puts the close to one owner. Closing removes the owner's record, so the owner performs
-	// it and the core orders it.
-	Order Order
+	// Router puts the question and the close to one owner, in the window that session was last
+	// shown in. A plugin answers in a window and a unit answers over its own socket; which of the
+	// two an owner is, is what the router settles.
+	Router Router
 }
 
 // Register puts this group on the registry.
@@ -38,7 +36,7 @@ type Registration struct {
 // A missing dependency refuses by name rather than being absent: a caller that receives "unknown
 // command" cannot tell a capability this build does not have from a name it typed wrong.
 func Register(registry *control.Registry, deps Registration) {
-	if deps.Store == nil || deps.Ask == nil || deps.Order == nil {
+	if deps.Store == nil || deps.Router.windows == nil {
 		reason := "this build was given no place to read the session index, or no route to " +
 			"the components that own sessions"
 		for _, name := range Names() {
@@ -57,7 +55,7 @@ func Register(registry *control.Registry, deps Registration) {
 			if err != nil {
 				return nil, err
 			}
-			listed, err := List(index, deps.Ask)
+			listed, err := ListIn(index, deps.Router)
 			if err != nil {
 				return nil, err
 			}
@@ -75,7 +73,7 @@ func Register(registry *control.Registry, deps Registration) {
 			if err != nil {
 				return nil, err
 			}
-			listed, err := List(index, deps.Ask)
+			listed, err := ListIn(index, deps.Router)
 			if err != nil {
 				return nil, err
 			}
@@ -142,7 +140,7 @@ func Register(registry *control.Registry, deps Registration) {
 			if err != nil {
 				return nil, err
 			}
-			return CloseAndForget(deps.Store, index, named, deps.Order)
+			return CloseAndForget(deps.Store, index, named, deps.Router.CloseIn(windowOf(index, named)))
 		},
 	})
 }
@@ -205,6 +203,14 @@ func callOwner(send Send, owner, command string, request any, into any) error {
 	if !answer.Ok {
 		return refused(owner, answer.Error)
 	}
+	return unwrap(answer, into)
+}
+
+// unwrap reads an owner's answer out of the envelope it travels in.
+//
+// An `ok` answer with no data is a refusal with no reason rather than a report: read as one it
+// surfaces as a parse error, and a caller cannot tell that from an owner that answered nothing.
+func unwrap(answer controlwire.Response, into any) error {
 	var envelope struct {
 		Data json.RawMessage `json:"data"`
 	}
@@ -215,6 +221,9 @@ func callOwner(send Send, owner, command string, request any, into any) error {
 	if err := json.Unmarshal(body, &envelope); err != nil {
 		return err
 	}
+	if len(envelope.Data) == 0 {
+		return i18n.Errorf("session.owner.noAnswer", nil)
+	}
 	return json.Unmarshal(envelope.Data, into)
 }
 
@@ -222,40 +231,6 @@ func callOwner(send Send, owner, command string, request any, into any) error {
 // comes from a key rather than being assembled here.
 func refused(owner, reason string) error {
 	return i18n.Errorf("session.owner.refused", map[string]string{"owner": owner, "reason": reason})
-}
-
-// AskEither sends the session question to whichever place the owner runs in.
-//
-// An owner is a component that holds sessions, and where it runs is not the question. Some run in a
-// process of their own and some run in the renderer; the core sends the same command either way,
-// because a caller cannot tell where a command runs and that is the point of one registry.
-//
-// `running` answers whether a name is a unit this host has open. A name that is not takes the other
-// route rather than being refused: a plugin is not a unit and holds sessions all the same.
-func AskEither(running func(name string) bool, toUnit, toRenderer Send) Ask {
-	return func(owner string, sessions []string) (controlwire.SessionReport, error) {
-		send := toRenderer
-		if running(owner) {
-			send = toUnit
-		}
-		var report controlwire.SessionReport
-		err := callOwner(send, owner, controlwire.SessionsCommand,
-			controlwire.SessionsRequest{Sessions: sessions}, &report)
-		return report, err
-	}
-}
-
-// OrderEither sends the close to whichever place the owner runs in, for the same reason.
-func OrderEither(running func(name string) bool, toUnit, toRenderer Send) Order {
-	return func(owner string, request controlwire.SessionCloseRequest) (controlwire.SessionCloseResult, error) {
-		send := toRenderer
-		if running(owner) {
-			send = toUnit
-		}
-		var result controlwire.SessionCloseResult
-		err := callOwner(send, owner, controlwire.SessionCloseCommand, request, &result)
-		return result, err
-	}
 }
 
 // PluginCommandName is how a plugin's command is named on the registry.

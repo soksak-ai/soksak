@@ -23,6 +23,10 @@ func init() {
 			EN: "the component {owner} did not end session {session}",
 			KO: "컴포넌트 {owner} 가 session {session} 을 끝내지 않았습니다",
 		},
+		"session.owner.noAnswer": {
+			EN: "the component answered with no report",
+			KO: "컴포넌트가 report 없이 답했습니다",
+		},
 		"session.owner.refused": {
 			EN: "the component {owner} refused the session question: {reason}",
 			KO: "컴포넌트 {owner} 가 session 질문을 거부했습니다: {reason}",
