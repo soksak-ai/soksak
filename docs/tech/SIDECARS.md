@@ -65,14 +65,29 @@ Readiness is the first valid announcement from the process. A file appearing on 
 readiness. The core waits on the announcement with a finite deadline and never polls for a socket.
 Concurrent opens for the same provider share one start operation and receive the same success or
 failure result. A different secret declaration is rejected before waiting.
-The exact resolved component version is part of the running unit identity. A unit already serving
-another version or executable path is ended before the selected unit starts; matching only the
-sidecar id or its stable development directory is forbidden. The saved process announcement records
-that version, so a later Core generation applies the same rule before adoption.
+The exact resolved component version is part of the running unit identity. Matching only the sidecar
+id or its stable development directory is forbidden. The saved process announcement records that
+version, so a later Core generation compares the same values before adoption.
 
-The public `sidecar.status` command returns `{ units: [{ name, version, process, pid }] }` for units
-this Core generation holds open after a liveness check. It does not adopt a recorded unit, start a
-unit, or return transport addresses, diagnostics, tokens, or secret declarations.
+A unit already serving another version or executable path is not ended by the core. Sessions the
+unit holds end with it, and the split process exists so those sessions outlive an application
+generation. The core reports the mismatch and starts no replacement. The selected version stays
+unused until the running unit exits, and the restart is an explicit request.
+
+`sidecar.mismatch` returns one entry per unit whose running version differs from the selected
+version: `{ name, running, selected, attached }`. `attached` is the count the unit reports for the
+resources it holds, and is `null` when the unit serves no count. An empty array is the pass
+condition. The command starts no unit and ends none.
+
+`sidecar.restart` ends one named unit and starts the selected version. It takes the unit name and
+refuses a name that is not in `sidecar.mismatch`. It ends the sessions the unit holds; the caller
+is the person, not the core.
+
+The public `sidecar.status` command returns `{ units: [{ name, version, process, pid }] }` for every
+unit this home has a live process for, whether this Core generation started it or a previous one
+left it. A recorded unit is checked by connecting; a record whose process is gone is removed and
+omitted. It does not start a unit, or return transport addresses, diagnostics, tokens, or secret
+declarations.
 
 ## S5. Lifetime
 
@@ -86,6 +101,12 @@ A process record can remain after an unclean application termination. A later ap
 the recorded process by connecting and completing the greeting. It reuses a valid process only
 during cleanup or recovery, removes a record for an unavailable process, and rejects an invalid
 record. Normal shutdown and test cleanup verify that no application-owned Sidecar remains.
+
+A process record is removed after the process exits, never before. A stop that fails leaves the
+process running, and removing its record makes the unit unreachable: adoption reads no record,
+status returns nothing, and the next start creates a second process for the same unit name.
+Measured 2026-09-03: a terminal sidecar ran for 17 minutes with no record while `environment.json`
+selected a newer version; `sidecar.status` returned one unit while two were running.
 
 `sidecar_stop` is the explicit operation that terminates a sidecar. It returns only after the
 operating system reports process exit. Darwin uses a kqueue process notification, Linux uses a

@@ -739,16 +739,10 @@ func (host *Host) Stop(name string) error {
 			return nil
 		}
 	}
-	// The record is forgotten only after the process is gone. A stop that fails leaves a process
-	// running, and a record removed under it names nothing: adopt reads none, Started reports none,
-	// and the next Start opens a second process against the same socket name. Measured 2026-09-03:
-	// a terminal sidecar ran for seventeen minutes with no record, invisible to sidecar.status,
-	// while the environment selected a newer version.
-	// The record is forgotten only after the process is gone. A stop that fails leaves a process
-	// running, and a record removed under it names nothing: adopt reads none, Started reports none,
-	// and the next Start opens a second process against the same socket name. Measured 2026-09-03:
-	// a terminal sidecar ran for seventeen minutes with no record, invisible to sidecar.status,
-	// while the environment selected a newer version.
+	// Remove the record after the process exits. When end fails the process keeps running, and a
+	// removed record makes it unreachable: adopt reads no record, Started returns nothing, and the
+	// next Start creates a second process for the same unit name. Measured 2026-09-03: a terminal
+	// sidecar ran for 17 minutes with no record while environment.json selected a newer version.
 	if err := host.end(held); err != nil {
 		return err
 	}

@@ -10,20 +10,19 @@ import (
 	"time"
 )
 
-// A stop that fails leaves the record, because the process it names is still there.
+// Stop keeps the record when end fails, because the process is still running.
 //
-// The record is how a later run finds a unit it did not start. Removing it while the process
-// survives produces a unit nothing can reach: adopt reads no record, Started reports nothing, and
-// the next Start opens a second process against the same socket name. What the user sees is a
-// terminal that will not attach, with the application reporting every sidecar healthy.
+// A later application run reads the record to find a unit it did not start. Removing the record
+// while the process runs makes the unit unreachable: adopt reads no record, Started returns
+// nothing, and the next Start creates a second process for the same unit name.
 //
-// Measured 2026-09-03: soksak-sidecar-terminal-alacritty 0.0.38 ran for seventeen minutes with no
-// record in <home>/run, invisible to sidecar.status, while environment.json selected 0.0.47. Vision
-// stopped at attaching-live-stream and the only symptom was "unknown surface command".
+// Measured 2026-09-03: soksak-sidecar-terminal-alacritty 0.0.38 ran for 17 minutes with no record
+// under <home>/run while environment.json selected 0.0.47. sidecar.status returned one unit; two
+// were running. A terminal view failed to open and reported "unknown surface command".
 //
-// The unit here is adopted (no child handle), which is what a unit from a previous application run
-// is. Stop signals its pid and waits; the process ignores the signal, so the wait times out and the
-// process is still running when Stop returns.
+// This unit is adopted, so it has no child handle, which is the shape of a unit left by a previous
+// run. Stop signals the pid and waits for exit. The process ignores the signal, the wait ends at
+// its deadline, and the process is running when Stop returns.
 func TestAFailedStopKeepsTheRecordThatNamesTheLiveProcess(t *testing.T) {
 	home := shortHome(t)
 	host := NewHost(Deps{Home: home, ReadyWithin: 200 * time.Millisecond})
