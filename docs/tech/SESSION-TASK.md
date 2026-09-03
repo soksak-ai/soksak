@@ -62,6 +62,7 @@ is, and a row that is not done leaves the item open.
 | 17 | A browser view keeps its address in its view record | `soksak-plugin-browser-wails3` | [x] | [x] | [x] `7c2af28` |
 | 17-1 | Every view declares what its restore needs | core, every plugin with a view | [x] | [x] | [x] `8ef6402` |
 | 17-2 | The recorded modes have a producer and a consumer | `soksak-kit-plugin-terminal` | [x] | [ ] | [ ] |
+| 17-3 | The command a session owner's view calls is named by the contract | `soksak-contract-control` | [x] | [ ] | [ ] |
 | 18 | A plugin can take back what it stored | `soksak-core` | [x] | [x] | [x] `361032f` |
 | 19 | The session question goes wherever the owner runs | `soksak-core` | [x] | [x] | [x] `899a792` |
 
@@ -339,6 +340,31 @@ indistinguishable from a view with nothing to bring.
 Check: the three kinds are closed in one place, so a fourth leaves the branches on it visibly
 incomplete; a view without a declaration is refused with a sentence from the bundle; the terminal
 kit declares `session` and the browser declares `view` for its page and `none` for its list.
+
+## 17-3. The command a session owner's view calls is named by the contract
+
+Owner: `soksak-contract-control`, and the two sides that read it.
+
+Measured 2026-09-04: the terminal kit called `session_attach` with `viewId`. The command it can
+run is `session.attach` with `view` — the first is the Go registry name and the kit runs catalog
+names, and the parameter is spelled differently. Either mismatch alone leaves the index empty, and both
+were invisible: the runner answers `{ok:false}` rather than rejecting, so a name nothing serves
+looks like a success to a caller that only catches.
+
+The answer is read now, so the next wrong name is reported at every pane. What is still missing is
+anything that makes it right before it runs. The kit cannot check the core's names without reading
+the core, and the core cannot check the kit's calls without reading the kit — the coupling law
+forbids both directions, and this is exactly the shape it exists for.
+
+The contract already has the mechanism. `address-vectors.json` and `process-name-vectors.json` are
+how it defines a common case for Go, Rust and a JavaScript reader at once. Session commands are one
+component telling another what it holds, which is the same kind of thing.
+
+Red: rename the parameter on either side. Nothing fails until a person opens the session listing
+and finds it empty.
+
+Check: both names and their parameters come from one file; the core's catalog is graded against it;
+the kit reads it rather than spelling the names itself. A side that spells a name of its own fails.
 
 ## 17-2. The recorded modes have a producer and a consumer
 
