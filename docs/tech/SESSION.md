@@ -34,27 +34,31 @@ A cache is not a session: losing it costs time, not work.
 | Work | Session | Reason |
 | --- | --- | --- |
 | A shell running under a pty | Yes | The process continues with no view; the working directory and the output it produced are needed to reattach |
-| A browser view's page and history | Yes | The address, the navigation history and the scroll position are needed to reattach, and none is derivable. The page itself is drawn in a view inside this application's window and cannot outlive it (S1-2) |
+| A browser view's page and history | Yes | The address, the navigation history and the scroll position are needed to reattach, and none is derivable. The page itself is drawn in a view inside this application's window and cannot outlive it, so its owner keeps the state and never a renderer (S1-2) |
 | A terminal screen | No | Replayed from the shell's stored output; the mirror that draws it holds nothing that outlives it |
 | A file tree's expanded folders | No | Reconstructed from the filesystem; losing it costs no work |
 | One command sent over the control protocol | No | No state a later attachment needs |
 
-### S1-2. The owner is a sidecar
+### S1-2. The owner is never the core
 
-A session's owner is a sidecar, never the core. Two reasons, and both are required.
+A session's owner is the component that made it, and it is never the core. The state's shape is the
+owner's, and a core that stored it would have to know that shape — the coupling this rule exists to
+prevent.
 
-**The core cannot store the state correctly.** Its shape is the owner's, and a core that stored it
-would have to know that shape, which is the coupling this rule exists to prevent.
+**A sidecar is what a session needs when the work keeps running without the application.** A shell
+does: the process is the work, it outlives the window and the application generation, and something
+has to be there holding it. That is why the PTY owner is a process of its own.
 
-**A sidecar outlives the application generation and the core does not.** That is what makes a
-session survive an application restart rather than merely be written down before one: the owner is
-there to answer for the session, and its record is not the only thing left of it.
-
-What an owner keeps running is a separate question from what it stores, and the two do not have to
-match. A shell keeps running: the process is the work. A page does not — it is drawn in a view
+**A session whose work cannot keep running needs no process to own it.** A page is drawn in a view
 inside this application's window, and a view in a window is the property of the process that owns
-the window. So a browser session's owner keeps its state and never its renderer, and S3 puts the
-renderer where every process is: on the side that does not survive.
+the window, so no owner outside this application holds one either way. Its state is written down by
+the component that made it and read back by the next one, and a process in between would hold a
+file and answer questions about it.
+
+So the owner of a browser session is the browser plugin, and the owner of a shell session is the
+PTY sidecar. Both answer the same question. Where an owner runs is not what the core is asking: a
+unit answers over its own socket, a plugin answers in the renderer, and the command is the same —
+a caller cannot tell where a command runs, which is what one command registry is for.
 
 The core owns the **index**: which sessions exist, which component owns each, and where each was
 last shown. It does not own the state.
