@@ -37,7 +37,7 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 5 | One session survives its owner's process exiting | owner + core | [x] pty | [x] pty | [x] pty `7fc12af` |
 | 6 | The core records every session id of a view beside its coordinate | `soksak-core` | [x] | [x] | [x] `86681c4` |
 | 7 | `session.list` | `soksak-core` | [x] | [x] | [x] `70c3060` `14bfe6d` |
-| 8 | `session.attach`, `session.detach`, `session.close` | `soksak-core` | [ ] | [ ] | [ ] |
+| 8 | `session.attach`, `session.detach`, `session.close` | `soksak-core` | [x] | [x] | [x] `be7fdaa` `65e39b4` `8699c40` `7c0321b` |
 | 9 | The restore outcome is reported | contract + owner | [x] pty | [x] pty | [x] pty `b850f86` `0ab78e6` |
 | 10 | A session survives its window closing | `soksak-core` | [ ] | [ ] | [ ] |
 | 11 | A session survives an application restart | `soksak-core` | [ ] | [ ] | [ ] |
