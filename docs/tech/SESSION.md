@@ -349,9 +349,12 @@ for a view to attach to.
 
 ### S6-1. When the owner process restarts
 
-The owner reads its records at start, restores each session, and reports the outcome for each. The
-terminal owner applies a session's recorded modes and then replays its stored output; the mirror
-that consumes the replay is whichever one is installed, since it holds nothing of its own (S1-3).
+The owner reads its records at start, restores each session, and reports the outcome for each.
+
+The recorded modes are not applied by the owner. Applying them would mean parsing the output, which
+is the mirror's work and not the owner's (S1-3) — and put into the replay they would be drawn as the
+characters they are. The consumer reads them, applies them to a fresh mirror, and then replays the
+stored output into it. Which mirror that is does not matter, since it holds nothing of its own.
 
 | Outcome | Meaning | State after |
 | --- | --- | --- |

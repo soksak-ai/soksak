@@ -60,6 +60,8 @@ is, and a row that is not done leaves the item open.
 | 15 | The owner records the program that was running | each owner repository | [x] | [x] | [x] `f16ec9e` |
 | 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [x] | [x] | [x] `61ed75c` |
 | 17 | A browser view keeps its address in its view record | `soksak-plugin-browser-wails3` | [x] | [x] | [x] `7c2af28` |
+| 17-1 | Every view declares what its restore needs | core, every plugin with a view | [x] | [x] | [x] `8ef6402` |
+| 17-2 | The recorded modes have a producer and a consumer | `soksak-kit-plugin-terminal` | [x] | [ ] | [ ] |
 | 18 | A plugin can take back what it stored | `soksak-core` | [x] | [x] | [x] `361032f` |
 | 19 | The session question goes wherever the owner runs | `soksak-core` | [x] | [x] | [x] `899a792` |
 
@@ -337,6 +339,31 @@ indistinguishable from a view with nothing to bring.
 Check: the three kinds are closed in one place, so a fourth leaves the branches on it visibly
 incomplete; a view without a declaration is refused with a sentence from the bundle; the terminal
 kit declares `session` and the browser declares `view` for its page and `none` for its list.
+
+## 17-2. The recorded modes have a producer and a consumer
+
+Owner: `soksak-kit-plugin-terminal`, and the host PTY capability it reaches the owner through.
+
+`pty.modes` is served by the PTY owner (`control.go`) and defined by the contract, and nothing
+calls it in either direction. Measured 2026-09-04: the only occurrences across the repositories are
+the definition, the handler and a comment. `record.Modes` is empty for every session that has ever
+existed, so S4-5's second half has never happened.
+
+The pieces are all here. The mirror reports its modes — `soksak-kit-sidecar-terminal` answers
+`modes()` and the frame carries them — and `soksak-contract-terminal` encodes them as a
+`ModeReport`. What is missing is the wire: the terminal binding has no modes call, so nothing
+carries a mirror's modes to the owner and nothing reads them back before a replay.
+
+Why it matters: a mode set before the retained output begins is in no byte the store holds. A
+rotation drops the half that set it, and the replay then draws into a mirror in the wrong mode —
+the alternate screen being the visible one. That is the case the record exists for.
+
+Red: set a mode, produce more than one segment of output, restart the owner, replay. The mirror is
+in the mode it started in rather than the one the session was left in.
+
+Check: the modes reach the record when they change and not on a cadence; a restore reads them and
+applies them to a fresh mirror before any replayed byte; the owner still applies none of them
+itself, because parsing output is the mirror's work.
 
 ## 18. A plugin can take back what it stored
 
