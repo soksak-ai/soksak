@@ -43,7 +43,7 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 11 | A session survives an application restart | `soksak-core` | [ ] | [ ] | [ ] |
 | 12 | An owner restarting notifies its live sessions | contract + core | [ ] | [ ] | [ ] |
 | 13 | The lost-session count is exposed and is zero | `soksak-core` | [ ] | [ ] | [ ] |
-| 14 | The terminal contract defines where a screen is stored | `soksak-contract-terminal` | [ ] | [ ] | [ ] |
+| 14 | The mirror reports the modes a replay cannot rebuild | contract + owner | [ ] | [ ] | [ ] |
 | 15 | The owner records the program that was running | each owner repository | [ ] | [ ] | [ ] |
 | 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [ ] | [ ] | [ ] |
 
@@ -81,37 +81,42 @@ rather than adopted.
 
 Owner: each owner repository.
 
-Write the creation facts at creation, the final state of every held session when the owner is told
-to stop, and the final state of one session when that session closes. Write to a temporary file in
-the same directory and rename over the target.
+Write the creation facts at creation, append the output as it arrives, and write the final state
+when the owner is told to stop or when the session closes. The record's name states its format
+version, and the stop write is the only one that marks the record cleanly ended.
 
 The stop write is what a machine power cycle recovers from, and it is the one an owner is most
 likely to omit: quitting the application closes no session (S7), so the close write never fires for
 it. `soksak-sidecar-pty` already handles SIGTERM at `main.go:121` and ends its sessions there; the
-write goes in that path, ahead of the ending.
+write goes in that path, ahead of the ending. A drain past its deadline leaves the record unmarked.
+
+The append never pauses the read loop. It is a subscriber like any other and loses bytes loudly
+rather than blocking the session that feeds it.
 
 Measured 2026-09-03: `soksak-sidecar-pty` writes one file, an auth token at `main.go:176`. Its ring
-is memory only. The terminal mirrors serialize `cold_paint`, and no component in this workspace
-stores the result. Nothing on either side of a terminal view survives its process today.
+is memory only. Nothing a terminal session holds survives its process today.
 
 Red: stop the owner with a session open, start it again. The session is absent, or returns with the
 creation facts alone.
 
-Check: after a stop and a start the session returns at `full`, and the screen it returns with is
-the screen it had. A reader never observes a partial record — assert by reading concurrently with a
-write. Item 5 covers the uncontrolled exit; this item covers the controlled one.
+Check: after a stop and a start the session returns at `full`, and the screen a replay rebuilds is
+the screen it had. After a kill the record exists, is unmarked, and holds the output up to the last
+append. A reader never observes a partial record. A record whose name states an older version is
+not found. Item 5 covers the uncontrolled exit; this item covers the controlled one.
 
 ## 4. One session's record is isolated from every other
 
 Owner: each owner repository.
 
-Derive each record's path from the session id. Serialize writes per session id.
+Derive each record's path from the session id. Serialize writes per session id. At start, remove
+every record no session in the core's index names.
 
 Red: two sessions writing concurrently produce one record holding the other's field, or a write to
 one path while another session's write is in flight.
 
 Check: concurrent writes for two sessions leave two records, each stating its own id. A record
-whose id does not match its path is refused.
+whose id does not match its path is refused. A record the index does not name is gone after a
+start, and a record it names is untouched.
 
 ## 5. One session survives its owner's process exiting
 
@@ -215,24 +220,24 @@ Red: no command reports the count.
 Check: the count is a number and it is zero. A non-zero count names each lost session's owner and
 last coordinate. A session whose owner is not running is absent from the count.
 
-## 14. The terminal contract defines where a screen is stored
+## 14. The mirror reports the modes a replay cannot rebuild
 
-Owner: `soksak-contract-terminal`.
+Owner: contract repository and each terminal owner.
 
-`coldPaint` returns the flattened screen and names no destination for it. §7 falls to a seal path
-where the plugin fetches a sealed blob from the daemon, and the active contract states that the
-daemon stores no terminal checkpoint or blob; the mechanism §7 depends on is in the removed draft.
-So the contract defines a serializer with no writer.
+A mode set before the stored output begins is in no byte the store holds, so a replay alone cannot
+rebuild it (S4-5). The mirror already tracks mode state apart from the byte window — the corpus
+grades it on `private modes beyond the ring window` — and this item exposes that state so the
+daemon can record it.
 
-Specify where the screen is stored, by whom, and what a reader receives when the store holds
-nothing. The daemon is not the store: it parses no output and owns no grid (S1-3).
+Specify what the report holds. A serializer that omits a mode a program negotiated is the failure
+this closes, and it is invisible until a program misbehaves against it, so the set is enumerated
+and graded rather than assumed complete.
 
-Red: the specification defines a serialization and no destination, and §7 depends on a mechanism
-the same specification marks removed.
+Red: the mirror reports no mode state, so a replay from a truncated store rebuilds a screen whose
+modes are the defaults.
 
-Check: the specification names one store and one owner for it; §7 depends on no removed mechanism;
-the conformance suite covers a screen written, the owner stopped, and the screen read back. A
-screen read back with no process behind it is presented flattened.
+Check: a session that entered a full-screen mode before the stored output's floor restores with
+that mode set. The conformance suite covers each mode the report names.
 
 ## 15. The owner records the program that was running
 

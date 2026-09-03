@@ -35,7 +35,7 @@ A cache is not a session: losing it costs time, not work.
 | --- | --- | --- |
 | A shell running under a pty | Yes | The process continues with no view; the working directory and the output it produced are needed to reattach |
 | A browser view's page and history | Yes | The navigation history and scroll position are needed to reattach; the owner keeps the page loading while no view shows it |
-| A terminal screen | Yes | The mirror holds the grid; output past the retained tail no longer reproduces it |
+| A terminal screen | No | Replayed from the shell's stored output; the mirror that draws it holds nothing that outlives it |
 | A file tree's expanded folders | No | Reconstructed from the filesystem; losing it costs no work |
 | One command sent over the control protocol | No | No state a later attachment needs |
 
@@ -47,19 +47,14 @@ contains and cannot store it correctly.
 The core owns the **index**: which sessions exist, which component owns each, and where each was
 last shown. It does not own the state.
 
-### S1-3. One view attaches to more than one session
+### S1-3. One session, whatever draws it
 
-A terminal view shows two sessions with different owners. The PTY daemon owns the shell: the
-process, the working directory, the output it produced. The terminal mirror owns the screen: the
-grid that output painted, and the alternate screen a full-screen program drew.
+A terminal is one session. The PTY daemon owns it: the shell, the working directory, the output
+the shell produced. The mirror that turns that output into a grid owns no part of the session and
+stores nothing — feed it the stored output and it produces the same grid again.
 
-They are paired, never merged. Each stores its own state, restores on its own, and returns its own
-outcome. A person sees one terminal; the model holds two sessions, and the attachment record
-(S2-4) holds one row per session against the same view.
-
-The screen is not a derivative the shell can reproduce. The daemon retains a bounded output tail,
-and past that bound the output that painted the top of the screen is gone. The grid the mirror
-holds is the only remaining form of it.
+A component that renders is replaceable for that reason. Losing the mirror costs the time to
+replay, never the work.
 
 ## S2. Identity
 
@@ -114,12 +109,12 @@ process and is not stored.
 
 | | Session state | Process state |
 | --- | --- | --- |
-| Shell — PTY daemon | Working directory, environment the shell was started with, the retained output tail, exit status | The pty file descriptor, the child process id, the connection to a subscriber |
-| Screen — terminal mirror | The grid, the alternate screen, cursor position and style, the modes a program set | The half-read escape sequence in the parser, the socket to the daemon |
+| Terminal — PTY daemon | Working directory, environment the shell was started with, the stored output, the modes a program set, exit status | The pty file descriptor, the child process id, the connection to a subscriber |
 | Browser view | Address, navigation history, scroll position, form values the page declares as restorable | The renderer process, the network connections, the compositor surface |
 
-An owner classifies only what it holds. The daemon parses no output and therefore owns no grid;
-the mirror runs no shell and therefore owns no working directory.
+The grid is absent from that table because it is derived (S1-3). The modes are not: a mode set
+before the stored output begins is in no byte the store holds, so the owner records it as a fact
+of its own.
 
 The owner classifies its own facts as session state or process state. The core does not.
 
@@ -160,9 +155,15 @@ closing them (S7), and a machine shutting down stops the owner while closing not
 writing only at creation and close would preserve the creation facts alone across either, and every
 session would return `degraded`.
 
-An owner that cannot write more often writes only these three. An owner that writes more often
-raises what an uncontrolled exit preserves: the state recovered after such an exit is the state at
-the last write, and nothing later.
+An owner whose state grows as the session runs writes as it grows, and does not wait for the stop.
+A stop write covers a controlled exit and covers nothing else; an owner that only wrote at a stop
+would lose everything a crash interrupted. What a crash preserves is the state at the last write,
+and nothing later, so how often an owner writes is how much a crash costs.
+
+A stop write has a deadline. An owner holds buffered state and a slow disk does not become a slow
+shutdown, so the owner drains for a bounded time and then exits. **A drain that hits its deadline
+leaves the record unmarked** (S4-3): the record is short of what the session held, and marking it
+cleanly ended would report `full` over a truncated store.
 
 Recreating a session from creation facts alone is a **degraded** recovery. It is reported as
 degraded and never presented as a full restore.
@@ -176,8 +177,18 @@ The rename covers a process exit, which is what S6 recovers from. It does not co
 that needs the temporary file and its directory synced before the rename, and an owner that claims
 to survive a power loss does that.
 
+**A record's name states its format version.** A reader looks only for the version it writes, so a
+record in an older shape is not found rather than found and refused, and no reader for an older
+shape can exist to be written. A format change is a new version in the name and the removal of the
+one before it.
+
 A record states the session id it is for. A reader that finds a record whose id does not match the
 path refuses the record rather than repairing it.
+
+**A record states whether its owner ended cleanly.** The stop write sets that mark; nothing else
+does. A record without it is one whose owner ended without warning, and it is the only evidence a
+reader has of which happened. A reader that assumed a clean end would report a `full` restore over
+state a crash truncated.
 
 A record that cannot be parsed costs that record only. Other sessions' records are unaffected.
 
@@ -192,6 +203,39 @@ A write is serialized per session id within the owner. Two writes for one sessio
 
 A record is not shared between sessions. A value two sessions both need is stored by whoever owns
 it and read through that owner, not copied into both records.
+
+### S4-5. What the terminal owner stores
+
+Two parts, and no third.
+
+- **The output**, appended as the shell produces it, kept to a bound. The bound sets the restore
+  cost: a mirror consumes at the contract's floor of 80 MB/s, so the stored bound divided by that
+  floor is what a restore spends replaying.
+- **The modes**, written when they change. Modes change when a program enters or leaves a
+  full-screen mode, which is rare, and a mode set before the stored output begins is recoverable
+  from nothing else.
+
+A grid snapshot is not stored. Its cost is set by the grid and the interval rather than by what the
+session did, so an idle terminal would pay it forever: a measured paint is 1.05 MB, and at a
+five-second interval sixteen idle panes write 3.4 MB/s to buy back tens of milliseconds once, at a
+start. The stored output costs nothing while nothing happens.
+
+The writer never blocks the shell. It is a subscriber to the same output every other subscriber
+reads, and a subscriber that cannot keep up loses bytes loudly rather than pausing the session that
+feeds it. That rule is the terminal contract's and this store takes it unchanged.
+
+The write goes as far as the operating system and is not forced to the platter. That is what a process
+exit needs, and a process exit is what S6 recovers from; a stop write forces the platter because a
+stop is the point a power cycle recovers from.
+
+### S4-6. What is removed
+
+A record outlives the process that wrote it, so nothing removes it on its own. An owner removes a
+record when its session closes, and at start it removes every record no session in the core's index
+names.
+
+Removal at start is the only sweep. An owner that never swept would grow its store by every session
+that ever ran.
 
 ## S5. States
 
@@ -226,12 +270,14 @@ for a view to attach to.
 
 ### S6-1. When the owner process restarts
 
-The owner reads its records at start, restores each session, and reports the outcome for each.
+The owner reads its records at start, restores each session, and reports the outcome for each. The
+terminal owner applies a session's recorded modes and then replays its stored output; the mirror
+that consumes the replay is whichever one is installed, since it holds nothing of its own (S1-3).
 
 | Outcome | Meaning | State after |
 | --- | --- | --- |
-| `full` | The state at the last write is restored | `detached` |
-| `degraded` | Only the creation facts were available; an equivalent session was created | `detached` |
+| `full` | The record is marked cleanly ended and its state is restored | `detached` |
+| `degraded` | The record is not marked cleanly ended, or holds the creation facts alone | `detached` |
 | `failed` | A record exists and could not be used | `orphaned` |
 | `lost` | No record exists for the session | `lost` |
 
@@ -254,9 +300,9 @@ deletion rather than by correctness, and the entry is what names the session the
 A process is process state (S3) and no store returns one. The shell that runs after a restore is a
 new shell, started from the creation facts.
 
-A restore therefore returns a screen and never the program that painted it. The owner stores the
-screen whole — the alternate screen a full-screen program drew, the frozen primary under it, the
-cursor, the colours, the modes.
+A restore therefore returns a screen and never the program that painted it. Replaying the stored
+output rebuilds that screen whole — the alternate screen a full-screen program drew, the frozen
+primary under it, the cursor, the colours, and the modes the record holds.
 
 **A screen with no process behind it is presented as history.** An alternate screen is flattened
 into the text flow, and a person reads the record of a program that ran. A full-screen editor drawn
@@ -264,10 +310,9 @@ as though it were live, over a process that ended three days ago, states somethi
 keys that route to a shell and answers none of them as itself. Presenting it that way would make
 the restore a misrepresentation rather than a recovery.
 
-The state is stored whole and the flattening is applied at presentation, where the fact that
-settles it is known: whether a process backs the screen. When one does, the same stored form
-restores the screen live, and that case is the process replacement in
-[`COMPONENT-HANDOFF.md`](COMPONENT-HANDOFF.md).
+The flattening is applied at presentation, where the fact that settles it is known: whether a
+process backs the screen. When one does, the same replay stands the screen up live, and that case
+is the process replacement in [`COMPONENT-HANDOFF.md`](COMPONENT-HANDOFF.md).
 
 This limit is imposed, not chosen: restoring a process needs either a kernel checkpoint, which no
 platform this application targets offers, or a snapshot of the whole machine the shell runs in,
@@ -382,6 +427,12 @@ not read an owner's store.
 | A partial record is never read | Owner repository test per owner |
 | One session's record is not written by another session | Owner repository test per owner |
 | A degraded restore is reported as degraded | Contract conformance test per owner |
+| A record left by a killed owner is not marked cleanly ended | Owner repository test per owner |
+| A drain that hits its deadline leaves the record unmarked | Owner repository test per owner |
+| A record in an older format version is not found | Owner repository test per owner |
+| A record no session in the index names is removed at start | Owner repository test per owner |
+| A slow store loses bytes loudly and does not pause the session | Contract conformance test per owner |
+| Output written while no stop happened is recovered | Owner repository test per owner |
 | A lost session is counted | Core test: the count is a number, and it is zero |
 
 The execution order is in [`SESSION-TASK.md`](SESSION-TASK.md).
