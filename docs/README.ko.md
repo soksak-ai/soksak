@@ -65,6 +65,8 @@ resource 값에만 존재합니다.
 | `IDENTITY.md` | Home, socket, CLI identity |
 | `ENVIRONMENT-AND-INSTALLATION.md` | Component environment와 installer |
 | `ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md` | 두 상태 파일을 하나로 합친 이유 |
+| `COMPONENT-HANDOFF.md` | 사이드카마다 선언하는 인계 수준, 실행 중 유닛을 교체하기 전에 코어가 묻는 것, 각 부분의 소유 저장소 |
+| `COMPONENT-HANDOFF-TASK.md` | 그 계약의 실행 순서 — 항목마다 소유 저장소, red, 닫는 검사 |
 | `CONTROL-PROTOCOL.md` | Control envelope와 version negotiation |
 | `CONTROL-PROTOCOL.CHANGELOG.md` | 하나의 응답 envelope가 필요한 이유 |
 | `COMMAND-LINE.md` | 공개 CLI command 형식 |

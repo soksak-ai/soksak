@@ -86,6 +86,8 @@ that on the same date and the gate landed against it.
 | [`tech/IDENTITY.md`](tech/IDENTITY.md) | One derivation for home, socket, CLI name and axis; the core reads no ambient; one backend per home |
 | [`tech/ENVIRONMENT-AND-INSTALLATION.md`](tech/ENVIRONMENT-AND-INSTALLATION.md) | Runtime component environment, local/registry release transport, and installer ownership |
 | [`tech/ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md`](tech/ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md) | Why local component state became one atomic environment |
+| [`tech/COMPONENT-HANDOFF.md`](tech/COMPONENT-HANDOFF.md) | One declared level per sidecar, the question the core asks before it replaces a running unit, and which repository owns each part |
+| [`tech/COMPONENT-HANDOFF-TASK.md`](tech/COMPONENT-HANDOFF-TASK.md) | Execution order for that contract: the repository, the red and the check that closes each item |
 | [`tech/CONTROL-PROTOCOL.md`](tech/CONTROL-PROTOCOL.md) | One line of JSON, the envelope, the greeting that negotiates, the command table, the socket address |
 | [`tech/CONTROL-PROTOCOL.CHANGELOG.md`](tech/CONTROL-PROTOCOL.CHANGELOG.md) | Why the control plane requires one self-describing response shape |
 | [`tech/COMMAND-LINE.md`](tech/COMMAND-LINE.md) | Public dotted command names, name-value and JSON object parameter forms, discovery, output and quoting |
