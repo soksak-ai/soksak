@@ -88,9 +88,9 @@ func containsAll(text string, parts ...string) bool {
 
 // A close the owner performed is done, whatever becomes of the index afterwards.
 //
-// The owner's record is gone and the session with it. Reporting failure because the index could not
-// be updated tells a caller the session is still running, and the next listing counts a session
-// nothing can reach as lost — the measured value a gate asserts is zero.
+// The owner's record is gone and the session with it. A failure reported because the index could
+// not be updated leaves a caller believing the session is still running, and the next listing counts
+// a session nothing addresses as lost — the measured value a gate asserts is zero.
 func TestACloseTheOwnerPerformedIsNotUndoneByTheIndex(t *testing.T) {
 	store := &refusingWriter{}
 	if err := Attach(store.backing(), Attachment{Session: "7", Owner: "pty", ViewID: "tab-a"}); err != nil {
