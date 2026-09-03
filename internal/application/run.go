@@ -176,7 +176,9 @@ func Run(assets embed.FS) error {
 	// Filled once the home is ours. Nothing this installation owns — least of
 	// all its database — is touched by a process that has not claimed it.
 	fill := func(kv *store.KV) {
-		session.Register(registry, session.Registration{Reader: kv, Ask: sessionAsk})
+		session.Register(registry, session.Registration{
+			Reader: kv, Ask: sessionAsk, Order: session.OrderThrough(units.Send),
+		})
 		wired := boot.RegisterCore(registry, boot.Boot{
 			Identity:     resolved,
 			BuildProfile: buildProfile,
