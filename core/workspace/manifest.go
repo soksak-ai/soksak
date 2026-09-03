@@ -17,6 +17,11 @@ const (
 	// — silently, with no error.
 	ManifestNamespace = "core"
 	ManifestKey       = "windows"
+	// WindowSnapshotPrefix is where one window's saved state goes, under this same namespace and
+	// followed by the window's label. The renderer writes it and this side reads it, so the two name
+	// one key in two languages: a prefix that drifted would leave the reader on a key nobody writes,
+	// answering empty with no error.
+	WindowSnapshotPrefix = "window/"
 )
 
 // ManifestStore is the slice of the key-value store this package needs.

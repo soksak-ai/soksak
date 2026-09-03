@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
+	"github.com/soksak-ai/soksak-core/core/workspace"
 )
 
 // The states a session is in. Exactly one of them at a time.
@@ -26,12 +27,13 @@ const (
 	StateLost = "lost"
 )
 
-// where the window ledger and each window's snapshot are stored. They are the pair the application
-// writes; a second pair here would read a key nobody wrote and report an empty index with no error.
+// Where the index and the window snapshots are stored. The names come from the package that writes
+// them: a second declaration here would be a second answer, and the two agree only until one of
+// them changes.
 const (
-	ledgerNamespace = "core"
-	ledgerKey       = "windows"
-	snapshotPrefix  = "window/"
+	ledgerNamespace = workspace.ManifestNamespace
+	ledgerKey       = workspace.ManifestKey
+	snapshotPrefix  = workspace.WindowSnapshotPrefix
 )
 
 // Reader is the slice of the key-value store this package needs.
