@@ -86,3 +86,27 @@ func answered(request controlwire.Request) controlwire.Response {
 		Result: map[string]any{"code": "OK", "data": controlwire.SessionReport{Complete: true}},
 	}
 }
+
+// A plugin serves its commands under the name the host gives them, and the core has to send that
+// name. One built a different way reaches nothing, and the owner reports orphaned forever with no
+// error to say why.
+func TestAPluginOwnerIsAddressedByTheNameItsCommandsAreServedUnder(t *testing.T) {
+	var sent string
+	ask := AskEither(
+		func(string) bool { return false },
+		func(string, controlwire.Request) (controlwire.Response, error) {
+			t.Fatal("a unit was asked about a plugin owner")
+			return controlwire.Response{}, nil
+		},
+		func(owner string, request controlwire.Request) (controlwire.Response, error) {
+			sent = PluginCommandName(owner, request.Command)
+			return answered(request), nil
+		},
+	)
+	if _, err := ask("soksak-plugin-browser-wails3", nil); err != nil {
+		t.Fatal(err)
+	}
+	if sent != "plugin.soksak-plugin-browser-wails3.system.sessions" {
+		t.Fatalf("the plugin was addressed as %q", sent)
+	}
+}

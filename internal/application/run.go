@@ -182,9 +182,10 @@ func Run(assets embed.FS) error {
 		return false
 	}
 	throughRenderer := func(owner string, request controlwire.Request) (controlwire.Response, error) {
-		// A plugin serves its commands under its own id, so the name the index holds is what puts
-		// the question in front of the right one.
-		answer, err := registry.Invoke(owner+"."+request.Command, control.Args(request.Args))
+		// A plugin serves under the name the host gives its commands, and the name the index holds
+		// is what puts the question in front of the right one.
+		answer, err := registry.Invoke(
+			session.PluginCommandName(owner, request.Command), control.Args(request.Args))
 		if err != nil {
 			return controlwire.Response{}, err
 		}
