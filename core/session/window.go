@@ -23,7 +23,7 @@ type Router struct {
 	toRenderer Send
 }
 
-// AskEitherIn builds a router that knows which windows are open.
+// AskEitherIn builds a router with a reader of which windows serve a command.
 //
 // A unit answers over its own socket and a window means nothing to it. A plugin answers in a
 // window, and the renderer refuses a delegated command that names none — so a question with no
@@ -35,7 +35,7 @@ func AskEitherIn(windows Windows, running func(name string) bool, toUnit, toRend
 
 // In answers the question for one session, preferring the window that session was last shown in.
 //
-// That window is where its view is, so it is asked first. It is also the window most likely to be
+// That window is where its view is, so it is tried first. It is also the window most likely to be
 // gone — a session is detached exactly when its window closed — so a window that no longer answers
 // falls to one that is open: the plugin serving that name is the same component in every window,
 // and what it holds does not depend on which one asks.
@@ -61,7 +61,7 @@ func (router Router) In(window string) Ask {
 	}
 }
 
-// CloseIn orders the close for one session, in the same order In asks.
+// CloseIn orders the close for one session, in the same order In uses.
 func (router Router) CloseIn(window string) Order {
 	return func(owner string, request controlwire.SessionCloseRequest) (controlwire.SessionCloseResult, error) {
 		if router.running(owner) {

@@ -49,7 +49,7 @@ type Options struct {
 	// its Emit and Live before this framework existed, and Run fills it in.
 	Bridge *Bridge
 	// ServingWindows, when set, is handed a reader of which windows declare one delegated command.
-	// A caller that has to name a window asks it rather than guessing, and it is late-bound for the
+	// A caller that has to name a window reads it rather than guessing, and it is late-bound for the
 	// same reason the bridge is: the renderer half does not exist until Run builds it.
 	ServingWindows func(func(name string) []string)
 	// Registry answers every command this process serves. The host registers
