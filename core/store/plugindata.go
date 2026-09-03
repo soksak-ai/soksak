@@ -62,8 +62,39 @@ func writePluginData(base, id, key, value string) error {
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return fmt.Errorf("store: could not create %s: %w", directory, err)
 	}
-	if err := os.WriteFile(pluginValuePath(base, id, key), []byte(value), 0o644); err != nil {
+	// Written to a neighbour and renamed over the target, never into the target. A reader that
+	// arrives mid-write of a plain write sees a file that is half the old value and half the new
+	// one, and a write that dies mid-way leaves that on disk permanently. Rename within one
+	// directory is atomic, so a reader sees the whole old value or the whole new one.
+	//
+	// Each write gets its own neighbour rather than one name per process. Measured: with a shared
+	// name, two writes of one key overwrite each other's neighbour and the rename publishes a file
+	// that is half of each — the same splice the plain write produced, moved one step later.
+	//
+	// Two writers still race for which lands last, and that race the caller settles. What this
+	// removes is the third outcome, where neither value is what is on disk.
+	target := pluginValuePath(base, id, key)
+	staged, err := os.CreateTemp(directory, key+pluginValueSuffix+".*.next")
+	if err != nil {
+		return fmt.Errorf("store: staging the %s value of %s: %w", key, id, err)
+	}
+	name := staged.Name()
+	if _, err := staged.WriteString(value); err != nil {
+		staged.Close()
+		os.Remove(name)
 		return fmt.Errorf("store: writing the %s value of %s: %w", key, id, err)
+	}
+	if err := staged.Close(); err != nil {
+		os.Remove(name)
+		return fmt.Errorf("store: writing the %s value of %s: %w", key, id, err)
+	}
+	if err := os.Chmod(name, 0o644); err != nil {
+		os.Remove(name)
+		return fmt.Errorf("store: writing the %s value of %s: %w", key, id, err)
+	}
+	if err := os.Rename(name, target); err != nil {
+		os.Remove(name)
+		return fmt.Errorf("store: publishing the %s value of %s: %w", key, id, err)
 	}
 	return nil
 }
