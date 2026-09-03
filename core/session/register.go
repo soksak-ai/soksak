@@ -59,7 +59,7 @@ func Register(registry *control.Registry, deps Registration) {
 			}
 			// Every session in every state, orphaned included. A caller filters; this hides
 			// nothing, because a session it did not report is one nobody goes looking for.
-			return map[string]any{"sessions": listed, "lost": countLost(listed)}, nil
+			return map[string]any{"sessions": listed, "lost": LostReport(listed)}, nil
 		},
 	})
 
@@ -134,16 +134,29 @@ func Register(registry *control.Registry, deps Registration) {
 	})
 }
 
-// countLost is the measured value the gate asserts is zero. A session an owner read its store for
-// and found no record of is a defect, not an accepted outcome.
-func countLost(listed []Listed) int {
-	count := 0
+// Lost is the measured value a gate asserts is zero, with what was lost named beside it.
+//
+// A number alone leaves nobody anywhere to look. A session an owner read its store for and found no
+// record of is a defect, and the owner and the coordinate it was last shown at are where the search
+// for the cause starts.
+type Lost struct {
+	Count    int      `json:"count"`
+	Sessions []Listed `json:"sessions"`
+}
+
+// LostReport counts the lost sessions in a listing and names them.
+//
+// Only a lost session counts. An orphaned one is waiting for its owner, and counting it would fire
+// the gate every time an owner is not running.
+func LostReport(listed []Listed) Lost {
+	report := Lost{Sessions: []Listed{}}
 	for _, one := range listed {
 		if one.State == StateLost {
-			count++
+			report.Sessions = append(report.Sessions, one)
 		}
 	}
-	return count
+	report.Count = len(report.Sessions)
+	return report
 }
 
 // Send takes one unit a request and answers with what came back.

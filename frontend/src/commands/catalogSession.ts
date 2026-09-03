@@ -16,7 +16,7 @@ export function registerSessionCatalog(): void {
     triggers: { ko: "세션 목록 상태 소유자 복원" },
     params: {},
     returns:
-      "{ sessions[].{ session, owner, state: live|detached|orphaned|lost, windowLabel, viewId, outcome, reason }, lost } — every session in every state, orphaned included; the caller filters",
+      "{ sessions[].{ session, owner, state: live|detached|orphaned|lost, windowLabel, viewId, outcome, reason }, lost:{count, sessions[]} } — every session in every state, orphaned included; the caller filters. lost.count is the measured value a gate asserts is zero, and lost.sessions names each one",
     message: (d) =>
       tmsg("msg.session.list", { n: ((d.sessions as unknown[]) ?? []).length }),
     examples: ["session.list"],
