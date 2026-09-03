@@ -296,11 +296,11 @@ A browser view is not a session (S1-4). Nothing runs behind the page once the vi
 the address is what brings it back, and the scroll position and the navigation history are of the
 same kind — observed about the view, meaningless without it.
 
-The core already carries that. `setRestoreState` writes a plugin's observed state into the view's
+The core already does that. `setRestoreState` writes a plugin's observed state into the view's
 record, the window snapshot puts that on disk, and the view gets it back as `restore.state` when it
 mounts again — the same record and the same file that bring the layout back. Its declaration names a
-browser URL as the example and says not to put it in plugin kv, because a view id is the only key a
-plugin has and the core does not promise one is unique across restarts.
+browser URL as the example and rules out plugin kv, because a view id is the only key a plugin has
+and the core does not promise one is unique across restarts.
 
 Two things were built before that was checked. A process of its own, whose whole job was to hold a
 small record and answer two questions about it — taken out again. Then a store inside the plugin,
