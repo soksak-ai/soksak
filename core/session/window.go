@@ -33,7 +33,7 @@ func AskEitherIn(windows Windows, running func(name string) bool, toUnit, toRend
 	return Router{windows: windows, running: running, toUnit: toUnit, toRenderer: toRenderer}
 }
 
-// In answers the question for one session, preferring the window that session was last shown in.
+// In answers the question for one session, preferring the window it was last shown in.
 //
 // That window is where its view is, so it is tried first. It is also the window most likely to be
 // gone — a session is detached exactly when its window closed — so a window that no longer answers
