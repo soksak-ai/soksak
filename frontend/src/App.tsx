@@ -64,6 +64,7 @@ import {
   type Workspace,
   type Pane,
 } from "./state/sessions";
+import { closeViewPermanently } from "./state/permanentViewClose";
 import {
   useSettings,
   type TabPosition,
@@ -1213,7 +1214,11 @@ function App() {
         // ⌘W goes to the active view first: a view holding several panes closes one of them and stays.
         // What "close" means inside a view is the view's; which view is active stays the core's.
         e.preventDefault();
-        if (view && closeIntentOfView(view.id) === "pass") closeView(workspace.id, view.id);
+        // Permanent, the same as the close button: the view is gone and the sessions on it end
+        // with it. Removing it from the layout alone would leave those sessions with nothing
+        // holding their ids.
+        if (view && closeIntentOfView(view.id) === "pass")
+          void closeViewPermanently(workspace.id, view.id);
       } else if (key === "t" && !e.shiftKey) {
         e.preventDefault();
         // ⌘T opens the add-tab menu on the active pane, and the person picks.

@@ -6,7 +6,7 @@ import { create } from "zustand";
 import { allViews, useSessions, type Space, type Tab } from "./sessions";
 import { useSettings } from "./settings";
 import { contentCloseReasons, viewCloseReason } from "./closeGuard";
-import { closeViewPermanently } from "./permanentViewClose";
+import { closeViewPermanently, endSessionsOnView } from "./permanentViewClose";
 
 export interface ClosePending {
   kind: "view" | "content";
@@ -40,6 +40,19 @@ function findContent(
 }
 
 const isWarn = () => useSettings.getState().tabCloseConfirm === "warn";
+
+// Closing a space takes every view in it, so every view's sessions end.
+//
+// The views are named before the space is removed: afterwards there is nothing left to enumerate,
+// and the core's index would still hold sessions on views that no longer exist. Each view goes
+// through the same permanent close a single view does, so no path has its own idea of what closing
+// means.
+async function closeContentPermanently(projectId: string, contentId: string) {
+  const content = findContent(projectId, contentId);
+  const views = content ? allViews(content.layout) : [];
+  for (const view of views) await endSessionsOnView(view.id);
+  return useSessions.getState().closeContent(projectId, contentId);
+}
 const closeNow = (projectId: string, viewId: string) => {
   void closeViewPermanently(projectId, viewId).catch((error) => {
     useSessions.getState().setViewStatus(projectId, viewId, {
@@ -73,7 +86,7 @@ export const useCloseConfirm = moduleState("state/closeConfirm#store", () =>
     if (isWarn() && reasons.length > 0) {
       set({ pending: { kind: "content", projectId, id: contentId, reasons } });
     } else {
-      useSessions.getState().closeContent(projectId, contentId);
+      void closeContentPermanently(projectId, contentId);
     }
   },
 
@@ -81,7 +94,7 @@ export const useCloseConfirm = moduleState("state/closeConfirm#store", () =>
     const p = get().pending;
     if (!p) return;
     if (p.kind === "view") closeNow(p.projectId, p.id);
-    else useSessions.getState().closeContent(p.projectId, p.id);
+    else void closeContentPermanently(p.projectId, p.id);
     set({ pending: null });
   },
 
