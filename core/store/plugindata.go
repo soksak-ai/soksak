@@ -96,3 +96,24 @@ func listPluginData(base, id string) ([]string, error) {
 	sort.Strings(keys)
 	return keys, nil
 }
+
+// deletePluginData takes back one value a plugin stored.
+//
+// Without it a record outlives the thing it was for and nothing reaches it — a session that closed,
+// a view that is gone, a key a build stopped writing — and the store grows by everything that ever
+// existed with no command able to shrink it.
+//
+// Deleting what was never written is not a failure: the outcome the caller wanted is the outcome it
+// has, and a refusal would make a caller handle a case that is already what it asked for.
+func deletePluginData(base, id, key string) error {
+	if err := validatePluginID(id); err != nil {
+		return err
+	}
+	if err := validatePluginKey(key); err != nil {
+		return err
+	}
+	if err := os.Remove(pluginValuePath(base, id, key)); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("store: removing the %s value of %s: %w", key, id, err)
+	}
+	return nil
+}

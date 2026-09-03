@@ -300,6 +300,9 @@ export interface SoksakPluginApi {
   storage?: {
     read: (key: string) => Promise<unknown>;
     write: (key: string, value: unknown) => Promise<void>;
+    /** Take back one value. Without it a record outlives the thing it was for and nothing reaches
+     *  it, and the store grows by everything that ever existed. */
+    remove: (key: string) => Promise<void>;
     list: () => Promise<string[]>;
   };
   /** General-purpose embedded data store (core SQLite singleton). DB-agnostic — raw SQL is not exposed.
@@ -1680,6 +1683,9 @@ export function buildPluginApi(
               key,
               value: JSON.stringify(value),
             });
+          },
+          remove: async (key) => {
+            await deps.invoke("plugin_data_delete", { id, key });
           },
           list: async () =>
             (await deps.invoke("plugin_data_list", { id })) as string[],

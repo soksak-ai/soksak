@@ -832,6 +832,25 @@ func pluginDataCommands(deps Deps) []Command {
 			},
 		},
 		{
+			Name:  "plugin_data_delete",
+			Owner: ownerCore,
+			Handler: func(args Args) (any, error) {
+				base, err := deps.pluginDataDirectory()
+				if err != nil {
+					return nil, err
+				}
+				id, err := required[string](args, "id")
+				if err != nil {
+					return nil, err
+				}
+				key, err := required[string](args, "key")
+				if err != nil {
+					return nil, err
+				}
+				return nil, deletePluginData(base, id, key)
+			},
+		},
+		{
 			Name:  "plugin_data_list",
 			Owner: ownerCore,
 			Handler: func(args Args) (any, error) {

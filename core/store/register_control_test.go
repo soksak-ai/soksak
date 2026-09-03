@@ -15,7 +15,8 @@ var groupCommands = []string{
 	"data_define", "data_kv_delete", "data_kv_keys", "data_kv_entries", "data_kv_delete_many",
 	"data_ns_remove", "data_migrate_ns", "data_export", "data_import", "data_backup",
 	"data_restore", "data_verify", "data_repair", "data_reclaim", "data_retention_reap",
-	"data_retention_trim", "plugin_data_read", "plugin_data_write", "plugin_data_list",
+	"data_retention_trim", "plugin_data_read", "plugin_data_write", "plugin_data_delete",
+	"plugin_data_list",
 }
 
 func arguments(t *testing.T, text string) control.Args {
