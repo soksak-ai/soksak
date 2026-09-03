@@ -25,7 +25,7 @@ describe("a view's restore declaration", () => {
     // An absent record means one thing for a view that keeps nothing and another for a view that
     // failed to read what it kept. Without the declaration the core cannot judge either.
     //
-    // The refusal is a sentence from the bundle, so the reader's language decides its words. What
+    // The refusal is a sentence from the bundle, so its words come from the reader's language. What
     // is asserted is that there is one and that it names the three kinds a caller has to pick from.
     expect(() => restoreKindOf(drawing as unknown as PluginViewProvider)).toThrow(
       /none, view, session/,
