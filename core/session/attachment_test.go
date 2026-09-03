@@ -139,7 +139,7 @@ func TestOneUnreadableAttachmentCostsThatSessionOnly(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// One session's record is what a corrupt byte reaches, and it reaches no other.
+	// A corrupt byte lands in one session's record and touches no other.
 	store.values["sessions/7"] = `{"session":`
 
 	index, err := ReadIndex(store)
