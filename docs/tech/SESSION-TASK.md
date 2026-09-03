@@ -25,7 +25,7 @@ is, and a row that is not done leaves the item open.
 | `soksak-sidecar-pty` | Yes | It runs the shell, holds the output, and outlives the application generation |
 | `soksak-sidecar-terminal-*` | No | A mirror turns output into a grid and stores nothing (S1-3). Measured 2026-09-03: none of the six writes a file |
 | `soksak-plugin-terminal-*` | No | Every one declares `soksak-sidecar-pty` as its runtime dependency and shows that owner's sessions |
-| `soksak-plugin-browser-wails3` | Yes | It holds a browser session's address, history and scroll in its own store. No process of its own: a page is drawn in a view inside this application's window, so nothing outside this application holds one either way (S1-2) |
+| `soksak-plugin-browser-wails3` | No | A page has nothing running behind it once its view is gone, so its address, scroll and history are view state and go in the view's own record (S1-4) |
 | `soksak-plugin-file-tree`, `soksak-plugin-process-monitor` | No | Reconstructed from the filesystem and from the process table (S1-1) |
 
 ## Rules for this work
@@ -59,7 +59,7 @@ is, and a row that is not done leaves the item open.
 | 14 | The mirror reports the modes a replay cannot rebuild | contract + owner | [x] | [x] | [x] `3d8cbe1` `3cc396d` |
 | 15 | The owner records the program that was running | each owner repository | [x] | [x] | [x] `f16ec9e` |
 | 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [x] | [x] | [x] `61ed75c` |
-| 17 | A browser view has an owner | `soksak-plugin-browser-wails3` | [x] | [x] | [x] `02fe242` |
+| 17 | A browser view keeps its address in its view record | `soksak-plugin-browser-wails3` | [x] | [ ] | [ ] |
 | 18 | A plugin can take back what it stored | `soksak-core` | [x] | [x] | [x] `361032f` |
 | 19 | The session question goes wherever the owner runs | `soksak-core` | [x] | [x] | [x] `899a792` |
 
@@ -288,29 +288,34 @@ Red: the handoff document states a rule the session document contradicts.
 Check: every rule in the handoff document is derivable from `SESSION.md`, and the two documents
 state no conflicting rule. `COMPONENT-HANDOFF-TASK.md` items are renumbered under this order.
 
-## 17. A browser view has an owner
+## 17. A browser view keeps its address in its view record
 
 Owner: `soksak-plugin-browser-wails3`.
 
-S1-1 states a browser view is a session: the address, the navigation history and the scroll position
-are what a later attachment needs, and none of the three is derivable. Nothing owned it as one, so
-the work ended with the window.
+A browser view is not a session (S1-4). Nothing runs behind the page once the view is gone: going to
+the address is what brings it back, and the scroll position and the navigation history are of the
+same kind — observed about the view, meaningless without it.
 
-The plugin owns it, in its own store, keyed by session rather than by view — a view id is reused
-across restores, so a record under one is a record the next view to take that id reads as its own.
+The core already carries that. `setRestoreState` writes a plugin's observed state into the view's
+record, the window snapshot puts that on disk, and the view gets it back as `restore.state` when it
+mounts again — the same record and the same file that bring the layout back. Its declaration names a
+browser URL as the example and says not to put it in plugin kv, because a view id is the only key a
+plugin has and the core does not promise one is unique across restarts.
 
-A process of its own was built for this first and taken out again. Its whole job was to hold a small
-record and answer two questions about it: the record survives a restart because it is a file, and
-the core addresses a plugin's commands through the renderer it already delegates to. What it bought
-was uniformity, and what it cost was a process, a repository and a version to keep in step. The
-premise it rested on — that the core cannot question a plugin — was not checked before it was built.
+Two things were built before that was checked. A process of its own, whose whole job was to hold a
+small record and answer two questions about it — taken out again. Then a store inside the plugin,
+keyed by session id, which is a second copy of what the view record already holds. Both rested on a
+premise nobody checked: that a browser page has state which outlives its view. It does not.
+
+So this item is the removal of that store and of this plugin's session ownership, leaving the
+address, the scroll position and the history in the view record where the core already keeps them.
 
 Red: close the window a browser view is in and open it again. The page is a fresh one at the same
 address, with no history behind it and no scroll position.
 
-Check: a session the store holds is resumed at the address it was left at with its history and its
-scroll; an id the store no longer holds starts a new session rather than showing nothing; a store
-that refuses leaves the page working and reports that the session is not durable.
+Check: a view restored from a snapshot loads the address it was left at, with its history and its
+scroll applied; a view with no recorded state opens blank rather than failing; this plugin declares
+no session command and answers none.
 
 ## 18. A plugin can take back what it stored
 

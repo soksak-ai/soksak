@@ -33,8 +33,8 @@ A cache is not a session: losing it costs time, not work.
 
 | Work | Session | Reason |
 | --- | --- | --- |
-| A shell running under a pty | Yes | The process continues with no view; the working directory and the output it produced are needed to reattach |
-| A browser view's page and history | Yes | The address, the navigation history and the scroll position are needed to reattach, and none is derivable. The page itself is drawn in a view inside this application's window and cannot outlive it, so its owner keeps the state and never a renderer (S1-2) |
+| A shell running under a pty | Yes | The process continues with no view, so something has to hold it; the working directory and the output it produced are needed to reattach and neither is derivable |
+| A browser view's page | No | Nothing runs behind it once the view is gone. The page comes back by going to its address, and the address is view state (S1-4) |
 | A terminal screen | No | Replayed from the shell's stored output; the mirror that draws it holds nothing that outlives it |
 | A file tree's expanded folders | No | Reconstructed from the filesystem; losing it costs no work |
 | One command sent over the control protocol | No | No state a later attachment needs |
@@ -55,10 +55,9 @@ the window, so no owner outside this application holds one either way. Its state
 the component that made it and read back by the next one, and a process in between would hold a
 file and answer questions about it.
 
-So the owner of a browser session is the browser plugin, and the owner of a shell session is the
-PTY sidecar. Both answer the same question. Where an owner runs is not what the core is asking: a
-unit answers over its own socket, a plugin answers in the renderer, and the command is the same —
-a caller cannot tell where a command runs, which is what one command registry is for.
+Where an owner runs is not what the core is asking: a unit answers over its own socket, a plugin
+answers in the renderer, and the command is the same — a caller cannot tell where a command runs,
+which is what one command registry is for.
 
 The core owns the **index**: which sessions exist, which component owns each, and where each was
 last shown. It does not own the state.
@@ -71,6 +70,26 @@ stores nothing — feed it the stored output and it produces the same grid again
 
 A component that renders is replaceable for that reason. Losing the mirror costs the time to
 replay, never the work.
+
+### S1-4. State that does not outlive its view is view state
+
+A view has a record of its own, and what a plugin observes about the view goes in it: the core takes
+it through `setRestoreState`, writes it into the window snapshot on disk, and hands it back as
+`restore.state` when the view mounts again. That is the same record and the same file that bring the
+layout back, so it survives a window closing, an application restart, and a power cycle.
+
+A browser page's address is one of those, not a session. Nothing runs behind the page once the
+view is gone — going to the address is what brings it back, and the scroll position and the
+navigation history are of the same kind: observed about the view, meaningless without it, and small
+enough to ride in its record.
+
+**A plugin does not keep view state in its own store.** A store of its own is keyed by something,
+and a view id is the only key it has — which the core does not promise to be unique across restarts.
+It would also be a second copy of a fact the view record already holds, and two copies of one fact
+disagree.
+
+So the test for a session is not "is this state worth keeping". It is **does the work outlive the
+view**. A shell does, and needs a session. A page does not, and needs a record on its view.
 
 ## S2. Identity
 
@@ -126,7 +145,9 @@ process and is not stored.
 | | Session state | Process state |
 | --- | --- | --- |
 | Terminal — PTY daemon | Working directory, environment the shell was started with, the stored output, the modes a program set, exit status | The pty file descriptor, the child process id, the connection to a subscriber |
-| Browser view | Address, navigation history, scroll position, form values the page declares as restorable | The renderer process, the network connections, the compositor surface |
+
+A browser view is not in that table. Its address, scroll position and navigation history are view
+state (S1-4), and its renderer, network connections and compositor surface end with the view.
 
 The grid is absent from that table because it is derived (S1-3). The modes are not: a mode set
 before the stored output begins is in no byte the store holds, so the owner records it as a fact
@@ -337,8 +358,8 @@ which the host platform gates behind an entitlement it grants no third party.
 
 A renderer is bounded further still. It draws into a view in this application's window, and a view
 in a window is the property of the process that owns the window, so no owner outside this
-application can hold one. A browser session comes back as its address, its history and its scroll position applied
-to a new renderer, and the page is loaded again rather than resumed.
+application can hold one. A page comes back by loading its address into a new renderer rather than
+being resumed — which is why it is view state and not a session (S1-4).
 
 This holds for every session, with no per-owner exception. Machine power-off and process exit are
 the same case here: both end the process, and neither touches a stored record.
