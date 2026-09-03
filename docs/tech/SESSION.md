@@ -232,9 +232,16 @@ would lose everything a crash interrupted. What a crash preserves is the state a
 and nothing later, so how often an owner writes is how much a crash costs.
 
 A stop write has a deadline. An owner holds buffered state and a slow disk does not become a slow
-shutdown, so the owner drains for a bounded time and then exits. **A drain that hits its deadline
-leaves the record unmarked** (S4-3): the record is short of what the session held, and marking it
-cleanly ended would report `full` over a truncated store.
+shutdown, so the owner drains for a bounded time and then exits. Unbounded, a stop stops at the
+first owner whose disk is not answering and every session behind it goes unwritten.
+
+**A drain that hits its deadline does not report a full restore** (S4-3). The record is short of
+what the session held, so a restore that compared them and answered `full` would report a complete
+restore over a truncated store.
+
+The stop is still written. The owner did stop on purpose, and refusing the mark would say it
+crashed — which is a different fact and a false one. The record states the coordinate the session
+reached, and a restore whose output falls short of it answers `degraded`.
 
 Recreating a session from creation facts alone is a **degraded** recovery. It is reported as
 degraded and never presented as a full restore.
@@ -505,7 +512,7 @@ not read an owner's store.
 | One session's record is not written by another session | Owner repository test per owner |
 | A degraded restore is reported as degraded | Contract conformance test per owner |
 | A record left by a killed owner is not marked cleanly ended | Owner repository test per owner |
-| A drain that hits its deadline leaves the record unmarked | Owner repository test per owner |
+| A drain that hits its deadline does not report a full restore | Owner repository test per owner |
 | A record in an older format version is not found | Owner repository test per owner |
 | A slow store loses bytes loudly and does not pause the session | Contract conformance test per owner |
 | Output written while no stop happened is recovered | Owner repository test per owner |
