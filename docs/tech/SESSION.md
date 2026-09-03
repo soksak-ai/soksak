@@ -91,6 +91,33 @@ disagree.
 So the test for a session is not "is this state worth keeping". It is **does the work outlive the
 view**. A shell does, and needs a session. A page does not, and needs a record on its view.
 
+### S1-5. A view declares what its restore needs
+
+**Every view declares one of the three below. A view that declares none is refused at registration.**
+
+The kind is not a property the core can work out. An absent record means one thing for a view that
+keeps nothing and another for a view that failed to read what it kept, and the core cannot tell
+those apart by looking — so the answer is declared rather than guessed, and a view with no
+declaration is a view whose every restore is unjudgeable.
+
+| Declared | What restoring is | Absent record |
+| --- | --- | --- |
+| `none` | Reconstructed from what is already there — a file tree reads the filesystem | Normal |
+| `view` | A record on the view, written with `setRestoreState` and read as `restore.state`. The plugin owns the shape and the core stores it as it was given | A fault, reported |
+| `session` | Work that outlives the view, held by an owner answering the commands in S9 | A fault, reported |
+
+The declaration is per view, not per plugin: one plugin can contribute a view of each kind.
+
+What each of them restores is the plugin's own to define, and how much work it is has nothing to do
+with which kind it is. A terminal is the complicated one — a process, the output it produced and the
+modes a program set — and it declares `session` because the shell is still running. An editor
+declares `view` and the record is the path it had open. A browser declares `view` and the record is
+the address, with the scroll position and the history beside it.
+
+A plugin that declares a kind and does not do it is the one failure this makes visible. Declaring
+`view` and writing nothing is a view that reports a fault at every restore; declaring `session` with
+no owner answering is a session the index holds and nothing can reach.
+
 ## S2. Identity
 
 ### S2-1. The owner issues the id
