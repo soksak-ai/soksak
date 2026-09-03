@@ -128,6 +128,13 @@ export interface TabStatus {
 // (default = fact, override = user intent only). An empty override is not stored.
 // One shape, because there is one kind of content view: a plugin's. PluginViewHost draws the
 // provider of the global key "<pluginId>.<view>", and close, move and drag are the same for any of
+// SessionBinding names one session and the component that owns it. The id is the owner's, in the
+// form the owner issued, and the core reads nothing out of it.
+export type SessionBinding = {
+  owner: string;
+  id: string;
+};
+
 // them. `kind` is kept because it is written into every snapshot; it holds one value.
 export type Tab =
   | {
@@ -148,6 +155,13 @@ export type Tab =
       status?: TabStatus;
       // Observed working directory (OSC 7/633) — persisted (B3): a restored view starts at the last cwd.
       cwd?: string;
+      // The session this view is bound to, and the component that owns it. The core's index: a
+      // coordinate answers whether a session is here and this answers which one, so a session whose
+      // pane id changed on a restore is still addressable. Measured 2026-08-16: a session looked up
+      // by windowLabel|paneId alone could not be reattached after a restore issued new pane ids,
+      // while the shell was still running. Not plugin state — the core owns which sessions exist
+      // and where each was last shown, so this is its own field rather than opaque `state`.
+      session?: SessionBinding;
       // Plugin-observed runtime state (B3 generalization) — stored on the view record with the same
       // lifetime as the view (view close = state gone, no id-reuse collision). E.g. the current
       // browser URL. Do not persist it in plugin kv under a viewId key — viewId is not unique across

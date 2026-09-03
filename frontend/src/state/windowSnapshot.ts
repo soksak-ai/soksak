@@ -19,7 +19,7 @@ import {
 } from "./splitTree";
 import { initialSidebarLayout, type SidebarGroup, type SidebarLayout } from "./sidebarLayout";
 import { byPlace } from "./sectionSets";
-import type { Workspace, Space, Pane, Tab, SidebarRegion } from "./sessions";
+import type { Workspace, Space, Pane, Tab, SessionBinding, SidebarRegion } from "./sessions";
 import { DEFAULT_RAIL_PLACEMENT,
   normalizeRailPlacement,
   type RailPlacement,
@@ -43,6 +43,9 @@ type ViewSnapshot =
       cwd?: string;
       lastActivity?: number;
       legacyPaneId?: string;
+      // The session this view is bound to. The core's index rather than plugin state: a lookup by
+      // coordinate that finds nothing falls to this.
+      session?: SessionBinding;
       // B3 — plugin-observed state (setRestoreState — e.g. browser URL). Becomes restore.state on the restore mount.
       state?: unknown;
     };
@@ -104,6 +107,7 @@ function serializeView(v: Tab): ViewSnapshot {
         ...(v.cwd ? { cwd: v.cwd } : {}),
         ...(v.lastActivity ? { lastActivity: v.lastActivity } : {}),
         ...(v.legacyPaneId ? { legacyPaneId: v.legacyPaneId } : {}),
+        ...(v.session ? { session: v.session } : {}),
         ...(v.state !== undefined ? { state: v.state } : {}),
       };
   }
@@ -157,6 +161,7 @@ function deserializeView(s: ViewSnapshot): Tab {
         ...(s.cwd ? { cwd: s.cwd } : {}),
         ...(s.lastActivity ? { lastActivity: s.lastActivity } : {}),
         ...(s.legacyPaneId ? { legacyPaneId: s.legacyPaneId } : {}),
+        ...(s.session ? { session: s.session } : {}),
         ...(s.state !== undefined ? { state: s.state } : {}),
       };
   }
