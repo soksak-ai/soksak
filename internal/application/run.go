@@ -177,7 +177,7 @@ func Run(assets embed.FS) error {
 	// all its database — is touched by a process that has not claimed it.
 	fill := func(kv *store.KV) {
 		session.Register(registry, session.Registration{
-			Reader: kv, Ask: sessionAsk, Order: session.OrderThrough(units.Send),
+			Store: kv, Ask: sessionAsk, Order: session.OrderThrough(units.Send),
 		})
 		wired := boot.RegisterCore(registry, boot.Boot{
 			Identity:     resolved,

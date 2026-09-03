@@ -1,79 +1,76 @@
 package session
 
 import (
-	"encoding/json"
 	"testing"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 )
 
 // The index is what the core owns: which sessions exist, which component owns each, and where each
-// was last shown. It is read out of the window snapshots the application already writes, because a
-// second place to record it would be a second answer to the same question.
-func TestTheIndexReadsEveryBindingAWindowHolds(t *testing.T) {
-	reader := fakeStore{
-		"windows": `{"slots":[{"label":"w-one"},{"label":"w-two"}]}`,
-		"window/w-one": snapshot(t, []binding{
-			{pane: "pan-a", view: "tab-a", active: "tab-a", owner: "pty", id: "7"},
-			{pane: "pan-b", view: "tab-b", active: "tab-other", owner: "pty", id: "8"},
-		}),
-		"window/w-two": snapshot(t, []binding{
-			{pane: "pan-c", view: "tab-c", active: "tab-c", owner: "browser", id: "9"},
-		}),
+// was last shown. Every attachment is in it, whatever became of the window that held the view.
+func TestTheIndexHoldsEveryAttachment(t *testing.T) {
+	store := &memoryStore{}
+	for _, attachment := range []Attachment{
+		{Session: "7", Owner: "pty", ViewID: "tab-a", WindowLabel: "w-one"},
+		{Session: "8", Owner: "pty", ViewID: "tab-b", WindowLabel: "w-one"},
+		{Session: "9", Owner: "browser", ViewID: "tab-c", WindowLabel: "w-two"},
+	} {
+		if err := Attach(store, attachment); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	entries, err := ReadIndex(reader)
+	index, err := ReadIndex(store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 3 {
-		t.Fatalf("the index holds %d bindings, not the three the windows hold", len(entries))
+	if len(index) != 3 {
+		t.Fatalf("the index holds %d attachments, not the three that were made", len(index))
 	}
 	byID := map[string]Entry{}
-	for _, entry := range entries {
+	for _, entry := range index {
 		byID[entry.Session] = entry
 	}
 	if byID["7"].Owner != "pty" || byID["7"].WindowLabel != "w-one" || byID["7"].ViewID != "tab-a" {
-		t.Fatalf("the binding came back as %+v", byID["7"])
-	}
-	if !byID["7"].Shown {
-		t.Fatal("a session whose view is its pane's active one is not shown")
-	}
-	if byID["8"].Shown {
-		t.Fatal("a session behind another tab is shown")
+		t.Fatalf("the attachment came back as %+v", byID["7"])
 	}
 	if byID["9"].Owner != "browser" {
-		t.Fatalf("the second window's binding came back as %+v", byID["9"])
+		t.Fatalf("the second window's attachment came back as %+v", byID["9"])
 	}
 }
 
-// A window with no snapshot is a slot the application has not written yet. It contributes nothing
-// rather than refusing: one window's absence must not hide every other window's sessions.
-func TestAWindowWithNoSnapshotContributesNothing(t *testing.T) {
-	entries, err := ReadIndex(fakeStore{"windows": `{"slots":[{"label":"w-gone"}]}`})
+// A window with no snapshot leaves its sessions in the index. It is a window the application has
+// not written yet, or one that closed, and neither ends a session.
+func TestAWindowWithNoSnapshotKeepsItsSessions(t *testing.T) {
+	store := &memoryStore{values: map[string]string{"windows": `{"slots":[{"label":"w-gone"}]}`}}
+	if err := Attach(store, Attachment{Session: "7", Owner: "pty", ViewID: "tab-a", WindowLabel: "w-gone"}); err != nil {
+		t.Fatal(err)
+	}
+	index, err := ReadIndex(store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 0 {
-		t.Fatalf("a slot with no snapshot produced %d bindings", len(entries))
+	if len(index) != 1 || index[0].Shown {
+		t.Fatalf("a slot with no snapshot produced %+v", index)
 	}
 }
 
-// A snapshot that does not parse costs that window only. Refusing the whole read would hide every
-// other window's sessions behind one bad record.
-func TestASnapshotThatDoesNotParseCostsThatWindowOnly(t *testing.T) {
-	entries, err := ReadIndex(fakeStore{
-		"windows":      `{"slots":[{"label":"w-bad"},{"label":"w-good"}]}`,
+// A snapshot that does not parse costs what it answers — whether a view is shown — and nothing
+// else. The index is read from the attachments, so one unreadable window hides no session.
+func TestASnapshotThatDoesNotParseHidesNoSession(t *testing.T) {
+	store := &memoryStore{values: map[string]string{
+		"windows":      `{"slots":[{"label":"w-bad"}]}`,
 		"window/w-bad": `{"workspaces":`,
-		"window/w-good": snapshot(t, []binding{
-			{pane: "pan-a", view: "tab-a", active: "tab-a", owner: "pty", id: "7"},
-		}),
-	})
+	}}
+	if err := Attach(store, Attachment{Session: "7", Owner: "pty", ViewID: "tab-a", WindowLabel: "w-bad"}); err != nil {
+		t.Fatal(err)
+	}
+	index, err := ReadIndex(store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Session != "7" {
-		t.Fatalf("one unreadable window cost the other its sessions: %+v", entries)
+	if len(index) != 1 || index[0].Session != "7" {
+		t.Fatalf("an unreadable window hid a session: %+v", index)
 	}
 }
 
@@ -102,46 +99,4 @@ func TestTheStateFollowsFromTheOwnerReportAndTheView(t *testing.T) {
 			}
 		})
 	}
-}
-
-type binding struct{ pane, view, active, owner, id string }
-
-type fakeStore map[string]string
-
-func (store fakeStore) Get(ns, key string) (string, bool, error) {
-	value, found := store[key]
-	return value, found, nil
-}
-
-func snapshot(t *testing.T, bindings []binding) string {
-	t.Helper()
-	views := make([]any, 0, len(bindings))
-	panes := make([]any, 0, len(bindings))
-	for _, held := range bindings {
-		views = append(views, map[string]any{
-			"id": held.view, "kind": "plugin", "title": "T", "pluginId": "p", "view": "content",
-			"session": map[string]any{"owner": held.owner, "id": held.id},
-		})
-		panes = append(panes, map[string]any{
-			"t": "l",
-			"v": map[string]any{
-				"id": held.pane, "activeViewId": held.active,
-				"views": []any{views[len(views)-1]},
-			},
-		})
-	}
-	body, err := json.Marshal(map[string]any{
-		"activeId": "wsp-a",
-		"workspaces": []any{map[string]any{
-			"id": "wsp-a", "activeContentId": "spc-a",
-			"contents": []any{map[string]any{
-				"id": "spc-a", "activeGroupId": "pan-a",
-				"layout": map[string]any{"t": "s", "id": "spl-a", "dir": "row", "children": panes},
-			}},
-		}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(body)
 }

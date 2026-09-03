@@ -13,13 +13,14 @@ import (
 // "this build has no route to an owner" and "this build forgot a command" is only visible if the
 // names are still declared.
 func Names() []string {
-	return []string{"session_list", "session_close"}
+	return []string{"session_list", "session_attach", "session_detach", "session_close"}
 }
 
 // Registration is what this group needs to serve.
 type Registration struct {
-	// Reader is where the index is read from.
-	Reader Reader
+	// Store is where the index is read from and written to. The core owns the index, so it is the
+	// core's store rather than an owner's.
+	Store Writer
 	// Ask puts the session question to one owner. The name the index holds is the whole of what the
 	// core has for an owner.
 	Ask Ask
@@ -33,7 +34,7 @@ type Registration struct {
 // A missing dependency refuses by name rather than being absent: a caller that receives "unknown
 // command" cannot tell a capability this build does not have from a name it typed wrong.
 func Register(registry *control.Registry, deps Registration) {
-	if deps.Reader == nil || deps.Ask == nil || deps.Order == nil {
+	if deps.Store == nil || deps.Ask == nil || deps.Order == nil {
 		reason := "this build was given no place to read the session index, or no route to " +
 			"the components that own sessions"
 		for _, name := range Names() {
@@ -48,7 +49,7 @@ func Register(registry *control.Registry, deps Registration) {
 		Name:  "session_list",
 		Owner: control.OwnerCore,
 		Handler: func(control.Args) (any, error) {
-			index, err := ReadIndex(deps.Reader)
+			index, err := ReadIndex(deps.Store)
 			if err != nil {
 				return nil, err
 			}
@@ -63,6 +64,51 @@ func Register(registry *control.Registry, deps Registration) {
 	})
 
 	registry.MustRegister(control.Command{
+		Name:  "session_attach",
+		Owner: control.OwnerCore,
+		Handler: func(args control.Args) (any, error) {
+			attachment := Attachment{}
+			for target, name := range map[*string]string{
+				&attachment.Session: "session", &attachment.Owner: "owner", &attachment.ViewID: "view",
+			} {
+				value, err := control.Arg[string](args, name)
+				if err != nil {
+					return nil, err
+				}
+				*target = value
+			}
+			// The window label is where the session was last shown, and a caller that omits it
+			// leaves that unknown rather than wrong.
+			if raw, present := args["window"]; present {
+				if err := json.Unmarshal(raw, &attachment.WindowLabel); err != nil {
+					return nil, err
+				}
+			}
+			if err := Attach(deps.Store, attachment); err != nil {
+				return nil, err
+			}
+			return attachment, nil
+		},
+	})
+
+	registry.MustRegister(control.Command{
+		Name:  "session_detach",
+		Owner: control.OwnerCore,
+		Handler: func(args control.Args) (any, error) {
+			named, err := control.Arg[string](args, "session")
+			if err != nil {
+				return nil, err
+			}
+			// Detaching releases the session and ends nothing. Closing a window, a workspace or a
+			// pane releases what it held the same way.
+			if err := Detach(deps.Store, named); err != nil {
+				return nil, err
+			}
+			return map[string]any{"session": named, "detached": true}, nil
+		},
+	})
+
+	registry.MustRegister(control.Command{
 		Name:  "session_close",
 		Owner: control.OwnerCore,
 		Handler: func(args control.Args) (any, error) {
@@ -70,11 +116,20 @@ func Register(registry *control.Registry, deps Registration) {
 			if err != nil {
 				return nil, err
 			}
-			index, err := ReadIndex(deps.Reader)
+			index, err := ReadIndex(deps.Store)
 			if err != nil {
 				return nil, err
 			}
-			return Close(index, named, deps.Order)
+			result, err := Close(index, named, deps.Order)
+			if err != nil {
+				return nil, err
+			}
+			// The session is gone, so its attachment names a session nothing can reach. Leaving it
+			// would keep a closed session in every listing.
+			if err := Detach(deps.Store, named); err != nil {
+				return nil, err
+			}
+			return result, nil
 		},
 	})
 }

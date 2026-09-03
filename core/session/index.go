@@ -78,24 +78,29 @@ func StateOf(outcome string, known bool, shown bool) string {
 	}
 }
 
-// ReadIndex answers every session binding the windows hold.
+// ReadIndex answers every session the core holds an attachment for.
 //
-// A window with no snapshot contributes nothing, and a snapshot that does not parse costs that
-// window only: one unreadable record must not hide every other window's sessions.
+// The attachments are the index and the window snapshots are not: a session outlives the view that
+// showed it, and reading the index out of the snapshots would drop a session the moment its window
+// closed. The snapshots answer one thing here — whether a view is the one its pane shows.
 func ReadIndex(reader Reader) ([]Entry, error) {
-	labels, err := windowLabels(reader)
+	held, err := readAttachments(reader)
 	if err != nil {
 		return nil, err
 	}
-	entries := make([]Entry, 0, len(labels))
-	for _, label := range labels {
-		raw, found, err := reader.Get(ledgerNamespace, snapshotPrefix+label)
-		if err != nil || !found {
-			continue
-		}
-		entries = append(entries, bindingsIn(label, raw)...)
+	shown := shownViews(reader)
+	index := make([]Entry, 0, len(held))
+	for _, attachment := range held {
+		index = append(index, Entry{
+			Session:     attachment.Session,
+			Owner:       attachment.Owner,
+			WindowLabel: attachment.WindowLabel,
+			ViewID:      attachment.ViewID,
+			Shown:       shown[attachment.ViewID],
+		})
 	}
-	return entries, nil
+	sortIndex(index)
+	return index, nil
 }
 
 func windowLabels(reader Reader) ([]string, error) {
@@ -147,44 +152,4 @@ type layoutNode struct {
 			} `json:"session"`
 		} `json:"views"`
 	} `json:"v"`
-}
-
-func bindingsIn(label, raw string) []Entry {
-	var snapshot windowSnapshot
-	if err := json.Unmarshal([]byte(raw), &snapshot); err != nil {
-		return nil
-	}
-	var entries []Entry
-	for _, workspace := range snapshot.Workspaces {
-		for _, content := range workspace.Contents {
-			var root layoutNode
-			if err := json.Unmarshal(content.Layout, &root); err != nil {
-				continue
-			}
-			entries = append(entries, bindingsUnder(label, root)...)
-		}
-	}
-	return entries
-}
-
-func bindingsUnder(label string, node layoutNode) []Entry {
-	var entries []Entry
-	if node.Value != nil {
-		for _, view := range node.Value.Views {
-			if view.Session == nil || view.Session.ID == "" {
-				continue
-			}
-			entries = append(entries, Entry{
-				Session:     view.Session.ID,
-				Owner:       view.Session.Owner,
-				WindowLabel: label,
-				ViewID:      view.ID,
-				Shown:       view.ID == node.Value.ActiveViewID,
-			})
-		}
-	}
-	for _, child := range node.Children {
-		entries = append(entries, bindingsUnder(label, child)...)
-	}
-	return entries
 }
