@@ -35,8 +35,8 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 3 | The owner writes at creation, at stop and at close, atomically | each owner repository | [x] pty | [x] pty | [x] pty `66bf962` `1e50f0d` |
 | 4 | One session's record is isolated from every other | each owner repository | [x] pty | [x] pty | [x] pty `71a0b13` |
 | 5 | One session survives its owner's process exiting | owner + core | [x] pty | [x] pty | [x] pty `7fc12af` |
-| 6 | The core records every session id of a view beside its coordinate | `soksak-core` | [ ] | [ ] | [ ] |
-| 7 | `session.list` | `soksak-core` | [ ] | [ ] | [ ] |
+| 6 | The core records every session id of a view beside its coordinate | `soksak-core` | [x] | [x] | [x] `86681c4` |
+| 7 | `session.list` | `soksak-core` | [x] | [x] | [x] `70c3060` `14bfe6d` |
 | 8 | `session.attach`, `session.detach`, `session.close` | `soksak-core` | [ ] | [ ] | [ ] |
 | 9 | The restore outcome is reported | contract + owner | [x] pty | [x] pty | [x] pty `b850f86` `0ab78e6` |
 | 10 | A session survives its window closing | `soksak-core` | [ ] | [ ] | [ ] |
