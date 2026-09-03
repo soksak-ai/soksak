@@ -5,16 +5,11 @@ import (
 	"testing"
 )
 
-// The core records the id an owner issued, never one it made from a coordinate.
+// What the owner issued is what comes back, whatever it looks like.
 //
-// A coordinate answers "is there a session here" and the id answers "which session". Measured
-// 2026-08-16: a terminal looked up by windowLabel + paneId alone could not be reattached after a
-// restore issued new pane ids, while the shell was still running and still holding its scrollback.
-// A core that built an id out of the coordinate would put that failure back — the id would change
-// whenever the view moved, and every session would be lost by a drag.
-//
-// So an attachment with no id is refused rather than given one, and what is stored is what the
-// owner issued, byte for byte.
+// A session id is the owner's to shape and this package reads nothing out of one. An id that looks
+// like a coordinate is still an id, and a core that treated it as one would answer a different
+// session — so the shapes that could tempt a reader are the ones measured here.
 func TestTheCoreStoresTheIdTheOwnerIssued(t *testing.T) {
 	store := &memoryStore{}
 	// An id that looks nothing like a coordinate, and one that looks exactly like one. Both are the
@@ -62,10 +57,12 @@ func TestAnAttachmentWithNoSessionIsRefused(t *testing.T) {
 	}
 }
 
-// The coordinate is stored beside the id, never in place of it.
+// A session that moves keeps its id.
 //
-// A lookup by coordinate that finds nothing falls to the recorded id, so a session whose view moved
-// is still addressable. That only works while both are kept.
+// Measured 2026-08-16: a terminal looked up by window and pane alone could not be reattached after
+// a restore issued new pane ids, while the shell was still running and still holding its
+// scrollback. The coordinate is stored beside the id so a lookup that finds nothing falls to it,
+// and that only works while moving the view leaves the id alone.
 func TestTheCoordinateIsStoredBesideTheId(t *testing.T) {
 	store := &memoryStore{}
 	if err := Attach(store, Attachment{

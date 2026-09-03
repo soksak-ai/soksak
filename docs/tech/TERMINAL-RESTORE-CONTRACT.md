@@ -16,6 +16,27 @@ screen may therefore contain earlier commands and intentional blank lines; that 
 same session, not a duplicated shell. `terminal.clear` clears the engine screen but does not erase
 the shell's process or daemon history.
 
+## A screen with no process behind it
+
+A restore returns a screen and never the program that painted it. `SESSION.md` S6-2 states why:
+restoring a process needs a kernel checkpoint no targeted platform offers, or a machine snapshot the
+host gates behind an entitlement it grants no third party. What comes back is the stored output and
+a new shell.
+
+**Such a screen is presented as history.** An alternate screen is flattened into the text flow, and
+a person reads the record of a program that ran.
+
+A full-screen editor drawn as though it were live, over a process that ended three days ago, states
+something false: it takes keys that route to a shell and answers none of them as itself. Presented
+that way the restore is a misrepresentation rather than a recovery.
+
+The flattening is applied at presentation, because that is where the fact which settles it is known
+— whether a process backs the screen. When one does, the same replay stands the screen up live, and
+that case is the process replacement in [`COMPONENT-HANDOFF.md`](COMPONENT-HANDOFF.md).
+
+This rule is graded here rather than in `SESSION.md` because the component it grades is the mirror,
+and a mirror owns no session. The session document's business ends at what the owner returns.
+
 ## Boundary comparison
 
 | Concern | Workspace restore | Terminal Kit restore |

@@ -30,6 +30,27 @@ sequence 없는 캐시 문자열을 그리거나, 소유된 pane에 두 번째 �
 RED입니다. 화면 캡처만으로는 이 계약을 인증할 수 없으며 recovery/status sequence와 독립 입력 marker를
 함께 확인해야 합니다.
 
+## 뒤에 프로세스가 없는 화면
+
+restore 는 화면을 돌려주며 그것을 그린 프로그램은 결코 돌려주지 않습니다. 이유는 `SESSION.md` S6-2 에
+있습니다. 프로세스를 복원하려면 이 애플리케이션이 대상으로 하는 어느 플랫폼도 제공하지 않는 커널
+checkpoint 이거나, host 플랫폼이 서드파티에게 주지 않는 entitlement 뒤의 머신 스냅샷이 필요합니다.
+돌아오는 것은 저장된 출력과 새 shell 입니다.
+
+**그런 화면은 history 로 제시합니다.** alternate screen 은 text flow 로 flatten 되고, 사람은 실행됐던
+프로그램의 기록을 읽습니다.
+
+3일 전에 끝난 프로세스 위에 전체 화면 편집기를 살아 있는 것처럼 그리는 것은 거짓을 진술합니다. 그
+화면은 shell 로 가는 키를 받으면서 자신으로서는 아무것도 응답하지 않습니다. 그렇게 제시하면 restore 는
+복구가 아니라 오표시가 됩니다.
+
+flatten 은 제시 시점에 적용합니다. 그 시점에 판정 근거가 알려져 있기 때문입니다. 화면 뒤에 프로세스가
+있는지입니다. 있으면 같은 재생이 화면을 살아 있는 채로 세우며, 그 경우가
+[`COMPONENT-HANDOFF.md`](COMPONENT-HANDOFF.md) 의 프로세스 교체입니다.
+
+이 규칙은 `SESSION.md` 가 아니라 여기서 판정됩니다. 판정 대상 컴포넌트가 미러이고 미러는 session 을
+소유하지 않기 때문입니다. session 문서의 일은 소유자가 무엇을 돌려주는지에서 끝납니다.
+
 ## 입력 준비 상태
 
 Kit 0.0.91은 byte renderer의 `attach` 직후 `writable=false`를 유지하고 첫 PTY output이 renderer에

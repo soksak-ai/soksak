@@ -386,15 +386,12 @@ A restore therefore returns a screen and never the program that painted it. Repl
 output rebuilds that screen whole — the alternate screen a full-screen program drew, the frozen
 primary under it, the cursor, the colours, and the modes the record holds.
 
-**A screen with no process behind it is presented as history.** An alternate screen is flattened
-into the text flow, and a person reads the record of a program that ran. A full-screen editor drawn
-as though it were live, over a process that ended three days ago, states something false: it takes
-keys that route to a shell and answers none of them as itself. Presenting it that way would make
-the restore a misrepresentation rather than a recovery.
-
-The flattening is applied at presentation, where the fact that settles it is known: whether a
-process backs the screen. When one does, the same replay stands the screen up live, and that case
-is the process replacement in [`COMPONENT-HANDOFF.md`](COMPONENT-HANDOFF.md).
+How that screen is then drawn is not this document's subject. A screen with no process behind it is
+presented as history rather than as a live program, and that rule is graded on the component that
+draws it — which is the mirror, and a mirror is not an owner (S1-3). It is stated in
+[`TERMINAL-RESTORE-CONTRACT.md`](TERMINAL-RESTORE-CONTRACT.md), where a mirror can be measured
+against it. This document's business ends at what the owner returns: the stored output and a new
+process.
 
 This limit is imposed, not chosen: restoring a process needs either a kernel checkpoint, which no
 platform this application targets offers, or a snapshot of the whole machine the shell runs in,
@@ -500,14 +497,13 @@ not read an owner's store.
 
 | Claim | Gate |
 | --- | --- |
-| The core records no id it derived from a coordinate | `core/session/identity_gate_test.go` |
+| An attach the core refused is reported, never discarded | Owner repository test per owner |
 | An owner's id does not repeat across its restarts | Owner repository test per owner |
 | A session survives its window closing | Core test: close the window, `session.list` reports `detached` |
 | A session survives its owner's process exiting | Core test with a fake owner: kill it, `session.list` reports `orphaned` |
 | A session survives an application restart | Core test over a fixture index |
 | A session restored after its owner was stopped and started reports `full` | Owner repository test per owner |
-| A screen restored after a stop equals the screen before it, alternate screen included | Contract conformance test per owner |
-| A screen with no process behind it is presented flattened | Contract conformance test per owner |
+| A screen restored after a stop equals the screen before it, alternate screen included | The terminal conformance suite, fed the owner's stored output. The owner parses no output and has no screen, so it is not the component this grades |
 | A restore starts no program on its own | Owner repository test per owner (`restore_gates_test.go` for the PTY) |
 | A session whose owner is not running reports `orphaned`, never `lost` | Core test with no owner process |
 | A close aimed at a session whose owner is not running is refused | Core test |
