@@ -25,7 +25,8 @@ is, and a row that is not done leaves the item open.
 | `soksak-sidecar-pty` | Yes | It runs the shell, holds the output, and outlives the application generation |
 | `soksak-sidecar-terminal-*` | No | A mirror turns output into a grid and stores nothing (S1-3). Measured 2026-09-03: none of the six writes a file |
 | `soksak-plugin-terminal-*` | No | Every one declares `soksak-sidecar-pty` as its runtime dependency and shows that owner's sessions |
-| `soksak-plugin-browser-*` | **Not yet** | S1-1 states a browser view is a session and nothing owns it as one: the page is held in a native child webview this application's process owns, so it fails S1's first property and S1-2. Item 17 |
+| `soksak-sidecar-browser` | Yes | It holds a browser session's address, history and scroll, and outlives the application generation. It draws nothing: a page is in a view inside the application's window, and a view in a window is the property of the process that owns the window |
+| `soksak-plugin-browser-*` | No | Declares `soksak-sidecar-browser` and shows that owner's sessions |
 | `soksak-plugin-file-tree`, `soksak-plugin-process-monitor` | No | Reconstructed from the filesystem and from the process table (S1-1) |
 
 ## Rules for this work
@@ -59,7 +60,10 @@ is, and a row that is not done leaves the item open.
 | 14 | The mirror reports the modes a replay cannot rebuild | contract + owner | [x] | [x] | [x] `3d8cbe1` `3cc396d` |
 | 15 | The owner records the program that was running | each owner repository | [x] | [x] | [x] `f16ec9e` |
 | 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [x] | [x] | [x] `61ed75c` |
-| 17 | A browser view has an owner that outlives the display | `soksak-plugin-browser-wails3` | [ ] | [ ] | [ ] |
+| 17 | A browser view has an owner that outlives the display | `soksak-sidecar-browser` | [x] | [x] | [x] `8ca578b` `33a199e` |
+| 18 | The session mechanics are held once, not per owner | `soksak-kit-sidecar-session` | [x] | [x] | [x] `a915a88` `113488c` `039cdbb` |
+| 19 | The kit and the browser owner are published and installable | kit + owner + `soksak-spec` | [ ] | [ ] | [ ] |
+| 20 | The browser plugin drives its owner | `soksak-plugin-browser-wails3` | [ ] | [ ] | [ ] |
 
 ---
 
@@ -304,9 +308,62 @@ Items 1 to 5, 9 and 15 then run against that owner the way they ran against the 
 marked closed here because the owner set they name holds one member; a second member reopens them,
 which is why the set is written down rather than left to the phrase.
 
+Two ways were weighed and one was taken. A sidecar that holds the state gives a browser view what a
+shell already has, and every owner is then questioned the same way. Letting a plugin own sessions
+would have added a second route from the core to an owner and a command name per plugin, which is
+two answers to how an owner is asked — the thing this model removes everywhere else.
+
 Red: close the window a browser view is in and open it again. The page is a fresh one at the same
 address, with no history behind it and no scroll position.
 
-Check: the page returns with its history and its scroll position after the window closes, after the
-owner's process exits, and after an application restart. `session.list` reports it with an owner of
-its own, and `system.sessions` answers for it the way it answers for a shell.
+Check: the page returns with its history and its scroll position after the owner's process exits.
+Measured 2026-09-03 against the built owner: a session opened at one.example, navigated to
+two.example at scroll 250, stopped with SIGTERM, and came back `full` at that address with both
+history entries and the scroll intact.
+
+## 18. The session mechanics are held once, not per owner
+
+Owner: `soksak-kit-sidecar-session`.
+
+A version in every record name, an atomic write, a refusal when a record's stated id and its path
+disagree, a lock per session rather than per store, a stop write forced to the platter, and the
+two commands every owner answers. Two owners needed all of it, and a copy each is the old path the
+next change has to be made in twice.
+
+The kit holds the envelope and the owner holds what a session is: the payload is opaque bytes and
+nothing in the kit reads it, because a kit that parsed it would be a second definition.
+
+No accept loop. One owner turns a connection into a stream and the other does not, so a loop there
+would carry a hook built for a single user. The kit is parts.
+
+Red: two owners implement the same six mechanics, and a change to any of them has to be made twice.
+
+Check: the PTY daemon and the browser owner both take them from the kit, and neither holds its own.
+Both packages green, and the PTY daemon's behaviour is unchanged end to end — measured 2026-09-03:
+a session survived a stop and a start with its output, its modes and its recorded program intact.
+
+## 19. The kit and the browser owner are published and installable
+
+Owner: `soksak-kit-sidecar-session`, `soksak-sidecar-browser`, `soksak-spec`.
+
+Both are built and tested and neither is published. A local workspace resolves them; nothing else
+does, so the browser plugin's declared dependency names a version no environment can install.
+
+Red: the browser plugin declares `soksak-sidecar-browser` and no environment resolves it.
+
+Check: both are built and released by the pipeline every other component uses, `soksak-spec-sidecar-browser`
+is a declared interface, and an environment installs the owner from its manifest.
+
+## 20. The browser plugin drives its owner
+
+Owner: `soksak-plugin-browser-wails3`.
+
+The plugin declares the owner and does not yet speak to it. A page's address, history and scroll are
+observed in the view and have to reach the owner, and a restore has to apply what the owner holds to
+a new renderer.
+
+Red: a page navigates and the owner's record does not change.
+
+Check: navigating updates the owner's record; a view mounted after a restart opens at the address
+the owner holds, with its history and its scroll position; `session.attach` binds the view to the
+owner's session id.
