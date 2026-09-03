@@ -91,7 +91,7 @@ func TestAReaderNeverSeesAPartialValue(t *testing.T) {
 
 // A write in progress is not a key.
 //
-// The staged neighbour sits in the same directory as the value it will become, because rename is
+// The staged neighbour is in the same directory as the value it will become, because rename is
 // atomic only within one filesystem. It must not answer as a key of its own: a caller listing what
 // it stored would find a name it never wrote and cannot read.
 func TestAStagedWriteIsNotListedAsAKey(t *testing.T) {
