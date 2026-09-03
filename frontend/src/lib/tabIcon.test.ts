@@ -24,7 +24,8 @@ beforeEach(() => {
 
 describe("what a tab draws", () => {
   it("is the manifest icon when the view is registered and reported none", () => {
-    useViewRegistry.getState().register("plg-a", view(">_"), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register("plg-a", view(">_"), { restores: "none" as const, mount: () => {} });
     expect(tabIconOf({ pluginId: "plg-a", view: "content" })).toEqual({
       source: "manifest",
       value: ">_",
@@ -32,7 +33,8 @@ describe("what a tab draws", () => {
   });
 
   it("is the reported icon when the view reported one", () => {
-    useViewRegistry.getState().register("plg-a", view(">_"), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register("plg-a", view(">_"), { restores: "none" as const, mount: () => {} });
     expect(tabIconOf({ icon: "https://x/f.ico", pluginId: "plg-a", view: "content" })).toEqual({
       source: "reported",
       value: "https://x/f.ico",
@@ -47,7 +49,8 @@ describe("what a tab draws", () => {
   });
 
   it("is the same for two tabs of one view — the defect this reading was written for", () => {
-    useViewRegistry.getState().register("plg-a", view(">_"), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register("plg-a", view(">_"), { restores: "none" as const, mount: () => {} });
     const first = tabIconOf({ pluginId: "plg-a", view: "content" });
     const second = tabIconOf({ pluginId: "plg-a", view: "content" });
     expect(first).toEqual(second);

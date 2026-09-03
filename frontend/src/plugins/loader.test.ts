@@ -169,7 +169,8 @@ describe("activatePlugin — transparency rules (manifest static) at the activat
             description: "open",
             handler: async () => ({ ok: true, code: "OK", message: "ok" }),
           });
-          ctx.app.ui!.registerView("panel", { mount: () => {} });
+          restores: "none" as const,
+          ctx.app.ui!.registerView("panel", { restores: "none" as const, mount: () => {} });
         },
       },
       manifestOf({
@@ -389,7 +390,8 @@ describe("activatePlugin — lifecycle and disposal", () => {
         {
           activate: (ctx: PluginContext) => {
             // Explode after registering — no partially activated state may remain.
-            ctx.app.ui!.registerView("panel", { mount: () => {} });
+            restores: "none" as const,
+            ctx.app.ui!.registerView("panel", { restores: "none" as const, mount: () => {} });
             throw new Error("partial failure");
           },
         },
@@ -459,7 +461,7 @@ describe("activatePlugin — static module shape ({controller, commands, views})
         default: {
           controller: { activate: activateSpy, deactivate: vi.fn() },
           commands: { hello: async () => ({ ok: true }) },
-          views: { panel: { mount: vi.fn() } },
+          views: { panel: { restores: "none", mount: vi.fn() } },
         },
       },
       staticManifest(),
@@ -478,7 +480,7 @@ describe("activatePlugin — static module shape ({controller, commands, views})
       {
         default: {
           commands: { hello: async () => ({ ok: true }) },
-          views: { panel: { mount: vi.fn() } },
+          views: { panel: { restores: "none", mount: vi.fn() } },
         },
       },
       staticManifest(),
@@ -498,7 +500,7 @@ describe("activatePlugin — static module shape ({controller, commands, views})
       {
         default: {
           commands: { hello: async () => ({ ok: true, message: "Greeted" }) },
-          views: { panel: { mount: vi.fn() } },
+          views: { panel: { restores: "none", mount: vi.fn() } },
         },
       },
       staticManifest(),
@@ -520,7 +522,7 @@ describe("activatePlugin — static module shape ({controller, commands, views})
       {
         default: {
           commands: { hello: async () => ({ ok: true }) },
-          views: { panel: { mount: mountSpy } },
+          views: { panel: { restores: "none", mount: mountSpy } },
         },
       },
       staticManifest(),
@@ -565,7 +567,7 @@ describe("activatePlugin — static module shape ({controller, commands, views})
       {
         default: {
           commands: { hello: handler },
-          views: { panel: { mount: vi.fn() } },
+          views: { panel: { restores: "none", mount: vi.fn() } },
         },
       },
       staticManifest(),
@@ -596,7 +598,7 @@ describe("activatePlugin — static module shape ({controller, commands, views})
         default: {
           controller: { activate: vi.fn(), deactivate: deactivateSpy },
           commands: { hello: async () => ({ ok: true }) },
-          views: { panel: { mount: vi.fn() } },
+          views: { panel: { restores: "none", mount: vi.fn() } },
         },
       },
       staticManifest(),
@@ -614,7 +616,7 @@ describe("activatePlugin — static module shape ({controller, commands, views})
         {
           default: {
             commands: { hello: async () => ({ ok: true }) },
-            views: { panel: { mount: vi.fn() }, ghost: { mount: vi.fn() } },
+            views: { panel: { restores: "none", mount: vi.fn() }, ghost: { mount: vi.fn() } },
           },
         },
         staticManifest(),

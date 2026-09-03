@@ -27,7 +27,8 @@ const context = {
 function provider(
   hooks: Partial<PluginViewProvider>,
 ): PluginViewProvider {
-  return { mount: () => {}, ...hooks };
+  // These fixtures keep nothing, so "none" is what they declare (SESSION.md S1-5).
+  return { restores: "none", mount: () => {}, ...hooks };
 }
 
 function fixture() {

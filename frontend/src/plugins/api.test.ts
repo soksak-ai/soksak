@@ -548,14 +548,16 @@ describe("ui — an undeclared view is rejected and the registry is updated", ()
 
   it("throws on an undeclared viewId", () => {
     const { api } = buildPluginApi(uiManifest(), "/d", fakeDeps());
-    expect(() => api.ui!.registerView("ghost", { mount: () => {} })).toThrow(
+    restores: "none" as const,
+    expect(() => api.ui!.registerView("ghost", { restores: "none" as const, mount: () => {} })).toThrow(
       /contributes\.views.*ghost/,
     );
   });
 
   it("registers into viewRegistry and disposeAll takes it back", () => {
     const { api, tracker } = buildPluginApi(uiManifest(), "/d", fakeDeps());
-    api.ui!.registerView("panel", { mount: () => {} });
+    restores: "none" as const,
+    api.ui!.registerView("panel", { restores: "none" as const, mount: () => {} });
     expect(useViewRegistry.getState().views["demo.panel"]).toBeDefined();
     tracker.disposeAll();
     expect(useViewRegistry.getState().views["demo.panel"]).toBeUndefined();

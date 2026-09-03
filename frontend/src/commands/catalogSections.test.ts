@@ -31,17 +31,20 @@ describe("a set standing beside the work", () => {
   });
 
   it("stands when every section it holds lives beside the work", () => {
-    useViewRegistry.getState().register("plg-a", view(["side"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register("plg-a", view(["side"]), { restores: "none" as const, mount: () => {} });
     expect(refuseUnplaced(setOf("plg-a.tree"))).toBeNull();
   });
 
   it("names a section that lives on a tab rather than dropping it", () => {
-    useViewRegistry.getState().register("plg-a", view(["tab"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register("plg-a", view(["tab"]), { restores: "none" as const, mount: () => {} });
     expect(refuseUnplaced(setOf("plg-a.tree"))).toContain("plg-a.tree");
   });
 
   it("takes a section that lives on both", () => {
-    useViewRegistry.getState().register("plg-a", view(["tab", "side"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register("plg-a", view(["tab", "side"]), { restores: "none" as const, mount: () => {} });
     expect(refuseUnplaced(setOf("plg-a.tree"))).toBeNull();
   });
 
@@ -50,14 +53,16 @@ describe("a set standing beside the work", () => {
   });
 
   it("names every unplaced section, not the first", () => {
-    useViewRegistry.getState().register("plg-a", view(["side"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register("plg-a", view(["side"]), { restores: "none" as const, mount: () => {} });
     const refusal = refuseUnplaced(setOf("plg-a.tree", "plg-b.tree", "plg-c.tree"));
     expect(refusal).toContain("plg-b.tree");
     expect(refusal).toContain("plg-c.tree");
   });
 
   it("checks the addressed workspace when another workspace has the same region", async () => {
-    useViewRegistry.getState().register("plg-a", view(["side"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register("plg-a", view(["side"]), { restores: "none" as const, mount: () => {} });
     document.body.innerHTML = `
       <section data-workspace-plane="wsp-inactive">
         <aside data-region="rail"><div class="sidebar-body" data-region-sections=""></div></aside>

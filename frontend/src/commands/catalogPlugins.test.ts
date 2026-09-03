@@ -306,7 +306,7 @@ describe("plugin.view.open — only a center view opens as a tab", () => {
     const off = useViewRegistry.getState().register(
       "demo",
       { id: "panel", title: "Panel", icon: "P", surfaces: ["tab"], transparent: false, nativeSurface: false },
-      { mount: () => {} },
+      { restores: "none" as const, mount: () => {} },
     );
     try {
       const result = await execute("plugin.view.open", { viewKey: "demo.panel", callerLanguage: "en" }, {});
@@ -328,7 +328,7 @@ describe("plugin.view.open — only a center view opens as a tab", () => {
         transparent: false,
         nativeSurface: false,
       },
-      { mount: () => {} },
+      { restores: "none" as const, mount: () => {} },
     );
     useSessions.setState({ workspaces: [tabWith([])], activeId: "wsp-aaaaaa" } as never);
     const r = (await execute("plugin.view.open", { viewKey: "railplug.tree" }, {})) as {

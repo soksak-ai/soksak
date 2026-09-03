@@ -44,6 +44,7 @@ describe("a view that reports it was interacted with", () => {
     context = null;
     useViewRegistry.setState({ views: {}, badges: {}, version: 0 });
     useViewRegistry.getState().register(PLUGIN, decl, {
+      restores: "none" as const,
       mount: (_element, ctx) => {
         context = ctx;
       },

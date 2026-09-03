@@ -35,6 +35,7 @@ import {
   useViewRegistry,
   type PluginViewProvider,
 } from "./viewRegistry";
+import { restoreKindOf } from "./restoreDeclaration";
 import { useIconRegistry, validateIconSetData } from "../ui/icons/registry";
 import {
   registerStatusBarItem,
@@ -1578,6 +1579,9 @@ export function buildPluginApi(
               declared: manifest.contributes.views,
               idOf: (v) => v.id,
             });
+            // Refused here rather than at the first restore that goes wrong: a view with no
+            // declaration is a view whose every restore is unjudgeable (SESSION.md S1-5).
+            restoreKindOf(provider);
             registered.views.add(viewId);
             const registeredProvider = entrySource
               ? attachViewPresentationRuntime(provider, {

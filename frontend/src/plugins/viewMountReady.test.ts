@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { awaitViewMounted, registerMountedViewFocus } from "./viewFocus";
 import type { PluginViewProvider, PluginViewContext } from "./viewRegistry";
 
-const provider = { mount: () => {} } as unknown as PluginViewProvider;
+const provider = { restores: "none" as const, mount: () => {} } as unknown as PluginViewProvider;
 const ctx = () => ({}) as PluginViewContext;
 const mount = (viewId: string) =>
   registerMountedViewFocus(viewId, document.createElement("div"), provider, ctx);

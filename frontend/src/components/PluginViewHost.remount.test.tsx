@@ -39,6 +39,7 @@ describe("PluginViewHost — container generation isolation", () => {
     const containers: HTMLElement[] = [];
     const shadowAtMount: boolean[] = [];
     const provider = {
+      restores: "none" as const,
       mount(el: HTMLElement) {
         containers.push(el);
         shadowAtMount.push(el.shadowRoot != null);

@@ -9,6 +9,7 @@
 //     end gate).
 
 import { moduleState } from "../lib/moduleState";
+import type { RestoreKind } from "./restoreDeclaration";
 import {
   buildPluginApi,
   type Disposable,
@@ -67,6 +68,9 @@ interface EntryFns {
 
 // Provider shape of the SDK static module contract (plugins/spec SoksakPluginModule).
 interface StaticViewProvider {
+  // What this view needs to come back (SESSION.md S1-5). Required of a static view for the same
+  // reason as any other: the core cannot judge a restore of a view that declared nothing.
+  restores: RestoreKind;
   mount(context: unknown): void | Promise<void>;
   update?(context: unknown): void | Promise<void>;
   unmount?(context: unknown): void | Promise<void>;
@@ -104,6 +108,7 @@ function adaptStaticView(
     signal,
   });
   return {
+    restores: provider.restores,
     mount(el: HTMLElement, vctx: unknown) {
       aborts.get(el)?.abort();
       const ac = new AbortController();

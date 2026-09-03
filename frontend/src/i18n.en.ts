@@ -2001,6 +2001,8 @@ export const en: Record<MsgKey, string> = {
   "plugin.contrib.noun.command": "command",
   "plugin.contrib.noun.iconSet": "set",
   "plugin.contrib.noun.view": "view",
+  "plugin.view.restoreUndeclared":
+    "this view declares nothing about what it needs to come back, so no restore of it can be judged. Declare one of: {kinds}",
   "plugin.contrib.undeclared": "{noun} not declared in manifest contributes.{key}: {id}",
   "plugin.enabled.writeFailed": "Could not save plugin enabled settings: {error}",
   "plugin.engine.unmetNeeds": "{id}: not loaded — this framework cannot meet: {unmet}",

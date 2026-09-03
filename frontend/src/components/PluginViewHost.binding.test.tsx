@@ -115,6 +115,7 @@ describe("PluginViewHost — a changed binding is delivered to the view", () => 
     const seen: boolean[] = [];
     let initial: boolean | null = null;
     const provider = {
+      restores: "none" as const,
       mount(_el: HTMLElement, ctx: PluginViewContext) {
         initial = ctx.presentation().visible;
         ctx.onPresentationChange((presentation) => seen.push(presentation.visible));

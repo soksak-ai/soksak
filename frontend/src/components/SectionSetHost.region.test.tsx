@@ -81,7 +81,8 @@ describe("a region draws the set standing in it", () => {
 
   /** A `side` section, in a set, linked to one of the two places a plugin fills. */
   const stand = (place: "rail" | "right") => {
-    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { restores: "none" as const, mount: () => {} });
     const set = useSectionSets.getState().create("work");
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
     useSectionSets.getState().link(PLUGIN, place, set.id);
@@ -96,6 +97,7 @@ describe("a region draws the set standing in it", () => {
 
   it("mounts the active side provider rather than leaving only the section frame", async () => {
     useViewRegistry.getState().register(PLUGIN, view(["side"]), {
+      restores: "none" as const,
       mount: (container) => container.append("mounted"),
     });
     const set = useSectionSets.getState().create("work");
@@ -107,8 +109,10 @@ describe("a region draws the set standing in it", () => {
   });
 
   it("gives every exposed node a unique address when one region has split panes", () => {
-    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
-    useViewRegistry.getState().register(OTHER_PLUGIN, view(["side"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { restores: "none" as const, mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register(OTHER_PLUGIN, view(["side"]), { restores: "none" as const, mount: () => {} });
     const set = useSectionSets.getState().create("work");
     const first = `${PLUGIN}.tree`;
     const second = `${OTHER_PLUGIN}.tree`;
@@ -148,11 +152,12 @@ describe("a region draws the set standing in it", () => {
   });
 
   it("switches the standing rail set on the selected tab's plugin in the same render", () => {
-    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { restores: "none" as const, mount: () => {} });
     useViewRegistry.getState().register(
       OTHER_PLUGIN,
       { ...view(["side"]), title: { en: "Processes", ko: "Processes" } },
-      { mount: () => {} },
+      { restores: "none" as const, mount: () => {} },
     );
     const files = useSectionSets.getState().create("files");
     const processes = useSectionSets.getState().create("processes");
@@ -187,7 +192,8 @@ describe("a region draws the set standing in it", () => {
   });
 
   it("the left edge draws what was stood there, and no link touches it", () => {
-    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { restores: "none" as const, mount: () => {} });
     const set = useSectionSets.getState().create("work");
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
     useSectionSets.getState().link(PLUGIN, "rail", set.id);

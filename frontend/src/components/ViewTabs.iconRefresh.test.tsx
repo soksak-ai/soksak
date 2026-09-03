@@ -71,7 +71,8 @@ describe("a tab bar and the view registry", () => {
     expect(drawn()).toBe("fallback");
 
     act(() => {
-      useViewRegistry.getState().register("plg-a", VIEW, { mount: () => {} });
+      restores: "none" as const,
+      useViewRegistry.getState().register("plg-a", VIEW, { restores: "none" as const, mount: () => {} });
     });
 
     expect(drawn()).toBe("manifest");

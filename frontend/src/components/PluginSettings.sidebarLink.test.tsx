@@ -68,7 +68,8 @@ describe("the plugin settings sidebar link", () => {
     host.querySelector<HTMLSelectElement>(`[data-sidebar-set="${place}"]`);
 
   it("offers a composed sidebar and links it to this plugin when chosen", () => {
-    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { restores: "none" as const, mount: () => {} });
     const set = useSectionSets.getState().create("work");
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
     render();
@@ -89,7 +90,8 @@ describe("the plugin settings sidebar link", () => {
   it("does not offer a sidebar whose section lives on a tab", () => {
     // A tab view is opened as a tab; putting it in a set would drop it silently, and the person
      // would read that as the plugin failing rather than as the set being wrong.
-    useViewRegistry.getState().register(PLUGIN, view(["tab"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register(PLUGIN, view(["tab"]), { restores: "none" as const, mount: () => {} });
     const set = useSectionSets.getState().create("work");
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
     render();
@@ -99,7 +101,8 @@ describe("the plugin settings sidebar link", () => {
   });
 
   it("offers a section that lives beside the work in both places it can stand", () => {
-    useViewRegistry.getState().register(PLUGIN, view(["side"]), { mount: () => {} });
+    restores: "none" as const,
+    useViewRegistry.getState().register(PLUGIN, view(["side"]), { restores: "none" as const, mount: () => {} });
     const set = useSectionSets.getState().create("work");
     useSectionSets.getState().arrange(set.id, [`${PLUGIN}.tree`]);
     render();

@@ -101,6 +101,11 @@ export interface PluginViewFocusRequest {
 
 // A view implemented by a plugin. React is not required — it draws directly into the container DOM.
 export interface PluginViewProvider {
+  // What this view needs to come back (SESSION.md S1-5): "none", "view" or "session". Required —
+  // a view that declares nothing is refused at registration, because an absent record means one
+  // thing for a view that keeps nothing and another for a view that failed to read what it kept,
+  // and the core cannot tell those apart by looking.
+  restores: import("./restoreDeclaration").RestoreKind;
   // Product lifetime of the view instance. Ownership unrelated to DOM nodes, such as command
   // targets and state, is registered here. The same instance contract applies even when the
   // framework draws the DOM in a separate renderer. The returned cleanup runs after the

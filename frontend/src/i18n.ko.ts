@@ -2007,6 +2007,8 @@ export const ko = {
   "plugin.contrib.noun.command": "명령",
   "plugin.contrib.noun.iconSet": "셋",
   "plugin.contrib.noun.view": "뷰",
+  "plugin.view.restoreUndeclared":
+    "이 뷰는 돌아오기 위해 무엇이 필요한지 선언하지 않아, 복원을 판정할 수 없습니다. 다음 중 하나를 선언하십시오: {kinds}",
   "plugin.contrib.undeclared": "매니페스트 contributes.{key} 에 선언되지 않은 {noun}: {id}",
   "plugin.enabled.writeFailed": "플러그인 활성 설정을 저장하지 못했습니다: {error}",
   "plugin.engine.unmetNeeds": "{id}: 이 프레임워크가 못 채우는 요구가 있어 적재하지 않습니다 — {unmet}",
