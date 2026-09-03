@@ -231,11 +231,12 @@ stop is the point a power cycle recovers from.
 ### S4-6. What is removed
 
 A record outlives the process that wrote it, so nothing removes it on its own. An owner removes a
-record when its session closes, and at start it removes every record no session in the core's index
-names.
+record when its session closes.
 
-Removal at start is the only sweep. An owner that never swept would grow its store by every session
-that ever ran.
+A start removes nothing. Every record an owner finds at start is a session the previous process
+held, and that is what a restore stands back up; a sweep there would delete exactly what S6 exists
+to recover. What bounds the store is the close: a restored session nothing attaches to reaches its
+abandon window, ends, and takes its record with it.
 
 ## S5. States
 
@@ -430,7 +431,6 @@ not read an owner's store.
 | A record left by a killed owner is not marked cleanly ended | Owner repository test per owner |
 | A drain that hits its deadline leaves the record unmarked | Owner repository test per owner |
 | A record in an older format version is not found | Owner repository test per owner |
-| A record no session in the index names is removed at start | Owner repository test per owner |
 | A slow store loses bytes loudly and does not pause the session | Contract conformance test per owner |
 | Output written while no stop happened is recovered | Owner repository test per owner |
 | A lost session is counted | Core test: the count is a number, and it is zero |

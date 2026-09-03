@@ -33,8 +33,8 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 1 | Session state and process state are separated per owner | each owner repository | [x] pty | [x] pty | [x] pty `066e3be` |
 | 2 | The owner's id form does not repeat across its restarts | each owner repository | [x] pty | [x] pty | [x] pty `14a664c` |
 | 3 | The owner writes at creation, at stop and at close, atomically | each owner repository | [x] pty | [x] pty | [x] pty `66bf962` `1e50f0d` |
-| 4 | One session's record is isolated from every other | each owner repository | [ ] | [ ] | [ ] |
-| 5 | One session survives its owner's process exiting | owner + core | [ ] | [ ] | [ ] |
+| 4 | One session's record is isolated from every other | each owner repository | [x] pty | [x] pty | [x] pty `71a0b13` |
+| 5 | One session survives its owner's process exiting | owner + core | [x] pty | [x] pty | [x] pty `7fc12af` |
 | 6 | The core records every session id of a view beside its coordinate | `soksak-core` | [ ] | [ ] | [ ] |
 | 7 | `session.list` | `soksak-core` | [ ] | [ ] | [ ] |
 | 8 | `session.attach`, `session.detach`, `session.close` | `soksak-core` | [ ] | [ ] | [ ] |
@@ -108,15 +108,15 @@ not found. Item 5 covers the uncontrolled exit; this item covers the controlled 
 
 Owner: each owner repository.
 
-Derive each record's path from the session id. Serialize writes per session id. At start, remove
-every record no session in the core's index names.
+Derive each record's path from the session id. Take a lock per session id, never one for the whole
+store: a write through one lock pauses every other session for the length of a disk write.
 
 Red: two sessions writing concurrently produce one record holding the other's field, or a write to
 one path while another session's write is in flight.
 
-Check: concurrent writes for two sessions leave two records, each stating its own id. A record
-whose id does not match its path is refused. A record the index does not name is gone after a
-start, and a record it names is untouched.
+Check: concurrent writes for two sessions leave two records, each holding only its own output. A
+record whose id does not match its path is refused. A write for one session completes while another
+session's lock is held.
 
 ## 5. One session survives its owner's process exiting
 
