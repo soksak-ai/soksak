@@ -73,6 +73,17 @@ so the `prepare`, `verify` and `build` targets refuse to run without it. Make fo
 scoped registry flags: the `scripts/ci` scripts take pnpm options as trailing arguments and the
 Taskfile takes them as `PNPM_FLAGS`. No `.npmrc` takes part.
 
+`REGISTRY` is a build input and not a component transport. What it serves is the npm packages the
+frontend compiles against — the Spec validator, the terminal kit, the terminal plugin contract. What
+installs a Plugin or a Sidecar is the release closure in
+[`ENVIRONMENT-AND-INSTALLATION.md`](ENVIRONMENT-AND-INSTALLATION.md), whose two transports are an
+HTTPS release directory and an addressed local store. The two are separate: a component is never
+resolved through `REGISTRY`, and a build input is never installed as a record.
+
+Measured 2026-09-04: a repository pinned its Spec validator to a GitHub release asset URL, the
+release was deleted, and the install stopped resolving. The version and the lockfile integrity are
+what make a build input exact; the release was a location, and a location can go.
+
 `WAILS3` overrides, a global `wails3`, a separately installed Task binary and versioned tool paths
 in scripts are forbidden. An absolute workstation path may appear in an evidence record as the
 observed executable, but never in source, a lockfile, a workflow or a release artifact.

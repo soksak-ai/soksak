@@ -73,6 +73,16 @@ go tool wails3 dev
 scoped registry 플래그로 전달합니다. `scripts/ci`의 script는 pnpm option을 뒤따르는 인자로 받고,
 Taskfile은 `PNPM_FLAGS`로 받습니다. `.npmrc`는 관여하지 않습니다.
 
+`REGISTRY` 는 빌드 입력이지 컴포넌트 전송이 아닙니다. 그것이 제공하는 것은 프론트엔드가 컴파일하며
+의존하는 npm 패키지입니다 — Spec validator, 터미널 킷, 터미널 플러그인 계약. Plugin 이나 Sidecar 를
+설치하는 것은 [`ENVIRONMENT-AND-INSTALLATION.md`](ENVIRONMENT-AND-INSTALLATION.md) 의 릴리즈
+closure 이고, 그 전송은 HTTPS 릴리즈 디렉터리와 주소로 지정된 로컬 store 둘입니다. 둘은 별개입니다.
+컴포넌트는 `REGISTRY` 로 해석되지 않고, 빌드 입력은 record 로 설치되지 않습니다.
+
+2026-09-04 측정: 한 저장소가 Spec validator 를 GitHub 릴리즈 asset URL 로 고정했고, 그 릴리즈가
+삭제되자 설치가 해석되지 않았습니다. 빌드 입력을 정확하게 만드는 것은 버전과 lockfile integrity 이고,
+릴리즈는 위치이며 위치는 사라질 수 있습니다.
+
 `WAILS3` override, global `wails3`, 별도로 설치한 Task binary, script에 기록한 version별 tool
 경로는 금지합니다. Workstation absolute path는 관측된 executable을 나타내는 evidence record에는
 들어갈 수 있지만 소스, lockfile, 워크플로, 릴리즈 산출물에는 들어갈 수 없습니다.

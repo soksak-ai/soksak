@@ -39,6 +39,33 @@ emptying the ledger then opens nothing on the next run.
 A window that has never been closed is therefore legitimately absent from the
 ledger while it is open.
 
+## P2-1. A durable write is published, never written into
+
+Writing into the file a reader reads is not one step. The open truncates, so a reader arriving
+between the truncate and the last byte sees a file that is neither the old contents nor the new
+ones, and a write that dies part-way leaves that on disk permanently.
+
+Measured 2026-09-03: a reader read **0 bytes** of a 1 MiB value on the first round of a concurrency
+probe against a plain write. Five writers held that shape — a plugin's stored values, the install
+commit journal that recovery reads after a crash, a sidecar's adoption record, the person's own file
+save, and a window capture, which this repository's own workflow reads as soon as it is taken.
+
+`core/atomicfile.Publish` is the one way to do it: the contents go to a neighbour in the same
+directory and the neighbour is renamed over the target, which is one step. A gate names every
+remaining `os.WriteFile` with the reason no reader can arrive mid-write.
+
+Each write stages its own neighbour. A name shared per process publishes half of each of two
+concurrent writes — the same splice, one step later.
+
+A path that is a link publishes onto what it points at. Rename replaces what it lands on, and a
+person who symlinked a file into place expects the link to survive their save. This repository makes
+no links of its own; a second gate holds that, and paths are resolved from what is declared.
+
+Reaching the platter is a separate question from being one step. A write that has to survive a
+process exit is done when the operating system has it; one that has to survive a power cycle is not,
+because page cache does not. Only the writes of the second kind pay `Sync` — see `SESSION.md` S4-5,
+where the stop write is the one that does.
+
 ## P3. A snapshot with no slot is forgotten
 
 Measured 2026-08-16: the ledger held 3 slots and the store held 24 snapshots.
