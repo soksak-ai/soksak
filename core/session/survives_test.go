@@ -139,3 +139,26 @@ func stateOfOne(t *testing.T, store Writer, session string) string {
 	t.Fatalf("session %s is not in the listing", session)
 	return ""
 }
+
+// A session released by session.detach is listed as detached, not gone.
+//
+// S5: only a closed session returns nothing. S6-5: the core offers every detached session. A
+// release that took the session out of the listing left a shell running with nothing addressing it.
+func TestAReleasedSessionIsListedAsDetached(t *testing.T) {
+	store := &memoryStore{values: map[string]string{
+		"windows":      `{"slots":[{"label":"w-one"}]}`,
+		"window/w-one": activeViewSnapshot("pan-a", "tab-a", []string{"tab-a"}),
+	}}
+	if err := Attach(store, Attachment{Session: "7", Owner: "pty", ViewID: "tab-a", WindowLabel: "w-one"}); err != nil {
+		t.Fatal(err)
+	}
+	if state := stateOfOne(t, store, "7"); state != StateLive {
+		t.Fatalf("a shown session reports %q", state)
+	}
+	if err := Detach(store, "7"); err != nil {
+		t.Fatal(err)
+	}
+	if state := stateOfOne(t, store, "7"); state != StateDetached {
+		t.Fatalf("a released session reports %q, not detached", state)
+	}
+}
