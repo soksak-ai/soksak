@@ -132,13 +132,33 @@ func Register(registry *control.Registry, deps Registration) {
 		Name:  "session_close",
 		Owner: control.OwnerCore,
 		Handler: func(args control.Args) (any, error) {
-			named, err := control.Arg[string](args, "session")
+			// Named by session, or by the view holding them. A view is what the person closes and a
+			// session is what the owner ends, and the index is what joins the two — so the caller
+			// closing a view names it rather than looking the sessions up and closing each, which
+			// would put the core's index in the caller.
+			view, err := control.OptionalArg(args, "view", "")
 			if err != nil {
 				return nil, err
+			}
+			named, err := control.OptionalArg(args, "session", "")
+			if err != nil {
+				return nil, err
+			}
+			if (view == "") == (named == "") {
+				return nil, i18n.Errorf("session.close.nameOne", nil)
 			}
 			index, err := ReadIndex(deps.Store)
 			if err != nil {
 				return nil, err
+			}
+			if view != "" {
+				closed, err := CloseView(deps.Store, index, view, func(session string) Order {
+					return deps.Router.CloseIn(windowOf(index, session))
+				})
+				if err != nil {
+					return nil, err
+				}
+				return map[string]any{"view": view, "closed": closed}, nil
 			}
 			return CloseAndForget(deps.Store, index, named, deps.Router.CloseIn(windowOf(index, named)))
 		},

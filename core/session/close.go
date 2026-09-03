@@ -1,6 +1,8 @@
 package session
 
 import (
+	"errors"
+
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
@@ -78,4 +80,32 @@ func CloseAndForget(store Writer, index []Entry, session string, order Order) (C
 		return Closed{SessionCloseResult: result, Indexed: false}, nil
 	}
 	return Closed{SessionCloseResult: result, Indexed: true}, nil
+}
+
+// CloseView ends every session attached to one view, and answers those that ended.
+//
+// A view leaves the layout by more paths than any one of them can observe: the shortcut, the close
+// button, a space closing, a project closing. Resolving the close from the index rather than from
+// the view covers all of them at once, and covers the two cases a view cannot answer for itself —
+// a view whose body was never mounted, and a view already taken out of the tree.
+//
+// Closing the view is the person's act and it is finished either way, so one owner refusing does
+// not stop the rest: stopping would leave the later sessions attached to a view that is gone, which
+// nothing addresses. The refusals come back together and their attachments stay, because a session
+// its owner still holds must keep being listed.
+func CloseView(store Writer, index []Entry, view string, orderTo func(session string) Order) ([]Closed, error) {
+	var closed []Closed
+	var refusals []error
+	for _, entry := range index {
+		if entry.ViewID != view {
+			continue
+		}
+		result, err := CloseAndForget(store, index, entry.Session, orderTo(entry.Session))
+		if err != nil {
+			refusals = append(refusals, err)
+			continue
+		}
+		closed = append(closed, result)
+	}
+	return closed, errors.Join(refusals...)
 }

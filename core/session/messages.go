@@ -11,6 +11,10 @@ func init() {
 			EN: "an attachment names no session, so nothing states which session a view holds",
 			KO: "attachment 이 session 을 명시하지 않아, view 가 어느 session 을 드는지 아무것도 말하지 않습니다",
 		},
+		"session.close.nameOne": {
+			EN: "a close names one session or one view, never both and never neither",
+			KO: "close 는 session 하나 또는 view 하나를 지목하고, 둘 다도 아무것도 아닌 것도 아닙니다",
+		},
 		"session.close.notInIndex": {
 			EN: "no session {session} in this index, so nothing names the component that would end it",
 			KO: "이 index 에 session {session} 이 없어, 그것을 끝낼 컴포넌트를 아무것도 명시하지 않습니다",
