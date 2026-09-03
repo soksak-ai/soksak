@@ -235,7 +235,7 @@ record when its session closes.
 
 A start removes nothing. Every record an owner finds at start is a session the previous process
 held, and that is what a restore stands back up; a sweep there would delete exactly what S6 exists
-to recover. What bounds the store is the close: a restored session nothing attaches to reaches its
+to recover. What bounds the store is the close: a restored session nothing attaches to passes its
 abandon window, ends, and takes its record with it.
 
 ## S5. States
