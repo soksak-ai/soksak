@@ -88,8 +88,8 @@ func answered(request controlwire.Request) controlwire.Response {
 }
 
 // A plugin serves its commands under the name the host gives them, and the core has to send that
-// name. One built a different way reaches nothing, and the owner reports orphaned forever with no
-// error to say why.
+// name. One built a different way addresses nothing, and the owner reports orphaned forever with
+// no error to say why.
 func TestAPluginOwnerIsAddressedByTheNameItsCommandsAreServedUnder(t *testing.T) {
 	var sent string
 	ask := AskEither(

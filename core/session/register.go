@@ -269,7 +269,7 @@ func OrderEither(running func(name string) bool, toUnit, toRenderer Send) Order 
 // PluginCommandName is how a plugin's command is named on the registry.
 //
 // A plugin serves under `plugin.<id>.<command>` and the core has to send that name. One built a
-// different way reaches nothing, and the owner reports orphaned forever with no error to say why.
+// different way addresses nothing, and the owner reports orphaned forever with no error to say why.
 // The shape is the host's, so it is written down once here rather than assembled at each caller.
 func PluginCommandName(owner, command string) string {
 	return "plugin." + owner + "." + command
