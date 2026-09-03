@@ -41,7 +41,7 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 9 | The restore outcome is reported | contract + owner | [x] pty | [x] pty | [x] pty `b850f86` `0ab78e6` |
 | 10 | A session survives its window closing | `soksak-core` | [x] | [x] | [x] `9bc431b` |
 | 11 | A session survives an application restart | `soksak-core` | [x] | [x] | [x] `9bc431b` |
-| 12 | An owner restarting notifies its live sessions | contract + core | [ ] | [ ] | [ ] |
+| 12 | An owner restarting notifies its live sessions | contract + core | [x] | [x] | [x] `ed039ac` |
 | 13 | The lost-session count is exposed and is zero | `soksak-core` | [x] | [x] | [x] `b2c938f` |
 | 14 | The mirror reports the modes a replay cannot rebuild | contract + owner | [ ] | [ ] | [ ] |
 | 15 | The owner records the program that was running | each owner repository | [ ] | [ ] | [ ] |
