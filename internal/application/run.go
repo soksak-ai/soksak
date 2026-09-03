@@ -169,9 +169,9 @@ func Run(assets embed.FS) error {
 		},
 		Sink: wails.NewSidecarSink(bridge),
 	})
-	// The core reads its own index and puts one question to each owner. It learns nothing about an
-	// owner beyond the name the index holds: a question named per owner would make the core know
-	// which owner it was addressing before it could ask.
+	// The core reads its own index and puts one question to each owner. The name the index holds is
+	// the whole of what it has for an owner: a question named per owner would require the core to
+	// hold which owner it was addressing before it could ask.
 	sessionAsk := session.AskThrough(units.Send)
 	// Filled once the home is ours. Nothing this installation owns — least of
 	// all its database — is touched by a process that has not claimed it.
