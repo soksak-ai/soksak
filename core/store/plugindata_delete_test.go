@@ -39,19 +39,23 @@ func TestDeletingWhatWasNeverWrittenIsNotAFailure(t *testing.T) {
 	}
 }
 
-// A key another plugin's data would be reached through is refused, the same as it is for a read and
-// a write. A delete is the one that would destroy rather than expose.
+// A key another plugin's data would be addressed through is refused, the same as a read and a write
+// refuse it. A delete is the one that would destroy rather than expose.
+//
+// The neighbour is named for what it is rather than after a repository. A literal shaped like a
+// sibling's path puts this file on the wrong side of the boundary gate, and the traversal being
+// refused here is the shape and not any particular name.
 func TestADeleteCannotReachAnotherPluginsData(t *testing.T) {
 	base := t.TempDir()
-	if err := writePluginData(base, "soksak-plugin-other", "kept", "value"); err != nil {
+	if err := writePluginData(base, "a-neighbour", "kept", "value"); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"../soksak-plugin-other/kept", "..", "/etc/passwd"} {
+	for _, key := range []string{"../a-neighbour/kept", "..", "/etc/passwd"} {
 		if err := deletePluginData(base, "soksak-plugin-example", key); err == nil {
 			t.Errorf("a delete of %q was accepted", key)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(base, "soksak-plugin-other")); err != nil {
+	if _, err := os.Stat(filepath.Join(base, "a-neighbour")); err != nil {
 		t.Fatalf("another plugin's directory did not survive: %v", err)
 	}
 }

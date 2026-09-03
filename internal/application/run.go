@@ -169,15 +169,34 @@ func Run(assets embed.FS) error {
 		},
 		Sink: wails.NewSidecarSink(bridge),
 	})
-	// The core reads its own index and puts one question to each owner. The name the index holds is
-	// the whole of what it has for an owner: a question named per owner would require the core to
-	// hold which owner it was addressing before it could ask.
-	sessionAsk := session.AskThrough(units.Send)
+	// The core reads its own index and puts one question to each owner. Where the owner runs is not
+	// the question: a unit answers it over its own socket and a plugin answers it in the renderer,
+	// and the command is the same either way — a caller cannot tell where a command runs, which is
+	// what one registry is for.
+	unitRunning := func(name string) bool {
+		for _, open := range units.Started() {
+			if open.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+	throughRenderer := func(owner string, request controlwire.Request) (controlwire.Response, error) {
+		// A plugin serves its commands under its own id, so the name the index holds is what puts
+		// the question in front of the right one.
+		answer, err := registry.Invoke(owner+"."+request.Command, control.Args(request.Args))
+		if err != nil {
+			return controlwire.Response{}, err
+		}
+		return controlwire.Response{Ok: true, Result: answer}, nil
+	}
 	// Filled once the home is ours. Nothing this installation owns — least of
 	// all its database — is touched by a process that has not claimed it.
 	fill := func(kv *store.KV) {
 		session.Register(registry, session.Registration{
-			Store: kv, Ask: sessionAsk, Order: session.OrderThrough(units.Send),
+			Store: kv,
+			Ask:   session.AskEither(unitRunning, units.Send, throughRenderer),
+			Order: session.OrderEither(unitRunning, units.Send, throughRenderer),
 		})
 		wired := boot.RegisterCore(registry, boot.Boot{
 			Identity:     resolved,

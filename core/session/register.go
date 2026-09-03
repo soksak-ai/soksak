@@ -231,3 +231,37 @@ type errRefused struct{ owner, reason string }
 func (err errRefused) Error() string {
 	return "the component " + err.owner + " refused the session question: " + err.reason
 }
+
+// AskEither sends the session question to whichever place the owner runs in.
+//
+// An owner is a component that holds sessions, and where it runs is not the question. Some run in a
+// process of their own and some run in the renderer; the core sends the same command either way,
+// because a caller cannot tell where a command runs and that is the point of one registry.
+//
+// `running` answers whether a name is a unit this host has open. A name that is not takes the other
+// route rather than being refused: a plugin is not a unit and holds sessions all the same.
+func AskEither(running func(name string) bool, toUnit, toRenderer Send) Ask {
+	return func(owner string, sessions []string) (controlwire.SessionReport, error) {
+		send := toRenderer
+		if running(owner) {
+			send = toUnit
+		}
+		var report controlwire.SessionReport
+		err := callOwner(send, owner, controlwire.SessionsCommand,
+			controlwire.SessionsRequest{Sessions: sessions}, &report)
+		return report, err
+	}
+}
+
+// OrderEither sends the close to whichever place the owner runs in, for the same reason.
+func OrderEither(running func(name string) bool, toUnit, toRenderer Send) Order {
+	return func(owner string, request controlwire.SessionCloseRequest) (controlwire.SessionCloseResult, error) {
+		send := toRenderer
+		if running(owner) {
+			send = toUnit
+		}
+		var result controlwire.SessionCloseResult
+		err := callOwner(send, owner, controlwire.SessionCloseCommand, request, &result)
+		return result, err
+	}
+}
