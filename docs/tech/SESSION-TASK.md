@@ -15,6 +15,19 @@ One session is made correct before any work on several. Item 5 is the boundary: 
 starts until items 1 to 4 close. Every item leaves a working product — a later item adds a state or
 a command to what already runs, and none replaces a working path with an unfinished one.
 
+## Who owns sessions
+
+"Each owner repository" is this list and nothing else. An item spanning it is closed when every row
+is, and a row that is not done leaves the item open.
+
+| Component | Owns sessions | Why |
+| --- | --- | --- |
+| `soksak-sidecar-pty` | Yes | It runs the shell, holds the output, and outlives the application generation |
+| `soksak-sidecar-terminal-*` | No | A mirror turns output into a grid and stores nothing (S1-3). Measured 2026-09-03: none of the six writes a file |
+| `soksak-plugin-terminal-*` | No | Every one declares `soksak-sidecar-pty` as its runtime dependency and shows that owner's sessions |
+| `soksak-plugin-browser-*` | **Not yet** | S1-1 states a browser view is a session and nothing owns it as one: the page is held in a native child webview this application's process owns, so it fails S1's first property and S1-2. Item 17 |
+| `soksak-plugin-file-tree`, `soksak-plugin-process-monitor` | No | Reconstructed from the filesystem and from the process table (S1-1) |
+
 ## Rules for this work
 
 - Establish a mechanical red before implementation and confirm it fails for the stated reason.
@@ -30,22 +43,23 @@ a command to what already runs, and none replaces a working path with an unfinis
 
 | # | Item | Repository | Red | Implementation | Check |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Session state and process state are separated per owner | each owner repository | [x] pty | [x] pty | [x] pty `066e3be` |
-| 2 | The owner's id form does not repeat across its restarts | each owner repository | [x] pty | [x] pty | [x] pty `14a664c` |
-| 3 | The owner writes at creation, at stop and at close, atomically | each owner repository | [x] pty | [x] pty | [x] pty `66bf962` `1e50f0d` |
-| 4 | One session's record is isolated from every other | each owner repository | [x] pty | [x] pty | [x] pty `71a0b13` |
-| 5 | One session survives its owner's process exiting | owner + core | [x] pty | [x] pty | [x] pty `7fc12af` |
+| 1 | Session state and process state are separated per owner | each owner repository | [x] | [x] | [x] `066e3be` |
+| 2 | The owner's id form does not repeat across its restarts | each owner repository | [x] | [x] | [x] `14a664c` |
+| 3 | The owner writes at creation, at stop and at close, atomically | each owner repository | [x] | [x] | [x] `66bf962` `1e50f0d` |
+| 4 | One session's record is isolated from every other | each owner repository | [x] | [x] | [x] `71a0b13` |
+| 5 | One session survives its owner's process exiting | owner + core | [x] | [x] | [x] `7fc12af` |
 | 6 | The core records every session id of a view beside its coordinate | `soksak-core` | [x] | [x] | [x] `9bc431b` |
 | 7 | `session.list` | `soksak-core` | [x] | [x] | [x] `70c3060` `14bfe6d` |
 | 8 | `session.attach`, `session.detach`, `session.close` | `soksak-core` | [x] | [x] | [x] `be7fdaa` `65e39b4` `8699c40` `7c0321b` |
-| 9 | The restore outcome is reported | contract + owner | [x] pty | [x] pty | [x] pty `b850f86` `0ab78e6` |
+| 9 | The restore outcome is reported | contract + owner | [x] | [x] | [x] `b850f86` `0ab78e6` |
 | 10 | A session survives its window closing | `soksak-core` | [x] | [x] | [x] `9bc431b` |
 | 11 | A session survives an application restart | `soksak-core` | [x] | [x] | [x] `9bc431b` |
 | 12 | An owner restarting notifies its live sessions | contract + core | [x] | [x] | [x] `ed039ac` |
 | 13 | The lost-session count is exposed and is zero | `soksak-core` | [x] | [x] | [x] `b2c938f` |
 | 14 | The mirror reports the modes a replay cannot rebuild | contract + owner | [x] | [x] | [x] `3d8cbe1` `3cc396d` |
-| 15 | The owner records the program that was running | each owner repository | [x] pty | [x] pty | [x] pty `f16ec9e` |
+| 15 | The owner records the program that was running | each owner repository | [x] | [x] | [x] `f16ec9e` |
 | 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [x] | [x] | [x] `61ed75c` |
+| 17 | A browser view has an owner that outlives the display | `soksak-plugin-browser-wails3` | [ ] | [ ] | [ ] |
 
 ---
 
@@ -271,3 +285,28 @@ Red: the handoff document states a rule the session document contradicts.
 
 Check: every rule in the handoff document is derivable from `SESSION.md`, and the two documents
 state no conflicting rule. `COMPONENT-HANDOFF-TASK.md` items are renumbered under this order.
+
+## 17. A browser view has an owner that outlives the display
+
+Owner: `soksak-plugin-browser-wails3`.
+
+S1-1 states a browser view is a session: the navigation history and the scroll position are what a
+later attachment needs, and neither is derivable. Nothing owns it as one. The page is held in a
+native child webview this application's process owns, so the work ends when the window does — it
+fails S1's first property, and S1-2 requires the owner to be a sidecar rather than the core.
+
+Two ways to close this, and they are not equivalent. Declaring a sidecar that holds the pages gives
+a browser view what a shell already has. Striking the row from S1-1 makes a browser view not a
+session, which contradicts the reason it was written: losing a page's history costs work, not time.
+So the first is the one this item takes.
+
+Items 1 to 5, 9 and 15 then run against that owner the way they ran against the PTY daemon. They are
+marked closed here because the owner set they name holds one member; a second member reopens them,
+which is why the set is written down rather than left to the phrase.
+
+Red: close the window a browser view is in and open it again. The page is a fresh one at the same
+address, with no history behind it and no scroll position.
+
+Check: the page returns with its history and its scroll position after the window closes, after the
+owner's process exits, and after an application restart. `session.list` reports it with an owner of
+its own, and `system.sessions` answers for it the way it answers for a shell.
