@@ -90,7 +90,7 @@ func TestTheCoordinateIsStoredBesideTheId(t *testing.T) {
 	if index[0].Session != "7" || index[0].ViewID != "v2" || index[0].WindowLabel != "w-two" {
 		t.Fatalf("the moved session reads %+v", index[0])
 	}
-	// And the id is not built out of the coordinate it now sits at.
+	// And the id is not built out of the coordinate recorded beside it.
 	if strings.Contains(index[0].Session, index[0].WindowLabel) ||
 		strings.Contains(index[0].Session, index[0].ViewID) {
 		t.Fatalf("the stored id was derived from the coordinate: %+v", index[0])
