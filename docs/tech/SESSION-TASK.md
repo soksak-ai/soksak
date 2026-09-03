@@ -38,7 +38,7 @@ a command to what already runs, and none replaces a working path with an unfinis
 | 6 | The core records every session id of a view beside its coordinate | `soksak-core` | [ ] | [ ] | [ ] |
 | 7 | `session.list` | `soksak-core` | [ ] | [ ] | [ ] |
 | 8 | `session.attach`, `session.detach`, `session.close` | `soksak-core` | [ ] | [ ] | [ ] |
-| 9 | The restore outcome is reported | contract + owner | [ ] | [ ] | [ ] |
+| 9 | The restore outcome is reported | contract + owner | [x] pty | [x] pty | [x] pty `b850f86` `0ab78e6` |
 | 10 | A session survives its window closing | `soksak-core` | [ ] | [ ] | [ ] |
 | 11 | A session survives an application restart | `soksak-core` | [ ] | [ ] | [ ] |
 | 12 | An owner restarting notifies its live sessions | contract + core | [ ] | [ ] | [ ] |
