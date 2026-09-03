@@ -497,7 +497,7 @@ not read an owner's store.
 
 | Claim | Gate |
 | --- | --- |
-| The core records no id it derived from a coordinate | Core test over the index writer |
+| The core records no id it derived from a coordinate | `core/session/identity_gate_test.go` |
 | An owner's id does not repeat across its restarts | Owner repository test per owner |
 | A session survives its window closing | Core test: close the window, `session.list` reports `detached` |
 | A session survives its owner's process exiting | Core test with a fake owner: kill it, `session.list` reports `orphaned` |
@@ -505,16 +505,16 @@ not read an owner's store.
 | A session restored after its owner was stopped and started reports `full` | Owner repository test per owner |
 | A screen restored after a stop equals the screen before it, alternate screen included | Contract conformance test per owner |
 | A screen with no process behind it is presented flattened | Contract conformance test per owner |
-| A restore starts no program on its own | Owner repository test per owner |
+| A restore starts no program on its own | Owner repository test per owner (`restore_gates_test.go` for the PTY) |
 | A session whose owner is not running reports `orphaned`, never `lost` | Core test with no owner process |
 | A close aimed at a session whose owner is not running is refused | Core test |
-| A partial record is never read | Owner repository test per owner |
+| A partial record is never read | Owner repository test per owner (`restore_gates_test.go` for the PTY), and `core/store/plugindata_atomic_test.go` for the write that would produce one |
 | One session's record is not written by another session | Owner repository test per owner |
 | A degraded restore is reported as degraded | Contract conformance test per owner |
 | A record left by a killed owner is not marked cleanly ended | Owner repository test per owner |
 | A drain that hits its deadline does not report a full restore | Owner repository test per owner |
 | A record in an older format version is not found | Owner repository test per owner |
-| A slow store loses bytes loudly and does not pause the session | Contract conformance test per owner |
+| A slow store loses bytes loudly and does not pause the session | Owner repository test per owner (`feed_test.go` for the PTY) |
 | Output written while no stop happened is recovered | Owner repository test per owner |
 | A lost session is counted | Core test: the count is a number, and it is zero |
 

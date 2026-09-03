@@ -474,7 +474,7 @@ session 에는 그것이 없으며, 필드는 `full` 로 기본값을 주는 대
 
 | 주장 | Gate |
 | --- | --- |
-| 코어는 좌표에서 유도한 id 를 기록하지 않는다 | index 를 쓰는 쪽에 대한 코어 테스트 |
+| 코어는 좌표에서 유도한 id 를 기록하지 않는다 | `core/session/identity_gate_test.go` |
 | 소유자의 id 는 자기 재시작을 가로질러 반복되지 않는다 | 소유자별 저장소 테스트 |
 | session 은 자기 창이 닫혀도 살아남는다 | 코어 테스트: 창을 닫고 `session.list` 가 `detached` 를 보고 |
 | session 은 소유자 프로세스가 종료돼도 살아남는다 | fake 소유자를 쓰는 코어 테스트: kill 후 `session.list` 가 `orphaned` 를 보고 |
@@ -482,13 +482,13 @@ session 에는 그것이 없으며, 필드는 `full` 로 기본값을 주는 대
 | 소유자를 정지시켰다 시작한 뒤 복원된 session 은 `full` 을 보고한다 | 소유자별 저장소 테스트 |
 | 기한에 걸린 배수는 복원을 full 로 보고하지 않는다 | 소유자별 저장소 테스트 |
 | 옛 형식 버전의 기록은 찾아지지 않는다 | 소유자별 저장소 테스트 |
-| 느린 저장소는 바이트를 크게 알리며 잃고 session 을 멈추지 않는다 | 소유자별 contract conformance 테스트 |
+| 느린 저장소는 바이트를 크게 알리며 잃고 session 을 멈추지 않는다 | 소유자별 저장소 테스트 (PTY 는 `feed_test.go`) |
 | 정지 후 복원된 화면은 alternate screen 을 포함해 정지 전 화면과 같다 | 소유자별 contract conformance 테스트 |
 | 뒤에 프로세스가 없는 화면은 flatten 되어 제시된다 | 소유자별 contract conformance 테스트 |
-| restore 는 스스로 어떤 프로그램도 시작하지 않는다 | 소유자별 저장소 테스트 |
+| restore 는 스스로 어떤 프로그램도 시작하지 않는다 | 소유자별 저장소 테스트 (PTY 는 `restore_gates_test.go`) |
 | 소유자가 실행 중이지 않은 session 은 `orphaned` 를 보고하며 `lost` 를 보고하지 않는다 | 소유자 프로세스 없는 코어 테스트 |
 | 소유자가 실행 중이지 않은 session 을 향한 종료는 거부된다 | 코어 테스트 |
-| 부분 기록은 읽히지 않는다 | 소유자별 저장소 테스트 |
+| 부분 기록은 읽히지 않는다 | 소유자별 저장소 테스트 (PTY 는 `restore_gates_test.go`), 그리고 그런 기록을 만들 쓰기에 대해서는 `core/store/plugindata_atomic_test.go` |
 | 한 session 의 기록은 다른 session 이 쓰지 않는다 | 소유자별 저장소 테스트 |
 | degraded restore 는 degraded 로 보고된다 | 소유자별 contract conformance 테스트 |
 | lost session 은 세어진다 | 코어 테스트: 그 수는 숫자이며 0 이다 |
