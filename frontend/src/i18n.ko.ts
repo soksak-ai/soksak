@@ -816,7 +816,7 @@ export const ko = {
   "cmd.session.close": "session 을 종료하고 그 기록을 제거합니다",
   "cmd.session.close.desc": "session 을 소유하는 컴포넌트에 종료를 지시합니다. 종료는 소유자의 기록을 제거하고 코어는 소유자의 저장소에 쓰지 않으므로, 수행은 소유자가 합니다. 소유자가 실행 중이지 않은 session 을 향한 종료는 거부됩니다. 소유자가 받지 못했으므로 session 은 계속 돌고 있습니다.",
   "cmd.session.close.param.session": "종료할 session",
-  "msg.session.list": "{n, plural, other {session #개}}",
+  "msg.session.list": "session {n}개",
   "msg.session.attach": "session {session} 이 부착됐습니다",
   "msg.session.detach": "view {view} 를 놓았습니다",
   "msg.session.close": "session {session} 이 종료됐습니다",
