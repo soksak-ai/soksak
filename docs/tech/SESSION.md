@@ -497,7 +497,7 @@ not read an owner's store.
 
 | Claim | Gate |
 | --- | --- |
-| An attach the core refused is reported, never discarded | Owner repository test per owner |
+| An attach the core refused is reported, never discarded | Owner repository test per owner (`core-index.test.ts` for the terminal) |
 | An owner's id does not repeat across its restarts | Owner repository test per owner |
 | A session survives its window closing | Core test: close the window, `session.list` reports `detached` |
 | A session survives its owner's process exiting | Core test with a fake owner: kill it, `session.list` reports `orphaned` |

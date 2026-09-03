@@ -474,7 +474,7 @@ session 에는 그것이 없으며, 필드는 `full` 로 기본값을 주는 대
 
 | 주장 | Gate |
 | --- | --- |
-| 코어가 거부한 attach 는 보고되며 버려지지 않는다 | 소유자별 저장소 테스트 |
+| 코어가 거부한 attach 는 보고되며 버려지지 않는다 | 소유자별 저장소 테스트 (터미널은 `core-index.test.ts`) |
 | 소유자의 id 는 자기 재시작을 가로질러 반복되지 않는다 | 소유자별 저장소 테스트 |
 | session 은 자기 창이 닫혀도 살아남는다 | 코어 테스트: 창을 닫고 `session.list` 가 `detached` 를 보고 |
 | session 은 소유자 프로세스가 종료돼도 살아남는다 | fake 소유자를 쓰는 코어 테스트: kill 후 `session.list` 가 `orphaned` 를 보고 |
