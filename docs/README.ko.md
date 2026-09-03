@@ -65,6 +65,8 @@ resource 값에만 존재합니다.
 | `IDENTITY.md` | Home, socket, CLI identity |
 | `ENVIRONMENT-AND-INSTALLATION.md` | Component environment와 installer |
 | `ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md` | 두 상태 파일을 하나로 합친 이유 |
+| `SESSION.md` | session 이 무엇인지, session state 와 process state 의 구분, 누가 저장하는지, 네 상태, 그리고 창 닫힘·프로세스 종료·애플리케이션 재시작이 session 에 하는 일 |
+| `SESSION-TASK.md` | 그 모델의 실행 순서 — 항목마다 소유 저장소, red, 닫는 검사 |
 | `COMPONENT-HANDOFF.md` | 사이드카마다 선언하는 인계 수준, 실행 중 유닛을 교체하기 전에 코어가 묻는 것, 각 부분의 소유 저장소 |
 | `COMPONENT-HANDOFF-TASK.md` | 그 계약의 실행 순서 — 항목마다 소유 저장소, red, 닫는 검사 |
 | `CONTROL-PROTOCOL.md` | Control envelope와 version negotiation |
@@ -75,6 +77,7 @@ resource 값에만 존재합니다.
 | `TERMINAL-UX-EXECUTION.ko.md` | Renderer parity, view visibility, native close, test isolation의 필수 RED-to-GREEN 순서 |
 | `TERMINAL-STANDARD-AUDIT.ko.md` | Provider별 표준 근거와 명시적인 UNVERIFIED·RED 행 |
 | `MESSAGE-PROTOCOL.md` | Request, response, progress 상관관계 |
+| `TERMINAL-RESTORE-CONTRACT.md` | 터미널 소유자의 restore 절차 — 무엇을 어떤 순서로 hydrate 하고 복원된 화면이 무엇을 담아도 되는지 |
 | `SIDECARS.md` | Sidecar 배포, 선택, lifetime |
 | `PLUGIN-CONTRACT.md` | Plugin 선언과 계약 소유권 |
 | `I18N.md` | 사용자 문장의 소유권과 번역 |

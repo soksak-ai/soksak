@@ -86,6 +86,8 @@ that on the same date and the gate landed against it.
 | [`tech/IDENTITY.md`](tech/IDENTITY.md) | One derivation for home, socket, CLI name and axis; the core reads no ambient; one backend per home |
 | [`tech/ENVIRONMENT-AND-INSTALLATION.md`](tech/ENVIRONMENT-AND-INSTALLATION.md) | Runtime component environment, local/registry release transport, and installer ownership |
 | [`tech/ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md`](tech/ENVIRONMENT-AND-INSTALLATION.CHANGELOG.md) | Why local component state became one atomic environment |
+| [`tech/SESSION.md`](tech/SESSION.md) | What a session is, session state against process state, who stores it, the four states, and what a window close, a process exit and an application restart do to it |
+| [`tech/SESSION-TASK.md`](tech/SESSION-TASK.md) | Execution order for that model: the repository, the red and the check that closes each item |
 | [`tech/COMPONENT-HANDOFF.md`](tech/COMPONENT-HANDOFF.md) | One declared level per sidecar, the question the core asks before it replaces a running unit, and which repository owns each part |
 | [`tech/COMPONENT-HANDOFF-TASK.md`](tech/COMPONENT-HANDOFF-TASK.md) | Execution order for that contract: the repository, the red and the check that closes each item |
 | [`tech/CONTROL-PROTOCOL.md`](tech/CONTROL-PROTOCOL.md) | One line of JSON, the envelope, the greeting that negotiates, the command table, the socket address |
@@ -96,6 +98,7 @@ that on the same date and the gate landed against it.
 | [`tech/TERMINAL-UX-EXECUTION.md`](tech/TERMINAL-UX-EXECUTION.md) | Required RED-to-GREEN order for renderer parity, view visibility, native close and test isolation |
 | [`tech/TERMINAL-STANDARD-AUDIT.md`](tech/TERMINAL-STANDARD-AUDIT.md) | Provider-by-provider standards evidence; unverified and RED rows remain explicit |
 | [`tech/MESSAGE-PROTOCOL.md`](tech/MESSAGE-PROTOCOL.md) | Request and response shape, progress deltas, correlation by parent id |
+| [`tech/TERMINAL-RESTORE-CONTRACT.md`](tech/TERMINAL-RESTORE-CONTRACT.md) | The terminal owner's restore sequence: what is hydrated in what order and what a restored screen legitimately holds |
 | [`tech/SIDECARS.md`](tech/SIDECARS.md) | A plugin in its own process: one envelope, lifetime, distribution, declaration |
 | [`tech/PLUGIN-CONTRACT.md`](tech/PLUGIN-CONTRACT.md) | What a plugin declares, who owns each definition, the generated contract.json, permissions, and contract ids |
 | [`tech/I18N.md`](tech/I18N.md) | Who reads a sentence decides where it lives, the key table and the Go mechanism, what a test may assert |
