@@ -59,7 +59,7 @@ is, and a row that is not done leaves the item open.
 | 14 | The mirror reports the modes a replay cannot rebuild | contract + owner | [x] | [x] | [x] `3d8cbe1` `3cc396d` |
 | 15 | The owner records the program that was running | each owner repository | [x] | [x] | [x] `f16ec9e` |
 | 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [x] | [x] | [x] `61ed75c` |
-| 17 | A browser view keeps its address in its view record | `soksak-plugin-browser-wails3` | [x] | [ ] | [ ] |
+| 17 | A browser view keeps its address in its view record | `soksak-plugin-browser-wails3` | [x] | [x] | [x] `7c2af28` |
 | 18 | A plugin can take back what it stored | `soksak-core` | [x] | [x] | [x] `361032f` |
 | 19 | The session question goes wherever the owner runs | `soksak-core` | [x] | [x] | [x] `899a792` |
 
@@ -316,6 +316,27 @@ address, with no history behind it and no scroll position.
 Check: a view restored from a snapshot loads the address it was left at, with its history and its
 scroll applied; a view with no recorded state opens blank rather than failing; this plugin declares
 no session command and answers none.
+
+## 17-1. Every view declares what its restore needs
+
+Owner: the core, and every plugin that contributes a view.
+
+Restoring is not one thing. A terminal is the involved one — a process, the output it produced, the
+modes a program set — and it is the only session, because the shell keeps running with nothing
+drawing it. An editor keeps the path it had open. A browser keeps the address. A file tree keeps
+nothing and reads the filesystem.
+
+Which of those a view is cannot be worked out by looking. An absent record means one thing for a
+view that keeps nothing and another for a view that failed to read what it kept, so every view
+declares `none`, `view` or `session` (S1-5) and one that declares nothing is refused at
+registration.
+
+Red: a provider with no declaration registers, and a restore that brought nothing back is
+indistinguishable from a view with nothing to bring.
+
+Check: the three kinds are closed in one place, so a fourth leaves the branches on it visibly
+incomplete; a view without a declaration is refused with a sentence from the bundle; the terminal
+kit declares `session` and the browser declares `view` for its page and `none` for its list.
 
 ## 18. A plugin can take back what it stored
 
