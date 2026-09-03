@@ -61,6 +61,7 @@ const (
 // than report a silent renderer while the native request is still running.
 const rendererDeadline = 35 * time.Second
 const rendererDeadlineMargin = 5 * time.Second
+
 // A renderer command may expose an event-driven wait longer than the default
 // request/HTTP boundary. The transport contains that declared wait, up to one
 // finite process-level ceiling; it does not silently shorten it to the default.
@@ -511,14 +512,6 @@ func (r *RendererCommands) forward() func(string, control.Args) (any, error) {
 		return r.call(window, name, withoutRouting(args))
 	}
 }
-
-// serving is which windows declared this name, in declaration order.
-// Serving answers which windows declare one command.
-//
-// A delegated command is answered in a window, so a caller that has to name one reads this rather
-// than guessing: a window that never declared the name refuses it, and a window that closed is no
-// longer here.
-func (r *RendererCommands) Serving(name string) []string { return r.serving(name) }
 
 func (r *RendererCommands) serving(name string) []string {
 	r.mu.Lock()

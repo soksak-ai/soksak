@@ -80,18 +80,13 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	// The session group, wired the way Run wires it. Its store and its router come from the
 	// application, and which names register depends on both being present rather than on what they
 	// answer — so a store that holds nothing and a router that answers nowhere are enough.
+	send := func(string, controlwire.Request) (controlwire.Response, error) {
+		return controlwire.Response{}, nil
+	}
 	session.Register(registry, session.Registration{
 		Store: emptySessionStore{},
-		Router: session.AskEitherIn(
-			func(string) []string { return nil },
-			func(string) bool { return false },
-			func(string, controlwire.Request) (controlwire.Response, error) {
-				return controlwire.Response{}, nil
-			},
-			func(string, controlwire.Request) (controlwire.Response, error) {
-				return controlwire.Response{}, nil
-			},
-		),
+		Ask:   session.AskThrough(send),
+		Order: session.OrderThrough(send),
 	})
 	// The same call Run makes. A second list here drifts from that one in both
 	// directions at once and neither side reports it: measured 2026-08-15, this

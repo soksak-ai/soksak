@@ -25,10 +25,10 @@ type Registration struct {
 	// Store is where the index is read from and written to. The core owns the index, so it is the
 	// core's store rather than an owner's.
 	Store Writer
-	// Router puts the question and the close to one owner, in the window that session was last
-	// shown in. A plugin answers in a window and a unit answers over its own socket; which of the
-	// two an owner is, is what the router settles.
-	Router Router
+	// Ask puts the session question to one owner and Order puts the close. Every owner runs outside
+	// the window and answers over its own socket (S1-2), so neither takes a window.
+	Ask   Ask
+	Order Order
 }
 
 // Register puts this group on the registry.
@@ -36,7 +36,7 @@ type Registration struct {
 // A missing dependency refuses by name rather than being absent: a caller that receives "unknown
 // command" cannot tell a capability this build does not have from a name it typed wrong.
 func Register(registry *control.Registry, deps Registration) {
-	if deps.Store == nil || deps.Router.windows == nil {
+	if deps.Store == nil || deps.Ask == nil || deps.Order == nil {
 		reason := "this build was given no place to read the session index, or no route to " +
 			"the components that own sessions"
 		for _, name := range Names() {
@@ -55,7 +55,7 @@ func Register(registry *control.Registry, deps Registration) {
 			if err != nil {
 				return nil, err
 			}
-			listed, err := ListIn(index, deps.Router)
+			listed, err := List(index, deps.Ask)
 			if err != nil {
 				return nil, err
 			}
@@ -73,7 +73,7 @@ func Register(registry *control.Registry, deps Registration) {
 			if err != nil {
 				return nil, err
 			}
-			listed, err := ListIn(index, deps.Router)
+			listed, err := List(index, deps.Ask)
 			if err != nil {
 				return nil, err
 			}
@@ -153,14 +153,14 @@ func Register(registry *control.Registry, deps Registration) {
 			}
 			if view != "" {
 				closed, err := CloseView(deps.Store, index, view, func(session string) Order {
-					return deps.Router.CloseIn(windowOf(index, session))
+					return deps.Order
 				})
 				if err != nil {
 					return nil, err
 				}
 				return map[string]any{"view": view, "closed": closed}, nil
 			}
-			return CloseAndForget(deps.Store, index, named, deps.Router.CloseIn(windowOf(index, named)))
+			return CloseAndForget(deps.Store, index, named, deps.Order)
 		},
 	})
 }
@@ -251,13 +251,4 @@ func unwrap(answer controlwire.Response, into any) error {
 // comes from a key rather than being assembled here.
 func refused(owner, reason string) error {
 	return i18n.Errorf("session.owner.refused", map[string]string{"owner": owner, "reason": reason})
-}
-
-// PluginCommandName is how a plugin's command is named on the registry.
-//
-// A plugin serves under `plugin.<id>.<command>` and the core has to send that name. One built a
-// different way addresses nothing, and the owner reports orphaned forever with no error to say why.
-// The shape is the host's, so it is written down once here rather than assembled at each caller.
-func PluginCommandName(owner, command string) string {
-	return "plugin." + owner + "." + command
 }

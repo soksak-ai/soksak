@@ -169,47 +169,16 @@ func Run(assets embed.FS) error {
 		},
 		Sink: wails.NewSidecarSink(bridge),
 	})
-	// The core reads its own index and puts one question to each owner. Where the owner runs is not
-	// the question: a unit answers it over its own socket and a plugin answers it in the renderer,
-	// and the command is the same either way — a caller cannot tell where a command runs, which is
-	// what one registry is for.
-	unitRunning := func(name string) bool {
-		for _, open := range units.Started() {
-			if open.Name == name {
-				return true
-			}
-		}
-		return false
-	}
-	throughRenderer := func(owner string, request controlwire.Request) (controlwire.Response, error) {
-		// A plugin serves under the name the host gives its commands, and the name the index holds
-		// is what puts the question in front of the right one. The window travels in the args
-		// because a delegated command is answered in one, and one that names none is refused.
-		answer, err := registry.Invoke(
-			session.PluginCommandName(owner, request.Command), control.Args(request.Args))
-		if err != nil {
-			return controlwire.Response{}, err
-		}
-		return controlwire.Response{Ok: true, Result: answer}, nil
-	}
-	// Which windows answer for one plugin owner. Asked of the renderer rather than assumed: a
-	// window that never declared the name refuses it, and one that closed is no longer here.
-	//
-	// Late-bound because the renderer half does not exist until the framework runs, and this is
-	// built before it.
-	var servingWindows func(string) []string
-	openWindows := func(command string) []string {
-		if servingWindows == nil {
-			return nil
-		}
-		return servingWindows(command)
-	}
+	// The core reads its own index and puts one question to each owner. Every owner runs outside
+	// the window and answers over its own socket (SESSION.md S1-2): a session survives its window
+	// closing, and a component inside a window goes when the window does.
 	// Filled once the home is ours. Nothing this installation owns — least of
 	// all its database — is touched by a process that has not claimed it.
 	fill := func(kv *store.KV) {
 		session.Register(registry, session.Registration{
-			Store:  kv,
-			Router: session.AskEitherIn(openWindows, unitRunning, units.Send, throughRenderer),
+			Store: kv,
+			Ask:   session.AskThrough(units.Send),
+			Order: session.OrderThrough(units.Send),
 		})
 		wired := boot.RegisterCore(registry, boot.Boot{
 			Identity:     resolved,
@@ -274,10 +243,9 @@ func Run(assets embed.FS) error {
 		stopProcessEvents := observeTerminalProcessEvents(units, resolvePTYOwner, bridge.Emit)
 		defer stopProcessEvents()
 		return wails.Run(wails.Options{
-			ServingWindows: func(reader func(string) []string) { servingWindows = reader },
-			Assets:         assets,
-			Identity:       resolved.Identifier,
-			TerminalLinks:  terminalSurfaceLinks(units),
+			Assets:        assets,
+			Identity:      resolved.Identifier,
+			TerminalLinks: terminalSurfaceLinks(units),
 			TerminalUnitStarts: func(listener func(string)) func() {
 				return units.ObserveStarted(func(open sidecar.Open) { listener(open.Name) })
 			},

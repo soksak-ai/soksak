@@ -55,9 +55,16 @@ the window, so no owner outside this application holds one either way. Its state
 the component that made it and read back by the next one, and a process in between would hold a
 file and answer questions about it.
 
-Where an owner runs is not what the core is asking: a unit answers over its own socket, a plugin
-answers in the renderer, and the command is the same — a caller cannot tell where a command runs,
-which is what one command registry is for.
+**Every owner runs outside the window.** A session survives its window closing and reports
+`detached` (S10), and a plugin instance is per window — it goes when the window does, so its
+sessions would report `lost` at the one moment S10 rules that out. Answering from another
+window that happens to be open is not an answer either: it makes whether a session exists depend on
+what else the person left open.
+
+So an owner answers over its own socket, on the same path as any other unit.
+Where an owner runs is still not part of the question — a caller cannot tell where a command runs,
+which is what one command registry is for — but nothing today puts an owner inside a window, and
+the rule above is why.
 
 The core owns the **index**: which sessions exist, which component owns each, and where each was
 last shown. It does not own the state.
