@@ -300,8 +300,8 @@ export interface SoksakPluginApi {
   storage?: {
     read: (key: string) => Promise<unknown>;
     write: (key: string, value: unknown) => Promise<void>;
-    /** Take back one value. Without it a record outlives the thing it was for and nothing reaches
-     *  it, and the store grows by everything that ever existed. */
+    /** Take back one value. Without it a record outlives the thing it was for and nothing
+     *  addresses it, and the store grows by everything that ever existed. */
     remove: (key: string) => Promise<void>;
     list: () => Promise<string[]>;
   };

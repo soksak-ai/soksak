@@ -7,7 +7,7 @@ import (
 )
 
 // What a plugin stored, it can take back. Without this a record outlives the thing it was for and
-// nothing reaches it: a session that closed, a view that is gone, a key a build stopped writing.
+// nothing addresses it: a session that closed, a view that is gone, a key a build stopped writing.
 // The store grows by everything that ever existed and no command can shrink it.
 func TestAPluginTakesBackWhatItStored(t *testing.T) {
 	base := t.TempDir()

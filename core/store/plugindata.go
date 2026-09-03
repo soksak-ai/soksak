@@ -99,9 +99,9 @@ func listPluginData(base, id string) ([]string, error) {
 
 // deletePluginData takes back one value a plugin stored.
 //
-// Without it a record outlives the thing it was for and nothing reaches it — a session that closed,
-// a view that is gone, a key a build stopped writing — and the store grows by everything that ever
-// existed with no command able to shrink it.
+// Without it a record outlives the thing it was for and nothing addresses it — a session that
+// closed, a view that is gone, a key a build stopped writing — and the store grows by everything
+// that ever existed with no command able to shrink it.
 //
 // Deleting what was never written is not a failure: the outcome the caller wanted is the outcome it
 // has, and a refusal would make a caller handle a case that is already what it asked for.
