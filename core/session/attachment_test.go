@@ -1,6 +1,11 @@
 package session
 
-import "testing"
+import (
+	"sort"
+	"strings"
+	"sync"
+	"testing"
+)
 
 // The attachment is a record of its own, not a field on the view. A view goes away with the window
 // that held it, and a session outlives both: closing a window releases what it showed and closes
@@ -24,8 +29,8 @@ func TestAnAttachmentOutlivesTheViewItNames(t *testing.T) {
 	}
 }
 
-// Detaching removes the record and ends nothing.
-func TestDetachingRemovesTheRecord(t *testing.T) {
+// Detaching releases the view and leaves the session addressable by its id.
+func TestDetachingReleasesTheViewAndKeepsTheSession(t *testing.T) {
 	store := &memoryStore{}
 	if err := Attach(store, Attachment{Session: "7", Owner: "pty", ViewID: "tab-a"}); err != nil {
 		t.Fatal(err)
@@ -37,8 +42,8 @@ func TestDetachingRemovesTheRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(index) != 0 {
-		t.Fatalf("a detached session is still in the index: %+v", index)
+	if len(index) != 1 || index[0].ViewID != "" {
+		t.Fatalf("detaching left %+v", index)
 	}
 }
 
@@ -89,17 +94,21 @@ func TestShownFollowsTheLayoutNotTheAttachment(t *testing.T) {
 	}
 }
 
-type memoryStore struct{ values map[string]string }
+type memoryStore struct {
+	mu     sync.Mutex
+	values map[string]string
+}
 
 func (store *memoryStore) Get(_, key string) (string, bool, error) {
-	if store.values == nil {
-		return "", false, nil
-	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
 	value, found := store.values[key]
 	return value, found, nil
 }
 
 func (store *memoryStore) Set(_, key, value string) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
 	if store.values == nil {
 		store.values = map[string]string{}
 	}
@@ -108,8 +117,24 @@ func (store *memoryStore) Set(_, key, value string) error {
 }
 
 func (store *memoryStore) Delete(_, key string) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
 	delete(store.values, key)
 	return nil
+}
+
+func (store *memoryStore) Keys(_ string, prefix *string) ([]string, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	names := make([]string, 0, len(store.values))
+	for key := range store.values {
+		if prefix != nil && !strings.HasPrefix(key, *prefix) {
+			continue
+		}
+		names = append(names, key)
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 func activeViewSnapshot(pane, active string, views []string) string {
@@ -166,5 +191,84 @@ func TestAnAttachmentWhoseSessionDoesNotMatchItsKeyIsRefused(t *testing.T) {
 	}
 	if len(index) != 0 {
 		t.Fatalf("a record naming another session was read: %+v", index)
+	}
+}
+
+// Detaching releases the view and ends nothing, so the session stays in the index.
+//
+// The index holds three facts (S1-2): which sessions exist, which component owns each, and where
+// each was last shown. Only the third is the attachment. Storing all three in one record made
+// detaching remove the session itself — a shell still running, invisible to every listing, and
+// unreachable until its abandon window kills it. S2-4: a session with no attachment whose owner
+// holds it is detached, not closed.
+func TestDetachingLeavesTheSessionInTheIndex(t *testing.T) {
+	store := &memoryStore{}
+	if err := Attach(store, Attachment{Session: "7", Owner: "pty", ViewID: "tab-a", WindowLabel: "w-one"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Detach(store, "7"); err != nil {
+		t.Fatal(err)
+	}
+
+	index, err := ReadIndex(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(index) != 1 {
+		t.Fatalf("detaching left %d sessions in the index", len(index))
+	}
+	if index[0].Owner != "pty" {
+		t.Fatalf("the session lost its owner: %+v", index[0])
+	}
+	if index[0].ViewID != "" {
+		t.Fatalf("a released session still names a view: %+v", index[0])
+	}
+	if index[0].Shown {
+		t.Fatal("a session no view holds is reported as shown")
+	}
+}
+
+// Forgetting is what a close does, and only a close. A closed session returns nothing from a
+// listing because it no longer exists (S5).
+func TestForgettingRemovesTheSessionEntirely(t *testing.T) {
+	store := &memoryStore{}
+	if err := Attach(store, Attachment{Session: "7", Owner: "pty", ViewID: "tab-a"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Forget(store, "7"); err != nil {
+		t.Fatal(err)
+	}
+	index, err := ReadIndex(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(index) != 0 {
+		t.Fatalf("a closed session is still in the index: %+v", index)
+	}
+}
+
+// Two attaches at once leave two sessions. A roll read, appended to and written back is a state
+// assembled from a read that another writer already moved past, and the session that lost the race
+// keeps its record while every listing omits it.
+func TestConcurrentAttachesBothLand(t *testing.T) {
+	store := &memoryStore{}
+	var group sync.WaitGroup
+	for _, session := range []string{"a", "b", "c", "d"} {
+		group.Add(1)
+		go func(id string) {
+			defer group.Done()
+			if err := Attach(store, Attachment{Session: id, Owner: "pty", ViewID: "tab-" + id}); err != nil {
+				t.Error(err)
+			}
+		}(session)
+	}
+	group.Wait()
+
+	index, err := ReadIndex(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(index) != 4 {
+		t.Fatalf("four attaches left %d sessions: %+v", len(index), index)
 	}
 }

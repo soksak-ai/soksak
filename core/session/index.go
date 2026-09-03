@@ -39,6 +39,10 @@ const (
 // Reader is the slice of the key-value store this package needs.
 type Reader interface {
 	Get(ns, key string) (string, bool, error)
+	// Keys enumerates one namespace by prefix. It is what makes the stored keys the only list of
+	// which sessions the index holds: a second list kept beside them is a second truth, and two
+	// writers assembling it from a read leave one session out of every listing.
+	Keys(ns string, prefix *string) ([]string, error)
 }
 
 // Entry is one session the index holds.
@@ -86,7 +90,7 @@ func StateOf(outcome string, known bool, shown bool) string {
 // showed it, and reading the index out of the snapshots would drop a session the moment its window
 // closed. The snapshots answer one thing here — whether a view is the one its pane shows.
 func ReadIndex(reader Reader) ([]Entry, error) {
-	names := readRoll(reader)
+	names := sessionsHeld(reader)
 	shown := shownViews(reader)
 	index := make([]Entry, 0, len(names))
 	for _, name := range names {

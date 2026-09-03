@@ -74,7 +74,7 @@ func CloseAndForget(store Writer, index []Entry, session string, order Order) (C
 		// session from every listing.
 		return Closed{}, err
 	}
-	if err := Detach(store, session); err != nil {
+	if err := Forget(store, session); err != nil {
 		return Closed{SessionCloseResult: result, Indexed: false}, nil
 	}
 	return Closed{SessionCloseResult: result, Indexed: true}, nil

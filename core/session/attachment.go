@@ -3,6 +3,7 @@ package session
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
@@ -51,68 +52,61 @@ func Attach(store Writer, attachment Attachment) error {
 	if err != nil {
 		return err
 	}
-	if err := store.Set(ledgerNamespace, attachmentPrefix+attachment.Session, string(body)); err != nil {
-		return err
-	}
-	return rememberSession(store, attachment.Session)
+	return store.Set(ledgerNamespace, attachmentPrefix+attachment.Session, string(body))
 }
 
-// Detach removes one session's attachment and ends nothing.
+// Detach releases the view a session was shown in and ends nothing.
+//
+// The record stays and loses its coordinate. The index holds three facts — which sessions exist,
+// which component owns each, and where each was last shown (S1-2) — and only the third is the view.
+// Removing the record would take the session out of every listing while its owner still holds it: a
+// shell running, invisible, and unreachable until its abandon window kills it. S2-4 names that state
+// detached, not closed.
 func Detach(store Writer, session string) error {
-	if err := store.Delete(ledgerNamespace, attachmentPrefix+session); err != nil {
-		return err
-	}
-	return forgetSession(store, session)
-}
-
-// The roll names which sessions the index holds. The store answers one key at a time, so without it
-// a reader has nowhere to start; it is a list of names and nothing else, so a byte that went wrong
-// in it costs the names and never an attachment's contents.
-const rollKey = "session-roll"
-
-func readRoll(store Reader) []string {
-	raw, found, err := store.Get(ledgerNamespace, rollKey)
-	if err != nil || !found || raw == "" {
+	held, readable := readAttachment(store, session)
+	if !readable {
+		// Nothing to release. A session the index does not hold is one a close already took.
 		return nil
 	}
-	var names []string
-	if err := json.Unmarshal([]byte(raw), &names); err != nil {
-		return nil
-	}
-	return names
-}
-
-func writeRoll(store Writer, names []string) error {
-	sort.Strings(names)
-	body, err := json.Marshal(names)
+	held.ViewID = ""
+	held.WindowLabel = ""
+	body, err := json.Marshal(held)
 	if err != nil {
 		return err
 	}
-	return store.Set(ledgerNamespace, rollKey, string(body))
+	return store.Set(ledgerNamespace, attachmentPrefix+session, string(body))
 }
 
-func rememberSession(store Writer, session string) error {
-	names := readRoll(store)
-	for _, held := range names {
-		if held == session {
-			return nil
-		}
-	}
-	return writeRoll(store, append(names, session))
+// Forget removes a session from the index entirely, and only a close does it.
+//
+// A closed session returns nothing from a listing because it no longer exists (S5). One left behind
+// is counted lost by the gate that asserts nothing is.
+func Forget(store Writer, session string) error {
+	return store.Delete(ledgerNamespace, attachmentPrefix+session)
 }
 
-func forgetSession(store Writer, session string) error {
-	names := readRoll(store)
-	kept := make([]string, 0, len(names))
-	for _, held := range names {
-		if held != session {
-			kept = append(kept, held)
-		}
-	}
-	if len(kept) == len(names) {
+// sessionsHeld answers which sessions the index holds, by asking the store rather than keeping a
+// second list beside it.
+//
+// A list of names read, appended to and written back is a state assembled from a read another
+// writer already moved past: two attaches at once leave one session with a record every listing
+// omits, permanently, because nothing reconciles the two. The store enumerates by prefix, so the
+// keys themselves are the only list there is.
+func sessionsHeld(store Reader) []string {
+	prefix := attachmentPrefix
+	names, err := store.Keys(ledgerNamespace, &prefix)
+	if err != nil {
 		return nil
 	}
-	return writeRoll(store, kept)
+	held := make([]string, 0, len(names))
+	for _, name := range names {
+		if !strings.HasPrefix(name, attachmentPrefix) {
+			continue
+		}
+		held = append(held, strings.TrimPrefix(name, attachmentPrefix))
+	}
+	sort.Strings(held)
+	return held
 }
 
 // readAttachment answers one session's attachment, and whether it could be read.

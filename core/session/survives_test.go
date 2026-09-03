@@ -103,7 +103,7 @@ func TestClosingTakesTheAttachmentWithIt(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Detach(store, "7"); err != nil {
+	if err := Forget(store, "7"); err != nil {
 		t.Fatal(err)
 	}
 	after, err := ReadIndex(store)

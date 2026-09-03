@@ -1,6 +1,8 @@
 package session
 
 import (
+	"sort"
+	"strings"
 	"testing"
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
@@ -172,4 +174,19 @@ func (store *refusingWriter) Delete(_, key string) error {
 	}
 	delete(store.values, key)
 	return nil
+}
+
+func (store *refusingWriter) Keys(_ string, prefix *string) ([]string, error) {
+	if store.refuse {
+		return nil, errDown{}
+	}
+	names := make([]string, 0, len(store.values))
+	for key := range store.values {
+		if prefix != nil && !strings.HasPrefix(key, *prefix) {
+			continue
+		}
+		names = append(names, key)
+	}
+	sort.Strings(names)
+	return names, nil
 }
