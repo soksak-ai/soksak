@@ -421,6 +421,15 @@ interface SessionsStore {
     viewId: string,
     patch: { cwd?: string; lastActivity?: number; state?: unknown },
   ) => void;
+  // Bind a session to a view, or pass null to unbind it. The binding is the core's index — which
+  // session this view holds — and unbinding removes the record without ending anything. Closing a
+  // window, a workspace or a pane detaches what it held and closes none of it, so nothing here ends
+  // a session; only an explicit close does.
+  bindSession: (
+    projectId: string | null,
+    viewId: string,
+    binding: SessionBinding | null,
+  ) => void;
   // Drag/command split and move: put viewId at the zone position of targetGroup.
   moveViewToGroup: (
     projectId: string,
@@ -1673,6 +1682,28 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   // View status report/reclaim (R1, R4) — common to every view. null = the field is removed. Same
   // shape as setFileDirty.
+  bindSession: (projectId, viewId, binding) => {
+    set((s) => {
+      const targets = projectId
+        ? s.workspaces.filter((t) => t.id === projectId)
+        : s.workspaces.filter((t) => contentOfView(t, viewId));
+      if (targets.length === 0) return s;
+      let workspaces = s.workspaces;
+      for (const t of targets) {
+        workspaces = mapWorkspace(workspaces, t.id, (x) =>
+          mapViewEverywhere(x, viewId, (v) => {
+            // Unbinding drops the field rather than storing an empty one. A view with no session is
+            // one the snapshot writes nothing for, and an empty binding would round-trip as a
+            // session that exists and names nothing.
+            const { session: _dropped, ...rest } = v;
+            return binding ? { ...rest, session: binding } : rest;
+          }),
+        );
+      }
+      return { workspaces };
+    });
+  },
+
   setViewRuntime: (projectId, viewId, patch) => {
     set((s) => {
       const targets = projectId

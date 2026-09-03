@@ -83,6 +83,7 @@ import { registerFsWatchCatalog } from "./catalogFsWatch";
 import { registerSectionsCatalog } from "./catalogSections";
 import { registerPluginCatalog } from "./catalogPlugins";
 import { registerDaemonCatalog } from "./catalogDaemon";
+import { registerSessionCatalog } from "./catalogSession";
 import { registerUpdateCatalog } from "./catalogUpdate";
 import { registerUiCatalog } from "./catalogUi";
 import { registerDomCatalog } from "./catalogDom";
@@ -2735,6 +2736,7 @@ export function registerCatalog(): void {
   registerSettingsCatalog();
   registerPluginCatalog();
   registerDaemonCatalog();
+  registerSessionCatalog();
   registerUpdateCatalog();
   registerUiCatalog();
   registerDomCatalog();
