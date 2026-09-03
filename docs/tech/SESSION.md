@@ -34,15 +34,27 @@ A cache is not a session: losing it costs time, not work.
 | Work | Session | Reason |
 | --- | --- | --- |
 | A shell running under a pty | Yes | The process continues with no view; the working directory and the output it produced are needed to reattach |
-| A browser view's page and history | Yes | The navigation history and scroll position are needed to reattach; the owner keeps the page loading while no view shows it |
+| A browser view's page and history | Yes | The address, the navigation history and the scroll position are needed to reattach, and none is derivable. The page itself is drawn in a view inside this application's window and cannot outlive it (S1-2) |
 | A terminal screen | No | Replayed from the shell's stored output; the mirror that draws it holds nothing that outlives it |
 | A file tree's expanded folders | No | Reconstructed from the filesystem; losing it costs no work |
 | One command sent over the control protocol | No | No state a later attachment needs |
 
 ### S1-2. The owner is a sidecar
 
-A session's owner is a sidecar, never the core. The core does not know what a session's state
-contains and cannot store it correctly.
+A session's owner is a sidecar, never the core. Two reasons, and both are required.
+
+**The core cannot store the state correctly.** Its shape is the owner's, and a core that stored it
+would have to know that shape, which is the coupling this rule exists to prevent.
+
+**A sidecar outlives the application generation and the core does not.** That is what makes a
+session survive an application restart rather than merely be written down before one: the owner is
+there to answer for the session, and its record is not the only thing left of it.
+
+What an owner keeps running is a separate question from what it stores, and the two do not have to
+match. A shell keeps running: the process is the work. A page does not — it is drawn in a view
+inside this application's window, and a view in a window is the property of the process that owns
+the window. So a browser session's owner keeps its state and never its renderer, and S3 puts the
+renderer where every process is: on the side that does not survive.
 
 The core owns the **index**: which sessions exist, which component owns each, and where each was
 last shown. It does not own the state.
@@ -318,6 +330,11 @@ is the process replacement in [`COMPONENT-HANDOFF.md`](COMPONENT-HANDOFF.md).
 This limit is imposed, not chosen: restoring a process needs either a kernel checkpoint, which no
 platform this application targets offers, or a snapshot of the whole machine the shell runs in,
 which the host platform gates behind an entitlement it grants no third party.
+
+A renderer is bounded further still. It draws into a view in this application's window, and a view
+in a window is the property of the process that owns the window, so no owner outside this
+application can hold one. A browser session comes back as its address, its history and its scroll position applied
+to a new renderer, and the page is loaded again rather than resumed.
 
 This holds for every session, with no per-owner exception. Machine power-off and process exit are
 the same case here: both end the process, and neither touches a stored record.
