@@ -5,7 +5,7 @@ import (
 	"sort"
 )
 
-// attachmentKey is where the core keeps its index. It sits beside the window ledger rather than
+// attachmentKey is where the core keeps its index. It is beside the window ledger rather than
 // inside a window's snapshot: a view goes away with the window that held it, and a session outlives
 // both. An attachment stored on the view would take the session out of the index with the window.
 const attachmentKey = "sessions"
