@@ -13,7 +13,10 @@ import (
 // "this build has no route to an owner" and "this build forgot a command" is only visible if the
 // names are still declared.
 func Names() []string {
-	return []string{"session_list", "session_attach", "session_detach", "session_close"}
+	return []string{
+		"session_list", "session_attach", "session_detach", "session_close",
+		"session_notices",
+	}
 }
 
 // Registration is what this group needs to serve.
@@ -60,6 +63,24 @@ func Register(registry *control.Registry, deps Registration) {
 			// Every session in every state, orphaned included. A caller filters; this hides
 			// nothing, because a session it did not report is one nobody goes looking for.
 			return map[string]any{"sessions": listed, "lost": LostReport(listed)}, nil
+		},
+	})
+
+	registry.MustRegister(control.Command{
+		Name:  "session_notices",
+		Owner: control.OwnerCore,
+		Handler: func(control.Args) (any, error) {
+			index, err := ReadIndex(deps.Store)
+			if err != nil {
+				return nil, err
+			}
+			listed, err := List(index, deps.Ask)
+			if err != nil {
+				return nil, err
+			}
+			// The core delivers the news and does not act on it. What an attachment does with a
+			// degraded restore is that component's; reading it is what this answers.
+			return map[string]any{"notices": Notices(listed)}, nil
 		},
 	})
 

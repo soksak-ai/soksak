@@ -23,6 +23,19 @@ export function registerSessionCatalog(): void {
     handler: async () => (await invoke("session_list", {})) as unknown as Record<string, unknown>,
   });
 
+  register("session.notices", {
+    description: key("cmd.session.notices.desc"),
+    triggers: { ko: "세션 통지 복원 결과 전달" },
+    params: {},
+    returns:
+      "{ notices[].{ viewId, notice:{ session, owner, outcome, reason } } } — one per attached session with an outcome; the core delivers and does not act on it",
+    message: (d) =>
+      tmsg("msg.session.notices", { n: ((d.notices as unknown[]) ?? []).length }),
+    examples: ["session.notices"],
+    handler: async () =>
+      (await invoke("session_notices", {})) as unknown as Record<string, unknown>,
+  });
+
   register("session.attach", {
     description: key("cmd.session.attach.desc"),
     triggers: { ko: "세션 부착 뷰 연결" },
