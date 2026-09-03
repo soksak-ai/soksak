@@ -5,6 +5,7 @@ import (
 
 	controlwire "github.com/soksak-ai/soksak-contract-control"
 	"github.com/soksak-ai/soksak-core/core/control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Names is every command this group owns, served or not.
@@ -202,7 +203,7 @@ func callOwner(send Send, owner, command string, request any, into any) error {
 		return err
 	}
 	if !answer.Ok {
-		return errRefused{owner: owner, reason: answer.Error}
+		return refused(owner, answer.Error)
 	}
 	var envelope struct {
 		Data json.RawMessage `json:"data"`
@@ -217,10 +218,10 @@ func callOwner(send Send, owner, command string, request any, into any) error {
 	return json.Unmarshal(envelope.Data, into)
 }
 
-type errRefused struct{ owner, reason string }
-
-func (err errRefused) Error() string {
-	return "the component " + err.owner + " refused the session question: " + err.reason
+// refused is what an owner answering with a refusal becomes. A caller reads it, so the sentence
+// comes from a key rather than being assembled here.
+func refused(owner, reason string) error {
+	return i18n.Errorf("session.owner.refused", map[string]string{"owner": owner, "reason": reason})
 }
 
 // AskEither sends the session question to whichever place the owner runs in.

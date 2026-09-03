@@ -2,8 +2,9 @@ package session
 
 import (
 	"encoding/json"
-	"fmt"
 	"sort"
+
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // attachmentPrefix is where the core keeps its index, one key per session.
@@ -44,7 +45,7 @@ type Attachment struct {
 // "where" for, and every consumer of that answer would then have to pick.
 func Attach(store Writer, attachment Attachment) error {
 	if attachment.Session == "" {
-		return fmt.Errorf("an attachment names no session")
+		return i18n.Errorf("session.attach.noSession", nil)
 	}
 	body, err := json.Marshal(attachment)
 	if err != nil {

@@ -1,9 +1,8 @@
 package session
 
 import (
-	"fmt"
-
 	controlwire "github.com/soksak-ai/soksak-contract-control"
+	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
 // Order puts the close to one owner. The core orders and the owner performs: closing removes the
@@ -23,21 +22,20 @@ func Close(index []Entry, session string, order Order) (controlwire.SessionClose
 		}
 	}
 	if owner == "" {
-		return controlwire.SessionCloseResult{}, fmt.Errorf(
-			"no session %s in this index, so nothing names the component that would end it", session)
+		return controlwire.SessionCloseResult{}, i18n.Errorf("session.close.notInIndex",
+			map[string]string{"session": session})
 	}
 
 	result, err := order(owner, controlwire.SessionCloseRequest{Session: session})
 	if err != nil {
 		// The owner is where the record is. A close it never received changed nothing, and reporting
 		// the session ended would stop a caller showing something that is still running.
-		return controlwire.SessionCloseResult{}, fmt.Errorf(
-			"the component %s that owns session %s is not running, so the close was not performed: %w",
-			owner, session, err)
+		return controlwire.SessionCloseResult{}, i18n.Errorf("session.close.ownerDown",
+			map[string]string{"owner": owner, "session": session})
 	}
 	if !result.Closed {
-		return controlwire.SessionCloseResult{}, fmt.Errorf(
-			"the component %s did not end session %s", owner, session)
+		return controlwire.SessionCloseResult{}, i18n.Errorf("session.close.refused",
+			map[string]string{"owner": owner, "session": session})
 	}
 	return result, nil
 }
