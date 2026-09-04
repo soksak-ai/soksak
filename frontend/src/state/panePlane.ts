@@ -80,11 +80,18 @@ export function splitPane(
   return plane.splitToward(targetId, side, { id: freshId }) === null ? null : plane.toJSON();
 }
 
-/** The plane without `paneId`; its neighbours grow over the room (split-pane R7). */
+/**
+ * The plane without `paneId`; its neighbours grow over the room (split-pane R7). A line the
+ * departure left with no card on it is dropped (`tidy`): kept, every later insert lands beside it
+ * and the plane's lines grow with each rail that withdraws (measured 2026-09-05: four lines for
+ * two columns after one withdraw, five with a coincident pair after the next stand).
+ */
 export function closePane(state: PlaneState, box: PlaneBox, paneId: string): PlaneState | null {
   if (!hasPane(state, paneId)) return null;
   const plane = grid(state, box);
-  return plane.close(paneId) ? plane.toJSON() : null;
+  if (!plane.close(paneId)) return null;
+  plane.tidy();
+  return plane.toJSON();
 }
 
 /** The plane with `paneId` moved to `side` of `targetId` — one operation, not a close and a split. */
@@ -224,6 +231,7 @@ export function withdrawRail(state: PlaneState, box: PlaneBox): PlaneState {
   const plane = grid(state, box);
   plane.setFixed(RAIL_CARD, false);
   plane.close(RAIL_CARD);
+  plane.tidy();
   return plane.toJSON();
 }
 

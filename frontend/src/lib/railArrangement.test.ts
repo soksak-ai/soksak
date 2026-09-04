@@ -5,7 +5,7 @@ import {
   type Arrangement,
 } from "./railArrangement";
 import {
-  moveBoundary, splitPane, standRail, type PlaneBox, type PlaneState,
+  flowRailLine, moveBoundary, splitPane, standRail, type PlaneBox, type PlaneState,
 } from "../state/panePlane";
 import { columnPlane, planeOf, rowPlane } from "../test/planes";
 
@@ -187,6 +187,22 @@ describe("travel — only the panes the solve names, and width never changes", (
     expect(arrangementMoves(from, to)).toEqual([{ id: "a", dLeft: -RAIL_W }]);
     expect(rectOf(from, "a").width).toBe(rectOf(to, "a").width);
     expect(rectOf(from, "b")).toEqual(rectOf(to, "b"));
+  });
+
+  // split-pane R5: a rail landing on the border charges the pane beside it half a gap less. That
+  // pane translated by the rail's width and changed width by half a gap; it travels.
+  it("a pane whose width changed by the border's half gap still travels", () => {
+    // a | b over c at 0.3, the rail at the front, then beside c (measured 2026-09-05: a grew 2.7).
+    const withGap: PlaneBox = { ...box, gap: 10 };
+    const base = moveBoundary(splitPane(rowPlane(["a", "b"]), withGap, "b", "bottom", "c")!, withGap, "x", 1, 0.3)!;
+    const front = standRail(base, withGap, 0, RAIL_W)!;
+    const beside = standRail(front, withGap, flowRailLine(front, withGap, "c")!, RAIL_W)!;
+    const from = solveArrangement({ layout: front, box: withGap, focusId: "a", placement: { mode: "flow" }, railPresent: true });
+    const to = solveArrangement({ layout: beside, box: withGap, focusId: "c", placement: { mode: "flow" }, railPresent: true });
+    const change = rectOf(to, "a").width - rectOf(from, "a").width;
+    expect(Math.abs(change)).toBeGreaterThan(0);
+    expect(Math.abs(change)).toBeLessThanOrEqual(withGap.gap / 2);
+    expect(arrangementMoves(from, to).map((m) => m.id)).toEqual(["a"]);
   });
 
   it("an identical arrangement is not a move, and float error is not a move", () => {

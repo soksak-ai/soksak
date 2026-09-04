@@ -23,6 +23,7 @@ const arrangement = (railPresent: boolean): LayoutTransitionIntent["from"] => ({
   cleanLines: [0, 500, 1000],
   standingLines: [0, 1, 2],
   lineSet: "1x1:pane@0-1,0-1",
+  gap: 0,
   display: singlePane("pane"),
   rail: railPresent ? { left: 500, top: 0, width: 100, height: 1000 } : null,
   dividers: [],

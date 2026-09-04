@@ -48,6 +48,8 @@ export interface Arrangement {
   cells: ArrangementCell[];
   /** The rail's rect, when it stands. */
   rail: Rect | null;
+  /** The corridor between two cards on this plane, in px. */
+  gap: number;
   /** Where each boundary can be grabbed. None while maximized. */
   dividers: Divider[];
   focusId: string | null;
@@ -316,6 +318,7 @@ function read(
     swapped: facts.swapped,
     cells,
     rail,
+    gap: box.gap,
     dividers: facts.dividers ? dividersOf(display, box) : [],
     focusId,
     betweenIds: betweenRailAndFocus(cells, rail, focusId),
@@ -344,19 +347,25 @@ const MOVE_EPSILON_PX = 0.5;
  * is a translate, and translating a pane whose width also changed moves an edge that stays. Only
  * those: putting animation and layer promotion on a pane that does not move makes unrelated
  * surfaces pay re-raster cost every phase (measured).
+ *
+ * A width that changed by no more than half the corridor is the same box: a rail landing on or
+ * leaving the plane's border charges its neighbours half a gap (split-pane R5), and measured
+ * 2026-09-05, that 2.7px made every rail travel a snap instead of a journey.
  */
 export function arrangementMoves(
   from: Pick<Arrangement, "cells">,
-  to: Pick<Arrangement, "cells">,
+  to: Pick<Arrangement, "cells"> & Partial<Pick<Arrangement, "gap">>,
 ): ArrangementMove[] {
   const moves: ArrangementMove[] = [];
+  const widthTolerance = (to.gap ?? 0) / 2 + MOVE_EPSILON_PX;
   for (const cell of to.cells) {
     const before = from.cells.find((item) => item.id === cell.id);
     if (!before) continue; // A pane that appears is not one that moves.
     const dLeft = before.rect.left - cell.rect.left;
-    const same = (a: number, b: number) => Math.abs(a - b) < MOVE_EPSILON_PX;
-    if (same(dLeft, 0)) continue;
-    if (!same(before.rect.width, cell.rect.width) || !same(before.rect.top, cell.rect.top)
+    const same = (a: number, b: number, tolerance = MOVE_EPSILON_PX) => Math.abs(a - b) < tolerance;
+    // A shift of no more than the half gap is the border's charge on a neighbour, not a travel.
+    if (same(dLeft, 0, widthTolerance)) continue;
+    if (!same(before.rect.width, cell.rect.width, widthTolerance) || !same(before.rect.top, cell.rect.top)
       || !same(before.rect.height, cell.rect.height)) continue;
     moves.push({ id: cell.id, dLeft });
   }

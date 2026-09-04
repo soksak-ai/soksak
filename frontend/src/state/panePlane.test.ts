@@ -209,6 +209,23 @@ describe("the rail on the plane", () => {
     }
     expect(hasRail(withdrawRail(threePanes(), box))).toBe(false);
   });
+
+  // A withdraw that grew a neighbour over the rail's slot left the slot's line on the plane with
+  // no card on it; the next stand landed beside it, and the lines grew by one per cycle.
+  it("leaves no line behind when it withdraws", () => {
+    const stood = standRail(threePanes(), box, 1, 190)!;
+    const gone = withdrawRail(stood, box);
+    expect(gone.xs).toHaveLength(threePanes().xs.length);
+    const again = standRail(gone, box, 0, 190)!;
+    expect(again.xs).toHaveLength(threePanes().xs.length + 1);
+  });
+
+  it("leaves no line behind when a pane closes", () => {
+    // c grows over b: the line between a and c stays, the one between b and c has no card on it.
+    const state = closePane(threePanes(), box, "b")!;
+    expect(state.xs).toHaveLength(3);
+    expect(state.ys).toHaveLength(2);
+  });
 });
 
 describe("a focused pane the rail cannot reach", () => {
