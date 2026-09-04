@@ -89,7 +89,7 @@ is where "no child process" now is defined, one process further out.
 
 | Judged by | Answered 2026-08-16 |
 | --- | --- |
-| `layoutCanonical.test.ts` | SplitPane cards split and close while preserving the canonical card state |
+| `splitTreeScale.test.ts` | 64 same-direction splits give 65 siblings and one split node; 64 alternating; closing newest-first back to the single leaf; the last leaf refuses |
 | `sok layout.verify` | 69 panes, worst 0.0125px against a 0.5px tolerance, nothing missing, nothing unexpected |
 
 `layout.verify` subtracts the declared rect from the measured one for every

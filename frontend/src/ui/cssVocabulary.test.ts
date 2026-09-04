@@ -66,7 +66,6 @@ const propNames = () => uniq([...CSS.matchAll(/--[a-zA-Z][a-zA-Z0-9_-]*/g)].map(
 // had different lists, so the host and frame families were flagged in only one of them).
 const DEAD = BANNED_DOM_MORPHEMES.map((b) => b.morpheme);
 const WRAPPER_ROLE_NOUNS = new Set(DEAD);
-const PUBLIC_LIBRARY_CLASSES = new Set([".sp-divider"]);
 const paneNameViolates = (name: string): boolean => {
   const segs = name.slice(1).split("-");
   if (!segs.includes("pane")) return false;
@@ -77,7 +76,6 @@ const PANE_PROP_ALIVE = new Set(["--pane-inset"]);
 
 /** Dead words this name holds. Empty = not a violation. */
 function deadWordsIn(name: string, kind: "class" | "prop"): string[] {
-  if (kind === "class" && PUBLIC_LIBRARY_CLASSES.has(name)) return [];
   const segs = name.replace(/^(\.|--)/, "").split("-");
   const hit = DEAD.filter((w) => segs.includes(w));
   if (kind === "class" && segs[0] === "content" && segs.length > 1) hit.push("content-");

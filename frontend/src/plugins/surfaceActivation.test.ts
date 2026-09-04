@@ -7,7 +7,6 @@ import { startSurfaceActivationSync } from "./viewFocus";
 import { useSessions } from "../state/sessions";
 import { CONTENT_VIEW_EVENT } from "../lib/contentViewEvents";
 import { surfaceLabelIn } from "../lib/surfaceLabels";
-import { paneLayout } from "../test/paneLayout";
 
 const WINDOW = "win-a1b2c3";
 
@@ -47,11 +46,14 @@ describe("a surface that reports it was activated", () => {
             {
               id: "spc-a1b2c3",
               activePaneId: "pan-other",
-              layout: paneLayout({
+              layout: {
+                type: "leaf",
+                value: {
                   id: PANE,
                   tabs: [{ id: VIEW, kind: "plugin", pluginId: "plg-a", view: "content", title: "T" }],
                   activeTabId: "tab-other",
-              }),
+                },
+              },
             },
           ],
         },

@@ -1,13 +1,22 @@
-// Workspace serialization uses the SplitPaneState wire shape for content and sidebar layouts.
+// Workspace serialization — layout to a plain JSON snapshot (persist and restore, A2). Both trees (PaneNode,
+// SidebarLayout) serialize through the same serializeSplitTree path in splitTree.ts (no duplication).
 //
-// Snapshot field names describe the current workspace model and are converted only at this boundary.
+// [RULE] Wire keys stay on the old shape (contents·views·activeViewId·activeGroupId·activeContentId·
+// maximizedViewId) — the migration (P0-5) moves them. In-memory fields are already the new
+// vocabulary (spaces·tabs·activeTabId·activePaneId·activeSpaceId·maximizedTabId·railBindingTabId), so the two
+// are joined only inside this file's serialize/deserialize. Existing user snapshots still open unchanged.
 //
 // [RULE] leaf payload id (group/pane), view id and content id are preserved → the active references
 // (activeContentId/activeGroupId/activeViewId/focusedPaneId/maximizedViewId) work undamaged.
+// Only split id is regenerated on restore (used for tree structure alone and never referenced, so
+// serializeSplitTree omits it).
 // live status and live sessions (PTY/webview) are not serialized — after restore the views re-report and remount.
 
-import { checkState } from "split-pane";
-import type { CardInit, SplitPaneState } from "split-pane";
+import {
+  serializeSplitTree,
+  deserializeSplitTree,
+  type SplitSnapshot,
+} from "./splitTree";
 import { initialSidebarLayout, type SidebarGroup, type SidebarLayout } from "./sidebarLayout";
 import { byPlace } from "./sectionSets";
 import type { Workspace, Space, Pane, Tab, SidebarRegion } from "./sessions";
@@ -15,9 +24,7 @@ import { DEFAULT_RAIL_PLACEMENT,
   normalizeRailPlacement,
   type RailPlacement,
 } from "../lib/railPlacement";
-type GridSnapshot<T> = Omit<SplitPaneState, "cards"> & {
-  cards: Array<Omit<CardInit, "data"> & { data: T }>;
-};
+import { normalizeVerticalLines } from "./verticalLines";
 
 // ── Snapshot types ───────────────────────────────────────────────────────────
 
@@ -51,7 +58,7 @@ interface ContentSnapshot {
   title: string;
   activeGroupId: string;
   maximizedViewId?: string;
-  layout: GridSnapshot<ViewGroupSnapshot>;
+  layout: SplitSnapshot<ViewGroupSnapshot>;
 }
 
 export interface WorkspaceSnapshot {
@@ -59,12 +66,20 @@ export interface WorkspaceSnapshot {
   title: string;
   root: string;
   color?: string;
+  // Vertical-line normalization migration marker — serialization always writes it. Only an old snapshot without
+  // the marker is healed once on restore by normalizeVerticalLines; a restore with the marker is identity —
+  // restore never rewrites a separate line the user placed outside the drag rule (LINE_GROUP_EPS).
+  vlNormalized?: true;
+  // One-time placement migration marker — while rail migration was withdrawn, serialization wrote an anchor
+  // (pin@0) even for workspaces with no placement set. The placement in a snapshot without the marker may be that
+  // era's default, so it is dropped once (removal condition: no marker-less snapshot left in the field).
+  railPlacementNormalized?: true;
   regionOpen: Record<SidebarRegion, boolean>;
   // Rail frame position PIN.
   railPlacement?: RailPlacement;
   // One arrangement per region. The right held a single active view and drew an icon rail of
   // everything placed there until 2026-08-16 — a region with a rule of its own (A2a).
-  sidebarLayouts: Record<SidebarRegion, GridSnapshot<SidebarGroup>>;
+  sidebarLayouts: Record<SidebarRegion, SplitSnapshot<SidebarGroup>>;
   activeContentId: string;
   contents: ContentSnapshot[];
   // Rail pins (§4.5) — persisted with the workspace.
@@ -105,10 +120,7 @@ const serializeContent = (c: Space): ContentSnapshot => ({
   title: c.title,
   activeGroupId: c.activePaneId,
   ...(c.maximizedTabId ? { maximizedViewId: c.maximizedTabId } : {}),
-  layout: {
-    ...c.layout,
-    cards: c.layout.cards.map((card) => ({ ...card, data: serializeViewGroup(card.data) })),
-  },
+  layout: serializeSplitTree(c.layout, serializeViewGroup), // PaneNode(leaf=Pane)
 });
 
 export function serializeWorkspace(p: Workspace): WorkspaceSnapshot {
@@ -117,9 +129,12 @@ export function serializeWorkspace(p: Workspace): WorkspaceSnapshot {
     title: p.title,
     root: p.root,
     ...(p.color ? { color: p.color } : {}),
+    vlNormalized: true,
+    railPlacementNormalized: true,
     regionOpen: p.regionOpen,
     railPlacement: p.railPlacement ?? DEFAULT_RAIL_PLACEMENT,
-    sidebarLayouts: byPlace((place) => p.sidebarLayouts[place]),
+    // Sidebar layout (SplitTree<SidebarGroup>) — the leaf payload is plain JSON.
+    sidebarLayouts: byPlace((place) => serializeSplitTree(p.sidebarLayouts[place], (g) => g)),
     activeContentId: p.activeSpaceId,
     contents: p.spaces.map(serializeContent),
   };
@@ -153,22 +168,19 @@ const deserializeViewGroup = (s: ViewGroupSnapshot): Pane => ({
   tabs: s.views.map(deserializeView),
 });
 
-const deserializeGrid = <T, U>(
-  state: GridSnapshot<T>,
-  data: (value: T) => U,
-): Omit<SplitPaneState, "cards"> & { cards: Array<Omit<CardInit, "data"> & { data: U }> } => {
-  checkState(state);
-  return { ...state, cards: state.cards.map((card) => ({ ...card, data: data(card.data) })) };
-};
-
-const deserializeContent = (s: ContentSnapshot): Space => {
-  const layout = deserializeGrid(s.layout, deserializeViewGroup);
+const deserializeContent = (s: ContentSnapshot, normalize: boolean): Space => {
+  const layout = deserializeSplitTree(s.layout, deserializeViewGroup);
   return {
     id: s.id,
     title: s.title,
     activePaneId: s.activeGroupId,
     ...(s.maximizedViewId ? { maximizedTabId: s.maximizedViewId } : {}),
-    layout,
+    // One migration per snapshot (the vertical no-split proposition) — only an old snapshot without the
+    // vlNormalized marker is healed by snapping vertical lines fragmented before companion drag (e.g. top 40.6 /
+    // bottom 39.5) to the x of the topmost segment. A restore with the marker is identity — it does not rewrite
+    // the user's layout.
+    // [removal condition] Drop the gate once marker-less snapshots are gone from the field (re-saved with the marker).
+    layout: normalize ? normalizeVerticalLines(layout) : layout,
   };
 };
 
@@ -179,8 +191,13 @@ const deserializeContent = (s: ContentSnapshot): Space => {
  *  written before that threw here, and with it went the panes, the tabs and the roots of every
  *  workspace in the window — measured, every command answered `No such workspace`. The arrangement
  *  of a region is presentation, and losing it costs the arrangement. */
-function sidebarLayoutOf(stored: GridSnapshot<SidebarGroup> | undefined): SidebarLayout {
-  return stored ? deserializeGrid(stored, (group) => group) : initialSidebarLayout([]);
+function sidebarLayoutOf(stored: SplitSnapshot<SidebarGroup> | undefined): SidebarLayout {
+  if (!stored) return initialSidebarLayout([]);
+  try {
+    return deserializeSplitTree(stored, (g) => g);
+  } catch {
+    return initialSidebarLayout([]);
+  }
 }
 
 export function deserializeWorkspace(s: WorkspaceSnapshot): Workspace {
@@ -192,9 +209,14 @@ export function deserializeWorkspace(s: WorkspaceSnapshot): Workspace {
     // The rail is open on a workspace that never said, the two edges are not. A snapshot from
     // before the left edge existed has nothing for it, and nothing is what it gets.
     regionOpen: byPlace((place) => s.regionOpen?.[place] ?? place === "rail"),
-    railPlacement: normalizeRailPlacement(s.railPlacement),
+    // The stored value of an old snapshot without the marker is not trusted — there is no way to separate the
+    // withdrawn era's default (pin@0) from an anchor the user chose, so it is reset once to the default (flow).
+    // With the marker present the stored value is honored.
+    railPlacement: s.railPlacementNormalized
+      ? normalizeRailPlacement(s.railPlacement)
+      : DEFAULT_RAIL_PLACEMENT,
     sidebarLayouts: byPlace((place) => sidebarLayoutOf(s.sidebarLayouts?.[place])),
     activeSpaceId: s.activeContentId,
-    spaces: s.contents.map(deserializeContent),
+    spaces: s.contents.map((c) => deserializeContent(c, !s.vlNormalized)),
   };
 }

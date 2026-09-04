@@ -30,7 +30,6 @@ import { execute } from "./registry";
 import { useSessions, type Workspace } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
 import { SECTION_PLACES } from "../state/sectionSets";
-import { paneLayout } from "../test/paneLayout";
 
 function workspace(open: Record<string, boolean>): Workspace {
   return {
@@ -49,7 +48,10 @@ function workspace(open: Record<string, boolean>): Workspace {
         id: "spc-aaaaaa",
         title: "1",
         activePaneId: "pan-aaaaaa",
-          layout: paneLayout({
+        layout: {
+          type: "leaf",
+          id: "lea-aaaaaa",
+          value: {
             id: "pan-aaaaaa",
             activeTabId: "tab-aaaaaa",
             tabs: [
@@ -61,7 +63,8 @@ function workspace(open: Record<string, boolean>): Workspace {
                 view: "content",
               },
             ],
-          }),
+          },
+        },
       },
     ],
     activeSpaceId: "spc-aaaaaa",

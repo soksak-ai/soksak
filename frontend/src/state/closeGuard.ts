@@ -1,6 +1,6 @@
 // Close guard — the blocking decision over view status (R2). Pure function, zero IO — single truth for close risk.
 // Close orchestration (confirm dialog, closeView call) is done by the UI on top of this function (R6/§5).
-import type { Tab, Space, PaneLayout } from "./sessions";
+import type { Tab, Space, PaneNode } from "./sessions";
 
 // Standard blocking vocabulary (R2) — only these codes trigger the close guard. Every other code is display only.
 // A new blocking meaning requires extending this vocabulary through a core change (deliberate gate).
@@ -26,6 +26,10 @@ export function contentCloseReasons(content: Space): string[] {
 }
 
 // Every view in the group tree (leaf/split), in order — used by contentCloseReasons.
-export function* viewsOfGroupNode(node: PaneLayout): Generator<Tab> {
-  for (const card of node.cards) yield* card.data.tabs;
+export function* viewsOfGroupNode(node: PaneNode): Generator<Tab> {
+  if (node.type === "leaf") {
+    yield* node.value.tabs;
+  } else {
+    for (const child of node.children) yield* viewsOfGroupNode(child);
+  }
 }

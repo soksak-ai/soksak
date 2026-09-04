@@ -18,8 +18,7 @@ import {
 } from "./windowRecorder";
 import { tabIconOf } from "../lib/tabIcon";
 import { tmsg, key} from "../i18n";
-import { SplitPane } from "split-pane";
-import type { Axis } from "split-pane";
+import { computeSplitLayout } from "../lib/splitLayout";
 import { railJournal } from "../lib/railJournal";
 import { fingerprintOf } from "./stateFingerprint";
 import {
@@ -36,7 +35,7 @@ import {
   useSessions,
   type Space,
   type DropZone,
-  type PaneLayout,
+  type PaneNode,
   type Program,
   type Workspace,
   type Side,
@@ -53,8 +52,14 @@ import {
   setPlaceWidth,
   widthWithinBounds,
 } from "../state/placeWidth";
-type GutterSide = "right" | "bottom" | "left" | "top";
+import {
+  canonicalGutter,
+  isCanonicalSide,
+  resolveGutter,
+  type GutterSide,
+} from "../lib/gutterAddress";
 import type { SidebarLayout } from "../state/sidebarLayout";
+import type { SplitTree } from "../state/splitTree";
 import { addWorkspaceClaimed, closeWorkspaceReleased } from "../state/workspaceRegistry";
 import { getRegisteredProgram, listPrograms } from "../plugins/programRegistry";
 import {
@@ -165,28 +170,54 @@ interface LayoutSpaceSpec {
   panes?: LayoutPaneSpec[];
 }
 
-// Gutter resolution uses SplitPane divider axis and line values.
+// Gutter axis resolution and canonicalization is owned by lib/gutterAddress alone (the renderer's
+// data-node address and the command parameters take the same function — no second standard). Here
+// it only adds sizes to that result.
 const EDGES = ["right", "bottom", "left", "top"] as const satisfies readonly GutterSide[];
+const paneIdOf = (pane: Pane) => pane.id;
 
 // The canonical gutter the response names — the direction axis on the command surface is edge (side
 // means pane.split's split direction, a different axis, so one word never has two meanings here).
-type GutterRef = { axis: Axis; line: number };
-function gutterRef(layout: PaneLayout, paneId: string, edge: GutterSide): GutterRef | null {
-  const grid = new SplitPane(layout, { width: 100, height: 100, gap: 0, minSize: 0 });
-  const rect = grid.rect(paneId);
-  if (!rect) return null;
-  const divider = grid.dividers().find((item) => {
-    if (edge === "right") return item.axis === "x" && Math.abs(item.x - (rect.x + rect.w)) < 2;
-    if (edge === "left") return item.axis === "x" && Math.abs(item.x + item.w - rect.x) < 2;
-    if (edge === "bottom") return item.axis === "y" && Math.abs(item.y - (rect.y + rect.h)) < 2;
-    return item.axis === "y" && Math.abs(item.y + item.h - rect.y) < 2;
-  });
-  return divider ? { axis: divider.axis, line: divider.line } : null;
+function gutterEcho(
+  layout: PaneNode,
+  paneId: string,
+  edge: GutterSide,
+): { pane: string; edge: GutterSide } | null {
+  const canonical = canonicalGutter(layout, paneId, edge, paneIdOf);
+  return canonical ? { pane: canonical.pane, edge: canonical.side } : null;
 }
 
 // The split that directly wraps the leaf holding that viewKey — interior nodes of the sidebar tree
 // have no name, so the split to adjust is named by the view inside it (sidebar.resize). A leaf
 // root has no split (null).
+function sidebarSplitIdOf(layout: SidebarLayout, viewKey: string): string | null {
+  const walk = (node: SidebarLayout, parentId: string | null): string | null => {
+    if (node.type === "leaf") return node.value.viewKeys.includes(viewKey) ? parentId : null;
+    for (const c of node.children) {
+      const hit = walk(c, node.id);
+      if (hit !== null) return hit;
+    }
+    return null;
+  };
+  return walk(layout, null);
+}
+
+// Current sizes of the split containing the resolved gutter — this read exists because resizeSplit
+// requires the full sizes array (moving one gutter re-reads the other ratios and writes them back).
+// If that interface changes to take one gutter's ratio, this function disappears entirely — that is
+// the removal condition, and until then it stays a local read here (promoting it gives a home to
+// something that must vanish). If promotion becomes necessary, put it next to resizeSplitTree and
+// findSplitTree in splitTree.ts as a leaf generic — that file is the single abstraction for both the
+// pane tree and the sidebar tree, so a read that fits only one side breaks the symmetry.
+function splitSizesOf(node: PaneNode, splitId: string): number[] | null {
+  if (node.type === "leaf") return null;
+  if (node.id === splitId) return node.sizes;
+  for (const c of node.children) {
+    const hit = splitSizesOf(c, splitId);
+    if (hit) return hit;
+  }
+  return null;
+}
 
 // Search every workspace for the location of a tab id. Terminal targets resolve through this function
 // too — a terminal is a plugin view and its instance is a tab (no core terminal).
@@ -300,12 +331,30 @@ function serializeTab(v: Tab) {
   };
 }
 
-function serializeLayout(node: PaneLayout): object {
-  return { ...node, cards: node.cards.map((card) => ({ ...card, data: { pane: card.data.id } })) };
+// Serialization of the split structure (shared by the pane tree and the sidebar tree). Interior nodes
+// are not real things, so they have no name — only dir/sizes and nested children, no id. Commands
+// that manipulate gutters (pane.resize, pane.equalize, sidebar.resize) name a gutter by leaf, so
+// an interior node is never named (IDENTITY §4).
+function serializeSplitStructure<L>(
+  node: SplitTree<L>,
+  leafOf: (value: L) => object,
+): object {
+  if (node.type === "leaf") return leafOf(node.value);
+  return {
+    split: { dir: node.dir, sizes: node.sizes },
+    children: node.children.map((c) => serializeSplitStructure(c, leafOf)),
+  };
+}
+
+function serializeLayout(node: PaneNode): object {
+  return serializeSplitStructure(node, (pane) => ({ pane: pane.id }));
 }
 
 function serializeSidebarLayout(node: SidebarLayout): object {
-  return { ...node, cards: node.cards.map((card) => ({ ...card, data: { viewKeys: card.data.viewKeys, active: card.data.activeViewKey } })) };
+  return serializeSplitStructure(node, (g) => ({
+    viewKeys: g.viewKeys,
+    active: g.activeViewKey,
+  }));
 }
 
 function serializeSpace(
@@ -367,7 +416,7 @@ function serializeSpace(
     activePaneId: c.activePaneId,
     maximizedTabId: c.maximizedTabId ?? null,
     // layout/panes = the screen right now. canonicalLayout = read-only serialization of the stored
-    // The response distinguishes canonical layout from the projected arrangement.
+    // SplitTree. Consumers need not mistake the projection for the canonical state or read the private store.
     layout: maximizedPane
       ? { pane: maximizedPane.group.id }
       : serializeLayout(displayLayout),
@@ -521,7 +570,7 @@ export function registerCatalog(): void {
     description: key("cmd.state.tree.desc"),
     params: {},
     returns:
-      "{ activeProjectId, workspaces[].{ regionOpen{left,rail,right}, railPosition, spaces[].{ layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] } } } — layout/panes are displayed state; canonicalLayout is the stored SplitPaneState",
+      "{ activeProjectId, workspaces[].{ regionOpen{left,rail,right}, railPosition, spaces[].{ layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] } } } — layout/panes are displayed state; canonicalLayout is the stored SplitTree",
     message: (d) => tmsg("msg.state.tree", { n: ((d.workspaces as unknown[]) ?? []).length }),
     examples: ["state.tree"],
     handler: () => serializeTree(),
@@ -652,12 +701,11 @@ export function registerCatalog(): void {
         if (!before) return notFound("msg.workspace.notFound");
         const solved = projectArrangement(before);
         if (!solved) return notFound("msg.space.notFound");
-        const spaceHost = document.querySelector<HTMLElement>(
+        const host = document.querySelector<HTMLElement>(
           `[data-node="layout/space/${before.activeSpaceId}"]`,
         );
-        const host = spaceHost?.querySelector<HTMLElement>(`[data-node="layout/host/${before.activeSpaceId}"]`);
-        if (!host) return { ok: false, code: "NOT_EXPOSED", message: `layout/space/${before.activeSpaceId}/split-pane` };
-        const drawn = [...document.querySelectorAll<HTMLElement>(`[data-node^="layout/slot/"]`)]
+        if (!host) return { ok: false, code: "NOT_EXPOSED", message: `layout/space/${before.activeSpaceId}` };
+        const drawn = [...document.querySelectorAll<HTMLElement>(`[data-node^="layout/pane/"]`)]
           .filter((el) => host.contains(el) && el.dataset.pane)
           .map((el) => el.dataset.pane as string)
           .sort()
@@ -672,10 +720,11 @@ export function registerCatalog(): void {
 
       const spaceId = t.activeSpaceId;
       const hostRect = host.getBoundingClientRect();
-      const hostWidth = host.clientWidth;
-      const hostHeight = host.clientHeight;
+      // The inset is declared once on the space container and every pane consumes it.
+      const inset = read(host, "--pane-inset");
+
       const onScreen = new Map<string, HTMLElement>();
-      for (const el of document.querySelectorAll<HTMLElement>(`[data-node^="layout/slot/"]`)) {
+      for (const el of document.querySelectorAll<HTMLElement>(`[data-node^="layout/pane/"]`)) {
         const id = el.dataset.pane;
         if (id && host.contains(el)) onScreen.set(id, el);
       }
@@ -695,13 +744,11 @@ export function registerCatalog(): void {
         // The rail shifts a pane sideways. The shift it was rendered with is on the pane itself.
         const railDx = read(el, "--rail-dx");
         const railDw = read(el, "--rail-dw");
-        // layout/pane is the library card boundary. Header, status, and pane inset are children of
-        // that card and are not part of this measurement.
         const expected = {
-          left: hostRect.left + (hostWidth * cell.rect.left) / 100 + railDx,
-          top: hostRect.top + (hostHeight * cell.rect.top) / 100,
-          width: (hostWidth * cell.rect.width) / 100 + railDw,
-          height: (hostHeight * cell.rect.height) / 100,
+          left: hostRect.left + (hostRect.width * cell.rect.left) / 100 + railDx + inset,
+          top: hostRect.top + (hostRect.height * cell.rect.top) / 100 + inset,
+          width: (hostRect.width * cell.rect.width) / 100 + railDw - inset * 2,
+          height: (hostRect.height * cell.rect.height) / 100 - inset * 2,
         };
         const delta = {
           left: measured.left - expected.left,
@@ -1505,26 +1552,31 @@ export function registerCatalog(): void {
         description: key("cmd.sidebar.param.region"),
         required: true,
       },
-      axis: { type: "string", enum: ["x", "y"], description: key("cmd.sidebar.resize.param.axis"), required: true },
-      line: { type: "number", description: key("cmd.sidebar.resize.param.line"), required: true },
-      px: { type: "number", description: key("cmd.sidebar.resize.param.px"), required: true },
+      viewKey: {
+        type: "string",
+        description: key("cmd.sidebar.resize.param.viewKey"),
+        required: true,
+      },
+      sizes: { type: "number[]", description: key("cmd.sidebar.resize.param.sizes"), required: true },
     },
     returns: "{ projectId, sizes }",
     message: () => tmsg("msg.sidebar.resize"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sidebar.resize \'{"region":"left","axis":"x","line":1,"px":420}\'',
+      'sidebar.resize \'{"region":"left","viewKey":"soksak-plugin-<id>.<view>","sizes":[0.6,0.4]}\'',
     ],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
       if (!t) return notFound("msg.workspace.notFound");
+      const key = p.viewKey as string;
       const region = p.region as SidebarRegion;
-      const axis = p.axis as Axis;
-      const line = p.line as number;
-      const px = p.px as number;
-      if ((axis !== "x" && axis !== "y") || !Number.isInteger(line) || !Number.isFinite(px)) return err("INVALID_PARAMS", "axis, line and px are invalid");
-      const r = S().resizeSidebar(t.id, region, axis, line, px);
-      return r.ok ? { projectId: t.id, axis, line, px } : r;
+      const splitId = sidebarSplitIdOf(t.sidebarLayouts[region], key);
+      if (!splitId) {
+        return notFound("msg.sidebar.resize.notSplit", { key });
+      }
+      const sizes = p.sizes as number[];
+      const r = S().resizeSidebar(t.id, region, splitId, sizes);
+      return r.ok ? { projectId: t.id, sizes } : r;
     },
   });
 
@@ -1929,7 +1981,7 @@ export function registerCatalog(): void {
     if (box.width <= 0 || box.height <= 0) return null;
 
     const placeholder = { id: "pan-floor", activeTabId: undefined, tabs: [] } as unknown as Pane;
-    const { cells } = computeLayout(splitAtGroup(space.layout, paneId, side, placeholder));
+    const { cells } = computeSplitLayout(splitAtGroup(space.layout, paneId, side, placeholder));
     // The rail is inserted into the row: every cell keeps its percentage and loses pixels in
     // proportion, so the row is narrower than the space box by the rail's whole width. Leaving it
     // out reads a row 160px wider than the one on screen — measured 2026-08-16, a single pane in a
@@ -1964,9 +2016,9 @@ export function registerCatalog(): void {
   // Zero when the rail is closed, when no pane is drawn yet, or when the pane's declared width is
   // zero — all three are "nothing measurable", and guessing a width there would refuse splits that
   // are fine.
-  const railWidthOf = (layout: PaneLayout, host: HTMLElement): number => {
-    for (const cell of computeLayout(layout).cells) {
-      const el = host.querySelector<HTMLElement>(`[data-node="layout/pane/${cell.group.id}"]`);
+  const railWidthOf = (layout: PaneNode, host: HTMLElement): number => {
+    for (const cell of computeSplitLayout(layout).cells) {
+      const el = host.querySelector<HTMLElement>(`[data-node="layout/pane/${cell.value.id}"]`);
       if (!el) continue;
       const share = Number.parseFloat(getComputedStyle(el).getPropertyValue("--rail-dw"));
       if (!Number.isFinite(share)) continue;
@@ -2178,21 +2230,24 @@ export function registerCatalog(): void {
         };
       }
       const layout = loc.space.layout;
-      const gutter = gutterRef(layout, loc.pane.id, edge);
-      const grid = new SplitPane(layout, { width: 100, height: 100, gap: 0, minSize: 0 });
-      const rect = grid.rect(loc.pane.id);
-      if (!gutter || !rect) {
+      const gutter = resolveGutter(layout, loc.pane.id, edge, paneIdOf);
+      const current = gutter ? splitSizesOf(layout, gutter.splitId) : null;
+      if (!gutter || !current) {
         return notFound("msg.pane.noGutter", { pane: loc.pane.id, edge });
       }
-      const position = edge === "right" || edge === "left" ? rect.x + rect.w * (edge === "right" ? ratio : 1 - ratio) : rect.y + rect.h * (edge === "bottom" ? ratio : 1 - ratio);
-      const r = S().resizeSplit(loc.workspace.id, gutter.axis, gutter.line, position);
+      const sizes = [...current];
+      const pair = sizes[gutter.index] + sizes[gutter.index + 1];
+      // One gutter moves only the two neighbouring slots (that is what dragging a gutter does) — the
+      // rest stay unchanged. A gutter named by left/top is the preceding sibling's forward gutter, so
+      // the requested pane is in the trailing slot.
+      sizes[gutter.index] = isCanonicalSide(edge) ? pair * ratio : pair * (1 - ratio);
+      sizes[gutter.index + 1] = pair - sizes[gutter.index];
+      const r = S().resizeSplit(loc.workspace.id, gutter.splitId, sizes);
       return r.ok
         ? {
             paneId: loc.pane.id,
-            gutter: { pane: loc.pane.id, edge },
-            axis: gutter.axis,
-            line: gutter.line,
-            px: position,
+            gutter: gutterEcho(layout, loc.pane.id, edge),
+            sizes,
           }
         : r;
     },
@@ -2228,21 +2283,25 @@ export function registerCatalog(): void {
         };
       }
       const layout = loc.space.layout;
-      const gutter = gutterRef(layout, loc.pane.id, edge);
-      const grid = new SplitPane(layout, { width: 100, height: 100, gap: 0, minSize: 0 });
-      const rect = grid.rect(loc.pane.id);
-      if (!gutter || !rect) {
+      const gutter = resolveGutter(layout, loc.pane.id, edge, paneIdOf);
+      const current = gutter ? splitSizesOf(layout, gutter.splitId) : null;
+      if (!gutter || !current) {
         return notFound("msg.pane.noGutter", { pane: loc.pane.id, edge });
       }
-      const position = edge === "right" || edge === "left" ? rect.x + rect.w / 2 : rect.y + rect.h / 2;
-      const r = S().resizeSplit(loc.workspace.id, gutter.axis, gutter.line, position);
+      const sizes = [...current];
+      if (p.all === true) {
+        sizes.fill(1 / sizes.length);
+      } else {
+        const half = (sizes[gutter.index] + sizes[gutter.index + 1]) / 2;
+        sizes[gutter.index] = half;
+        sizes[gutter.index + 1] = half;
+      }
+      const r = S().resizeSplit(loc.workspace.id, gutter.splitId, sizes);
       return r.ok
         ? {
             paneId: loc.pane.id,
-            gutter: { pane: loc.pane.id, edge },
-            axis: gutter.axis,
-            line: gutter.line,
-            px: position,
+            gutter: gutterEcho(layout, loc.pane.id, edge),
+            sizes,
           }
         : r;
     },

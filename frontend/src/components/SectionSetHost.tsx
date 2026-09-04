@@ -1,8 +1,13 @@
-// Left sidebar host. SplitPane owns the sidebar card state and geometry.
+// Left sidebar host — the sidebar-body view frame. Layout is workspace.leftLayout (SplitTree<SidebarGroup>).
+// [dedupe] Shares the *same* split machine as the content area (GroupArea) through splitLayout.ts:
+// computeSplitLayout for % coordinate cells, hitTestCells for 5-zone (center/left/right/top/bottom) drops,
+// the same drop-ind/divider visuals. The sidebar is narrow, so a col (vertical) split is natural, but it
+// supports the same 4-way drop as content (left/right = row).
 // keep-alive: a view opened once stays mounted (display toggle).
 
 import { execute } from "../commands/registry";
-import { SplitPane } from "split-pane";
+import { gutterOwnerOf } from "../lib/gutterAddress";
+import { beginGesture } from "../lib/gesture";
 import { CHROME_BANDS } from "../lib/chromeBands";
 import {
   memo,
@@ -16,14 +21,19 @@ import {
 import { PluginViewHost } from "./PluginViewHost";
 import { ViewBadge } from "./ViewBadge";
 import { rafThrottle } from "../lib/rafThrottle";
-import { zoneAt, cellVars, type GridLayout } from "../lib/splitPaneGeometry";
+import {
+  computeSplitLayout,
+  hitTestCells,
+  cellVars,
+  type DropZone,
+} from "../lib/splitLayout";
 import {
   useViewRegistry,
   viewsOnSurface,
   getRegisteredView,
 } from "../plugins/viewRegistry";
 import { useHeldWhileLeaving } from "../lib/heldWhileLeaving";
-import { LAYOUT_MOTION_MS } from "../lib/layoutMotion";
+import { beginLayoutMotion, endLayoutMotion, LAYOUT_MOTION_MS } from "../lib/layoutMotion";
 import { useSectionSets } from "../state/sectionSets";
 import { useSessions, type Workspace, type SidebarRegion } from "../state/sessions";
 import { useTheme } from "../state/theme";
@@ -35,8 +45,6 @@ import {
 } from "../state/sidebarLayout";
 import { isComposingEnter } from "../lib/imeKeys";
 import { localize } from "../i18n";
-
-type DropZone = "center" | "left" | "right" | "top" | "bottom";
 
 const DRAG_THRESHOLD = 5;
 // Tab row height — the same band as the content header (lib/chromeBands). Measured: before 2026-08-15 this
@@ -108,23 +116,7 @@ export const SectionSetHost = memo(function SectionSetHost({
   const opened = [...openedRef.current].filter((k) => registeredKeys.includes(k));
 
   // Compute cells and dividers with the shared machine.
-  const { cells, gutters } = useMemo(() => {
-    const grid = new SplitPane(layout, { width: 100, height: 100, gap: 0, minSize: 0 });
-    const rects = grid.rects();
-    const cells = layout.cards.map((card) => {
-      const rect = rects.get(card.id)!;
-      return { value: card.data, rect: { left: rect.x, top: rect.y, width: rect.w, height: rect.h } };
-    });
-    const gutters = grid.dividers().map((divider) => ({
-      splitId: `${divider.axis}:${divider.line}`,
-      dir: divider.axis === "x" ? "row" as const : "col" as const,
-      index: divider.line,
-      rect: { left: divider.x, top: divider.y, width: divider.w, height: divider.h },
-      spanPct: divider.axis === "x" ? divider.h : divider.w,
-      sizes: grid.lines(divider.axis),
-    }));
-    return { cells, gutters };
-  }, [layout]);
+  const { cells, gutters } = useMemo(() => computeSplitLayout(layout), [layout]);
   const cellsRef = useRef(cells);
   cellsRef.current = cells;
   // Unique id of each cell (leaf group) = viewKeys joined (unique within the layout).
@@ -138,14 +130,16 @@ export const SectionSetHost = memo(function SectionSetHost({
   // dragged tab (the self-split guard applies only when that cell has 1 view — with several views an edge drop
   // may split one out).
   const hitTest = useCallback(
-    (x: number, y: number, r: DOMRect, _sourceCellId: string, selfCenterOnly: boolean) => {
-      const sourceCard = layout.cards.find((item) => cellId(item.data) === _sourceCellId);
-      const result = zoneAt(layout as GridLayout<SidebarGroup>, (x - r.left) / Math.max(1, r.width) * 100, (y - r.top) / Math.max(1, r.height) * 100, { headerPx: SIDEBAR_HEADER_PX, centreOnly: selfCenterOnly ? sourceCard?.id : undefined });
-      if (!result) return null;
-      const card = layout.cards.find((item) => item.id === result.id);
-      return card ? { ...result, id: cellId(card.data), zone: result.zone === "centre" ? "center" as const : result.zone } : null;
-    },
-    [layout],
+    (x: number, y: number, r: DOMRect, sourceCellId: string, selfCenterOnly: boolean) =>
+      hitTestCells(
+        x,
+        y,
+        r,
+        cellsRef.current.map((c) => ({ value: c.value, rect: c.rect })),
+        cellId,
+        { chromeTop: SIDEBAR_HEADER_PX, statusPx: 0, sourceId: sourceCellId, selfCenterOnly },
+      ),
+    [],
   );
 
   // Tab drag (move a view). Below the threshold it is a click (tab switch).
@@ -224,30 +218,63 @@ export const SectionSetHost = memo(function SectionSetHost({
     [workspace.id, region, hitTest, setSidebarTab],
   );
 
-  const onGutterDown = (d: (typeof gutters)[number]) => (event: React.MouseEvent) => {
-    event.preventDefault();
-    const host = containerRef.current;
-    if (!host) return;
-    const axis = d.dir === "row" ? "x" : "y";
-    const grid = new SplitPane(layout, { width: 100, height: 100, gap: 0, minSize: 0 });
-    const startCoordinate = axis === "x" ? event.clientX : event.clientY;
-    const startBoundary = grid.boundaryPos(axis, d.index);
-    const hostRect = host.getBoundingClientRect();
-    const scale = axis === "x" ? 100 / Math.max(1, hostRect.width) : 100 / Math.max(1, hostRect.height);
-    const commit = rafThrottle((coordinate: number) => {
-      const px = startBoundary + (coordinate - startCoordinate) * scale;
-      useSessions.getState().resizeSidebar(workspace.id, region, axis, d.index, px);
+  // Divider drag (split ratio). The same logic as the content onGutterDown.
+  const onGutterDown = (d: (typeof gutters)[number]) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const cont = containerRef.current;
+    if (!cont) return;
+    const cr = cont.getBoundingClientRect();
+    const totalPx = d.dir === "row" ? cr.width : cr.height;
+    const splitPx = (totalPx * d.spanPct) / 100;
+    if (splitPx <= 0) return;
+    const startPos = d.dir === "row" ? e.clientX : e.clientY;
+    const startSizes = [...d.sizes];
+    const i = d.index;
+    const minFrac = 0.1;
+    // Pair presentation and action in one place — preview runs every frame (straight to the store; that is
+    // presentation), commit runs once on landing (through the command). The pairing is forced, so "the screen
+    // changed but the ledger has nothing" is structurally impossible.
+    const gesture = beginGesture<number[]>({
+      preview: (sizes) =>
+        // Presentation touches the store directly — it runs every frame, which is no place for a command. This
+        // reads the state at that moment rather than subscribing, so it reads outside the hook (a gesture path
+        // unrelated to render).
+        useSessions.getState().resizeSidebar(workspace.id, region, d.splitId, sizes),
+      commit: (sizes) => {
+        // Address the gutter by name — the internal split id never goes outside (IDENTITY §4).
+        const owner = gutterOwnerOf(layout, d.splitId, d.index, cellId);
+        const key = owner?.pane.split("|")[0];
+        if (key) {
+          void execute(
+            "sidebar.left.resize",
+            { workspace: workspace.id, viewKey: key, sizes },
+            {},
+          );
+        }
+      },
     });
-    const onMove = (move: MouseEvent) => commit(axis === "x" ? move.clientX : move.clientY);
+    const throttled = rafThrottle((sizes: number[]) => gesture.move(sizes));
+    const onMove = (ev: MouseEvent) => {
+      const cur = d.dir === "row" ? ev.clientX : ev.clientY;
+      let delta = (cur - startPos) / splitPx;
+      delta = Math.max(-(startSizes[i] - minFrac), Math.min(startSizes[i + 1] - minFrac, delta));
+      const sizes = [...startSizes];
+      sizes[i] = startSizes[i] + delta;
+      sizes[i + 1] = startSizes[i + 1] - delta;
+      throttled(sizes);
+    };
     const onUp = () => {
-      commit.flush();
+      throttled.flush(); // Before the listeners are removed — a dropped last frame = snapback.
+      gesture.end();
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
+      endLayoutMotion("resize");
     };
+    beginLayoutMotion("resize");
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-    document.body.style.cursor = axis === "x" ? "col-resize" : "row-resize";
+    document.body.style.cursor = d.dir === "row" ? "col-resize" : "row-resize";
   };
 
   const hoverCell = hover && cells.find((c) => cellId(c.value) === hover.cellId);

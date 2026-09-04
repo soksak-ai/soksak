@@ -27,6 +27,7 @@ import { reseedSessionsSnapshot } from "../plugins/hooks";
 import { listRecentWorkspaces } from "./recentWorkspaces";
 import {
   useSessions,
+  migrateSpaceTitle,
   type Workspace,
 } from "./sessions";
 import { dropWindowCache, sweepWindowCaches, windowCacheKey } from "./windowCacheSweep";
@@ -162,7 +163,14 @@ export async function initWorkspacePersistence(
       // window already holds are dropped in this window (no duplicate window per workspace — graceful degradation).
       const denied = await claimRoots(workspaces.map((t) => t.root));
       bootFact(`restore:denied:${denied.size}`);
-      const owned = workspaces.filter((t) => !denied.has(t.root));
+      const owned = workspaces
+        .filter((t) => !denied.has(t.root))
+        // Load-time migration — promotes an old purely numeric space title ("3") to the i18n space title (idempotent;
+        // spreadsheet-style naming makes it explicit that it is a space). Titles the user changed are kept (numeric only).
+        .map((t) => ({
+          ...t,
+          spaces: t.spaces.map((c) => ({ ...c, title: migrateSpaceTitle(c.title) })),
+        }));
       for (const t of workspaces) {
         if (denied.has(t.root))
           console.warn(`[P6] restored tab dropped (held by another window): ${t.root}`);
@@ -185,8 +193,7 @@ export async function initWorkspacePersistence(
     bootFact(`restore:done:${restored}`);
   } catch (e) {
     bootFact(`restore:error:${String(e).slice(0, 120)}`);
-    console.error("workspace restore failed:", e);
-    throw e;
+    console.error("workspace restore failed — falling back to the default boot:", e);
   }
   // Restore attempt finished (success, no snapshot, or failure alike) — the store is now this window's truth, so
   // release webviewGc's recovery reboot hold (webviewGc.ts gcGate header).

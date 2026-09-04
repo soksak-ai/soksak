@@ -38,18 +38,17 @@ import {
   removeLayoutArrangementPhase,
 } from "../lib/layoutArrangementPhase";
 import { emitPluginEvent } from "../plugins/hooks";
-import type { CardInit, SplitPaneState } from "split-pane";
+import type { SplitTree } from "../state/splitTree";
 
-type GridLayout<L> = Omit<SplitPaneState, "cards"> & {
-  cards: Array<Omit<CardInit, "data"> & { data: L }>;
-};
-
-function valuesById<L extends { id: string }>(layout: GridLayout<L>): Map<string, L> {
-  return new Map(layout.cards.map((card) => [card.data.id, card.data]));
+function valuesById<L extends { id: string }>(tree: SplitTree<L>, values = new Map<string, L>()): Map<string, L> {
+  if (tree.type === "leaf") values.set(tree.value.id, tree.value);
+  else for (const child of tree.children) valuesById(child, values);
+  return values;
 }
 
-function rebindLayoutValues<L extends { id: string }>(layout: GridLayout<L>, values: Map<string, L>): GridLayout<L> {
-  return { ...layout, cards: layout.cards.map((card) => ({ ...card, data: values.get(card.data.id) ?? card.data })) };
+function rebindLayoutValues<L extends { id: string }>(tree: SplitTree<L>, values: Map<string, L>): SplitTree<L> {
+  if (tree.type === "leaf") return { ...tree, value: values.get(tree.value.id) ?? tree.value };
+  return { ...tree, children: tree.children.map((child) => rebindLayoutValues(child, values)) };
 }
 
 function rebindArrangementContent<L extends { id: string }>(

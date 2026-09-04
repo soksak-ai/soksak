@@ -31,7 +31,6 @@ export default defineConfig(({ mode }) => ({
         manualChunks(id) {
           if (id.includes("/node_modules/react") || id.includes("/node_modules/scheduler/")) return "react";
           if (id.includes("/node_modules/@soksak/soksak-spec/")) return "soksak-spec";
-          if (id.includes("/node_modules/split-pane/")) return "split-pane";
           if (/\/src\/i18n\.(?:en|ko)\.ts$/.test(id)) return "translations";
         },
       },

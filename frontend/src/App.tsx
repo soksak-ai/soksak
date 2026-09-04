@@ -33,7 +33,7 @@ import { RailGridSurface, type RailGridSurfaceHandle } from "./components/RailGr
 import { RailLinkOverlay } from "./components/RailLinkOverlay";
 import { PluginManagerModal } from "./components/PluginManagerModal";
 import { ContentTabs } from "./components/ContentTabs";
-import { GroupArea, HEADER_PX, PANE_INSET, computeLayout } from "./components/GroupArea";
+import { GroupArea, HEADER_PX, PANE_INSET } from "./components/GroupArea";
 import { NewWorkspaceModal } from "./components/NewWorkspaceModal";
 import { WorkspaceSettingsModal } from "./components/WorkspaceSettingsModal";
 import { Icon } from "./ui/icons/Icon";
@@ -79,6 +79,7 @@ import {
   snapRailStation,
 } from "./lib/railPlacement";
 import { railGeometryScopeId, railPresentation } from "./lib/railMotion";
+import { computeSplitLayout } from "./lib/splitLayout";
 import { railWidthResizePlan } from "./lib/railWidthResize";
 import { useAppChromeLayoutReflow } from "./lib/appChromeLayoutReflow";
 import { useArrangementPhase } from "./components/useArrangementPhase";
@@ -313,11 +314,6 @@ const WorkspacePlane = memo(function WorkspacePlane({
               (group) =>
                 `${group.id}:${group.activeTabId}:${group.tabs.map((v) => v.id).join("+")}`,
             )
-            .concat([
-              `xs:${activeContent.layout.xs.join(",")}`,
-              `ys:${activeContent.layout.ys.join(",")}`,
-              `cards:${activeContent.layout.cards.map((card) => `${card.id}:${card.c0},${card.c1}:${card.r0},${card.r1}`).join("|")}`,
-            ])
             .join("|")
         : "",
     [activeContent],
@@ -376,7 +372,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
     const hostWidthPx = plane.getBoundingClientRect().width;
     const startWidthPx = sidebarW;
     const startStation = renderedStation;
-    const gutters = computeLayout(arrangement.displayLayout).gutters;
+    const gutters = computeSplitLayout(arrangement.displayLayout).gutters;
     const bounds = PLACE_WIDTH_BOUNDS.rail;
     const startX = e.clientX;
     const commit = rafThrottle((requested: number) => {
@@ -755,7 +751,6 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   content={c}
                   projectId={workspace.id}
                   nativeSurfaceViewIds={nativeSurfaceViewIds(c)}
-                  rebaseArrangement={isActiveContent ? phase.rebase : undefined}
                   surfaceActive={isActiveWorkspace && isActiveContent}
                   // The solution determines the arrangement — inactive content keeps its canonical layout (no rail).
                   // Cells blocked by how far the rail could not go — they do not move, but must dim to show which panel is active.

@@ -9,26 +9,13 @@
 // Invariant: a solution's station is always a clean line over that solution's cells (it crosses no
 // panel). That is what lets consumers use projectRailCssRect safely.
 
-import { SplitPane } from "split-pane";
-import type { CardInit, SplitPaneState } from "split-pane";
+import { leavesOf, type SplitTree } from "../state/splitTree";
 import { flowRailBoundBox } from "./railBoundBox";
 import {
   classifyRailRelation,
   type RailRelationSide,
 } from "./railLinkShape";
-import type { Rect } from "./splitPaneGeometry";
-
-type GridLayout<L> = Omit<SplitPaneState, "cards"> & {
-  cards: Array<Omit<CardInit, "data"> & { data: L }>;
-};
-
-function cellsOf<L>(layout: GridLayout<L>): Array<{ value: L; rect: Rect }> {
-  const grid = new SplitPane(layout, { width: 100, height: 100, gap: 0, minSize: 0 });
-  return layout.cards.map((card) => {
-    const rect = grid.rect(card.id)!;
-    return { value: card.data, rect: { left: rect.x, top: rect.y, width: rect.w, height: rect.h } };
-  });
-}
+import { computeSplitLayout, type Rect } from "./splitLayout";
 import {
   RAIL_EPSILON,
   cleanRailLines,
@@ -59,7 +46,7 @@ export interface Arrangement<L> {
   station: number;
   cleanLines: number[];
   /** Arrangement to render. Without switching, object identity matches the canonical tree. */
-  displayLayout: GridLayout<L>;
+  displayLayout: SplitTree<L>;
   /** Whether adjacency in FLOW was produced by a swap — the single basis for the dashed seam. Always false for PIN. */
   swapped: boolean;
   cells: ArrangementCell[];
@@ -200,7 +187,7 @@ export function resolveEffectiveRailRelation<
   // rail was absent.
   if (!arrangement?.railPresent) return none();
 
-  const panes = arrangement.displayLayout.cards.map((card) => card.data);
+  const panes = leavesOf(arrangement.displayLayout);
   const visibleIds = new Set(arrangement.cells.map((cell) => cell.id));
   // The focused pane, and nothing else. A space held a `railBindingTabId` that outranked the focus
   // until 2026-08-19 — carried over from the preceding implementation, which kept it equal to the
@@ -297,10 +284,10 @@ export function resolvePresentedRailRelation<
 
 /** Whether the focused panel's left line is already a full-height clean line. A missing focus is no basis for disturbing the arrangement. */
 function focusedLeftIsClean<L extends { id: string }>(
-  tree: GridLayout<L>,
+  tree: SplitTree<L>,
   focusId: string,
 ): boolean {
-  const cells = cellsOf(tree);
+  const { cells } = computeSplitLayout(tree);
   const target = cells.find((cell) => cell.value.id === focusId);
   if (!target) return true;
   return isCleanRailStation(
@@ -318,32 +305,47 @@ function focusedLeftIsClean<L extends { id: string }>(
  * A subtree is never moved wholesale and nested structure is never rewritten.
  */
 function swapCandidates<L extends { id: string }>(
-  node: GridLayout<L>,
+  node: SplitTree<L>,
   targetId: string,
-): GridLayout<L>[] {
-  const grid = new SplitPane(node, { width: 100, height: 100, gap: 0, minSize: 0 });
-  const target = grid.rect(targetId);
-  if (!target) return [];
-  const candidates = [...grid.rects().entries()]
-    .filter(([id]) => id !== targetId)
-    .sort(([, a], [, b]) => Math.abs(a.x - target.x) - Math.abs(b.x - target.x));
-  const out: GridLayout<L>[] = [];
-  for (const [id, rect] of candidates) {
-    const side = rect.x < target.x ? "left" : "right";
-    const trial = new SplitPane(node, { width: 100, height: 100, gap: 0, minSize: 0 });
-    if (trial.canMove(targetId, id, side) && trial.move(targetId, id, side)) {
-      const state = trial.toJSON();
-      out.push({ ...state, cards: state.cards.map((card) => ({ ...card, data: card.data as L })) });
+): SplitTree<L>[] {
+  if (node.type === "leaf") return [];
+  if (node.dir === "row") {
+    const targetIndex = node.children.findIndex(
+      (child) => child.type === "leaf" && child.value.id === targetId,
+    );
+    if (targetIndex > 0) {
+      const out: SplitTree<L>[] = [];
+      for (let j = targetIndex - 1; j >= 0; j -= 1) {
+        if (node.children[j].type !== "leaf") continue;
+        const children = [...node.children];
+        [children[j], children[targetIndex]] = [
+          children[targetIndex],
+          children[j],
+        ];
+        const sizes = [...node.sizes];
+        [sizes[j], sizes[targetIndex]] = [sizes[targetIndex], sizes[j]];
+        out.push({ ...node, children, sizes });
+      }
+      return out;
     }
   }
-  return out;
+  for (let i = 0; i < node.children.length; i += 1) {
+    const subs = swapCandidates(node.children[i], targetId);
+    if (subs.length === 0) continue;
+    return subs.map((child) => {
+      const children = [...node.children];
+      children[i] = child;
+      return { ...node, children };
+    });
+  }
+  return [];
 }
 
 /** Switches a focus blocked by misaligned per-row vertical lines to the front. On failure the canonical tree is returned unchanged (identity preserved). */
 function switchFocusedToFront<L extends { id: string }>(
-  canonical: GridLayout<L>,
+  canonical: SplitTree<L>,
   focusId: string,
-): GridLayout<L> {
+): SplitTree<L> {
   // Only rows the rail cannot reach in FLOW are resolved to the front. PIN never enters this function:
   // a click on a pinned sidebar is a focus change, not a layout operation, and it preserves the canonical tree.
   if (focusedLeftIsClean(canonical, focusId)) return canonical;
@@ -375,7 +377,7 @@ function flowStation(
 }
 
 export function solveArrangement<L extends { id: string }>(input: {
-  layout: GridLayout<L>;
+  layout: SplitTree<L>;
   focusId: string | null | undefined;
   placement: RailPlacement;
   /** Whether the sidebar is open — when closed there is no rail to attach to. */
@@ -399,7 +401,7 @@ export function solveArrangement<L extends { id: string }>(input: {
     const cleanLines = cleanRailLines([FULL_RECT]);
     let maximizedStation = 0;
     if (input.placement.mode === "pin") {
-      const canonicalCells = cellsOf(input.layout).map(({ value, rect }) => ({
+      const canonicalCells = computeSplitLayout(input.layout).cells.map(({ value, rect }) => ({
         id: value.id,
         rect,
       }));
@@ -429,7 +431,7 @@ export function solveArrangement<L extends { id: string }>(input: {
   // Keep the canonical pane order and one stable station so focus-only changes cannot open a
   // geometry transaction for an element that does not exist.
   if (!input.railOpen) {
-    const cells = cellsOf(input.layout).map(({ value, rect }) => ({ id: value.id, rect }));
+    const cells = computeSplitLayout(input.layout).cells.map(({ value, rect }) => ({ id: value.id, rect }));
     return {
       railPresent: false,
       station: 0,
@@ -452,7 +454,7 @@ export function solveArrangement<L extends { id: string }>(input: {
       ? switchFocusedToFront(input.layout, focusId)
       : input.layout;
 
-  const cells = cellsOf(displayLayout).map(({ value, rect }) => ({
+  const cells = computeSplitLayout(displayLayout).cells.map(({ value, rect }) => ({
     id: value.id,
     rect,
   }));
@@ -571,9 +573,9 @@ export function spanMoveAcross(
  */
 export function viewIdsOfMoves<
   L extends { id: string; tabs: ReadonlyArray<{ id: string }> },
->(layout: GridLayout<L>, moves: readonly ArrangementMove[]): string[] {
+>(layout: SplitTree<L>, moves: readonly ArrangementMove[]): string[] {
   if (moves.length === 0) return [];
-  const groups = layout.cards.map((card) => card.data);
+  const groups = leavesOf(layout);
   return moves.flatMap(
     (move) => groups.find((g) => g.id === move.id)?.tabs.map((v) => v.id) ?? [],
   );
