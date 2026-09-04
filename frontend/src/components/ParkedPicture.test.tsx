@@ -7,9 +7,11 @@
 // moment an overlay opened (measured 2026-09-04).
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ParkedPicture } from "./ParkedPicture";
-import { __setParkedPictureForTest, __resetParkedPicturesForTest } from "../lib/parkedPicture";
+import {
+  __resetParkedPicturesForTest, __setParkedPictureForTest, whenParkedPictureShown,
+} from "../lib/parkedPicture";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -37,6 +39,32 @@ describe("the picture a parked surface leaves", () => {
     const img = host.querySelector<HTMLImageElement>(".parked-picture")!;
     expect(img.style.opacity).toBe("");
     expect(host.querySelector(".parked-picture-veil"), "the surface's dim is in the picture").toBeNull();
+  });
+
+  // Loading is not painting. The surface is taken off when the picture is on screen, and a load
+  // event reports the bytes decoded only: the pane read 129.7 on white for three frames between 224.7
+  // and 224.7, with the surface gone and the picture not yet drawn (measured 2026-09-04).
+  //
+  // The picture is staged under an opaque surface, so waiting for the frame costs nothing on screen.
+  it("reports the picture on a frame boundary, not on the load", async () => {
+    const frames: Array<() => void> = [];
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((run) => {
+      frames.push(() => run(0));
+      return frames.length;
+    });
+    let reported = false;
+    void whenParkedPictureShown("v-1").then(() => { reported = true; });
+
+    act(() => root.render(<ParkedPicture viewId="v-1" style={{}} />));
+    const img = host.querySelector<HTMLImageElement>(".parked-picture")!;
+    act(() => img.dispatchEvent(new Event("load")));
+    await Promise.resolve();
+    expect(reported, "a load is not a paint").toBe(false);
+
+    while (frames.length > 0) act(() => frames.shift()!());
+    await Promise.resolve();
+    expect(reported, "the frame after the load is").toBe(true);
+    raf.mockRestore();
   });
 
   it("draws nothing when no picture is held", () => {

@@ -32,9 +32,18 @@ export function ParkedPicture(
         aria-hidden="true"
         draggable={false}
       style={style}
-      // The surface is taken off only after this: the document has the picture now, and a surface
-      // taken off before it does leaves one frame with neither.
-      onLoad={() => markParkedPictureShown(viewId)}
+      // The surface is taken off after the picture is on screen. A load reports the bytes decoded, not
+      // the document drawing them: the pane read 129.7 on white for three frames between 224.7
+      // and 224.7, with the surface gone and the picture not yet drawn.
+      //
+      // The next frame is the report. It is an event, not a clock, and the picture is staged under
+      // an opaque surface meanwhile, so nothing is on screen for it to cost. A window nothing
+      // paints reports nothing and its surface stays up, which is what an unseen window needs.
+      onLoad={() => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => markParkedPictureShown(viewId));
+        });
+      }}
     />
   );
 }
