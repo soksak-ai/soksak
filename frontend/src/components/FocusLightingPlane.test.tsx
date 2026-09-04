@@ -149,11 +149,12 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
     expect(layers).toEqual(["left-rail", "left", "right"]);
     expect(plane.querySelector("[data-lighting-content='left']")).not.toBeNull();
   });
-  // A pane showing a parked picture is already dimmed: the picture was captured from a surface that
-  // applied the same --dim to its own alpha, and the document draws it under this plane. An
-  // idle veil over it dims it a second time — measured 2026-09-04, opening the program menu made
-  // every unfocused pane visibly darker for as long as the menu was open.
-  it("paints no idle veil over a pane that carries its own dim", async () => {
+  // Every pane that is not the focus is dimmed, whatever is drawing it.
+  //
+  // A parked picture holds no dim of its own: measured 2026-09-04, the surface snapshot is opaque
+  // white at full brightness. Exempting a parked pane from the veil on the premise that the picture
+  // was already dimmed left every unfocused pane bright for as long as an overlay was open.
+  it("paints an idle veil over every unfocused pane, parked or live", async () => {
     await act(async () => {
       root.render(
         <FocusLightingPlane
@@ -163,7 +164,8 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
           blocked={[]}
           exempt={[]}
           content={[
-            { ...region("left", 0), carriesOwnDim: true },
+            // A cell whose surface is parked and whose picture the document is drawing.
+            region("left", 0),
             region("right", 50),
           ]}
         />,
@@ -171,7 +173,9 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
     });
 
     const plane = host.querySelector("[data-node='focus-lighting/space-e']")!;
-    expect(plane.querySelector("[data-lighting-content='left']")).toBeNull();
-    expect(plane.querySelector("[data-lighting-aperture='right']")).not.toBeNull();
+    const idle = plane.querySelector<HTMLElement>("[data-lighting-content='left']");
+    expect(idle, "an unfocused pane is dimmed").not.toBeNull();
+    expect(idle!.style.opacity).toBe("0.5");
+    expect(plane.querySelector("[data-lighting-content='right']")).toBeNull();
   });
 });

@@ -37,7 +37,6 @@ import { useT } from "../i18n";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
 import { dimAmount, dimLevel } from "../lib/dimLevel";
-import { cellCarriesOwnDim } from "../lib/parkedDim";
 import { useUi } from "../state/ui";
 import {
   type Space,
@@ -978,21 +977,10 @@ export const GroupArea = memo(function GroupArea({
 
   const lightingFocusId = focusedPaneId ?? content.activePaneId;
   const lightingFocusCell = displayCells.find((c) => c.group.id === lightingFocusId);
-  // A cell showing a parked picture is already dimmed: the picture was captured from a surface that
-  // applied this cell's --dim to its own alpha, and the document draws it. A veil over it dims
-  // it a second time — measured 2026-09-04, opening the program menu made every unfocused pane
-  // visibly darker for as long as it was open.
-  const heldPictures = new Set(
-    displayCells.flatMap((c) => c.group.tabs.map((tab) => tab.id))
-      .filter((id) => parkedPicture(id) !== null),
-  );
-  const showsParkedPicture = (cell: (typeof displayCells)[number]) =>
-    cellCarriesOwnDim(maxCell ? maximizedId : cell.group.activeTabId, heldPictures);
   const lightingContent = displayCells.map((c) => ({
     id: c.group.id,
     style: cellVars(c.rect, c.group.id),
     moving: flipMoves(c.group.id),
-    carriesOwnDim: showsParkedPicture(c),
   }));
   const blockedLighting = displayCells
     .filter((c) => c.group.id !== lightingFocusId && betweenIds?.includes(c.group.id))
