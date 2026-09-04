@@ -73,17 +73,28 @@ describe("view visibility ownership", () => {
 });
 
 describe("viewSurfaceStyle — exclusive (maximize) composition contract", () => {
+  // A picture that is held is not a picture that is on screen. The declaration hid the surface as
+  // soon as one was held, so the native hide raced the document's first paint of it: the pane read
+  // 129.7 on white for three frames between 224.7 and 224.7 (measured 2026-09-04).
+  it("keeps the surface applied while the picture is held but not yet on screen", () => {
+    const presentation = resolveViewVisibility(true, true, true, true, false);
+    expect(viewSurfacePlacementForPresentation(presentation, false, "held").desiredVisible)
+      .toBe(true);
+    expect(viewSurfacePlacementForPresentation(presentation, false, "shown").desiredVisible)
+      .toBe(false);
+  });
+
   it("keeps an overlay-occluded native surface applied until the parking owner captures it", () => {
     const presentation = resolveViewVisibility(true, true, true, true, false);
 
     expect(presentation.surfaceVisible).toBe(false);
-    expect(viewSurfacePlacementForPresentation(presentation, false, false)).toEqual({
+    expect(viewSurfacePlacementForPresentation(presentation, false, "none")).toEqual({
       desiredVisible: true,
       dim: 0,
       topology: "visible",
       declaredPaneFrame: null,
     });
-    expect(viewSurfacePlacementForPresentation(presentation, false, true)).toEqual({
+    expect(viewSurfacePlacementForPresentation(presentation, false, "shown")).toEqual({
       desiredVisible: false,
       dim: 0,
       topology: "retained-hidden",

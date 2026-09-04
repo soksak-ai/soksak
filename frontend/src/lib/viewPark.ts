@@ -135,11 +135,15 @@ export function viewSurfacePlacement(
 export function viewSurfacePlacementForPresentation(
   presentation: ViewPresentation,
   exclusive: boolean,
-  parkedPictureHeld: boolean,
+  /** Where the picture that stands in for this surface is: nowhere, held, or on screen. */
+  parkedPicture: "none" | "held" | "shown",
   dim: number = 0,
 ): PluginViewSurfacePlacement {
+  // A picture that is held is not a picture that is on screen. Hiding the surface as soon as one is
+  // held races the document's first paint of it — the pane read 129.7 on white for three frames
+  // between 224.7 and 224.7, with the surface gone and the picture not yet drawn.
   const appliedVisible = presentation.surfaceVisible
-    || (presentation.contentVisible && !parkedPictureHeld);
+    || (presentation.contentVisible && parkedPicture !== "shown");
   return viewSurfacePlacement(appliedVisible, exclusive, dim);
 }
 

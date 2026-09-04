@@ -146,7 +146,10 @@ export function __resetParkedPicturesForTest(): void {
 
 /** The document has drawn the picture held for this view. */
 export function markParkedPictureShown(viewId: string): void {
+  if (shown.has(viewId)) return;
   shown.add(viewId);
+  // The declaration reads this: the surface stays applied until the picture is on screen.
+  announce();
   const waiting = showing.get(viewId);
   if (!waiting) return;
   showing.delete(viewId);
@@ -161,4 +164,9 @@ export function whenParkedPictureShown(viewId: string): Promise<void> {
     if (waiting) waiting.push(resolve);
     else showing.set(viewId, [resolve]);
   });
+}
+
+/** Whether the document has drawn the picture held for this view. */
+export function parkedPictureShown(viewId: string): boolean {
+  return shown.has(viewId);
 }

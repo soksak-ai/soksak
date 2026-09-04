@@ -9,7 +9,9 @@ import {
   viewSurfacePlacementForPresentation,
   viewSurfaceStyle,
 } from "../lib/viewPark";
-import { onParkedPictureChange, parkedPicture, parkedPictureVersion } from "../lib/parkedPicture";
+import {
+  onParkedPictureChange, parkedPicture, parkedPictureShown, parkedPictureVersion,
+} from "../lib/parkedPicture";
 import { Icon } from "../ui/icons/Icon";
 import { GroupStatusBar } from "./GroupStatusBar";
 import { PluginViewHost } from "./PluginViewHost";
@@ -1278,7 +1280,9 @@ export const GroupArea = memo(function GroupArea({
                   surfacePlacement={viewSurfacePlacementForPresentation(
                     visibility,
                     !!maxCell,
-                    parkedPicture(view.id) !== null,
+                    parkedPicture(view.id) === null
+                      ? "none"
+                      : parkedPictureShown(view.id) ? "shown" : "held",
                     dimStrengthOf(group.id),
                   )}
                   command={view.command ?? null}
