@@ -43,6 +43,7 @@ import {
 } from "../ui/statusBarItems";
 import { registerHeaderAction, type HeaderAction } from "../ui/headerActions";
 import { useUi } from "../state/ui";
+import { publishActivity } from "../state/activityFeed";
 import { pushNotification, type NotificationInput } from "../lib/notify";
 import { playSound, BUILTIN_SOUNDS } from "../ui/sound";
 import {
@@ -907,6 +908,24 @@ const denied = (message: string): CommandOutcome => ({
   message,
 });
 
+/** Records a command this API refused before it ran.
+ *
+ *  A refusal here returns before the registry, so `command.executed` never records it and the run
+ *  leaves no trace. The caller receives `{ok:false}` rather than an exception, so a plugin that only
+ *  catches treats it as success — and the refusal is then readable nowhere.
+ *
+ *  Measured 2026-09-04: a kit's index writes were refused at this boundary. Locating that required
+ *  rebuilding the plugin four times with an added log statement, because the running application
+ *  offered nothing to read. */
+function recordRefusal(pluginId: string, name: string, outcome: CommandOutcome): CommandOutcome {
+  publishActivity("plugin.command.refused", pluginId, {
+    command: name,
+    code: outcome.code,
+    message: outcome.message,
+  });
+  return outcome;
+}
+
 // app.process implementation — per-handle (id) listeners plus a buffer for bytes arriving before
 // registration (nothing lost). spawn builds 3 streams (stdout/stderr/exit), passes them to
 // process_spawn, and onData/onStderr/onExit subscribe to them.
@@ -1363,7 +1382,7 @@ export function buildPluginApi(
     inherit?: { origin?: string; parent?: string },
   ): Promise<CommandOutcome> => {
     if (isBlockedForPlugins(name)) {
-      return denied(tmsg("plugin.command.managementBlocked", { name }));
+      return recordRefusal(id, name, denied(tmsg("plugin.command.managementBlocked", { name })));
     }
     const danger = deps.getCommandDanger(name);
     const need: PluginPermission =
@@ -1373,7 +1392,7 @@ export function buildPluginApi(
           ? "commands:inject"
           : "commands";
     if (!has(need)) {
-      return denied(tmsg("plugin.permission.undeclared", { permission: need, name }));
+      return recordRefusal(id, name, denied(tmsg("plugin.permission.undeclared", { permission: need, name })));
     }
     // A cross-plugin call requires a dependency declaration — undeclared is denied (call-boundary
     // enforcement). Core, self, and view pass.
@@ -1385,7 +1404,7 @@ export function buildPluginApi(
       name,
     );
     if (crossDeny) {
-      return denied(crossDeny);
+      return recordRefusal(id, name, denied(crossDeny));
     }
     return deps.execute(name, params ?? {}, {
       ...pluginCtx,
