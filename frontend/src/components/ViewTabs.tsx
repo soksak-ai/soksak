@@ -7,6 +7,7 @@ import {
   type Pane,
 } from "../state/sessions";
 import { useAddTabIntent } from "../state/addTabIntent";
+import { activatePaneIntent } from "../lib/viewActivation";
 import { useCloseConfirm } from "../state/closeConfirm";
 import { getRegisteredView, useViewRegistry } from "../plugins/viewRegistry";
 import { useProgramRegistry } from "../plugins/programRegistry";
@@ -222,8 +223,12 @@ export const ViewTabs = memo(function ViewTabs({
             className="icon-btn tab-add"
             data-node={`tab/view/${group.id}/add`}
             title={t("view.new")}
+            // The mousedown is kept off the strip's drag machinery, so this activates its own pane
+            // here instead. Without it, opening the menu on an unfocused pane left the
+            // focus where it was: the clicked pane stayed dim and another stayed lit.
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => {
+              activatePaneIntent(group.id);
               if (menuPos) {
                 setMenuPos(null);
                 return;
