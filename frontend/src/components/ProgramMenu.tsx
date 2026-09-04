@@ -97,8 +97,13 @@ export function ProgramMenu({
   onClose: () => void;
 }) {
   const t = useT();
-  // The menu is a document overlay and does not cover the native pane surface geometry.
-  useOverlayActive(true, false);
+  // The menu opens at a point inside the layout, which is where the native pane surfaces are. A
+  // document overlay cannot be raised over one by any z-index (state/ui), so the surfaces are
+  // occluded while it is open, exactly as every modal does.
+  //
+  // It declared the opposite until 2026-09-04, on the premise that the menu does not cover the pane
+  // geometry. It opens over a pane and was drawn under it.
+  useOverlayActive(true);
   const menuRef = useRef<HTMLDivElement>(null);
   // Position corrected into the viewport after measuring, plus whether the submenu flips.
   const [place, setPlace] = useState({ left: pos.left, top: pos.top, flip: false });
