@@ -977,9 +977,12 @@ export const GroupArea = memo(function GroupArea({
 
   const lightingFocusId = focusedPaneId ?? content.activePaneId;
   const lightingFocusCell = displayCells.find((c) => c.group.id === lightingFocusId);
-  // A cell whose surface is parked draws its own dim: the picture stands in the document with a veil
-  // of the same amount beneath it, which is the composite the live surface produced. Only the tab
-  // the cell shows counts — a picture held for another tab is no reading of what is on screen.
+  // A cell whose surface is parked draws its own dim over its body box: the picture stands there
+  // with a veil of the same amount beneath it, which is the composite the live surface produced.
+  // The veil steps off that box and stays over the chrome around it, exactly as it did while the
+  // surface was up — measured 2026-09-04: exempting the whole card left the tab bar and the status
+  // bar undimmed. Only the tab the cell shows counts; a picture held for another tab is no reading
+  // of what is on screen.
   const drawsOwnDim = (cell: (typeof displayCells)[number]) => {
     const shown = maxCell ? maximizedId : cell.group.activeTabId;
     return shown !== null && parkedPicture(shown) !== null;
@@ -988,8 +991,14 @@ export const GroupArea = memo(function GroupArea({
     id: c.group.id,
     style: cellVars(c.rect, c.group.id),
     moving: flipMoves(c.group.id),
-    drawsOwnDim: drawsOwnDim(c),
   }));
+  const parkedBodyExemptions = displayCells
+    .filter((c) => c.group.id !== lightingFocusId && drawsOwnDim(c))
+    .map((c) => ({
+      id: `parked-body-${c.group.id}`,
+      className: "lighting-body-exempt",
+      style: cellVars(c.rect, c.group.id),
+    }));
   const blockedLighting = displayCells
     .filter((c) => c.group.id !== lightingFocusId && betweenIds?.includes(c.group.id))
     .map((c) => ({
@@ -1292,7 +1301,10 @@ export const GroupArea = memo(function GroupArea({
           moving: flipMoves(lightingFocusCell.group.id),
         } : undefined}
         blocked={blockedLighting}
-        exempt={railWidthPx > 0 ? [railLightingExemption(railWidthPx, railStation)] : []}
+        exempt={[
+          ...(railWidthPx > 0 ? [railLightingExemption(railWidthPx, railStation)] : []),
+          ...parkedBodyExemptions,
+        ]}
         content={lightingContent}
       />
 

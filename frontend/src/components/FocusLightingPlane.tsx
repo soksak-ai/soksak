@@ -5,19 +5,14 @@ export type LightingRegion = {
   id: string;
   style: CSSProperties;
   moving?: boolean;
-  /** The region draws its own dim, and this plane paints no veil over it.
-   *
-   *  A parked pane draws the picture its surface left, with a veil of the same amount beneath it —
-   *  the composite the live surface produced, which this plane never reached. A veil here would
-   *  apply the amount a second time (measured 2026-09-04: 127 on white where the live pane read
-   *  191). */
-  drawsOwnDim?: boolean;
 };
 
 /** Chrome box explicitly named as exempt from lighting. */
 export type LightingExemption = {
   id: string;
   style: CSSProperties;
+  /** Geometry the stylesheet owns. The style then holds only the variables that rule reads. */
+  className?: string;
 };
 
 type BlockedLightingRegion = LightingRegion & { amount: number };
@@ -56,11 +51,11 @@ export function FocusLightingPlane({
   };
   const focusedGeometry = focused ? geometryKey(focused.style) : null;
   const blockedGeometries = new Set(blocked.map((region) => geometryKey(region.style)));
-  // Every pane that is not the focus is dimmed. A region that draws its own dim is dimmed by what
-  // draws it, and a veil here would apply the amount twice.
+  // Every pane that is not the focus is dimmed. A parked pane steps its body box out through an
+  // exemption, because the picture there draws the amount itself; the chrome around it stays under
+  // this veil, exactly as it was while the surface was up.
   const idleContent = content
-    .filter((region) => !region.drawsOwnDim
-      && geometryKey(region.style) !== focusedGeometry
+    .filter((region) => geometryKey(region.style) !== focusedGeometry
       && !blockedGeometries.has(geometryKey(region.style)))
     .reduce<LightingRegion[]>((unique, region) => {
       // One pane rectangle gets one veil. Multiple tabs or duplicated projection records can
@@ -91,7 +86,9 @@ export function FocusLightingPlane({
     >
       {exempt.map((region) => (
         <div key={`exempt-${region.id}`} data-node={`focus-lighting/${scopeId}/exempt/${region.id}`}
-          data-lighting-exempt={region.id} style={exemptionStyle(region.style)} />
+          className={region.className}
+          data-lighting-exempt={region.id}
+          style={region.className ? region.style : exemptionStyle(region.style)} />
       ))}
       {idleContent.map((region) => (
         <div key={`idle-${region.id}`} className={regionClass(region.moving)}

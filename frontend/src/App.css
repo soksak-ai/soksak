@@ -1080,7 +1080,11 @@ body,
 /* The persistent body slot: moving it by viewId does not remount (a CodeMirror
    or terminal session survives) — the only layer where positioning is
    legitimate. The body area is the cell minus the header minus the status bar. */
-.tab-body {
+/* The body box is written once. The focus lighting exemption for a parked pane uses the same rule,
+   so the region the picture draws its own dim over is the region the veil steps off — no second
+   arithmetic that has to agree with this one. */
+.tab-body,
+.lighting-body-exempt {
   position: absolute;
   contain: layout paint style;
   left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
@@ -1090,6 +1094,11 @@ body,
     var(--h) - (var(--pane-inset) * 2 + var(--header-h) + var(--status-h))
   );
   overflow: hidden;
+}
+/* The exemption is a hole in the veil, not a surface: it takes no input and paints nothing. */
+.lighting-body-exempt {
+  contain: layout style;
+  pointer-events: none;
 }
 /* The group titlebar (first flex row of the cell) is the group's drag handle.
    The active group gets the blue accent line. */

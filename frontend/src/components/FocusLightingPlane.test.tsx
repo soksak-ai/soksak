@@ -149,10 +149,10 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
     expect(layers).toEqual(["left-rail", "left", "right"]);
     expect(plane.querySelector("[data-lighting-content='left']")).not.toBeNull();
   });
-  // A pane that draws its own dim is dimmed by what draws it — a parked pane paints a veil under
-  // the picture its surface left, reproducing the composite the live surface produced. A veil here
-  // would apply the amount twice: 127 on white where the live pane read 191 (measured 2026-09-04).
-  it("paints no idle veil over a pane that draws its own dim, and one over every other", async () => {
+  // A parked pane steps its body box out through an exemption, which the stylesheet places. The
+  // chrome around that box stays under the veil, exactly as it was while the surface was up:
+  // exempting the whole card left the tab bar and the status bar undimmed (measured 2026-09-04).
+  it("cuts an exemption the stylesheet places, and dims every unfocused pane", async () => {
     await act(async () => {
       root.render(
         <FocusLightingPlane
@@ -160,21 +160,24 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
           baseAmount={0.5}
           focused={region("right", 50)}
           blocked={[]}
-          exempt={[]}
-          content={[
-            // A cell whose surface is parked and whose picture the document is drawing.
-            { ...region("left", 0), drawsOwnDim: true } as LightingRegion,
-            region("middle", 25),
-            region("right", 50),
-          ]}
+          exempt={[{
+            // A parked pane's body box. The class holds the geometry, so no second arithmetic.
+            id: "parked-body-left",
+            className: "lighting-body-exempt",
+            style: region("left", 0).style,
+          }]}
+          content={[region("left", 0), region("middle", 25), region("right", 50)]}
         />,
       );
     });
 
     const plane = host.querySelector("[data-node='focus-lighting/space-e']")!;
-    expect(plane.querySelector("[data-lighting-content='left']"), "the pane draws its own dim").toBeNull();
+    const hole = plane.querySelector<HTMLElement>("[data-lighting-exempt='parked-body-left']");
+    expect(hole, "the parked pane's body box steps out of the veil").not.toBeNull();
+    expect(hole!.className).toBe("lighting-body-exempt");
+    // The chrome around that box keeps its veil, and so does every other unfocused pane.
+    expect(plane.querySelector("[data-lighting-content='left']")).not.toBeNull();
     const idle = plane.querySelector<HTMLElement>("[data-lighting-content='middle']");
-    expect(idle, "every other unfocused pane is dimmed here").not.toBeNull();
     expect(idle!.style.opacity).toBe("0.5");
     expect(plane.querySelector("[data-lighting-content='right']")).toBeNull();
   });

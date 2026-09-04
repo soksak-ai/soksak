@@ -168,8 +168,16 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
   });
 
   it("contains each definite tab body layout and paint", () => {
-    const tabBody = rules().find((rule) => rule.selector === ".tab-body");
-    expect(tabBody?.decls).toMatch(/contain\s*:\s*layout paint style/);
+    // The rule may be shared — the focus lighting exemption for a parked pane takes the same box, so
+    // the geometry is written once. What this gate holds is that .tab-body is declared with it.
+    const forTabBody = rules().filter((rule) =>
+      rule.selector.split(",").map((one) => one.trim()).includes(".tab-body"),
+    );
+    expect(forTabBody.length, ".tab-body has no rule").toBeGreaterThan(0);
+    expect(
+      forTabBody.some((rule) => /contain\s*:\s*layout paint style/.test(rule.decls)),
+      ".tab-body is declared without its containment",
+    ).toBe(true);
   });
 
   it("workspace and rail are global chrome above the DOM browser content stack", () => {
