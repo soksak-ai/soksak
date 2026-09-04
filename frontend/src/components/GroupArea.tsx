@@ -1227,11 +1227,7 @@ export const GroupArea = memo(function GroupArea({
             {/* What the surface left when it was parked, beside the body and on the layer the
                 surface was on: at the alpha it was declared with, above the lighting veil. Inside
                 the body its containment would keep it off that layer. */}
-            <ParkedPicture
-              viewId={view.id}
-              dim={dimStrengthOf(group.id)}
-              style={cellVars(slotRect, group.id)}
-            />
+            <ParkedPicture viewId={view.id} style={cellVars(slotRect, group.id)} />
             <div
               className={`tab-body${contentVisible && presentation.domSurfaceMotion === "active" ? " flip-move" : ""}`}
               // Read the same value as the cell — recombining the reasons here makes the two surfaces diverge silently.

@@ -12,7 +12,7 @@ import { markParkedPictureShown, onParkedPictureChange, parkedPicture } from "..
 // what it does states that: it does not scroll, it takes no click, and it is one instant old. It is
 // removed the moment the surface is back.
 export function ParkedPicture(
-  { viewId, dim, style }: { viewId: string; dim: number; style: CSSProperties },
+  { viewId, style }: { viewId: string; style: CSSProperties },
 ) {
   const url = useSyncExternalStore(
     onParkedPictureChange,
@@ -20,11 +20,9 @@ export function ParkedPicture(
     () => null,
   );
   if (!url) return null;
-  // The live pane reads the surface at its declared alpha over the dimmed document — a native
-  // surface is composited above the focus lighting veil, which never reached it. The picture is
-  // drawn on that same layer (App.css) at that same alpha, so the pane reads the same whether the
-  // surface is up or parked. Drawn under the veil at full alpha instead, an unfocused pane read 127
-  // on white where the live one read 191 (measured 2026-09-04).
+  // The picture is what the surface painted, drawn on the layer the surface was on (App.css). The
+  // surface paints its own dim (surface.dim), so the picture already holds it: an opacity here
+  // would apply the amount a second time, and the pane darkened the moment it parked.
   return (
     <img
         className="parked-picture"
@@ -33,7 +31,7 @@ export function ParkedPicture(
         alt=""
         aria-hidden="true"
         draggable={false}
-      style={{ ...style, opacity: 1 - dim }}
+      style={style}
       // The surface is taken off only after this: the document has the picture now, and a surface
       // taken off before it does leaves one frame with neither.
       onLoad={() => markParkedPictureShown(viewId)}
