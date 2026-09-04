@@ -115,3 +115,17 @@ export function dropParkedPicture(viewId: string): void {
   asking.delete(viewId);
   if (changed) announce();
 }
+
+/** Test seam: places a picture without asking a surface for one. */
+export function __setParkedPictureForTest(viewId: string, url: string): void {
+  pictures.set(viewId, { url, label: `${viewId}#test` });
+  announce();
+}
+
+/** Test seam: drops every held picture and every recorded failure. */
+export function __resetParkedPicturesForTest(): void {
+  pictures.clear();
+  failures.clear();
+  asking.clear();
+  announce();
+}

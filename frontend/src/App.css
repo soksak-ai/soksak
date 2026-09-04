@@ -2178,9 +2178,12 @@ body::after {
 
 .parked-picture {
   position: absolute;
-  /* The provider body remains mounted under an overlay. Its opaque background is later in DOM
-     order, so the captured pixels need an explicit local layer above that body. */
-  z-index: 1;
+  /* Above the focus lighting plane (z-index 6), because the surface it stands in for was composited
+     above it too: a native surface is outside the document and the veil never reached it. Drawn
+     under the veil instead, a parked pane read 127 on white where the live one read 191, and every
+     unfocused pane darkened the moment an overlay opened (measured 2026-09-04). The pane cell sets
+     no z-index and no transform, so this lifts within the same stacking context. */
+  z-index: 7;
   inset: 0;
   width: 100%;
   height: 100%;

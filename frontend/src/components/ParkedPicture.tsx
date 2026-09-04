@@ -11,7 +11,7 @@ import { onParkedPictureChange, parkedPicture } from "../lib/parkedPicture";
 // So the pane keeps showing the page's last frame while the surface is away. It is a picture, and
 // what it does states that: it does not scroll, it takes no click, and it is one instant old. It is
 // removed the moment the surface is back.
-export function ParkedPicture({ viewId }: { viewId: string }) {
+export function ParkedPicture({ viewId, dim }: { viewId: string; dim: number }) {
   const url = useSyncExternalStore(
     onParkedPictureChange,
     () => parkedPicture(viewId),
@@ -26,6 +26,11 @@ export function ParkedPicture({ viewId }: { viewId: string }) {
       alt=""
       aria-hidden="true"
       draggable={false}
+      // The alpha the surface was declared with. The surface was composited above the lighting
+      // veil, so an unfocused pane read the surface at that alpha over the dimmed document. The
+      // picture is drawn above the same veil (App.css) at the same alpha, so parking
+      // changes nothing on screen.
+      style={{ opacity: 1 - dim }}
     />
   );
 }

@@ -1236,9 +1236,9 @@ export const GroupArea = memo(function GroupArea({
                 });
               }}
             >
-              {/* What the surface left when it was parked. Drawn under the view's own body, so the
-                  moment the surface is back the picture is behind it and then gone. */}
-              <ParkedPicture viewId={view.id} />
+              {/* What the surface left when it was parked, at the alpha the surface was declared
+                  with and above the lighting veil, exactly where the surface was. */}
+              <ParkedPicture viewId={view.id} dim={dimStrengthOf(group.id)} />
               {!hydrated ? null : (
                 <PluginViewHost
                   viewKey={`${view.pluginId}.${view.view}`}
