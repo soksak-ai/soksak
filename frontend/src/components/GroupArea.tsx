@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { moduleState } from "../lib/moduleState";
 import { execute } from "../commands/registry";
 import { rafThrottle } from "../lib/rafThrottle";
@@ -1199,8 +1199,16 @@ export const GroupArea = memo(function GroupArea({
           const hydrated = !coldSet.has(view.id) || contentVisible;
           const presentation = presentationOf(group, view.id);
           return (
+            <Fragment key={view.id}>
+            {/* What the surface left when it was parked, beside the body and on the layer the
+                surface was on: at the alpha it was declared with, above the lighting veil. Inside
+                the body its containment would keep it off that layer. */}
+            <ParkedPicture
+              viewId={view.id}
+              dim={dimStrengthOf(group.id)}
+              style={cellVars(slotRect, group.id)}
+            />
             <div
-              key={view.id}
               className={`tab-body${contentVisible && presentation.domSurfaceMotion === "active" ? " flip-move" : ""}`}
               // Read the same value as the cell — recombining the reasons here makes the two surfaces diverge silently.
               {...dimOf(group.id)}
@@ -1236,9 +1244,6 @@ export const GroupArea = memo(function GroupArea({
                 });
               }}
             >
-              {/* What the surface left when it was parked, at the alpha the surface was declared
-                  with and above the lighting veil, exactly where the surface was. */}
-              <ParkedPicture viewId={view.id} dim={dimStrengthOf(group.id)} />
               {!hydrated ? null : (
                 <PluginViewHost
                   viewKey={`${view.pluginId}.${view.view}`}
@@ -1267,6 +1272,7 @@ export const GroupArea = memo(function GroupArea({
                 />
               )}
             </div>
+            </Fragment>
           );
         }),
       )}

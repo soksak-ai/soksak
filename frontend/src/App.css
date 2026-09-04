@@ -1080,19 +1080,20 @@ body,
 /* The persistent body slot: moving it by viewId does not remount (a CodeMirror
    or terminal session survives) — the only layer where positioning is
    legitimate. The body area is the cell minus the header minus the status bar. */
-.tab-body {
+/* The body box is written once. The picture a parked surface leaves takes the same box as a sibling
+   of the body — inside it, containment would keep it off the layer its surface was on. */
+.tab-body,
+.parked-picture {
   position: absolute;
-  /* Layout and style, not paint. Paint containment makes this a stacking context, and the picture a
-     parked surface leaves could then never reach the layer the surface itself was on — it read 127
-     on white where the live pane read 191 (measured 2026-09-04). The clip that paint containment
-     also gives is already given by overflow below. */
-  contain: layout style;
   left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
   top: calc(var(--t) + var(--pane-inset) + var(--header-h));
   width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
   height: calc(
     var(--h) - (var(--pane-inset) * 2 + var(--header-h) + var(--status-h))
   );
+}
+.tab-body {
+  contain: layout paint style;
   overflow: hidden;
 }
 /* The group titlebar (first flex row of the cell) is the group's drag handle.
@@ -2181,15 +2182,10 @@ body::after {
 }
 
 .parked-picture {
-  position: absolute;
   /* Above the focus lighting plane (z-index 6), because the surface it stands in for was composited
-     above it: a native surface is outside the document and the veil never reached it. The picture
-     is drawn there at the alpha the surface was declared with, so the pane reads the same either
-     way. */
+     above it: a native surface is outside the document and the veil never reached it. The picture is
+     drawn there at the alpha the surface was declared with, so the pane reads the same either way. */
   z-index: 7;
-  inset: 0;
-  width: 100%;
-  height: 100%;
   object-fit: fill;
   pointer-events: none;
   user-select: none;

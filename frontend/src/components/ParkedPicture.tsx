@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { type CSSProperties, useSyncExternalStore } from "react";
 import { onParkedPictureChange, parkedPicture } from "../lib/parkedPicture";
 
 // The picture a parked surface left, drawn where the surface was.
@@ -11,7 +11,9 @@ import { onParkedPictureChange, parkedPicture } from "../lib/parkedPicture";
 // So the pane keeps showing the page's last frame while the surface is away. It is a picture, and
 // what it does states that: it does not scroll, it takes no click, and it is one instant old. It is
 // removed the moment the surface is back.
-export function ParkedPicture({ viewId, dim }: { viewId: string; dim: number }) {
+export function ParkedPicture(
+  { viewId, dim, style }: { viewId: string; dim: number; style: CSSProperties },
+) {
   const url = useSyncExternalStore(
     onParkedPictureChange,
     () => parkedPicture(viewId),
@@ -24,16 +26,14 @@ export function ParkedPicture({ viewId, dim }: { viewId: string; dim: number }) 
   // surface is up or parked. Drawn under the veil at full alpha instead, an unfocused pane read 127
   // on white where the live one read 191 (measured 2026-09-04).
   return (
-    <>
-      <img
+    <img
         className="parked-picture"
         data-node={`layout/parked-picture/${viewId}`}
         src={url}
         alt=""
         aria-hidden="true"
         draggable={false}
-        style={{ opacity: 1 - dim }}
-      />
-    </>
+      style={{ ...style, opacity: 1 - dim }}
+    />
   );
 }

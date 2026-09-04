@@ -168,17 +168,14 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
   });
 
   it("contains each definite tab body layout and paint", () => {
-    // Layout and style, not paint. Paint containment makes the body a stacking context, and the
-    // picture a parked surface leaves could then never reach the layer the surface was on. The clip
-    // it also gives is given by overflow, which this gate holds too.
+    // The rule may be shared — the picture a parked surface leaves takes the same box. What this
+    // gate holds is that .tab-body is declared with its containment.
     const forTabBody = rules().filter((rule) =>
       rule.selector.split(",").map((one) => one.trim()).includes(".tab-body"),
     );
     expect(forTabBody.length, ".tab-body has no rule").toBeGreaterThan(0);
     const decls = forTabBody.map((rule) => rule.decls).join("\n");
-    expect(decls).toMatch(/contain\s*:\s*layout style/);
-    expect(decls).not.toMatch(/contain\s*:[^;]*paint/);
-    expect(decls).toMatch(/overflow\s*:\s*hidden/);
+    expect(decls).toMatch(/contain\s*:\s*layout paint style/);
   });
 
   it("workspace and rail are global chrome above the DOM browser content stack", () => {
