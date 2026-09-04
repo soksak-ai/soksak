@@ -2176,14 +2176,22 @@ body::after {
   overflow: hidden;
 }
 
+/* The dim the surface was drawn over, beneath the picture. The lighting plane exempts a cell that
+   draws this one, so the amount is applied once. */
+.parked-picture-veil {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+}
+
 .parked-picture {
   position: absolute;
-  /* Above the focus lighting plane (z-index 6), because the surface it stands in for was composited
-     above it too: a native surface is outside the document and the veil never reached it. Drawn
-     under the veil instead, a parked pane read 127 on white where the live one read 191, and every
-     unfocused pane darkened the moment an overlay opened (measured 2026-09-04). The pane cell sets
-     no z-index and no transform, so this lifts within the same stacking context. */
-  z-index: 7;
+  /* The provider body remains mounted under an overlay. Its opaque background is later in DOM
+     order, so the captured pixels need an explicit local layer above that body, and above the
+     picture's own veil. */
+  z-index: 2;
   inset: 0;
   width: 100%;
   height: 100%;

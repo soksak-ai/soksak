@@ -977,10 +977,18 @@ export const GroupArea = memo(function GroupArea({
 
   const lightingFocusId = focusedPaneId ?? content.activePaneId;
   const lightingFocusCell = displayCells.find((c) => c.group.id === lightingFocusId);
+  // A cell whose surface is parked draws its own dim: the picture stands in the document with a veil
+  // of the same amount beneath it, which is the composite the live surface produced. Only the tab
+  // the cell shows counts — a picture held for another tab is no reading of what is on screen.
+  const drawsOwnDim = (cell: (typeof displayCells)[number]) => {
+    const shown = maxCell ? maximizedId : cell.group.activeTabId;
+    return shown !== null && parkedPicture(shown) !== null;
+  };
   const lightingContent = displayCells.map((c) => ({
     id: c.group.id,
     style: cellVars(c.rect, c.group.id),
     moving: flipMoves(c.group.id),
+    drawsOwnDim: drawsOwnDim(c),
   }));
   const blockedLighting = displayCells
     .filter((c) => c.group.id !== lightingFocusId && betweenIds?.includes(c.group.id))

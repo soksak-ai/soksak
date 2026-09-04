@@ -5,6 +5,13 @@ export type LightingRegion = {
   id: string;
   style: CSSProperties;
   moving?: boolean;
+  /** The region draws its own dim, and this plane paints no veil over it.
+   *
+   *  A parked pane draws the picture its surface left, with a veil of the same amount beneath it —
+   *  the composite the live surface produced, which this plane never reached. A veil here would
+   *  apply the amount a second time (measured 2026-09-04: 127 on white where the live pane read
+   *  191). */
+  drawsOwnDim?: boolean;
 };
 
 /** Chrome box explicitly named as exempt from lighting. */
@@ -49,11 +56,11 @@ export function FocusLightingPlane({
   };
   const focusedGeometry = focused ? geometryKey(focused.style) : null;
   const blockedGeometries = new Set(blocked.map((region) => geometryKey(region.style)));
-  // Every pane that is not the focus is dimmed, whatever is drawing it. A parked picture holds no
-  // dim of its own — measured 2026-09-04, the surface snapshot is opaque white at full brightness —
-  // so exempting a parked pane leaves it bright for as long as an overlay is open.
+  // Every pane that is not the focus is dimmed. A region that draws its own dim is dimmed by what
+  // draws it, and a veil here would apply the amount twice.
   const idleContent = content
-    .filter((region) => geometryKey(region.style) !== focusedGeometry
+    .filter((region) => !region.drawsOwnDim
+      && geometryKey(region.style) !== focusedGeometry
       && !blockedGeometries.has(geometryKey(region.style)))
     .reduce<LightingRegion[]>((unique, region) => {
       // One pane rectangle gets one veil. Multiple tabs or duplicated projection records can

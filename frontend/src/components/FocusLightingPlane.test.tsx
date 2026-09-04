@@ -149,12 +149,10 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
     expect(layers).toEqual(["left-rail", "left", "right"]);
     expect(plane.querySelector("[data-lighting-content='left']")).not.toBeNull();
   });
-  // Every pane that is not the focus is dimmed, whatever is drawing it.
-  //
-  // A parked picture holds no dim of its own: measured 2026-09-04, the surface snapshot is opaque
-  // white at full brightness. Exempting a parked pane from the veil on the premise that the picture
-  // was already dimmed left every unfocused pane bright for as long as an overlay was open.
-  it("paints an idle veil over every unfocused pane, parked or live", async () => {
+  // A pane that draws its own dim is dimmed by what draws it — a parked pane paints a veil under
+  // the picture its surface left, reproducing the composite the live surface produced. A veil here
+  // would apply the amount twice: 127 on white where the live pane read 191 (measured 2026-09-04).
+  it("paints no idle veil over a pane that draws its own dim, and one over every other", async () => {
     await act(async () => {
       root.render(
         <FocusLightingPlane
@@ -165,7 +163,8 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
           exempt={[]}
           content={[
             // A cell whose surface is parked and whose picture the document is drawing.
-            region("left", 0),
+            { ...region("left", 0), drawsOwnDim: true } as LightingRegion,
+            region("middle", 25),
             region("right", 50),
           ]}
         />,
@@ -173,8 +172,9 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
     });
 
     const plane = host.querySelector("[data-node='focus-lighting/space-e']")!;
-    const idle = plane.querySelector<HTMLElement>("[data-lighting-content='left']");
-    expect(idle, "an unfocused pane is dimmed").not.toBeNull();
+    expect(plane.querySelector("[data-lighting-content='left']"), "the pane draws its own dim").toBeNull();
+    const idle = plane.querySelector<HTMLElement>("[data-lighting-content='middle']");
+    expect(idle, "every other unfocused pane is dimmed here").not.toBeNull();
     expect(idle!.style.opacity).toBe("0.5");
     expect(plane.querySelector("[data-lighting-content='right']")).toBeNull();
   });

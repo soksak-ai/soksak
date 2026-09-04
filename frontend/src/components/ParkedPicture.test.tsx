@@ -29,15 +29,29 @@ afterEach(() => {
 });
 
 describe("the picture a parked surface leaves", () => {
-  it("draws at the alpha the surface was declared with", () => {
+  // The live pane reads the surface at its declared alpha over the dimmed document. The picture
+  // reproduces that composite inside the cell: a veil at the same amount beneath it, and the image
+  // at the surface's alpha above. The lighting plane exempts the cell, so the amount is applied
+  // once.
+  it("draws its own veil and the image at the alpha the surface was declared with", () => {
     act(() => root.render(<ParkedPicture viewId="v-1" dim={0.5} />));
+    const veil = host.querySelector<HTMLElement>(".parked-picture-veil")!;
     const img = host.querySelector<HTMLImageElement>(".parked-picture")!;
+    expect(veil).not.toBeNull();
+    expect(veil.style.opacity).toBe("0.5");
     expect(img.style.opacity).toBe("0.5");
   });
 
-  it("draws opaque for a pane the lighting plane does not dim", () => {
+  it("draws no veil and an opaque image for a pane nothing dims", () => {
     act(() => root.render(<ParkedPicture viewId="v-1" dim={0} />));
-    const img = host.querySelector<HTMLImageElement>(".parked-picture")!;
-    expect(img.style.opacity).toBe("1");
+    expect(host.querySelector(".parked-picture-veil")).toBeNull();
+    expect(host.querySelector<HTMLImageElement>(".parked-picture")!.style.opacity).toBe("1");
+  });
+
+  it("draws nothing when no picture is held", () => {
+    __resetParkedPicturesForTest();
+    act(() => root.render(<ParkedPicture viewId="v-1" dim={0.5} />));
+    expect(host.querySelector(".parked-picture")).toBeNull();
+    expect(host.querySelector(".parked-picture-veil")).toBeNull();
   });
 });
