@@ -505,7 +505,7 @@ not read an owner's store.
 | A session restored after its owner was stopped and started reports `full` | Owner repository test per owner |
 | A screen restored after a stop equals the screen before it, alternate screen included | The terminal conformance suite, fed the owner's stored output. The owner parses no output and has no screen, so it is not the component this grades |
 | A restore starts no program on its own | Owner repository test per owner (`restore_gates_test.go` for the PTY) |
-| A session whose owner is not running reports `orphaned`, never `lost` | Core test with no owner process |
+| A session whose owner is not running reports `orphaned`, never `lost` | `core/session/owner_process_test.go`, and measured in a running application 2026-09-04: one listing held `live`, `lost` and `orphaned` together |
 | A close aimed at a session whose owner is not running is refused | Core test |
 | A partial record is never read | Owner repository test per owner (`restore_gates_test.go` for the PTY), and `core/store/plugindata_atomic_test.go` for the write that would produce one |
 | One session's record is not written by another session | Owner repository test per owner |

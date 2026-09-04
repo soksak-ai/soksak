@@ -64,7 +64,7 @@ is, and a row that is not done leaves the item open.
 | 17-2 | The recorded modes have a producer and a consumer | `soksak-kit-plugin-terminal`, `soksak-kit-sidecar-terminal` | [x] | [ ] | [ ] |
 | 17-3 | The command a session owner's view calls is named by the contract | `soksak-contract-control` | [x] | [ ] | [ ] |
 | 17-4 | A plugin's failure is observable from outside the renderer | core | [x] | [x] | [x] `2653847` |
-| 17-5 | A terminal pane registers with the mirror that renders it | `soksak-kit-sidecar-terminal` | [x] | [ ] | [ ] |
+| 17-5 | A mounted terminal view holds its pane | `soksak-kit-plugin-terminal` | [x] | [ ] | [ ] |
 | 18 | A plugin can take back what it stored | `soksak-core` | [x] | [x] | [x] `361032f` |
 | 19 | The session question goes wherever the owner runs | `soksak-core` | [x] | [x] | [x] `899a792` |
 
@@ -343,24 +343,31 @@ Check: the three kinds are closed in one place, so a fourth leaves the branches 
 incomplete; a view without a declaration is refused with a sentence from the bundle; the terminal
 kit declares `session` and the browser declares `view` for its page and `none` for its list.
 
-## 17-5. A terminal pane registers with the mirror that renders it
+## 17-5. A mounted terminal view holds its pane
 
-Owner: `soksak-kit-sidecar-terminal`.
+Owner: `soksak-kit-plugin-terminal`.
 
-Measured 2026-09-04 in a running application: a terminal view mounts, the core places eight native
-surfaces with `displaced: 0`, the PTY opens a session and writes its record — and the pane closes
-at once. The mirror answers `no surface renders <pane>`, so the pane is absent from its own map.
-`supersede` is the only place that map is written and it did not run.
+Measured 2026-09-04 in a running application: a terminal view mounts, the core places the native
+surface, the PTY opens a session and writes its record, and the mirror renders it — and the kit
+holds no pane. `plugin.<terminal>.status` reads `phase: closed` with `panes: []` while the mirror
+reports eight panes `running` with 23 to 106 frames consumed each.
 
-The session index stays empty as a result, which is what this looked like at first. The index write
-is correct: a provider-level test covers the whole seam, and a probe in a released build showed the
-writer constructed and `attach()` never called.
+So `attach()` is never called and the core index stays empty. The index write itself is correct: a
+provider-level test covers the whole seam, and a probe in a released build showed the writer
+constructed and `attach()` called zero times.
 
-Red: open a terminal view. `plugin.<terminal>.status` reads `phase: closed` with `panes: []` while
-`surface.inventory` holds the surface.
+The rest of the chain works. Attaching one of those sessions by hand produces `live` with outcome
+`full` beside a `lost` and an `orphaned` session in the same listing, so the owner query, the
+outcome, the state distinction and survival across an application restart all hold outside a
+fixture.
 
-Check: a mounted pane is in the mirror's map before any render command is served; a pane the mirror
-does not hold is reported rather than answered `NOT_FOUND` to every caller in turn.
+An earlier version of this item named the mirror. That was wrong: the mirror holds every pane and
+renders it. What holds none is the kit.
+
+Red: open a terminal view. The mirror renders it and `plugin.<terminal>.status` reads `panes: []`.
+
+Check: a view the host reports as mounted has a pane in the kit's own map, and a pane that fails to
+open reports why rather than leaving an empty map.
 
 ## 17-4. A plugin's failure is observable from outside the renderer
 

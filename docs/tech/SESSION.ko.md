@@ -485,7 +485,7 @@ session 에는 그것이 없으며, 필드는 `full` 로 기본값을 주는 대
 | 느린 저장소는 바이트를 크게 알리며 잃고 session 을 멈추지 않는다 | 소유자별 저장소 테스트 (PTY 는 `feed_test.go`) |
 | 정지 후 복원된 화면은 alternate screen 을 포함해 정지 전 화면과 같다 | 소유자의 저장된 출력을 먹인 터미널 conformance suite. 소유자는 출력을 파싱하지 않고 화면이 없으므로 이것이 재는 컴포넌트가 아닙니다 |
 | restore 는 스스로 어떤 프로그램도 시작하지 않는다 | 소유자별 저장소 테스트 (PTY 는 `restore_gates_test.go`) |
-| 소유자가 실행 중이지 않은 session 은 `orphaned` 를 보고하며 `lost` 를 보고하지 않는다 | 소유자 프로세스 없는 코어 테스트 |
+| 소유자가 실행 중이지 않은 session 은 `orphaned` 를 보고하며 `lost` 를 보고하지 않는다 | `core/session/owner_process_test.go`, 그리고 2026-09-04 실행 애플리케이션에서 측정: 한 목록에 `live`·`lost`·`orphaned` 가 함께 나왔습니다 |
 | 소유자가 실행 중이지 않은 session 을 향한 종료는 거부된다 | 코어 테스트 |
 | 부분 기록은 읽히지 않는다 | 소유자별 저장소 테스트 (PTY 는 `restore_gates_test.go`), 그리고 그런 기록을 만들 쓰기에 대해서는 `core/store/plugindata_atomic_test.go` |
 | 한 session 의 기록은 다른 session 이 쓰지 않는다 | 소유자별 저장소 테스트 |
