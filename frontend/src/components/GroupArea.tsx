@@ -1,5 +1,6 @@
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { moduleState } from "../lib/moduleState";
+import { coversBox } from "../lib/overlayCoverage";
 import { execute } from "../commands/registry";
 import { rafThrottle } from "../lib/rafThrottle";
 import {
@@ -402,7 +403,30 @@ export const GroupArea = memo(function GroupArea({
   // A native surface is composited above the document, so no z-index puts it under a modal. The
   // count of open overlays is the fourth layer of `surfaceShown` — nothing read this counter until
   // 2026-08-17, and the plugin manager opened with two browser pages drawn over its card.
-  const overlayed = useUi((s) => s.nativeOverlayCount > 0);
+  // Which panes an open overlay covers. Only those step aside: the swap between a surface and its
+  // picture crosses two compositing layers and cannot land in one frame, so a pane nothing is drawn
+  // over stays exactly as it is (measured 2026-09-04: a dropdown over 31px of one pane made every
+  // pane in the window flash).
+  const nativeOverlayAreas = useUi((s) => s.nativeOverlayAreas);
+  const [coveredPanes, setCoveredPanes] = useState<ReadonlySet<string>>(() => new Set());
+  useLayoutEffect(() => {
+    if (nativeOverlayAreas.length === 0) {
+      setCoveredPanes((held) => (held.size === 0 ? held : new Set()));
+      return;
+    }
+    // Measured on the overlay's own state edge, not on a render or a clock.
+    const covered = new Set<string>();
+    for (const node of document.querySelectorAll<HTMLElement>('[data-node^="layout/pane/"]')) {
+      const id = node.dataset.node?.slice("layout/pane/".length);
+      if (!id) continue;
+      const box = node.getBoundingClientRect();
+      if (coversBox(nativeOverlayAreas, {
+        left: box.left, top: box.top, right: box.right, bottom: box.bottom,
+      })) covered.add(id);
+    }
+    setCoveredPanes(covered);
+  }, [nativeOverlayAreas]);
+  const overlayedPane = (paneId: string) => coveredPanes.has(paneId);
   // One inventory subscription, not one hook per tab. A successful capture advances the revision;
   // this render then changes the declaration from live to parked. Until publication the surface stays
   // applied, so render cannot hide the surface before capture completes.
@@ -629,7 +653,7 @@ export const GroupArea = memo(function GroupArea({
         const tabActive = maxCell ? v.id === maximizedId : v.id === group.activeTabId;
         commitViewPresentation(
           v.id,
-          resolveViewVisibility(surfaceActive, true, tabActive, overlayed, traveling),
+          resolveViewVisibility(surfaceActive, true, tabActive, overlayedPane(group.id), traveling),
         );
       }
     }
@@ -1189,7 +1213,7 @@ export const GroupArea = memo(function GroupArea({
             surfaceActive,
             true,
             tabActive,
-            overlayed,
+            overlayedPane(group.id),
             traveling,
           );
           const slotRect = maxCell && contentVisible ? FULL_RECT : rect;
