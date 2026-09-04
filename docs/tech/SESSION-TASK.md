@@ -61,7 +61,7 @@ is, and a row that is not done leaves the item open.
 | 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [x] | [x] | [x] `61ed75c` |
 | 17 | A browser view keeps its address in its view record | `soksak-plugin-browser-wails3` | [x] | [x] | [x] `7c2af28` |
 | 17-1 | Every view declares what its restore needs | core, every plugin with a view | [x] | [x] | [x] `8ef6402` |
-| 17-2 | The recorded modes have a producer and a consumer | `soksak-kit-plugin-terminal`, `soksak-kit-sidecar-terminal` | [x] | [ ] | [ ] |
+| 17-2 | The recorded modes have a producer and a consumer | `soksak-contract-terminal`, `soksak-kit-sidecar-terminal` | [x] | [x] | [x] `4acb6bc` `1f777f8` |
 | 17-3 | The command a session owner's view calls is named by the contract | `soksak-contract-control` | [x] | [x] | [x] `7791493` `ef2296e` `c657d7d` |
 | 17-4 | A plugin's failure is observable from outside the renderer | core | [x] | [x] | [x] `2653847` |
 | 17-5 | A surface-delivered view writes the core index | `soksak-kit-plugin-terminal` | [x] | [x] | [x] `4836c4e` |
@@ -412,27 +412,31 @@ the kit's calls are the declared names; a side that spells a name of its own fai
 
 ## 17-2. The recorded modes have a producer and a consumer
 
-Owner: `soksak-kit-plugin-terminal`, and the host PTY capability between it and the session owner.
+Owner: `soksak-contract-terminal`, `soksak-kit-sidecar-terminal`, and the engines that implement it.
 
-`pty.modes` is served by the PTY owner (`control.go`) and defined by the contract, and nothing
-calls it in either direction. Measured 2026-09-04: the only occurrences across the repositories are
-the definition, the handler and a comment. `record.Modes` is empty for every session that has ever
-existed, so S4-5's second half has never happened.
-
-Done: the terminal binding records a mode report and reads one back over `pty.modes`, which the
-owner has served in both directions all along.
-
-The pieces are all here. The mirror reports its modes — `soksak-kit-sidecar-terminal` answers
-`modes()` and they travel in the frame — and `soksak-contract-terminal` encodes them as a
-`ModeReport`. What is missing is the wire: the terminal binding has no modes call, so a mirror's
-modes never reach the owner and nothing reads them back before a replay.
+Measured 2026-09-04: `pty.modes` was served by the PTY owner and defined by the contract, and
+nothing called it in either direction. `record.Modes` was empty for every session that has ever
+existed, so S4-5's second half had never happened.
 
 Why it matters: a mode set before the retained output begins is in no byte the store holds. A
-rotation drops the half that set it, and the replay then draws into a mirror in the wrong mode —
-the alternate screen being the visible one. That is the case the record exists for.
+rotation drops the half that set it, and the replay then draws into a mirror in the wrong mode — the
+alternate screen being the visible one.
 
-Red: set a mode, produce more than one segment of output, restart the owner, replay. The mirror is
-in the mode it started in rather than the one the session was left in.
+Done. The mirror already answered `mode_report()`. `ModeReport::apply_bytes` puts a fresh mirror
+into a report's modes, and the mode numbers stay in the contract rather than in each engine. The
+sidecar's consumer sends a report when the modes change, off the byte path — a worker thread holds
+the control socket so the feed loop does not — and a restore reads what the owner stored and feeds
+it before the archived paint. A report this build cannot read is refused rather than read as
+defaults.
+
+The report holds the thirteen modes the contract declares. DEC private 9 and 1001 are tracked by
+the mirror and are not in that set; adding them changes the contract's reference states.
+
+`assert_mode_report_restores` grades every engine, and all six pass. It found one defect: resets
+sent among the sets lost 1002 and 1006 on kitty, because an engine that treats mouse tracking as one
+exclusive group clears the group on any reset in it. Every reset is now sent before every set.
+
+Red: apply a report to a fresh mirror and read its modes back. They are the engine's defaults.
 
 Check: the modes reach the record when they change and not on a cadence; a restore reads them and
 applies them to a fresh mirror before any replayed byte; the owner still applies none of them
