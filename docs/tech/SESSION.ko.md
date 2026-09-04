@@ -477,7 +477,7 @@ session 에는 그것이 없으며, 필드는 `full` 로 기본값을 주는 대
 | 코어가 거부한 attach 는 보고되며 버려지지 않는다 | 소유자별 저장소 테스트 (터미널은 `core-index.test.ts`) |
 | 소유자의 id 는 자기 재시작을 가로질러 반복되지 않는다 | 소유자별 저장소 테스트 |
 | session 은 자기 창이 닫혀도 살아남는다 | 코어 테스트: 창을 닫고 `session.list` 가 `detached` 를 보고 |
-| session 은 소유자 프로세스가 종료돼도 살아남는다 | fake 소유자를 쓰는 코어 테스트: kill 후 `session.list` 가 `orphaned` 를 보고 |
+| session 은 소유자 프로세스가 종료돼도 살아남는다 | `core/session/owner_process_test.go`: 소켓 소유자가 응답하고, 중지되고, session 이 `orphaned` 로 읽힙니다 |
 | session 은 애플리케이션 재시작에도 살아남는다 | fixture index 에 대한 코어 테스트 |
 | 소유자를 정지시켰다 시작한 뒤 복원된 session 은 `full` 을 보고한다 | 소유자별 저장소 테스트 |
 | 기한에 걸린 배수는 복원을 full 로 보고하지 않는다 | 소유자별 저장소 테스트 |

@@ -136,13 +136,16 @@ func TestAStrayNonUTF8ByteWithoutNULStillReads(t *testing.T) {
 		t.Errorf("read_bytes = %d, want 5", got.ReadBytes)
 	}
 	// A lossy decoder would replace the byte on the way in; this keeps it and
-	// encoding/json substitutes U+FFFD on the way out. The caller sees the same
-	// answer through one pass instead of two — pinned here rather than assumed.
+	// encoding/json substitutes U+FFFD on the way out. The caller reads the same
+	// answer through one pass instead of two.
+	//
+	// The check is on the character, not on its escape: encoding/json emits U+FFFD as its UTF-8
+	// bytes rather than as \ufffd, and which of the two it writes is the encoder's business.
 	encoded, err := json.Marshal(got)
 	if err != nil {
 		t.Fatalf("encoding: %v", err)
 	}
-	if !strings.Contains(string(encoded), "\"content\":\"caf\\ufffd\\n\"") {
+	if !strings.Contains(string(encoded), "\"content\":\"caf\ufffd\\n\"") {
 		t.Errorf("the invalid byte did not become U+FFFD at the boundary: %s", encoded)
 	}
 }

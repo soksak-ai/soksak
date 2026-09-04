@@ -500,7 +500,7 @@ not read an owner's store.
 | An attach the core refused is reported, never discarded | Owner repository test per owner (`core-index.test.ts` for the terminal) |
 | An owner's id does not repeat across its restarts | Owner repository test per owner |
 | A session survives its window closing | Core test: close the window, `session.list` reports `detached` |
-| A session survives its owner's process exiting | Core test with a fake owner: kill it, `session.list` reports `orphaned` |
+| A session survives its owner's process exiting | `core/session/owner_process_test.go`: a socket owner answers, is stopped, and the session reads `orphaned` |
 | A session survives an application restart | Core test over a fixture index |
 | A session restored after its owner was stopped and started reports `full` | Owner repository test per owner |
 | A screen restored after a stop equals the screen before it, alternate screen included | The terminal conformance suite, fed the owner's stored output. The owner parses no output and has no screen, so it is not the component this grades |
