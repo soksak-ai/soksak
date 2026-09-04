@@ -87,7 +87,7 @@ pane 안의 실제 로그인 shell 을 밖에서 구동합니다. `sok term.exec
 
 | 판정 | 2026-08-16 의 답 |
 | --- | --- |
-| `splitTreeScale.test.ts` | 같은 방향 분할 64회가 형제 65개와 split 노드 하나를 만듦. 번갈아 64회. 최신부터 닫아 단일 leaf 까지. 마지막 leaf 는 거부 |
+| `layoutCanonical.test.ts` | SplitPane card 분할과 닫기에서 canonical card 상태를 유지 |
 | `sok layout.verify` | pane 69개, 최악 0.0125px, 허용치 0.5px, 빠진 것 없음, 예상 밖 없음 |
 
 `layout.verify` 는 모든 pane 에 대해 측정한 사각형에서 선언한 사각형을 뺍니다. `settled` 를 먼저
