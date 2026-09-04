@@ -359,26 +359,25 @@ the transport. A view that stops working reports it there.
 
 Owner: `soksak-contract-control`, and the two sides that read it.
 
-Measured 2026-09-04: the terminal kit called `session_attach` with `viewId`. The command it can
-run is `session.attach` with `view` — the first is the Go registry name and the kit runs catalog
-names, and the parameter is spelled differently. Either mismatch alone leaves the index empty, and both
-were invisible: the runner answers `{ok:false}` rather than rejecting, so a name nothing serves
-looks like a success to a caller that only catches.
+Measured 2026-09-04: the terminal kit called `session_attach` with `viewId`. The command it can run
+is `session.attach` with `view` — the first is the Go registry name and the kit runs catalog names,
+and the parameter is spelled differently. Either mismatch alone leaves the index empty, and both
+were invisible: the runner returns `{ok:false}` rather than raising, so a name nothing serves looks
+like a success to a caller that only catches.
 
-The answer is read now, so the next wrong name is reported at every pane. What is still missing is
-anything that makes it right before it runs. The kit cannot check the core's names without reading
-the core, and the core cannot check the kit's calls without reading the kit — the coupling law
-forbids both directions, and this is exactly the shape it exists for.
+Done: `soksak-contract-control` defines the names and their parameters in
+`session-command-vectors.json`, in the same form as `address-vectors.json`, with a test that the
+file is well formed.
 
-The contract already has the mechanism. `address-vectors.json` and `process-name-vectors.json` are
-how it defines a common case for Go, Rust and a JavaScript reader at once. Session commands are one
-component telling another what it holds, which is the same kind of thing.
+Open: neither side reads it yet. The core registers its catalog names from its own source, and the
+kit spells them in its own. Each has to be graded against the file, and the core's dependency on the
+contract has to move to a version carrying it.
 
-Red: rename the parameter on either side. Nothing fails until a person opens the session listing
-and finds it empty.
+Red: rename a parameter on either side. Nothing fails until a person opens the session listing and
+finds it empty.
 
-Check: both names and their parameters come from one file; the core's catalog is graded against it;
-the kit reads it rather than spelling the names itself. A side that spells a name of its own fails.
+Check: the core's catalog registers exactly the declared names with exactly the declared parameters;
+the kit's calls are the declared names; a side that spells a name of its own fails.
 
 ## 17-2. The recorded modes have a producer and a consumer
 
