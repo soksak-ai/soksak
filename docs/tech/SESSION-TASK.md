@@ -61,9 +61,10 @@ is, and a row that is not done leaves the item open.
 | 16 | Handoff is rewritten as a subordinate of S6 | `soksak-core` | [x] | [x] | [x] `61ed75c` |
 | 17 | A browser view keeps its address in its view record | `soksak-plugin-browser-wails3` | [x] | [x] | [x] `7c2af28` |
 | 17-1 | Every view declares what its restore needs | core, every plugin with a view | [x] | [x] | [x] `8ef6402` |
-| 17-2 | The recorded modes have a producer and a consumer | `soksak-kit-plugin-terminal` | [x] | [ ] | [ ] |
+| 17-2 | The recorded modes have a producer and a consumer | `soksak-kit-plugin-terminal`, `soksak-kit-sidecar-terminal` | [x] | [ ] | [ ] |
 | 17-3 | The command a session owner's view calls is named by the contract | `soksak-contract-control` | [x] | [ ] | [ ] |
-| 17-4 | A plugin's failure is observable from outside the renderer | core | [x] | [ ] | [ ] |
+| 17-4 | A plugin's failure is observable from outside the renderer | core | [x] | [x] | [x] `2653847` |
+| 17-5 | A terminal pane registers with the mirror that renders it | `soksak-kit-sidecar-terminal` | [x] | [ ] | [ ] |
 | 18 | A plugin can take back what it stored | `soksak-core` | [x] | [x] | [x] `361032f` |
 | 19 | The session question goes wherever the owner runs | `soksak-core` | [x] | [x] | [x] `899a792` |
 
@@ -342,6 +343,25 @@ Check: the three kinds are closed in one place, so a fourth leaves the branches 
 incomplete; a view without a declaration is refused with a sentence from the bundle; the terminal
 kit declares `session` and the browser declares `view` for its page and `none` for its list.
 
+## 17-5. A terminal pane registers with the mirror that renders it
+
+Owner: `soksak-kit-sidecar-terminal`.
+
+Measured 2026-09-04 in a running application: a terminal view mounts, the core places eight native
+surfaces with `displaced: 0`, the PTY opens a session and writes its record — and the pane closes
+at once. The mirror answers `no surface renders <pane>`, so the pane is absent from its own map.
+`supersede` is the only place that map is written and it did not run.
+
+The session index stays empty as a result, which is what this looked like at first. The index write
+is correct: a provider-level test covers the whole seam, and a probe in a released build showed the
+writer constructed and `attach()` never called.
+
+Red: open a terminal view. `plugin.<terminal>.status` reads `phase: closed` with `panes: []` while
+`surface.inventory` holds the surface.
+
+Check: a mounted pane is in the mirror's map before any render command is served; a pane the mirror
+does not hold is reported rather than answered `NOT_FOUND` to every caller in turn.
+
 ## 17-4. A plugin's failure is observable from outside the renderer
 
 Owner: the core.
@@ -387,6 +407,9 @@ Owner: `soksak-kit-plugin-terminal`, and the host PTY capability between it and 
 calls it in either direction. Measured 2026-09-04: the only occurrences across the repositories are
 the definition, the handler and a comment. `record.Modes` is empty for every session that has ever
 existed, so S4-5's second half has never happened.
+
+Done: the terminal binding records a mode report and reads one back over `pty.modes`, which the
+owner has served in both directions all along.
 
 The pieces are all here. The mirror reports its modes — `soksak-kit-sidecar-terminal` answers
 `modes()` and they travel in the frame — and `soksak-contract-terminal` encodes them as a
