@@ -89,32 +89,31 @@ closure 이고, 그 전송은 HTTPS 릴리즈 디렉터리와 주소로 지정�
 
 ## 컴포넌트를 로컬에서 릴리즈하기
 
-컴포넌트는 자기 저장소가 자기 Makefile 이 고정한 SDK 로 릴리즈하고, 저장소마다 고정 버전이 다릅니다.
-2026-09-04 에 재구성해 처음부터 끝까지 돌렸습니다. Makefile 하나에서 유도되지 않기에 적어 둡니다.
+각 저장소는 자기 Makefile 이 고정한 SDK 버전으로 자기 컴포넌트를 릴리즈합니다. 버전은 저장소마다
+다릅니다. 2026-09-04 에 처음부터 끝까지 확인했습니다.
 
-**SDK 는 체크아웃이 아니라 준비된 릴리즈여야 합니다.** `require-tooling` 이 요구하는 것은 루트에
-`release.json` 과 `.dependencies/soksak-spec` 를 든, 정확히 고정된 버전의 풀린 패키지입니다. 버전이 다른
-SDK 저장소는 대체하지 못하고 저장소 자체도 마찬가지입니다.
+**SDK 입력.** `require-tooling` 은 루트에 `release.json` 과 `.dependencies/soksak-spec` 가 있는, 고정된
+버전의 풀린 SDK 패키지를 요구합니다. SDK 저장소 체크아웃은 허용되지 않습니다.
 
-준비 방법: `soksak-sdk/artifacts/<version>/soksak-sdk-<version>-any.tgz` 를 풀고, 그 디렉터리의
-`release.json` 을 같은 디렉터리에 복사한 뒤, 패키지의 `sdk-spec.lock.json` 이 명시한 Spec 을
-`prepareSpecDependency({root, lock, manifest, artifact})` 로 실체화합니다. 로컬 릴리즈 스토어에서 가져오고
-네트워크에서 가져오지 않습니다. 고정된 Spec 릴리즈는 상류에 더 이상 없을 수 있고, 스토어는 lock 이 명시한
-바로 그 바이트를 듭니다.
+준비 절차: `soksak-sdk/artifacts/<version>/soksak-sdk-<version>-any.tgz` 를 풀고, 그 디렉터리의
+`release.json` 을 풀린 루트에 복사하고, 패키지의 `sdk-spec.lock.json` 이 명시한 Spec 을
+`prepareSpecDependency({root, lock, manifest, artifact})` 로 설치합니다. Spec 은 네트워크가 아니라 로컬
+릴리즈 스토어에서 읽습니다. 고정된 Spec 릴리즈가 상류에 없을 수 있습니다.
 
-**순서.** 컴포넌트의 의존성이 로컬 스토어에 있어야 그것에 대해 릴리즈할 수 있으므로 사슬은 아래에서
-위로 갑니다. 킷을 npm 레지스트리로, 그다음 플러그인이 선언한 각 사이드카, 그다음 플러그인입니다.
-`make release OUT=<빈 디렉터리>` — 이미 릴리즈가 든 출력 디렉터리는 실패하므로 시도마다 새 것을 씁니다.
+**순서.** 킷을 npm 레지스트리에 게시하고, 그다음 플러그인이 선언한 각 사이드카, 그다음 플러그인입니다.
+의존성은 그것에 대해 릴리즈하기 전에 로컬 릴리즈 스토어에 있어야 합니다.
 
-**발행된 버전은 불변입니다.** 잘못된 릴리즈는 덮어쓰지 않고 새 버전으로 잇습니다. 같은 버전을
-다시 발행하면 충돌로 거부됩니다.
+**출력 디렉터리.** `make release OUT=<디렉터리>` 는 디렉터리에 이미 릴리즈가 있으면 실패합니다. 시도마다
+새 디렉터리를 사용합니다.
 
-**스테이지 디렉터리는 버전보다 오래 삽니다.** 같은 버전의 이전 매니페스트로 만든 `dist/` 는 조용히
-덮이지 않고 충돌로 다음 빌드를 멈춥니다. 우회하지 않고 제거합니다.
+**버전 불변.** 이미 있는 버전을 게시하면 conflict 를 반환합니다. 결함 있는 릴리즈는 새 버전으로 교체합니다.
 
-**빌드한 것을 설치하기.** plan 과 install 은 두 명령이고 plan 의 digest 를 install 로 실어 보내므로,
-설치되는 것은 계획된 것입니다. 플러그인은 그 뒤 동의와 활성화가 필요하고, 버전이 바뀌면 동의를 다시
-요구합니다.
+**스테이지 디렉터리.** 같은 버전의 다른 매니페스트로 생성된 `dist/` 는 다음 빌드를
+`STAGED_MANIFEST_CONFLICT` 로 중단시킵니다. 제거합니다.
+
+**설치.** `plugin.install.local.plan` 이 digest 를 반환하고 `plugin.install.local` 이 그 digest 를
+요구합니다. 플러그인은 그다음 `plugin.consent.grant` 와 `plugin.enable` 이 필요합니다. 버전이 바뀌면
+동의가 다시 필요합니다.
 
 ## 준비 구분
 

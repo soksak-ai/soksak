@@ -35,7 +35,7 @@ Transaction test는 설치 실패가 partial environment를 공개하지 못하�
 첫 구현은 `environment.json`이 없을 때 memory의 revision 1을 반환했지만 compare-and-swap은 저장된
 revision을 올바르게 0으로 보았습니다. 따라서 첫 설치는 `expected 1, actual 0`으로 실패할 수밖에
 없었습니다. 이제 Core가 identity home을 소유한 뒤 실제 revision 1을 공개합니다. 조회와 write가
-하나의 상태를 사용하며 파일 부재를 두 가지로 해석하지 않습니다.
+하나의 상태를 사용하며 파일 없음을 두 가지로 해석하지 않습니다.
 
 ## 2026-08-25: 개발 소스와 종류별 제거 명령 하나
 
@@ -139,7 +139,7 @@ Path 거부는 key 하나가 아니라 둘입니다. `<home>/components/`의 str
 `environment.remove.artifactDeleteFailed`, `install.transaction.dependencyVersionConflict`,
 `install.transaction.pluginManifestInvalid`, `install.hostArtifactTarget.noPlatform`,
 `install.hostArtifactTarget.noTriple`이고, key가 아닌 error는 `ErrRevisionConflict`,
-`environment.json` 부재의 `os.ErrNotExist`, 그리고 표에 적힌 `os.ErrInvalid`, `os.ErrNotExist`,
+`environment.json` 없음의 `os.ErrNotExist`, 그리고 표에 적힌 `os.ErrInvalid`, `os.ErrNotExist`,
 file 검사의 os error입니다. `environment.develop.manifestMismatch`는 삭제되었습니다.
 `environment.develop.directoryUnavailable`(`kind`, `id`, `path`, `error`)이 읽거나 parse할 수 없거나
 다른 id를 선언하는 개발 manifest에 대한 유일한 거부입니다. `plugin_develop`과 `sidecar_develop`,

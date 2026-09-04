@@ -75,7 +75,7 @@ Core가 이 service를 pin한 뒤 Kitty는 다른 tab 왕복 후에도 42×30 su
 
 Ghostty는 engine 결함이 아니라 readiness 측정 결함을 드러냈습니다. `waitForText`가 첫 성공한 native
 state event 전에 surface를 읽었습니다. Vision 0.0.14는 이 event 뒤에만 read합니다. 그 다음 VT100은
-같은 input gate 부재를 드러냈습니다. 즉시 입력이 service가 session 25를 공개하기 전에 opening
+같은 input gate 없음을 드러냈습니다. 즉시 입력이 service가 session 25를 공개하기 전에 opening
 session의 zero value에 도달했습니다. Vision 0.0.15는 같은 event까지 입력을 보관하고 정확히 한 번
 전달하며, 준비 전 dispose는 보관 입력을 명시적으로 거부합니다. 두 event gate 적용 뒤 Ghostty·VT100·
 WezTerm은 tab 왕복 뒤에도 42×30 grid와 cursor를 유지했고 marker 순서로 보장한 OSC set/reset 및 직접

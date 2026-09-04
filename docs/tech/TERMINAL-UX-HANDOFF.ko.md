@@ -410,7 +410,7 @@ Release train은 시작하지 않았습니다. Theme, native focus/cursor/keyboa
 후보 plan 의 SHA-256 은
 `630486414dd0a83cdd7d4cb54d78c1f6a2a6d7295293d35f13fdf27836a5c51b` 입니다. 이 plan 은 PTY 와 프레임
 사이드카 여섯 개의 archive 도 고정합니다. 이 표와 digest 가 closure identity 이며, 설치 제품
-보고서와 공개 상태·DOM 단언이 자동 판정 증거이고 스크린샷과 녹화는 직접 관측 증거입니다.
+보고서와 공개 상태·DOM 검사가 자동 판정 증거이고 스크린샷과 녹화는 직접 관측 증거입니다.
 
 허용되는 로컬 빌드 시점 검증 경로는 TERMINAL-UX-EXECUTION.ko.md 의 "저장소 간 로컬 후보 검증" 이
 정의합니다. 소비자 manifest 나 lockfile 을 직접 편집하는 것은 개발 모드가 아닙니다.
@@ -444,7 +444,7 @@ arm64·x86_64, Windows x86_64 전체 네이티브 매트릭스는 아직 실행�
 Shitty 빌드 의존은 사이드카의 `build-dependencies.json` 이 정확한 source revision과 Python·LLVM·Ragel
 version으로 선언합니다. commit `a5f8785f` 는 내장 버전을 소스 commit epoch 에서 만들고, 결정적 정적
 archive 를 쓰며, 디버그 데이터에서 노드 작업 경로를 제거합니다.
-시간대가 다른 독립 arm64 SDK 빌드 두 번이 바이트 단위로 같았고, 정본 트리 receipt `86f83d4c`,
+시간비용 다른 독립 arm64 SDK 빌드 두 번이 바이트 단위로 같았고, 정본 트리 receipt `86f83d4c`,
 사이드카 빌드, 반복 stage, 적합성 8개가 GREEN 입니다. 다른 네이티브 target 과 새 소유자 전용
 benchmark 계약 closure 는 아직 검증하지 않았습니다.
 
@@ -584,7 +584,7 @@ session/generation을 함께 기록한 뒤, 동일한 clean 폐포를 v7에서 �
 `soksak-core`를 기다리는 event-driven `wait`도 input 없이 통과했습니다. 뒤에서 읽는 제한된
 `read`가 빈 줄을 반환한 것은 출력 누락의 증거가 아닙니다. 프롬프트가 viewport 첫 줄에 있어
 마지막 행만 읽는 명령 범위 밖이었습니다. 이것은 사용자 v3의 오래된 보고를 닫는 것이 아니라,
-깨끗한 현재 폐포에서는 해당 프롬프트 부재를 재현하지 못했다는 사실만 기록합니다.
+깨끗한 현재 폐포에서는 해당 프롬프트 없음을 재현하지 못했다는 사실만 기록합니다.
 
 두 항목은 기존 2번(포커스)·4번(입력)의 하위 현상으로 숨기지 않고 각각 named assertion을 가진다. RED가
   확인되기 전 구현하지 않으며, 사용자 `soksakv3`에서는 재현·수정하지 않는다.

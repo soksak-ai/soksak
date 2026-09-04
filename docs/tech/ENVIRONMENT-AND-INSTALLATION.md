@@ -49,6 +49,30 @@ reads it must return those bytes. A local install reads every release of the clo
 addressed store; a dependency absent from the store, or one whose bytes differ from the pin, is an
 error named by its derived location. Core does not fall back to the network.
 
+## The official registry is built in, and it is one URL
+
+`official` is not added; it is compiled in. Its descriptor — id, name, index URL and trusted public
+key — is a constant, `registry.add` refuses a descriptor whose id is `official`, and its index URL
+is
+
+```text
+https://github.com/soksak-ai/soksak-plugin-registry/releases/latest/download/registry.json
+```
+
+So the whole official catalogue is one release asset. `latest` resolves to the newest
+`registry-<sequence>` release of the registry repository, and the index is that release's only
+asset. A repository with no such release answers 404, every plugin is unavailable, and
+`registry.list` reports the registry in `error` — measured 2026-09-04.
+
+Another registry is added by descriptor and reached over HTTPS. `isRegistryIndexUrl` refuses every
+other scheme, and refuses credentials, a query and a fragment with it — so a file path, a plain
+http server and a URL carrying a token are all outside the transport. A local index is served over
+TLS or it is not a registry index.
+
+Both registries produce the same qualified entries, and an unqualified install resolves only
+against `official` — `resolveRegistryRelease` answers `qualification_required` for anything else, so
+a second registry never silently supplies a plugin the official one names.
+
 ## Installer transaction
 
 The installer resolves the complete Plugin/Sidecar runtime closure, selects the host target, verifies

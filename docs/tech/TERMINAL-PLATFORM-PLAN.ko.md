@@ -108,7 +108,7 @@ projection, 네이티브 표면 binding 을 구현할 수 있습니다. 터미�
 용어가 아닙니다. reference state 는 계약의 규범 입력 또는 명시된 계약 결정을 기록합니다. 후보 엔진의 출력은
 증거이며 권위가 아닙니다.
 
-계약은 그 계약만 정의하는 경우에 자기 schema, conformance case, reference state, 단언을 담을 수
+계약은 그 계약만 정의하는 경우에 자기 schema, conformance case, reference state, 검사를 담을 수
 있습니다. 재사용 가능한 제품 구현은 실제 소비자 여럿이 같은 코드를 필요로 한 뒤에만 kit 으로
 옮깁니다.
 
@@ -157,7 +157,7 @@ SDK 를 제공합니다. Kitty 제공자는 같은 적합성·실제 프로세�
 암호화된 archived 복원은 공유 AES-256-GCM checkpoint 저장소 하나를 씁니다. Wails 호스트는 자기 장치
 키를 Keychain, Credential Manager, Secret Service 에 만들고, 평문을 JavaScript 에 노출하지 않고 제공자
 checkpoint 키를 생성하며, 제공자 키를 그 사이드카 프로세스에만 주입합니다. 공유 kit 은 인증된
-checkpoint 왕복, 디스크 평문 부재, 손상된 checkpoint 거부를 증명합니다. 완전한 archived 복구는 제공자
+checkpoint 왕복, 디스크 평문 없음, 손상된 checkpoint 거부를 증명합니다. 완전한 archived 복구는 제공자
 여섯 개 모두에 대해 제품 검사 항목으로 남아 있습니다.
 
 Shitty 제공자 기준선에는 독립된 RED 하나가 있습니다.

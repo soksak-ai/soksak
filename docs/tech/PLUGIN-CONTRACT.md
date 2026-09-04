@@ -33,6 +33,30 @@ Views declare `surfaces: ["tab"]`, `surfaces: ["side"]`, or both. The host owns 
 - Loader activation checks `appVersionRequirement`, permissions, commands, views, nodes, and interface requirements through the canonical package.
 - Plugin, sidecar, and Core communicate through commands, events, status, and versioned interfaces. They do not read each other's internal files or DOM.
 
+## Failure reporting
+
+A Plugin runs in the renderer. Core collects no renderer console output, and `activity` records a
+command that executed, not a command refused before execution. A Plugin that fails without
+reporting therefore fails without any record.
+
+Two forms produce no record:
+
+- An optional call on an absent collaborator. `a?.b()` with `a` undefined performs nothing and
+  raises nothing.
+- A refusal returned as a value. `commands.execute` returns `{ok:false}` instead of raising, so a
+  caller that only catches exceptions treats a refusal as success.
+
+Requirements:
+
+- A component that cannot perform its function reports that once, at the point of detection.
+- A caller of `commands.execute` reads `ok` and reports a false value.
+- An uncaught Plugin error and a refused Plugin command reach one location readable without
+  rebuilding the Plugin.
+
+Measured 2026-09-04: a Plugin wrote no session to the Core index. Every element of the path was
+present in the installed bundle and every permission check passed. Locating the cause required
+rebuilding the Plugin with an added log statement.
+
 ## File-drop grants
 
 An operating-system drop enters Core as a path, but Plugin events receive only opaque grant IDs and

@@ -83,7 +83,7 @@ Local 사이드카 릴리즈는 registry 릴리즈와 같은 manifest, target �
 코어가 아니라 사람입니다.
 
 공개 `sidecar.status` 명령은 이 home 에 살아 있는 프로세스가 있는 모든 유닛을
-`{ units: [{ name, version, process, pid }] }`로 반환합니다. 이 Core 세대가 시작했든 이전 세대가
+`{ units: [{ name, version, process, pid }] }`로 반환합니다. 이 Core 세비용 시작했든 이전 세비용
 남겼든 포함합니다. 기록된 유닛은 연결해서 확인하며, 프로세스가 없는 record 는 제거하고 결과에서
 뺍니다. 유닛을 시작하지 않으며 transport 주소, 진단, token, secret 선언을 반환하지 않습니다.
 

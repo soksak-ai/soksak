@@ -90,36 +90,33 @@ observed executable, but never in source, a lockfile, a workflow or a release ar
 
 ## Releasing a component locally
 
-A component is released by its own repository with the SDK its Makefile pins, and every repository
-pins its own. Reconstructed and run end to end 2026-09-04; written down because none of it is
-derivable from a single Makefile.
+Each repository releases its own component with the SDK version its Makefile pins. Versions differ
+per repository. Verified end to end 2026-09-04.
 
-**The SDK has to be a prepared release, not a checkout.** `require-tooling` wants an unpacked
-package whose root holds `release.json` and `.dependencies/soksak-spec`, at exactly the pinned
-version. An SDK repository at a different version does not substitute, and neither does the
-repository itself.
+**SDK input.** `require-tooling` requires an unpacked SDK package whose root contains `release.json`
+and `.dependencies/soksak-spec`, at the pinned version. An SDK repository checkout is not accepted.
 
 To prepare one: unpack `soksak-sdk/artifacts/<version>/soksak-sdk-<version>-any.tgz`, copy that
-directory's `release.json` beside it, and materialize the Spec the package's `sdk-spec.lock.json`
-names with `prepareSpecDependency({root, lock, manifest, artifact})` — from the local release store,
-never the network. The pinned Spec release may no longer exist upstream, and the store holds the
-exact bytes the lock names.
+directory's `release.json` into the unpacked root, and install the Spec named by the package's
+`sdk-spec.lock.json` with `prepareSpecDependency({root, lock, manifest, artifact})`. Read the Spec
+from the local release store, not the network: the pinned Spec release may be absent upstream.
 
-**Order.** A component's dependency has to be in the local store before it can be released against
-it, so the chain runs bottom up: kit to the npm registry, then each sidecar the plugin declares,
-then the plugin. `make release OUT=<empty dir>` — an output directory that already holds a release
-fails, which is why each attempt gets a fresh one.
+**Order.** Release the kit to the npm registry first, then each sidecar the plugin declares, then
+the plugin. A dependency must exist in the local release store before a component is released
+against it.
 
-**A published version is immutable.** A wrong release is followed by a new version, never corrected
-in place; a republish of the same version is refused as a conflict.
+**Output directory.** `make release OUT=<directory>` fails when the directory already contains a
+release. Use a new directory per attempt.
 
-**A staged build directory outlives the version.** A `dist/` from a previous manifest with the same
-version stops the next build with a conflict rather than being overwritten silently. It is removed,
-not worked around.
+**Version immutability.** Publishing an existing version returns a conflict. Replace a defective
+release with a new version.
 
-**Installing what was built.** The plan and the install are two commands and the plan's digest is
-carried into the install, so what is installed is what was planned. A plugin then needs consent and
-enabling, and a version change requires consent again.
+**Stage directory.** A `dist/` produced from a different manifest at the same version stops the next
+build with `STAGED_MANIFEST_CONFLICT`. Remove it.
+
+**Installation.** `plugin.install.local.plan` returns a digest; `plugin.install.local` requires that
+digest. A plugin then requires `plugin.consent.grant` and `plugin.enable`. A version change requires
+consent again.
 
 ## Preparation boundary
 

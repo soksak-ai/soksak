@@ -53,6 +53,28 @@ layout, symlink로 repository를 찾지 않습니다.
 없는 의존이나 고정값과 바이트가 다른 의존은 도출한 위치를 명시한 오류이며 네트워크로
 fallback하지 않습니다.
 
+## official 레지스트리는 내장이고, URL 하나다
+
+`official` 은 추가하는 것이 아니라 컴파일되어 들어 있습니다. 서술자 — id, 이름, 색인 URL, 신뢰 공개 키 —
+가 상수이고, `registry.add` 는 id 가 `official` 인 서술자를 거부하며, 그것이 든 색인 URL 은
+
+```text
+https://github.com/soksak-ai/soksak-plugin-registry/releases/latest/download/registry.json
+```
+
+입니다. 그래서 official 카탈로그 전체가 릴리즈 asset 하나입니다. `latest` 는 레지스트리 저장소의 가장
+새로운 `registry-<sequence>` 릴리즈로 해석되고, 색인은 그 릴리즈의 유일한 asset 입니다. 그런 릴리즈가
+없는 저장소는 404 를 답하고, 모든 플러그인이 사용 불가가 되며, `registry.list` 가 그 레지스트리를
+`error` 로 보고합니다 — 2026-09-04 측정.
+
+다른 레지스트리는 서술자로 추가하고 HTTPS 로 닿습니다. `isRegistryIndexUrl` 이 다른 모든 scheme 을
+거부하고, 자격 증명·쿼리·프래그먼트도 함께 거부합니다. 그래서 파일 경로도, 평문 http 서버도, 토큰을 실은
+URL 도 이 전송 밖입니다. 로컬 색인은 TLS 로 서비스하거나 레지스트리 색인이 아닙니다.
+
+두 레지스트리는 같은 qualified 항목을 만들고, 한정 없는 설치는 `official` 에 대해서만 해석됩니다.
+`resolveRegistryRelease` 가 나머지에는 `qualification_required` 를 답하므로, 두 번째 레지스트리가
+official 이 이름 붙인 플러그인을 조용히 대신 공급하는 일은 없습니다.
+
 ## 설치기 transaction
 
 설치기는 완전한 Plugin·Sidecar 실행 closure 를 해석하고 host target 을 고르며 모든 크기와
