@@ -106,10 +106,13 @@ export function ProgramMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   // Position corrected into the viewport after measuring, plus whether the submenu flips.
   const [place, setPlace] = useState({ left: pos.left, top: pos.top, flip: false });
-  // The box this menu covers, once it has been measured. Until then it covers nothing and no
-  // surface steps aside for it: the menu is not on screen yet either.
+  // The box this menu covers, measured before paint. The overlay registers with it and not before:
+  // registering first without it and again with it puts two edges on the overlay state, and every
+  // pane parks, comes back and parks again between them. The picture that stands in for a surface
+  // is then taken while the surface is off, and the pane shows a picture with nothing in it
+  // (measured 2026-09-04).
   const [covers, setCovers] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
-  useOverlayActive(true, true, covers);
+  useOverlayActive(covers !== null, true, covers);
   // Subscribes to the register/unregister signal — a plugin enable toggle applies to an open menu too.
   useProgramRegistry((s) => s.version);
   const { programs, order } = useProgramRegistry.getState();
