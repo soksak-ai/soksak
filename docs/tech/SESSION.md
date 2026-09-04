@@ -304,7 +304,11 @@ Two parts, and no third.
   floor is what a restore spends replaying.
 - **The modes**, written when they change. Modes change when a program enters or leaves a
   full-screen mode, which is rare, and a mode set before the stored output begins is recoverable
-  from nothing else.
+  from nothing else. The owner stores the report and reads none of it: what a mode is
+  concerns whatever parses the output, and the owner parses none. A restore applies the report to the fresh
+  mirror before any replayed byte — applied after, the replay draws in the mode the mirror started
+  in. A report written in a form the reader does not know is refused rather than read as defaults,
+  which would restore the modes of a session that never ran.
 
 A grid snapshot is not stored. Its cost is set by the grid and the interval rather than by what the
 session did, so an idle terminal would pay it forever: a measured paint is 1.05 MB, and at a
