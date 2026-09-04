@@ -11,7 +11,9 @@ import { moduleState } from "../lib/moduleState";
 import { contentViewHost, lastAppliedSurfaces } from "./contentViews";
 import { emitPluginEvent } from "../plugins/hooks";
 import { nextFrame } from "./nextFrame";
-import { dropParkedPicture, holdParkedPicture, releaseParkedPicture } from "./parkedPicture";
+import {
+  dropParkedPicture, holdParkedPicture, releaseParkedPicture, whenParkedPictureShown,
+} from "./parkedPicture";
 import { surfaceLabelOfView } from "./surfaceLabels";
 import { parkedStyle } from "./layerPark";
 import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost";
@@ -185,15 +187,23 @@ export function commitViewPresentation(viewId: string, presentation: ViewPresent
     // travelling rail can only be shown by taking the surface off the screen — and a pane that goes
     // blank is what a person reads as a view that failed. The picture is what stays in its place.
     void holdParkedPicture(viewId, label)
-      .then((captured) => {
+      .then(async (captured) => {
         // A surface without a picture has no document stand-in. Hiding it would turn an overlay
         // into a blank pane, so it remains applied and the failure stays observable in the picture
         // failure status. Only a successful capture authorizes the visibility transition.
         if (presentationByView.get(viewId) !== key) {
           releaseParkedPicture(viewId);
-        } else if (captured) {
-          commit();
+          return;
         }
+        if (!captured) return;
+        // On screen, not merely in the store. The document draws the picture on the next render, and
+        // taking the surface off before that leaves one frame with neither.
+        await whenParkedPictureShown(viewId);
+        if (presentationByView.get(viewId) !== key) {
+          releaseParkedPicture(viewId);
+          return;
+        }
+        commit();
       })
       .catch((e: unknown) => {
         console.warn(`[viewPark] parking a picture failed: ${viewId}`, e);

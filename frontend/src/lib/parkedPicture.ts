@@ -29,6 +29,14 @@ const listeners = moduleState("lib/parkedPicture#listeners", () => new Set<() =>
 const asking = moduleState("lib/parkedPicture#asking", () => new Set<string>());
 const revision = moduleState("lib/parkedPicture#revision", () => ({ value: 0 }));
 const failures = moduleState("lib/parkedPicture#failures", () => new Map<string, { label: string; reason: string }>());
+// Who is waiting for a picture to be on screen. A surface is taken off only after that: hidden the
+// moment the store holds the picture, one frame passes with the surface gone and nothing in its
+// place — measured 2026-09-04, a pane read 127 on white for one frame between 191 and 191.
+const showing = moduleState("lib/parkedPicture#showing", () => new Map<string, Array<() => void>>());
+// Views whose picture the document has already drawn. The report and the wait are two async paths
+// and either can be first; without this the wait that arrives second never ends and the surface
+// stays up.
+const shown = moduleState("lib/parkedPicture#shown", () => new Set<string>());
 
 const announce = (): void => {
   revision.value += 1;
@@ -105,6 +113,8 @@ export async function holdParkedPicture(viewId: string, label: string): Promise<
 
 /** Drops the picture held for a view — the surface is back and is the thing to look at. */
 export function releaseParkedPicture(viewId: string): void {
+  shown.delete(viewId);
+  showing.delete(viewId);
   if (!pictures.delete(viewId)) return;
   announce();
 }
@@ -113,6 +123,8 @@ export function releaseParkedPicture(viewId: string): void {
 export function dropParkedPicture(viewId: string): void {
   const changed = pictures.delete(viewId) || failures.delete(viewId);
   asking.delete(viewId);
+  shown.delete(viewId);
+  showing.delete(viewId);
   if (changed) announce();
 }
 
@@ -127,5 +139,26 @@ export function __resetParkedPicturesForTest(): void {
   pictures.clear();
   failures.clear();
   asking.clear();
+  showing.clear();
+  shown.clear();
   announce();
+}
+
+/** The document has drawn the picture held for this view. */
+export function markParkedPictureShown(viewId: string): void {
+  shown.add(viewId);
+  const waiting = showing.get(viewId);
+  if (!waiting) return;
+  showing.delete(viewId);
+  for (const wake of waiting) wake();
+}
+
+/** Resolves when the document has drawn the picture held for this view. */
+export function whenParkedPictureShown(viewId: string): Promise<void> {
+  if (shown.has(viewId)) return Promise.resolve();
+  return new Promise((resolve) => {
+    const waiting = showing.get(viewId);
+    if (waiting) waiting.push(resolve);
+    else showing.set(viewId, [resolve]);
+  });
 }

@@ -1,5 +1,5 @@
 import { type CSSProperties, useSyncExternalStore } from "react";
-import { onParkedPictureChange, parkedPicture } from "../lib/parkedPicture";
+import { markParkedPictureShown, onParkedPictureChange, parkedPicture } from "../lib/parkedPicture";
 
 // The picture a parked surface left, drawn where the surface was.
 //
@@ -34,6 +34,9 @@ export function ParkedPicture(
         aria-hidden="true"
         draggable={false}
       style={{ ...style, opacity: 1 - dim }}
+      // The surface is taken off only after this: the document has the picture now, and a surface
+      // taken off before it does leaves one frame with neither.
+      onLoad={() => markParkedPictureShown(viewId)}
     />
   );
 }

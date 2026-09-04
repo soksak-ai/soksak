@@ -201,6 +201,13 @@ describe("a parking commit goes through the content view host", () => {
     // The picture is taken before the surface goes, so the commit lands after that answer rather
     // than in the same breath as the call.
     await new Promise((done) => setTimeout(done, 0));
+    // The picture is in the store, but the document has not drawn it yet. Hiding the surface here
+    // leaves one frame with the surface gone and nothing in its place — measured 2026-09-04: a pane
+    // read 127 on white for one frame between 191 and 191.
+    expect(order, "the surface is hidden before the picture is on screen").toEqual(["picture"]);
+    const { markParkedPictureShown } = await import("./parkedPicture");
+    markParkedPictureShown("v-1");
+    await new Promise((done) => setTimeout(done, 0));
     expect(order).toEqual(["picture", "hide"]);
     expect(seen).toHaveLength(1);
     expect(seen[0][0]).toBe("browser-win-a-v-1");
