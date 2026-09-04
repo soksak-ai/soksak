@@ -110,24 +110,10 @@ export const ViewTabs = memo(function ViewTabs({
     setThumb({ left, width });
   };
 
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onScroll = () => recompute();
-    el.addEventListener("scroll", onScroll, { passive: true });
-    const ro = new ResizeObserver(recompute);
-    ro.observe(el);
-    return () => {
-      el.removeEventListener("scroll", onScroll);
-      ro.disconnect();
-    };
-  }, []);
-
-  useLayoutEffect(() => {
-    recompute();
-  }, [group.tabs.length]);
-
-  useEffect(() => {
+  // The active tab is kept at the centre of the strip. A split or a merge changes the strip's width
+  // without changing which tab is active or how many there are, so the width is a reason to centre
+  // on its own — measured 2026-09-04: after a split the active tab sat half outside the strip.
+  const centerActive = useCallback((behavior: ScrollBehavior) => {
     const el = scrollRef.current;
     if (!el) return;
     const active = el.querySelector<HTMLElement>(".tab.active");
@@ -137,8 +123,34 @@ export const ViewTabs = memo(function ViewTabs({
     const center = aR.left - elR.left + el.scrollLeft + aR.width / 2;
     const target = center - el.clientWidth / 2;
     const max = el.scrollWidth - el.clientWidth;
-    el.scrollTo({ left: Math.max(0, Math.min(max, target)), behavior: "smooth" });
-  }, [group.activeTabId, group.tabs.length]);
+    el.scrollTo({ left: Math.max(0, Math.min(max, target)), behavior });
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => recompute();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    // A width change lands every frame of a divider drag. It centres without animation: a smooth
+    // scroll started per frame is restarted before it finishes and the strip lags the pointer.
+    const ro = new ResizeObserver(() => {
+      recompute();
+      centerActive("auto");
+    });
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      ro.disconnect();
+    };
+  }, [centerActive]);
+
+  useLayoutEffect(() => {
+    recompute();
+  }, [group.tabs.length]);
+
+  useEffect(() => {
+    centerActive("smooth");
+  }, [group.activeTabId, group.tabs.length, centerActive]);
 
   const onThumbDown = (e: React.MouseEvent) => {
     e.preventDefault();
