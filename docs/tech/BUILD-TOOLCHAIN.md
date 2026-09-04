@@ -96,10 +96,20 @@ per repository. Verified end to end 2026-09-04.
 **SDK input.** `require-tooling` requires an unpacked SDK package whose root contains `release.json`
 and `.dependencies/soksak-spec`, at the pinned version. An SDK repository checkout is not accepted.
 
-To prepare one: unpack `soksak-sdk/artifacts/<version>/soksak-sdk-<version>-any.tgz`, copy that
-directory's `release.json` into the unpacked root, and install the Spec named by the package's
-`sdk-spec.lock.json` with `prepareSpecDependency({root, lock, manifest, artifact})`. Read the Spec
-from the local release store, not the network: the pinned Spec release may be absent upstream.
+`make sdk-root SDK_VERSION=<version> DEST=<absolute directory>` in `local/` materializes one from
+the local release store. It unpacks the released package, copies that release's `release.json` into
+the unpacked root, and installs the Spec named by the package's `sdk-spec.lock.json` from the store.
+It is idempotent: an existing destination is compared and reported as `SDK_ROOT_UNCHANGED`, and a
+destination holding a different build is refused with `SDK_ROOT_VERSION_CONFLICT`. Put `<DEST>/bin`
+on PATH for the component build.
+
+An SDK version the store does not hold is built by the SDK repository's own `make install`, which
+requires a prepared root at the version that repository pins in `TOOLING_SDK_VERSION` — prepare that
+one from the store first. `make install` writes the prepared root at `DEST`; copy the release
+directory it produced under `artifacts/<version>/` into the store so the next component can use it.
+
+Read the Spec from the local release store, not the network: the pinned Spec release may be absent
+upstream.
 
 **Order.** Release the kit to the npm registry first, then each sidecar the plugin declares, then
 the plugin. A dependency must exist in the local release store before a component is released

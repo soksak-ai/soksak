@@ -95,10 +95,18 @@ closure 이고, 그 전송은 HTTPS 릴리즈 디렉터리와 주소로 지정�
 **SDK 입력.** `require-tooling` 은 루트에 `release.json` 과 `.dependencies/soksak-spec` 가 있는, 고정된
 버전의 풀린 SDK 패키지를 요구합니다. SDK 저장소 체크아웃은 허용되지 않습니다.
 
-준비 절차: `soksak-sdk/artifacts/<version>/soksak-sdk-<version>-any.tgz` 를 풀고, 그 디렉터리의
-`release.json` 을 풀린 루트에 복사하고, 패키지의 `sdk-spec.lock.json` 이 명시한 Spec 을
-`prepareSpecDependency({root, lock, manifest, artifact})` 로 설치합니다. Spec 은 네트워크가 아니라 로컬
-릴리즈 스토어에서 읽습니다. 고정된 Spec 릴리즈가 상류에 없을 수 있습니다.
+`local/` 에서 `make sdk-root SDK_VERSION=<version> DEST=<절대 디렉터리>` 가 로컬 릴리즈 스토어에서 하나를
+만듭니다. 릴리즈된 패키지를 풀고, 그 릴리즈의 `release.json` 을 풀린 루트에 복사하고, 패키지의
+`sdk-spec.lock.json` 이 명시한 Spec 을 스토어에서 설치합니다. 멱등합니다. 이미 있는 대상은 비교 후
+`SDK_ROOT_UNCHANGED` 로 보고하고, 다른 빌드를 든 대상은 `SDK_ROOT_VERSION_CONFLICT` 로 거부합니다.
+컴포넌트 빌드에는 `<DEST>/bin` 을 PATH 에 둡니다.
+
+스토어에 없는 SDK 버전은 SDK 저장소의 `make install` 로 빌드합니다. 그 저장소가 `TOOLING_SDK_VERSION` 에
+고정한 버전의 풀린 루트가 필요하므로, 그것을 스토어에서 먼저 만듭니다. `make install` 은 `DEST` 에 풀린
+루트를 쓰며, 함께 만들어진 `artifacts/<version>/` 릴리즈 디렉터리를 스토어에 복사해야 다음 컴포넌트가
+씁니다.
+
+Spec 은 네트워크가 아니라 로컬 릴리즈 스토어에서 읽습니다. 고정된 Spec 릴리즈가 상류에 없을 수 있습니다.
 
 **순서.** 킷을 npm 레지스트리에 게시하고, 그다음 플러그인이 선언한 각 사이드카, 그다음 플러그인입니다.
 의존성은 그것에 대해 릴리즈하기 전에 로컬 릴리즈 스토어에 있어야 합니다.

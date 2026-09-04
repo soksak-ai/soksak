@@ -69,6 +69,19 @@ the rule above is why.
 The core owns the **index**: which sessions exist, which component owns each, and where each was
 last shown. It does not own the state.
 
+**A view that does not open its session requests the id from the owner.** The coordinate exists only
+in the view, so the index entry is written there. A view that opens the session receives
+the id from that call. A view whose picture is drawn by a surface owner never opens one, so it has
+no id to write and would leave the session unindexed. The owner stamps the pane on every session it
+holds, so the view requests the session that serves that pane. Measured 2026-09-04: every terminal in a
+running application used the surface path, so the index was empty and `session.list` reported zero
+while five sessions ran.
+
+**An index write reports where a running application can read it.** A plugin's console is not
+readable from the command surface, so a failure that goes only there is a failure nobody can
+measure — it cost four wrong diagnoses. A view publishes the outcome as DOM state that `ui.expect`
+selects on, and the core records a refusal at the plugin boundary as an activity entry.
+
 ### S1-3. One session, whatever draws it
 
 A terminal is one session. The PTY daemon owns it: the shell, the working directory, the output
