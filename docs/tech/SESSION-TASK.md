@@ -346,27 +346,14 @@ kit declares `session` and the browser declares `view` for its page and `none` f
 
 Owner: the core.
 
-Measured 2026-09-04: a released kit wrote no session to the core index. Every link of the chain was
-present in the installed bundle, every permission gate passed, the sessions were opened — and
-nothing anywhere reported what stopped. The failure was found by writing a test rather than by
-looking at the running application, which offers nothing to look at.
-
-A plugin runs in the renderer and reports with `console.error`. Nothing collects that: the
-application log holds the Go side alone, and `activity` records a command that ran rather than one
-refused before it ran. So a plugin that fails quietly fails invisibly, and every diagnosis
-starts by rebuilding it with a probe inside.
-
-Two shapes make it quiet, and both are ordinary:
-
-- An optional call. `index?.attach(...)` on an absent index is a no-op with no error.
-- A refusal before execution. `commands.execute` returns `{ok:false}` rather than throwing, so a
-  caller that only catches sees a success.
+The rule and what it cost are in [`AGENTS.md`](../../AGENTS.md) 3-3a. What remains here is the work:
+a plugin's uncaught error and its refused command have nowhere to be read. The application log holds
+the Go side alone, and `activity` records a command that ran rather than one refused before it ran.
 
 Red: break one link of a plugin's wiring and run the application. Nothing reports it.
 
-Check: a plugin's uncaught error and its refused command reach somewhere a person can read without
-rebuilding the plugin — the same place, whatever the transport. A view that stops working reports
-it there.
+Check: both reach somewhere a person reads without rebuilding the plugin — the same place, whatever
+the transport. A view that stops working reports it there.
 
 ## 17-3. The command a session owner's view calls is named by the contract
 
