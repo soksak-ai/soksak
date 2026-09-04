@@ -80,3 +80,54 @@ func holdsHangul(line string) bool {
 	}
 	return false
 }
+
+// Commit messages are held to the same register as comments and documents.
+//
+// AGENTS 6 states one standard for the record, and a commit message is the part of the record that
+// cannot be edited later. The scan covers what has not been pushed: those messages are still local,
+// so a violation is fixed by rewording rather than by rewriting shared history.
+//
+// Measured 2026-09-04: 30 of 123 unpushed messages across five repositories used the banned
+// register. Nothing had checked them, so the rule applied to comments and not to the log.
+func TestUnpushedCommitMessagesAreWrittenDry(t *testing.T) {
+	remote := exec.Command("git", "rev-parse", "origin/main")
+	head, err := remote.Output()
+	if err != nil {
+		t.Skipf("no origin/main to compare against: %v", err)
+	}
+	log := exec.Command("git", "log", "--format=%H%x00%B%x00", strings.TrimSpace(string(head))+"..HEAD")
+	out, err := log.Output()
+	if err != nil {
+		t.Skipf("git log is unavailable here: %v", err)
+	}
+
+	fields := strings.Split(string(out), "\x00")
+	var offenders []string
+	for i := 0; i+1 < len(fields); i += 2 {
+		hash := strings.TrimSpace(fields[i])
+		if hash == "" {
+			continue
+		}
+		short := hash
+		if len(short) > 8 {
+			short = short[:8]
+		}
+		for index, line := range strings.Split(fields[i+1], "\n") {
+			if match := bannedEnglish.FindString(line); match != "" {
+				offenders = append(offenders, short+" line "+itoa(index+1)+" "+match+": "+strings.TrimSpace(line))
+			}
+			for _, word := range bannedKorean {
+				if strings.Contains(line, word) {
+					offenders = append(offenders, short+" line "+itoa(index+1)+" "+word+": "+strings.TrimSpace(line))
+					break
+				}
+			}
+		}
+	}
+
+	if len(offenders) > 0 {
+		t.Errorf("these unpushed commit messages use the banned register in %d places:\n%s\n"+
+			"Reword them before pushing. State the action, the subject and the object.",
+			len(offenders), strings.Join(offenders, "\n"))
+	}
+}
