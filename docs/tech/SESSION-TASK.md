@@ -63,6 +63,7 @@ is, and a row that is not done leaves the item open.
 | 17-1 | Every view declares what its restore needs | core, every plugin with a view | [x] | [x] | [x] `8ef6402` |
 | 17-2 | The recorded modes have a producer and a consumer | `soksak-kit-plugin-terminal` | [x] | [ ] | [ ] |
 | 17-3 | The command a session owner's view calls is named by the contract | `soksak-contract-control` | [x] | [ ] | [ ] |
+| 17-4 | A plugin's failure is observable from outside the renderer | core | [x] | [ ] | [ ] |
 | 18 | A plugin can take back what it stored | `soksak-core` | [x] | [x] | [x] `361032f` |
 | 19 | The session question goes wherever the owner runs | `soksak-core` | [x] | [x] | [x] `899a792` |
 
@@ -340,6 +341,32 @@ indistinguishable from a view with nothing to bring.
 Check: the three kinds are closed in one place, so a fourth leaves the branches on it visibly
 incomplete; a view without a declaration is refused with a sentence from the bundle; the terminal
 kit declares `session` and the browser declares `view` for its page and `none` for its list.
+
+## 17-4. A plugin's failure is observable from outside the renderer
+
+Owner: the core.
+
+Measured 2026-09-04: a released kit wrote no session to the core index. Every link of the chain was
+present in the installed bundle, every permission gate passed, the sessions were opened — and
+nothing anywhere reported what stopped. The failure was found by writing a test rather than by
+looking at the running application, which offers nothing to look at.
+
+A plugin runs in the renderer and reports with `console.error`. Nothing collects that: the
+application log holds the Go side alone, and `activity` records a command that ran rather than one
+refused before it ran. So a plugin that fails quietly fails invisibly, and every diagnosis
+starts by rebuilding it with a probe inside.
+
+Two shapes make it quiet, and both are ordinary:
+
+- An optional call. `index?.attach(...)` on an absent index is a no-op with no error.
+- A refusal before execution. `commands.execute` returns `{ok:false}` rather than throwing, so a
+  caller that only catches sees a success.
+
+Red: break one link of a plugin's wiring and run the application. Nothing reports it.
+
+Check: a plugin's uncaught error and its refused command reach somewhere a person can read without
+rebuilding the plugin — the same place, whatever the transport. A view that stops working reports
+it there.
 
 ## 17-3. The command a session owner's view calls is named by the contract
 
