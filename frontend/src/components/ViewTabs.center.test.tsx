@@ -8,7 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ViewTabs } from "./ViewTabs";
 import { allGroups, useSessions } from "../state/sessions";
-import { splitLeaf } from "../state/splitTree";
+import { singlePane } from "../state/panePlane";
 
 // One observer per mount, and the test drives it. A real ResizeObserver never fires in jsdom, so a
 // fixture that used one would pass whether or not the width is a reason to centre.
@@ -68,7 +68,7 @@ function render(): void {
   const content = base.spaces[0];
   const viewId = "v-active";
   const group = {
-    ...allGroups(content.layout)[0],
+    ...allGroups(content)[0],
     activeTabId: viewId,
     tabs: [
       { id: "v-first", kind: "plugin" as const, title: "First", pluginId: "fixture", view: "content" },
@@ -77,7 +77,7 @@ function render(): void {
   };
   const workspace = {
     ...base,
-    spaces: [{ ...content, activePaneId: group.id, layout: splitLeaf(group) }],
+    spaces: [{ ...content, activePaneId: group.id, panes: [group], layout: singlePane(group.id) }],
   };
   useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
   act(() => {

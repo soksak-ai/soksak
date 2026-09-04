@@ -1,26 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
-  classifyRailRelation,
   insetClippedEdges,
   railLinkBoxes,
   railLinkPolygon,
+  railSeamX,
   roundedOrthogonalPath,
   splitRightEdgeRounded,
 } from "./railLinkShape";
+import { classifyRailRelation } from "./railArrangement";
 
 describe("rail link relation shapes", () => {
-  it("classifies left adjacency, right adjacency, and detachment from the measured rect by one rule", () => {
-    expect(classifyRailRelation(50, { left: 0, top: 0, width: 50, height: 100 })).toBe("left");
-    expect(classifyRailRelation(50, { left: 50, top: 0, width: 25, height: 100 })).toBe("right");
-    expect(classifyRailRelation(0, { left: 50, top: 0, width: 50, height: 100 })).toBe("detached");
+  it("classifies left adjacency, right adjacency, and detachment across the corridor by one rule", () => {
+    const rail = { left: 500, top: 0, width: 300, height: 800 };
+    expect(classifyRailRelation(rail, { left: 0, top: 0, width: 490, height: 800 }, 10)).toBe("left");
+    expect(classifyRailRelation(rail, { left: 810, top: 0, width: 200, height: 800 }, 10)).toBe("right");
+    expect(classifyRailRelation(rail, { left: 900, top: 0, width: 100, height: 800 }, 10)).toBe("detached");
   });
   it("joins a fixed-width rail and the panel directly to its upper right into one L-shaped union", () => {
     const boxes = railLinkBoxes(
-      1200,
-      800,
-      300,
-      50,
-      { left: 50, top: 0, width: 25, height: 50 },
+      { left: 450, top: 0, width: 300, height: 800 },
+      { left: 750, top: 0, width: 225, height: 400 },
       0,
     );
     expect(boxes).toEqual({
@@ -106,38 +105,26 @@ describe("right edge split (option B — dashed outer edge, rounding preserved)"
 
 });
 
-/** The host defines the reference width. The panel area is the host minus the rail only — the
- *  rail is placed *inside* the host. Anything placed outside the host (a push sidebar) is not
- *  subtracted here: when it is present, the host itself is already that much narrower.
- *
- *  Re-legislated (2026-08-02): the old standard was "subtract the right push width too", and
- *  that check was in this spot. It was wrong — measurement showed the border drawn in push mode
- *  was shorter than the joined panel by exactly the sidebar width (window 1017 vs 1336, host
- *  width 1204 vs 1529 in overlay mode). One more thing to subtract gets counted twice sooner or
- *  later. The argument is gone, so there is no place left to get it wrong. */
-describe("panel area — the host is the reference", () => {
-  it("the panel area is the host minus the rail only", () => {
-    const b = railLinkBoxes(1000, 500, 100, 0, { left: 0, top: 0, width: 100, height: 100 }, 0);
-    expect(b?.panel.width).toBe(900);
-  });
-
-  it("a full-width box ends at the host right edge — anything shorter leaves the border short of the panel", () => {
-    const b = railLinkBoxes(1000, 500, 100, 0, { left: 0, top: 0, width: 100, height: 100 }, 0);
-    expect((b?.panel.x ?? 0) + (b?.panel.width ?? 0)).toBe(1000);
-  });
-
-  it("uses the pane inset as the shared origin and outer bound for the rail and linked panel", () => {
+/** The plane's origin is the host inset by the pane inset (UI-GEOMETRY R1b), so a rect on the plane
+ *  becomes a rect in the host by that offset alone — the rail and the linked panel share it. */
+describe("boxes in the host — the plane's origin is the inset", () => {
+  it("offsets the rail and the panel by the pane inset", () => {
     const b = railLinkBoxes(
-      999,
-      535,
-      320,
-      0,
-      { left: 0, top: 0, width: 100, height: 30 },
+      { left: 0, top: 0, width: 310, height: 525 },
+      { left: 320, top: 0, width: 669, height: 157.5 },
       5,
     );
     expect(b).toEqual({
       rail: { x: 5, y: 5, width: 310, height: 525 },
       panel: { x: 325, y: 5, width: 669, height: 157.5 },
     });
+  });
+
+  // Two cards on one plane never touch (split-pane R5): the seam is the centre of the corridor.
+  it("draws the seam through the corridor between the rail and the panel beside it", () => {
+    const rail = { x: 100, y: 0, width: 240, height: 900 };
+    expect(railSeamX(rail, { x: 350, y: 0, width: 300, height: 450 }, 10)).toBe(345);
+    expect(railSeamX(rail, { x: 0, y: 0, width: 90, height: 450 }, 10)).toBe(95);
+    expect(railSeamX(rail, { x: 500, y: 0, width: 300, height: 450 }, 10)).toBeNull();
   });
 });

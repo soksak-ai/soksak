@@ -63,13 +63,11 @@ describe("layoutTransitionHost", () => {
 
   it("every view in a moving group is published with the same physical displacement", () => {
     expect(viewLayoutMoves(
-      [{ id: "pan-aaaaaa", dLeftPct: 25, dRailUnits: -1 }],
+      [{ id: "pan-aaaaaa", dLeft: 140 }],
       [
         { id: "pan-aaaaaa", viewIds: ["terminal-1", "browser-1"], panePresentationViewIds: [] },
         { id: "pan-bbbbbb", viewIds: ["browser-2"], panePresentationViewIds: [] },
       ],
-      800,
-      60,
     )).toEqual([
       { viewId: "terminal-1", dx: 140 },
       { viewId: "browser-1", dx: 140 },
@@ -91,7 +89,7 @@ describe("layoutTransitionHost", () => {
     expect(viewLayoutChange(before, after, [
       { id: "pan-aaaaaa", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
       { id: "pan-bbbbbb", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
-    ], 800, 60)).toEqual({
+    ])) .toEqual({
       moves: [],
       projectionParticipants: [{ viewId: "browser-left", kind: "projection-snap" }],
       panePresentationTargets: [{ viewId: "browser-left" }],
@@ -99,23 +97,25 @@ describe("layoutTransitionHost", () => {
     });
   });
 
-  it("right maximize is projection snap even when the retained target also has a translation", () => {
+  it("right maximize is a projection snap, and a box that changes shape does not travel", () => {
+    // A 2000px plane with a 160px rail: a | rail | b, then the rail at the front of b alone. b's
+    // left edge moves 920 and its right edge stays; a translate would move both.
     const before = {
-      railPresent: true, station: 50, focusId: "pan-aaaaaa",
+      railPresent: true, station: 920, focusId: "pan-aaaaaa",
       cells: [
-        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 50, height: 100 } },
-        { id: "pan-bbbbbb", rect: { left: 50, top: 0, width: 50, height: 100 } },
+        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 920, height: 1000 } },
+        { id: "pan-bbbbbb", rect: { left: 1080, top: 0, width: 920, height: 1000 } },
       ],
     };
     const after = {
       railPresent: true, station: 0, focusId: "pan-bbbbbb",
-      cells: [{ id: "pan-bbbbbb", rect: { left: 0, top: 0, width: 100, height: 100 } }],
+      cells: [{ id: "pan-bbbbbb", rect: { left: 160, top: 0, width: 1840, height: 1000 } }],
     };
     expect(viewLayoutChange(before, after, [
       { id: "pan-aaaaaa", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
       { id: "pan-bbbbbb", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
-    ], 2000, 160)).toEqual({
-      moves: [{ viewId: "browser-right", dx: 920 }],
+    ])).toEqual({
+      moves: [],
       projectionParticipants: [{ viewId: "browser-right", kind: "projection-snap" }],
       panePresentationTargets: [{ viewId: "browser-right" }],
       paneSettlementParticipants: [{ viewId: "browser-left" }],
@@ -124,42 +124,42 @@ describe("layoutTransitionHost", () => {
 
   it("equal-size FLOW translation remains a glide without projection participants", () => {
     const before = {
-      railPresent: true, station: 50, focusId: "pan-aaaaaa",
+      railPresent: true, station: 920, focusId: "pan-aaaaaa",
       cells: [
-        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 50, height: 100 } },
-        { id: "pan-bbbbbb", rect: { left: 50, top: 0, width: 50, height: 100 } },
+        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 920, height: 1000 } },
+        { id: "pan-bbbbbb", rect: { left: 1080, top: 0, width: 920, height: 1000 } },
       ],
     };
     const after = {
-      railPresent: true, station: 50, focusId: "pan-bbbbbb",
+      railPresent: true, station: 920, focusId: "pan-bbbbbb",
       cells: [
-        { id: "pan-bbbbbb", rect: { left: 0, top: 0, width: 50, height: 100 } },
-        { id: "pan-aaaaaa", rect: { left: 50, top: 0, width: 50, height: 100 } },
+        { id: "pan-bbbbbb", rect: { left: 0, top: 0, width: 920, height: 1000 } },
+        { id: "pan-aaaaaa", rect: { left: 1080, top: 0, width: 920, height: 1000 } },
       ],
     };
     const change = viewLayoutChange(before, after, [
       { id: "pan-aaaaaa", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
       { id: "pan-bbbbbb", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
-    ], 2000, 160);
+    ]);
     expect(change.moves).toHaveLength(2);
     expect(change.projectionParticipants).toEqual([]);
   });
 
   it("a pane rearrangement snaps the native pane owners whose geometry changed, not the focused terminal", () => {
     const before = {
-      railPresent: true, station: 50, focusId: "terminal-bottom-right",
+      railPresent: true, station: 920, focusId: "terminal-bottom-right",
       cells: [
-        { id: "browser-left", rect: { left: 0, top: 0, width: 50, height: 100 } },
-        { id: "browser-top-right", rect: { left: 50, top: 0, width: 50, height: 50 } },
-        { id: "terminal-bottom-right", rect: { left: 50, top: 50, width: 50, height: 50 } },
+        { id: "browser-left", rect: { left: 0, top: 0, width: 920, height: 1000 } },
+        { id: "browser-top-right", rect: { left: 1080, top: 0, width: 920, height: 500 } },
+        { id: "terminal-bottom-right", rect: { left: 1080, top: 500, width: 920, height: 500 } },
       ],
     };
     const after = {
       railPresent: true, station: 0, focusId: "terminal-bottom-right",
       cells: [
-        { id: "browser-left", rect: { left: 0, top: 0, width: 50, height: 50 } },
-        { id: "terminal-bottom-right", rect: { left: 0, top: 50, width: 50, height: 50 } },
-        { id: "browser-top-right", rect: { left: 50, top: 0, width: 50, height: 100 } },
+        { id: "browser-left", rect: { left: 160, top: 0, width: 920, height: 500 } },
+        { id: "terminal-bottom-right", rect: { left: 160, top: 500, width: 920, height: 500 } },
+        { id: "browser-top-right", rect: { left: 1080, top: 0, width: 920, height: 1000 } },
       ],
     };
 
@@ -179,7 +179,7 @@ describe("layoutTransitionHost", () => {
         viewIds: ["terminal-tab"],
         panePresentationViewIds: [],
       },
-    ], 2000, 160)).toMatchObject({
+    ])).toMatchObject({
       projectionParticipants: [
         { viewId: "browser-left-tab", kind: "projection-snap" },
         { viewId: "browser-right-tab", kind: "projection-snap" },
@@ -194,17 +194,24 @@ describe("layoutTransitionHost", () => {
 
   it("a translation publishes the moving target and the non-target settlement sibling identity separately", () => {
     const before = {
-      railPresent: true, station: 50, focusId: "pan-bbbbbb",
+      railPresent: true, station: 920, focusId: "pan-bbbbbb",
       cells: [
-        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 50, height: 100 } },
-        { id: "pan-bbbbbb", rect: { left: 50, top: 0, width: 50, height: 100 } },
+        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 920, height: 1000 } },
+        { id: "pan-bbbbbb", rect: { left: 1080, top: 0, width: 920, height: 1000 } },
       ],
     };
-    const after = { ...before, station: 0, focusId: "pan-aaaaaa" };
+    // The rail travels to the front: a moves right by the rail's width, b stays.
+    const after = {
+      ...before, station: 0, focusId: "pan-aaaaaa",
+      cells: [
+        { id: "pan-aaaaaa", rect: { left: 160, top: 0, width: 920, height: 1000 } },
+        { id: "pan-bbbbbb", rect: { left: 1080, top: 0, width: 920, height: 1000 } },
+      ],
+    };
     expect(viewLayoutChange(before, after, [
       { id: "pan-aaaaaa", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
       { id: "pan-bbbbbb", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
-    ], 2000, 160)).toMatchObject({
+    ])).toMatchObject({
       panePresentationTargets: [{ viewId: "browser-left" }],
       paneSettlementParticipants: [{ viewId: "browser-right" }],
     });
@@ -212,16 +219,23 @@ describe("layoutTransitionHost", () => {
 
   it("rail presence alone snaps every native pane presentation before the width changes", () => {
     const cells = [
-      { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 50, height: 100 } },
-      { id: "pan-bbbbbb", rect: { left: 50, top: 0, width: 50, height: 100 } },
+      { id: "pan-aaaaaa", rect: { left: 160, top: 0, width: 920, height: 1000 } },
+      { id: "pan-bbbbbb", rect: { left: 1080, top: 0, width: 920, height: 1000 } },
     ];
     const before = { railPresent: true, station: 0, focusId: "pan-aaaaaa", cells };
-    const after = { ...before, railPresent: false };
+    // The rail withdraws: the room goes to the pane beside it, which grows without moving.
+    const after = {
+      ...before, railPresent: false,
+      cells: [
+        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 1080, height: 1000 } },
+        { id: "pan-bbbbbb", rect: { left: 1080, top: 0, width: 920, height: 1000 } },
+      ],
+    };
 
     expect(viewLayoutChange(before, after, [
       { id: "pan-aaaaaa", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
       { id: "pan-bbbbbb", viewIds: ["terminal-right"], panePresentationViewIds: ["terminal-right"] },
-    ], 2000, 160)).toMatchObject({
+    ])).toMatchObject({
       moves: [],
       projectionParticipants: [
         { viewId: "browser-left", kind: "projection-snap" },

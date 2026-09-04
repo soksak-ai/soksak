@@ -1,15 +1,14 @@
-// Workspace serialization — layout to a plain JSON snapshot (persist and restore, A2). Both trees (PaneNode,
-// SidebarLayout) serialize through the same serializeSplitTree path in splitTree.ts (no duplication).
+// Workspace serialization — layout to a plain JSON snapshot (persist and restore, A2). A space's
+// plane is stored as the library's own state (`toJSON`); the sidebar tree serializes through
+// splitTree.ts.
 //
 // [RULE] Wire keys stay on the old shape (contents·views·activeViewId·activeGroupId·activeContentId·
-// maximizedViewId) — the migration (P0-5) moves them. In-memory fields are already the new
-// vocabulary (spaces·tabs·activeTabId·activePaneId·activeSpaceId·maximizedTabId·railBindingTabId), so the two
-// are joined only inside this file's serialize/deserialize. Existing user snapshots still open unchanged.
+// maximizedViewId). In-memory fields are the new vocabulary (spaces·tabs·activeTabId·activePaneId·
+// activeSpaceId·maximizedTabId), so the two are joined only inside this file's serialize/deserialize.
 //
-// [RULE] leaf payload id (group/pane), view id and content id are preserved → the active references
-// (activeContentId/activeGroupId/activeViewId/focusedPaneId/maximizedViewId) work undamaged.
-// Only split id is regenerated on restore (used for tree structure alone and never referenced, so
-// serializeSplitTree omits it).
+// [RULE] Every id is preserved → the active references (activeContentId/activeGroupId/activeViewId/
+// maximizedViewId) work undamaged. A record of another shape is refused by name
+// (windowSnapshotShape.ts), never mended.
 // live status and live sessions (PTY/webview) are not serialized — after restore the views re-report and remount.
 
 import {
@@ -20,11 +19,8 @@ import {
 import { initialSidebarLayout, type SidebarGroup, type SidebarLayout } from "./sidebarLayout";
 import { byPlace } from "./sectionSets";
 import type { Workspace, Space, Pane, Tab, SidebarRegion } from "./sessions";
-import { DEFAULT_RAIL_PLACEMENT,
-  normalizeRailPlacement,
-  type RailPlacement,
-} from "../lib/railPlacement";
-import { normalizeVerticalLines } from "./verticalLines";
+import { DEFAULT_RAIL_PLACEMENT, isRailPlacement, type RailPlacement } from "../lib/railPlacement";
+import type { PlaneState } from "./panePlane";
 
 // ── Snapshot types ───────────────────────────────────────────────────────────
 
@@ -53,12 +49,15 @@ interface ViewGroupSnapshot {
   views: ViewSnapshot[];
 }
 
-interface ContentSnapshot {
+export interface ContentSnapshot {
   id: string;
   title: string;
   activeGroupId: string;
   maximizedViewId?: string;
-  layout: SplitSnapshot<ViewGroupSnapshot>;
+  /** What each pane holds, by id. */
+  groups: ViewGroupSnapshot[];
+  /** Where each pane is, and the rail when it stands: the plane's own state. */
+  plane: PlaneState;
 }
 
 export interface WorkspaceSnapshot {
@@ -66,17 +65,9 @@ export interface WorkspaceSnapshot {
   title: string;
   root: string;
   color?: string;
-  // Vertical-line normalization migration marker — serialization always writes it. Only an old snapshot without
-  // the marker is healed once on restore by normalizeVerticalLines; a restore with the marker is identity —
-  // restore never rewrites a separate line the user placed outside the drag rule (LINE_GROUP_EPS).
-  vlNormalized?: true;
-  // One-time placement migration marker — while rail migration was withdrawn, serialization wrote an anchor
-  // (pin@0) even for workspaces with no placement set. The placement in a snapshot without the marker may be that
-  // era's default, so it is dropped once (removal condition: no marker-less snapshot left in the field).
-  railPlacementNormalized?: true;
   regionOpen: Record<SidebarRegion, boolean>;
-  // Rail frame position PIN.
-  railPlacement?: RailPlacement;
+  // How the rail behaves when focus moves. Where it stands is in each space's plane.
+  railPlacement: RailPlacement;
   // One arrangement per region. The right held a single active view and drew an icon rail of
   // everything placed there until 2026-08-16 — a region with a rule of its own (A2a).
   sidebarLayouts: Record<SidebarRegion, SplitSnapshot<SidebarGroup>>;
@@ -120,7 +111,8 @@ const serializeContent = (c: Space): ContentSnapshot => ({
   title: c.title,
   activeGroupId: c.activePaneId,
   ...(c.maximizedTabId ? { maximizedViewId: c.maximizedTabId } : {}),
-  layout: serializeSplitTree(c.layout, serializeViewGroup), // PaneNode(leaf=Pane)
+  groups: c.panes.map(serializeViewGroup),
+  plane: c.layout,
 });
 
 export function serializeWorkspace(p: Workspace): WorkspaceSnapshot {
@@ -129,8 +121,6 @@ export function serializeWorkspace(p: Workspace): WorkspaceSnapshot {
     title: p.title,
     root: p.root,
     ...(p.color ? { color: p.color } : {}),
-    vlNormalized: true,
-    railPlacementNormalized: true,
     regionOpen: p.regionOpen,
     railPlacement: p.railPlacement ?? DEFAULT_RAIL_PLACEMENT,
     // Sidebar layout (SplitTree<SidebarGroup>) — the leaf payload is plain JSON.
@@ -168,21 +158,14 @@ const deserializeViewGroup = (s: ViewGroupSnapshot): Pane => ({
   tabs: s.views.map(deserializeView),
 });
 
-const deserializeContent = (s: ContentSnapshot, normalize: boolean): Space => {
-  const layout = deserializeSplitTree(s.layout, deserializeViewGroup);
-  return {
-    id: s.id,
-    title: s.title,
-    activePaneId: s.activeGroupId,
-    ...(s.maximizedViewId ? { maximizedTabId: s.maximizedViewId } : {}),
-    // One migration per snapshot (the vertical no-split proposition) — only an old snapshot without the
-    // vlNormalized marker is healed by snapping vertical lines fragmented before companion drag (e.g. top 40.6 /
-    // bottom 39.5) to the x of the topmost segment. A restore with the marker is identity — it does not rewrite
-    // the user's layout.
-    // [removal condition] Drop the gate once marker-less snapshots are gone from the field (re-saved with the marker).
-    layout: normalize ? normalizeVerticalLines(layout) : layout,
-  };
-};
+const deserializeContent = (s: ContentSnapshot): Space => ({
+  id: s.id,
+  title: s.title,
+  activePaneId: s.activeGroupId,
+  ...(s.maximizedViewId ? { maximizedTabId: s.maximizedViewId } : {}),
+  panes: s.groups.map(deserializeViewGroup),
+  layout: s.plane,
+});
 
 /** One region's stored arrangement, or an empty one.
  *
@@ -209,14 +192,11 @@ export function deserializeWorkspace(s: WorkspaceSnapshot): Workspace {
     // The rail is open on a workspace that never said, the two edges are not. A snapshot from
     // before the left edge existed has nothing for it, and nothing is what it gets.
     regionOpen: byPlace((place) => s.regionOpen?.[place] ?? place === "rail"),
-    // The stored value of an old snapshot without the marker is not trusted — there is no way to separate the
-    // withdrawn era's default (pin@0) from an anchor the user chose, so it is reset once to the default (flow).
-    // With the marker present the stored value is honored.
-    railPlacement: s.railPlacementNormalized
-      ? normalizeRailPlacement(s.railPlacement)
-      : DEFAULT_RAIL_PLACEMENT,
+    // A placement of another shape — a pinned station from before 2026-09-05, or none — is
+    // presentation, and costs that field only (RESTORE R1): the rail follows focus.
+    railPlacement: isRailPlacement(s.railPlacement) ? s.railPlacement : DEFAULT_RAIL_PLACEMENT,
     sidebarLayouts: byPlace((place) => sidebarLayoutOf(s.sidebarLayouts?.[place])),
     activeSpaceId: s.activeContentId,
-    spaces: s.contents.map((c) => deserializeContent(c, !s.vlNormalized)),
+    spaces: s.contents.map(deserializeContent),
   };
 }

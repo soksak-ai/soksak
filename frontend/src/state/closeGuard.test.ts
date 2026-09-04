@@ -5,6 +5,8 @@ import {
   contentCloseReasons,
 } from "./closeGuard";
 import type { Tab, TabStatus, Space } from "./sessions";
+import { singlePane } from "./panePlane";
+import { rowPlane } from "../test/planes";
 
 // Test view/content factories — only status differs.
 const fileView = (status?: TabStatus, id = "tab-aaaaaa"): Tab => ({
@@ -19,26 +21,19 @@ const fileView = (status?: TabStatus, id = "tab-aaaaaa"): Tab => ({
 const leafContent = (tabs: Tab[]): Space => ({
   id: "spc-aaaaaa",
   title: "1",
-  layout: {
-    type: "leaf",
-    value: { id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" },
-  },
+  panes: [{ id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" }],
+  layout: singlePane("pan-aaaaaa"),
   activePaneId: "pan-aaaaaa",
 });
 
 const splitContent = (left: Tab[], right: Tab[]): Space => ({
   id: "spc-aaaaaa",
   title: "1",
-  layout: {
-    type: "split",
-    id: "spl-aaaaaa",
-    dir: "row",
-    sizes: [0.5, 0.5],
-    children: [
-      { type: "leaf", value: { id: "pan-aaaaaa", tabs: left, activeTabId: left[0]?.id ?? "" } },
-      { type: "leaf", value: { id: "pan-bbbbbb", tabs: right, activeTabId: right[0]?.id ?? "" } },
-    ],
-  },
+  panes: [
+    { id: "pan-aaaaaa", tabs: left, activeTabId: left[0]?.id ?? "" },
+    { id: "pan-bbbbbb", tabs: right, activeTabId: right[0]?.id ?? "" },
+  ],
+  layout: rowPlane(["pan-aaaaaa", "pan-bbbbbb"]),
   activePaneId: "pan-aaaaaa",
 });
 

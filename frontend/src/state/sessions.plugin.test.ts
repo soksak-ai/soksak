@@ -20,7 +20,7 @@ function activeLayout() {
   const s = useSessions.getState();
   const t = s.workspaces.find((x) => x.id === s.activeId)!;
   const c = t.spaces.find((x) => x.id === t.activeSpaceId)!;
-  return { t, c, groups: allGroups(c.layout) };
+  return { t, c, groups: allGroups(c) };
 }
 
 beforeEach(() => {
@@ -225,7 +225,7 @@ describe("addWorkspace — initial program", () => {
       if (!r.ok) return;
       expect(r.viewId).toBeTruthy();
       const t = useSessions.getState().workspaces.find((x) => x.id === r.projectId)!;
-      const grp = allGroups(t.spaces[0].layout).find((g) => g.id === r.groupId)!;
+      const grp = allGroups(t.spaces[0]).find((g) => g.id === r.groupId)!;
       expect(grp.activeTabId).toBe(r.viewId);
       const v = grp.tabs.find((x) => x.id === r.viewId)!;
       expect(v).toMatchObject({
@@ -248,7 +248,7 @@ describe("addWorkspace — initial program", () => {
     if (!r.ok) return;
     expect(r.viewId).toBeUndefined();
     const t = useSessions.getState().workspaces.find((x) => x.id === r.projectId)!;
-    expect(allViews(t.spaces[0].layout)).toHaveLength(0);
+    expect(allViews(t.spaces[0])).toHaveLength(0);
   });
 
   it("an unregistered program degrades to an empty skeleton — makeContent creates no view", () => {

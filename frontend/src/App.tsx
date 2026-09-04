@@ -58,6 +58,7 @@ import { useBootPhase } from "./state/bootPhase";
 import {
   allGroups,
   cwdTabOf as resolveCwdTab,
+  parkedArrangement,
   projectArrangement,
   useSessions,
   webviewDisplayName,
@@ -72,15 +73,11 @@ import {
 } from "./state/settings";
 import { useTheme } from "./state/theme";
 import { hasPtyObservation } from "./terminal/ptyObservationStore";
-import {
-  DEFAULT_RAIL_PLACEMENT,
-  insetRailRect,
-  railStationFromLeftPx,
-  snapRailStation,
-} from "./lib/railPlacement";
+import { DEFAULT_RAIL_PLACEMENT } from "./lib/railPlacement";
 import { railGeometryScopeId, railPresentation } from "./lib/railMotion";
-import { computeSplitLayout } from "./lib/splitLayout";
-import { railWidthResizePlan } from "./lib/railWidthResize";
+import type { Arrangement } from "./lib/railArrangement";
+import { RAIL_CARD } from "./state/panePlane";
+import { setPlaneBox, usePlaneBox } from "./state/planeBox";
 import { useAppChromeLayoutReflow } from "./lib/appChromeLayoutReflow";
 import { useArrangementPhase } from "./components/useArrangementPhase";
 import {
@@ -105,7 +102,7 @@ import "./App.css";
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
 // framework or the plugin registry; it picks the travel visual owner from this identity set.
 const nativeSurfaceViewIds = (content: Workspace["spaces"][number]): string[] => (
-  allGroups(content.layout).flatMap((group) => group.tabs
+  allGroups(content).flatMap((group) => group.tabs
     .filter((view) => ownsNativeSurfaceFromManifests(view.pluginId, view.view))
     .map((view) => view.id))
 );
@@ -251,7 +248,10 @@ const WorkspacePlane = memo(function WorkspacePlane({
 }) {
   const t = useT();
   const setLeftRailPlacement = useSessions((s) => s.setLeftRailPlacement);
-  const resizeSplits = useSessions((s) => s.resizeSplits);
+  const moveBoundary = useSessions((s) => s.moveBoundary);
+  const moveRail = useSessions((s) => s.moveRail);
+  const settleRail = useSessions((s) => s.settleRail);
+  const setRailWidth = useSessions((s) => s.setRailWidth);
   const sidebarW = usePlaceWidthValue("rail");
   useRenderCost("render.workspace");
   const railPlaneRef = useRef<HTMLDivElement>(null);
@@ -288,19 +288,47 @@ const WorkspacePlane = memo(function WorkspacePlane({
     workspace.spaces.find((content) => content.id === workspace.activeSpaceId) ??
     workspace.spaces[0];
 
-  // Fall back to the last settled value so station does not collapse to 0 on an unresolved focus render.
-  const lastStationRef = useRef(0);
+  // The plane every space is laid out in: the content area inset by the pane inset, and the
+  // corridor the theme declares. Measured on the element, so a command over the socket lays out in
+  // the same box a drag does.
+  const paneStyle = useTheme((s) => s.spec.chrome.paneStyle);
+  const railPaneInset = PANE_INSET[paneStyle] ?? 0;
+  useLayoutEffect(() => {
+    const plane = railPlaneRef.current;
+    if (!plane) return;
+    const measure = () => {
+      const r = plane.getBoundingClientRect();
+      setPlaneBox({
+        width: Math.max(0, r.width - railPaneInset * 2),
+        height: Math.max(0, r.height - railPaneInset * 2),
+        gap: railPaneInset * 2,
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(plane);
+    return () => observer.disconnect();
+  }, [railPaneInset]);
+  const planeBox = usePlaneBox((s) => ({ width: s.width, height: s.height, gap: s.gap }));
+  // What stands in the rail is decided outside this store (the sets a plugin registers), so the
+  // plane follows it from here: the rail is stood or withdrawn on the active space when presence
+  // changes, and drawn at the place's width when that changes.
+  useLayoutEffect(() => {
+    settleRail(workspace.id);
+  }, [railOpen, settleRail, workspace.id, planeBox.width, planeBox.height, planeBox.gap]);
+  useLayoutEffect(() => {
+    setRailWidth(workspace.id, sidebarW);
+  }, [setRailWidth, sidebarW, workspace.id]);
   // The solver solves the arrangement — single truth for station, layout, produced adjacency and move amounts (never recompute).
   // **Subscribe** to the attach mode and pass it down — reading it through getState skips the redraw when the setting changes.
   const railPullFocused = useSettings((s) => s.railPullFocused);
-  const solved = projectArrangement(workspace, lastStationRef.current, railPullFocused, railOpen);
-  lastStationRef.current = solved?.station ?? 0;
-  const sidebarWRef = useRef(sidebarW);
-  sidebarWRef.current = sidebarW;
-  const railGeometryScope = railGeometryScopeId(
-    activeContent?.id,
-    solved?.cleanLines ?? [0, 100],
+  // The plane box is an input of every solve; subscribing above makes its change a render.
+  const solved = useMemo(
+    () => projectArrangement(workspace, railPullFocused, railOpen),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workspace, railPullFocused, railOpen, planeBox],
   );
+  const railGeometryScope = railGeometryScopeId(activeContent?.id, solved?.lineSet ?? "");
   // Arrangement phase (§12-④) — only the pane corridor contracts and expands over 340ms, with the departure and arrival rails on the floor below it.
   // This hook is the only phase tracker, and **the phase also owns what stands on screen** (a solution arriving
   // mid-travel waits in the queue — swapping the display at once makes the running animation jump).
@@ -309,7 +337,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
   const contentKey = useMemo(
     () =>
       activeContent
-        ? allGroups(activeContent.layout)
+        ? allGroups(activeContent)
             .map(
               (group) =>
                 `${group.id}:${group.activeTabId}:${group.tabs.map((v) => v.id).join("+")}`,
@@ -318,28 +346,28 @@ const WorkspacePlane = memo(function WorkspacePlane({
         : "",
     [activeContent],
   );
+  const activePanesRef = useRef<readonly Pane[]>([]);
+  activePanesRef.current = activeContent?.panes ?? [];
   const prepareArrangementTravel = useCallback(
-    (from: NonNullable<typeof solved>, to: NonNullable<typeof solved>, signal?: AbortSignal) => {
-      const hostWidth = railPlaneRef.current?.getBoundingClientRect().width ?? 0;
-      const groups = allGroups(to.displayLayout).map((group) => ({
-        id: group.id,
-        viewIds: group.tabs.map((view) => view.id),
-        panePresentationViewIds: group.tabs
-          .filter((view) => view.id === group.activeTabId
-            && ownsNativeSurfaceFromManifests(view.pluginId, view.view))
-          .map((view) => view.id),
-      }));
-      return prepareLayoutChange(viewLayoutChange(
-        from,
-        to,
-        groups,
-        hostWidth,
-        from.railPresent || to.railPresent ? sidebarWRef.current : 0,
-      ), signal);
+    (from: Arrangement, to: Arrangement, signal?: AbortSignal) => {
+      const panes = activePanesRef.current;
+      const groups = to.cells.flatMap((cell) => {
+        const group = panes.find((pane) => pane.id === cell.id);
+        if (!group) return [];
+        return [{
+          id: group.id,
+          viewIds: group.tabs.map((view) => view.id),
+          panePresentationViewIds: group.tabs
+            .filter((view) => view.id === group.activeTabId
+              && ownsNativeSurfaceFromManifests(view.pluginId, view.view))
+            .map((view) => view.id),
+        }];
+      });
+      return prepareLayoutChange(viewLayoutChange(from, to, groups), signal);
     },
     [],
   );
-  useLayoutTransitionIntentHost<Pane>(
+  useLayoutTransitionIntentHost(
     workspace.id,
     ({ from, to }, signal) => prepareArrangementTravel(from, to, signal),
   );
@@ -353,70 +381,47 @@ const WorkspacePlane = memo(function WorkspacePlane({
     railGridSurfaceRef.current?.candidateParticipant,
   );
   const arrangement = phase.displayed;
-  const displayedRailWidth = presentedRailWidth(arrangement, sidebarW);
+  const displayedRailWidth = presentedRailWidth(arrangement);
   const displayedRailOpen = displayedRailWidth > 0;
-  const railCleanLines = arrangement?.cleanLines ?? [0, 100];
   const effectiveStation = arrangement?.station ?? 0;
   const [dragStation, setDragStation] = useState<number | null>(null);
   const renderedStation = dragStation ?? effectiveStation;
 
-  // The rail's right grip changes two state owners in one preview transaction: the place width and
-  // the canonical line the flow rail occupies. Width-only resizing keeps the logical percentage
-  // fixed while the pane plane shrinks, moving the rail's left edge in the opposite direction and
-  // making a 120px pointer move reach the grabbed boundary by only about 60px.
+  // The rail's right grip drags the boundary on the rail's right (split-pane R5: beside a card with
+  // a declared width, a drag changes that width and the slot on the other side pays for it), so the
+  // rail's left edge stays where it is. The place's width follows what the plane settled on.
   const startResize = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0 || !displayedRailOpen || !arrangement) return;
+    if (e.button !== 0 || !displayedRailOpen || !arrangement || !activeContent) return;
     e.preventDefault();
+    const railCard = arrangement.display.cards.find((card) => card.id === RAIL_CARD);
     const plane = railPlaneRef.current;
-    if (!plane) return;
-    const hostWidthPx = plane.getBoundingClientRect().width;
-    const startWidthPx = sidebarW;
-    const startStation = renderedStation;
-    const gutters = computeSplitLayout(arrangement.displayLayout).gutters;
+    if (!railCard || !plane) return;
     const bounds = PLACE_WIDTH_BOUNDS.rail;
     const startX = e.clientX;
-    const commit = rafThrottle((requested: number) => {
-      const bounded = Math.min(bounds.max, Math.max(bounds.min, requested));
-      if (placement.mode === "flow") {
-        const plan = railWidthResizePlan({
-          gutters,
-          startStation,
-          hostWidthPx,
-          startWidthPx,
-          requestedWidthPx: bounded,
-        });
-        if (plan) {
-          // One event callback, one React batch: the pane line and rail width cannot render from
-          // different previews. The line-group contract also preserves a vertically shared seam.
-          resizeSplits(workspace.id, plan.moves);
-          setPlaceWidth("rail", plan.widthPx);
-          return;
-        }
-        // At the leading edge the physical left is already zero. At the trailing edge a right grip
-        // has nowhere to move without leaving the plane, so it is intentionally immovable.
-        if (startStation === 0) setPlaceWidth("rail", bounded);
-        return;
-      }
-      const leftPx = ((hostWidthPx - startWidthPx) * startStation) / 100;
-      const station = railStationFromLeftPx(leftPx, hostWidthPx, bounded);
-      setLeftRailPlacement(workspace.id, { mode: "pin", station });
-      setPlaceWidth("rail", bounded);
+    const startRight = arrangement.rail ? arrangement.rail.left + arrangement.rail.width : 0;
+    const spaceId = activeContent.id;
+    const commit = rafThrottle((dx: number) => {
+      const left = arrangement.rail?.left ?? 0;
+      const width = Math.min(bounds.max, Math.max(bounds.min, startRight + dx - left));
+      moveBoundary(workspace.id, spaceId, { axis: "x", line: railCard.c1 }, { px: left + width + planeBox.gap / 2 });
     });
-    const onMove = (event: MouseEvent) => commit(startWidthPx + event.clientX - startX);
+    const onMove = (event: MouseEvent) => commit(event.clientX - startX);
     const onUp = () => {
       commit.flush();
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
       endLayoutMotion("resize");
+      const settled = useSessions.getState().workspaces.find((w) => w.id === workspace.id)
+        ?.spaces.find((c) => c.id === spaceId)?.layout.cards.find((card) => card.id === RAIL_CARD)?.width;
+      if (typeof settled === "number") setPlaceWidth("rail", settled);
       persistPlaceWidth("rail");
     };
     beginLayoutMotion("resize");
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     document.body.style.cursor = "col-resize";
-  }, [arrangement, displayedRailOpen, placement.mode, renderedStation, resizeSplits,
-    setLeftRailPlacement, sidebarW, workspace.id]);
+  }, [activeContent, arrangement, displayedRailOpen, moveBoundary, planeBox.gap, workspace.id]);
   // The renderer and state.tree/pane.list consume the same solver. With no explicit binding it is this solution's
   // focused active tab; a closed or empty panel gives none/0. Group, adjacency and border are never re-decided here.
   const effectiveRailRelation = activeContent
@@ -424,8 +429,9 @@ const WorkspacePlane = memo(function WorkspacePlane({
         contentId: activeContent.id,
         displayed: arrangement,
         destination: solved,
+        panes: activeContent.panes,
         placement: placement.mode,
-        station: renderedStation,
+        gap: planeBox.gap,
       })
     : null;
   // Rail visual mode (§12-⑤) — pane (like a split window) | ground (floor plane). The toggle is on the slot frame header.
@@ -434,10 +440,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
   // this set alone: a surface that does not move stays live through the phase and is not even notified.
   const movingViewIds = useMemo(() => {
     if (!activeContent || phase.moves.length === 0) return [];
-    return viewIdsOfMoves(
-      phase.from?.displayLayout ?? activeContent.layout,
-      phase.moves,
-    );
+    return viewIdsOfMoves(activeContent.panes, phase.moves);
   }, [activeContent, phase.from, phase.moves]);
   const movingKey = movingViewIds.join(",");
   // Precondition for gliding (§4.6-5) — glide only when every moving hole surface can be covered by a stand-in.
@@ -466,25 +469,16 @@ const WorkspacePlane = memo(function WorkspacePlane({
     return () => endLayoutMotion("move");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [railTraveling, movingKey]);
-  // Consume the pane grid row contract — inject dimensions from the same source (GroupArea constants + theme
-  // paneStyle) into the rail subtree so the rail header aligns with the pane group header row.
-  const paneStyle = useTheme((s) => s.spec.chrome.paneStyle);
-  const railPaneInset = PANE_INSET[paneStyle] ?? 0;
-  const railFrame = insetRailRect(displayedRailWidth, railPaneInset);
-
-  // Pin = anchor at the current position / unpin = follow focus (flow). Attaching the rail to the function tab is the default.
+  // Pin = the rail stays where it stands / unpin = follow focus (flow). Attaching the rail to the function tab is the default.
   const toggleRailPin = useCallback(() => {
-    setLeftRailPlacement(
-      workspace.id,
-      placement.mode === "pin"
-        ? { mode: "flow" }
-        : { mode: "pin", station: effectiveStation },
-    );
-  }, [effectiveStation, placement.mode, workspace.id, setLeftRailPlacement]);
+    setLeftRailPlacement(workspace.id, placement.mode === "pin" ? { mode: "flow" } : { mode: "pin" });
+  }, [placement.mode, workspace.id, setLeftRailPlacement]);
 
+  // A hand drags the rail to another line it can stand on. The pointer is snapped to the nearest
+  // standing in px, and the landing moves the card there (moveTo) and pins the placement.
   const startRailStationDrag = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button !== 0 || !displayedRailOpen) return;
+      if (e.button !== 0 || !displayedRailOpen || !arrangement) return;
       e.preventDefault();
       e.stopPropagation();
       const plane = railPlaneRef.current;
@@ -492,18 +486,16 @@ const WorkspacePlane = memo(function WorkspacePlane({
       if (!plane || !rail) return;
       const planeRect = plane.getBoundingClientRect();
       const offset = e.clientX - rail.getBoundingClientRect().left;
-      let next = effectiveStation;
+      const standings = arrangement.cleanLines.map((px, i) => ({ px, line: arrangement.standingLines[i] }));
+      let next = { px: effectiveStation, line: -1 };
       const resolve = (clientX: number) => {
-        const raw = railStationFromLeftPx(
-          clientX - planeRect.left - offset,
-          planeRect.width,
-          sidebarW,
-        );
-        return snapRailStation(railCleanLines, raw);
+        const wanted = clientX - planeRect.left - railPaneInset - offset;
+        return standings.reduce((best, s) =>
+          Math.abs(s.px - wanted) < Math.abs(best.px - wanted) ? s : best, standings[0] ?? next);
       };
       const onMove = (ev: MouseEvent) => {
         next = resolve(ev.clientX);
-        setDragStation((current) => (current === next ? current : next));
+        setDragStation((current) => (current === next.px ? current : next.px));
       };
       const onUp = (ev: MouseEvent) => {
         next = resolve(ev.clientX);
@@ -515,7 +507,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
         setDragStation(null);
         // A drag landing is not a travel phase — sync the display reference point to the pointer position.
         phase.rebase();
-        setLeftRailPlacement(workspace.id, { mode: "pin", station: next });
+        if (next.line >= 0) moveRail(workspace.id, next.line);
       };
       // A hand drag is a layout motion phase too — it gets the same signals as automatic travel (hole clipping, native follow).
       beginLayoutMotion("move", undefined, "station-drag");
@@ -524,15 +516,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     },
-    [
-      effectiveStation,
-      phase.rebase,
-      workspace.id,
-      displayedRailOpen,
-      railCleanLines,
-      setLeftRailPlacement,
-      sidebarW,
-    ],
+    [arrangement, displayedRailOpen, effectiveStation, moveRail, phase.rebase, railPaneInset, workspace.id],
   );
   // On a content tab switch the inactive slot hides while keeping its DOM lifetime. That visibility change lands in the
   // DOM in this render commit, so right after the commit (useLayoutEffect, before paint) the core fires layout.reflow
@@ -602,10 +586,10 @@ const WorkspacePlane = memo(function WorkspacePlane({
                 key={`${effectiveRailRelation.state.relationId}|${effectiveRailRelation.station}|${effectiveRailRelation.targetRect?.left ?? "none"}|${effectiveRailRelation.targetRect?.top ?? "none"}|${effectiveRailRelation.targetRect?.width ?? "none"}|${effectiveRailRelation.targetRect?.height ?? "none"}`}
                 contentId={activeContent.id}
                 relation={effectiveRailRelation.state}
-                railWidth={sidebarW}
                 paneInset={railPaneInset}
-                railStation={effectiveRailRelation.station}
-                targetRect={effectiveRailRelation.targetRect}
+                gap={planeBox.gap}
+                railRect={arrangement?.rail ?? null}
+                targetRect={effectiveRailRelation.paneRect}
                 projected={arrangement?.swapped ?? false}
                 nativeVisible={isActiveWorkspace}
               />
@@ -657,8 +641,8 @@ const WorkspacePlane = memo(function WorkspacePlane({
                       // nothing on the screen marks it as one view's rather than the other — measured
                       // 2026-08-17: the left column ended at 414, the sidebar held 420..580,
                       // and the pane it served began at 586. Six points each way.
-                      left: `calc(${rail.station}% - ${(sidebarW * rail.station) / 100}px + ${railFrame.leftInsetPx}px)`,
-                      width: railFrame.widthPx,
+                      left: railPaneInset + rail.station,
+                      width: displayedRailWidth,
                       borderTopWidth: railEdgeWidths(
                         railLook,
                         displayedRailOpen,
@@ -752,36 +736,22 @@ const WorkspacePlane = memo(function WorkspacePlane({
                   projectId={workspace.id}
                   nativeSurfaceViewIds={nativeSurfaceViewIds(c)}
                   surfaceActive={isActiveWorkspace && isActiveContent}
-                  // The solution determines the arrangement — inactive content keeps its canonical layout (no rail).
-                  // Cells blocked by how far the rail could not go — they do not move, but must dim to show which panel is active.
+                  // The solution determines the arrangement — the active space draws what the phase
+                  // displays; an inactive one its own plane without the rail.
                   //
                   // Taken from the solution the screen draws — the same place as the effective binding. One box comes
                   // from one solution: attaching old geometry to a new fact yields a picture that is from no solution
                   // at all. A solution where only focus changed is accepted by the phase at once (arrangementKey signs
                   // that fact too — otherwise this reads the old value forever).
+                  arrangement={isActiveContent && arrangement ? arrangement : parkedArrangement(c)}
+                  // Cells blocked by how far the rail could not go — they do not move, but must dim to show which panel is active.
                   betweenIds={isActiveContent ? (arrangement?.betweenIds ?? []) : []}
                   // Dimming follows the same solution — if geometry follows the phase but dimming changes at once,
                   // the frozen snapshot becomes unusable at journey start and nothing is left to cover the surface.
                   focusedPaneId={isActiveContent ? arrangement?.focusId : undefined}
-                  displayLayout={
-                    isActiveContent ? arrangement?.displayLayout : undefined
-                  }
                   moves={isActiveContent && railTraveling ? phase.moves : undefined}
-                  travel={
-                    isActiveContent && railTraveling
-                      ? {
-                          from: phase.from?.station ?? renderedStation,
-                          to: renderedStation,
-                        }
-                      : undefined
-                  }
+                  travelFrom={isActiveContent && railTraveling ? (phase.from ?? undefined) : undefined}
                   replaceGeometry={isActiveContent && phase.replacing}
-                  railStation={isActiveContent ? renderedStation : 0}
-                  // The maximize fact comes from the **same solution** as station — mixing them makes the render throw.
-                  displayMaximizedId={isActiveContent ? (arrangement?.maximizedId ?? null) : undefined}
-                  railWidthPx={
-                    isActiveContent ? displayedRailWidth : 0
-                  }
                 />
               </div>
             );
@@ -1210,7 +1180,7 @@ function App() {
         toggleRegion(workspace.id, "right");
         return;
       }
-      const groups = allGroups(content.layout);
+      const groups = allGroups(content);
       const grp =
         groups.find((g) => g.id === content.activePaneId) ?? groups[0];
       const view = grp?.tabs.find((v) => v.id === grp.activeTabId);
@@ -1256,7 +1226,7 @@ function App() {
       const proj = s.workspaces.find((t) => t.id === s.activeId);
       const content = proj?.spaces.find((space) => space.id === proj.activeSpaceId);
       const group = content
-        ? allGroups(content.layout).find((pane) => pane.id === content.activePaneId)
+        ? allGroups(content).find((pane) => pane.id === content.activePaneId)
         : undefined;
       const view = group?.tabs.find((tab) => tab.id === group.activeTabId);
       if (!view?.pluginId) return;

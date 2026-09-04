@@ -431,7 +431,7 @@ export function activeSessionViewId(): string | null {
     (item) => item.id === workspace.activeSpaceId,
   );
   const panel = space
-    ? allGroups(space.layout).find((item) => item.id === space.activePaneId)
+    ? allGroups(space).find((item) => item.id === space.activePaneId)
     : null;
   return panel?.activeTabId ?? null;
 }
@@ -472,7 +472,7 @@ export function startSurfaceActivationSync(
     if (!workspace) return;
     const space = workspace.spaces.find((c) => c.id === workspace.activeSpaceId);
     if (!space) return;
-    const pane = allGroups(space.layout).find((g) => g.tabs.some((v) => v.id === viewId));
+    const pane = allGroups(space).find((g) => g.tabs.some((v) => v.id === viewId));
     if (!pane) return;
     sessions.setActiveGroup(workspace.id, pane.id);
     sessions.setActiveView(workspace.id, viewId);

@@ -1,6 +1,6 @@
-// Split layout + drop hit test — one machine shared by the content area (GroupArea) and the left sidebar
-// (LeftSidebarHost). Expands SplitTree<L> into % coordinate cells + split dividers and computes pointer →
-// drop zone (5 zones). [RULE] Both areas must behave identically, so layout and hit test exist only here (no duplicates).
+// Split layout + drop hit test for the sidebar's section tree (SectionSetHost). Expands SplitTree<L>
+// into % coordinate cells + split dividers and computes pointer → drop zone (5 zones). The content
+// area's panes are on a plane of their own (state/panePlane) and are laid out by the library.
 
 import type { SplitTree } from "../state/splitTree";
 
@@ -230,4 +230,42 @@ export function cellVars(rect: Rect): Record<string, string> {
     "--w": `${rect.width}%`,
     "--h": `${rect.height}%`,
   };
+}
+
+/**
+ * The canonical name of a sidebar gutter: the first leaf in document order touching the trailing
+ * face of the child before the seam. The seam of children i and i+1 of a split is the trailing face
+ * of child i, and that subtree always holds a leaf on that face — descend to the last child along
+ * the split's axis, to the first child across it.
+ */
+export function treeGutterOwnerOf<L>(
+  tree: SplitTree<L>,
+  splitId: string,
+  index: number,
+  idOf: (leaf: L) => string,
+): { pane: string; side: "right" | "bottom" } | null {
+  const node = splitNodeById(tree, splitId);
+  if (!node) return null;
+  if (index < 0 || index >= node.children.length - 1) return null;
+  const trailing = (n: SplitTree<L>, axis: "row" | "col"): L =>
+    n.type === "leaf"
+      ? n.value
+      : trailing(n.dir === axis ? n.children[n.children.length - 1] : n.children[0], axis);
+  return {
+    pane: idOf(trailing(node.children[index], node.dir)),
+    side: node.dir === "row" ? "right" : "bottom",
+  };
+}
+
+function splitNodeById<L>(
+  node: SplitTree<L>,
+  splitId: string,
+): Extract<SplitTree<L>, { type: "split" }> | null {
+  if (node.type === "leaf") return null;
+  if (node.id === splitId) return node;
+  for (const c of node.children) {
+    const hit = splitNodeById(c, splitId);
+    if (hit) return hit;
+  }
+  return null;
 }

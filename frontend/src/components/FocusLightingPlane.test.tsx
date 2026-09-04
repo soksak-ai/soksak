@@ -104,7 +104,8 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
   });
 
   it("the left rail area under the work surface is exempt from lighting exactly", async () => {
-    const exempt = railLightingExemption(240, 50);
+    // The rail at plane x 380, 240 wide, on a plane inset by 5.
+    const exempt = railLightingExemption({ left: 380, top: 0, width: 240, height: 500 }, 5);
     await act(async () => {
       root.render(
         <FocusLightingPlane
@@ -119,10 +120,10 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
 
     const cutout = host.querySelector<SVGRectElement>("[data-lighting-exempt='left-rail']");
     expect(cutout).not.toBeNull();
-    expect(cutout?.style.getPropertyValue("x")).toBe("calc(50% - 120px)");
-    expect(cutout?.style.getPropertyValue("y")).toBe("0px");
+    expect(cutout?.style.getPropertyValue("x")).toBe("385px");
+    expect(cutout?.style.getPropertyValue("y")).toBe("5px");
     expect(cutout?.style.getPropertyValue("width")).toBe("240px");
-    expect(cutout?.style.getPropertyValue("height")).toBe("100%");
+    expect(cutout?.style.getPropertyValue("height")).toBe("500px");
   });
 
   it("an inactive tabview overlapping the rail restores the pane veil and leaves only the exposed rail lit", async () => {
@@ -133,7 +134,7 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
           baseAmount={0.5}
           focused={region("right", 50)}
           blocked={[]}
-          exempt={[railLightingExemption(240, 50)]}
+          exempt={[railLightingExemption({ left: 380, top: 0, width: 240, height: 500 }, 5)]}
           content={[region("left", 0), region("right", 50)]}
         />,
       );

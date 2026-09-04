@@ -50,14 +50,14 @@ describe("rail presentation — one persistent DOM node that stays on screen whi
 
 describe("plane identity", () => {
   it("rail lines of two spaces are not one coordinate system", () => {
-    expect(railGeometryScopeId("c38", [0, 50, 100])).not.toBe(
-      railGeometryScopeId("c39", [0, 50, 100]),
+    expect(railGeometryScopeId("c38", "2x1:a@0-1,0-1;b@1-2,0-1")).not.toBe(
+      railGeometryScopeId("c39", "2x1:a@0-1,0-1;b@1-2,0-1"),
     );
   });
 
   it("the same space is a new coordinate system once split or merge changes the line set", () => {
-    expect(railGeometryScopeId("c1", [0, 50, 100])).not.toBe(
-      railGeometryScopeId("c1", [0, 100 / 3, 200 / 3, 100]),
+    expect(railGeometryScopeId("c1", "2x1:a@0-1,0-1;b@1-2,0-1")).not.toBe(
+      railGeometryScopeId("c1", "3x1:a@0-1,0-1;b@1-2,0-1;c@2-3,0-1"),
     );
   });
 });

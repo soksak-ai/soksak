@@ -1,5 +1,6 @@
-// Public surface for left rail position. Rail position is workspace state, but a client must
-// observe and control it through state.tree and commands without reading store internals.
+// Public surface for left rail position. Where the rail stands is on the space's plane, and a
+// client must observe and control it through state.tree and commands without reading store
+// internals.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mem = new Map<string, string>();
@@ -17,11 +18,16 @@ import { execute } from "./registry";
 import { useSessions, type Workspace, type Pane } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
 import { useSectionSets } from "../state/sectionSets";
-import { splitLeaf } from "../state/splitTree";
+import { equalizeAxis, splitPane, standRail, type PlaneState } from "../state/panePlane";
+import { planeBox, setPlaneBox } from "../state/planeBox";
+import { setPlaceWidth } from "../state/placeWidth";
+import { rowPlane } from "../test/planes";
 import {
   __resetLayoutSettlementForTest,
   layoutSettlementFacts,
 } from "../lib/layoutSettlement";
+
+const RAIL_W = 100;
 
 const group = (
   id: string,
@@ -41,9 +47,14 @@ const group = (
   activeTabId: viewId ?? "",
 });
 
+/** a | b in a 1000×600 plane, the rail standing at `railLine` when given. */
 function workspace(
   placement?: Workspace["railPlacement"],
+  options: { panes?: Pane[]; railLine?: number | null; activePaneId?: string } = {},
 ): Workspace {
+  const panes = options.panes ?? [group("pan-aaaaaa"), group("pan-bbbbbb")];
+  const bare = rowPlane(panes.map((g) => g.id));
+  const railLine = options.railLine === undefined ? 1 : options.railLine;
   return {
     id: "wsp-aaaaaa",
     title: "P",
@@ -55,61 +66,31 @@ function workspace(
       {
         id: "spc-aaaaaa",
         title: "1",
-        layout: {
-          type: "split",
-          id: "spl-aaaaaa",
-          dir: "row",
-          sizes: [0.5, 0.5],
-          children: [
-            { type: "leaf", value: group("pan-aaaaaa") },
-            { type: "leaf", value: group("pan-bbbbbb") },
-          ],
-        },
-        activePaneId: "pan-bbbbbb",
+        panes,
+        layout: railLine === null ? bare : standRail(bare, planeBox(), railLine, RAIL_W)!,
+        activePaneId: options.activePaneId ?? "pan-bbbbbb",
       },
     ],
     activeSpaceId: "spc-aaaaaa",
   };
 }
 
-/** Layout whose per-row vertical lines do not align — terminal crosses ghostty's left 50. */
+/** [db | (design | ghostty) over terminal | kanban] in thirds of a 1500 plane, the rail at the
+ *  front of the middle column: the line between design and ghostty is crossed by terminal. */
 function switchWorkspace(): Workspace {
   const base = workspace({ mode: "flow" });
+  const box = planeBox();
+  const thirds = equalizeAxis(rowPlane(["db", "design", "kanban"]), box, "x");
+  const stacked = splitPane(thirds, box, "design", "bottom", "terminal")!;
+  const layout: PlaneState = standRail(splitPane(stacked, box, "design", "right", "ghostty")!, box, 1, RAIL_W)!;
   return {
     ...base,
     spaces: [
       {
         ...base.spaces[0],
         activePaneId: "ghostty",
-        layout: {
-          type: "split",
-          id: "root",
-          dir: "row",
-          sizes: [1 / 3, 1 / 3, 1 / 3],
-          children: [
-            splitLeaf(group("db")),
-            {
-              type: "split",
-              id: "middle",
-              dir: "col",
-              sizes: [0.5, 0.5],
-              children: [
-                {
-                  type: "split",
-                  id: "top",
-                  dir: "row",
-                  sizes: [0.5, 0.5],
-                  children: [
-                    splitLeaf(group("design")),
-                    splitLeaf(group("ghostty")),
-                  ],
-                },
-                splitLeaf(group("terminal")),
-              ],
-            },
-            splitLeaf(group("kanban")),
-          ],
-        },
+        panes: ["db", "design", "ghostty", "terminal", "kanban"].map((id) => group(id)),
+        layout,
       },
     ],
   };
@@ -118,6 +99,8 @@ function switchWorkspace(): Workspace {
 registerCatalog();
 
 beforeEach(() => {
+  setPlaneBox({ width: 1000, height: 600, gap: 0 });
+  setPlaceWidth("rail", RAIL_W);
   __resetLayoutSettlementForTest();
   useSectionSets.setState({ sets: [], byPlugin: {}, left: null });
   const set = useSectionSets.getState().create("test rail");
@@ -128,9 +111,10 @@ beforeEach(() => {
 
 type Position = {
   mode: "flow" | "pin";
-  station?: number;
   effectiveStation: number;
+  line: number | null;
   cleanLines: number[];
+  standingLines: number[];
 };
 
 function resultPosition(result: Awaited<ReturnType<typeof execute>>): Position {
@@ -138,151 +122,92 @@ function resultPosition(result: Awaited<ReturnType<typeof execute>>): Position {
 }
 
 describe("rail.position", () => {
-  it("an omitted call reads the current FLOW state — the rail aligns to the left line of the focused pane", async () => {
+  it("an omitted call reads where the rail stands — beside the focused pane under FLOW", async () => {
     const result = await execute("rail.position", {}, {});
     expect(result.ok).toBe(true);
     expect(resultPosition(result)).toEqual({
       mode: "flow",
-      effectiveStation: 50, // the left line of the active pane g2
-      cleanLines: [0, 50, 100],
+      effectiveStation: 500, // the left line of the active pane b
+      line: 1,
+      cleanLines: [0, 500, 600, 1000],
+      standingLines: [0, 1, 2, 3],
     });
   });
 
-  it("PIN with no station pins the current FLOW effective line where it is", async () => {
+  it("PIN with no line pins the rail where it stands", async () => {
     const result = await execute("rail.position", { mode: "pin" }, {});
     expect(result.ok).toBe(true);
-    expect(resultPosition(result)).toEqual({
-      mode: "pin",
-      station: 50,
-      effectiveStation: 50,
-      cleanLines: [0, 50, 100],
-    });
-    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
-      mode: "pin",
-      station: 50,
-    });
+    expect(resultPosition(result)).toMatchObject({ mode: "pin", effectiveStation: 500, line: 1 });
+    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({ mode: "pin" });
   });
 
-  it("PIN with a station snaps to the nearest clean line and stores that", async () => {
-    const result = await execute(
-      "rail.position",
-      { mode: "pin", station: 31 },
-      {},
-    );
+  it("PIN with a line moves the rail to that standing and pins it there", async () => {
+    const result = await execute("rail.position", { mode: "pin", line: 0 }, {});
     expect(result.ok).toBe(true);
-    expect(resultPosition(result)).toMatchObject({
-      mode: "pin",
-      station: 50,
-      effectiveStation: 50,
-    });
-    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
-      mode: "pin",
-      station: 50,
-    });
+    expect(resultPosition(result)).toMatchObject({ mode: "pin", effectiveStation: 0, line: 0 });
+    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({ mode: "pin" });
   });
 
-  it("an existing dirty PIN is not silently re-saved — persisted and effective are read apart", async () => {
+  it("a FLOW command restores focus following at once — the rail goes back beside the focused pane", async () => {
     useSessions.setState({
-      workspaces: [workspace({ mode: "pin", station: 31 })],
-      activeId: "wsp-aaaaaa",
-    });
-
-    const result = await execute("rail.position", {}, {});
-    expect(result.ok).toBe(true);
-    expect(resultPosition(result)).toEqual({
-      mode: "pin",
-      station: 31,
-      effectiveStation: 50,
-      cleanLines: [0, 50, 100],
-    });
-    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
-      mode: "pin",
-      station: 31,
-    });
-  });
-
-  it("a FLOW command removes the pinned station and restores focus following at once", async () => {
-    useSessions.setState({
-      workspaces: [workspace({ mode: "pin", station: 0 })],
+      workspaces: [workspace({ mode: "pin" }, { railLine: 0 })],
       activeId: "wsp-aaaaaa",
     });
 
     const result = await execute("rail.position", { mode: "flow" }, {});
     expect(result.ok).toBe(true);
-    expect(resultPosition(result)).toEqual({
-      mode: "flow",
-      effectiveStation: 50,
-      cleanLines: [0, 50, 100],
-    });
-    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
-      mode: "flow",
-    });
+    expect(resultPosition(result)).toMatchObject({ mode: "flow", line: 1 });
+    // Beside the focused pane: the rail's right edge is b's left edge. The rail took its room from
+    // a when it stood at the front, and a keeps what it had when the rail leaves (split-pane R5).
+    const panes = (await execute("pane.list", {}, {})).data as { panes: Array<{ id: string; rect: { left: number } }> };
+    expect(resultPosition(result).effectiveStation + RAIL_W)
+      .toBe(panes.panes.find((p) => p.id === "pan-bbbbbb")!.rect.left);
+    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({ mode: "flow" });
   });
 
   it("PIN→FLOW with the same displayed solution opens no settlement revision, only a real station change", async () => {
     useSessions.setState({
-      workspaces: [workspace({ mode: "pin", station: 50 })],
+      workspaces: [workspace({ mode: "pin" })],
       activeId: "wsp-aaaaaa",
     });
 
     const unchanged = await execute("rail.position", { mode: "flow" }, {});
     expect(unchanged.ok).toBe(true);
-    expect(resultPosition(unchanged)).toMatchObject({
-      mode: "flow",
-      effectiveStation: 50,
-    });
+    expect(resultPosition(unchanged)).toMatchObject({ mode: "flow", effectiveStation: 500 });
     expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({ active: false, pending: [] });
 
     useSessions.setState({
-      workspaces: [workspace({ mode: "pin", station: 0 })],
+      workspaces: [workspace({ mode: "pin" }, { railLine: 0 })],
       activeId: "wsp-aaaaaa",
     });
     const changed = await execute("rail.position", { mode: "flow" }, {});
     expect(changed.ok).toBe(true);
-    expect(resultPosition(changed)).toMatchObject({
-      mode: "flow",
-      effectiveStation: 50,
-    });
+    expect(resultPosition(changed)).toMatchObject({ mode: "flow", line: 1 });
     expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({
       active: true,
       pending: [{ key: "wsp-aaaaaa", requested: 1, settled: 0 }],
     });
   });
 
-  it("refuses a station outside the logical plane, and FLOW+station ambiguity, as structural errors", async () => {
-    const outside = await execute(
-      "rail.position",
-      { mode: "pin", station: 101 },
-      {},
-    );
+  it("refuses a line the rail cannot stand on, and FLOW+line ambiguity, as structural errors", async () => {
+    const outside = await execute("rail.position", { mode: "pin", line: 7 }, {});
     expect(outside).toMatchObject({ ok: false, code: "INVALID_PARAMS" });
+    const fraction = await execute("rail.position", { mode: "pin", line: 0.5 }, {});
+    expect(fraction).toMatchObject({ ok: false, code: "INVALID_PARAMS" });
 
-    const ambiguous = await execute(
-      "rail.position",
-      { mode: "flow", station: 50 },
-      {},
-    );
+    const ambiguous = await execute("rail.position", { mode: "flow", line: 1 }, {});
     expect(ambiguous).toMatchObject({ ok: false, code: "INVALID_PARAMS" });
   });
 });
 
 describe("state.tree — the solution is a public fact", () => {
   it("exposes a pinned rail relation on the same basis for left, right and non-adjacent", async () => {
-    const withBinding = workspace({ mode: "pin", station: 0 });
-    withBinding.spaces[0] = {
-      ...withBinding.spaces[0],
+    // rail | a | b, b focused: b is not beside the rail.
+    const withBinding = workspace({ mode: "pin" }, {
+      panes: [group("pan-aaaaaa", "tab-aaaaaa"), group("pan-bbbbbb", "tab-bbbbbb")],
+      railLine: 0,
       activePaneId: "pan-bbbbbb",
-      layout: {
-        type: "split",
-        id: "spl-aaaaaa",
-        dir: "row",
-        sizes: [0.5, 0.5],
-        children: [
-          { type: "leaf", value: group("pan-aaaaaa", "tab-aaaaaa") },
-          { type: "leaf", value: group("pan-bbbbbb", "tab-bbbbbb") },
-        ],
-      },
-    };
+    });
     useSessions.setState({ workspaces: [withBinding], activeId: "wsp-aaaaaa" });
     const detached = await execute("state.tree", {}, {});
     const relation = (detached.data as { workspaces: Array<{ spaces: Array<{ railRelation: unknown }> }> })
@@ -301,21 +226,11 @@ describe("state.tree — the solution is a public fact", () => {
   });
 
   it("exposes the active tab of the active pane as the effective binding with no explicit one, as the screen does", async () => {
-    const withoutLock = workspace({ mode: "pin", station: 0 });
-    withoutLock.spaces[0] = {
-      ...withoutLock.spaces[0],
+    const withoutLock = workspace({ mode: "pin" }, {
+      panes: [group("pan-aaaaaa", "tab-aaaaaa"), group("pan-bbbbbb", "tab-bbbbbb")],
+      railLine: 0,
       activePaneId: "pan-aaaaaa",
-      layout: {
-        type: "split",
-        id: "spl-aaaaaa",
-        dir: "row",
-        sizes: [0.5, 0.5],
-        children: [
-          { type: "leaf", value: group("pan-aaaaaa", "tab-aaaaaa") },
-          { type: "leaf", value: group("pan-bbbbbb", "tab-bbbbbb") },
-        ],
-      },
-    };
+    });
     useSessions.setState({ workspaces: [withoutLock], activeId: "wsp-aaaaaa" });
 
     const tree = await execute("state.tree", {}, {});
@@ -340,16 +255,12 @@ describe("state.tree — the solution is a public fact", () => {
   });
 
   it("states a none/0 state with no binding and no drawing when the sidebar is closed", async () => {
-    const closed = workspace({ mode: "pin", station: 0 });
-    closed.regionOpen = { ...closed.regionOpen, rail: false };
-    closed.spaces[0] = {
-      ...closed.spaces[0],
+    const closed = workspace({ mode: "pin" }, {
+      panes: [group("pan-aaaaaa", "tab-aaaaaa")],
+      railLine: null,
       activePaneId: "pan-aaaaaa",
-      layout: {
-        type: "leaf",
-        value: group("pan-aaaaaa", "tab-aaaaaa"),
-      },
-    };
+    });
+    closed.regionOpen = { ...closed.regionOpen, rail: false };
     useSessions.setState({ workspaces: [closed], activeId: "wsp-aaaaaa" });
 
     const tree = await execute("state.tree", {}, {});
@@ -370,24 +281,10 @@ describe("state.tree — the solution is a public fact", () => {
   });
 
   it("states none/0 when the rail preference is open but the selected tab's plugin has no linked set", async () => {
-    const unlinked = workspace({ mode: "flow" });
-    unlinked.spaces[0] = {
-      ...unlinked.spaces[0],
+    const unlinked = workspace({ mode: "flow" }, {
+      panes: [group("pan-aaaaaa", "tab-aaaaaa"), group("pan-bbbbbb", "tab-bbbbbb", "test.unlinked")],
       activePaneId: "pan-bbbbbb",
-      layout: {
-        type: "split",
-        id: "spl-aaaaaa",
-        dir: "row",
-        sizes: [0.5, 0.5],
-        children: [
-          { type: "leaf", value: group("pan-aaaaaa", "tab-aaaaaa") },
-          {
-            type: "leaf",
-            value: group("pan-bbbbbb", "tab-bbbbbb", "test.unlinked"),
-          },
-        ],
-      },
-    };
+    });
     useSessions.setState({ workspaces: [unlinked], activeId: unlinked.id });
 
     const tree = await execute("state.tree", {}, {});
@@ -408,26 +305,16 @@ describe("state.tree — the solution is a public fact", () => {
     });
   });
 
-  it("restores station, split and relation direction exactly after a two-way PIN maximize/restore", async () => {
+  it("restores the rail's line, the plane and the relation direction exactly after a two-way PIN maximize/restore", async () => {
     for (const [paneId, tabId, side] of [
       ["pan-aaaaaa", "tab-aaaaaa", "left"],
       ["pan-bbbbbb", "tab-bbbbbb", "right"],
     ] as const) {
-      const pinned = workspace({ mode: "pin", station: 50 });
-      pinned.spaces[0] = {
-        ...pinned.spaces[0],
+      const pinned = workspace({ mode: "pin" }, {
+        panes: [group("pan-aaaaaa", "tab-aaaaaa"), group("pan-bbbbbb", "tab-bbbbbb")],
+        railLine: 1,
         activePaneId: paneId,
-        layout: {
-          type: "split",
-          id: "spl-aaaaaa",
-          dir: "row",
-          sizes: [0.5, 0.5],
-          children: [
-            { type: "leaf", value: group("pan-aaaaaa", "tab-aaaaaa") },
-            { type: "leaf", value: group("pan-bbbbbb", "tab-bbbbbb") },
-          ],
-        },
-      };
+      });
       useSessions.setState({ workspaces: [pinned], activeId: "wsp-aaaaaa" });
 
       const read = async () => {
@@ -445,17 +332,13 @@ describe("state.tree — the solution is a public fact", () => {
       };
 
       const before = await read();
-      expect(before.railPosition).toMatchObject({
-        mode: "pin",
-        station: 50,
-        effectiveStation: 50,
-      });
+      expect(before.railPosition).toMatchObject({ mode: "pin", effectiveStation: 500, line: 1 });
       expect(before.spaces[0].railRelation.side).toBe(side);
 
       expect(useSessions.getState().maximizeView("wsp-aaaaaa", tabId)).toMatchObject({ ok: true });
       const maximized = await read();
       expect(maximized.spaces[0].railRelation.side).toBe(side);
-      expect(maximized.railPosition.station).toBe(50);
+      expect(maximized.railPosition.line).toBe(1);
 
       expect(useSessions.getState().restoreView("wsp-aaaaaa")).toMatchObject({ ok: true });
       const restored = await read();
@@ -469,9 +352,10 @@ describe("state.tree — the solution is a public fact", () => {
       );
     }
   });
+
   it("exposes the position with the same computation as the command query", async () => {
     useSessions.setState({
-      workspaces: [workspace({ mode: "pin", station: 31 })],
+      workspaces: [workspace({ mode: "pin" }, { railLine: 0 })],
       activeId: "wsp-aaaaaa",
     });
     const result = await execute("state.tree", {}, {});
@@ -479,15 +363,12 @@ describe("state.tree — the solution is a public fact", () => {
     const workspaces = (result.data as {
       workspaces: Array<{ railPosition: Position }>;
     }).workspaces;
-    expect(workspaces[0].railPosition).toEqual({
-      mode: "pin",
-      station: 31,
-      effectiveStation: 50,
-      cleanLines: [0, 50, 100],
-    });
+    expect(workspaces[0].railPosition).toEqual(resultPosition(await execute("rail.position", {}, {})));
+    expect(workspaces[0].railPosition).toMatchObject({ mode: "pin", effectiveStation: 0, line: 0 });
   });
 
   it("exposes a row-mismatched switch in the displayed layout and panes, and reports the canonical form with it", async () => {
+    setPlaneBox({ width: 1500, height: 800, gap: 0 });
     const original = switchWorkspace();
     useSessions.setState({ workspaces: [original], activeId: original.id });
 
@@ -496,8 +377,8 @@ describe("state.tree — the solution is a public fact", () => {
       workspaces: Array<{
         railPosition: Position;
         spaces: Array<{
-          layout: { children: unknown[] };
-          canonicalLayout: { children: unknown[] };
+          layout: { cards: unknown[] };
+          canonicalLayout: { cards: unknown[] };
           projection: {
             kind: string;
             applied: boolean;
@@ -509,7 +390,7 @@ describe("state.tree — the solution is a public fact", () => {
       }>;
     }).workspaces[0];
 
-    expect(space.railPosition.effectiveStation).toBeCloseTo(100 / 3, 1);
+    expect(space.railPosition.effectiveStation).toBeCloseTo(500, 6);
     const first = space.spaces[0];
     expect(first.projection).toEqual({
       kind: "switched",
@@ -518,15 +399,16 @@ describe("state.tree — the solution is a public fact", () => {
       swappedPanes: ["design", "ghostty"],
     });
     expect(first.canonicalLayout).not.toEqual(first.layout);
-    expect(first.panes.find((pane) => pane.id === "ghostty")?.rect.left).toBe(33.3);
-    expect(first.panes.find((pane) => pane.id === "design")?.rect.left).toBe(50);
-    // The session canonical layout never changes — only the presentation is switched.
+    expect(first.panes.find((pane) => pane.id === "ghostty")?.rect.left).toBe(600);
+    expect(first.panes.find((pane) => pane.id === "design")?.rect.left).toBeGreaterThan(600);
+    // The session's plane never changes — only the presentation is switched.
     expect(useSessions.getState().workspaces[0].spaces[0].layout).toBe(
       original.spaces[0].layout,
     );
   });
 
   it("maximize exposes the public layout/panes as the real [sidebar|feature] plane too", async () => {
+    setPlaneBox({ width: 1500, height: 800, gap: 0 });
     const original = switchWorkspace();
     useSessions.setState({ workspaces: [original], activeId: original.id });
     // Fixture groups have no views, so set the public state directly and verify serialization only.
@@ -536,7 +418,7 @@ describe("state.tree — the solution is a public fact", () => {
         spaces: t.spaces.map((c) => ({
           ...c,
           activePaneId: "ghostty",
-          maximizedTabId: "v-max",
+          maximizedTabId: "ghostty-view",
         })),
       })),
     }));
@@ -544,17 +426,17 @@ describe("state.tree — the solution is a public fact", () => {
     const result = await execute("state.tree", {}, {});
     const space = (result.data as {
       workspaces: Array<{ spaces: Array<{
-        layout: { pane: string };
-        canonicalLayout: { children: unknown[] };
+        layout: { cards: Array<{ id: string }> };
+        canonicalLayout: { cards: unknown[] };
         projection: { kind: string; applied: boolean; focusedPaneId: string; swappedPanes: string[] };
         panes: Array<{ id: string; rect: { left: number; top: number; width: number; height: number } }>;
       }> }>;
     }).workspaces[0].spaces[0];
-    expect(space.layout).toEqual({ pane: "ghostty" });
+    expect(space.layout.cards.map((c) => c.id).sort()).toEqual(["ghostty", "rail"]);
     expect(space.panes).toMatchObject([
       {
         id: "ghostty",
-        rect: { left: 0, top: 0, width: 100, height: 100 },
+        rect: { left: RAIL_W, top: 0, width: 1500 - RAIL_W, height: 800 },
         active: true,
         activeTabId: "ghostty-view",
         tabs: [{ id: "ghostty-view", plugin: "test.plugin" }],
@@ -566,6 +448,6 @@ describe("state.tree — the solution is a public fact", () => {
       focusedPaneId: "ghostty",
       swappedPanes: [],
     });
-    expect(space.canonicalLayout.children).toHaveLength(3);
+    expect(space.canonicalLayout.cards).toHaveLength(6);
   });
 });

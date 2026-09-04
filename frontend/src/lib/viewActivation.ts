@@ -14,7 +14,7 @@ export function activatePaneIntent(paneId: string): boolean {
   const sessions = useSessions.getState();
   const workspace = sessions.workspaces.find((item) => item.id === sessions.activeId);
   const space = workspace?.spaces.find((item) => item.id === workspace.activeSpaceId);
-  const pane = space ? allGroups(space.layout).find((item) => item.id === paneId) : null;
+  const pane = space ? allGroups(space).find((item) => item.id === paneId) : null;
   if (!pane) return false;
   const target = pane.activeTabId;
   // Re-clicking the active pane is a focus repair, not an idempotent no-op. The view may have

@@ -21,17 +21,16 @@ import { beginLayoutMotion, endLayoutMotion } from "../lib/layoutMotion";
 import { CHROME_BANDS } from "../lib/chromeBands";
 import { createRectMotionTracker } from "../lib/layoutRectMotion";
 import { timed, useRenderCost } from "../lib/mainThreadCost";
-import { cleanRailLines } from "../lib/railPlacement";
 import { recordRailPhase } from "../lib/railJournal";
 import { useGutterHover } from "../state/gutterHover";
 import { ViewTabs } from "./ViewTabs";
 import { FocusLightingPlane } from "./FocusLightingPlane";
 import { ParkedPicture } from "./ParkedPicture";
 import { railLightingExemption } from "./focusLightingGeometry";
-import { computeSplitLayout, hitTestCells } from "../lib/splitLayout";
 import { layoutGeometrySignature } from "../lib/layoutGeometrySignature";
 import { useLayoutGeometryReflow } from "../lib/layoutGeometryReflow";
 import { gutterAddress, gutterOwnerOf } from "../lib/gutterAddress";
+import { boundaryShares } from "../state/panePlane";
 import { beginGesture } from "../lib/gesture";
 import { commitDomLayout } from "../lib/domLayoutCommit";
 import { listenThisWindow } from "../lib/windowEvents";
@@ -44,7 +43,6 @@ import { useUi } from "../state/ui";
 import {
   type Space,
   type DropZone,
-  type PaneNode,
   type Tab,
   type Pane,
   allGroups,
@@ -52,26 +50,9 @@ import {
   viewDisplayTitle,
 } from "../state/sessions";
 import { useHydration } from "../state/hydration";
-import {
-  projectRailCssRect,
-  projectRailCssSpan,
-  unprojectRailX,
-} from "../lib/railPlacement";
-import {
-  moveOffsetPx,
-  spanMoveAcross,
-  type ArrangementMove,
-} from "../lib/railArrangement";
-import { resizeSplitTree, type SplitTree } from "../state/splitTree";
-import {
-  MIN_PANE_FRAC,
-  minPaneFracForSpan,
-  collectLineGroup,
-  equalizeLineGroup,
-  moveLineGroup,
-  resizeDeltaBounds,
-  type LineMove,
-} from "../state/verticalLines";
+import type { Arrangement, ArrangementMove, Rect } from "../lib/railArrangement";
+import { moveBoundaryPx, rectsOf, zoneAt, type Divider } from "../state/panePlane";
+import { usePlaneBox } from "../state/planeBox";
 import { viewTravelPresentation } from "../lib/viewTravelPresentation";
 import { roundedOrthogonalPath } from "../lib/railLinkShape";
 import {
@@ -80,7 +61,6 @@ import {
   strokeDecoration,
 } from "../lib/nativeDecorations";
 import { dividerSurfaceGeometry } from "../lib/dividerSurfaceGeometry";
-import { paneChromeExtentPx } from "../lib/paneChrome";
 import { stageNativeSurfaceGeometry } from "../framework/wails/nativeSurfaces";
 import { createDividerResizeTransaction } from "../lib/dividerResizeTransaction";
 import { afterFramePaint } from "../lib/afterFramePaint";
@@ -95,18 +75,11 @@ import { appliedResizeSizes, beginResizeGesture, computedResizeSizes, endResizeG
 //
 // Each group = [title bar (drag = move group)] [tab bar (tab drag = move view)] [body] [status bar].
 
-export type Rect = { left: number; top: number; width: number; height: number }; // %
+export type { Rect };
 export interface Cell {
   group: Pane;
+  /** The pane's rect on the plane, in px from the plane's origin. */
   rect: Rect;
-}
-interface Gutter {
-  splitId: string;
-  dir: "row" | "col";
-  index: number;
-  rect: Rect;
-  spanPct: number;
-  sizes: number[];
 }
 
 // 33 = padding 4 + chip 24 + padding 4 + divider 1 — the interior (32) is even, so the chip is even too and
@@ -119,10 +92,8 @@ const CHROME_TOP = HEADER_PX; // Body top offset
 const DRAG_THRESHOLD = 5; // Movement past this many pixels counts as a drag (otherwise a click)
 
 // Panel gap per paneStyle token (half value — 10/12px summed between neighbours, the reference divider's real width).
+// The plane's corridor (split-pane `gap`) is twice this, and the plane is the host inset by it.
 export const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 6 };
-
-// Full rect a cell or slot occupies when maximized (% of the content area).
-const FULL_RECT = { left: 0, top: 0, width: 100, height: 100 };
 
 function cornerFocusPath(rect: DOMRect, strokeWidth: number): string {
   const half = strokeWidth / 2;
@@ -299,19 +270,6 @@ export function NativePaneBorder({
   );
 }
 
-// Content cell layout = the shared machine (computeSplitLayout). Maps the leaf value (Pane) to cell.group.
-// [Deduplication] Shares the same layout and hit test as the left sidebar (splitLayout.ts).
-export function computeLayout(node: PaneNode): {
-  cells: Cell[];
-  gutters: Gutter[];
-} {
-  const { cells, gutters } = computeSplitLayout(node);
-  return {
-    cells: cells.map((c) => ({ group: c.value, rect: c.rect })),
-    gutters,
-  };
-}
-
 const titleOf = (v: Tab | undefined): string => (v ? viewDisplayTitle(v) : "");
 
 // Guard against a duplicate start of a divider resize drag. When the divider is over a gap with no native child, both
@@ -354,49 +312,36 @@ export function isViewContentVisible(
 export const GroupArea = memo(function GroupArea({
   content,
   projectId,
+  arrangement,
   focusedPaneId,
   surfaceActive = true,
-  railStation = 0,
-  displayMaximizedId = undefined,
-  railWidthPx = 0,
-  displayLayout: solvedLayout,
   betweenIds,
   moves,
-  travel,
+  travelFrom,
   replaceGeometry = false,
   nativeSurfaceViewIds = [],
 }: {
   content: Space;
   projectId: string;
+  /**
+   * The solution this render **draws** — cells, dividers, the rail and the maximize fact, from one
+   * solve. Never the raw state: station and rects are decided together, and a maximize flag from
+   * another moment puts a new rect on an old line (measured 2026-07-29: maximizing the browser in a
+   * half-and-half split took exposed nodes from 64 to 0 and blanked the window).
+   */
+  arrangement: Arrangement;
   /** Focused panel of the solution the screen draws — dimming follows the same solution as geometry (omitted = canonical active). */
   focusedPaneId?: string | null;
   /** Whether this space (content) is active — used to resolve effective view visibility (space && tab). */
   // Whether the surface holding this group (workspace + space) is on screen now — the two upper layers of view visibility.
   surfaceActive?: boolean;
-  /** Clean logical line (0..100) of the left rail inserted into the active content panel plane. */
-  railStation?: number;
-  /**
-   * Maximized panel id of the solution this render **draws**. Never the raw state (content.maximizedTabId).
-   *
-   * station and rect are decided together by one solution; if only the maximize flag comes from another point in
-   * time, a new rect lands on an old line, and that combination has the panel crossing the rail, so the projection
-   * throws. A throw during render erases the whole tree, not one screen (measured 2026-07-29: maximizing the browser
-   * in a half-and-half split took exposed nodes from 64 to 0 and blanked the window).
-   *
-   * undefined means the solution did not state it — only then fall back to the state (inactive content has no solution).
-   */
-  displayMaximizedId?: string | null;
-  /** Fixed physical width. 0 keeps the previous continuous plane. */
-  railWidthPx?: number;
-  /** Display layout solved by the solver. Omitted uses the canonical layout (inactive content). */
-  displayLayout?: SplitTree<Pane>;
   /** Move amounts the solution named — present only during a phase. A panel absent here does not move. */
   /** Cells wedged between the rail and the focused panel — they do not move but are blocked, so they dim. */
   betweenIds?: string[];
   moves?: ArrangementMove[];
-  /** The phase's two stations. The move amount of decoration spans (dividers) comes from this — it must arrive with
+  /** The solution the phase departs from. A divider's travel is read against it — it must arrive with
    *  moves in the same phase (with only one, cells glide while the corridor teleports and the screen tears). */
-  travel?: { from: number; to: number };
+  travelFrom?: Arrangement;
   /** Target DOM commit of a structural snap. Replaces with the new structure instead of FLIPping the old rect to the target. */
   replaceGeometry?: boolean;
   /** Out-of-document surface view identities the manifest declared. The boundary above finishes any framework-internal lookup. */
@@ -452,8 +397,8 @@ export const GroupArea = memo(function GroupArea({
   // corresponding React layout commit consumes it; the native input callback may already have ended
   // by then, especially when the window is not focused and React batches the external event.
   const resizeGeometryPending = useRef(false);
-  const displayLayout = solvedLayout ?? content.layout;
-  const focusProjectionApplied = displayLayout !== content.layout;
+  const displayLayout = arrangement.display;
+  const focusProjectionApplied = arrangement.swapped;
   const traveling = (moves?.length ?? 0) > 0;
   const moveOf = (groupId?: string) =>
     groupId ? moves?.find((move) => move.id === groupId) : undefined;
@@ -469,11 +414,11 @@ export const GroupArea = memo(function GroupArea({
   useEffect(() => {
     if (coldSet.size === 0) return;
     const maximizedId2 = content.maximizedTabId ?? null;
-    for (const g of allGroups(displayLayout)) {
+    for (const g of allGroups(content)) {
       const visibleId = maximizedId2 ?? g.activeTabId;
       if (coldSet.has(visibleId)) useHydration.getState().promote(visibleId);
     }
-  }, [coldSet, content.maximizedTabId, displayLayout]);
+  }, [coldSet, content]);
   // Split panel header = fixed to tab mode (2026-06 decision — not exposed in settings). The title mode branch is
   // kept in case it is exposed again: to restore it, switch back to useSettings((s) => s.splitHeaderMode).
   const splitHeaderMode = "tabs" as "title" | "tabs";
@@ -523,7 +468,7 @@ export const GroupArea = memo(function GroupArea({
   // puts real focus on that group's focused pane, regardless of state.
   // Focus inside a view (terminal etc.) is handled by the plugin view itself on mount or activation — the core
   // only activates the group (the core no longer owns the terminal host div).
-  const resizeSplits = useSessions((s) => s.resizeSplits);
+  const moveBoundary = useSessions((s) => s.moveBoundary);
   const pushOverlay = useUi((s) => s.pushOverlay);
   const popOverlay = useUi((s) => s.popOverlay);
   // Workspace root passed to the plugin view (content placement) host.
@@ -532,9 +477,6 @@ export const GroupArea = memo(function GroupArea({
   );
 
   const containerRef = useRef<HTMLDivElement>(null);
-  // The composed width is a measurement — the only point that folds a logical move amount (% and rail-width multiples) into px.
-  // Read only during a phase (no forced layout while parked).
-  const hostWidthPx = traveling ? (containerRef.current?.offsetWidth ?? 0) : 0;
   const [drag, setDrag] = useState<{ kind: "view" | "group"; id: string } | null>(
     null,
   );
@@ -542,63 +484,43 @@ export const GroupArea = memo(function GroupArea({
     null,
   );
 
-  const { cells, gutters } = useMemo(
-    () => computeLayout(displayLayout),
-    [displayLayout],
+  // The plane every space is laid out in, and the geometry this render draws — both from the
+  // library, through the arrangement. Nothing here computes a rect.
+  const planeBox = usePlaneBox((s) => ({ width: s.width, height: s.height, gap: s.gap }));
+  const panesById = useMemo(() => new Map(content.panes.map((g) => [g.id, g])), [content.panes]);
+  const cells: Cell[] = useMemo(
+    () => arrangement.cells.flatMap((cell) => {
+      const group = panesById.get(cell.id);
+      return group ? [{ group, rect: cell.rect }] : [];
+    }),
+    [arrangement.cells, panesById],
   );
-  // Measure provider-owned chrome after each committed layout. A native
-  // surface can be composited outside the document while its declaration
-  // remains in this pane; retaining the last positive measurement makes the
-  // next drag use the same public geometry instead of guessing a plugin size.
-  const paneChromePxRef = useRef(CHROME_TOP + STATUS_PX);
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const fallback = CHROME_TOP + STATUS_PX;
-    paneChromePxRef.current = fallback;
-    const insetPx = Number.parseFloat(
-      getComputedStyle(container).getPropertyValue("--pane-inset"),
-    );
-    const measure = () => {
-      // A surface may report zero while its native receipt is being applied.
-      // Keep the last positive provider extent for this committed layout; a
-      // new layout resets it above before measuring again.
-      paneChromePxRef.current = Math.max(
-        paneChromePxRef.current,
-        paneChromeExtentPx(container, fallback, Number.isFinite(insetPx) ? insetPx : 0),
-      );
-      container.dataset.paneChromePx = String(paneChromePxRef.current);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(container);
-    for (const surface of container.querySelectorAll<HTMLElement>(
-      "[data-native-surface][data-native-surface-id]",
-    )) {
-      observer.observe(surface);
-    }
-    return () => observer.disconnect();
-  }, [content.id, cells.length, nativeSurfaceViewIds.join("\u0000")]);
-  // Maximize (maximizedTabId): one tab takes the whole space. The split tree is
-  // unchanged — only cells and frames are redrawn as that single group (full rect), and the slots of the
-  // remaining groups stay hidden (session preservation: terminal and webview mounts are never broken).
+  const gutters = arrangement.dividers;
+  // Maximize (maximizedTabId): one tab takes the whole space. The plane is unchanged — the
+  // solution draws that one pane alone, and the slots of the remaining panes stay hidden (session
+  // preservation: terminal and webview mounts are never broken).
   // This state is the sole owner of the highlight (replaces divider :hover) — selector subscription (principle 1).
   const gutterHoverKey = useGutterHover((s) => s.key);
-  // What the solution states is the truth. Folding from the state alone while the solution does not yet draw the
-  // maximize makes that render lay a new rect on an old line (see the prop preamble above).
-  const maximizedId =
-    displayMaximizedId === undefined
-      ? (content.maximizedTabId ?? null)
-      : displayMaximizedId === null
-        ? null
-        : (content.maximizedTabId ?? null);
+  // What the solution states is the truth (see the prop preamble above).
+  const maximizedId = arrangement.maximizedId ? (content.maximizedTabId ?? null) : null;
   const maxCell = maximizedId
-    ? (cells.find((c) => c.group.tabs.some((v) => v.id === maximizedId)) ??
-      null)
+    ? (cells.find((c) => c.group.tabs.some((v) => v.id === maximizedId)) ?? null)
     : null;
-  const displayCells = maxCell
-    ? [{ group: maxCell.group, rect: FULL_RECT }]
-    : cells;
+  const displayCells = cells;
+  // A pane hidden by the maximize keeps the rect it has on the space's own plane, so nothing
+  // reflows when it comes back.
+  const hiddenRects = useMemo(
+    () => (maxCell ? rectsOf(content.layout, planeBox) : null),
+    [maxCell, content.layout, planeBox],
+  );
+  const slotRectOf = (groupId: string): Rect => {
+    const shown = cells.find((c) => c.group.id === groupId);
+    if (shown) return shown.rect;
+    const hidden = hiddenRects?.get(groupId);
+    return hidden
+      ? { left: hidden.x, top: hidden.y, width: hidden.w, height: hidden.h }
+      : { left: 0, top: 0, width: 0, height: 0 };
+  };
   // One record per phase, written after the commit so the rail surface count is what the document
   // holds rather than what this render intended. The three rail claims — the surface gone during a
   // transition and back exactly once after, a PIN click moving nothing, a FLOW station on the
@@ -608,8 +530,8 @@ export const GroupArea = memo(function GroupArea({
   // motion; anything extra is a render that ends one that was playing.
   const geometrySignature = layoutGeometrySignature({
     traveling,
-    railStation,
-    railWidthPx,
+    railStation: arrangement.station,
+    railWidthPx: arrangement.rail?.width ?? 0,
     paneInset: inset,
     replaceGeometry,
     cells: displayCells.map((c) => ({ id: c.group.id, rect: c.rect })),
@@ -630,14 +552,14 @@ export const GroupArea = memo(function GroupArea({
 
   const phaseKey = [
     traveling ? "traveling" : "settled",
-    railStation,
+    arrangement.station,
     displayCells.map((c) => `${c.group.id}:${c.rect.left},${c.rect.top},${c.rect.width},${c.rect.height}`).join("|"),
   ].join("\u0000");
   useEffect(() => {
     recordRailPhase({
       phase: traveling ? "traveling" : "settled",
-      station: railStation,
-      cleanLines: cleanRailLines(displayCells.map((c) => c.rect)),
+      station: arrangement.station,
+      cleanLines: arrangement.cleanLines,
       cells: displayCells.map((c) => ({ id: c.group.id, rect: c.rect })),
     });
     // phaseKey collapses the arrangement into one string: a record per render would write the same
@@ -650,7 +572,7 @@ export const GroupArea = memo(function GroupArea({
   // Commit effective view visibility (surface active && tab active) — solely owned by the core (lib/viewPark.surfaceShown).
   // It runs after the render commit (effect), when the parking style is already applied, and commit is idempotent, so cost is paid only on change.
   useEffect(() => {
-    for (const { group } of cells) {
+    for (const group of content.panes) {
       for (const v of group.tabs) {
         const tabActive = maxCell ? v.id === maximizedId : v.id === group.activeTabId;
         commitViewPresentation(
@@ -663,12 +585,16 @@ export const GroupArea = memo(function GroupArea({
 
   const cellsRef = useRef(cells);
   cellsRef.current = cells;
+  const displayRef = useRef(displayLayout);
+  displayRef.current = displayLayout;
+  const planeBoxRef = useRef(planeBox);
+  planeBoxRef.current = planeBox;
 
-  // Pointer coordinates → which zone of which cell. The title, tab and status areas are center (move);
-  // the outer ¼ of the body is a split in that direction.
+  // Pointer coordinates → which zone of which pane. The title, tab and status areas are centre
+  // (move); the outer ¼ of the body is a split in that direction. The plane answers (zoneAt); the
+  // pointer is taken to the plane's origin, which is the container inset by the pane inset.
   // r is the container rect captured once at drag start — the layout is static during a tab drag, so
   // getBoundingClientRect (forced layout) is not re-read on every tick (principle 5).
-  // Hit test = the shared machine (hitTestCells). Content header (HEADER_PX) and status bar (STATUS_PX) offsets injected.
   const hitTest = useCallback(
     (
       clientX: number,
@@ -677,36 +603,21 @@ export const GroupArea = memo(function GroupArea({
       sourceGroupId?: string,
       selfCenterOnly = true,
     ): { groupId: string; zone: DropZone } | null => {
-      const physicalX = clientX - r.left;
-      const logicalX = unprojectRailX(
-        physicalX,
-        r.width,
-        railWidthPx,
-        railStation,
-      );
-      if (logicalX === null) return null;
-      const logicalRect = {
-        left: r.left,
-        top: r.top,
-        width: Math.max(0, r.width - railWidthPx),
-        height: r.height,
-      } as DOMRect;
-      const res = hitTestCells(
-        r.left + logicalX,
-        clientY,
-        logicalRect,
-        cellsRef.current.map((c) => ({ value: c.group, rect: c.rect })),
-        (g) => g.id,
+      const hit = zoneAt(
+        displayRef.current,
+        planeBoxRef.current,
+        clientX - r.left - inset,
+        clientY - r.top - inset,
         {
-          chromeTop: CHROME_TOP,
-          statusPx: STATUS_PX,
-          sourceId: sourceGroupId,
-          selfCenterOnly,
+          headerPx: CHROME_TOP,
+          footerPx: STATUS_PX,
+          centreOnly: selfCenterOnly ? sourceGroupId : undefined,
         },
       );
-      return res ? { groupId: res.id, zone: res.zone } : null;
+      if (!hit) return null;
+      return { groupId: hit.id, zone: hit.zone === "centre" ? "center" : hit.zone };
     },
-    [railStation, railWidthPx],
+    [inset],
   );
 
   // Pointer drag start (title bar = group, tab = view). Past the threshold it is a drag, otherwise a click (switch).
@@ -801,40 +712,33 @@ export const GroupArea = memo(function GroupArea({
     [startDrag],
   );
 
-  // Double click = split the two adjacent areas evenly (sum preserved — other siblings' ratios unchanged). A row
-  // divider follows the no-vertical-split proposition — the whole line group moves to the equalization target x
-  // (intersection clamp) and applies in one commit (resizeSplits), so the line does not tear. col is outside the proposition — adjacent pair only.
-  const onGutterDoubleClick = (d: Gutter) => () => {
-    if (d.dir === "row") {
-      resizeSplits(
-        projectId,
-        equalizeLineGroup(gutters, d.splitId, d.index).moves,
-      );
-      return;
-    }
-    // Equalize through a command — name the gutter by its address (the internal split id never leaves,
-    // IDENTITY §4). The renderer holds the tree, so it converts to named coordinates on the spot.
-    const owner = gutterOwnerOf(displayLayout, d.splitId, d.index, (g) => g.id);
+  // Double click = centre the boundary between its two neighbours, through a command that names the
+  // gutter by its address (the line index never leaves, IDENTITY §4).
+  const onGutterDoubleClick = (d: Divider) => () => {
+    const owner = gutterOwnerOf(displayLayout, d.axis, d.line);
     if (owner) {
       void execute("pane.equalize", { pane: owner.pane, edge: owner.side }, {});
     }
   };
 
-  const onGutterDown = (d: Gutter) => (e: React.MouseEvent) => {
+  const onGutterDown = (d: Divider) => (e: React.MouseEvent) => {
     e.preventDefault();
-    // Pair presentation and behavior in one place — preview runs every frame (one commit per line group),
-    // commit runs once on landing (through a command). Forcing the pair makes "the screen changed but the
-    // ledger has nothing" structurally impossible.
-    const gesture = beginGesture<number[]>({
-      preview: (sizes) => commitResize([{ splitId: d.splitId, sizes }]),
-      commit: (sizes) => {
-        // Name the gutter by its address — the internal split id never leaves (IDENTITY §4).
-        const owner = gutterOwnerOf(displayLayout, d.splitId, d.index, (g) => g.id);
-        const pair = sizes[d.index] + sizes[d.index + 1];
-        if (owner && pair > 0) {
+    // Pair presentation and behavior in one place — preview runs every frame (one boundary, one
+    // commit), commit runs once on landing (through a command). Forcing the pair makes "the screen
+    // changed but the ledger has nothing" structurally impossible.
+    const gesture = beginGesture<number>({
+      preview: (px) => commitResize(px),
+      commit: (px) => {
+        // Name the gutter by its address — the line index never leaves (IDENTITY §4). The ratio
+        // is the slot before the boundary over the two slots that meet there, from where the
+        // plane put the line.
+        const owner = gutterOwnerOf(displayLayout, d.axis, d.line);
+        const landed = moveBoundaryPx(displayLayout, planeBoxRef.current, d.axis, d.line, px);
+        if (owner && landed) {
+          const [before, after] = boundaryShares(landed, d.axis, d.line);
           void execute(
             "pane.resize",
-            { pane: owner.pane, edge: owner.side, ratio: sizes[d.index] / pair },
+            { pane: owner.pane, edge: owner.side, ratio: before / (before + after) },
             {},
           );
         }
@@ -843,74 +747,42 @@ export const GroupArea = memo(function GroupArea({
     if (ms.resizeDragActive) return; // A duplicate start (DOM + native composition) is ignored.
     const cont = containerRef.current;
     if (!cont) return;
-    const contRect = cont.getBoundingClientRect();
-    const totalPx =
-      d.dir === "row"
-        ? Math.max(0, contRect.width - railWidthPx)
-        : contRect.height;
-    const splitPx = (totalPx * d.spanPct) / 100;
-    if (splitPx <= 0) return;
-    // The percentage floor alone is insufficient for a short vertical split:
-    // the pane can retain 8% while its header and status consume the whole
-    // box, leaving a zero-height native viewport. Derive the floor from the
-    // same chrome contract used by the pane and keep one body pixel.
-    const minPaneFrac =
-      d.dir === "col"
-        ? minPaneFracForSpan(
-            splitPx,
-            paneChromePxRef.current,
-          )
-        : MIN_PANE_FRAC;
     ms.resizeDragActive = true; // Only after the real drag start is confirmed (the early-return above does not lock).
-    beginResizeGesture(gutterKey(d) ?? `${d.splitId}:${d.index}`, e.clientX, e.clientY);
+    beginResizeGesture(gutterKey(d) ?? d.key, e.clientX, e.clientY);
     emitResizeGesture(true);
-    const startPos = d.dir === "row" ? e.clientX : e.clientY;
-    const startSizes = [...d.sizes];
-    const i = d.index;
-    // No-vertical-split proposition — at drag start a row divider takes every segment on the same x line as one
-    // group (solely owned by verticalLines) and moves them together at the same x throughout. A line only moves;
-    // it never splits. col is outside the proposition — the existing adjacent-pair delta exchange applies.
-    const lineGroup =
-      d.dir === "row" ? collectLineGroup(gutters, d.splitId, d.index) : [];
-    const startX = d.rect.left;
+    const startPos = d.axis === "x" ? e.clientX : e.clientY;
+    // The boundary's own px position at the start; the pointer's delta is added to it. The plane
+    // keeps every pane at its floor (split-pane minSize), so no clamp is computed here.
+    const startLine = d.axis === "x" ? d.x + d.w / 2 : d.y + d.h / 2;
     // Store commits are capped at once per frame (principles 3 and 4) — mousemove exceeds 60Hz.
-    // The whole group lands in one commit (resizeSplits) — the line is not fragmented even in an intermediate state.
-    const resizeTransaction = createDividerResizeTransaction<LineMove[]>({
+    const resizeTransaction = createDividerResizeTransaction<number>({
       beforeStage: afterFramePaint,
-      stage: async (next) => {
-        const targetLayout = next.reduce(
-          (layout, move) => resizeSplitTree(layout, move.splitId, move.sizes),
-          displayLayout,
-        );
-        const targetCells = computeLayout(targetLayout).cells.map((cell) => ({
-          id: cell.group.id,
-          rect: cell.rect,
-        }));
-        const frames = dividerSurfaceGeometry(cont, targetCells, railStation, railWidthPx);
+      stage: async (px) => {
+        const target = moveBoundaryPx(displayLayout, planeBoxRef.current, d.axis, d.line, px);
+        if (!target) return;
+        const rects = rectsOf(target, planeBoxRef.current);
+        const targetCells = cellsRef.current.map((cell) => {
+          const r = rects.get(cell.group.id);
+          return {
+            id: cell.group.id,
+            rect: r ? { left: r.x, top: r.y, width: r.w, height: r.h } : cell.rect,
+          };
+        });
+        const frames = dividerSurfaceGeometry(cont, targetCells);
         if (frames.size > 0) await stageNativeSurfaceGeometry(frames);
       },
-      apply: (next) => commitDomLayout(() => {
-        appliedResizeSizes(next[0]?.sizes ?? []);
+      apply: (px) => commitDomLayout(() => {
+        appliedResizeSizes([px]);
         resizeGeometryPending.current = true;
-        resizeSplits(projectId, next);
+        moveBoundary(projectId, content.id, { axis: d.axis, line: d.line }, { px });
       }),
     });
-    const commitResize = rafThrottle((moves: LineMove[]) => resizeTransaction.submit(moves));
+    const commitResize = rafThrottle((px: number) => resizeTransaction.submit(px));
     const onMove = (ev: Pick<MouseEvent, "clientX" | "clientY">) => {
       moveResizeGesture(ev.clientX, ev.clientY);
-      if (d.dir === "row") {
-        const targetX = startX + ((ev.clientX - startPos) / totalPx) * 100;
-        commitResize(moveLineGroup(lineGroup, targetX).moves);
-        return;
-      }
-      let delta = (ev.clientY - startPos) / splitPx;
-      const bounds = resizeDeltaBounds(startSizes, i, minPaneFrac);
-      delta = Math.max(bounds.min, Math.min(bounds.max, delta));
-      const sizes = [...startSizes];
-      sizes[i] = startSizes[i] + delta;
-      sizes[i + 1] = startSizes[i + 1] - delta;
-      computedResizeSizes(sizes);
-      gesture.move(sizes);
+      const px = startLine + ((d.axis === "x" ? ev.clientX : ev.clientY) - startPos);
+      computedResizeSizes([px]);
+      gesture.move(px);
     };
     let ended = false;
     let stopNativeInput = () => {};
@@ -918,14 +790,13 @@ export const GroupArea = memo(function GroupArea({
       if (ended) return;
       ended = true;
       endResizeGesture();
-      // Settle not only the store's final ratio but the React DOM that consumed it. Emitting the end right after a
-      // plain rafThrottle.flush makes the Tauri consumer read the departure slot rect while the DOM widens only on
-      // the next commit, leaving a black gap on the release frame. This contract is the meaning of the end event,
-      // not a framework workaround — Electron sees the same final DOM with no separate compositing.
+      // Settle not only the store's final position but the React DOM that consumed it. Emitting the end right after a
+      // plain rafThrottle.flush makes the native consumer read the departure slot rect while the DOM widens only on
+      // the next commit, leaving a black gap on the release frame. This contract is the meaning of the end event.
       // The landing command is part of the same geometry transaction as the last preview. React batches
       // external event updates, so issuing it after flushSync lets the resize phase close before the command's
-      // render and turns the landing into an ordinary FLIP. A live slot then starts at its previous top while
-      // taking the new height. Commit both writes while resize motion still owns immediate geometry.
+      // render and turns the landing into an ordinary FLIP. Commit both writes while resize motion still owns
+      // immediate geometry.
       commitResize.flush();
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp as unknown as EventListener);
@@ -949,57 +820,35 @@ export const GroupArea = memo(function GroupArea({
         void onUp();
       }
     });
-    document.body.style.cursor = d.dir === "row" ? "col-resize" : "row-resize";
+    document.body.style.cursor = d.axis === "x" ? "col-resize" : "row-resize";
   };
 
   const hoverCell = hover && cells.find((c) => c.group.id === hover.groupId);
 
-  // Internal coordinates (splitId, index) → the canonical gutter address. Convert only here, where the tree is at
-  // hand, and write only named coordinates into the DOM. When it does not resolve (the moment the tree and the
-  // divider list are one frame apart), build no address — a wrong address is worse than none.
-  const gutterKey = (d: Gutter): string | undefined => {
-    const owner = gutterOwnerOf(displayLayout, d.splitId, d.index, (g) => g.id);
+  // Line index → the canonical gutter address. Convert only here, where the plane is at hand, and
+  // write only named coordinates into the DOM. When it does not resolve (a border), build no address.
+  const gutterKey = (d: Divider): string | undefined => {
+    const owner = gutterOwnerOf(displayLayout, d.axis, d.line);
     return owner ? gutterAddress(owner.pane, owner.side) : undefined;
   };
 
-  // Cell coordinates — pass only 4 CSS variables; a single CSS rule owns the arithmetic (calc).
-  // (Removes the legacy that assembled and scattered coordinate strings every render — the dimension constants are
-  // --header-h/--status-h/--pane-inset, injected once by the container below, as the single source.)
-  // Real-move decision — only a panel the solution told to move is animated. A whole-subtree phase selector put even
-  // zero-delta elements onto a compositing layer with animation + will-change and took them off again, causing a
-  // re-raster every phase, and that re-raster showed as a twitch in the DOM (address bar included) (a real incident).
+  // Cell coordinates — pass only 4 CSS variables in px; a single CSS rule owns the offset to the
+  // plane's origin (the pane inset). Real-move decision — only a panel the solution told to move is
+  // animated. A whole-subtree phase selector put even zero-delta elements onto a compositing layer
+  // with animation + will-change and took them off again, causing a re-raster every phase, and that
+  // re-raster showed as a twitch in the DOM (address bar included) (a real incident).
   const flipMoves = (groupId?: string): boolean => !!moveOf(groupId);
 
-  /** Move amount → start offset (px). Composition happens only here (interpolating the two axes separately diverges).
-   *  Without a measured container width (first mount during a phase) the layout-swap term cannot be folded — applying
-   *  only half slides the wrong way, so that phase does not glide (snap). */
-  const flipOffsetPx = (groupId?: string): number => {
-    const move = moveOf(groupId);
-    if (!move) return 0;
-    if (hostWidthPx <= 0 && Math.abs(move.dLeftPct) > 0.05) return 0;
-    return moveOffsetPx(move, hostWidthPx, railWidthPx);
-  };
+  /** Move amount → start offset (px). */
+  const flipOffsetPx = (groupId?: string): number => moveOf(groupId)?.dLeft ?? 0;
 
-  const cellVars = (rect: {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  }, groupId?: string) => {
-    const projected =
-      railWidthPx > 0
-        ? projectRailCssRect(rect, railStation)
-        : { railLeft: 0, railWidth: 0 };
-    return ({
-      "--l": `${rect.left}%`,
-      "--t": `${rect.top}%`,
-      "--w": `${rect.width}%`,
-      "--h": `${rect.height}%`,
-      "--rail-dx": `${projected.railLeft * railWidthPx}px`,
-      "--rail-dw": `${projected.railWidth * railWidthPx}px`,
-      "--flip-x": `${flipOffsetPx(groupId)}px`,
-    }) as React.CSSProperties;
-  };
+  const cellVars = (rect: Rect, groupId?: string) => ({
+    "--l": `${rect.left}px`,
+    "--t": `${rect.top}px`,
+    "--w": `${rect.width}px`,
+    "--h": `${rect.height}px`,
+    "--flip-x": `${flipOffsetPx(groupId)}px`,
+  }) as React.CSSProperties;
 
   const lightingFocusId = focusedPaneId ?? content.activePaneId;
   const lightingFocusCell = displayCells.find((c) => c.group.id === lightingFocusId);
@@ -1017,33 +866,31 @@ export const GroupArea = memo(function GroupArea({
       amount: dimBlocked,
     }));
 
-  // A decoration span (divider, drop indicator) is part of the corridor, not a panel — its only source of move
-  // amount is the change of insertion point, and the solver's own mapping (spanMoveAcross) owns it.
-  const spanFlipPx = (rect: Rect): number =>
-    travel
-      ? moveOffsetPx(
-          spanMoveAcross(rect, travel.from, travel.to),
-          hostWidthPx,
-          railWidthPx,
-        )
-      : 0;
-  const spanMovesPx = (rect: Rect): boolean => Math.abs(spanFlipPx(rect)) > 0.5;
-  const gutterVars = (d: Gutter) => {
-    if (railWidthPx <= 0) return {};
-    if (d.dir === "row") {
-      const after = d.rect.left > railStation ? 1 : 0;
-      return {
-        "--rail-dx": `${(after - d.rect.left / 100) * railWidthPx}px`,
-        "--flip-x": `${spanFlipPx(d.rect)}px`,
-      } as React.CSSProperties;
+  // A divider is part of the corridor, not a panel — it travels when the boundary it stands on
+  // moved between the departure solution and this one. Read by address, because a line's index
+  // shifts when the rail moves and the address does not.
+  const departedGutters = useMemo(() => {
+    if (!travelFrom) return null;
+    const byAddress = new Map<string, Divider>();
+    for (const d of travelFrom.dividers) {
+      const owner = gutterOwnerOf(travelFrom.display, d.axis, d.line);
+      if (owner) byAddress.set(gutterAddress(owner.pane, owner.side), d);
     }
-    const projected = projectRailCssSpan(d.rect, railStation);
-    return {
-      "--rail-dx": `${projected.railLeft * railWidthPx}px`,
-      "--rail-dw": `${projected.railWidth * railWidthPx}px`,
-      "--flip-x": `${spanFlipPx(d.rect)}px`,
-    } as React.CSSProperties;
+    return byAddress;
+  }, [travelFrom]);
+  const spanFlipPx = (d: Divider): number => {
+    const key = gutterKey(d);
+    const before = key ? departedGutters?.get(key) : undefined;
+    return before ? before.x - d.x : 0;
   };
+  const spanMovesPx = (d: Divider): boolean => Math.abs(spanFlipPx(d)) > 0.5;
+  const gutterVars = (d: Divider) => ({
+    left: `${inset + d.x}px`,
+    top: `${inset + d.y}px`,
+    width: `${d.w}px`,
+    height: `${d.h}px`,
+    "--flip-x": `${spanFlipPx(d)}px`,
+  }) as React.CSSProperties;
 
   return (
     <div
@@ -1057,6 +904,7 @@ export const GroupArea = memo(function GroupArea({
             : "canonical"
       }
       data-focused-pane={content.activePaneId}
+      data-station={arrangement.station}
       data-maximized-tab={content.maximizedTabId ?? ""}
       data-traveling={traveling ? "true" : "false"}
       data-moving-panes={(moves ?? []).map((move) => move.id).join(" ")}
@@ -1201,7 +1049,7 @@ export const GroupArea = memo(function GroupArea({
       {/* ── Persistent body layer: keyed by viewId → no remount on a move. This layer alone has a
           legitimate reason to position (an editor or terminal session survives a move between
           groups). Body area coordinates are computed by CSS rules (cell variables + size variables). ── */}
-      {cells.flatMap(({ group, rect }) =>
+      {content.panes.flatMap((group) =>
         group.tabs.map((view) => {
           // While maximized only the maximized view is visible (full rect) — the rest stay hidden.
           const contentVisible = isViewContentVisible(
@@ -1218,7 +1066,7 @@ export const GroupArea = memo(function GroupArea({
             overlayedPane(group.id),
             traveling,
           );
-          const slotRect = maxCell && contentVisible ? FULL_RECT : rect;
+          const slotRect = slotRectOf(group.id);
           // B4 restore hydration gate — a cold view (restored but not yet visible) defers its body mount
           // (spreads concurrent PTY spawns). The moment it becomes visible, or the idle chain, promotes it. Normally
           // cold is empty, so the gate costs 0. The slot div itself always renders (atomic appearance, stable address).
@@ -1314,15 +1162,14 @@ export const GroupArea = memo(function GroupArea({
           moving: flipMoves(lightingFocusCell.group.id),
         } : undefined}
         blocked={blockedLighting}
-        exempt={railWidthPx > 0 ? [railLightingExemption(railWidthPx, railStation)] : []}
+        exempt={arrangement.rail ? [railLightingExemption(arrangement.rail, inset)] : []}
         content={lightingContent}
       />
 
       {/* ── Resizer (the split boundary — an element whose essence is positioning). While maximized there is no boundary ── */}
-      {!maxCell &&
-        gutters.map((d) => (
+      {gutters.map((d) => (
         <div
-          key={`gutter-${d.splitId}-${d.index}`}
+          key={gutterKey(d) ?? d.key}
           data-gutter-key={gutterKey(d)}
           data-node={gutterKey(d)}
           data-wv-occlusion="pane-gutter"
@@ -1332,24 +1179,10 @@ export const GroupArea = memo(function GroupArea({
           // cannot be turned on or off from a script, so it is neither drivable nor verifiable — moving ownership
           // into state solves both problems together.
           data-hover={gutterHoverKey === gutterKey(d) ? "1" : undefined}
-          className={`pane-gutter ${d.dir}${spanMovesPx(d.rect) ? " flip-move" : ""}`}
+          className={`pane-gutter ${d.axis === "x" ? "row" : "col"}${spanMovesPx(d) ? " flip-move" : ""}`}
           onPointerEnter={() => useGutterHover.getState().set(gutterKey(d) ?? null)}
           onPointerLeave={() => useGutterHover.getState().set(null)}
-          style={
-            d.dir === "row"
-              ? {
-                  left: `calc(${d.rect.left}% + var(--rail-dx, 0px))`,
-                  top: `${d.rect.top}%`,
-                  height: `${d.rect.height}%`,
-                  ...gutterVars(d),
-                }
-              : {
-                  left: `calc(${d.rect.left}% + var(--rail-dx, 0px))`,
-                  top: `${d.rect.top}%`,
-                  width: `calc(${d.rect.width}% + var(--rail-dw, 0px))`,
-                  ...gutterVars(d),
-                }
-          }
+          style={gutterVars(d)}
           onMouseDown={onGutterDown(d)}
           onDoubleClick={onGutterDoubleClick(d)}
           title={t("divider.equalize")}

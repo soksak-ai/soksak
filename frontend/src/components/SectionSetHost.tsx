@@ -6,7 +6,6 @@
 // keep-alive: a view opened once stays mounted (display toggle).
 
 import { execute } from "../commands/registry";
-import { gutterOwnerOf } from "../lib/gutterAddress";
 import { beginGesture } from "../lib/gesture";
 import { CHROME_BANDS } from "../lib/chromeBands";
 import {
@@ -23,6 +22,7 @@ import { ViewBadge } from "./ViewBadge";
 import { rafThrottle } from "../lib/rafThrottle";
 import {
   computeSplitLayout,
+  treeGutterOwnerOf,
   hitTestCells,
   cellVars,
   type DropZone,
@@ -242,7 +242,7 @@ export const SectionSetHost = memo(function SectionSetHost({
         useSessions.getState().resizeSidebar(workspace.id, region, d.splitId, sizes),
       commit: (sizes) => {
         // Address the gutter by name — the internal split id never goes outside (IDENTITY §4).
-        const owner = gutterOwnerOf(layout, d.splitId, d.index, cellId);
+        const owner = treeGutterOwnerOf(layout, d.splitId, d.index, cellId);
         const key = owner?.pane.split("|")[0];
         if (key) {
           void execute(

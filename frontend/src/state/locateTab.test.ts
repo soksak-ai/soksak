@@ -2,6 +2,7 @@
 // The parameter name paneId is the old name on the plugin contract surface and stays for now (docs/NAMING.md migration table).
 import { describe, expect, it } from "vitest";
 import { locateTab, type Workspace, type Tab } from "./sessions";
+import { singlePane } from "./panePlane";
 
 // Plugin terminal view: PTY key = tab id (single key since the core terminal was removed).
 const term = (viewId: string): Tab => ({
@@ -22,10 +23,8 @@ const tab = (id: string, tabs: Tab[]): Workspace => ({
     {
       id: "spc-aaaaaa",
       title: "1",
-      layout: {
-        type: "leaf",
-        value: { id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" },
-      },
+      panes: [{ id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" }],
+      layout: singlePane("pan-aaaaaa"),
       activePaneId: "pan-aaaaaa",
     },
   ],

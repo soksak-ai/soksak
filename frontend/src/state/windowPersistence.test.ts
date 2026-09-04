@@ -7,23 +7,16 @@ import {
   upsertManifest,
   type WindowManifest,
 } from "./windowPersistence";
-import type { Workspace, PaneNode } from "./sessions";
+import type { Workspace, Pane } from "./sessions";
+import { singlePane } from "./panePlane";
 
-
-const leafGroup = (gid: string, vid: string): PaneNode => ({
-  type: "leaf",
-  value: {
-    id: gid,
-    activeTabId: vid,
-    tabs: [
-      { id: vid, kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-fixture", view: "content" },
-    ],
-  },
+const leafGroup = (gid: string, vid: string): Pane => ({
+  id: gid,
+  activeTabId: vid,
+  tabs: [
+    { id: vid, kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-fixture", view: "content" },
+  ],
 });
-
-let sid = 0;
-const newSplitId = () => `spl-${sid++}`;
-void newSplitId;
 
 const proj = (id: string, root: string): Workspace => ({
   id,
@@ -32,12 +25,15 @@ const proj = (id: string, root: string): Workspace => ({
   regionOpen: { left: false, rail: true, right: false },
   sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, rail: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   activeSpaceId: "spc-aaaaaa",
-  spaces: [{ id: "spc-aaaaaa", title: "1", activePaneId: "pan-aaaaaa", layout: leafGroup("pan-aaaaaa", "tab-aaaaaa") }],
+  spaces: [{
+    id: "spc-aaaaaa", title: "1", activePaneId: "pan-aaaaaa",
+    panes: [leafGroup("pan-aaaaaa", "tab-aaaaaa")], layout: singlePane("pan-aaaaaa"),
+  }],
 });
 
 describe("snapshot/restore round trip per window", () => {
   it("workspaces and activeId are preserved", () => {
-    sid = 0;
+
     const workspaces = [proj("wsp-aaaaaa", "/a"), proj("wsp-bbbbbb", "/b")];
     const snap = snapshotWindow(workspaces, "wsp-bbbbbb");
     const back = restoreWindow(snap);
@@ -47,7 +43,7 @@ describe("snapshot/restore round trip per window", () => {
   });
 
   it("an activeId absent from the restored set falls back to the first workspace", () => {
-    sid = 0;
+
     const snap = snapshotWindow([proj("wsp-aaaaaa", "/a")], "tZ");
     expect(restoreWindow(snap).activeId).toBe("wsp-aaaaaa");
   });

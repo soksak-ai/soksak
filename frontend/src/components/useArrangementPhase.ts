@@ -38,34 +38,12 @@ import {
   removeLayoutArrangementPhase,
 } from "../lib/layoutArrangementPhase";
 import { emitPluginEvent } from "../plugins/hooks";
-import type { SplitTree } from "../state/splitTree";
 
-function valuesById<L extends { id: string }>(tree: SplitTree<L>, values = new Map<string, L>()): Map<string, L> {
-  if (tree.type === "leaf") values.set(tree.value.id, tree.value);
-  else for (const child of tree.children) valuesById(child, values);
-  return values;
-}
-
-function rebindLayoutValues<L extends { id: string }>(tree: SplitTree<L>, values: Map<string, L>): SplitTree<L> {
-  if (tree.type === "leaf") return { ...tree, value: values.get(tree.value.id) ?? tree.value };
-  return { ...tree, children: tree.children.map((child) => rebindLayoutValues(child, values)) };
-}
-
-function rebindArrangementContent<L extends { id: string }>(
-  displayed: Arrangement<L>,
-  current: Arrangement<L>,
-): Arrangement<L> {
-  return {
-    ...displayed,
-    displayLayout: rebindLayoutValues(displayed.displayLayout, valuesById(current.displayLayout)),
-  };
-}
-
-export interface ArrangementPhase<L> {
+export interface ArrangementPhase {
   /** The arrangement on screen now — the single truth for render (during a phase it holds the phase target). */
-  displayed: Arrangement<L> | null;
+  displayed: Arrangement | null;
   /** Phase start arrangement. Equal to displayed while stopped. */
-  from: Arrangement<L> | null;
+  from: Arrangement | null;
   /** Only panels that actually move. Empty means this is not a phase. */
   moves: ArrangementMove[];
   traveling: boolean;
@@ -88,9 +66,9 @@ export interface ArrangementPhase<L> {
   rebase: () => void;
 }
 
-interface PhaseState<L> {
-  from: Arrangement<L> | null;
-  displayed: Arrangement<L> | null;
+interface PhaseState {
+  from: Arrangement | null;
+  displayed: Arrangement | null;
   scopeId: string;
   contentKey: string;
   /** Journey mode frozen at start. Meaningless while stopped. */
@@ -116,7 +94,7 @@ interface PhaseState<L> {
  * not move is applied below **immediately, without a journey**, so an exact signature takes that
  * path.
  */
-function arrangementKey<L>(a: Arrangement<L> | null): string {
+function arrangementKey(a: Arrangement | null): string {
   if (!a) return "";
   const cells = a.cells
     .map((c) => [
@@ -138,8 +116,8 @@ function arrangementKey<L>(a: Arrangement<L> | null): string {
   ].join("|");
 }
 
-export function useArrangementPhase<L extends { id: string }>(
-  current: Arrangement<L> | null,
+export function useArrangementPhase(
+  current: Arrangement | null,
   /** Plane identity (space + the clean line set). A split or merge that changes the line set makes a new plane. */
   scopeId: string,
   /**
@@ -154,21 +132,21 @@ export function useArrangementPhase<L extends { id: string }>(
    * Evaluated **once** at phase start and the answer is fixed for the whole journey — re-evaluating
    * each render changes the representation shape mid-phase. Omitted means always glide.
    */
-  canGlide?: (from: Arrangement<L>, to: Arrangement<L>) => boolean,
+  canGlide?: (from: Arrangement, to: Arrangement) => boolean,
   /**
    * Prepares framework-external surfaces before the target DOM commit. `snap` places the DOM in one
    * step once preparation completes; `glide` starts the existing FLIP. Omitted means a DOM glide
    * with no external surface to prepare.
    */
   prepareTravel?: (
-    from: Arrangement<L>,
-    to: Arrangement<L>,
+    from: Arrangement,
+    to: Arrangement,
   ) => Promise<PreparedLayoutTransition>,
   /** ACK key for the workspace-scoped layout revision published by the state mutation. */
   settlementKey?: string,
   domCandidateParticipant?: LayoutPresentationCandidateParticipant,
-): ArrangementPhase<L> {
-  const [phase, setPhase] = useState<PhaseState<L>>({
+): ArrangementPhase {
+  const [phase, setPhase] = useState<PhaseState>({
     from: current,
     displayed: current,
     scopeId,
@@ -193,10 +171,10 @@ export function useArrangementPhase<L extends { id: string }>(
   const latestPrepareTravel = useRef(prepareTravel);
   latestPrepareTravel.current = prepareTravel;
   /** Mode decision at journey start — this is the only place that evaluates it. */
-  const decideGlide = (from: Arrangement<L> | null, to: Arrangement<L> | null): boolean =>
+  const decideGlide = (from: Arrangement | null, to: Arrangement | null): boolean =>
     from && to ? (latestCanGlide.current?.(from, to) ?? true) : true;
   /** Newest solution that arrived mid-travel (depth 1) — the display switches after the journey ends. */
-  const queued = useRef<Arrangement<L> | null>(null);
+  const queued = useRef<Arrangement | null>(null);
   const preparation = useRef({ serial: 0, key: "" });
   const lastFailure = useRef<{ targetKey: string; message: string } | null>(null);
   const pendingCommit = useRef<{
@@ -275,7 +253,7 @@ export function useArrangementPhase<L extends { id: string }>(
 
   useLayoutEffect(() => {
     if (!settlementKey) return;
-    const identity = (value: Arrangement<L> | null, key: string) => ({
+    const identity = (value: Arrangement | null, key: string) => ({
       key,
       station: value?.station ?? null,
       focusId: value?.focusId ?? null,
@@ -319,15 +297,12 @@ export function useArrangementPhase<L extends { id: string }>(
     }
     const contentChanged = phase.contentKey !== contentKey;
     // A tab switch during an active rail journey changes pane content, not that journey's geometry.
-    // Apply the newest pane values to the displayed tree while retaining from/displayed geometry,
-    // timer, transaction intent and settlement ownership. Replacing the whole phase here abandons
-    // the open intent and leaves every later focus change queued behind it.
+    // The phase holds geometry only and the panes' content is read beside it, so the journey keeps
+    // its from/displayed geometry, timer, transaction intent and settlement ownership, and only the
+    // content key moves on. Replacing the whole phase here abandons the open intent and leaves
+    // every later focus change queued behind it.
     if (traveling && contentChanged && currentKey === displayedKey && phase.displayed && current) {
-      setPhase((p) => p.displayed ? {
-        ...p,
-        displayed: rebindArrangementContent(p.displayed, current),
-        contentKey,
-      } : p);
+      setPhase((p) => (p.displayed ? { ...p, contentKey } : p));
       return;
     }
     if (currentKey === displayedKey && !contentChanged && !intentPrepared) return;

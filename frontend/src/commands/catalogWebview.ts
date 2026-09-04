@@ -66,7 +66,7 @@ export function registerWebviewCatalog(): void {
       const orphans = orphanSurfaceLabels(labels, windows);
       const viewIds = new Set<string>();
       for (const t of useSessions.getState().workspaces)
-        for (const c of t.spaces) for (const v of allViews(c.layout)) viewIds.add(v.id);
+        for (const c of t.spaces) for (const v of allViews(c)) viewIds.add(v.id);
       const declarations = nativeSurfaceDomFacts();
       const declarationById = new Map(declarations.map((fact) => [fact.id, fact]));
       const actual = new Set(mine);

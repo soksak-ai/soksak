@@ -4,12 +4,10 @@
 // Rule: every gutter coincides with some pane's right/bottom edge, so pane.resize and
 // pane.equalize address a gutter as (pane, edge). The operation is complete without any word for
 // an internal node.
-//   ① (pane, right) = the gutter at that position in the nearest row ancestor where the pane's
-//      subtree is not the last child.
-//   ② left/top are aliases of the same gutter (the name used from the preceding sibling) — the
-//      reply echoes the canonical form (the first pane's right/bottom).
-//   ③ One gutter moves the two neighboring slots only. The remaining slots are unchanged and the
-//      sum is 1.
+//   ① (pane, right) = the line of the plane the pane's right edge stands on.
+//   ② left/top are aliases of the same line (the name used from the pane beside it) — the reply
+//      echoes the canonical form (the first pane in reading order whose right/bottom stands on it).
+//   ③ One gutter moves the two slots that meet on it only. The remaining lines are unchanged.
 //   ④ No gutter on that edge (the right of the rightmost pane) gives TARGET_NOT_FOUND — no other
 //      gutter is moved by guessing.
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,13 +24,25 @@ vi.mock("../framework", async (importOriginal) => ({
 
 import { registerCatalog } from "./catalog";
 import { execute } from "./registry";
-import { useSessions, type PaneNode, type Workspace, type Pane } from "../state/sessions";
+import { useSessions, type Workspace, type Pane } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
+import { moveBoundary, splitPane, type PlaneState } from "../state/panePlane";
+import { FIXTURE_BOX, rowPlane } from "../test/planes";
 
 const pane = (id: string): Pane => ({ id, tabs: [], activeTabId: "" });
-const leaf = (id: string): PaneNode => ({ type: "leaf", value: pane(id) });
 
-/** row[ A | col[ B / C ] | D ] — nesting is required to observe the "nearest axis ancestor" rule. */
+const close = (values: number[], expected: number[]) => {
+  expect(values).toHaveLength(expected.length);
+  values.forEach((v, i) => expect(v, `line ${i}`).toBeCloseTo(expected[i], 9));
+};
+
+/** [ A | B over C | D ] at 0.5 : 0.3 : 0.2, B over C at 0.6 : 0.4. */
+function fixturePlane(): PlaneState {
+  const row = moveBoundary(rowPlane(["pan-a", "pan-b", "pan-d"]), FIXTURE_BOX, "x", 2, 0.6)!;
+  const stacked = splitPane(row, FIXTURE_BOX, "pan-b", "bottom", "pan-c")!;
+  return moveBoundary(stacked, FIXTURE_BOX, "y", 1, 0.6)!;
+}
+
 function fixture(): Workspace {
   return {
     id: "wsp-aaaaaa",
@@ -44,23 +54,8 @@ function fixture(): Workspace {
       {
         id: "spc-aaaaaa",
         title: "1",
-        layout: {
-          type: "split",
-          id: "spl-aaaaaa",
-          dir: "row",
-          sizes: [0.5, 0.3, 0.2],
-          children: [
-            leaf("pan-a"),
-            {
-              type: "split",
-              id: "spl-bbbbbb",
-              dir: "col",
-              sizes: [0.6, 0.4],
-              children: [leaf("pan-b"), leaf("pan-c")],
-            },
-            leaf("pan-d"),
-          ],
-        },
+        panes: ["pan-a", "pan-b", "pan-c", "pan-d"].map(pane),
+        layout: fixturePlane(),
         activePaneId: "pan-b",
       },
     ],
@@ -68,42 +63,21 @@ function fixture(): Workspace {
   };
 }
 
-/** row[ col[ row[ E | F ] / G ] | H ] — two ancestors share the row axis and neither is the last
- *  child. Only this shape observes whether the "nearest ancestor" rule actually holds (picking the
- *  far ancestor leaks E's right onto the gutter between col and H). */
+/** [ E | F over G | H ] at 0.7 : 0.3, E | F at 0.4 : 0.6 of their column — the line between E and
+ *  F is crossed by G, and the line between F and H is the one G ends on too. */
 function nestedRowFixture(): Workspace {
   const base = fixture();
+  const row = moveBoundary(rowPlane(["pan-e", "pan-h"]), FIXTURE_BOX, "x", 1, 0.7)!;
+  const stacked = splitPane(row, FIXTURE_BOX, "pan-e", "bottom", "pan-g")!;
+  const layout = moveBoundary(splitPane(stacked, FIXTURE_BOX, "pan-e", "right", "pan-f")!, FIXTURE_BOX, "x", 1, 0.4)!;
   return {
     ...base,
     spaces: [
       {
         ...base.spaces[0],
         activePaneId: "pan-e",
-        layout: {
-          type: "split",
-          id: "spl-aaaaaa",
-          dir: "row",
-          sizes: [0.7, 0.3],
-          children: [
-            {
-              type: "split",
-              id: "spl-bbbbbb",
-              dir: "col",
-              sizes: [0.5, 0.5],
-              children: [
-                {
-                  type: "split",
-                  id: "spl-cccccc",
-                  dir: "row",
-                  sizes: [0.4, 0.6],
-                  children: [leaf("pan-e"), leaf("pan-f")],
-                },
-                leaf("pan-g"),
-              ],
-            },
-            leaf("pan-h"),
-          ],
-        },
+        panes: ["pan-e", "pan-f", "pan-g", "pan-h"].map(pane),
+        layout,
       },
     ],
   };
@@ -115,69 +89,56 @@ beforeEach(() => {
   useSessions.setState({ workspaces: [fixture()], activeId: "wsp-aaaaaa" });
 });
 
-const sizesOf = (): number[] => {
-  const layout = useSessions.getState().workspaces[0].spaces[0].layout;
-  if (layout.type !== "split") throw new Error("not a split");
-  return layout.sizes;
-};
-
-const innerSizes = (): number[] => {
-  const layout = useSessions.getState().workspaces[0].spaces[0].layout;
-  if (layout.type !== "split") throw new Error("not a split");
-  const inner = layout.children[1];
-  if (inner.type !== "split") throw new Error("not a nested split");
-  return inner.sizes;
-};
+const xs = (): number[] => useSessions.getState().workspaces[0].spaces[0].layout.xs;
+const ys = (): number[] => useSessions.getState().workspaces[0].spaces[0].layout.ys;
 
 describe("pane.resize — a seam is addressed as a pane edge", () => {
-  it("① the first pane's right seam is the seam of that row slot — only two areas move and the rest stay unchanged", async () => {
+  it("① the first pane's right seam is the line its edge stands on — only two slots move and the rest stay unchanged", async () => {
     const r = await execute("pane.resize", { pane: "pan-a", edge: "right", ratio: 0.25 }, {});
     expect(r.ok).toBe(true);
-    // The two adjacent slots (0.5+0.3=0.8) become 0.25 : 0.75 — the third slot (0.2) is untouched.
-    expect(sizesOf()).toEqual([0.2, 0.6000000000000001, 0.2]);
-    expect(sizesOf().reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10);
+    // The two slots that meet on the line (0.5+0.3=0.8) become 0.25 : 0.75 — the third slot (0.2) is untouched.
+    close(xs(), [0, 0.2, 0.8, 1]);
     expect(r.data).toMatchObject({
       paneId: "pan-a",
       gutter: { pane: "pan-a", edge: "right" },
     });
+    close((r.data as { sizes: number[] }).sizes, [0.25, 0.75]);
   });
 
-  it("② a nested pane's right is the seam of the nearest row ancestor — the canonical pane is the first one in document order", async () => {
-    // pan-b is inside col and that col subtree is not row's last child → gutter 1 of the row.
+  it("② a stacked pane's right is the line both stacked panes end on — the canonical pane is the first in reading order", async () => {
     const r = await execute("pane.resize", { pane: "pan-b", edge: "right", ratio: 0.5 }, {});
     expect(r.ok).toBe(true);
-    expect(sizesOf()).toEqual([0.5, 0.25, 0.25]);
-    // First pane touching that gutter = first child of the col subtree (vertical, so all of them touch).
+    close(xs(), [0, 0.5, 0.75, 1]);
     expect(r.data).toMatchObject({ paneId: "pan-b", gutter: { pane: "pan-b", edge: "right" } });
   });
 
   it("② left is an alias for the same seam — it answers with the canonical pane and gives the ratio to the calling pane's side", async () => {
     const r = await execute("pane.resize", { pane: "pan-d", edge: "left", ratio: 0.25 }, {});
     expect(r.ok).toBe(true);
-    // pan-d is the trailing slot (0.2). Its sum with the preceding slot, 0.5, becomes 0.375 : 0.125 = 0.25 for pan-d.
-    expect(sizesOf()).toEqual([0.5, 0.375, 0.125]);
-    // Canonical is the first pane in document order touching that gutter — not the last child of
-    // the preceding sibling (col) but its first child (pan-b), because the axis is vertical.
+    // pan-d is the slot after the line. Its sum with the slot before, 0.5, becomes 0.375 : 0.125 = 0.25 for pan-d.
+    close(xs(), [0, 0.5, 0.875, 1]);
+    // Canonical is the first pane in reading order whose right edge stands on that line: pan-b,
+    // above pan-c.
     expect(r.data).toMatchObject({
       paneId: "pan-d",
       gutter: { pane: "pan-b", edge: "right" },
     });
   });
 
-  it("③ bottom is the seam on the col axis — one pane has a different seam per axis", async () => {
+  it("③ bottom is the seam on the other axis — one pane has a different seam per axis", async () => {
     const r = await execute("pane.resize", { pane: "pan-b", edge: "bottom", ratio: 0.25 }, {});
     expect(r.ok).toBe(true);
-    expect(innerSizes()).toEqual([0.25, 0.75]);
-    expect(sizesOf()).toEqual([0.5, 0.3, 0.2]); // the outer row is unchanged
+    close(ys(), [0, 0.25, 1]);
+    close(xs(), [0, 0.5, 0.8, 1]); // the vertical lines are unchanged
     expect(r.data).toMatchObject({ gutter: { pane: "pan-b", edge: "bottom" } });
   });
 
   it("④ TARGET_NOT_FOUND when that edge has no seam — no other seam is guessed and moved", async () => {
-    const before = sizesOf();
+    const before = xs();
     const r = await execute("pane.resize", { pane: "pan-d", edge: "right", ratio: 0.5 }, {});
     expect(r.ok).toBe(false);
     expect(r.code).toBe("TARGET_NOT_FOUND");
-    expect(sizesOf()).toEqual(before);
+    expect(xs()).toEqual(before);
   });
 
   it("ratio must be between 0 and 1 — a boundary value removes an area", async () => {
@@ -188,26 +149,26 @@ describe("pane.resize — a seam is addressed as a pane edge", () => {
     }
   });
 
-  it("the answer has no internal node id — a name the caller cannot address is not handed out", async () => {
+  it("the answer has no line index — a name that shifts is not handed out", async () => {
     const r = await execute("pane.resize", { pane: "pan-a", edge: "right", ratio: 0.4 }, {});
     const text = JSON.stringify(r);
-    expect(text).not.toContain("spl-aaaaaa");
-    expect(text).not.toContain("spl-bbbbbb");
+    expect(text).not.toMatch(/"line"|"axis"|splitId/);
   });
 });
 
 describe("pane.equalize — equalize around a seam", () => {
-  it("the default halves the two areas that seam divides — the rest stay unchanged", async () => {
+  it("the default halves the two slots that seam divides — the rest stay unchanged", async () => {
     const r = await execute("pane.equalize", { pane: "pan-a", edge: "right" }, {});
     expect(r.ok).toBe(true);
-    expect(sizesOf()).toEqual([0.4, 0.4, 0.2]);
+    close(xs(), [0, 0.4, 0.8, 1]);
     expect(r.data).toMatchObject({ paneId: "pan-a", gutter: { pane: "pan-a", edge: "right" } });
+    close((r.data as { sizes: number[] }).sizes, [0.5, 0.5]);
   });
 
-  it("all:true makes every area on that axis equal", async () => {
+  it("all:true makes every slot on that axis equal", async () => {
     const r = await execute("pane.equalize", { pane: "pan-a", edge: "right", all: true }, {});
     expect(r.ok).toBe(true);
-    expect(sizesOf()).toEqual([1 / 3, 1 / 3, 1 / 3]);
+    close(xs(), [0, 1 / 3, 2 / 3, 1]);
   });
 
   it("an edge with no seam is TARGET_NOT_FOUND", async () => {
@@ -217,37 +178,27 @@ describe("pane.equalize — equalize around a seam", () => {
   });
 });
 
-describe("nearest axis ancestor — when there are two ancestors on the same axis", () => {
+describe("a line another pane crosses — the seam is the pane's own line, not the one past it", () => {
   beforeEach(() => {
     useSessions.setState({ workspaces: [nestedRowFixture()], activeId: "wsp-aaaaaa" });
   });
 
-  it("moves the inner row's seam — it does not leak out to the outer row", async () => {
+  it("moves E's own line — the line F and G end on does not move", async () => {
     const r = await execute("pane.resize", { pane: "pan-e", edge: "right", ratio: 0.25 }, {});
     expect(r.ok).toBe(true);
-    const outer = useSessions.getState().workspaces[0].spaces[0].layout;
-    if (outer.type !== "split") throw new Error("not a split");
-    // The outer row (col | H) must be unchanged — picking the far ancestor changes it here.
-    expect(outer.sizes).toEqual([0.7, 0.3]);
-    const col = outer.children[0];
-    if (col.type !== "split") throw new Error("not a col");
-    const innerRow = col.children[0];
-    if (innerRow.type !== "split") throw new Error("not an inner row");
-    expect(innerRow.sizes).toEqual([0.25, 0.75]);
+    close(xs(), [0, 0.175, 0.7, 1]);
     expect(r.data).toMatchObject({ gutter: { pane: "pan-e", edge: "right" } });
   });
 
-  it("the outer row's seam is addressed as the edge of a pane touching it — F's right is that spot", async () => {
-    // pan-f is the last child of the inner row, so that axis has no gutter; one level up, col has a
-    // different axis and is skipped; in the outer row the col subtree is not last, so that gutter is taken.
+  it("the line G ends on is addressed as the edge of the first pane in reading order standing on it — F's right", async () => {
     const r = await execute("pane.resize", { pane: "pan-f", edge: "right", ratio: 0.5 }, {});
     expect(r.ok).toBe(true);
-    const outer = useSessions.getState().workspaces[0].spaces[0].layout;
-    if (outer.type !== "split") throw new Error("not a split");
-    expect(outer.sizes).toEqual([0.5, 0.5]);
-    // Canonical = first pane in document order touching that gutter: col (vertical) → first child →
-    // inner row (same axis) → last child = pan-f.
+    // Halfway between E's line (0.28) and the border: 0.64.
+    close(xs(), [0, 0.28, 0.64, 1]);
     expect(r.data).toMatchObject({ gutter: { pane: "pan-f", edge: "right" } });
+    // G's right names the same line, and the answer is the canonical form.
+    const g = await execute("pane.resize", { pane: "pan-g", edge: "right", ratio: 0.5 }, {});
+    expect(g.data).toMatchObject({ gutter: { pane: "pan-f", edge: "right" } });
   });
 });
 
@@ -257,6 +208,6 @@ describe("omitted = the caller context's pane", () => {
     expect(r.ok).toBe(true);
     // Active pane = pan-b (the fixture's activePaneId).
     expect(r.data).toMatchObject({ paneId: "pan-b" });
-    expect(innerSizes()).toEqual([0.75, 0.25]);
+    close(ys(), [0, 0.75, 1]);
   });
 });

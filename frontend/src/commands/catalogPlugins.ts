@@ -1351,7 +1351,7 @@ export function registerPluginCatalog(): void {
       }
       // content placement: closes every tab of this plugin view across all spaces.
       for (const space of workspace.spaces) {
-        for (const g of allGroups(space.layout)) {
+        for (const g of allGroups(space)) {
           for (const v of g.tabs) {
             if (
               v.kind === "plugin" &&
@@ -1424,7 +1424,7 @@ export function registerPluginCatalog(): void {
       const observed: ViewStatusObservation[] = [];
       for (const t of useSessions.getState().workspaces)
         for (const ca of t.spaces)
-          for (const g of allGroups(ca.layout))
+          for (const g of allGroups(ca))
             for (const v of g.tabs)
               if (v.kind === "plugin" && v.pluginId === id)
                 observed.push({ viewId: v.id, view: v.view, code: v.status?.code ?? null });

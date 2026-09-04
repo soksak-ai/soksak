@@ -15,6 +15,7 @@ import {
   type Workspace,
   type Tab,
 } from "./sessions";
+import { singlePane } from "./panePlane";
 
 const browser = (viewId: string, title: string, customLabel?: string): Tab => ({
   id: viewId,
@@ -35,10 +36,8 @@ const tab = (id: string, tabs: Tab[]): Workspace => ({
     {
       id: "spc-aaaaaa",
       title: "1",
-      layout: {
-        type: "leaf",
-        value: { id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" },
-      },
+      panes: [{ id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" }],
+      layout: singlePane("pan-aaaaaa"),
       activePaneId: "pan-aaaaaa",
     },
   ],

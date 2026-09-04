@@ -20,7 +20,10 @@ import { execute, getSpec } from "./registry";
 import { projectArrangement, useSessions, type Workspace, type Pane } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
 import { useSectionSets } from "../state/sectionSets";
-import { splitLeaf } from "../state/splitTree";
+import { singlePane, standRail } from "../state/panePlane";
+import { planeBox, setPlaneBox } from "../state/planeBox";
+import { setPlaceWidth } from "../state/placeWidth";
+import { rowPlane } from "../test/planes";
 import {
   prepareLayoutChange,
   prepareLayoutMove,
@@ -39,6 +42,8 @@ import {
   claimLayoutTransitionIntent,
   registerLayoutTransitionIntentHost,
 } from "../lib/layoutTransitionIntent";
+
+const RAIL_W = 100;
 
 /** The tab id for that pane. Only the prefix changes from pan- to tab-. */
 const tabOf = (paneId: string) => paneId.replace("pan-", "tab-");
@@ -64,13 +69,9 @@ function workspace(activePaneId: string): Workspace {
         id: "spc-aaaaaa",
         title: "1",
         activePaneId,
-        layout: {
-          type: "split",
-          id: "spl-aaaaaa",
-          dir: "row",
-          sizes: [0.5, 0.5],
-          children: [splitLeaf(group("pan-aaaaaa")), splitLeaf(group("pan-bbbbbb"))],
-        },
+        panes: [group("pan-aaaaaa"), group("pan-bbbbbb")],
+        // a | rail | b in a 1000×600 plane: the rail stands beside b at 500.
+        layout: standRail(rowPlane(["pan-aaaaaa", "pan-bbbbbb"]), planeBox(), 1, RAIL_W)!,
       },
     ],
     activeSpaceId: "spc-aaaaaa",
@@ -80,6 +81,8 @@ function workspace(activePaneId: string): Workspace {
 registerCatalog();
 
 beforeEach(() => {
+  setPlaneBox({ width: 1000, height: 600, gap: 0 });
+  setPlaceWidth("rail", RAIL_W);
   __resetLayoutTransitionHostForTest();
   __resetLayoutTransitionJournalForTest();
   __resetLayoutSettlementForTest();
@@ -150,7 +153,7 @@ describe("layout.arrangement", () => {
   it("tab.maximize opens the exact geometry revision before publishing and its transaction consumes the cause", async () => {
     const pinned = {
       ...workspace("pan-bbbbbb"),
-      railPlacement: { mode: "pin" as const, station: 50 },
+      railPlacement: { mode: "pin" as const },
     };
     useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
     const before = projectArrangement(pinned)!;
@@ -173,7 +176,8 @@ describe("layout.arrangement", () => {
     }, {});
     unsubscribe();
     expect(result).toMatchObject({ ok: true, data: { tabId: "tab-aaaaaa" } });
-    expect(published).toEqual([{ active: true, requested: 1, station: 100, cells: 1 }]);
+    // a stood left of the rail, so shown alone it keeps the rail on its right.
+    expect(published).toEqual([{ active: true, requested: 1, station: 1000 - RAIL_W, cells: 1 }]);
 
     const after = projectArrangement(useSessions.getState().workspaces[0])!;
     // **Projection snap is for native surfaces.** Listing every view of a reshaped cell as a
@@ -183,7 +187,7 @@ describe("layout.arrangement", () => {
     const change = viewLayoutChange(before, after, [
       { id: "pan-aaaaaa", viewIds: ["tab-aaaaaa"], panePresentationViewIds: ["tab-aaaaaa"] },
       { id: "pan-bbbbbb", viewIds: ["tab-bbbbbb"], panePresentationViewIds: [] },
-    ], 800, 60);
+    ]);
     expect(change).toEqual({
       moves: [],
       projectionParticipants: [{ viewId: "tab-aaaaaa", kind: "projection-snap" }],
@@ -196,12 +200,12 @@ describe("layout.arrangement", () => {
     });
   });
 
-  it("tab.restore opens one geometry revision from station 100 back to the two-pane station 50 layout", async () => {
+  it("tab.restore opens one geometry revision from the solo plane back to the two-pane layout", async () => {
     const pinned = workspace("pan-aaaaaa");
-    pinned.railPlacement = { mode: "pin", station: 50 };
+    pinned.railPlacement = { mode: "pin" };
     pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "tab-aaaaaa" };
     useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
-    expect(projectArrangement(pinned)).toMatchObject({ station: 100, cells: [{ id: "pan-aaaaaa" }] });
+    expect(projectArrangement(pinned)).toMatchObject({ station: 1000 - RAIL_W, cells: [{ id: "pan-aaaaaa" }] });
 
     const published: Array<{ active: boolean; requested: number; station: number; cells: number }> = [];
     const unsubscribe = useSessions.subscribe((state, previous) => {
@@ -218,12 +222,12 @@ describe("layout.arrangement", () => {
     expect(await execute("tab.restore", { workspace: "wsp-aaaaaa" }, {}))
       .toMatchObject({ ok: true, data: { tabId: "tab-aaaaaa" } });
     unsubscribe();
-    expect(published).toEqual([{ active: true, requested: 1, station: 50, cells: 2 }]);
+    expect(published).toEqual([{ active: true, requested: 1, station: 500, cells: 2 }]);
   });
 
   it("tab maximize no-op and missing targets do not open layout revisions", async () => {
     const pinned = workspace("pan-aaaaaa");
-    pinned.railPlacement = { mode: "pin", station: 50 };
+    pinned.railPlacement = { mode: "pin" };
     pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "tab-aaaaaa" };
     useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
 
@@ -379,7 +383,7 @@ describe("layout.arrangement", () => {
 
   it("focus is the station input — activating another pane moves the answer", async () => {
     const at = (await execute("layout.arrangement", {}, {})) as { data?: { station: number } };
-    expect(at.data?.station).toBe(50); // g2 focus
+    expect(at.data?.station).toBe(500); // g2 focus
 
     useSessions.getState().setActiveGroup("wsp-aaaaaa", "pan-aaaaaa");
     const moved = (await execute("layout.arrangement", {}, {})) as { data?: { station: number } };
@@ -430,11 +434,9 @@ describe("layout.arrangement", () => {
 
   it("a tab switch inside the same pane and a failed activation open no geometry revision", async () => {
     const fixture = workspace("pan-bbbbbb");
-    const g2 = fixture.spaces[0].layout.type === "split"
-      ? fixture.spaces[0].layout.children[1]
-      : null;
-    if (!g2 || g2.type !== "leaf") throw new Error("g2 fixture missing");
-    g2.value.tabs.push({
+    const g2 = fixture.spaces[0].panes.find((g) => g.id === "pan-bbbbbb");
+    if (!g2) throw new Error("g2 fixture missing");
+    g2.tabs.push({
       id: "v-g2-second",
       kind: "plugin",
       title: "g2 second",
@@ -467,7 +469,8 @@ describe("layout.arrangement", () => {
     const hidden = structuredClone(fixture.spaces[0]);
     hidden.id = "spc-hidden";
     hidden.activePaneId = "pan-hidden";
-    hidden.layout = splitLeaf(group("pan-hidden"));
+    hidden.panes = [group("pan-hidden")];
+    hidden.layout = singlePane("pan-hidden");
     fixture.spaces.push(hidden);
     useSessions.setState({ workspaces: [fixture], activeId: fixture.id });
 
@@ -479,20 +482,14 @@ describe("layout.arrangement", () => {
     expect(landed.activeId).toBe(fixture.id);
     expect(landed.workspaces[0].activeSpaceId).toBe("spc-hidden");
     expect(landed.workspaces[0].spaces[1].activePaneId).toBe("pan-hidden");
-    expect(
-      landed.workspaces[0].spaces[1].layout.type === "leaf"
-        ? landed.workspaces[0].spaces[1].layout.value.activeTabId
-        : null,
-    ).toBe("tab-hidden");
+    expect(landed.workspaces[0].spaces[1].panes[0].activeTabId).toBe("tab-hidden");
   });
 
   it("a same-pane activation cause cannot leak into a later layout transaction", async () => {
     const fixture = workspace("pan-bbbbbb");
-    const g2 = fixture.spaces[0].layout.type === "split"
-      ? fixture.spaces[0].layout.children[1]
-      : null;
-    if (!g2 || g2.type !== "leaf") throw new Error("g2 fixture missing");
-    g2.value.tabs.push({
+    const g2 = fixture.spaces[0].panes.find((g) => g.id === "pan-bbbbbb");
+    if (!g2) throw new Error("g2 fixture missing");
+    g2.tabs.push({
       id: "v-g2-second",
       kind: "plugin",
       title: "g2 second",
@@ -513,7 +510,7 @@ describe("layout.arrangement", () => {
 
   it("cross-pane activation under PIN changes focus only and opens no geometry revision", async () => {
     const fixture = workspace("pan-bbbbbb");
-    fixture.railPlacement = { mode: "pin", station: 50 };
+    fixture.railPlacement = { mode: "pin" };
     useSessions.setState({ workspaces: [fixture], activeId: "wsp-aaaaaa" });
 
     await expect(execute("tab.activate", { tab: "tab-aaaaaa" }, {})).resolves.toMatchObject({ ok: true });

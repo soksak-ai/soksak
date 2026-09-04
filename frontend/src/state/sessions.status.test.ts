@@ -13,7 +13,7 @@ const pristineActive = useSessions.getState().activeId;
 function findView(viewId: string): Tab | undefined {
   for (const t of useSessions.getState().workspaces)
     for (const c of t.spaces)
-      for (const g of allGroups(c.layout))
+      for (const g of allGroups(c))
         for (const v of g.tabs) if (v.id === viewId) return v;
   return undefined;
 }

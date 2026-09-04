@@ -28,31 +28,32 @@ function stored() {
     title: "one",
     root: "/workspaces/one",
     regionOpen: { left: false, rail: true, right: false },
+    railPlacement: { mode: "flow" },
     sidebarLayouts: { left: { t: "l", v: { id: "grp-a", views: [], activeViewId: "" } }, rail: { t: "l", v: { id: "grp-a", views: [], activeViewId: "" } }, right: { t: "l", v: { id: "grp-a", views: [], activeViewId: "" } } },
-    railPlacementNormalized: true,
-    vlNormalized: true,
     activeContentId: "spc-aaaaaa",
     contents: [
       {
         id: "spc-aaaaaa",
         title: "1",
         activeGroupId: "pan-aaaaaa",
-        railBindingViewId: "tab-aaaaaa",
-        layout: {
-          t: "s",
-          id: "spl-stored",
-          dir: "row",
-          sizes: [1],
-          children: [
-            {
-              t: "l",
-              v: {
-                id: "pan-aaaaaa",
-                activeViewId: "tab-aaaaaa",
-                views: [{ id: "tab-aaaaaa", kind: "plugin", title: "T", pluginId: "p", view: "content" }],
-              },
-            },
+        groups: [
+          {
+            id: "pan-aaaaaa",
+            activeViewId: "tab-aaaaaa",
+            views: [{ id: "tab-aaaaaa", kind: "plugin", title: "T", pluginId: "p", view: "content" }],
+          },
+          { id: "pan-bbbbbb", activeViewId: "", views: [] },
+        ],
+        // a | rail | b: the rail's slot is stored with the plane, so it comes back where it stood.
+        plane: {
+          xs: [0, 0.5, 0.65, 1],
+          ys: [0, 1],
+          cards: [
+            { id: "pan-aaaaaa", c0: 0, c1: 1, r0: 0, r1: 1 },
+            { id: "rail", c0: 1, c1: 2, r0: 0, r1: 1, width: 180, fixed: true },
+            { id: "pan-bbbbbb", c0: 2, c1: 3, r0: 0, r1: 1 },
           ],
+          paidBy: { "pan-bbbbbb": { side: "lo", to: "pan-aaaaaa" }, rail: { side: "hi", to: "pan-bbbbbb" } },
         },
       },
     ],
@@ -67,11 +68,10 @@ describe("what a restore carries across", () => {
   it("keeps the pane id, which is half a terminal session's key", () => {
     const workspace = restored();
     const space = workspace.spaces[0]!;
-    const branch = space.layout as { type: "split"; children: unknown[] };
-    const leaf = branch.children[0] as { type: "leaf"; value: { id: string; tabs: { id: string }[] } };
 
-    expect(leaf.value.id).toBe("pan-aaaaaa");
-    expect(leaf.value.tabs[0]!.id).toBe("tab-aaaaaa");
+    expect(space.panes[0]!.id).toBe("pan-aaaaaa");
+    expect(space.panes[0]!.tabs[0]!.id).toBe("tab-aaaaaa");
+    expect(space.layout.cards.map((card) => card.id)).toEqual(["pan-aaaaaa", "rail", "pan-bbbbbb"]);
   });
 
   it("keeps the workspace and space ids, and every reference to them", () => {
@@ -86,22 +86,15 @@ describe("what a restore carries across", () => {
 
 });
 
-// The split node is not an exception either.
-//
-// It was the one id this build minted again, on the ground that it "appears in
-// no address, command or document". Measured 2026-08-16 on the running
-// application: it appears in none of those — and it was not in the snapshot
-// either, so it was not an exception to the rule so much as a value outside it.
-//
-// One rule is worth more than an exception nobody can act on. Every id this
-// product issues survives a restart, so nothing has to know which kind it is
-// holding before deciding whether the name it has will still be there.
-it("keeps the split node id too, so the rule has no exception", () => {
-  const first = restored().spaces[0]!.layout as { type: "split"; id: string };
-  const second = restored().spaces[0]!.layout as { type: "split"; id: string };
+// The plane is stored as the library states it, and it comes back as stated: the lines, every
+// card's span, the rail's slot and width, and which slot each card took its room from.
+it("keeps the plane as stored, the rail's slot included", () => {
+  const first = restored().spaces[0]!.layout;
+  const second = restored().spaces[0]!.layout;
 
-  expect(first.id).toBe("spl-stored");
-  // And twice, so this is the stored value rather than a generator that happens
-  // to start at the same place.
-  expect(second.id).toBe("spl-stored");
+  expect(first.xs).toEqual([0, 0.5, 0.65, 1]);
+  expect(first.cards.find((card) => card.id === "rail")).toMatchObject({ c0: 1, c1: 2, width: 180, fixed: true });
+  expect(first.paidBy).toEqual({ "pan-bbbbbb": { side: "lo", to: "pan-aaaaaa" }, rail: { side: "hi", to: "pan-bbbbbb" } });
+  // And twice, so this is the stored value rather than something computed on the way in.
+  expect(second).toEqual(first);
 });

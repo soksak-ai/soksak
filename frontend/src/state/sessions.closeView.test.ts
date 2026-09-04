@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useSessions } from "./sessions";
-import { splitLeaf, leavesOf } from "./splitTree";
+import { rowPlane } from "../test/planes";
 
 // Regression: after reload the content is left with an empty tab (empty group); adding a view by split
 // and closing it makes removeView drop every group with views.length===0, so the closed view's group
@@ -16,9 +16,9 @@ describe("closeView — one side of the split is an empty tab", () => {
     useSessions.getState().bootstrapFirstWorkspace("/test/root");
     const base = useSessions.getState().workspaces[0]!;
     const content = base.spaces[0];
-    const emptyGroup = leavesOf(content.layout)[0]; // { tabs:[], activeTabId:"" }
+    const emptyGroup = content.panes[0]; // { tabs:[], activeTabId:"" }
 
-    // Build content.layout directly as split(empty group, one-view group) — same shape as a real split.
+    // Build the space directly as [empty group | one-view group] — same shape as a real split.
     const view = {
       id: "tab-yyyyyy",
       kind: "plugin" as const,
@@ -27,20 +27,18 @@ describe("closeView — one side of the split is an empty tab", () => {
       view: "content",
     };
     const viewGroup = { id: "pan-yyyyyy", tabs: [view], activeTabId: "tab-yyyyyy" };
-    const layout = {
-      type: "split" as const,
-      id: "spl-aaaaaa",
-      dir: "row" as const,
-      sizes: [0.5, 0.5],
-      children: [splitLeaf(emptyGroup), splitLeaf(viewGroup)],
-    };
     useSessions.setState({
       workspaces: [
-        { ...base, spaces: [{ ...content, layout, activePaneId: "pan-yyyyyy" }] },
+        { ...base, spaces: [{
+          ...content,
+          panes: [emptyGroup, viewGroup],
+          layout: rowPlane([emptyGroup.id, viewGroup.id]),
+          activePaneId: "pan-yyyyyy",
+        }] },
       ],
     });
 
-    // Closing the new view empties content entirely and tree=null — it must stay an empty tab, workspace intact.
+    // Closing the new view leaves the empty group alone on the plane — an empty tab, workspace intact.
     const r = useSessions.getState().closeView(base.id, "tab-yyyyyy");
     expect(r.ok).toBe(true);
 
@@ -48,5 +46,7 @@ describe("closeView — one side of the split is an empty tab", () => {
     const after = useSessions.getState().workspaces.find((x) => x.id === base.id);
     expect(after).toBeTruthy();
     expect(after!.spaces.length).toBe(1);
+    expect(after!.spaces[0].panes.map((g) => g.id)).toEqual([emptyGroup.id]);
+    expect(after!.spaces[0].activePaneId).toBe(emptyGroup.id);
   });
 });

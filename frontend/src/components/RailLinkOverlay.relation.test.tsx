@@ -38,7 +38,7 @@ vi.mock("../i18n", async (importOriginal) => ({
 
 import { RailLinkOverlay } from "./RailLinkOverlay";
 import type { RailRelationState } from "../lib/railArrangement";
-import { classifyRailRelation } from "../lib/railLinkShape";
+import { classifyRailRelation } from "../lib/railArrangement";
 import { useSettings } from "../state/settings";
 import { styleSurfaceRules } from "../ui/styleSurface";
 
@@ -47,7 +47,10 @@ class ResizeObserverMock {
   disconnect() {}
 }
 
-const adjacentRect = { left: 50, top: 0, width: 25, height: 50 };
+// A plane of 1000×800 with no corridor; the rail is 300 wide.
+const RAIL_W = 300;
+const railAt = (left: number) => ({ left, top: 0, width: RAIL_W, height: 800 });
+const adjacentRect = { left: 500 + RAIL_W, top: 0, width: 200, height: 400 };
 
 function overlayProps(overrides: Partial<{
   boundViewId: string;
@@ -57,11 +60,11 @@ function overlayProps(overrides: Partial<{
   relation: Partial<RailRelationState>;
 }> = {}) {
   const boundViewId = overrides.boundViewId ?? "v2";
-  const railStation = overrides.railStation ?? 50;
+  const railStation = overrides.railStation ?? 500;
   const targetRect = overrides.targetRect === undefined ? adjacentRect : overrides.targetRect;
   const placement = overrides.placementMode ?? "flow";
   const side = targetRect
-    ? classifyRailRelation(railStation, targetRect)
+    ? classifyRailRelation(railAt(railStation), targetRect, 0)
     : "detached";
   const connected = side !== "detached";
   const relation: RailRelationState = {
@@ -81,9 +84,9 @@ function overlayProps(overrides: Partial<{
   return {
     contentId: "c1",
     relation,
-    railWidth: 300,
     paneInset: 0,
-    railStation,
+    gap: 0,
+    railRect: railAt(railStation),
     targetRect,
   };
 }
@@ -158,9 +161,9 @@ describe("RailLinkOverlay — the railRelation three-way switch", () => {
     }
   });
 
-  it("a gap of 1 percentage point or less is float tolerance — the relation root still renders", () => {
+  it("a gap of one px or less is float tolerance — the relation root still renders", () => {
     act(() =>
-      root.render(<RailLinkOverlay {...overlayProps({ railStation: 49 })} />),
+      root.render(<RailLinkOverlay {...overlayProps({ railStation: 499 })} />),
     );
     expect(host.querySelector(".rail-link-overlay")).not.toBeNull();
   });
@@ -170,8 +173,8 @@ describe("RailLinkOverlay — the railRelation three-way switch", () => {
       root.render(
         <RailLinkOverlay
           {...overlayProps({
-            railStation: 60,
-            targetRect: { left: 0, top: 0, width: 60, height: 100 },
+            railStation: 600,
+            targetRect: { left: 0, top: 0, width: 600, height: 800 },
             placementMode: "pin",
           })}
         />,
@@ -188,8 +191,8 @@ describe("RailLinkOverlay — the railRelation three-way switch", () => {
       root.render(
         <RailLinkOverlay
           {...overlayProps({
-            railStation: 40,
-            targetRect: { left: 40, top: 0, width: 30, height: 100 },
+            railStation: 400,
+            targetRect: { left: 400 + RAIL_W, top: 0, width: 300, height: 800 },
             placementMode: "pin",
           })}
         />,
@@ -214,7 +217,7 @@ describe("RailLinkOverlay — the railRelation three-way switch", () => {
         <RailLinkOverlay
           {...overlayProps({
             railStation: 0,
-            targetRect: { left: 50, top: 0, width: 50, height: 100 },
+            targetRect: { left: 500, top: 0, width: 500, height: 800 },
             placementMode: "pin",
           })}
         />,
@@ -275,7 +278,7 @@ describe("RailLinkOverlay — the railRelation three-way switch", () => {
     act(() =>
       root.render(
         <RailLinkOverlay
-          {...overlayProps({ targetRect: { ...adjacentRect, width: 40 } })}
+          {...overlayProps({ targetRect: { ...adjacentRect, width: 260 } })}
         />,
       ),
     );
@@ -289,7 +292,7 @@ describe("RailLinkOverlay — the railRelation three-way switch", () => {
         <RailLinkOverlay
           {...overlayProps({
             boundViewId: "v3",
-            targetRect: { ...adjacentRect, width: 40 },
+            targetRect: { ...adjacentRect, width: 260 },
           })}
         />,
       ),

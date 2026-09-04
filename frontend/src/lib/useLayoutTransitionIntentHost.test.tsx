@@ -14,22 +14,25 @@ import {
 } from "./layoutTransitionIntent";
 import type { PreparedLayoutTransition } from "./layoutTransitionHost";
 import { useLayoutTransitionIntentHost } from "./useLayoutTransitionIntentHost";
+import { singlePane } from "../state/panePlane";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Leaf = { id: string };
-
-const arrangement = (railPresent: boolean) => ({
-  station: railPresent ? 50 : 0,
-  cleanLines: [0, 50, 100],
-  displayLayout: { type: "leaf", value: { id: "pane" } },
+const arrangement = (railPresent: boolean): LayoutTransitionIntent["from"] => ({
+  station: railPresent ? 500 : 0,
+  cleanLines: [0, 500, 1000],
+  standingLines: [0, 1, 2],
+  lineSet: "1x1:pane@0-1,0-1",
+  display: singlePane("pane"),
+  rail: railPresent ? { left: 500, top: 0, width: 100, height: 1000 } : null,
+  dividers: [],
   swapped: false,
-  cells: [{ id: "pane", rect: { left: 0, top: 0, width: 100, height: 100 } }],
+  cells: [{ id: "pane", rect: { left: 0, top: 0, width: 1000, height: 1000 } }],
   focusId: "pane",
   betweenIds: [],
   maximizedId: null,
   railPresent,
-}) as LayoutTransitionIntent<Leaf>["from"];
+});
 
 const prepared = (id: string): PreparedLayoutTransition => ({
   transactionId: id,
@@ -45,7 +48,7 @@ function Probe({
   prepare,
 }: {
   prepare: (
-    intent: LayoutTransitionIntent<Leaf>,
+    intent: LayoutTransitionIntent,
     signal: AbortSignal,
   ) => Promise<PreparedLayoutTransition>;
 }) {

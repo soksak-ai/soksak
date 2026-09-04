@@ -46,7 +46,7 @@ export function beginRestoreHydration(): void {
   for (const t of s.workspaces) {
     for (const c of t.spaces) {
       const contentVisible = t.id === s.activeId && c.id === t.activeSpaceId;
-      for (const g of allGroups(c.layout)) {
+      for (const g of allGroups(c)) {
         for (const v of g.tabs) {
           if (v.kind !== "plugin") continue; // File views are cheap — outside the gate
           const visible = contentVisible && g.activeTabId === v.id;

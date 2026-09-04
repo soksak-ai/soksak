@@ -60,20 +60,73 @@ describe("reading a stored window snapshot", () => {
 // it has none, and this build keeps no old paths: no fallback
 // that mints a name, no migration that rewrites the record. It is refused by
 // name, it costs that record only, and the ledger slot stays (R1).
-describe("a split node with no id", () => {
-  const withLayout = (layout: unknown) => ({
+describe("a space's plane", () => {
+  const withSpace = (space: Record<string, unknown>) => ({
     activeId: "wsp-aaaaaa",
     workspaces: [
       {
         id: "wsp-aaaaaa",
-        contents: [{ id: "spc-aaaaaa", activeGroupId: "pan-aaaaaa", layout }],
+        railPlacement: { mode: "flow" },
+        contents: [{ id: "spc-aaaaaa", activeGroupId: "pan-aaaaaa", ...space }],
+      },
+    ],
+  });
+  const onePane = {
+    groups: [{ id: "pan-aaaaaa", activeViewId: "", views: [] }],
+    plane: { xs: [0, 1], ys: [0, 1], cards: [{ id: "pan-aaaaaa", c0: 0, c1: 1, r0: 0, r1: 1 }] },
+  };
+
+  it("a record this build wrote is read", () => {
+    expect(readableWindowSnapshot(withSpace(onePane)).ok).toBe(true);
+  });
+
+  it("a split tree in place of a plane is refused, and the reason names the date", () => {
+    const verdict = readableWindowSnapshot(withSpace({
+      groups: onePane.groups,
+      layout: { t: "s", id: "spl-aaaaaa", dir: "row", sizes: [1], children: [{ t: "l", v: { id: "pan-aaaaaa" } }] },
+    }));
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) return;
+    expect(verdict.why).toContain("no plane");
+    expect(verdict.why).toContain("2026-09-05");
+  });
+
+  it("a plane the library refuses is refused with the library's reason", () => {
+    const verdict = readableWindowSnapshot(withSpace({
+      groups: onePane.groups,
+      plane: { xs: [0, 1], ys: [0, 1], cards: [{ id: "pan-aaaaaa", c0: 0, c1: 2, r0: 0, r1: 1 }] },
+    }));
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) return;
+    expect(verdict.why).toContain("cannot read");
+  });
+
+  it("panes and plane must name the same ids", () => {
+    const verdict = readableWindowSnapshot(withSpace({ groups: [], plane: onePane.plane }));
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) return;
+    expect(verdict.why).toContain("pan-aaaaaa");
+  });
+
+});
+
+// The sidebar's arrangement is still a split tree, and its nodes carry ids too (NAMING N2a).
+describe("a sidebar split node with no id", () => {
+  const withSidebar = (layout: unknown) => ({
+    activeId: "wsp-aaaaaa",
+    workspaces: [
+      {
+        id: "wsp-aaaaaa",
+        railPlacement: { mode: "flow" },
+        contents: [],
+        sidebarLayouts: { left: layout },
       },
     ],
   });
 
   it("is refused, and the reason names what is missing", () => {
     const verdict = readableWindowSnapshot(
-      withLayout({ t: "s", dir: "row", sizes: [1], children: [{ t: "l", v: { id: "pan-aaaaaa" } }] }),
+      withSidebar({ t: "s", dir: "row", sizes: [1], children: [{ t: "l", v: { viewKeys: [], activeViewKey: "" } }] }),
     );
     expect(verdict.ok).toBe(false);
     if (verdict.ok) return;
@@ -81,27 +134,10 @@ describe("a split node with no id", () => {
     expect(verdict.why).toContain("id");
   });
 
-  it("is refused however deep it is", () => {
-    const verdict = readableWindowSnapshot(
-      withLayout({
-        t: "s",
-        id: "spl-aaaaaa",
-        dir: "row",
-        sizes: [1],
-        children: [{ t: "s", dir: "col", sizes: [1], children: [{ t: "l", v: { id: "pan-aaaaaa" } }] }],
-      }),
-    );
-    expect(verdict.ok).toBe(false);
-  });
-
   it("a record this build wrote is read", () => {
     const verdict = readableWindowSnapshot(
-      withLayout({ t: "s", id: "spl-aaaaaa", dir: "row", sizes: [1], children: [{ t: "l", v: { id: "pan-aaaaaa" } }] }),
+      withSidebar({ t: "s", id: "spl-aaaaaa", dir: "row", sizes: [1], children: [{ t: "l", v: { viewKeys: [], activeViewKey: "" } }] }),
     );
     expect(verdict.ok).toBe(true);
-  });
-
-  it("a layout that is one leaf has no split to check", () => {
-    expect(readableWindowSnapshot(withLayout({ t: "l", v: { id: "pan-aaaaaa" } })).ok).toBe(true);
   });
 });

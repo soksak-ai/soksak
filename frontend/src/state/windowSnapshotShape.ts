@@ -1,4 +1,5 @@
 import type { WindowSnapshot } from "./windowPersistence";
+import { checkPlane, paneIds, type PlaneState } from "./panePlane";
 
 // Whether a stored window snapshot is one this build can read.
 //
@@ -46,13 +47,15 @@ export function readableWindowSnapshot(value: unknown): SnapshotVerdict {
   return { ok: true, snapshot: { activeId: record.activeId, workspaces: record.workspaces as WindowSnapshot["workspaces"] } };
 }
 
-// Every id survives a restart (NAMING N2a), with no exception. The split node's went into the
-// snapshot on 2026-08-16, and a record written before that has none.
+// Every id survives a restart (NAMING N2a), with no exception, and a space's plane is the library's
+// state. A record written before 2026-09-05 holds a split tree under `layout`, which this build
+// does not read. (A rail placement of another shape is presentation and costs that field only —
+// windowSnapshot.ts.)
 //
-// It is refused rather than mended. A fallback that minted the name would be an old path carried
-// forward, and it would make a restore rename part of itself in silence — the shape that cost a
-// day that same date. One unreadable record costs that record only (R1) and its ledger slot stays,
-// so the window is reported by name on every boot until it is written again.
+// It is refused rather than mended. A fallback that minted a name or laid a tree out as a plane
+// would be an old path carried forward, and it would make a restore rewrite part of itself in
+// silence. One unreadable record costs that record only (R1) and its ledger slot stays, so the
+// window is reported by name on every boot until it is written again.
 function splitWithNoID(workspaces: unknown[]): string | null {
   let found: string | null = null;
   const walk = (node: unknown, where: string): void => {
@@ -72,7 +75,23 @@ function splitWithNoID(workspaces: unknown[]): string | null {
     const name = typeof held.id === "string" ? held.id : "a workspace";
     for (const space of (held.contents as unknown[]) ?? []) {
       if (space === null || typeof space !== "object") continue;
-      walk((space as Record<string, unknown>).layout, name);
+      const record = space as Record<string, unknown>;
+      if (record.plane === undefined) {
+        return `a space in ${name} holds no plane, so this record predates 2026-09-05`;
+      }
+      try {
+        checkPlane(record.plane as PlaneState);
+      } catch (error) {
+        return `a space in ${name} holds a plane this build cannot read: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+      }
+      const groups = Array.isArray(record.groups) ? (record.groups as Array<{ id?: unknown }>) : [];
+      const held = groups.map((group) => group.id).filter((id): id is string => typeof id === "string");
+      const placed = paneIds(record.plane as PlaneState);
+      if (held.length !== placed.length || placed.some((id) => !held.includes(id))) {
+        return `a space in ${name} places ${placed.join(",")} and holds ${held.join(",")}`;
+      }
     }
     const layouts = (held.sidebarLayouts as Record<string, unknown>) ?? {};
     for (const layout of Object.values(layouts)) walk(layout, name);

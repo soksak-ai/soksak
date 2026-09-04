@@ -27,7 +27,7 @@ function findView(projectId: string, viewId: string): Tab | undefined {
   const t = useSessions.getState().workspaces.find((x) => x.id === projectId);
   if (!t) return undefined;
   for (const c of t.spaces)
-    for (const v of allViews(c.layout)) if (v.id === viewId) return v;
+    for (const v of allViews(c)) if (v.id === viewId) return v;
   return undefined;
 }
 
@@ -49,7 +49,7 @@ const isWarn = () => useSettings.getState().tabCloseConfirm === "warn";
 // means.
 async function closeContentPermanently(projectId: string, contentId: string) {
   const content = findContent(projectId, contentId);
-  const views = content ? allViews(content.layout) : [];
+  const views = content ? allViews(content) : [];
   for (const view of views) await endSessionsOnView(view.id);
   return useSessions.getState().closeContent(projectId, contentId);
 }

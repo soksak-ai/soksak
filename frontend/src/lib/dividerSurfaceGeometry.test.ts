@@ -24,16 +24,18 @@ describe("divider surface geometry", () => {
 
   it("preserves provider chrome offsets while applying the target pane rectangle", () => {
     const host = document.querySelector<HTMLElement>("#host")!;
+    // The plane is the host inset by 5: a pane at plane (0,0) 990×290 is host (5,85) 990×290, and
+    // the surface keeps its 33 above and 17 below.
     expect(dividerSurfaceGeometry(host, [{
-      id: "pan-a", rect: { left: 0, top: 0, width: 100, height: 60 },
-    }], 0, 0).get("browser-a")).toEqual({ x: 5, y: 118, width: 990, height: 240 });
+      id: "pan-a", rect: { left: 0, top: 0, width: 990, height: 290 },
+    }]).get("browser-a")).toEqual({ x: 5, y: 118, width: 990, height: 240 });
   });
 
   it("normalizes arithmetic residue to the public CSS-pixel precision", () => {
     const host = document.querySelector<HTMLElement>("#host")!;
     const frame = dividerSurfaceGeometry(host, [{
-      id: "pan-a", rect: { left: 0, top: 0, width: 100, height: 60.00000000000001 },
-    }], 0, 0).get("browser-a");
+      id: "pan-a", rect: { left: 0, top: 0, width: 990, height: 290.00000000000003 },
+    }]).get("browser-a");
     expect(frame?.height).toBe(240);
   });
 });

@@ -35,7 +35,7 @@ function mkView(status?: { code: string; message?: string }): string {
 function viewExists(viewId: string): boolean {
   for (const t of useSessions.getState().workspaces)
     for (const c of t.spaces)
-      for (const v of allViews(c.layout)) if (v.id === viewId) return true;
+      for (const v of allViews(c)) if (v.id === viewId) return true;
   return false;
 }
 

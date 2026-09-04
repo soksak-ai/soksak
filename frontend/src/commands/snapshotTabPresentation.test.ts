@@ -35,7 +35,7 @@ import { registerCatalog } from "./catalog";
 import { execute } from "./registry";
 import { initialSidebarLayout } from "../state/sidebarLayout";
 import { useSessions, type Workspace } from "../state/sessions";
-import { splitLeaf } from "../state/splitTree";
+import { singlePane } from "../state/panePlane";
 
 const currentTab = "tab-current";
 const targetTab = "tab-target";
@@ -47,7 +47,7 @@ function workspace(): Workspace {
     title: "capture",
     root: "/tmp/capture",
     regionOpen: { left: false, rail: false, right: false },
-    railPlacement: { mode: "pin", station: 50 },
+    railPlacement: { mode: "pin" },
     sidebarLayouts: {
       left: initialSidebarLayout([]),
       rail: initialSidebarLayout([]),
@@ -57,14 +57,15 @@ function workspace(): Workspace {
       id: "spc-capture",
       title: "1",
       activePaneId: "pan-capture",
-      layout: splitLeaf({
+      panes: [{
         id: "pan-capture",
         activeTabId: currentTab,
         tabs: [
           { id: currentTab, kind: "plugin", title: "current", pluginId: "fixture", view: "current" },
           { id: targetTab, kind: "plugin", title: "target", pluginId: "fixture", view: "target" },
         ],
-      }),
+      }],
+      layout: singlePane("pan-capture"),
     }],
     activeSpaceId: "spc-capture",
   };
@@ -74,7 +75,7 @@ function activeTab(): string {
   const state = useSessions.getState();
   const workspace = state.workspaces.find((candidate) => candidate.id === workspaceId)!;
   const space = workspace.spaces.find((candidate) => candidate.id === workspace.activeSpaceId)!;
-  return space.layout.type === "leaf" ? space.layout.value.activeTabId : "";
+  return space.panes[0]?.activeTabId ?? "";
 }
 
 registerCatalog();

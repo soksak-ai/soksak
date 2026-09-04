@@ -39,7 +39,7 @@ export function collectWebviewLabels(
   const live = new Set<string>();
   for (const t of tabs) {
     for (const c of t.spaces) {
-      for (const g of allGroups(c.layout)) {
+      for (const g of allGroups(c)) {
         for (const v of g.tabs) {
           // A view declaring nativeSurface owns a surface, under whatever label the plugin declared.
           if (v.kind === "plugin" && ownsSurface(v.pluginId, v.view)) {

@@ -23,10 +23,15 @@ import { registerCatalog } from "./catalog";
 import { execute } from "./registry";
 import { useSessions, type Pane, type Workspace } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
-import { splitLeaf } from "../state/splitTree";
+import { rowPlane } from "../test/planes";
+import { setPlaneBox } from "../state/planeBox";
 
 const HOST = { left: 12, top: 30, width: 1000, height: 800 };
 const INSET = 4;
+// The plane is the host inset by the pane inset, with a corridor of twice the inset (R1b).
+const PLANE = { width: HOST.width - INSET * 2, height: HOST.height - INSET * 2, gap: INSET * 2 };
+// Two panes side by side, each half of the plane less its half of the corridor.
+const HALF = (PLANE.width - PLANE.gap) / 2;
 
 const pane = (id: string): Pane => ({
   id,
@@ -47,26 +52,21 @@ function workspace(): Workspace {
         id: "spc-aaaaaa",
         title: "1",
         activePaneId: "pan-aaaaaa",
-        layout: {
-          type: "split",
-          id: "spl-aaaaaa",
-          dir: "row",
-          sizes: [0.5, 0.5],
-          children: [splitLeaf(pane("pan-aaaaaa")), splitLeaf(pane("pan-bbbbbb"))],
-        },
+        panes: [pane("pan-aaaaaa"), pane("pan-bbbbbb")],
+        layout: rowPlane(["pan-aaaaaa", "pan-bbbbbb"]),
       },
     ],
     activeSpaceId: "spc-aaaaaa",
   };
 }
 
-/** The rect the .pane rule produces for a cell declared at these percentages. */
-function laidOut(leftPct: number, widthPct: number, railDx = 0, railDw = 0) {
+/** The rect the .pane rule produces for a cell declared at these plane px. */
+function laidOut(left: number, width: number) {
   return {
-    left: HOST.left + (HOST.width * leftPct) / 100 + railDx + INSET,
+    left: HOST.left + INSET + left,
     top: HOST.top + INSET,
-    width: (HOST.width * widthPct) / 100 + railDw - INSET * 2,
-    height: HOST.height - INSET * 2,
+    width,
+    height: PLANE.height,
   };
 }
 
@@ -120,14 +120,15 @@ registerCatalog();
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  setPlaneBox(PLANE);
   useSessions.setState({ workspaces: [workspace()], activeId: "wsp-aaaaaa" });
 });
 
 describe("layout.verify", () => {
   it("a settled screen that matches the arrangement reports a difference of 0", async () => {
     plant([
-      { id: "pan-aaaaaa", rect: laidOut(0, 50) },
-      { id: "pan-bbbbbb", rect: laidOut(50, 50) },
+      { id: "pan-aaaaaa", rect: laidOut(0, HALF) },
+      { id: "pan-bbbbbb", rect: laidOut(HALF + PLANE.gap, HALF) },
     ]);
     const result = await execute("layout.verify", {}, {});
     expect(result.ok).toBe(true);
@@ -150,9 +151,9 @@ describe("layout.verify", () => {
   });
 
   it("a pane rendered three pixels off is reported as three pixels off", async () => {
-    const off = laidOut(50, 50);
+    const off = laidOut(HALF + PLANE.gap, HALF);
     plant([
-      { id: "pan-aaaaaa", rect: laidOut(0, 50) },
+      { id: "pan-aaaaaa", rect: laidOut(0, HALF) },
       { id: "pan-bbbbbb", rect: { ...off, left: off.left + 3 } },
     ]);
     const data = (await execute("layout.verify", {}, {})).data as {
@@ -166,19 +167,8 @@ describe("layout.verify", () => {
     expect(data.panes.find((p) => p.id === "pan-aaaaaa")!.worst).toBe(0);
   });
 
-  it("the rail offset a pane carries is part of where it is expected to be", async () => {
-    // The rail shifts panes sideways without changing the declared percentage. A verifier that ignores
-    // the shift calls every rail-open layout broken.
-    plant([
-      { id: "pan-aaaaaa", rect: laidOut(0, 50, 0, -120), vars: { "--rail-dw": "-120px" } },
-      { id: "pan-bbbbbb", rect: laidOut(50, 50, -120, 120), vars: { "--rail-dx": "-120px", "--rail-dw": "120px" } },
-    ]);
-    const data = (await execute("layout.verify", {}, {})).data as { worst: number };
-    expect(data.worst).toBe(0);
-  });
-
   it("a pane the arrangement names but the screen does not draw comes back as missing", async () => {
-    plant([{ id: "pan-aaaaaa", rect: laidOut(0, 50) }]);
+    plant([{ id: "pan-aaaaaa", rect: laidOut(0, HALF) }]);
     const data = (await execute("layout.verify", {}, {})).data as { missing: string[]; unexpected: string[] };
     expect(data.missing).toEqual(["pan-bbbbbb"]);
     expect(data.unexpected).toEqual([]);
@@ -186,9 +176,9 @@ describe("layout.verify", () => {
 
   it("a pane on screen that the arrangement does not name comes back as unexpected", async () => {
     plant([
-      { id: "pan-aaaaaa", rect: laidOut(0, 50) },
-      { id: "pan-bbbbbb", rect: laidOut(50, 50) },
-      { id: "pan-cccccc", rect: laidOut(50, 50) },
+      { id: "pan-aaaaaa", rect: laidOut(0, HALF) },
+      { id: "pan-bbbbbb", rect: laidOut(HALF + PLANE.gap, HALF) },
+      { id: "pan-cccccc", rect: laidOut(HALF + PLANE.gap, HALF) },
     ]);
     const data = (await execute("layout.verify", {}, {})).data as { missing: string[]; unexpected: string[] };
     expect(data.missing).toEqual([]);
@@ -198,7 +188,7 @@ describe("layout.verify", () => {
   it("a DOM that does not hold the arrangement answers settled false", async () => {
     // The numbers are still reported — they are what a reader needs to see the lag — but the answer
     // states that they describe a DOM built from a different tree, so nobody reads them as a verdict.
-    plant([{ id: "pan-aaaaaa", rect: laidOut(0, 50) }]);
+    plant([{ id: "pan-aaaaaa", rect: laidOut(0, HALF) }]);
     const data = (await execute("layout.verify", {}, {})).data as {
       settled: boolean;
       missing: string[];

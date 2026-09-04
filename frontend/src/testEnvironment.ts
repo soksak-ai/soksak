@@ -1,6 +1,12 @@
-import { afterEach } from "vitest";
+import { afterEach, beforeEach } from "vitest";
+import { setPlaneBox } from "./state/planeBox";
+import { FIXTURE_BOX } from "./test/planes";
 
 export {};
+
+// Every test lays panes out in one plane box. The host measures it in the app; here nothing does,
+// and a plane of 0×0 refuses every split at the floor.
+beforeEach(() => setPlaneBox(FIXTURE_BOX));
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;

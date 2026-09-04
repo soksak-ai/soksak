@@ -9,7 +9,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ViewTabs } from "./ViewTabs";
 import { allGroups, useSessions } from "../state/sessions";
-import { splitLeaf } from "../state/splitTree";
+import { singlePane } from "../state/panePlane";
+import { columnPlane } from "../test/planes";
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { startExecutor } from "../commands/executor";
 
@@ -44,10 +45,10 @@ describe("the + on a pane's tab strip", () => {
   it("does not take focus from what had it", () => {
     const base = useSessions.getState().workspaces[0];
     const space = base.spaces[0];
-    const group = { ...allGroups(space.layout)[0] };
+    const group = { ...allGroups(space)[0] };
     const workspace = {
       ...base,
-      spaces: [{ ...space, activePaneId: group.id, layout: splitLeaf(group) }],
+      spaces: [{ ...space, activePaneId: group.id, panes: [group], layout: singlePane(group.id) }],
     };
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
     startExecutor();
@@ -76,20 +77,15 @@ describe("the + on a pane's tab strip", () => {
   it("activates its own pane", async () => {
     const base = useSessions.getState().workspaces[0];
     const space = base.spaces[0];
-    const first = { ...allGroups(space.layout)[0] };
+    const first = { ...allGroups(space)[0] };
     const second = { ...first, id: "pan-second", tabs: [...first.tabs] };
     const workspace = {
       ...base,
       spaces: [{
         ...space,
         activePaneId: first.id,
-        layout: {
-          type: "split" as const,
-          id: "s-1",
-          dir: "col" as const,
-          sizes: [0.5, 0.5],
-          children: [splitLeaf(first), splitLeaf(second)],
-        },
+        panes: [first, second],
+        layout: columnPlane([first.id, second.id]),
       }],
     };
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });

@@ -1,7 +1,6 @@
 import { moduleState } from "./moduleState";
 import {
   arrangementMoves,
-  moveOffsetPx,
   projectionGeometryChanged,
   type ArrangementMove,
 } from "./railArrangement";
@@ -120,18 +119,12 @@ export interface LayoutViewGroup {
 export function viewLayoutMoves(
   moves: readonly ArrangementMove[],
   groups: readonly LayoutViewGroup[],
-  hostWidthPx: number,
-  railWidthPx: number,
 ): LayoutMove[] {
-  if (!Number.isFinite(hostWidthPx) || hostWidthPx <= 0) {
-    throw new Error(tmsg("layout.host.widthInvalid", { width: hostWidthPx }));
-  }
   const groupsById = new Map(groups.map((group) => [group.id, group]));
   return moves.flatMap((move) => {
     const group = groupsById.get(move.id);
     if (!group) return [];
-    const dx = moveOffsetPx(move, hostWidthPx, railWidthPx);
-    return group.viewIds.map((viewId) => ({ viewId, dx }));
+    return group.viewIds.map((viewId) => ({ viewId, dx: move.dLeft }));
   });
 }
 
@@ -140,15 +133,8 @@ export function viewLayoutChange(
   from: { railPresent: boolean; station: number; focusId: string | null; cells: Array<{ id: string; rect: { left: number; top: number; width: number; height: number } }> },
   to: { railPresent: boolean; station: number; focusId: string | null; cells: Array<{ id: string; rect: { left: number; top: number; width: number; height: number } }> },
   groups: readonly LayoutViewGroup[],
-  hostWidthPx: number,
-  railWidthPx: number,
 ): LayoutChange {
-  const moves = viewLayoutMoves(
-    arrangementMoves(from, to),
-    groups,
-    hostWidthPx,
-    railWidthPx,
-  );
+  const moves = viewLayoutMoves(arrangementMoves(from, to), groups);
   const affected = new Set(moves.map(({ viewId }) => viewId));
   const paneParticipants = groups.flatMap(({ panePresentationViewIds }) => panePresentationViewIds);
   const settlementParticipants = (targets: readonly LayoutPanePresentationTarget[]) => {

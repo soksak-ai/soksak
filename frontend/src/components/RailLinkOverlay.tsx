@@ -1,10 +1,7 @@
 import { useCallback, memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import type { RailRect } from "../lib/railPlacement";
-import type { RailRelationState } from "../lib/railArrangement";
+import type { RailRelationState, Rect } from "../lib/railArrangement";
 import { moduleState } from "../lib/moduleState";
-import {
-  railLinkBoxes,
-} from "../lib/railLinkShape";
+import { railLinkBoxes, railSeamX } from "../lib/railLinkShape";
 import { useSettings } from "../state/settings";
 import { useTheme } from "../state/theme";
 import {
@@ -42,9 +39,9 @@ export const RELATION_MOMENT_MS = 600;
 export const RailLinkOverlay = memo(function RailLinkOverlay({
   contentId,
   relation,
-  railWidth,
   paneInset,
-  railStation,
+  gap,
+  railRect,
   targetRect,
   projected = false,
   nativeVisible = false,
@@ -52,13 +49,14 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
   contentId: string;
   /** The public state produced by the arrangement resolver — this component does not re-judge the relation or border branch. */
   relation: RailRelationState;
-  railWidth: number;
   /** Shared pane-grid inset. Relation geometry and pane geometry use the same inner rectangle. */
   paneInset: number;
-  /** The width pushed in from the right — with a pushing sidebar the board is that much narrower. Omit it and
-   *  the projection stretches, the cell runs outside the host and the path goes diagonal. */
-  railStation: number;
-  targetRect: RailRect | null;
+  /** The corridor between two cards on the plane. */
+  gap: number;
+  /** The rail on the plane, in plane px. */
+  railRect: Rect | null;
+  /** The pane beside it, in plane px. */
+  targetRect: Rect | null;
   /** Whether this adjacency was formed by focus-near projection (replacement) — the only input for the seam line. */
   projected?: boolean;
   /** Only the active workspace contributes to the window-owned native plane. */
@@ -153,15 +151,9 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
     return () => clearTimeout(timer);
   }, [railRelation, identity]);
 
-  const boxes = projected && targetRect && relation.borderMode !== "none"
-    ? railLinkBoxes(
-        size.width,
-        size.height,
-        railWidth,
-        railStation,
-        targetRect,
-        paneInset,
-      )
+  const boxes = projected && railRect && targetRect && relation.borderMode !== "none"
+    && size.width > 0 && size.height > 0
+    ? railLinkBoxes(railRect, targetRect, paneInset)
     : null;
   // Card perimeter ownership is structural: .sidebar.rail-* and .pane are the
   // only owners. This relation layer is not another card and must never draw a
@@ -184,12 +176,7 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
     const origin = host.getBoundingClientRect();
     const decorations = [];
     if (projected && railSeamStyle === "seam") {
-        const eps = 1;
-        const seamX = Math.abs(boxes.rail.x + boxes.rail.width - boxes.panel.x) < eps
-          ? boxes.panel.x
-          : Math.abs(boxes.panel.x + boxes.panel.width - boxes.rail.x) < eps
-            ? boxes.rail.x
-            : null;
+        const seamX = railSeamX(boxes.rail, boxes.panel, gap);
         const y0 = Math.max(boxes.rail.y, boxes.panel.y);
         const y1 = Math.min(boxes.rail.y + boxes.rail.height, boxes.panel.y + boxes.panel.height);
         if (seamX !== null && y1 > y0) {
@@ -205,7 +192,7 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
     replaceNativeDecorations(owner, decorations);
     return () => replaceNativeDecorations(owner, []);
   }, [
-    accent, boxes, contentId, flash, nativeVisible, projected,
+    accent, boxes, contentId, flash, gap, nativeVisible, projected,
     railPullFocused, railRelation, railSeamStyle, railSolidColor, relationStroke,
     size.height, size.width, strokeWidth,
   ]);
@@ -256,13 +243,7 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
             // Replacement-adjacency seam — the internal shared edge of the union outline. Natural adjacency is
             // one body and has no seam; only an adjacency formed by projection (replacement) leaves a "stitch
             // mark" as a dashed line of the same width.
-            const eps = 1;
-            const seamX =
-              Math.abs(boxes.rail.x + boxes.rail.width - boxes.panel.x) < eps
-                ? boxes.panel.x
-                : Math.abs(boxes.panel.x + boxes.panel.width - boxes.rail.x) < eps
-                  ? boxes.rail.x
-                  : null;
+            const seamX = railSeamX(boxes.rail, boxes.panel, gap);
             const y0 = Math.max(boxes.rail.y, boxes.panel.y);
             const y1 = Math.min(
               boxes.rail.y + boxes.rail.height,

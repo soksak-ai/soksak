@@ -69,7 +69,7 @@ describe("a view leaving the layout for good", () => {
     const workspace = useSessions.getState().workspaces.find((w) => w.id === WORKSPACE);
     const contentId = workspace!.activeSpaceId;
     const content = workspace!.spaces.find((c) => c.id === contentId);
-    const held = allViews(content!.layout).map((view) => view.id);
+    const held = allViews(content!).map((view) => view.id);
     expect(held.length).toBeGreaterThan(1);
 
     useCloseConfirm.getState().requestCloseContent(WORKSPACE, contentId);
@@ -94,7 +94,7 @@ describe("a view leaving the layout for good", () => {
     // Closing the view is the person's act. An owner that will not end its session does not get to
     // keep the view on screen — the refusal is reported, and the view goes.
     const workspace = useSessions.getState().workspaces.find((w) => w.id === WORKSPACE);
-    const still = workspace!.spaces.flatMap((c) => allViews(c.layout)).some((v) => v.id === viewId);
+    const still = workspace!.spaces.flatMap((c) => allViews(c)).some((v) => v.id === viewId);
     expect(still).toBe(false);
   });
 });

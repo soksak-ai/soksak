@@ -45,7 +45,7 @@ function emptyActivePane(): void {
   const workspace = workspaces.find((t) => t.id === useSessions.getState().activeId)!;
   const space =
     workspace.spaces.find((c) => c.id === workspace.activeSpaceId) ?? workspace.spaces[0];
-  const panes = allGroups(space.layout);
+  const panes = allGroups(space);
   const g = panes.find((x) => x.id === space.activePaneId) ?? panes[0];
   g.tabs = [];
   g.activeTabId = "";
@@ -119,16 +119,12 @@ describe("pane.split has no default program", () => {
   });
 
   it("rejects an explicit unavailable program without creating a blank pane", async () => {
-    const before = allGroups(
-      useSessions.getState().workspaces[0].spaces[0].layout,
-    ).map((pane) => pane.id);
+    const before = allGroups(useSessions.getState().workspaces[0].spaces[0]).map((pane) => pane.id);
     const r = await execute("pane.split", {
       side: "left", program: "terminal-not-installed", mountTimeoutMs: 0,
     }, {});
     expect(r).toMatchObject({ ok: false, code: "TARGET_NOT_FOUND" });
-    const after = allGroups(
-      useSessions.getState().workspaces[0].spaces[0].layout,
-    ).map((pane) => pane.id);
+    const after = allGroups(useSessions.getState().workspaces[0].spaces[0]).map((pane) => pane.id);
     expect(after).toEqual(before);
   });
 });

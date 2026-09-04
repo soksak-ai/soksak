@@ -1,9 +1,4 @@
-import {
-  insetRailRect,
-  projectRailRect,
-  railLeftPx,
-  type RailRect,
-} from "./railPlacement";
+import type { Rect } from "./railArrangement";
 
 export interface Point {
   x: number;
@@ -31,66 +26,32 @@ export function insetClippedEdges(
   }));
 }
 
-// Non-adjacency suppression tolerance (logical %p). A linked cell always starts at the clean
-// line (rail station), so a larger gap is not float error but a mid-state where the box does not
-// yet touch the rail.
-export const RAIL_LINK_ADJACENT_TOLERANCE = 1;
-
-export type RailRelationSide = "left" | "right" | "detached";
-
-/** Single criterion classifying which rail edge the actual logical rect touches. */
-export function classifyRailRelation(
-  station: number,
-  target: RailRect,
-): RailRelationSide {
-  const right = target.left + target.width;
-  if (Math.abs(right - station) <= RAIL_LINK_ADJACENT_TOLERANCE) return "left";
-  if (Math.abs(target.left - station) <= RAIL_LINK_ADJACENT_TOLERANCE) return "right";
-  return "detached";
+/**
+ * The rail and the pane beside it in the host's px space. The plane's origin is the host inset by
+ * the pane inset (UI-GEOMETRY R1b), so a plane rect becomes a host rect by that offset alone.
+ */
+export function railLinkBoxes(
+  rail: Rect,
+  panel: Rect,
+  paneInset: number,
+): { rail: PixelBox; panel: PixelBox } {
+  const inset = Math.max(0, paneInset);
+  const box = (r: Rect): PixelBox => ({ x: inset + r.left, y: inset + r.top, width: r.width, height: r.height });
+  return { rail: box(rail), panel: box(panel) };
 }
 
 /**
- * Whether rail and linked box draw as one border — the relation-surface render gate.
- *
- * The linked box **starts at the rail** (App builds it that way: from the rail to the right end
- * of the joined panel). So mode does not matter here — pull or rail travel, the box's left edge
- * is the station. A widened gap is a mid-state not yet arrived, so suppress it.
+ * The corridor between the rail and the pane beside it: its centre line, or null when they do not
+ * stand beside each other. Two cards on one plane never touch (split-pane R5), so the seam is drawn
+ * through the gap that separates them.
  */
-export function railLinkAdjacent(station: number, target: RailRect): boolean {
-  return classifyRailRelation(station, target) !== "detached";
-}
-
-/** Resolve the logical panel rect and the fixed-width rail into the same px coordinate space. */
-export function railLinkBoxes(
-  hostWidth: number,
-  hostHeight: number,
-  railWidth: number,
-  station: number,
-  target: RailRect,
-  paneInset: number,
-): { rail: PixelBox; panel: PixelBox } | null {
-  const inset = Math.max(0, paneInset);
-  const innerWidth = hostWidth - inset * 2;
-  const innerHeight = hostHeight - inset * 2;
-  if (innerWidth <= 0 || innerHeight <= 0 || railWidth <= 0) return null;
-  // The host is the reference — the fixed reservation remains, while its visible
-  // rail frame follows the same inset lanes as the linked pane.
-  const projected = projectRailRect(target, station, innerWidth, railWidth);
-  const railFrame = insetRailRect(railWidth, inset);
-  return {
-    rail: {
-      x: inset + railLeftPx(innerWidth, railWidth, station),
-      y: inset,
-      width: railFrame.widthPx,
-      height: innerHeight,
-    },
-    panel: {
-      x: inset + projected.left,
-      y: inset + (target.top / 100) * innerHeight,
-      width: projected.width,
-      height: (target.height / 100) * innerHeight,
-    },
-  };
+export function railSeamX(rail: PixelBox, panel: PixelBox, gap: number): number | null {
+  const tolerance = gap + 1;
+  const railRight = rail.x + rail.width;
+  const panelRight = panel.x + panel.width;
+  if (Math.abs(panel.x - railRight) <= tolerance) return (railRight + panel.x) / 2;
+  if (Math.abs(rail.x - panelRight) <= tolerance) return (panelRight + rail.x) / 2;
+  return null;
 }
 
 function compact(points: Point[]): Point[] {

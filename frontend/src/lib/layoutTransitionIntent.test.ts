@@ -10,16 +10,19 @@ import {
   publishLayoutTransitionIntent,
   registerLayoutTransitionIntentHost,
 } from "./layoutTransitionIntent";
+import { singlePane } from "../state/panePlane";
 
-type Leaf = { id: string };
-
-const arrangement = (station: number, focusId: string): Arrangement<Leaf> => ({
+const arrangement = (station: number, focusId: string): Arrangement => ({
   railPresent: true,
   station,
-  cleanLines: [0, 50, 100],
-  displayLayout: { type: "leaf", value: { id: focusId } },
+  cleanLines: [0, 500, 1000],
+  standingLines: [0, 1, 2],
+  lineSet: "1x1:pane@0-1,0-1",
+  display: singlePane(focusId),
+  rail: null,
+  dividers: [],
   swapped: false,
-  cells: [{ id: focusId, rect: { left: station, top: 0, width: 50, height: 100 } }],
+  cells: [{ id: focusId, rect: { left: station, top: 0, width: 500, height: 1000 } }],
   focusId,
   betweenIds: [],
   maximizedId: null,

@@ -30,6 +30,7 @@ import { execute } from "./registry";
 import { useSessions, type Workspace } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
 import { SECTION_PLACES } from "../state/sectionSets";
+import { singlePane } from "../state/panePlane";
 
 function workspace(open: Record<string, boolean>): Workspace {
   return {
@@ -48,23 +49,20 @@ function workspace(open: Record<string, boolean>): Workspace {
         id: "spc-aaaaaa",
         title: "1",
         activePaneId: "pan-aaaaaa",
-        layout: {
-          type: "leaf",
-          id: "lea-aaaaaa",
-          value: {
-            id: "pan-aaaaaa",
-            activeTabId: "tab-aaaaaa",
-            tabs: [
-              {
-                id: "tab-aaaaaa",
-                kind: "plugin",
-                title: "t",
-                pluginId: "fixture",
-                view: "content",
-              },
-            ],
-          },
-        },
+        panes: [{
+          id: "pan-aaaaaa",
+          activeTabId: "tab-aaaaaa",
+          tabs: [
+            {
+              id: "tab-aaaaaa",
+              kind: "plugin",
+              title: "t",
+              pluginId: "fixture",
+              view: "content",
+            },
+          ],
+        }],
+        layout: singlePane("pan-aaaaaa"),
       },
     ],
     activeSpaceId: "spc-aaaaaa",

@@ -34,10 +34,8 @@ const STORED_BEFORE = {
           id: "spc-a1b2c3",
           title: "s",
           activeGroupId: "pan-a1b2c3",
-          layout: {
-            t: "l",
-            v: { id: "pan-a1b2c3", views: [], activeViewId: "" },
-          },
+          groups: [{ id: "pan-a1b2c3", views: [], activeViewId: "" }],
+          plane: { xs: [0, 1], ys: [0, 1], cards: [{ id: "pan-a1b2c3", c0: 0, c1: 1, r0: 0, r1: 1 }] },
         },
       ],
     },

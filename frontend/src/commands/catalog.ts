@@ -18,30 +18,22 @@ import {
 } from "./windowRecorder";
 import { tabIconOf } from "../lib/tabIcon";
 import { tmsg, key} from "../i18n";
-import { computeSplitLayout } from "../lib/splitLayout";
 import { railJournal } from "../lib/railJournal";
 import { fingerprintOf } from "./stateFingerprint";
-import {
-  DEFAULT_RAIL_PLACEMENT,
-  snapRailStation,
-  type RailPlacement,
-} from "../lib/railPlacement";
+import { DEFAULT_RAIL_PLACEMENT, type RailPlacement } from "../lib/railPlacement";
 import { listRecentWorkspaces, removeRecentWorkspace } from "../state/recentWorkspaces";
 import {
   allGroups,
-  err,
+  parkedArrangement,
   projectArrangement,
-  splitAtGroup,
   useSessions,
   type Space,
   type DropZone,
-  type PaneNode,
   type Program,
   type Workspace,
   type Side,
   type Tab,
   type Pane,
-  type CmdErr,
   type SidebarRegion,
 } from "../state/sessions";
 import { SECTION_PLACES, byPlace, type SectionPlace } from "../state/sectionSets";
@@ -72,11 +64,12 @@ import { awaitViewMounted } from "../plugins/viewFocus";
 import { useViewLabels } from "../state/viewLabels";
 import { hasPtyObservation } from "../terminal/ptyObservationStore";
 import { closeViewPermanently } from "../state/permanentViewClose";
-import { computeLayout } from "../components/GroupArea";
 import {
   resolveEffectiveRailRelation,
   type Arrangement,
 } from "../lib/railArrangement";
+import { boundaryShares, railLine, type PlaneState } from "../state/panePlane";
+import { planeBox } from "../state/planeBox";
 import { catalogJson, execute, register, type CommandContext, type CommandHint } from "./registry";
 import { notFound } from "./refuse";
 import { registerFsWatchCatalog } from "./catalogFsWatch";
@@ -174,16 +167,15 @@ interface LayoutSpaceSpec {
 // data-node address and the command parameters take the same function — no second standard). Here
 // it only adds sizes to that result.
 const EDGES = ["right", "bottom", "left", "top"] as const satisfies readonly GutterSide[];
-const paneIdOf = (pane: Pane) => pane.id;
 
 // The canonical gutter the response names — the direction axis on the command surface is edge (side
 // means pane.split's split direction, a different axis, so one word never has two meanings here).
 function gutterEcho(
-  layout: PaneNode,
+  layout: PlaneState,
   paneId: string,
   edge: GutterSide,
 ): { pane: string; edge: GutterSide } | null {
-  const canonical = canonicalGutter(layout, paneId, edge, paneIdOf);
+  const canonical = canonicalGutter(layout, paneId, edge);
   return canonical ? { pane: canonical.pane, edge: canonical.side } : null;
 }
 
@@ -202,23 +194,6 @@ function sidebarSplitIdOf(layout: SidebarLayout, viewKey: string): string | null
   return walk(layout, null);
 }
 
-// Current sizes of the split containing the resolved gutter — this read exists because resizeSplit
-// requires the full sizes array (moving one gutter re-reads the other ratios and writes them back).
-// If that interface changes to take one gutter's ratio, this function disappears entirely — that is
-// the removal condition, and until then it stays a local read here (promoting it gives a home to
-// something that must vanish). If promotion becomes necessary, put it next to resizeSplitTree and
-// findSplitTree in splitTree.ts as a leaf generic — that file is the single abstraction for both the
-// pane tree and the sidebar tree, so a read that fits only one side breaks the symmetry.
-function splitSizesOf(node: PaneNode, splitId: string): number[] | null {
-  if (node.type === "leaf") return null;
-  if (node.id === splitId) return node.sizes;
-  for (const c of node.children) {
-    const hit = splitSizesOf(c, splitId);
-    if (hit) return hit;
-  }
-  return null;
-}
-
 // Search every workspace for the location of a tab id. Terminal targets resolve through this function
 // too — a terminal is a plugin view and its instance is a tab (no core terminal).
 /** Tab location — other catalog files (capture etc.) use this same one (two copies answer different places for one id). */
@@ -226,7 +201,7 @@ export function locateTab(tabId: string): Location | null {
   const s = useSessions.getState();
   for (const workspace of s.workspaces) {
     for (const space of workspace.spaces) {
-      for (const pane of allGroups(space.layout)) {
+      for (const pane of allGroups(space)) {
         const tab = pane.tabs.find((v) => v.id === tabId);
         if (tab) return { workspace, space, pane, tab };
       }
@@ -240,7 +215,7 @@ function locatePane(paneId: string): Location | null {
   const s = useSessions.getState();
   for (const workspace of s.workspaces) {
     for (const space of workspace.spaces) {
-      const pane = allGroups(space.layout).find((g) => g.id === paneId);
+      const pane = allGroups(space).find((g) => g.id === paneId);
       if (pane) {
         const tab =
           pane.tabs.find((v) => v.id === pane.activeTabId) ?? pane.tabs[0];
@@ -261,8 +236,8 @@ function activeChain(): Location | null {
     workspace.spaces[0];
   if (!space) return null;
   const pane =
-    allGroups(space.layout).find((g) => g.id === space.activePaneId) ??
-    allGroups(space.layout)[0];
+    allGroups(space).find((g) => g.id === space.activePaneId) ??
+    allGroups(space)[0];
   if (!pane) return null;
   const tab =
     pane.tabs.find((v) => v.id === pane.activeTabId) ?? pane.tabs[0];
@@ -346,8 +321,18 @@ function serializeSplitStructure<L>(
   };
 }
 
-function serializeLayout(node: PaneNode): object {
-  return serializeSplitStructure(node, (pane) => ({ pane: pane.id }));
+/** A plane as the library states it: the shared lines and each card's span. */
+function serializePlane(plane: PlaneState): object {
+  return {
+    xs: plane.xs,
+    ys: plane.ys,
+    cards: plane.cards.map((card) => ({
+      id: card.id,
+      c0: card.c0, c1: card.c1, r0: card.r0, r1: card.r1,
+      ...(card.width !== undefined ? { width: card.width } : {}),
+      ...(card.fixed ? { fixed: true } : {}),
+    })),
+  };
 }
 
 function serializeSidebarLayout(node: SidebarLayout): object {
@@ -360,36 +345,23 @@ function serializeSidebarLayout(node: SidebarLayout): object {
 function serializeSpace(
   c: Space,
   activeSpaceId: string,
-  /** The solve for this space (arrangement solver). An inactive space with no rail is null — the canonical order as is. */
-  arrangement: Arrangement<Pane> | null,
+  /** The solve for this space. The active space's is the screen's; a parked space's is its own plane without the rail. */
+  arrangement: Arrangement,
   railPlacement: RailPlacement["mode"] = "flow",
 ) {
-  const displayLayout = arrangement?.displayLayout ?? c.layout;
-  const canonicalLayout = serializeLayout(c.layout);
-  const canonicalCells = computeLayout(c.layout).cells;
-  const projectedCells = computeLayout(displayLayout).cells;
-  const maximizedPane = c.maximizedTabId
-    ? (projectedCells.find(({ group }) => group.id === c.activePaneId) ??
-      projectedCells.find(({ group }) =>
-        group.tabs.some((tab) => tab.id === c.maximizedTabId),
-      ) ?? null)
-    : null;
-  const cells = maximizedPane
-    ? [{ group: maximizedPane.group, rect: { left: 0, top: 0, width: 100, height: 100 } }]
-    : projectedCells;
-  const canonicalOrder = canonicalCells.map(({ group }) => group.id);
-  const projectedOrder = projectedCells.map(({ group }) => group.id);
+  const canonicalOrder = allGroups(c).map((group) => group.id);
+  const projectedOrder = arrangement.cells.map((cell) => cell.id);
   const swappedPanes = canonicalOrder.filter(
     (id, index) => projectedOrder[index] !== id,
   );
-  const projection = c.maximizedTabId
+  const projection = arrangement.maximizedId
     ? {
         kind: "maximized" as const,
         applied: true,
         focusedPaneId: c.activePaneId,
         swappedPanes: [] as string[],
       }
-    : displayLayout !== c.layout
+    : arrangement.swapped
       ? {
           kind: "switched" as const,
           applied: true,
@@ -407,53 +379,56 @@ function serializeSpace(
   const railRelation = resolveEffectiveRailRelation({
     contentId: c.id,
     arrangement,
+    panes: c.panes,
     placement: railPlacement,
+    gap: planeBox().gap,
   }).state;
+  const panesById = new Map(c.panes.map((group) => [group.id, group]));
   return {
     id: c.id,
     title: c.title,
     active: c.id === activeSpaceId,
     activePaneId: c.activePaneId,
     maximizedTabId: c.maximizedTabId ?? null,
-    // layout/panes = the screen right now. canonicalLayout = read-only serialization of the stored
-    // SplitTree. Consumers need not mistake the projection for the canonical state or read the private store.
-    layout: maximizedPane
-      ? { pane: maximizedPane.group.id }
-      : serializeLayout(displayLayout),
-    canonicalLayout,
+    // layout = the plane the screen draws right now. canonicalLayout = the space's own plane as
+    // stored. Consumers need not mistake the projection for the canonical state or read the private store.
+    layout: serializePlane(arrangement.display),
+    canonicalLayout: serializePlane(c.layout),
     projection,
     railRelation,
-    panes: cells.map(({ group, rect }) => ({
-      id: group.id,
-      rect: {
-        left: Math.round(rect.left * 10) / 10,
-        top: Math.round(rect.top * 10) / 10,
-        width: Math.round(rect.width * 10) / 10,
-        height: Math.round(rect.height * 10) / 10,
-      },
-      active: group.id === c.activePaneId,
-      activeTabId: group.activeTabId,
-      tabs: group.tabs.map(serializeTab),
-    })),
+    rail: arrangement.rail,
+    panes: arrangement.cells.flatMap(({ id, rect }) => {
+      const group = panesById.get(id);
+      if (!group) return [];
+      return [{
+        id: group.id,
+        rect: {
+          left: Math.round(rect.left * 10) / 10,
+          top: Math.round(rect.top * 10) / 10,
+          width: Math.round(rect.width * 10) / 10,
+          height: Math.round(rect.height * 10) / 10,
+        },
+        active: group.id === c.activePaneId,
+        activeTabId: group.activeTabId,
+        tabs: group.tabs.map(serializeTab),
+      }];
+    }),
   };
 }
 
-// Public facts about the left rail position. The stored PIN station and the station actually applied
-// on the current grid are kept apart. Reading a stale snapshot's dirty PIN does not change the stored
-// value; only an explicit PIN command snaps to a valid line and stores it.
+// Public facts about the left rail position: the placement mode, where the rail stands on the
+// plane (px and line), and the lines it could stand on.
 function serializeRailPosition(t: Workspace) {
   const arrangement = projectArrangement(t);
-  const cleanLines = arrangement?.cleanLines ?? [0, 100];
   const placement: RailPlacement = t.railPlacement ?? DEFAULT_RAIL_PLACEMENT;
-  const effectiveStation = arrangement?.station ?? 0;
-  return placement.mode === "pin"
-    ? {
-        mode: placement.mode,
-        station: placement.station,
-        effectiveStation,
-        cleanLines,
-      }
-    : { mode: placement.mode, effectiveStation, cleanLines };
+  const active = t.spaces.find((c) => c.id === t.activeSpaceId);
+  return {
+    mode: placement.mode,
+    effectiveStation: arrangement?.station ?? 0,
+    line: active ? railLine(active.layout) : null,
+    cleanLines: arrangement?.cleanLines ?? [],
+    standingLines: arrangement?.standingLines ?? [],
+  };
 }
 
 function serializeTree() {
@@ -480,7 +455,7 @@ function serializeTree() {
           serializeSpace(
             c,
             t.activeSpaceId,
-            c.id === t.activeSpaceId ? arrangement : null,
+            (c.id === t.activeSpaceId ? arrangement : null) ?? parkedArrangement(c),
             railPosition.mode,
           ),
         ),
@@ -618,7 +593,9 @@ export function registerCatalog(): void {
       const relation = resolveEffectiveRailRelation({
         contentId: t.activeSpaceId,
         arrangement: solved,
+        panes: t.spaces.find((c) => c.id === t.activeSpaceId)?.panes ?? [],
         placement: (t.railPlacement ?? DEFAULT_RAIL_PLACEMENT).mode,
+        gap: planeBox().gap,
       }).state;
       return {
         projectId: t.id,
@@ -741,14 +718,13 @@ export function registerCatalog(): void {
         }
         onScreen.delete(cell.id);
         const measured = el.getBoundingClientRect();
-        // The rail shifts a pane sideways. The shift it was rendered with is on the pane itself.
-        const railDx = read(el, "--rail-dx");
-        const railDw = read(el, "--rail-dw");
+        // The plane's origin is the host inset by the pane inset (UI-GEOMETRY R1b); a declared
+        // rect is in px from there.
         const expected = {
-          left: hostRect.left + (hostRect.width * cell.rect.left) / 100 + railDx + inset,
-          top: hostRect.top + (hostRect.height * cell.rect.top) / 100 + inset,
-          width: (hostRect.width * cell.rect.width) / 100 + railDw - inset * 2,
-          height: (hostRect.height * cell.rect.height) / 100 - inset * 2,
+          left: hostRect.left + inset + cell.rect.left,
+          top: hostRect.top + inset + cell.rect.top,
+          width: cell.rect.width,
+          height: cell.rect.height,
         };
         const delta = {
           left: measured.left - expected.left,
@@ -1347,19 +1323,19 @@ export function registerCatalog(): void {
         description: key("cmd.rail.position.param.mode"),
         enum: ["flow", "pin"],
       },
-      station: {
+      line: {
         type: "number",
-        description: key("cmd.rail.position.param.station"),
+        description: key("cmd.rail.position.param.line"),
       },
     },
     returns:
-      "{ projectId, railPosition:{ mode, station?(persisted), effectiveStation, cleanLines[] } }",
+      "{ projectId, railPosition:{ mode, effectiveStation(px), line, cleanLines[](px), standingLines[] } }",
     message: () => tmsg("msg.rail.position"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
       "rail.position",
       'rail.position \'{"mode":"pin"}\'',
-      'rail.position \'{"mode":"pin","station":50}\'',
+      'rail.position \'{"mode":"pin","line":1}\'',
       'rail.position \'{"mode":"flow"}\'',
     ],
     handler: (p, ctx) => {
@@ -1367,7 +1343,7 @@ export function registerCatalog(): void {
       if (!t) return notFound("msg.workspace.notFound");
 
       const mode = p.mode as "flow" | "pin" | undefined;
-      const requested = p.station as number | undefined;
+      const requested = p.line as number | undefined;
       if (mode === undefined) {
         if (requested !== undefined) {
           return {
@@ -1393,25 +1369,21 @@ export function registerCatalog(): void {
         const changed = S().setLeftRailPlacement(t.id, { mode: "flow" });
         if (!changed.ok) return changed;
       } else {
-        if (
-          requested !== undefined &&
-          (!Number.isFinite(requested) || requested < 0 || requested > 100)
-        ) {
-          return {
-            ok: false as const,
-            code: "INVALID_PARAMS",
-            message: tmsg("msg.rail.position.stationRange"),
-          };
+        if (requested !== undefined) {
+          const current = serializeRailPosition(t);
+          if (!Number.isInteger(requested) || !current.standingLines.includes(requested)) {
+            return {
+              ok: false as const,
+              code: "INVALID_PARAMS",
+              message: tmsg("msg.rail.position.lineNotStanding", {
+                lines: current.standingLines.join(", "),
+              }),
+            };
+          }
+          const moved = S().moveRail(t.id, requested);
+          if (!moved.ok) return moved;
         }
-        const current = serializeRailPosition(t);
-        const station = snapRailStation(
-          current.cleanLines,
-          requested ?? current.effectiveStation,
-        );
-        const changed = S().setLeftRailPlacement(t.id, {
-          mode: "pin",
-          station,
-        });
+        const changed = S().setLeftRailPlacement(t.id, { mode: "pin" });
         if (!changed.ok) return changed;
       }
 
@@ -1774,7 +1746,7 @@ export function registerCatalog(): void {
   };
   const visibleSpaceViews = (space: Space): string[] => {
     if (space.maximizedTabId) return [space.maximizedTabId];
-    return allGroups(space.layout)
+    return allGroups(space)
       .map((pane) => pane.tabs.find((view) => view.id === pane.activeTabId)?.id)
       .filter((view): view is string => typeof view === "string");
   };
@@ -1933,7 +1905,7 @@ export function registerCatalog(): void {
           t.spaces.find((x) => x.id === t.activeSpaceId));
       if (!c) return notFound("msg.space.notFoundId", { id: String(p.space) });
       const arrangement =
-        c.id === t.activeSpaceId ? projectArrangement(t) : null;
+        (c.id === t.activeSpaceId ? projectArrangement(t) : null) ?? parkedArrangement(c);
       const out = serializeSpace(
         c,
         t.activeSpaceId,
@@ -1953,81 +1925,8 @@ export function registerCatalog(): void {
     },
   });
 
-  // A split that cannot be drawn is refused instead of performed.
-  //
-  // The .pane rule takes --pane-inset off both edges of a cell, so a cell narrower than the inset pair
-  // has no interior: CSS clamps the negative width to 0, and the screen no longer shows the tree.
-  //
-  // Every resulting cell is checked, not the target alone. A split inserts a sibling and equalSizes
-  // redistributes the whole row, so the cell that runs out of room is usually one nobody touched.
-  // Measured 2026-08-16: checking only the halved target let a 999px space reach panes at 0.2% declared
-  // width, drawn at 0, with layout.verify reporting 10.4px of difference across 6 panes.
-  //
-  // splitAtGroup is the same function the store applies — the rule is reused here, not restated.
-  //
-  // The floor is a measurement, never an assumption: with nothing on screen — headless, or before the
-  // first paint — the split goes through, because a refusal there would be a guess. The rail is not in
-  // the arithmetic either; it only ever takes width away, so a cell that spans the station can still be
-  // clamped, and layout.verify is what reports that.
-  const splitFloor = (workspaceId: string, paneId: string, side: Side): CmdErr | null => {
-    const t = S().workspaces.find((w) => w.id === workspaceId);
-    const space = t?.spaces.find((c) => c.id === t.activeSpaceId);
-    if (!space) return null;
-    const host = document.querySelector<HTMLElement>(`[data-node="layout/space/${space.id}"]`);
-    if (!host) return null;
-    const inset = Number.parseFloat(getComputedStyle(host).getPropertyValue("--pane-inset"));
-    if (!Number.isFinite(inset)) return null;
-    const box = host.getBoundingClientRect();
-    if (box.width <= 0 || box.height <= 0) return null;
-
-    const placeholder = { id: "pan-floor", activeTabId: undefined, tabs: [] } as unknown as Pane;
-    const { cells } = computeSplitLayout(splitAtGroup(space.layout, paneId, side, placeholder));
-    // The rail is inserted into the row: every cell keeps its percentage and loses pixels in
-    // proportion, so the row is narrower than the space box by the rail's whole width. Leaving it
-    // out reads a row 160px wider than the one on screen — measured 2026-08-16, a single pane in a
-    // 999px space with the rail open was 827px, which is 999 less 160 of rail and 12 of inset pair.
-    const rowWidth = box.width - railWidthOf(space.layout, host);
-    const floor = inset * 2;
-    let tightest = Infinity;
-    for (const cell of cells) {
-      tightest = Math.min(
-        tightest,
-        (rowWidth * cell.rect.width) / 100,
-        (box.height * cell.rect.height) / 100,
-      );
-    }
-    if (tightest > floor) return null;
-    return err(
-      "TOO_SMALL",
-      tmsg("msg.pane.split.tooSmall", {
-        along: String(Math.round(tightest * 10) / 10),
-        floor: String(Math.round(floor)),
-      }),
-    );
-  };
-
-  // What the rail takes out of the row, in pixels, read from a pane that is already drawn.
-  //
-  // A pane holds its own share in --rail-dw, which the projection sets to -(width/100) of the
-  // rail width. Dividing that share back out gives the whole, and every cell in the row loses the
-  // same proportion. Reading it from the pane rather than hunting for the rail element keeps this
-  // from depending on a second node's address.
-  //
-  // Zero when the rail is closed, when no pane is drawn yet, or when the pane's declared width is
-  // zero — all three are "nothing measurable", and guessing a width there would refuse splits that
-  // are fine.
-  const railWidthOf = (layout: PaneNode, host: HTMLElement): number => {
-    for (const cell of computeSplitLayout(layout).cells) {
-      const el = host.querySelector<HTMLElement>(`[data-node="layout/pane/${cell.value.id}"]`);
-      if (!el) continue;
-      const share = Number.parseFloat(getComputedStyle(el).getPropertyValue("--rail-dw"));
-      if (!Number.isFinite(share)) continue;
-      if (share === 0 || cell.rect.width <= 0) continue;
-      return (-share * 100) / cell.rect.width;
-    }
-    return 0;
-  };
-
+  // A split that would put a pane under its floor is refused by the plane (split-pane minSize):
+  // splitWithNewView answers TOO_SMALL and performs nothing.
   register("pane.split", {
     description: key("cmd.pane.split.desc"),
     triggers: { ko: "칸 나누기 분할 화면 분할 옆에 열기 나란히" },
@@ -2062,8 +1961,6 @@ export function registerCatalog(): void {
     handler: async (p, ctx) => {
       const loc = resolvePane(p, ctx);
       if (!loc) return notFound("msg.pane.notFound");
-      const wall = splitFloor(loc.workspace.id, loc.pane.id, p.side as Side);
-      if (wall) return wall;
       const r = S().splitWithNewView(
         loc.workspace.id,
         loc.pane.id,
@@ -2230,26 +2127,23 @@ export function registerCatalog(): void {
         };
       }
       const layout = loc.space.layout;
-      const gutter = resolveGutter(layout, loc.pane.id, edge, paneIdOf);
-      const current = gutter ? splitSizesOf(layout, gutter.splitId) : null;
-      if (!gutter || !current) {
+      const gutter = resolveGutter(layout, loc.pane.id, edge);
+      if (!gutter) {
         return notFound("msg.pane.noGutter", { pane: loc.pane.id, edge });
       }
-      const sizes = [...current];
-      const pair = sizes[gutter.index] + sizes[gutter.index + 1];
-      // One gutter moves only the two neighbouring slots (that is what dragging a gutter does) — the
-      // rest stay unchanged. A gutter named by left/top is the preceding sibling's forward gutter, so
-      // the requested pane is in the trailing slot.
-      sizes[gutter.index] = isCanonicalSide(edge) ? pair * ratio : pair * (1 - ratio);
-      sizes[gutter.index + 1] = pair - sizes[gutter.index];
-      const r = S().resizeSplit(loc.workspace.id, gutter.splitId, sizes);
-      return r.ok
-        ? {
-            paneId: loc.pane.id,
-            gutter: gutterEcho(layout, loc.pane.id, edge),
-            sizes,
-          }
-        : r;
+      // One boundary moves only the two slots that meet there (that is what dragging a gutter does)
+      // — the rest stay unchanged. A gutter named by left/top is the boundary before the pane, so
+      // the requested pane is in the slot after it.
+      const r = S().moveBoundary(loc.workspace.id, loc.space.id, gutter, {
+        ratio: isCanonicalSide(edge) ? ratio : 1 - ratio,
+      });
+      if (!r.ok) return r;
+      const after = locatePane(loc.pane.id)?.space.layout ?? layout;
+      return {
+        paneId: loc.pane.id,
+        gutter: gutterEcho(after, loc.pane.id, edge),
+        sizes: boundaryShares(after, gutter.axis, gutter.line),
+      };
     },
   });
 
@@ -2283,27 +2177,18 @@ export function registerCatalog(): void {
         };
       }
       const layout = loc.space.layout;
-      const gutter = resolveGutter(layout, loc.pane.id, edge, paneIdOf);
-      const current = gutter ? splitSizesOf(layout, gutter.splitId) : null;
-      if (!gutter || !current) {
+      const gutter = resolveGutter(layout, loc.pane.id, edge);
+      if (!gutter) {
         return notFound("msg.pane.noGutter", { pane: loc.pane.id, edge });
       }
-      const sizes = [...current];
-      if (p.all === true) {
-        sizes.fill(1 / sizes.length);
-      } else {
-        const half = (sizes[gutter.index] + sizes[gutter.index + 1]) / 2;
-        sizes[gutter.index] = half;
-        sizes[gutter.index + 1] = half;
-      }
-      const r = S().resizeSplit(loc.workspace.id, gutter.splitId, sizes);
-      return r.ok
-        ? {
-            paneId: loc.pane.id,
-            gutter: gutterEcho(layout, loc.pane.id, edge),
-            sizes,
-          }
-        : r;
+      const r = S().equalizeBoundary(loc.workspace.id, loc.space.id, gutter, p.all === true);
+      if (!r.ok) return r;
+      const after = locatePane(loc.pane.id)?.space.layout ?? layout;
+      return {
+        paneId: loc.pane.id,
+        gutter: gutterEcho(after, loc.pane.id, edge),
+        sizes: boundaryShares(after, gutter.axis, gutter.line),
+      };
     },
   });
 
@@ -2714,7 +2599,7 @@ export function registerCatalog(): void {
       const statuses: { tabId: string; code: string; message?: string }[] = [];
       for (const t of S().workspaces)
         for (const c of t.spaces)
-          for (const g of allGroups(c.layout))
+          for (const g of allGroups(c))
             for (const v of g.tabs)
               if (v.status && (!only || v.id === only))
                 statuses.push({

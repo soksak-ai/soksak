@@ -3,12 +3,7 @@ import { moduleState } from "../lib/moduleState";
 import { issueId } from "./ids";
 import { byPlace, focusedPluginOf, placePresent, type SectionPlace } from "./sectionSets";
 import { noteActivation } from "../lib/motionDebug";
-import {
-  DEFAULT_RAIL_PLACEMENT,
-  cleanRailLines,
-  isCleanRailStation,
-  type RailPlacement,
-} from "../lib/railPlacement";
+import { DEFAULT_RAIL_PLACEMENT, type RailPlacement } from "../lib/railPlacement";
 import { useSettings } from "./settings";
 import {
   projectionGeometryChanged,
@@ -21,15 +16,27 @@ import {
 } from "../plugins/programRegistry";
 import { localize, tmsg } from "../i18n";
 import {
-  type SplitTree,
-  splitLeaf,
-  insertBeside,
-  removeLeaf,
-  leavesOf,
-  resizeSplitTree,
-  findSplitTree,
-  mapLeaves,
-} from "./splitTree";
+  closePane as closePlanePane,
+  flowRailLine,
+  hasPane as planeHasPane,
+  hasRail,
+  movePane as movePlanePane,
+  centerBoundary as centerPlaneBoundary,
+  equalizeAxis as equalizePlaneAxis,
+  moveBoundary as movePlaneBoundary,
+  moveBoundaryPx as movePlaneBoundaryPx,
+  paneIds,
+  railLine,
+  resizeRail,
+  singlePane,
+  splitPane as splitPlanePane,
+  standRail,
+  withdrawRail,
+  type PlaneState,
+} from "./panePlane";
+import { planeBox } from "./planeBox";
+import { findSplitTree, mapLeaves, resizeSplitTree } from "./splitTree";
+import { placeWidth } from "./placeWidth";
 import {
   type SidebarLayout,
   type SidebarDrop,
@@ -41,12 +48,11 @@ import {
 import { viewIdFromSurfaceLabel } from "../lib/surfaceLabels";
 import { invalidateLayout } from "../lib/layoutSettlement";
 import { publishLayoutTransitionIntent } from "../lib/layoutTransitionIntent";
-import { computeSplitLayout } from "../lib/splitLayout";
 
 // Three-level structure:
 //   - Top = Workspace: its own sidebar (file tree) + spaces
-//   - Space = layout tree (PaneNode): recursive left/right/top/bottom splits.
-//       Each leaf = Pane (own header + active tab). Split, move, merge by drag or command.
+//   - Space = panes on one plane of shared grid lines (state/panePlane). Each pane has its own
+//       header and active tab. Split, move, merge by drag or command.
 //   - Tab = file (viewer plugin) / plugin (terminal, browser, editor — the core owns no terminal).
 // Inactive workspaces/spaces/tabs are hidden rather than unmounted, which keeps the sessions
 // (PTY/editor/webview) intact.
@@ -163,17 +169,12 @@ export type Tab =
       legacyPaneId?: string;
     };
 
-// Pane: a tab bundle + the active tab. The leaf of the layout tree.
+// Pane: a tab bundle + the active tab. A card on the space's plane.
 export interface Pane {
   id: string;
   tabs: Tab[];
   activeTabId: string;
 }
-
-// Recursive layout tree. leaf = one pane, split = panes grouped by row/column (sizes = split ratio).
-// A space's split tree = the generic SplitTree (leaf value = Pane). split/remove/resize/find come
-// from the single splitTree.ts abstraction (same code as the sidebar SidebarLayout — no duplication).
-export type PaneNode = SplitTree<Pane>;
 
 // Drop position (drag split direction). center = move, the rest = split toward that direction.
 export type DropZone = "center" | "left" | "right" | "top" | "bottom";
@@ -189,7 +190,11 @@ export type Program = string;
 export interface Space {
   id: string;
   title: string; // 1,2,3,… (renameable)
-  layout: PaneNode; // group (split) tree
+  // What each pane holds. Which pane is where is the plane's; the two are joined by pane id, and
+  // every card on the plane but the rail is a pane here (normalizeActiveGroupC).
+  panes: Pane[];
+  // The plane: a card per pane, and the rail's card while it stands (state/panePlane).
+  layout: PlaneState;
   activePaneId: string;
   // Maximized view (fills the whole content area). The layout tree is unchanged — display override
   // only. undefined = normal. normalize clears it when the view is gone.
@@ -421,18 +426,29 @@ interface SessionsStore {
     targetGroupId: string,
     zone: DropZone,
   ) => CmdResult<{ groupId: string }>;
-  // Adjust the split ratio (resizer drag/command).
-  resizeSplit: (
+  // Move one boundary of a space's plane so the slot before it holds `ratio` of the two slots
+  // that meet there (command), or to a px position (a drag).
+  moveBoundary: (
     projectId: string,
-    splitId: string,
-    sizes: number[],
+    spaceId: string,
+    boundary: { axis: "x" | "y"; line: number },
+    to: { ratio: number } | { px: number },
   ) => CmdResult;
-  // sizes of several splits in one commit (vertical line dragged along — no half-applied state).
-  // The rail conflict check runs once on the final state — on rejection nothing changes.
-  resizeSplits: (
+  // Centre one boundary, or space every boundary on its axis evenly.
+  equalizeBoundary: (
     projectId: string,
-    updates: { splitId: string; sizes: number[] }[],
+    spaceId: string,
+    boundary: { axis: "x" | "y"; line: number },
+    all: boolean,
   ) => CmdResult;
+  // The rail's width, in every space where it stands. The place's width is the input.
+  setRailWidth: (projectId: string, widthPx: number) => CmdResult;
+  // The rail moved to a line of the active space's plane by hand. The placement becomes PIN, so
+  // the next focus change leaves it there.
+  moveRail: (projectId: string, line: number) => CmdResult;
+  // The rail settled in the active space: standing where the placement puts it while a set stands
+  // in it, withdrawn otherwise. The host calls this when what stands in the rail changes.
+  settleRail: (projectId: string) => CmdResult;
   // Create a new view group beside targetGroup by splitting (split button / title mode ⌘T / command).
   // With program unset or unregistered, an empty group (empty panel) — no viewId (Partial).
   splitWithNewView: (
@@ -539,136 +555,119 @@ function makeContent(title: string, program?: Program): Space {
   return {
     id: newContentId(),
     title,
-    layout: splitLeaf(g),
+    panes: [g],
+    layout: singlePane(g.id),
     activePaneId: g.id,
   };
 }
 
 
-// ── Group tree helpers ───────────────────────────────────────────────────────
+// ── Pane helpers ─────────────────────────────────────────────────────────────
 
-export function allGroups(node: PaneNode, acc: Pane[] = []): Pane[] {
-  acc.push(...leavesOf(node)); // leaf value (Pane) = SplitTree leavesOf
-  return acc;
+/** The panes of a space in reading order — the plane's order, not the array's. */
+export function allGroups(space: Pick<Space, "panes" | "layout">): Pane[] {
+  const byId = new Map(space.panes.map((pane) => [pane.id, pane]));
+  return paneIds(space.layout).flatMap((id) => {
+    const pane = byId.get(id);
+    return pane ? [pane] : [];
+  });
 }
 
-export function allViews(node: PaneNode): Tab[] {
-  return allGroups(node).flatMap((g) => g.tabs);
+export function allViews(space: Pick<Space, "panes" | "layout">): Tab[] {
+  return allGroups(space).flatMap((g) => g.tabs);
 }
 
-function findGroupOfView(
-  node: PaneNode,
-  viewId: string,
-): Pane | undefined {
-  return allGroups(node).find((g) => g.tabs.some((v) => v.id === viewId));
+function findGroupOfView(space: Pick<Space, "panes" | "layout">, viewId: string): Pane | undefined {
+  return space.panes.find((g) => g.tabs.some((v) => v.id === viewId));
 }
 
-function hasGroup(node: PaneNode, groupId: string): boolean {
-  return allGroups(node).some((g) => g.id === groupId);
+function hasGroup(space: Pick<Space, "panes" | "layout">, groupId: string): boolean {
+  return planeHasPane(space.layout, groupId) && space.panes.some((g) => g.id === groupId);
 }
 
-function findGroup(node: PaneNode, groupId: string): Pane | undefined {
-  return allGroups(node).find((g) => g.id === groupId);
+function findGroup(space: Pick<Space, "panes" | "layout">, groupId: string): Pane | undefined {
+  return space.panes.find((g) => g.id === groupId);
 }
-
-// ── PaneNode operations = delegated to the generic SplitTree (single source, same code as SidebarLayout) ──
-// Traversal and structural operations (map/find/resize/remove/insert) exist only in splitTree.ts.
-// This file provides leaf (Pane) predicates and transforms only.
 
 // Transform the Pane of a specific group.
-function mapGroupNode(
-  node: PaneNode,
-  groupId: string,
-  fn: (g: Pane) => Pane,
-): PaneNode {
-  return mapLeaves(node, (g) => (g.id === groupId ? fn(g) : g));
+function mapGroup(space: Space, groupId: string, fn: (g: Pane) => Pane): Space {
+  return { ...space, panes: space.panes.map((g) => (g.id === groupId ? fn(g) : g)) };
 }
 
 // Transform a view in whichever group holds it (kind preserved).
-function mapViewNode(
-  node: PaneNode,
-  viewId: string,
-  fn: (v: Tab) => Tab,
-): PaneNode {
-  return mapLeaves(node, (g) =>
-    g.tabs.some((v) => v.id === viewId)
-      ? { ...g, tabs: g.tabs.map((v) => (v.id === viewId ? fn(v) : v)) }
-      : g,
-  );
+function mapView(space: Space, viewId: string, fn: (v: Tab) => Tab): Space {
+  return {
+    ...space,
+    panes: space.panes.map((g) =>
+      g.tabs.some((v) => v.id === viewId)
+        ? { ...g, tabs: g.tabs.map((v) => (v.id === viewId ? fn(v) : v)) }
+        : g,
+    ),
+  };
 }
 
-// split node existence / sizes transform — delegated to the generic.
-const findSplit = (node: PaneNode, splitId: string): boolean =>
-  findSplitTree(node, splitId);
-const mapSplitNode = (
-  node: PaneNode,
-  splitId: string,
-  sizes: number[],
-): PaneNode => resizeSplitTree(node, splitId, sizes);
-
-// Remove a view: (1) drop only that view from its group and fix the active one (mapLeaves),
-// (2) collapse the empty group leaf with removeLeaf. split cleanup (collapse, sizes renormalization)
-// reuses the single removeLeaf implementation.
-function removeView(
-  node: PaneNode,
-  viewId: string,
-): { tree: PaneNode | null; removed: Tab | null } {
-  let removed: Tab | null = null;
-  const mapped = mapLeaves(node, (g) => {
-    const found = g.tabs.find((v) => v.id === viewId);
-    if (!found) return g;
-    removed = found;
-    const tabs = g.tabs.filter((v) => v.id !== viewId);
-    let activeTabId = g.activeTabId;
-    if (activeTabId === viewId) {
-      const idx = g.tabs.findIndex((v) => v.id === viewId);
-      activeTabId = (tabs[idx] ?? tabs[idx - 1] ?? tabs[0])?.id ?? "";
-    }
-    return { ...g, tabs, activeTabId };
-  });
-  if (!removed) return { tree: node, removed: null };
-  const { tree } = removeLeaf(mapped, (g) => g.tabs.length === 0);
-  return { tree, removed };
+// Remove a view: drop it from its group and fix the active one; a group left empty leaves the
+// plane, unless it is the last one — an empty pane is a legitimate state.
+function removeView(space: Space, viewId: string): { space: Space; removed: Tab | null } {
+  const owner = findGroupOfView(space, viewId);
+  const removed = owner?.tabs.find((v) => v.id === viewId) ?? null;
+  if (!owner || !removed) return { space, removed: null };
+  const tabs = owner.tabs.filter((v) => v.id !== viewId);
+  let activeTabId = owner.activeTabId;
+  if (activeTabId === viewId) {
+    const idx = owner.tabs.findIndex((v) => v.id === viewId);
+    activeTabId = (tabs[idx] ?? tabs[idx - 1] ?? tabs[0])?.id ?? "";
+  }
+  const kept = mapGroup(space, owner.id, (g) => ({ ...g, tabs, activeTabId }));
+  if (tabs.length > 0) return { space: kept, removed };
+  return { space: removeGroup(kept, owner.id) ?? kept, removed };
 }
 
-// Remove one whole group (leaf) = removeLeaf (matching that group id, collapse included).
-function removeGroup(
-  node: PaneNode,
-  groupId: string,
-): { tree: PaneNode | null; removed: Pane | null } {
-  return removeLeaf(node, (g) => g.id === groupId);
+// Remove one whole group from the space and its card from the plane. null when it is the last one.
+function removeGroup(space: Space, groupId: string): Space | null {
+  const layout = closePlanePane(space.layout, planeBox(), groupId);
+  if (!layout) return null;
+  return { ...space, layout, panes: space.panes.filter((g) => g.id !== groupId) };
 }
 
-// Split targetGroup with the fresh group (toward side) = insertBeside (avoids nesting when the
-// sibling has the same dir).
 /**
- * The tree a split would produce. Exported so a caller can ask what the split
- * lands on before performing it — the answer has to come from this function,
- * not from a second one that agrees with it today.
+ * The space a split of `targetGroupId` toward `side` produces, with `fresh` in the new pane. null
+ * when the plane refused — the target is not on it, or no half would keep a pane's floor.
  */
 export function splitAtGroup(
-  node: PaneNode,
+  space: Space,
   targetGroupId: string,
   side: Side,
   fresh: Pane,
-): PaneNode {
-  const dir: "row" | "col" =
-    side === "left" || side === "right" ? "row" : "col";
-  const before = side === "left" || side === "top";
-  return insertBeside(
-    node,
-    (g) => g.id === targetGroupId,
-    dir,
-    before,
-    fresh,
-    newSplitId,
-  );
+): Space | null {
+  const layout = splitPlanePane(space.layout, planeBox(), targetGroupId, side, fresh.id);
+  return layout ? { ...space, layout, panes: [...space.panes, fresh] } : null;
 }
+
+/** The space with `groupId` taken to `side` of `targetGroupId` in one operation. */
+function moveGroupBeside(
+  space: Space,
+  groupId: string,
+  targetGroupId: string,
+  side: Side,
+): Space | null {
+  const layout = movePlanePane(space.layout, planeBox(), groupId, targetGroupId, side);
+  return layout ? { ...space, layout } : null;
+}
+
+/** The plane refused to place a pane where it was asked: no half would keep a pane's floor. */
+const planeRefused = (): CmdErr => err("TOO_SMALL", tmsg("layout.plane.refused"));
 
 // Fix the active group to the first one when it is gone, and clear maximize when the maximized
 // view is gone.
 function normalizeActiveGroupC(c: Space): Space {
-  const groups = allGroups(c.layout);
+  const groups = allGroups(c);
+  const cards = paneIds(c.layout);
+  if (groups.length !== cards.length || groups.length !== c.panes.length) {
+    throw new Error(
+      `space ${c.id}: the plane holds ${cards.join(",")} and the panes are ${c.panes.map((g) => g.id).join(",")}`,
+    );
+  }
   let next =
     c.maximizedTabId &&
     !groups.some((g) => g.tabs.some((v) => v.id === c.maximizedTabId))
@@ -676,6 +675,40 @@ function normalizeActiveGroupC(c: Space): Space {
       : c;
   if (groups.some((g) => g.id === next.activePaneId)) return next;
   return { ...next, activePaneId: groups[0]?.id ?? next.activePaneId };
+}
+
+/**
+ * The space with its rail where the workspace's placement puts it. Present: standing at the
+ * place's width, beside the focused pane under FLOW, where it was under PIN (the first line when
+ * it has never stood). Absent: withdrawn. Every change that can move the rail settles the active
+ * space; a space that is not on screen is settled when it comes on.
+ */
+function settleRail(
+  space: Space,
+  workspace: Pick<Workspace, "railPlacement">,
+  present: boolean,
+): Space {
+  const box = planeBox();
+  if (!present) {
+    return hasRail(space.layout) ? { ...space, layout: withdrawRail(space.layout, box) } : space;
+  }
+  const placement = workspace.railPlacement ?? DEFAULT_RAIL_PLACEMENT;
+  const current = railLine(space.layout);
+  const line = placement.mode === "flow" || current === null
+    ? (flowRailLine(space.layout, box, space.activePaneId) ?? current ?? 0)
+    : current;
+  const layout = standRail(space.layout, box, line, placeWidth("rail"));
+  return layout ? { ...space, layout } : space;
+}
+
+/** The workspace with the rail settled in its active space. */
+function settleWorkspaceRail(workspace: Workspace): Workspace {
+  const present = placePresent(workspace.regionOpen.rail, "rail", focusedPluginOf(workspace));
+  return {
+    ...workspace,
+    spaces: workspace.spaces.map((space) =>
+      space.id === workspace.activeSpaceId ? settleRail(space, workspace, present) : space),
+  };
 }
 
 /**
@@ -687,10 +720,7 @@ function normalizeActiveGroupC(c: Space): Space {
 function maximizedGroupId(content: Space): string | null {
   const target = content.maximizedTabId;
   if (!target) return null;
-  const owner = allGroups(content.layout).find((g) =>
-    g.tabs.some((v) => v.id === target),
-  );
-  return owner?.id ?? null;
+  return findGroupOfView(content, target)?.id ?? null;
 }
 
 /**
@@ -701,7 +731,6 @@ function maximizedGroupId(content: Space): string | null {
  */
 export function projectArrangement(
   workspace: Workspace,
-  fallbackStation = 0,
   /**
    * How to attach — **the caller supplies it.**
    *
@@ -716,16 +745,17 @@ export function projectArrangement(
   pullFocused = useSettings.getState().railPullFocused,
   /** The actual standing rail. React passes its subscribed value; imperative callers read the same section-set rule. */
   railPresent = placePresent(workspace.regionOpen.rail, "rail", focusedPluginOf(workspace)),
-): Arrangement<Pane> | null {
+): Arrangement | null {
   const content =
     workspace.spaces.find((item) => item.id === workspace.activeSpaceId) ??
     workspace.spaces[0];
   if (!content) return null;
-  return solveArrangement<Pane>({
+  return solveArrangement({
     layout: content.layout,
+    box: planeBox(),
     focusId: content.activePaneId,
     placement: workspace.railPlacement ?? DEFAULT_RAIL_PLACEMENT,
-    railOpen: railPresent,
+    railPresent,
     // Maximize is not a move on top of the underlying split but an atomic switch to the single
     // [rail | feature] plane. The filling panel is the group holding the maximized view — not the
     // active group. The two can diverge (double-clicking a tab of another group does exactly that),
@@ -733,8 +763,24 @@ export function projectArrangement(
     // view, so nothing is drawn (measured: maximizedTabId=v35 is in g3 while
     // layout={"panel":"g5"}, 0 DOM slots, the whole window blank).
     maximizedId: maximizedGroupId(content),
-    fallbackStation,
     pullFocused,
+  });
+}
+
+/**
+ * The arrangement of a space that is not on screen: its own plane without the rail, which stands in
+ * the active space only. The same solver as the screen, so `pane.list` for a parked space and the
+ * screen it shows when activated agree on every rect but the rail's.
+ */
+export function parkedArrangement(space: Space): Arrangement {
+  return solveArrangement({
+    layout: space.layout,
+    box: planeBox(),
+    focusId: space.activePaneId,
+    placement: DEFAULT_RAIL_PLACEMENT,
+    railPresent: false,
+    maximizedId: maximizedGroupId(space),
+    pullFocused: false,
   });
 }
 
@@ -762,28 +808,6 @@ function openProjectArrangementTransition(
   return true;
 }
 
-function leftRailLayoutConflict(workspace: Workspace): CmdErr | null {
-  const placement = workspace.railPlacement ?? DEFAULT_RAIL_PLACEMENT;
-  if (placement.mode !== "pin") return null;
-  const content =
-    workspace.spaces.find((item) => item.id === workspace.activeSpaceId) ??
-    workspace.spaces[0];
-  // PIN validity is judged against the split tree, the persisted canonical form. Maximize is a
-  // temporary projection on top of it and folds the clean line to [0,100], but rejecting the stored
-  // station on that basis would make maximize itself impossible under PIN. Real split/move/resize do
-  // change the canonical rect, so they go through this check as is.
-  const cleanLines = content
-    ? cleanRailLines(computeSplitLayout(content.layout).cells.map((cell) => cell.rect))
-    : [0, 100];
-  return isCleanRailStation(cleanLines, placement.station)
-    ? null
-    : err(
-        "LAYOUT_CONFLICT",
-        tmsg("layout.rail.stationCrossed", { station: placement.station }),
-        { station: placement.station, cleanLines },
-      );
-}
-
 // ── Terminal pane resolver (plugin terminal = substrate) ─────────────────────
 
 // Candidate PTY substrate key the tab drives (when there is one). The terminal test is generic — a
@@ -806,7 +830,7 @@ export function cwdTabOf(
     workspace.spaces.find((c) => c.id === workspace.activeSpaceId) ??
     workspace.spaces[0];
   if (!content) return undefined;
-  const groups = allGroups(content.layout);
+  const groups = allGroups(content);
   const activeGroup =
     groups.find((g) => g.id === content.activePaneId) ?? groups[0];
   const active = activeGroup?.tabs.find(
@@ -836,7 +860,7 @@ export function viewDisplayTitle(v: Tab): string {
 export function findViewById(workspaces: Workspace[], viewId: string): Tab | null {
   for (const t of workspaces)
     for (const c of t.spaces)
-      for (const v of allViews(c.layout)) if (v.id === viewId) return v;
+      for (const v of allViews(c)) if (v.id === viewId) return v;
   return null;
 }
 
@@ -858,7 +882,7 @@ export function locateTab(
 ): { projectId: string; viewId: string } | null {
   for (const t of workspaces)
     for (const c of t.spaces)
-      for (const v of allViews(c.layout))
+      for (const v of allViews(c))
         if (v.id === paneId) return { projectId: t.id, viewId: v.id };
   return null;
 }
@@ -882,16 +906,14 @@ function contentOfGroup(
   t: Workspace,
   groupId: string,
 ): Space | undefined {
-  return t.spaces.find((c) => hasGroup(c.layout, groupId));
+  return t.spaces.find((c) => hasGroup(c, groupId));
 }
 
 function contentOfView(
   t: Workspace,
   viewId: string,
 ): Space | undefined {
-  return t.spaces.find((c) =>
-    allViews(c.layout).some((v) => v.id === viewId),
-  );
+  return t.spaces.find((c) => allViews(c).some((v) => v.id === viewId));
 }
 
 function mapContent(
@@ -910,7 +932,7 @@ function mapContent(
 export function projectIdOfView(viewId: string): string | null {
   for (const t of useSessions.getState().workspaces) {
     for (const c of t.spaces) {
-      if (allViews(c.layout).some((v) => v.id === viewId)) return t.id;
+      if (allViews(c).some((v) => v.id === viewId)) return t.id;
     }
   }
   return null;
@@ -925,10 +947,7 @@ function mapViewEverywhere(
 ): Workspace {
   return {
     ...t,
-    spaces: t.spaces.map((c) => ({
-      ...c,
-      layout: mapViewNode(c.layout, viewId, fn),
-    })),
+    spaces: t.spaces.map((c) => mapView(c, viewId, fn)),
   };
 }
 
@@ -1010,7 +1029,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
     if (dup) {
       set({ activeId: dup.id });
       const c = dup.spaces.find((x) => x.id === dup.activeSpaceId)!;
-      const g = allGroups(c.layout)[0];
+      const g = allGroups(c)[0];
       const v = g.tabs[0];
       return ok({
         projectId: dup.id,
@@ -1024,7 +1043,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
     const t = makeWorkspace(id, opts);
     set((s) => ({ workspaces: [...s.workspaces, t], activeId: id }));
     const c = t.spaces[0];
-    const g = allGroups(c.layout)[0];
+    const g = allGroups(c)[0];
     const v = g.tabs[0];
     return ok({
       projectId: id,
@@ -1119,10 +1138,11 @@ export const useSessions = moduleState("state/sessions#store", () =>
       const next = open ?? !t.regionOpen[region];
       r = ok({ region, open: next });
       if (next === t.regionOpen[region]) return s; // idempotent
+      const opened = { ...t, regionOpen: { ...t.regionOpen, [region]: next } };
+      const nextWorkspace = region === "rail" ? settleWorkspaceRail(opened) : opened;
+      if (region === "rail") openProjectArrangementTransition(t, nextWorkspace);
       return {
-        workspaces: s.workspaces.map((x) =>
-          x.id === id ? { ...x, regionOpen: { ...x.regionOpen, [region]: next } } : x,
-        ),
+        workspaces: s.workspaces.map((x) => (x.id === id ? nextWorkspace : x)),
       };
     });
     return r;
@@ -1130,45 +1150,20 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   setLeftRailPlacement: (id, placement) => {
     let r: CmdResult<{ placement: RailPlacement }> = noWorkspace(id);
-    if (
-      placement.mode === "pin" &&
-      (!Number.isFinite(placement.station) ||
-        placement.station < 0 ||
-        placement.station > 100)
-    ) {
-      return err("INVALID_PARAMS", tmsg("layout.rail.stationRange"));
-    }
     set((s) => {
       const workspace = s.workspaces.find((item) => item.id === id);
       if (!workspace) return s;
       const current = workspace.railPlacement ?? DEFAULT_RAIL_PLACEMENT;
-      if (
-        current.mode === placement.mode &&
-        (current.mode === "flow" ||
-          (placement.mode === "pin" && current.station === placement.station))
-      ) {
+      if (current.mode === placement.mode) {
         r = ok({ placement: current });
         return s;
       }
-      const nextWorkspace = { ...workspace, railPlacement: placement };
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = err(
-          "INVALID_PARAMS",
-          tmsg("layout.rail.pinNotClean"),
-          conflict.data,
-        );
-        return s;
-      }
       r = ok({ placement });
-      // Even with a different persisted mode, an identical resolved station/cells/topology leaves
-      // the display owner nothing to do. When the actual display solution does change, open a
-      // revision before the WorkspacePlane publish so that render consumes the exact revision.
+      // Under FLOW the rail goes to the focused pane at once; under PIN it stays where it is.
+      const nextWorkspace = settleWorkspaceRail({ ...workspace, railPlacement: placement });
       openProjectArrangementTransition(workspace, nextWorkspace);
       return {
-        workspaces: s.workspaces.map((item) =>
-          item.id === id ? { ...item, railPlacement: placement } : item,
-        ),
+        workspaces: s.workspaces.map((item) => (item.id === id ? nextWorkspace : item)),
       };
     });
     return r;
@@ -1248,18 +1243,13 @@ export const useSessions = moduleState("state/sessions#store", () =>
       const nextNum =
         Math.max(0, ...t.spaces.map((c) => spaceAutoNum(c.title))) + 1;
       const c = makeContent(tmsg("space.autoTitle", { n: nextNum }), program);
-      const g = allGroups(c.layout)[0];
+      const g = c.panes[0];
       const v = g.tabs[0];
-      const nextWorkspace = {
+      const nextWorkspace = settleWorkspaceRail({
         ...t,
         spaces: [...t.spaces, c],
         activeSpaceId: c.id,
-      };
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = conflict;
-        return s;
-      }
+      });
       r = ok({ contentId: c.id, groupId: g.id, ...(v ? idsOfView(v) : {}) });
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
@@ -1287,12 +1277,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       if (activeSpaceId === contentId) {
         activeSpaceId = (spaces[idx] ?? spaces[idx - 1] ?? spaces[0]).id;
       }
-      const nextWorkspace = { ...t, spaces, activeSpaceId };
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = conflict;
-        return s;
-      }
+      const nextWorkspace = settleWorkspaceRail({ ...t, spaces, activeSpaceId });
       r = ok({ activeSpaceId });
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
@@ -1314,12 +1299,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = ok({});
         return s; // already active (prevents a needless re-render)
       }
-      const nextWorkspace = { ...t, activeSpaceId: contentId };
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = conflict;
-        return s;
-      }
+      const nextWorkspace = settleWorkspaceRail({ ...t, activeSpaceId: contentId });
       r = ok({});
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
@@ -1378,8 +1358,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
           mapContent(x, content.id, (c) => ({
-            ...c,
-            layout: mapGroupNode(c.layout, target, (g) => ({
+            ...mapGroup(c, target, (g) => ({
               ...g,
               tabs: [...g.tabs, v],
               activeTabId: v.id,
@@ -1403,21 +1382,17 @@ export const useSessions = moduleState("state/sessions#store", () =>
       const content = activeContentOf(t);
       if (!content) return s;
       // When the same plugin view is already open, activate that group/view (reuse).
-      const existing = allViews(content.layout).find(
+      const existing = allViews(content).find(
         (v) => v.pluginId === pluginId && v.view === view,
       );
       if (existing) {
-        const grp = findGroupOfView(content.layout, existing.id);
+        const grp = findGroupOfView(content, existing.id);
         if (!grp) return s;
         r = ok({ viewId: existing.id, groupId: grp.id, existing: true });
         return {
           workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
             mapContent(x, content.id, (c) => ({
-              ...c,
-              layout: mapGroupNode(c.layout, grp.id, (g) => ({
-                ...g,
-                activeTabId: existing.id,
-              })),
+              ...mapGroup(c, grp.id, (g) => ({ ...g, activeTabId: existing.id })),
               activePaneId: grp.id,
             })),
           ),
@@ -1433,14 +1408,13 @@ export const useSessions = moduleState("state/sessions#store", () =>
       r = ok({ viewId: v.id, groupId: content.activePaneId, existing: false });
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
-          mapContent(x, content.id, (c) => ({
-            ...c,
-            layout: mapGroupNode(c.layout, c.activePaneId, (g) => ({
+          mapContent(x, content.id, (c) =>
+            mapGroup(c, c.activePaneId, (g) => ({
               ...g,
               tabs: [...g.tabs, v],
               activeTabId: v.id,
             })),
-          })),
+          ),
         ),
       };
     });
@@ -1458,42 +1432,14 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = err("TARGET_NOT_FOUND", tmsg("view.notFound", { viewId }));
         return s;
       }
-      // When the content empties completely after the close, keep it as a single empty tab — content
-      // and group stay (pure skeleton: an empty tab is a legitimate state). This holds both for the
-      // last view of a single leaf group and for the case where one side of a split is an empty
-      // group so removeView cleans the empty groups up and the whole tree empties (removeView →
-      // tree=null). Leave the closed view's group empty. Do not mistake tree=null for "no workspace"
-      // (the r initial-value trap).
-      const grp = findGroupOfView(content.layout, viewId);
-      const { tree } = removeView(content.layout, viewId);
-      if (!tree) {
-        const next = normalizeActiveGroupC({
-          ...content,
-          layout: splitLeaf({ ...grp!, tabs: [], activeTabId: "" }),
-        });
-        const nextWorkspace = mapContent(t, content.id, () => next);
-        const conflict = leftRailLayoutConflict(nextWorkspace);
-        if (conflict) {
-          r = conflict;
-          return s;
-        }
-        r = ok({ activePaneId: next.activePaneId, activeTabId: "" });
-        return {
-          workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
-        };
-      }
-      let next = normalizeActiveGroupC({ ...content, layout: tree });
-      // R6 succession (plans/sidebar-projection-spec.md) — when the closed view was the bound view
-      // of this workspace (the end of the active chain), move the binding back to the most recent
-      // surviving view in the focusHistory of the same space. The adjacent tab is the next fallback
-      // (the default succession of removeView above already did that).
-      const activeGroup = findGroup(next.layout, next.activePaneId);
-      const nextWorkspace = mapContent(t, content.id, () => next);
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = conflict;
-        return s;
-      }
+      // A pane whose last view closes leaves the plane; the last pane stays as an empty one —
+      // content and group stay (pure skeleton: an empty tab is a legitimate state).
+      const { space } = removeView(content, viewId);
+      const next = normalizeActiveGroupC(space);
+      const activeGroup = findGroup(next, next.activePaneId);
+      // The rail follows the focus that succeeds the closed pane.
+      const nextWorkspace = settleWorkspaceRail(mapContent(t, content.id, () => next));
+      openProjectArrangementTransition(t, nextWorkspace);
       r = ok({
         activePaneId: next.activePaneId,
         activeTabId: activeGroup?.activeTabId ?? "",
@@ -1516,7 +1462,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = err("TARGET_NOT_FOUND", tmsg("view.notFound", { viewId }));
         return s;
       }
-      const grp = findGroupOfView(content.layout, viewId);
+      const grp = findGroupOfView(content, viewId);
       if (!grp) return s;
       const changed = s.activeId !== projectId
         || t.activeSpaceId !== content.id
@@ -1526,17 +1472,13 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = ok({ changed: false, layoutMoved: false });
         return s;
       }
-      const nextWorkspace = {
+      const nextWorkspace = settleWorkspaceRail({
         ...mapContent(t, content.id, (c) => ({
-          ...c,
-          layout: mapGroupNode(c.layout, grp.id, (g) => ({
-            ...g,
-            activeTabId: viewId,
-          })),
+          ...mapGroup(c, grp.id, (g) => ({ ...g, activeTabId: viewId })),
           activePaneId: grp.id,
         })),
         activeSpaceId: content.id,
-      };
+      });
       const layoutMoved = openProjectArrangementTransition(t, nextWorkspace, beforeLayoutMove);
       r = ok({ changed: true, layoutMoved });
       // The WorkspacePlane adapter starts preparing the exact revision before the new workspace
@@ -1569,18 +1511,13 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = ok({});
         return s;
       }
-      const nextWorkspace = {
+      const nextWorkspace = settleWorkspaceRail({
         ...mapContent(t, content.id, (c) => ({
           ...c,
           activePaneId: groupId,
         })),
         activeSpaceId: content.id,
-      };
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = conflict;
-        return s;
-      }
+      });
       openProjectArrangementTransition(t, nextWorkspace);
       r = ok({});
       return {
@@ -1600,26 +1537,17 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = err("TARGET_NOT_FOUND", tmsg("view.notFound", { viewId }));
         return s;
       }
-      const grp = findGroupOfView(content.layout, viewId);
+      const grp = findGroupOfView(content, viewId);
       if (!grp) return s;
-      const nextWorkspace = {
+      const nextWorkspace = settleWorkspaceRail({
         ...mapContent(t, content.id, (c) => ({
-            ...c,
-            maximizedTabId: viewId,
-            // Maximized view = the active view of that group + the active group (display matches input).
-            layout: mapGroupNode(c.layout, grp.id, (g) => ({
-              ...g,
-              activeTabId: viewId,
-            })),
-            activePaneId: grp.id,
-          })),
+          // Maximized view = the active view of that group + the active group (display matches input).
+          ...mapGroup(c, grp.id, (g) => ({ ...g, activeTabId: viewId })),
+          maximizedTabId: viewId,
+          activePaneId: grp.id,
+        })),
         activeSpaceId: content.id,
-      };
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = conflict;
-        return s;
-      }
+      });
       openProjectArrangementTransition(t, nextWorkspace);
       r = ok({ viewId });
       return {
@@ -1685,7 +1613,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
         return s;
       }
       const current = t.spaces
-        .flatMap((content) => allViews(content.layout))
+        .flatMap((content) => allViews(content))
         .find((view) => view.id === viewId)?.status;
       const next = status ?? undefined;
       if (current?.code === next?.code && current?.message === next?.message) {
@@ -1766,14 +1694,14 @@ export const useSessions = moduleState("state/sessions#store", () =>
       }
       // Only a target group inside the same content is allowed (moving across content is a separate
       // concept).
-      if (!hasGroup(content.layout, targetGroupId)) {
+      if (!hasGroup(content, targetGroupId)) {
         r = err(
           "TARGET_NOT_FOUND",
           tmsg("panel.targetNotFound", { targetGroupId }),
         );
         return s;
       }
-      const src = findGroupOfView(content.layout, viewId);
+      const src = findGroupOfView(content, viewId);
       if (!src) return s;
       const view = src.tabs.find((v) => v.id === viewId);
       if (!view) return s;
@@ -1783,23 +1711,18 @@ export const useSessions = moduleState("state/sessions#store", () =>
           r = ok({ groupId: targetGroupId }); // already that group — idempotent
           return s;
         }
-        const { tree } = removeView(content.layout, viewId);
-        if (!tree || !hasGroup(tree, targetGroupId)) return s;
+        const { space } = removeView(content, viewId);
+        if (!hasGroup(space, targetGroupId)) return s;
         const nextContent = normalizeActiveGroupC({
-          ...content,
-          layout: mapGroupNode(tree, targetGroupId, (g) => ({
+          ...mapGroup(space, targetGroupId, (g) => ({
             ...g,
             tabs: [...g.tabs, view],
             activeTabId: view.id,
           })),
           activePaneId: targetGroupId,
         });
-        const nextWorkspace = mapContent(t, content.id, () => nextContent);
-        const conflict = leftRailLayoutConflict(nextWorkspace);
-        if (conflict) {
-          r = conflict;
-          return s;
-        }
+        const nextWorkspace = settleWorkspaceRail(mapContent(t, content.id, () => nextContent));
+        openProjectArrangementTransition(t, nextWorkspace);
         r = ok({ groupId: targetGroupId });
         return {
           workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
@@ -1807,24 +1730,35 @@ export const useSessions = moduleState("state/sessions#store", () =>
       }
 
       // Split: detach from src and place it as a new group beside target.
-      if (allViews(content.layout).length <= 1) {
+      if (allViews(content).length <= 1) {
         r = err("LAST_ITEM", tmsg("view.onlyCannotSplit"));
         return s;
       }
-      const { tree } = removeView(content.layout, viewId);
-      if (!tree || !hasGroup(tree, targetGroupId)) return s;
+      // A view alone in its pane keeps the pane: the pane itself moves (same id, no body remount).
+      if (src.tabs.length === 1) {
+        const moved = moveGroupBeside(content, src.id, targetGroupId, zone);
+        if (!moved) {
+          r = planeRefused();
+          return s;
+        }
+        const nextWorkspace = settleWorkspaceRail(mapContent(t, content.id, () =>
+          normalizeActiveGroupC({ ...moved, activePaneId: src.id })));
+        openProjectArrangementTransition(t, nextWorkspace);
+        r = ok({ groupId: src.id });
+        return {
+          workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
+        };
+      }
       const fresh = makeGroup(view);
-      const nextContent = normalizeActiveGroupC({
-        ...content,
-        layout: splitAtGroup(tree, targetGroupId, zone, fresh),
-        activePaneId: fresh.id,
-      });
-      const nextWorkspace = mapContent(t, content.id, () => nextContent);
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = conflict;
+      const split = splitAtGroup(content, targetGroupId, zone, fresh);
+      if (!split) {
+        r = planeRefused();
         return s;
       }
+      const { space } = removeView(split, viewId);
+      const nextContent = normalizeActiveGroupC({ ...space, activePaneId: fresh.id });
+      const nextWorkspace = settleWorkspaceRail(mapContent(t, content.id, () => nextContent));
+      openProjectArrangementTransition(t, nextWorkspace);
       r = ok({ groupId: fresh.id });
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
@@ -1843,19 +1777,15 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = err("TARGET_NOT_FOUND", tmsg("panel.notFound", { groupId }));
         return s;
       }
-      if (allGroups(content.layout).length <= 1) {
+      if (allGroups(content).length <= 1) {
         r = err("LAST_ITEM", tmsg("panel.lastCannotClose"));
         return s;
       }
-      const { tree } = removeGroup(content.layout, groupId);
-      if (!tree) return s;
-      const next = normalizeActiveGroupC({ ...content, layout: tree });
-      const nextWorkspace = mapContent(t, content.id, () => next);
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = conflict;
-        return s;
-      }
+      const without = removeGroup(content, groupId);
+      if (!without) return s;
+      const next = normalizeActiveGroupC(without);
+      const nextWorkspace = settleWorkspaceRail(mapContent(t, content.id, () => next));
+      openProjectArrangementTransition(t, nextWorkspace);
       r = ok({ activePaneId: next.activePaneId });
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
@@ -1878,56 +1808,48 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = ok({ groupId: targetGroupId }); // idempotent
         return s;
       }
-      if (!hasGroup(content.layout, targetGroupId)) {
+      if (!hasGroup(content, targetGroupId)) {
         r = err(
           "TARGET_NOT_FOUND",
           tmsg("panel.targetNotFound", { targetGroupId }),
         );
         return s;
       }
-      if (allGroups(content.layout).length <= 1) {
+      if (allGroups(content).length <= 1) {
         r = err("LAST_ITEM", tmsg("panel.onlyCannotMove"));
         return s;
       }
-      const source = findGroup(content.layout, sourceGroupId);
+      const source = findGroup(content, sourceGroupId);
       if (!source) return s;
-      const { tree } = removeGroup(content.layout, sourceGroupId);
-      if (!tree || !hasGroup(tree, targetGroupId)) return s;
 
       if (zone === "center") {
         // Merge every tab of source into target (group join).
+        const without = removeGroup(content, sourceGroupId);
+        if (!without) return s;
         const nextContent = normalizeActiveGroupC({
-          ...content,
-          layout: mapGroupNode(tree, targetGroupId, (g) => ({
+          ...mapGroup(without, targetGroupId, (g) => ({
             ...g,
             tabs: [...g.tabs, ...source.tabs],
             activeTabId: source.activeTabId,
           })),
           activePaneId: targetGroupId,
         });
-        const nextWorkspace = mapContent(t, content.id, () => nextContent);
-        const conflict = leftRailLayoutConflict(nextWorkspace);
-        if (conflict) {
-          r = conflict;
-          return s;
-        }
+        const nextWorkspace = settleWorkspaceRail(mapContent(t, content.id, () => nextContent));
+        openProjectArrangementTransition(t, nextWorkspace);
         r = ok({ groupId: targetGroupId });
         return {
           workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
         };
       }
       // Relocate the whole group beside target (same id and views kept → no body remount).
-      const nextContent = normalizeActiveGroupC({
-        ...content,
-        layout: splitAtGroup(tree, targetGroupId, zone, source),
-        activePaneId: source.id,
-      });
-      const nextWorkspace = mapContent(t, content.id, () => nextContent);
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = conflict;
+      const moved = moveGroupBeside(content, sourceGroupId, targetGroupId, zone);
+      if (!moved) {
+        r = planeRefused();
         return s;
       }
+      const nextContent = normalizeActiveGroupC({ ...moved, activePaneId: source.id });
+      const nextWorkspace = settleWorkspaceRail(mapContent(t, content.id, () => nextContent));
+      openProjectArrangementTransition(t, nextWorkspace);
       r = ok({ groupId: source.id });
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
@@ -1936,46 +1858,107 @@ export const useSessions = moduleState("state/sessions#store", () =>
     return r;
   },
 
-  resizeSplit: (projectId, splitId, sizes) =>
-    get().resizeSplits(projectId, [{ splitId, sizes }]),
-
-  resizeSplits: (projectId, updates) => {
+  moveBoundary: (projectId, spaceId, boundary, to) => {
     let r: CmdResult = noWorkspace(projectId);
     set((s) => {
       const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
-      if (updates.length === 0) {
-        r = ok({});
-        return s;
-      }
-      // A batch is the lines of one layout — applied only to the one content that holds every
-      // splitId.
-      const content = t.spaces.find((c) =>
-        updates.every((u) => findSplit(c.layout, u.splitId)),
-      );
+      const content = t.spaces.find((c) => c.id === spaceId);
       if (!content) {
-        r = err(
-          "TARGET_NOT_FOUND",
-          tmsg("layout.split.notFound", { splitIds: updates.map((u) => u.splitId).join(", ") }),
-        );
+        r = err("TARGET_NOT_FOUND", tmsg("space.notFound", { id: spaceId }));
         return s;
       }
-      const nextWorkspace = mapContent(t, content.id, (c) => ({
-        ...c,
-        layout: updates.reduce(
-          (layout, u) => mapSplitNode(layout, u.splitId, u.sizes),
-          c.layout,
-        ),
-      }));
-      const conflict = leftRailLayoutConflict(nextWorkspace);
-      if (conflict) {
-        r = conflict;
+      const layout = "ratio" in to
+        ? movePlaneBoundary(content.layout, planeBox(), boundary.axis, boundary.line, to.ratio)
+        : movePlaneBoundaryPx(content.layout, planeBox(), boundary.axis, boundary.line, to.px);
+      if (!layout) {
+        r = err("TARGET_NOT_FOUND", tmsg("layout.boundary.notFound", boundary));
         return s;
       }
       r = ok({});
       return {
-        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
+        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
+          mapContent(x, content.id, (c) => ({ ...c, layout }))),
       };
+    });
+    return r;
+  },
+
+  equalizeBoundary: (projectId, spaceId, boundary, all) => {
+    let r: CmdResult = noWorkspace(projectId);
+    set((s) => {
+      const t = s.workspaces.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = t.spaces.find((c) => c.id === spaceId);
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", tmsg("space.notFound", { id: spaceId }));
+        return s;
+      }
+      const layout = all
+        ? equalizePlaneAxis(content.layout, planeBox(), boundary.axis)
+        : centerPlaneBoundary(content.layout, planeBox(), boundary.axis, boundary.line);
+      if (!layout) {
+        r = err("TARGET_NOT_FOUND", tmsg("layout.boundary.notFound", boundary));
+        return s;
+      }
+      r = ok({});
+      return {
+        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
+          mapContent(x, content.id, (c) => ({ ...c, layout }))),
+      };
+    });
+    return r;
+  },
+
+  setRailWidth: (projectId, widthPx) => {
+    let r: CmdResult = noWorkspace(projectId);
+    set((s) => {
+      const t = s.workspaces.find((x) => x.id === projectId);
+      if (!t) return s;
+      r = ok({});
+      const spaces = t.spaces.map((c) =>
+        hasRail(c.layout) ? { ...c, layout: resizeRail(c.layout, planeBox(), widthPx) } : c);
+      if (spaces.every((c, i) => c === t.spaces[i])) return s;
+      return { workspaces: mapWorkspace(s.workspaces, projectId, (x) => ({ ...x, spaces })) };
+    });
+    return r;
+  },
+
+  moveRail: (projectId, line) => {
+    let r: CmdResult = noWorkspace(projectId);
+    set((s) => {
+      const t = s.workspaces.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = activeContentOf(t);
+      if (!content || !hasRail(content.layout)) {
+        r = err("TARGET_NOT_FOUND", tmsg("layout.rail.absent"));
+        return s;
+      }
+      const layout = standRail(content.layout, planeBox(), line, placeWidth("rail"));
+      if (!layout) {
+        r = err("TARGET_NOT_FOUND", tmsg("layout.boundary.notFound", { axis: "x", line }));
+        return s;
+      }
+      r = ok({});
+      const nextWorkspace = {
+        ...mapContent(t, content.id, (c) => ({ ...c, layout })),
+        railPlacement: { mode: "pin" as const },
+      };
+      return { workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace) };
+    });
+    return r;
+  },
+
+  settleRail: (projectId) => {
+    let r: CmdResult = noWorkspace(projectId);
+    set((s) => {
+      const t = s.workspaces.find((x) => x.id === projectId);
+      if (!t) return s;
+      r = ok({});
+      const nextWorkspace = settleWorkspaceRail(t);
+      if (nextWorkspace.spaces.every((c, i) => c === t.spaces[i])) return s;
+      openProjectArrangementTransition(t, nextWorkspace);
+      return { workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace) };
     });
     return r;
   },
@@ -2000,17 +1983,17 @@ export const useSessions = moduleState("state/sessions#store", () =>
         return s;
       }
       const fresh = makeGroup(v ?? undefined);
+      const split = splitAtGroup(content, targetGroupId, side, fresh);
+      if (!split) {
+        r = planeRefused();
+        return s;
+      }
       r = ok({ groupId: fresh.id, ...(v ? idsOfView(v) : {}) });
+      const nextWorkspace = settleWorkspaceRail(mapContent(t, content.id, () =>
+        normalizeActiveGroupC({ ...split, activePaneId: fresh.id })));
+      openProjectArrangementTransition(t, nextWorkspace);
       return {
-        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
-          mapContent(x, content.id, (c) =>
-            normalizeActiveGroupC({
-              ...c,
-              layout: splitAtGroup(c.layout, targetGroupId, side, fresh),
-              activePaneId: fresh.id,
-            }),
-          ),
-        ),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;

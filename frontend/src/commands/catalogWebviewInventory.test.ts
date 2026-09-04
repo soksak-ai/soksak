@@ -24,10 +24,10 @@ vi.mock("../lib/contentViews", () => ({
   }),
 }));
 vi.mock("../state/sessions", () => ({
-  allViews: (layout: { views: Array<{ id: string }> }) => layout.views,
+  allViews: (space: { views: Array<{ id: string }> }) => space.views,
   useSessions: {
     getState: () => ({
-      workspaces: [{ spaces: [{ layout: { views: [{ id: "tab-browser" }, { id: "tab-terminal" }] } }] }],
+      workspaces: [{ spaces: [{ views: [{ id: "tab-browser" }, { id: "tab-terminal" }] }] }],
     }),
   },
 }));

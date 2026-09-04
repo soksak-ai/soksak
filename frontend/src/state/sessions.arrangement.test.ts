@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { splitLeaf, type SplitTree } from "./splitTree";
 import {
   projectArrangement,
   useSessions,
   type Workspace,
   type Pane,
 } from "./sessions";
+import { equalizeAxis, railLine, splitPane } from "./panePlane";
+import { planeBox, setPlaneBox } from "./planeBox";
+import { setPlaceWidth } from "./placeWidth";
+import { useSectionSets } from "./sectionSets";
+import { rowPlane } from "../test/planes";
 
 const group = (id: string): Pane => ({
   id,
@@ -21,91 +25,88 @@ const group = (id: string): Pane => ({
   ],
 });
 
+const RAIL_W = 60;
+
+// [db | (design | ghostty) over terminal | kanban], the columns in thirds of a 1500×800 plane.
 function workspaceFixture(): Workspace {
   useSessions.getState().bootstrapFirstWorkspace("/test/root");
   const base = useSessions.getState().workspaces[0];
-  const db = group("db");
-  const design = group("design");
-  const ghostty = group("ghostty");
-  const terminal = group("terminal");
-  const kanban = group("kanban");
-  const layout: SplitTree<Pane> = {
-    type: "split",
-    id: "root",
-    dir: "row",
-    sizes: [1 / 3, 1 / 3, 1 / 3],
-    children: [
-      splitLeaf(db),
-      {
-        type: "split",
-        id: "middle",
-        dir: "col",
-        sizes: [0.5, 0.5],
-        children: [
-          {
-            type: "split",
-            id: "top",
-            dir: "row",
-            sizes: [0.5, 0.5],
-            children: [splitLeaf(design), splitLeaf(ghostty)],
-          },
-          splitLeaf(terminal),
-        ],
-      },
-      splitLeaf(kanban),
-    ],
-  };
+  const box = planeBox();
+  const thirds = equalizeAxis(rowPlane(["db", "design", "kanban"]), box, "x");
+  const stacked = splitPane(thirds, box, "design", "bottom", "terminal")!;
+  const layout = splitPane(stacked, box, "design", "right", "ghostty")!;
   return {
     ...base,
+    regionOpen: { ...base.regionOpen, rail: true },
     railPlacement: { mode: "flow" },
     spaces: [
       {
         ...base.spaces[0],
-        activePaneId: ghostty.id,
+        activePaneId: "ghostty",
+        panes: ["db", "design", "ghostty", "terminal", "kanban"].map(group),
         layout,
       },
     ],
   };
 }
 
+const panesOf = (workspace: Workspace) =>
+  workspace.spaces[0].layout.cards.filter((c) => c.id !== "rail");
+
 beforeEach(() => {
+  setPlaneBox({ width: 1500, height: 800, gap: 0 });
+  setPlaceWidth("rail", RAIL_W);
   useSessions.setState({ workspaces: [], activeId: "" });
+  useSectionSets.setState({ sets: [], byPlugin: {}, left: null });
+  const set = useSectionSets.getState().create("fixture rail");
+  useSectionSets.getState().arrange(set.id, ["fixture.section"]);
+  useSectionSets.getState().link("fixture", "rail", set.id);
 });
-const withRail = (workspace: Workspace) => projectArrangement(workspace, 0, undefined, true)!;
 
-describe("session arrangement — the solution decides the display and the canonical tree stays unchanged", () => {
-  it("a blocked focus (ghostty) is displayed as a swapped arrangement and the session tree stays unchanged", () => {
-    // Fixture: [db | col([design | ghostty], terminal) | kanban]. The left 50 of ghostty is blocked by
-    // terminal crossing it — per the user rule it swaps forward and snaps to the 33.33 line.
+const withRail = (workspace: Workspace) => projectArrangement(workspace, true, true)!;
+const cell = (workspace: Workspace, id: string) => withRail(workspace).cells.find((c) => c.id === id)!.rect;
+
+describe("session arrangement — the solution decides the display and the panes' plane stays unchanged", () => {
+  it("a blocked focus (ghostty) is displayed as an exchanged arrangement and the panes stay where they are", () => {
+    // The line between design and ghostty is crossed by terminal, so the rail stands at the third
+    // in front of them and ghostty is exchanged with design on the screen.
     const workspace = workspaceFixture();
-    const canonical = workspace.spaces[0].layout;
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
+    useSessions.getState().settleRail(workspace.id);
 
-    const solved = withRail(useSessions.getState().workspaces[0]);
+    const stored = useSessions.getState().workspaces[0];
+    const solved = withRail(stored);
+    expect(solved.railPresent).toBe(true);
+    expect(solved.station).toBeCloseTo(500, 6);
     expect(solved.swapped).toBe(true);
-    expect(solved.cells.find((cell) => cell.id === "ghostty")!.rect.left).toBeCloseTo(100 / 3);
-    expect(solved.cells.find((cell) => cell.id === "design")!.rect.left).toBeCloseTo(50);
-    expect(solved.station).toBeCloseTo(100 / 3);
-    expect(useSessions.getState().workspaces[0].spaces[0].layout).toBe(canonical);
+    expect(cell(stored, "ghostty").left).toBeCloseTo(500 + RAIL_W, 6);
+    expect(cell(stored, "design").left).toBeGreaterThan(cell(stored, "ghostty").left);
+    // The plane the space stores holds the panes as they were; only the rail's slot was added at
+    // line 1, so every span past it reads one line further.
+    expect(panesOf(stored)).toEqual(panesOf(workspace).map((c) => ({
+      ...c, c0: c.c0 + (c.c0 >= 1 ? 1 : 0), c1: c.c1 + (c.c1 > 1 ? 1 : 0),
+    })));
   });
 
-  it("moving focus to an unblocked cell displays the canonical arrangement unchanged", () => {
+  it("moving focus to a pane the rail can reach displays the plane as stored", () => {
     const workspace = workspaceFixture();
-    const canonical = workspace.spaces[0].layout;
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
     useSessions.getState().setActiveGroup(workspace.id, "terminal");
 
-    const solved = withRail(useSessions.getState().workspaces[0]);
+    const stored = useSessions.getState().workspaces[0];
+    const solved = withRail(stored);
     expect(solved.swapped).toBe(false);
-    expect(solved.displayLayout).toBe(canonical);
-    expect(solved.cells.find((cell) => cell.id === "design")!.rect.left).toBeCloseTo(100 / 3);
-    expect(solved.cells.find((cell) => cell.id === "ghostty")!.rect.left).toBeCloseTo(50);
+    expect(solved.display).toBe(stored.spaces[0].layout);
+    expect(railLine(stored.spaces[0].layout)).toBe(1);
+    expect(cell(stored, "design").left).toBeCloseTo(500 + RAIL_W, 6);
+    expect(cell(stored, "ghostty").left).toBeGreaterThan(cell(stored, "design").left);
   });
 
-  it("maximizing a tab is a single [sidebar|panel] plane, and restore brings the original arrangement back", () => {
+  it("maximizing a tab is a single [rail | pane] plane, and restore brings the original arrangement back", () => {
     const workspace = workspaceFixture();
-    const canonical = workspace.spaces[0].layout;
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
+    useSessions.getState().settleRail(workspace.id);
+    const canonical = useSessions.getState().workspaces[0].spaces[0].layout;
 
     expect(useSessions.getState().maximizeView(workspace.id, "v-ghostty")).toEqual({
       ok: true,
@@ -114,7 +115,7 @@ describe("session arrangement — the solution decides the display and the canon
     const maximized = useSessions.getState().workspaces[0];
     const solved = withRail(maximized);
     expect(solved.cells).toEqual([
-      { id: "ghostty", rect: { left: 0, top: 0, width: 100, height: 100 } },
+      { id: "ghostty", rect: { left: RAIL_W, top: 0, width: 1500 - RAIL_W, height: 800 } },
     ]);
     expect(solved.station).toBe(0);
     expect(maximized.regionOpen.rail).toBe(true);
@@ -129,33 +130,14 @@ describe("session arrangement — the solution decides the display and the canon
     expect(restored.spaces[0].layout).toEqual(canonical);
   });
 
-  it("PIN validity is decided by the clean line of the canonical split, not by the temporary maximize plane", () => {
-    const workspace = workspaceFixture();
-    const station = withRail(workspace).cleanLines.find((line) => line > 0 && line < 100);
-    expect(station).toBeTypeOf("number");
-    const pinned: Workspace = {
-      ...workspace,
-      railPlacement: { mode: "pin", station: station! },
-    };
-    useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
-
-    expect(useSessions.getState().maximizeView(pinned.id, "v-ghostty")).toEqual({
-      ok: true,
-      viewId: "v-ghostty",
-    });
-    expect(useSessions.getState().workspaces[0].railPlacement).toEqual({
-      mode: "pin",
-      station,
-    });
-  });
-
-  it("a closed rail leaves nothing to attach to — no swap happens", () => {
+  it("a closed rail leaves nothing to attach to — no exchange happens", () => {
     const workspace = workspaceFixture();
     useSessions.setState({
       workspaces: [{ ...workspace, regionOpen: { ...workspace.regionOpen, rail: false } }],
       activeId: workspace.id,
     });
     const solved = projectArrangement(useSessions.getState().workspaces[0])!;
+    expect(solved.railPresent).toBe(false);
     expect(solved.swapped).toBe(false);
   });
 });
@@ -176,8 +158,7 @@ describe("maximize — the filling panel is the group that holds the view", () =
     useSessions.setState({ workspaces: [withMax], activeId: withMax.id });
 
     const solved = withRail(useSessions.getState().workspaces[0]);
-    const shown = solved.cells.filter((c) => c.rect.width > 0 && c.rect.height > 0);
-    expect(shown.map((c) => c.id)).toEqual(["kanban"]);
+    expect(solved.cells.map((c) => c.id)).toEqual(["kanban"]);
   });
 
   it("a maximized view inside the active group collapses to that same group", () => {
@@ -190,7 +171,6 @@ describe("maximize — the filling panel is the group that holds the view", () =
     useSessions.setState({ workspaces: [withMax], activeId: withMax.id });
 
     const solved = withRail(useSessions.getState().workspaces[0]);
-    const shown = solved.cells.filter((c) => c.rect.width > 0 && c.rect.height > 0);
-    expect(shown.map((c) => c.id)).toEqual(["ghostty"]);
+    expect(solved.cells.map((c) => c.id)).toEqual(["ghostty"]);
   });
 });

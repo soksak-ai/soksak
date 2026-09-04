@@ -12,7 +12,10 @@ const { redeliverViewFocusIfLost } = vi.hoisted(() => ({
 }));
 vi.mock("../plugins/viewFocus", () => ({ redeliverViewFocusIfLost }));
 
-import type { SplitTree } from "../state/splitTree";
+import {
+  equalizeAxis, flowRailLine, moveBoundary, splitPane, standRail, type PlaneBox, type PlaneState,
+} from "../state/panePlane";
+import { columnPlane, rowPlane } from "../test/planes";
 import { arrangementMoves, solveArrangement, type Arrangement } from "../lib/railArrangement";
 import { RAIL_TRAVEL_MS } from "../lib/railMotion";
 import { railGeometryScopeId } from "../lib/railMotion";
@@ -47,40 +50,39 @@ import {
   registerLayoutTransitionIntentHost,
 } from "../lib/layoutTransitionIntent";
 
-type G = { id: string; content?: string };
-const leaf = (id: string, content?: string): SplitTree<G> => ({ type: "leaf", value: { id, content } });
-const twoColumns: SplitTree<G> = {
-  type: "split",
-  id: "r",
-  dir: "row",
-  sizes: [0.5, 0.5],
-  children: [leaf("a"), leaf("b")],
-};
-const threeColumns: SplitTree<G> = {
-  type: "split",
-  id: "r",
-  dir: "row",
-  sizes: [1 / 3, 1 / 3, 1 / 3],
-  children: [leaf("a"), leaf("b"), leaf("c")],
-};
-const twoRows = (top: number): SplitTree<G> => ({
-  type: "split",
-  id: "c",
-  dir: "col",
-  sizes: [top, 1 - top],
-  children: [leaf("a"), leaf("b")],
-});
+// A plane of 1000×600 with no corridor and a 100px rail.
+const box: PlaneBox = { width: 1000, height: 600, gap: 0 };
+const RAIL_W = 100;
+const twoColumns = rowPlane(["a", "b"]);
+const threeColumns = equalizeAxis(rowPlane(["a", "b", "c"]), box, "x");
+const twoRows = (top: number): PlaneState => moveBoundary(columnPlane(["a", "b"]), box, "y", 1, top)!;
 
-const solve = (layout: SplitTree<G>, focusId: string) =>
-  solveArrangement<G>({
-    layout,
+/**
+ * The rail standing beside the focused pane, as the store settles it under FLOW: stood once on a
+ * plane, then moved on it, so two solves of one plane differ by the rail's travel alone and every
+ * pane keeps its width (split-pane: a slot that moves changes no other card's width).
+ */
+const standing = new Map<PlaneState, PlaneState>();
+const beside = (layout: PlaneState, focusId: string): PlaneState => {
+  const current = standing.get(layout) ?? layout;
+  const next = standRail(current, box, flowRailLine(current, box, focusId)!, RAIL_W)!;
+  standing.set(layout, next);
+  return next;
+};
+
+const solve = (
+  layout: PlaneState,
+  focusId: string,
+  extra: Partial<Parameters<typeof solveArrangement>[0]> = {},
+) =>
+  solveArrangement({
+    layout: beside(layout, focusId),
+    box,
     focusId,
     placement: { mode: "flow" },
-    railOpen: true,
+    railPresent: true,
+    ...extra,
   });
-const valuesOf = (tree: SplitTree<G>): G[] => tree.type === "leaf"
-  ? [tree.value]
-  : tree.children.flatMap(valuesOf);
 
 function Probe({
   arrangement,
@@ -92,14 +94,14 @@ function Probe({
   settlementKey,
   domCandidateParticipant,
 }: {
-  arrangement: Arrangement<G>;
+  arrangement: Arrangement;
   scopeId: string;
   contentKey?: string;
   onPhase?: (rebase: () => void) => void;
   canGlide?: () => boolean;
   prepareTravel?: (
-    from: Arrangement<G>,
-    to: Arrangement<G>,
+    from: Arrangement,
+    to: Arrangement,
   ) => Promise<PreparedLayoutTransition>;
   settlementKey?: string;
   domCandidateParticipant?: LayoutPresentationCandidateParticipant;
@@ -122,7 +124,6 @@ function Probe({
       data-station={String(phase.displayed?.station ?? "")}
       data-rail-present={phase.displayed?.railPresent ? "1" : "0"}
       data-content={String(phase.displayed === arrangement ? "live" : "stale")}
-      data-values={phase.displayed ? valuesOf(phase.displayed.displayLayout).map((value) => `${value.id}:${value.content ?? ""}`).join("|") : ""}
       data-rects={phase.displayed?.cells.map((cell) => `${cell.id}:${cell.rect.top},${cell.rect.height}`).join("|") ?? ""}
       data-glide={phase.glide ? "1" : "0"}
       data-preparing={phase.preparing ? "1" : "0"}
@@ -135,7 +136,7 @@ function Probe({
 
 let host: HTMLElement;
 let root: Root;
-const scopeOf = (a: Arrangement<G>) => railGeometryScopeId("c1", a.cleanLines);
+const scopeOf = (a: Arrangement) => railGeometryScopeId("c1", a.lineSet);
 const el = () => host.querySelector<HTMLElement>("[data-testid=p]")!;
 let transitionSequence = 1;
 const presentationStartReceipt = (
@@ -188,6 +189,7 @@ const transition = (
 });
 
 beforeEach(() => {
+  standing.clear();
   vi.useFakeTimers();
   __resetLayoutSettlementForTest();
   __resetLayoutTransitionHostForTest();
@@ -211,13 +213,13 @@ describe("useArrangementPhase", () => {
   it("applies a vertical split size change", () => {
     const at = solve(twoRows(0.5), "a");
     act(() => root.render(<Probe arrangement={at} scopeId={scopeOf(at)} />));
-    expect(el().dataset.rects).toBe("a:0,50|b:50,50");
+    expect(el().dataset.rects).toBe("a:0,300|b:300,300");
 
     const resized = solve(twoRows(0.35), "a");
     act(() => root.render(<Probe arrangement={resized} scopeId={scopeOf(resized)} />));
 
     expect(el().dataset.content).toBe("live");
-    expect(el().dataset.rects).toBe("a:0,35|b:35,65");
+    expect(el().dataset.rects).toBe("a:0,210|b:210,390");
   });
   it("a React render claims the intent transaction already started at the same revision and does not call fallback prepare again", async () => {
     const at = solve(twoColumns, "a");
@@ -417,19 +419,19 @@ describe("useArrangementPhase", () => {
     // pane, so the border width never returns. When the bottom row is full width the only clean
     // vertical lines are 0 and 100 — the rail has nowhere to go. Without a pull
     // (pullFocused:false) the pane does not move either. Hence two solutions differing in focus only.
-    const stack: SplitTree<G> = {
-      type: "split",
-      id: "c",
-      dir: "col",
-      sizes: [0.5, 0.5],
-      children: [threeColumns, leaf("d")],
-    };
+    // a | b | c on top, d across the bottom: only the front line stands, and the rail is there.
+    const tall = columnPlane(["a", "d"]);
+    const stack = standRail(
+      equalizeAxis(splitPane(splitPane(tall, box, "a", "right", "b")!, box, "b", "right", "c")!, box, "x"),
+      box, 0, RAIL_W,
+    )!;
     const still = (focusId: string) =>
-      solveArrangement<G>({
+      solveArrangement({
         layout: stack,
+        box,
         focusId,
         placement: { mode: "flow" },
-        railOpen: true,
+        railPresent: true,
         pullFocused: false,
       });
     const at = still("a");
@@ -452,14 +454,16 @@ describe("useArrangementPhase", () => {
     // changes visible geometry by a full rail width. Leaving it out of the phase identity kept a
     // linked set on screen after unlinking until some unrelated geometry changed.
     const standing = solve(twoColumns, "a");
-    const absent = solveArrangement<G>({
-      layout: twoColumns,
+    const absent = solveArrangement({
+      layout: beside(twoColumns, "a"),
+      box,
       focusId: "a",
       placement: { mode: "flow" },
-      railOpen: false,
+      railPresent: false,
     });
     expect(standing.station).toBe(absent.station);
-    expect(standing.cells).toEqual(absent.cells);
+    // The rail at the front: a's box starts a rail width in; without the rail, at 0.
+    expect(standing.cells.map((c) => c.id)).toEqual(absent.cells.map((c) => c.id));
 
     act(() => root.render(<Probe arrangement={standing} scopeId={scopeOf(standing)} />));
     expect(el().dataset.railPresent).toBe("1");
@@ -471,11 +475,12 @@ describe("useArrangementPhase", () => {
 
   it("closes each intent when consecutive rail-presence changes have no cell movement", async () => {
     const standing = solve(twoColumns, "a");
-    const absent = solveArrangement<G>({
-      layout: twoColumns,
+    const absent = solveArrangement({
+      layout: beside(twoColumns, "a"),
+      box,
       focusId: "a",
       placement: { mode: "flow" },
-      railOpen: false,
+      railPresent: false,
     });
     expect(arrangementMoves(standing, absent)).toEqual([]);
 
@@ -524,12 +529,13 @@ describe("useArrangementPhase", () => {
 
   it("a maximize projection delta with zero translation still prepares the target before adopting it", async () => {
     const at = solve(twoColumns, "a");
-    const maximized = solveArrangement<G>({
-      layout: twoColumns,
+    const maximized = solveArrangement({
+      layout: beside(twoColumns, "a"),
+      box,
       focusId: "a",
       maximizedId: "a",
       placement: { mode: "flow" },
-      railOpen: true,
+      railPresent: true,
     });
     const commit = vi.fn(async () => {});
     const start = vi.fn(async () => null);
@@ -661,17 +667,18 @@ describe("useArrangementPhase", () => {
 
   it("a committed snap restore settles once, at the exact revision where current/displayed and the presentation commit are closed", async () => {
     const restored = solve(twoColumns, "a");
-    const maximized = solveArrangement<G>({
-      layout: twoColumns,
+    const maximized = solveArrangement({
+      layout: beside(twoColumns, "a"),
+      box,
       focusId: "a",
       maximizedId: "a",
       placement: { mode: "flow" },
-      railOpen: true,
+      railPresent: true,
     });
     const commits: string[] = [];
     const prepareTravel = vi.fn(async (
-      _from: Arrangement<G>,
-      to: Arrangement<G>,
+      _from: Arrangement,
+      to: Arrangement,
     ): Promise<PreparedLayoutTransition> => transition("snap", async () => {
       commits.push(to.maximizedId ? "maximize" : "restore");
     }));
@@ -721,12 +728,13 @@ describe("useArrangementPhase", () => {
 
   it("an actual-shaped maximize7→restore8 snap preserves the consumed revision on each terminal row", async () => {
     const restored = solve(twoColumns, "a");
-    const maximized = solveArrangement<G>({
-      layout: twoColumns,
+    const maximized = solveArrangement({
+      layout: beside(twoColumns, "a"),
+      box,
       focusId: "a",
       maximizedId: "a",
       placement: { mode: "flow" },
-      railOpen: true,
+      railPresent: true,
     });
     registerLayoutTransitionHost({
       prepareChange: async (_change, identity) => ({
@@ -785,12 +793,13 @@ describe("useArrangementPhase", () => {
 
   it("the earlier transaction's snap commit does not ACK the next revision opened during a slow prepare", async () => {
     const restored = solve(twoColumns, "a");
-    const maximized = solveArrangement<G>({
-      layout: twoColumns,
+    const maximized = solveArrangement({
+      layout: beside(twoColumns, "a"),
+      box,
       focusId: "a",
       maximizedId: "a",
       placement: { mode: "flow" },
-      railOpen: true,
+      railPresent: true,
     });
     let finishPrepare!: (prepared: PreparedLayoutTransition) => void;
     const prepareTravel = vi.fn(() => new Promise<PreparedLayoutTransition>((resolve) => {
@@ -1111,13 +1120,13 @@ describe("useArrangementPhase", () => {
     // two move distances). The queue removes that defect structurally.
     const at = solve(threeColumns, "a"); // station 0
     act(() => root.render(<Probe arrangement={at} scopeId={scopeOf(at)} />));
-    const toB = solve(threeColumns, "b"); // station 33.33
+    const toB = solve(threeColumns, "b"); // beside b
     act(() => root.render(<Probe arrangement={toB} scopeId={scopeOf(toB)} />));
     expect(el().dataset.traveling).toBe("1");
     expect(el().dataset.station).toBe(String(toB.station));
 
     // A third solution arrives mid-travel — the display is still the first target.
-    const toC = solve(threeColumns, "c"); // station 66.67
+    const toC = solve(threeColumns, "c"); // beside c
     act(() => root.render(<Probe arrangement={toC} scopeId={scopeOf(toC)} />));
     expect(el().dataset.station).toBe(String(toB.station));
 
@@ -1167,23 +1176,16 @@ describe("useArrangementPhase", () => {
   });
 
   it("updates tab content during rail travel without abandoning the open geometry journey", () => {
-    const initialLayout: SplitTree<G> = {
-      type: "split", id: "r", dir: "row", sizes: [0.5, 0.5],
-      children: [leaf("a", "tab-a1"), leaf("b", "tab-b1")],
-    };
-    const changedLayout: SplitTree<G> = {
-      type: "split", id: "r", dir: "row", sizes: [0.5, 0.5],
-      children: [leaf("a", "tab-a2"), leaf("b", "tab-b1")],
-    };
-    const at = solve(initialLayout, "b");
-    const moving = solve(initialLayout, "a");
+    // The phase holds geometry only; a tab switch is a content key change with the same solution,
+    // and the journey keeps running.
+    const at = solve(twoColumns, "b");
+    const moving = solve(twoColumns, "a");
     act(() => root.render(<Probe arrangement={at} scopeId={scopeOf(at)} contentKey="a:tab-a1|b:tab-b1" />));
     act(() => root.render(<Probe arrangement={moving} scopeId={scopeOf(moving)} contentKey="a:tab-a1|b:tab-b1" />));
     expect(el().dataset.traveling).toBe("1");
 
-    const changed = solve(changedLayout, "a");
+    const changed = solve(twoColumns, "a");
     act(() => root.render(<Probe arrangement={changed} scopeId={scopeOf(changed)} contentKey="a:tab-a2|b:tab-b1" />));
-    expect(el().dataset.values).toContain("a:tab-a2");
     expect(el().dataset.traveling).toBe("1");
 
     act(() => vi.advanceTimersByTime(RAIL_TRAVEL_MS + 10));

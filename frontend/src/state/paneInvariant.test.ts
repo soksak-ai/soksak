@@ -35,8 +35,8 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { allGroups, allViews, type PaneNode, type Tab, type Pane } from "./sessions";
-import { leavesOf } from "./splitTree";
+import { allGroups, allViews, type Tab, type Pane, type Space } from "./sessions";
+import { rowPlane } from "../test/planes";
 
 const SRC_ROOT = join(__dirname, "..");
 const CATALOG_DIR = join(SRC_ROOT, "commands");
@@ -54,13 +54,13 @@ const pane = (id: string, tabs: Tab[]): Pane => ({
   tabs,
   activeTabId: tabs[0]?.id ?? "",
 });
-const leaf = (v: Pane): PaneNode => ({ type: "leaf", value: v });
-const split = (id: string, children: PaneNode[]): PaneNode => ({
-  type: "split",
-  id,
-  dir: "row",
-  sizes: children.map(() => 1 / children.length),
-  children,
+/** A space over these panes, side by side. */
+const spaceOf = (panes: Pane[]): Space => ({
+  id: "spc-a",
+  title: "1",
+  panes,
+  layout: rowPlane(panes.map((g) => g.id)),
+  activePaneId: panes[0]?.id ?? "",
 });
 
 /** Scrapes every node holding tabs out of the whole tree — only leaves must come out. */
@@ -148,26 +148,22 @@ const INNER_NODE_ID = /splitId|split\s+(?:node\s+)?ids?\b/i;
 describe("① a tab exists only in a pane", () => {
   const a = pane("pan-a", [tab("tab-1"), tab("tab-2")]);
   const b = pane("pan-b", [tab("tab-3")]);
-  const tree = split("s1", [leaf(a), split("s2", [leaf(b), leaf(pane("pan-c", []))])]);
+  const space = spaceOf([a, b, pane("pan-c", [])]);
 
-  it("every node holding tabs is a leaf value (pane) — not one internal node is among them", () => {
-    expect(nodesHoldingTabs(tree)).toEqual(leavesOf(tree));
+  it("every node holding tabs is a pane — the plane holds none", () => {
+    expect(nodesHoldingTabs(space)).toEqual(space.panes);
+    expect(nodesHoldingTabs(space.layout)).toEqual([]);
   });
 
-  it("an internal node has no slot for a tab at all", () => {
-    const inner = (n: PaneNode, acc: object[] = []): object[] => {
-      if (n.type === "leaf") return acc;
-      acc.push(n);
-      for (const c of n.children) inner(c, acc);
-      return acc;
-    };
-    const offenders = inner(tree).filter((n) => "tabs" in n || "value" in n);
+  it("a card on the plane has no slot for a tab at all", () => {
+    // The library's card has a host payload slot; the core leaves it empty.
+    const offenders = space.layout.cards.filter((card) => "tabs" in card || "value" in card || card.data !== undefined);
     expect(offenders).toEqual([]);
   });
 
   it("every tab in the layout is exactly the union of the tabs the panes hold", () => {
-    expect(allViews(tree)).toEqual(allGroups(tree).flatMap((g) => g.tabs));
-    expect(allViews(tree).map((v) => v.id)).toEqual(["tab-1", "tab-2", "tab-3"]);
+    expect(allViews(space)).toEqual(allGroups(space).flatMap((g) => g.tabs));
+    expect(allViews(space).map((v) => v.id)).toEqual(["tab-1", "tab-2", "tab-3"]);
   });
 });
 
@@ -175,15 +171,15 @@ describe("① a tab exists only in a pane", () => {
 describe("② an empty pane is valid — 0 or more tabs", () => {
   it("a pane with 0 tabs is collected as a pane too", () => {
     const empty = pane("pan-empty", []);
-    const tree = split("s1", [leaf(pane("pan-a", [tab("tab-1")])), leaf(empty)]);
-    expect(allGroups(tree).map((g) => g.id)).toEqual(["pan-a", "pan-empty"]);
-    expect(allViews(tree).map((v) => v.id)).toEqual(["tab-1"]);
+    const space = spaceOf([pane("pan-a", [tab("tab-1")]), empty]);
+    expect(allGroups(space).map((g) => g.id)).toEqual(["pan-a", "pan-empty"]);
+    expect(allViews(space).map((v) => v.id)).toEqual(["tab-1"]);
   });
 
   it("a layout with no tab at all is still a layout", () => {
-    const tree = leaf(pane("pan-empty", []));
-    expect(allGroups(tree).map((g) => g.id)).toEqual(["pan-empty"]);
-    expect(allViews(tree)).toEqual([]);
+    const space = spaceOf([pane("pan-empty", [])]);
+    expect(allGroups(space).map((g) => g.id)).toEqual(["pan-empty"]);
+    expect(allViews(space)).toEqual([]);
   });
 
   it("the active chain does not drop the position when a tab is absent — it cuts at the pane", () => {

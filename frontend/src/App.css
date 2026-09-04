@@ -623,10 +623,10 @@ body,
    again or followed, so no second clock appears. */
 .focus-lighting-region {
   position: absolute;
-  left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  left: calc(var(--l) + var(--pane-inset));
   top: calc(var(--t) + var(--pane-inset));
-  width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
-  height: calc(var(--h) - var(--pane-inset) * 2);
+  width: var(--w);
+  height: var(--h);
 }
 :root[data-pane-style="card"] .focus-lighting-region {
   border-radius: 11px;
@@ -1085,12 +1085,10 @@ body,
 .tab-body,
 .parked-picture {
   position: absolute;
-  left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  left: calc(var(--l) + var(--pane-inset));
   top: calc(var(--t) + var(--pane-inset) + var(--header-h));
-  width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
-  height: calc(
-    var(--h) - (var(--pane-inset) * 2 + var(--header-h) + var(--status-h))
-  );
+  width: var(--w);
+  height: calc(var(--h) - (var(--header-h) + var(--status-h)));
 }
 .tab-body {
   contain: layout paint style;
@@ -1235,14 +1233,12 @@ body,
   z-index: 4;
   background: transparent;
 }
+/* A grab area is where the plane says a boundary can be taken (split-pane dividers): its box is
+   set inline, so the rule adds nothing to its size. */
 .pane-gutter.row {
-  width: 6px;
-  transform: translateX(-3px);
   cursor: col-resize;
 }
 .pane-gutter.col {
-  height: 6px;
-  transform: translateY(-3px);
   cursor: row-resize;
 }
 /* §B6 exception — in the solid theme the group split seam takes a 1px centre
@@ -1263,16 +1259,14 @@ body,
    no events. */
 .drop-ind-wrap {
   position: absolute;
-  left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  left: calc(var(--l) + var(--pane-inset));
   /* The drop offset belongs to --drop-top-h; by default it is --header-h, so
      content is covered from the body down. The sidebar sets --drop-top-h:0 to
      cover the whole cell without touching --header-h, which is the plugin row2
      band height. */
   top: calc(var(--t) + var(--pane-inset) + var(--drop-top-h, var(--header-h)));
-  width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
-  height: calc(
-    var(--h) - (var(--pane-inset) * 2 + var(--drop-top-h, var(--header-h)) + var(--status-h))
-  );
+  width: var(--w);
+  height: calc(var(--h) - (var(--drop-top-h, var(--header-h)) + var(--status-h)));
   z-index: 10;
   pointer-events: none;
 }
@@ -1679,10 +1673,10 @@ body,
    the body area is taken by the slot layer above. */
 .pane {
   position: absolute;
-  left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  left: calc(var(--l) + var(--pane-inset));
   top: calc(var(--t) + var(--pane-inset));
-  width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
-  height: calc(var(--h) - var(--pane-inset) * 2);
+  width: var(--w);
+  height: var(--h);
   display: flex;
   flex-direction: column;
   z-index: 0;
@@ -1792,10 +1786,10 @@ body,
 .pane-border,
 .pane-focus-boundary {
   position: absolute;
-  left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  left: calc(var(--l) + var(--pane-inset));
   top: calc(var(--t) + var(--pane-inset));
-  width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
-  height: calc(var(--h) - var(--pane-inset) * 2);
+  width: var(--w);
+  height: var(--h);
   pointer-events: none;
   z-index: 5;
 }

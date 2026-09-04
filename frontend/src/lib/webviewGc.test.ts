@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import { collectWebviewLabels, gateAfterConsume, type OwnsSurface } from "./webviewGc";
 import { splitLeaf } from "../state/splitTree";
+import { singlePane } from "../state/panePlane";
 import type { Workspace, Tab, Pane, Space } from "../state/sessions";
 import { surfaceLabelIn } from "./surfaceLabels";
 
@@ -35,7 +36,7 @@ function group(tabs: Tab[]): Pane {
 }
 
 function content(views: Tab[]): Space {
-  return { id: "spc-aaaaaa", title: "1", layout: splitLeaf(group(views)), activePaneId: "pan-aaaaaa" };
+  return { id: "spc-aaaaaa", title: "1", panes: [group(views)], layout: singlePane("pan-aaaaaa"), activePaneId: "pan-aaaaaa" };
 }
 
 function tab(views: Tab[]): Workspace {

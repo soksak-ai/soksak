@@ -348,7 +348,7 @@ function snapshotSessions(s: SessionsState): SessionsSnapshot {
         (c) => c.id === workspace.activeSpaceId,
       );
       if (content) {
-        const group = allGroups(content.layout).find(
+        const group = allGroups(content).find(
           (g) => g.id === content.activePaneId,
         );
         const view = group?.tabs.find((v) => v.id === group.activeTabId);
@@ -621,7 +621,7 @@ export function terminalSurfaceStatePayload(value: {
 function projectInfoOfTab(paneId: string): { id: string; root: string | null } | null {
   for (const t of useSessions.getState().workspaces) {
     for (const c of t.spaces) {
-      for (const g of allGroups(c.layout)) {
+      for (const g of allGroups(c)) {
         for (const v of g.tabs) {
           if (v.id === paneId) {
             return { id: t.id, root: t.root ?? null };

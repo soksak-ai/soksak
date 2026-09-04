@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ViewTabs } from "./ViewTabs";
 import { allGroups, useSessions } from "../state/sessions";
-import { splitLeaf } from "../state/splitTree";
+import { singlePane } from "../state/panePlane";
 import { startExecutor } from "../commands/executor";
 
 vi.stubGlobal(
@@ -43,7 +43,7 @@ describe("feature tab maximize", () => {
     const content = base.spaces[0];
     const viewId = "v-max";
     const group = {
-      ...allGroups(content.layout)[0],
+      ...allGroups(content)[0],
       activeTabId: viewId,
       tabs: [
         {
@@ -57,7 +57,7 @@ describe("feature tab maximize", () => {
     };
     const workspace = {
       ...base,
-      spaces: [{ ...content, activePaneId: group.id, layout: splitLeaf(group) }],
+      spaces: [{ ...content, activePaneId: group.id, panes: [group], layout: singlePane(group.id) }],
     };
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
     startExecutor(); // The command catalog — without it the command answers REGISTRY_EMPTY and nothing happens.

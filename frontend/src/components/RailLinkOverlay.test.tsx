@@ -78,14 +78,14 @@ describe("RailLinkOverlay — live grid tracking", () => {
       <RailLinkOverlay
         contentId="spc-aaaaaa"
         relation={relation()}
-        railWidth={300}
         paneInset={0}
-        railStation={50}
-        targetRect={{ left: 50, top: 0, width, height: 50 }}
+        gap={0}
+        railRect={{ left: 450, top: 0, width: 300, height: 800 }}
+        targetRect={{ left: 750, top: 0, width, height: 400 }}
       />
     );
 
-    act(() => root.render(render(25)));
+    act(() => root.render(render(225)));
     const overlay = host.querySelector<HTMLElement>(".rail-link-overlay")!;
     expect(overlay.dataset).toMatchObject({
       node: "relation/rail/spc-aaaaaa",
@@ -97,7 +97,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
     expect(overlay.dataset.rail).toBeUndefined();
     expect(overlay.dataset.box).toBeUndefined();
 
-    act(() => root.render(render(40)));
+    act(() => root.render(render(360)));
     expect(host.querySelectorAll("path")).toHaveLength(0);
 
     hostSize = { width: 1000, height: 700 };
@@ -126,7 +126,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
           borderMode: "none",
           pathCount: 0,
         })}
-        railWidth={300} paneInset={0} railStation={0}
+        paneInset={0} gap={0} railRect={{ left: 0, top: 0, width: 300, height: 800 }}
         targetRect={null}
       />,
     ));
@@ -144,10 +144,10 @@ describe("RailLinkOverlay — live grid tracking", () => {
       <RailLinkOverlay
         contentId="spc-aaaaaa"
         relation={relation()}
-        railWidth={300}
         paneInset={0}
-        railStation={50}
-        targetRect={{ left: 50, top: 0, width: 25, height: 50 }}
+        gap={0}
+        railRect={{ left: 450, top: 0, width: 300, height: 800 }}
+        targetRect={{ left: 750, top: 0, width: 225, height: 400 }}
         nativeVisible
       />,
     ));
@@ -164,10 +164,10 @@ describe("projected-adjacency marking", () => {
     <RailLinkOverlay
       contentId="spc-aaaaaa"
       relation={relation()}
-      railWidth={300}
       paneInset={0}
-      railStation={50}
-      targetRect={{ left: 50, top: 0, width: 25, height: 50 }}
+      gap={0}
+      railRect={{ left: 450, top: 0, width: 300, height: 800 }}
+      targetRect={{ left: 750, top: 0, width: 225, height: 400 }}
       projected={projected}
     />
   );

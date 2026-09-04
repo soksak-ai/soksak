@@ -86,10 +86,13 @@ export function railFlipOffsetPx(
   return ((fromStation - targetStation) / 100) * available;
 }
 
-/** Identity of a panel plane that can share rail travel. A split/merge that changes the line set makes a new plane. */
+/**
+ * Identity of a pane plane that can share rail travel. A split or merge changes the line set and
+ * makes a new plane; a resize or the rail's travel does not (Arrangement.lineSet).
+ */
 export function railGeometryScopeId(
   spaceId: string | undefined,
-  cleanLines: readonly number[],
+  lineSet: string,
 ): string {
-  return `${spaceId ?? ""}:${cleanLines.join(",")}`;
+  return `${spaceId ?? ""}:${lineSet}`;
 }

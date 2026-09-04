@@ -231,7 +231,7 @@ export function focusedPluginOf(workspace: Workspace | null | undefined): string
   if (!workspace) return null;
   const space = workspace.spaces.find((c) => c.id === workspace.activeSpaceId);
   if (!space) return null;
-  const group = allGroups(space.layout).find((g) => g.id === space.activePaneId);
+  const group = allGroups(space).find((g) => g.id === space.activePaneId);
   const view = group?.tabs.find((v) => v.id === group.activeTabId);
   return view?.pluginId ?? null;
 }

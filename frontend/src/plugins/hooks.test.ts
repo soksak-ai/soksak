@@ -78,15 +78,13 @@ describe("startPluginHooks — sessions diff coalescing", () => {
       .splitWithNewView(projectId, created.groupId, "right");
     expect(split.ok).toBe(true);
 
-    // Find the split node id and run the resize storm.
+    // The boundary between the two panes, and the resize storm on it.
     const tab = useSessions.getState().workspaces.find((t) => t.id === projectId)!;
     const content = tab.spaces[0];
-    const splitId =
-      content.layout.type === "split" ? content.layout.id : null;
-    expect(splitId).not.toBeNull();
     for (let i = 0; i < 120; i++) {
       const a = 0.3 + (i % 40) / 100;
-      useSessions.getState().resizeSplit(projectId, splitId!, [a, 1 - a]);
+      const moved = useSessions.getState().moveBoundary(projectId, content.id, { axis: "x", line: 1 }, { ratio: a });
+      expect(moved.ok).toBe(true);
     }
 
     const opened = useSessions

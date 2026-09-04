@@ -2,16 +2,16 @@ import { moduleState } from "./moduleState";
 import type { Arrangement } from "./railArrangement";
 import type { PreparedLayoutTransition } from "./layoutTransitionHost";
 
-export interface LayoutTransitionIntent<L extends { id: string }> {
+export interface LayoutTransitionIntent {
   ownerKey: string;
   revision: number;
-  from: Arrangement<L>;
-  to: Arrangement<L>;
+  from: Arrangement;
+  to: Arrangement;
 }
 
-export interface LayoutTransitionIntentHost<L extends { id: string }> {
+export interface LayoutTransitionIntentHost {
   /** Called before the state publish. React render does not restart this preparation; it only claims it. */
-  prepare(intent: LayoutTransitionIntent<L>, signal: AbortSignal): Promise<PreparedLayoutTransition>;
+  prepare(intent: LayoutTransitionIntent, signal: AbortSignal): Promise<PreparedLayoutTransition>;
 }
 
 export class LayoutTransitionIntentSuperseded extends Error {
@@ -21,8 +21,7 @@ export class LayoutTransitionIntentSuperseded extends Error {
   }
 }
 
-type AnyLeaf = { id: string };
-type AnyIntent = LayoutTransitionIntent<AnyLeaf>;
+type AnyIntent = LayoutTransitionIntent;
 type HostEntry = {
   generation: number;
   prepare: (intent: AnyIntent, signal: AbortSignal) => Promise<PreparedLayoutTransition>;
@@ -185,9 +184,9 @@ function discardOwner(ownerKey: string, generation: number): void {
 }
 
 /** WorkspacePlane registers the imperative pre-paint adapter owner of its own workspace. */
-export function registerLayoutTransitionIntentHost<L extends { id: string }>(
+export function registerLayoutTransitionIntentHost(
   ownerKey: string,
-  host: LayoutTransitionIntentHost<L>,
+  host: LayoutTransitionIntentHost,
 ): () => void {
   if (!ownerKey) throw new Error("layout transition intent ownerKey is empty");
   const previous = state.hosts.get(ownerKey);
@@ -211,15 +210,15 @@ export function registerLayoutTransitionIntentHost<L extends { id: string }>(
  * Called by the store mutation owner before publishing a new workspace. With no active transaction, the
  * registered host's prepare starts on this call stack. With one active, only the latest intent starts after the terminal ACK.
  */
-export function publishLayoutTransitionIntent<L extends { id: string }>(
-  intent: LayoutTransitionIntent<L>,
+export function publishLayoutTransitionIntent(
+  intent: LayoutTransitionIntent,
 ): boolean {
   if (!intent.ownerKey || !Number.isInteger(intent.revision) || intent.revision <= 0) {
     throw new Error("layout transition intent identity is invalid");
   }
   const host = state.hosts.get(intent.ownerKey);
   if (!host) return false;
-  const next = entryOf(host, intent as AnyIntent);
+  const next = entryOf(host, intent);
   record(intent.ownerKey, next, "published");
   let queue = state.queues.get(intent.ownerKey);
   if (!queue) {
