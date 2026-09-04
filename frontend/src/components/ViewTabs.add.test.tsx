@@ -38,6 +38,41 @@ afterEach(() => {
 });
 
 describe("the + on a pane's tab strip", () => {
+  // A button takes focus when it is clicked. The terminal under it then loses focus, its cursor
+  // changes and the pane reads as inactive — for a menu that was supposed to change nothing but
+  // itself (measured 2026-09-04).
+  it("does not take focus from what had it", () => {
+    const base = useSessions.getState().workspaces[0];
+    const space = base.spaces[0];
+    const group = { ...allGroups(space.layout)[0] };
+    const workspace = {
+      ...base,
+      spaces: [{ ...space, activePaneId: group.id, layout: splitLeaf(group) }],
+    };
+    useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
+    startExecutor();
+
+    const elsewhere = document.createElement("input");
+    document.body.append(elsewhere);
+    elsewhere.focus();
+    expect(document.activeElement).toBe(elsewhere);
+
+    act(() => {
+      root.render(
+        <ViewTabs projectId={workspace.id} group={group} onTabPointerDown={() => {}} />,
+      );
+    });
+    const add = host.querySelector<HTMLButtonElement>(`[data-node="tab/view/${group.id}/add"]`)!;
+    act(() => {
+      const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+      const prevented = !add.dispatchEvent(down);
+      // The browser moves focus on the default action of a mousedown. Refusing that action is what
+      // keeps focus where it was.
+      expect(prevented, "the + does not refuse the focus its mousedown would take").toBe(true);
+    });
+    elsewhere.remove();
+  });
+
   it("activates its own pane", async () => {
     const base = useSessions.getState().workspaces[0];
     const space = base.spaces[0];

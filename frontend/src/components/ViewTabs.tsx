@@ -223,10 +223,17 @@ export const ViewTabs = memo(function ViewTabs({
             className="icon-btn tab-add"
             data-node={`tab/view/${group.id}/add`}
             title={t("view.new")}
-            // The mousedown is kept off the strip's drag machinery, so this activates its own pane
-            // here instead. Without it, opening the menu on an unfocused pane left the
-            // focus where it was: the clicked pane stayed dim and another stayed lit.
-            onMouseDown={(e) => e.stopPropagation()}
+            // The mousedown is kept off the strip's drag machinery, so the click activates this pane
+            // instead. Without that, opening the menu on an unfocused pane left the focus where it
+            // was: the clicked pane stayed dim and another stayed lit.
+            //
+            // Its default action is refused too. A button takes focus when it is clicked, and the
+            // terminal under it would lose focus and read as inactive — for a menu that changes
+            // nothing but itself.
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             onClick={() => {
               activatePaneIntent(group.id);
               if (menuPos) {
