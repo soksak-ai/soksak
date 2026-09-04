@@ -78,6 +78,7 @@ import { railGeometryScopeId, railPresentation } from "./lib/railMotion";
 import type { Arrangement } from "./lib/railArrangement";
 import { RAIL_CARD } from "./state/panePlane";
 import { setPlaneBox, usePlaneBox } from "./state/planeBox";
+import { useShallow } from "zustand/react/shallow";
 import { useAppChromeLayoutReflow } from "./lib/appChromeLayoutReflow";
 import { useArrangementPhase } from "./components/useArrangementPhase";
 import {
@@ -309,7 +310,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
     observer.observe(plane);
     return () => observer.disconnect();
   }, [railPaneInset]);
-  const planeBox = usePlaneBox((s) => ({ width: s.width, height: s.height, gap: s.gap }));
+  const planeBox = usePlaneBox(useShallow((s) => ({ width: s.width, height: s.height, gap: s.gap })));
   // What stands in the rail is decided outside this store (the sets a plugin registers), so the
   // plane follows it from here: the rail is stood or withdrawn on the active space when presence
   // changes, and drawn at the place's width when that changes.

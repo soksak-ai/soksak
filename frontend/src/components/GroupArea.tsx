@@ -53,6 +53,7 @@ import { useHydration } from "../state/hydration";
 import type { Arrangement, ArrangementMove, Rect } from "../lib/railArrangement";
 import { moveBoundaryPx, rectsOf, zoneAt, type Divider } from "../state/panePlane";
 import { usePlaneBox } from "../state/planeBox";
+import { useShallow } from "zustand/react/shallow";
 import { viewTravelPresentation } from "../lib/viewTravelPresentation";
 import { roundedOrthogonalPath } from "../lib/railLinkShape";
 import {
@@ -486,7 +487,7 @@ export const GroupArea = memo(function GroupArea({
 
   // The plane every space is laid out in, and the geometry this render draws — both from the
   // library, through the arrangement. Nothing here computes a rect.
-  const planeBox = usePlaneBox((s) => ({ width: s.width, height: s.height, gap: s.gap }));
+  const planeBox = usePlaneBox(useShallow((s) => ({ width: s.width, height: s.height, gap: s.gap })));
   const panesById = useMemo(() => new Map(content.panes.map((g) => [g.id, g])), [content.panes]);
   const cells: Cell[] = useMemo(
     () => arrangement.cells.flatMap((cell) => {
