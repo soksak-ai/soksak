@@ -928,6 +928,42 @@ body,
   width: calc(100% - var(--pane-inset) * 2);
   height: calc(100% - (var(--header-h) + var(--status-h) + var(--pane-inset) * 2));
 }
+.sp-rule {
+  background: var(--bd-soft);
+}
+.sp-rule[data-virtual="true"] {
+  background: color-mix(in srgb, var(--bd-soft) 45%, transparent);
+}
+.sp-divider {
+  z-index: 4;
+}
+.sp-divider::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 75%, transparent);
+  transition: background 120ms ease;
+}
+.sp-divider:hover::after,
+.sp-divider[data-dragging="true"]::after {
+  background: var(--acc);
+}
+.sp-divider[data-axis="x"] {
+  cursor: col-resize;
+}
+.sp-divider[data-axis="x"]::after {
+  width: 3px;
+  height: 24px;
+}
+.sp-divider[data-axis="y"] {
+  cursor: row-resize;
+}
+.sp-divider[data-axis="y"]::after {
+  width: 24px;
+  height: 3px;
+}
 
 .split-pane-content { position: absolute; inset: 0; pointer-events: none; }
 

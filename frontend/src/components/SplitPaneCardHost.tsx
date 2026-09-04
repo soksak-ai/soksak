@@ -40,8 +40,7 @@ export function SplitPaneCardHost<T>({ layout, className, node, children, onLayo
     if (!host) return;
     const grid = new SplitPane(toLibraryState(layout), { width: host.clientWidth, height: host.clientHeight, gap: 0, minSize: 0 });
     const view = new SplitPaneView(host, grid, {
-      classPrefix: "pane",
-      rules: false,
+      classPrefix: "sp",
       createCard: () => {
         const element = document.createElement("div");
         element.className = "sp-card";
