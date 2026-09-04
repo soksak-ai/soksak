@@ -15,6 +15,14 @@
 - rect, divider, rule, hit-test는 `SplitPane`의 공개 API에서만 얻는다.
 - React 컴포넌트와 명령은 grid의 내부 배열, DOM 구조, 로딩 순서를 읽지 않는다.
 
+### 1.2 Divider 표시
+
+- `SplitPaneView`는 라이브러리 기본 `sp` 클래스 네임스페이스를 사용한다.
+- 라이브러리가 생성한 `sp-divider`만 divider 입력 영역으로 사용한다.
+- 라이브러리가 생성한 `sp-rule`만 경계선으로 사용한다.
+- 코어 CSS는 공개 클래스의 위치 계산과 입력 동작을 대체하지 않고 스타일만 적용한다.
+- divider는 UI tree에서 `role="separator"`, `tabindex="0"`, `data-axis`, `data-line`을 제공한다.
+
 ### 1.1 저장소 경계
 
 - 코어, 플러그인, 사이드카, 킷, 스펙, 계약, 라이브러리는 별도 구성요소다.

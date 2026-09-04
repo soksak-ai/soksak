@@ -15,6 +15,14 @@ the implementation continues.
 - Rectangles, dividers, rules, and hit testing use the public `SplitPane` API.
 - React components and commands do not read internal grid arrays, private DOM state, or load order.
 
+## 1.2 Divider surface
+
+- `SplitPaneView` uses the library default `sp` class namespace.
+- The library-generated `sp-divider` is the only divider grab area.
+- The library-generated `sp-rule` is the only boundary line.
+- Core CSS styles these public classes without replacing their geometry or input behavior.
+- A divider exposes `role="separator"`, `tabindex="0"`, `data-axis`, and `data-line` through the UI tree.
+
 ## 1.1 Repository boundaries
 
 - Core, plugins, sidecars, kits, specs, contracts, and libraries are separate components.
