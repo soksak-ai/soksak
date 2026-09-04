@@ -88,6 +88,39 @@ When no basis can be built, that fact and its reason are reported.
 the work: a status that reads state, a command that causes the action, a log point that records
 the measurement. Such interfaces accumulate; they are not made and deleted.
 
+### 3-3a. A failure that reports nothing is the expensive one
+
+The cost of a defect is not its size. It is how long it hides.
+
+Measured 2026-09-04: a plugin wrote nothing to the core index. Every link of the chain was in the
+installed bundle, every gate passed, the work it was supposed to record was happening — and nothing
+anywhere reported what stopped. Finding it meant rebuilding the plugin with a probe inside, because
+the running application offers nothing to read.
+
+Two shapes go quiet, and both look like ordinary code:
+
+- **An optional call on an absent collaborator.** `a?.b()` where `a` is undefined does nothing, says
+  nothing, and no type or lint check objects. Where the collaborator is required for the feature to
+  work, its absence is stated once, loudly, at the point it is discovered — not at each use.
+- **A refusal that is a return value.** An API answering `{ok:false}` rather than throwing is a
+  success to any caller that only catches. The answer is read, or the call is not made.
+
+So: **a component that cannot do its job says so through a channel someone can read without
+rebuilding it.** A log nobody collects is not that channel.
+
+### 3-3b. Test the seam, not the half you wrote
+
+A test that starts where your change starts leaves the joint above it untested, and that joint is
+where a working part meets a wrong assumption.
+
+Measured 2026-09-04: the wiring test for a session index began one layer below the component that
+built the writer. It passed while the layer above never passed the writer at all. The bug was in
+the untested joint, and both halves were individually correct.
+
+Write the test at the outermost point the change can be observed from. If that needs a fake of
+another component's wire, the fake is the work — a fake that answers the wire wrongly reproduces
+the same silence as the defect, which is what makes writing it worth the time.
+
 ### 3-4. Idempotence
 
 - Nothing is patched to look like it works.
@@ -166,6 +199,26 @@ time on top of a working product. A working product is never traded for unfinish
 
 **Splitting files**: the test is responsibility, not line count. Two concerns in one file means
 two files.
+
+### 4-2a. One value, one place
+
+A value written down twice has to be changed twice, and the second place is found by whatever
+breaks. So a second copy is not made — and where one exists, what it asserts is turned into a rule
+about the first.
+
+Measured 2026-09-04, one kit release hit three:
+
+- A test asserting the literal version in `package.json`. It measures nothing about the release and
+  fails on every one. What it should assert is the shape and that the sibling files agree.
+- A manifest test asserting a dependency's literal version. Same shape, and it made every upstream
+  release a two-repository change.
+- A hand-maintained inventory of the files a release packs. A source file added and not listed was
+  **packaged out with the build passing and the release verifying** — the omission surfaced as a
+  missing module in a consumer's typecheck, two repositories away.
+
+The third is the one to watch for: a list of things that must match reality, maintained by hand,
+with nothing comparing the two. Where such a list has to exist, a gate compares it to what it
+describes.
 
 ### 4-3. Backward compatibility
 

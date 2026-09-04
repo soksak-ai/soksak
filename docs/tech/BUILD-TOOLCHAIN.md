@@ -88,6 +88,39 @@ what make a build input exact; the release was a location, and a location can go
 in scripts are forbidden. An absolute workstation path may appear in an evidence record as the
 observed executable, but never in source, a lockfile, a workflow or a release artifact.
 
+## Releasing a component locally
+
+A component is released by its own repository with the SDK its Makefile pins, and every repository
+pins its own. Reconstructed and run end to end 2026-09-04; written down because none of it is
+derivable from a single Makefile.
+
+**The SDK has to be a prepared release, not a checkout.** `require-tooling` wants an unpacked
+package whose root holds `release.json` and `.dependencies/soksak-spec`, at exactly the pinned
+version. An SDK repository at a different version does not substitute, and neither does the
+repository itself.
+
+To prepare one: unpack `soksak-sdk/artifacts/<version>/soksak-sdk-<version>-any.tgz`, copy that
+directory's `release.json` beside it, and materialize the Spec the package's `sdk-spec.lock.json`
+names with `prepareSpecDependency({root, lock, manifest, artifact})` — from the local release store,
+never the network. The pinned Spec release may no longer exist upstream, and the store holds the
+exact bytes the lock names.
+
+**Order.** A component's dependency has to be in the local store before it can be released against
+it, so the chain runs bottom up: kit to the npm registry, then each sidecar the plugin declares,
+then the plugin. `make release OUT=<empty dir>` — an output directory that already holds a release
+fails, which is why each attempt gets a fresh one.
+
+**A published version is immutable.** A wrong release is followed by a new version, never corrected
+in place; a republish of the same version is refused as a conflict.
+
+**A staged build directory outlives the version.** A `dist/` from a previous manifest with the same
+version stops the next build with a conflict rather than being overwritten silently. It is removed,
+not worked around.
+
+**Installing what was built.** The plan and the install are two commands and the plan's digest is
+carried into the install, so what is installed is what was planned. A plugin then needs consent and
+enabling, and a version change requires consent again.
+
 ## Preparation boundary
 
 Toolchain inspection and dependency preparation are separate operations.
