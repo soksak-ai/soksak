@@ -52,7 +52,7 @@ import { NotifyHost } from "./ui/NotifyHost";
 import { MotionDebug } from "./components/MotionDebug";
 import { PluginHeaderActions } from "./ui/PluginHeaderActions";
 import { useUi } from "./state/ui";
-import { setNativeDecorationPresentationVisible } from "./lib/nativeDecorations";
+import { setNativeDecorationOverlays } from "./lib/nativeDecorations";
 import { useT } from "./i18n";
 import { useBootPhase } from "./state/bootPhase";
 import {
@@ -995,7 +995,6 @@ function WebviewHealthBadges() {
 
 function App() {
   const t = useT();
-  const nativeOverlayCount = useUi((s) => s.nativeOverlayCount);
   const settingsSection = useUi((s) => s.settingsSection);
   const setSettingsSection = useUi((s) => s.setSettingsSection);
   const workspaceTabPosition = useSettings((s) => s.workspaceTabPosition);
@@ -1004,11 +1003,16 @@ function App() {
   const rightSidebarMode = useSettings((s) => s.rightSidebarMode);
 
   // DOM overlays own the final presentation while open. Native child surfaces are hidden by the
-  // selected framework, and the generic Core decoration plane is committed empty here. Its
+  // selected framework, and the Core decoration plane withholds what the overlays cover. Its
   // declarations stay intact and the newest snapshot returns on the closing state edge.
+  //
+  // An overlay that names an area withholds only the decorations in it: a dropdown over a corner of
+  // one card is not a reason to take every card border off the screen (measured 2026-09-04). One
+  // that names none covers the window.
+  const nativeOverlayAreas = useUi((s) => s.nativeOverlayAreas);
   useLayoutEffect(() => {
-    setNativeDecorationPresentationVisible(nativeOverlayCount === 0);
-  }, [nativeOverlayCount]);
+    setNativeDecorationOverlays(nativeOverlayAreas);
+  }, [nativeOverlayAreas]);
 
   // The theme system (token slots) is the single source — the theme engine applies CSS variables and structural attributes.
   const effectiveMode = useTheme((s) => s.effectiveMode);

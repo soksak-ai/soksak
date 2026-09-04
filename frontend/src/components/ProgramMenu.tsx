@@ -103,10 +103,13 @@ export function ProgramMenu({
   //
   // It declared the opposite until 2026-09-04, on the premise that the menu does not cover the pane
   // geometry. It opens over a pane and was drawn under it.
-  useOverlayActive(true);
   const menuRef = useRef<HTMLDivElement>(null);
   // Position corrected into the viewport after measuring, plus whether the submenu flips.
   const [place, setPlace] = useState({ left: pos.left, top: pos.top, flip: false });
+  // The box this menu covers, once it has been measured. Until then it covers nothing and no
+  // surface steps aside for it: the menu is not on screen yet either.
+  const [covers, setCovers] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
+  useOverlayActive(true, true, covers);
   // Subscribes to the register/unregister signal — a plugin enable toggle applies to an open menu too.
   useProgramRegistry((s) => s.version);
   const { programs, order } = useProgramRegistry.getState();
@@ -150,6 +153,15 @@ export function ProgramMenu({
       top = Math.max(m, window.innerHeight - m - h);
     const flip = left + w + 130 > window.innerWidth - m;
     setPlace({ left, top, flip });
+    // A submenu opens beside the body and is part of what the menu covers. Its width is the same
+    // 130 the flip test uses; taking the body alone would leave a surface over an open submenu.
+    const sub = 130;
+    setCovers({
+      left: flip ? left - sub : left,
+      top,
+      right: flip ? left + w : left + w + sub,
+      bottom: top + h,
+    });
   }, [pos.left, pos.top, order.length]);
 
   const root = emptyNode();

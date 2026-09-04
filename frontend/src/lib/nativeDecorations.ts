@@ -4,16 +4,62 @@ import { moduleState } from "./moduleState";
 
 type RGBA = { r: number; g: number; b: number; a: number };
 
+/** What one open overlay covers, in the absolute CSS points a decoration path is drawn in. */
+export type OverlayArea = { left: number; top: number; right: number; bottom: number };
+
 const state = moduleState("lib/nativeDecorations#registry", () => ({
   byOwner: new Map<string, readonly NativeDecoration[]>(),
   scheduled: false,
   running: false,
   dirty: false,
   presentationVisible: true,
+  // What the open overlays cover. A null entry covers the window. Empty means nothing is open.
+  overlays: [] as readonly (OverlayArea | null)[],
   lastSignature: "",
   lastReceipt: null as NativeDecorationReceipt | null,
   error: null as string | null,
 }));
+
+/** The box a decoration's path is drawn in, or null when the path names no point. */
+export function decorationBounds(path: string): OverlayArea | null {
+  const numbers = path.match(/-?\d+(?:\.\d+)?/g);
+  if (!numbers || numbers.length < 2) return null;
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  for (let index = 0; index + 1 < numbers.length; index += 2) {
+    const x = Number(numbers[index]);
+    const y = Number(numbers[index + 1]);
+    left = Math.min(left, x); right = Math.max(right, x);
+    top = Math.min(top, y); bottom = Math.max(bottom, y);
+  }
+  return Number.isFinite(left) ? { left, top, right, bottom } : null;
+}
+
+function overlaps(area: OverlayArea, cover: OverlayArea): boolean {
+  return area.left <= cover.right && cover.left <= area.right
+    && area.top <= cover.bottom && cover.top <= area.bottom;
+}
+
+/**
+ * The decorations the native plane presents.
+ *
+ * An overlay covering a corner of one card is not a reason to take every card border off the
+ * screen. Measured 2026-09-04: opening the program menu removed the perimeter from every pane in
+ * the window. An overlay that names no area covers the window — a modal is one — and every
+ * decoration is withheld for it.
+ */
+function presented(): NativeDecoration[] {
+  if (!state.presentationVisible) return [];
+  if (state.overlays.length === 0) return snapshot();
+  if (state.overlays.some((cover) => cover === null)) return [];
+  const covers = state.overlays.filter((cover): cover is OverlayArea => cover !== null);
+  return snapshot().filter((decoration) => {
+    const bounds = decorationBounds(decoration.path);
+    // A path nothing can be measured from is withheld: an overlay may be over it and no reading
+    // rules that out.
+    if (!bounds) return false;
+    return !covers.some((cover) => overlaps(bounds, cover));
+  });
+}
 
 function snapshot(): NativeDecoration[] {
   return [...state.byOwner.entries()]
@@ -30,7 +76,7 @@ async function flush(): Promise<NativeDecorationReceipt | null> {
   // Declarations remain owned by their components while a DOM overlay is open. Only their native
   // presentation is suppressed: the AppKit plane is necessarily above the document, so applying
   // even one stroke would put Core chrome above the modal that currently owns presentation.
-  const decorations = state.presentationVisible ? snapshot() : [];
+  const decorations = presented();
   const signature = JSON.stringify(decorations);
   if (signature === state.lastSignature) {
     state.running = false;
@@ -96,6 +142,20 @@ export function setNativeDecorationPresentationVisible(visible: boolean): void {
   schedule();
 }
 
+/**
+ * States what the open overlays cover. An empty list is nothing open; a null entry covers the
+ * window.
+ *
+ * Declarations are retained either way, so the latest geometry is restored atomically when the
+ * overlay closes.
+ */
+export function setNativeDecorationOverlays(covers: readonly (OverlayArea | null)[]): void {
+  const next = [...covers];
+  if (JSON.stringify(next) === JSON.stringify(state.overlays)) return;
+  state.overlays = next;
+  schedule();
+}
+
 export function nativeDecorationFacts(): {
   decorations: NativeDecoration[];
   presentedDecorations: NativeDecoration[];
@@ -106,7 +166,7 @@ export function nativeDecorationFacts(): {
   const decorations = snapshot();
   return {
     decorations,
-    presentedDecorations: state.presentationVisible ? decorations : [],
+    presentedDecorations: presented(),
     presentationVisible: state.presentationVisible,
     receipt: state.lastReceipt,
     error: state.error,
@@ -120,6 +180,7 @@ export function __resetNativeDecorationsForTest(): void {
   state.running = false;
   state.dirty = false;
   state.presentationVisible = true;
+  state.overlays = [];
   state.lastSignature = "";
   state.lastReceipt = null;
   state.error = null;

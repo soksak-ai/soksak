@@ -149,4 +149,29 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
     expect(layers).toEqual(["left-rail", "left", "right"]);
     expect(plane.querySelector("[data-lighting-content='left']")).not.toBeNull();
   });
+  // A pane showing a parked picture is already dimmed: the picture was captured from a surface that
+  // applied the same --dim to its own alpha, and the document draws it under this plane. An
+  // idle veil over it dims it a second time — measured 2026-09-04, opening the program menu made
+  // every unfocused pane visibly darker for as long as the menu was open.
+  it("paints no idle veil over a pane that carries its own dim", async () => {
+    await act(async () => {
+      root.render(
+        <FocusLightingPlane
+          scopeId="space-e"
+          baseAmount={0.5}
+          focused={region("right", 50)}
+          blocked={[]}
+          exempt={[]}
+          content={[
+            { ...region("left", 0), carriesOwnDim: true },
+            region("right", 50),
+          ]}
+        />,
+      );
+    });
+
+    const plane = host.querySelector("[data-node='focus-lighting/space-e']")!;
+    expect(plane.querySelector("[data-lighting-content='left']")).toBeNull();
+    expect(plane.querySelector("[data-lighting-aperture='right']")).not.toBeNull();
+  });
 });

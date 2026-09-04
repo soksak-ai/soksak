@@ -5,6 +5,12 @@ export type LightingRegion = {
   id: string;
   style: CSSProperties;
   moving?: boolean;
+  /** The region is already dimmed by whatever drew it, and this plane paints no veil over it.
+   *
+   *  A parked surface leaves a picture that was captured with the surface's own `--dim` applied to
+   *  its alpha. The picture is in the document, so an idle veil here would dim it a second time —
+   *  measured 2026-09-04: opening the program menu made every unfocused pane visibly darker. */
+  carriesOwnDim?: boolean;
 };
 
 /** Chrome box explicitly named as exempt from lighting. */
@@ -50,7 +56,8 @@ export function FocusLightingPlane({
   const focusedGeometry = focused ? geometryKey(focused.style) : null;
   const blockedGeometries = new Set(blocked.map((region) => geometryKey(region.style)));
   const idleContent = content
-    .filter((region) => geometryKey(region.style) !== focusedGeometry
+    .filter((region) => !region.carriesOwnDim
+      && geometryKey(region.style) !== focusedGeometry
       && !blockedGeometries.has(geometryKey(region.style)))
     .reduce<LightingRegion[]>((unique, region) => {
       // One pane rectangle gets one veil. Multiple tabs or duplicated projection records can

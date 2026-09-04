@@ -5,6 +5,7 @@ import {
   cssColorRGBA,
   nativeDecorationFacts,
   replaceNativeDecorations,
+  setNativeDecorationOverlays,
   setNativeDecorationPresentationVisible,
   strokeDecoration,
 } from "./nativeDecorations";
@@ -47,6 +48,52 @@ describe("native decoration inventory", () => {
     await Promise.resolve();
 
     expect(nativeDecorationFacts().decorations.map(({ id }) => id)).toEqual(["relation/a"]);
+  });
+
+  // An overlay that covers a corner of one card is not a reason to take every card border off the
+  // screen. Measured 2026-09-04: opening the program menu removed the perimeter from every pane in
+  // the window for as long as it was open.
+  it("withholds only the decorations an overlay covers", async () => {
+    const blue = cssColorRGBA("#5aa2ff")!;
+    replaceNativeDecorations("card", [
+      strokeDecoration("card/left", "M 0 0 L 100 0 L 100 100 L 0 100 Z", blue, 1),
+      strokeDecoration("card/right", "M 300 0 L 400 0 L 400 100 L 300 100 Z", blue, 1),
+    ]);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    setNativeDecorationOverlays([{ left: 40, top: 40, right: 140, bottom: 90 }]);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(nativeDecorationFacts()).toMatchObject({
+      presentedDecorations: [{ id: "card/right" }],
+      receipt: { count: 1 },
+    });
+
+    setNativeDecorationOverlays([]);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(nativeDecorationFacts().presentedDecorations.map((one) => one.id))
+      .toEqual(["card/left", "card/right"]);
+  });
+
+  // An overlay that does not say what it covers covers the window. A modal is one, and taking every
+  // decoration off is what it needs.
+  it("withholds every decoration for an overlay that names no area", async () => {
+    const blue = cssColorRGBA("#5aa2ff")!;
+    replaceNativeDecorations("card", [
+      strokeDecoration("card/left", "M 0 0 L 100 0 L 100 100 L 0 100 Z", blue, 1),
+    ]);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    setNativeDecorationOverlays([null]);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(nativeDecorationFacts()).toMatchObject({
+      presentedDecorations: [],
+      receipt: { count: 0 },
+    });
   });
 
   it("keeps declarations but applies an empty native plane while a DOM overlay owns presentation", async () => {
