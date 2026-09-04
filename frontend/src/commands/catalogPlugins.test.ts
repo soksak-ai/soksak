@@ -23,6 +23,7 @@ import { useProgramRegistry } from "../plugins/programRegistry";
 import { text, withReaderLanguage } from "../i18n";
 import { createEnvironmentEventHandler, setEnvironmentEventHandler } from "../state/environmentEvents";
 import { usePluginSettings } from "../state/pluginSettings";
+import { paneLayout } from "../test/paneLayout";
 
 function manifestOf(id: string, overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
@@ -53,7 +54,7 @@ function tabWith(tabs: Tab[]): Workspace {
       {
         id: "spc-aaaaaa",
         title: "1",
-        layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" } },
+        layout: paneLayout({ id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" }),
         activePaneId: "pan-aaaaaa",
       },
     ],

@@ -908,6 +908,30 @@ body,
   pointer-events: auto;
 }
 
+.split-pane-content {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.sp-card {
+  pointer-events: auto;
+  z-index: 1;
+}
+.sp-card > .pane {
+  position: absolute;
+  inset: 0;
+}
+.sp-card > .pane > .tab-body,
+.sp-card > .pane > .parked-picture {
+  left: var(--pane-inset);
+  top: calc(var(--header-h) + var(--pane-inset));
+  width: calc(100% - var(--pane-inset) * 2);
+  height: calc(100% - (var(--header-h) + var(--status-h) + var(--pane-inset) * 2));
+}
+
+.split-pane-content { position: absolute; inset: 0; pointer-events: none; }
+
+
 /* ── Content tab bar, the middle of the three rows ── */
 .space-tabs {
   flex: 0 0 auto;

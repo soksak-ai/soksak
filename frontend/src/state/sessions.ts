@@ -20,16 +20,8 @@ import {
   getRegisteredProgram,
 } from "../plugins/programRegistry";
 import { localize, tmsg } from "../i18n";
-import {
-  type SplitTree,
-  splitLeaf,
-  insertBeside,
-  removeLeaf,
-  leavesOf,
-  resizeSplitTree,
-  findSplitTree,
-  mapLeaves,
-} from "./splitTree";
+import { SplitPane, checkState } from "split-pane";
+import type { Axis, CardInit, Side as SplitSide, SplitPaneState } from "split-pane";
 import {
   type SidebarLayout,
   type SidebarDrop,
@@ -41,12 +33,8 @@ import {
 import { viewIdFromSurfaceLabel } from "../lib/surfaceLabels";
 import { invalidateLayout } from "../lib/layoutSettlement";
 import { publishLayoutTransitionIntent } from "../lib/layoutTransitionIntent";
-import { computeSplitLayout } from "../lib/splitLayout";
 
-// Three-level structure:
-//   - Top = Workspace: its own sidebar (file tree) + spaces
-//   - Space = layout tree (PaneNode): recursive left/right/top/bottom splits.
-//       Each leaf = Pane (own header + active tab). Split, move, merge by drag or command.
+// Workspace contains sidebars and spaces. Each space contains SplitPane cards and each card contains tabs.
 //   - Tab = file (viewer plugin) / plugin (terminal, browser, editor — the core owns no terminal).
 // Inactive workspaces/spaces/tabs are hidden rather than unmounted, which keeps the sessions
 // (PTY/editor/webview) intact.
@@ -171,9 +159,9 @@ export interface Pane {
 }
 
 // Recursive layout tree. leaf = one pane, split = panes grouped by row/column (sizes = split ratio).
-// A space's split tree = the generic SplitTree (leaf value = Pane). split/remove/resize/find come
-// from the single splitTree.ts abstraction (same code as the sidebar SidebarLayout — no duplication).
-export type PaneNode = SplitTree<Pane>;
+export type PaneLayout = Omit<SplitPaneState, "cards"> & {
+  cards: Array<Omit<CardInit, "data"> & { data: Pane }>;
+};
 
 // Drop position (drag split direction). center = move, the rest = split toward that direction.
 export type DropZone = "center" | "left" | "right" | "top" | "bottom";
@@ -189,7 +177,7 @@ export type Program = string;
 export interface Space {
   id: string;
   title: string; // 1,2,3,… (renameable)
-  layout: PaneNode; // group (split) tree
+  layout: PaneLayout;
   activePaneId: string;
   // Maximized view (fills the whole content area). The layout tree is unchanged — display override
   // only. undefined = normal. normalize clears it when the view is gone.
@@ -225,8 +213,7 @@ export interface Workspace {
   // Position mode of the left rail frame. A separate axis from the projection ref pin (the content
   // inside the rail). Absence in old snapshots and test fixtures is read as FLOW.
   railPlacement?: RailPlacement;
-  // How the sections of the set standing in each region are arranged (B2) — SplitTree<SidebarGroup>,
-  // tab bundle + split + active, the same drag-merge as the content area. Reconciled against
+  // How the sections of the set in each region are arranged as SplitPane cards. Reconciled against
   // registration changes by the host.
   //
   // One shape for both regions. The right held a single `rightView` and an icon rail of every view
@@ -322,8 +309,9 @@ interface SessionsStore {
   resizeSidebar: (
     id: string,
     region: SidebarRegion,
-    splitId: string,
-    sizes: number[],
+    axis: Axis,
+    line: number,
+    px: number,
   ) => CmdResult;
 
   // Content tab level. With program given, use that program (+ menu); otherwise the workspace then
@@ -422,17 +410,12 @@ interface SessionsStore {
     zone: DropZone,
   ) => CmdResult<{ groupId: string }>;
   // Adjust the split ratio (resizer drag/command).
-  resizeSplit: (
-    projectId: string,
-    splitId: string,
-    sizes: number[],
-  ) => CmdResult;
-  // sizes of several splits in one commit (vertical line dragged along — no half-applied state).
-  // The rail conflict check runs once on the final state — on rejection nothing changes.
+  resizeSplit: (projectId: string, axis: Axis, line: number, px: number) => CmdResult;
   resizeSplits: (
     projectId: string,
-    updates: { splitId: string; sizes: number[] }[],
+    updates: { axis: Axis; line: number; px: number }[],
   ) => CmdResult;
+  replaceContentLayout: (projectId: string, contentId: string, layout: PaneLayout) => CmdResult;
   // Create a new view group beside targetGroup by splitting (split button / title mode ⌘T / command).
   // With program unset or unregistered, an empty group (empty panel) — no viewId (Partial).
   splitWithNewView: (
@@ -539,130 +522,49 @@ function makeContent(title: string, program?: Program): Space {
   return {
     id: newContentId(),
     title,
-    layout: splitLeaf(g),
+    layout: { xs: [0, 1], ys: [0, 1], cards: [{ id: g.id, c0: 0, c1: 1, r0: 0, r1: 1, data: g }] },
     activePaneId: g.id,
   };
 }
 
 
-// ── Group tree helpers ───────────────────────────────────────────────────────
+// ── Split-pane state operations ─────────────────────────────────────────────
+export function allGroups(node: PaneLayout): Pane[] { return node.cards.map((card) => card.data); }
+export function allViews(node: PaneLayout): Tab[] { return allGroups(node).flatMap((g) => g.tabs); }
+function findGroupOfView(node: PaneLayout, viewId: string): Pane | undefined { return allGroups(node).find((g) => g.tabs.some((v) => v.id === viewId)); }
+function hasGroup(node: PaneLayout, groupId: string): boolean { return node.cards.some((card) => card.id === groupId); }
+function findGroup(node: PaneLayout, groupId: string): Pane | undefined { return node.cards.find((card) => card.id === groupId)?.data; }
+function mapGroupNode(node: PaneLayout, groupId: string, fn: (g: Pane) => Pane): PaneLayout { return { ...node, cards: node.cards.map((card) => card.id === groupId ? { ...card, data: fn(card.data) } : card) }; }
+function mapViewNode(node: PaneLayout, viewId: string, fn: (v: Tab) => Tab): PaneLayout { return { ...node, cards: node.cards.map((card) => card.data.tabs.some((v) => v.id === viewId) ? { ...card, data: { ...card.data, tabs: card.data.tabs.map((v) => v.id === viewId ? fn(v) : v) } } : card) }; }
 
-export function allGroups(node: PaneNode, acc: Pane[] = []): Pane[] {
-  acc.push(...leavesOf(node)); // leaf value (Pane) = SplitTree leavesOf
-  return acc;
+function paneState(grid: SplitPane): PaneLayout {
+  const state = grid.toJSON();
+  return { ...state, cards: state.cards.map((card) => ({ ...card, data: card.data as Pane })) };
 }
 
-export function allViews(node: PaneNode): Tab[] {
-  return allGroups(node).flatMap((g) => g.tabs);
+function removeView(node: PaneLayout, viewId: string): { tree: PaneLayout | null; removed: Tab | null } {
+  const card = node.cards.find((item) => item.data.tabs.some((v) => v.id === viewId));
+  const removed = card?.data.tabs.find((v) => v.id === viewId) ?? null;
+  if (!card || !removed) return { tree: node, removed: null };
+  const tabs = card.data.tabs.filter((v) => v.id !== viewId);
+  const index = card.data.tabs.findIndex((v) => v.id === viewId);
+  const activeTabId = card.data.activeTabId === viewId ? (tabs[index] ?? tabs[index - 1] ?? tabs[0])?.id ?? "" : card.data.activeTabId;
+  const mapped = mapGroupNode(node, card.id, (g) => ({ ...g, tabs, activeTabId }));
+  if (tabs.length > 0 || mapped.cards.length === 1) return { tree: mapped, removed };
+  const grid = new SplitPane(mapped, { width: 100, height: 100, gap: 0, minSize: 0 });
+  return grid.close(card.id) ? { tree: paneState(grid), removed } : { tree: mapped, removed };
 }
 
-function findGroupOfView(
-  node: PaneNode,
-  viewId: string,
-): Pane | undefined {
-  return allGroups(node).find((g) => g.tabs.some((v) => v.id === viewId));
-}
-
-function hasGroup(node: PaneNode, groupId: string): boolean {
-  return allGroups(node).some((g) => g.id === groupId);
-}
-
-function findGroup(node: PaneNode, groupId: string): Pane | undefined {
-  return allGroups(node).find((g) => g.id === groupId);
-}
-
-// ── PaneNode operations = delegated to the generic SplitTree (single source, same code as SidebarLayout) ──
-// Traversal and structural operations (map/find/resize/remove/insert) exist only in splitTree.ts.
-// This file provides leaf (Pane) predicates and transforms only.
-
-// Transform the Pane of a specific group.
-function mapGroupNode(
-  node: PaneNode,
-  groupId: string,
-  fn: (g: Pane) => Pane,
-): PaneNode {
-  return mapLeaves(node, (g) => (g.id === groupId ? fn(g) : g));
-}
-
-// Transform a view in whichever group holds it (kind preserved).
-function mapViewNode(
-  node: PaneNode,
-  viewId: string,
-  fn: (v: Tab) => Tab,
-): PaneNode {
-  return mapLeaves(node, (g) =>
-    g.tabs.some((v) => v.id === viewId)
-      ? { ...g, tabs: g.tabs.map((v) => (v.id === viewId ? fn(v) : v)) }
-      : g,
-  );
-}
-
-// split node existence / sizes transform — delegated to the generic.
-const findSplit = (node: PaneNode, splitId: string): boolean =>
-  findSplitTree(node, splitId);
-const mapSplitNode = (
-  node: PaneNode,
-  splitId: string,
-  sizes: number[],
-): PaneNode => resizeSplitTree(node, splitId, sizes);
-
-// Remove a view: (1) drop only that view from its group and fix the active one (mapLeaves),
-// (2) collapse the empty group leaf with removeLeaf. split cleanup (collapse, sizes renormalization)
-// reuses the single removeLeaf implementation.
-function removeView(
-  node: PaneNode,
-  viewId: string,
-): { tree: PaneNode | null; removed: Tab | null } {
-  let removed: Tab | null = null;
-  const mapped = mapLeaves(node, (g) => {
-    const found = g.tabs.find((v) => v.id === viewId);
-    if (!found) return g;
-    removed = found;
-    const tabs = g.tabs.filter((v) => v.id !== viewId);
-    let activeTabId = g.activeTabId;
-    if (activeTabId === viewId) {
-      const idx = g.tabs.findIndex((v) => v.id === viewId);
-      activeTabId = (tabs[idx] ?? tabs[idx - 1] ?? tabs[0])?.id ?? "";
-    }
-    return { ...g, tabs, activeTabId };
-  });
+function removeGroup(node: PaneLayout, groupId: string): { tree: PaneLayout | null; removed: Pane | null } {
+  const removed = findGroup(node, groupId);
   if (!removed) return { tree: node, removed: null };
-  const { tree } = removeLeaf(mapped, (g) => g.tabs.length === 0);
-  return { tree, removed };
+  const grid = new SplitPane(node, { width: 100, height: 100, gap: 0, minSize: 0 });
+  return grid.close(groupId) ? { tree: paneState(grid), removed } : { tree: null, removed };
 }
 
-// Remove one whole group (leaf) = removeLeaf (matching that group id, collapse included).
-function removeGroup(
-  node: PaneNode,
-  groupId: string,
-): { tree: PaneNode | null; removed: Pane | null } {
-  return removeLeaf(node, (g) => g.id === groupId);
-}
-
-// Split targetGroup with the fresh group (toward side) = insertBeside (avoids nesting when the
-// sibling has the same dir).
-/**
- * The tree a split would produce. Exported so a caller can ask what the split
- * lands on before performing it — the answer has to come from this function,
- * not from a second one that agrees with it today.
- */
-export function splitAtGroup(
-  node: PaneNode,
-  targetGroupId: string,
-  side: Side,
-  fresh: Pane,
-): PaneNode {
-  const dir: "row" | "col" =
-    side === "left" || side === "right" ? "row" : "col";
-  const before = side === "left" || side === "top";
-  return insertBeside(
-    node,
-    (g) => g.id === targetGroupId,
-    dir,
-    before,
-    fresh,
-    newSplitId,
-  );
+export function splitAtGroup(node: PaneLayout, targetGroupId: string, side: Side, fresh: Pane): PaneLayout {
+  const grid = new SplitPane(node, { width: 100, height: 100, gap: 0, minSize: 0 });
+  return grid.splitToward(targetGroupId, side as SplitSide, { id: fresh.id, data: fresh }) ? paneState(grid) : node;
 }
 
 // Fix the active group to the first one when it is gone, and clear maximize when the maximized
@@ -773,7 +675,7 @@ function leftRailLayoutConflict(workspace: Workspace): CmdErr | null {
   // station on that basis would make maximize itself impossible under PIN. Real split/move/resize do
   // change the canonical rect, so they go through this check as is.
   const cleanLines = content
-    ? cleanRailLines(computeSplitLayout(content.layout).cells.map((cell) => cell.rect))
+    ? cleanRailLines([...new SplitPane(content.layout, { width: 100, height: 100, gap: 0, minSize: 0 }).rects().values()].map((rect) => ({ left: rect.x, top: rect.y, width: rect.w, height: rect.h })))
     : [0, 100];
   return isCleanRailStation(cleanLines, placement.station)
     ? null
@@ -1184,12 +1086,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
         return s;
       }
       r = ok({ sidebarTab: viewKey });
-      // Make viewKey the active one only in the leaf group that holds it (other leaves unchanged).
-      const next = mapLeaves(t.sidebarLayouts[region], (g) =>
-        g.viewKeys.includes(viewKey) && g.activeViewKey !== viewKey
-          ? { ...g, activeViewKey: viewKey }
-          : g,
-      );
+      const next = { ...t.sidebarLayouts[region], cards: t.sidebarLayouts[region].cards.map((card) => card.data.viewKeys.includes(viewKey) && card.data.activeViewKey !== viewKey ? { ...card, data: { ...card.data, activeViewKey: viewKey } } : card) };
       return { workspaces: withSidebarLayout(s.workspaces, id, region, next) };
     });
     return r;
@@ -1215,24 +1112,27 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = err("TARGET_NOT_FOUND", tmsg("sidebar.view.notFound", { viewKey }));
         return s;
       }
-      const next = moveSidebarViewT(t.sidebarLayouts[region], viewKey, drop, newSplitId);
+      const next = moveSidebarViewT(t.sidebarLayouts[region], viewKey, drop);
       r = ok({});
       return { workspaces: withSidebarLayout(s.workspaces, id, region, next) };
     });
     return r;
   },
 
-  resizeSidebar: (id, region, splitId, sizes) => {
+  resizeSidebar: (id, region, axis, line, px) => {
     let r: CmdResult = noWorkspace(id);
     set((s) => {
       const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
-      if (!findSplitTree(t.sidebarLayouts[region], splitId)) {
-        r = err("TARGET_NOT_FOUND", tmsg("sidebar.split.notFound", { splitId }));
+      const grid = new SplitPane(t.sidebarLayouts[region], { width: 100, height: 100, gap: 0, minSize: 0 });
+      if (grid.lines(axis)[line] === undefined) {
+        r = err("TARGET_NOT_FOUND", tmsg("sidebar.split.notFound", { splitId: `${axis}:${line}` }));
         return s;
       }
+      grid.moveBoundary(axis, line, px);
       r = ok({});
-      const next = resizeSplitTree(t.sidebarLayouts[region], splitId, sizes);
+      const state = grid.toJSON();
+      const next = { ...state, cards: state.cards.map((card) => ({ ...card, data: card.data as import("./sidebarLayout").SidebarGroup })) };
       return { workspaces: withSidebarLayout(s.workspaces, id, region, next) };
     });
     return r;
@@ -1469,7 +1369,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       if (!tree) {
         const next = normalizeActiveGroupC({
           ...content,
-          layout: splitLeaf({ ...grp!, tabs: [], activeTabId: "" }),
+          layout: { xs: [0, 1], ys: [0, 1], cards: [{ id: grp!.id, c0: 0, c1: 1, r0: 0, r1: 1, data: { ...grp!, tabs: [], activeTabId: "" } }] },
         });
         const nextWorkspace = mapContent(t, content.id, () => next);
         const conflict = leftRailLayoutConflict(nextWorkspace);
@@ -1936,8 +1836,8 @@ export const useSessions = moduleState("state/sessions#store", () =>
     return r;
   },
 
-  resizeSplit: (projectId, splitId, sizes) =>
-    get().resizeSplits(projectId, [{ splitId, sizes }]),
+  resizeSplit: (projectId, axis, line, px) =>
+    get().resizeSplits(projectId, [{ axis, line, px }]),
 
   resizeSplits: (projectId, updates) => {
     let r: CmdResult = noWorkspace(projectId);
@@ -1948,25 +1848,22 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = ok({});
         return s;
       }
-      // A batch is the lines of one layout — applied only to the one content that holds every
-      // splitId.
+      // A batch is applied to one content layout and committed after all boundary moves succeed.
       const content = t.spaces.find((c) =>
-        updates.every((u) => findSplit(c.layout, u.splitId)),
+        updates.every((u) => new SplitPane(c.layout, { width: 100, height: 100, gap: 0, minSize: 0 }).lines(u.axis)[u.line] !== undefined),
       );
       if (!content) {
         r = err(
           "TARGET_NOT_FOUND",
-          tmsg("layout.split.notFound", { splitIds: updates.map((u) => u.splitId).join(", ") }),
+          tmsg("layout.split.notFound", { splitIds: updates.map((u) => `${u.axis}:${u.line}`).join(", ") }),
         );
         return s;
       }
-      const nextWorkspace = mapContent(t, content.id, (c) => ({
-        ...c,
-        layout: updates.reduce(
-          (layout, u) => mapSplitNode(layout, u.splitId, u.sizes),
-          c.layout,
-        ),
-      }));
+      const nextWorkspace = mapContent(t, content.id, (c) => {
+        const grid = new SplitPane(c.layout, { width: 100, height: 100, gap: 0, minSize: 0 });
+        for (const update of updates) grid.moveBoundary(update.axis, update.line, update.px);
+        return { ...c, layout: paneState(grid) };
+      });
       const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
@@ -1976,6 +1873,24 @@ export const useSessions = moduleState("state/sessions#store", () =>
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
+    });
+    return r;
+  },
+
+  replaceContentLayout: (projectId, contentId, layout) => {
+    let r: CmdResult = noWorkspace(projectId);
+    set((s) => {
+      const workspace = s.workspaces.find((item) => item.id === projectId);
+      if (!workspace || !workspace.spaces.some((item) => item.id === contentId)) return s;
+      try { checkState(layout); } catch (error) {
+        r = err("INVALID_PARAMS", error instanceof Error ? error.message : "content layout is invalid");
+        return s;
+      }
+      const nextWorkspace = mapContent(workspace, contentId, (item) => ({ ...item, layout }));
+      const conflict = leftRailLayoutConflict(nextWorkspace);
+      if (conflict) { r = conflict; return s; }
+      r = ok({});
+      return { workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace) };
     });
     return r;
   },

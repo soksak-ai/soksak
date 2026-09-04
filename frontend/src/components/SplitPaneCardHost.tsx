@@ -9,6 +9,7 @@ export type SplitPaneCardLayout<T> = Omit<SplitPaneState, "cards"> & {
 type Props<T> = {
   layout: SplitPaneCardLayout<T>;
   className?: string;
+  node?: string;
   children: (card: Card, rect: Rect, element: HTMLElement) => ReactNode;
   onLayoutChange?: (layout: SplitPaneCardLayout<T>) => void;
   dividerNodePrefix?: string;
@@ -24,7 +25,7 @@ const fromLibraryState = <T,>(state: SplitPaneState): SplitPaneCardLayout<T> => 
 });
 
 /** Core adapter. The library owns card placement and divider input. */
-export function SplitPaneCardHost<T>({ layout, className, children, onLayoutChange, dividerNodePrefix = "layout/divider", rectOverride, cardVisible }: Props<T>) {
+export function SplitPaneCardHost<T>({ layout, className, node, children, onLayoutChange, dividerNodePrefix = "layout/divider", rectOverride, cardVisible }: Props<T>) {
   const hostRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<SplitPane | null>(null);
   const viewRef = useRef<SplitPaneView | null>(null);
@@ -91,7 +92,7 @@ export function SplitPaneCardHost<T>({ layout, className, children, onLayoutChan
   const grid = gridRef.current;
   const view = viewRef.current;
   return (
-    <div ref={hostRef} className={className} data-split-pane-host>
+    <div ref={hostRef} className={className} data-node={node} data-split-pane-host>
       {grid && view ? grid.cards.map((card) => {
         const element = view.element(card.id);
         const rect = grid.rect(card.id);
