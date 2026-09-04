@@ -62,9 +62,9 @@ is, and a row that is not done leaves the item open.
 | 17 | A browser view keeps its address in its view record | `soksak-plugin-browser-wails3` | [x] | [x] | [x] `7c2af28` |
 | 17-1 | Every view declares what its restore needs | core, every plugin with a view | [x] | [x] | [x] `8ef6402` |
 | 17-2 | The recorded modes have a producer and a consumer | `soksak-kit-plugin-terminal`, `soksak-kit-sidecar-terminal` | [x] | [ ] | [ ] |
-| 17-3 | The command a session owner's view calls is named by the contract | `soksak-contract-control` | [x] | [ ] | [ ] |
+| 17-3 | The command a session owner's view calls is named by the contract | `soksak-contract-control` | [x] | [x] | [x] `7791493` `ef2296e` `c657d7d` |
 | 17-4 | A plugin's failure is observable from outside the renderer | core | [x] | [x] | [x] `2653847` |
-| 17-5 | A mounted terminal view holds its pane | `soksak-kit-plugin-terminal` | [x] | [ ] | [ ] |
+| 17-5 | A surface-delivered view writes the core index | `soksak-kit-plugin-terminal` | [x] | [x] | [x] `4836c4e` |
 | 18 | A plugin can take back what it stored | `soksak-core` | [x] | [x] | [x] `361032f` |
 | 19 | The session question goes wherever the owner runs | `soksak-core` | [x] | [x] | [x] `899a792` |
 
@@ -343,31 +343,35 @@ Check: the three kinds are closed in one place, so a fourth leaves the branches 
 incomplete; a view without a declaration is refused with a sentence from the bundle; the terminal
 kit declares `session` and the browser declares `view` for its page and `none` for its list.
 
-## 17-5. A mounted terminal view holds its pane
+## 17-5. A surface-delivered view writes the core index
 
 Owner: `soksak-kit-plugin-terminal`.
 
-Measured 2026-09-04 in a running application: a terminal view mounts, the core places the native
-surface, the PTY opens a session and writes its record, and the mirror renders it — and the kit
-holds no pane. `plugin.<terminal>.status` reads `phase: closed` with `panes: []` while the mirror
-reports eight panes `running` with 23 to 106 frames consumed each.
+Measured 2026-09-04 in a running application: five PTY sessions ran, every terminal view was mounted
+and drawn, and `session.list` answered zero. No `session.attach` reached the core, and no refusal was
+recorded either.
 
-So `attach()` is never called and the core index stays empty. The index write itself is correct: a
-provider-level test covers the whole seam, and a probe in a released build showed the writer
-constructed and `attach()` called zero times.
+The cause is the delivery path. A view whose picture a surface owner draws opens no session of its
+own — the owner does — so the id never arrived from an open call and the index write had nothing to
+write. The byte-delivery path opens the session and writes the index, and every terminal in the
+application uses the surface path.
 
-The rest of the chain works. Attaching one of those sessions by hand produces `live` with outcome
-`full` beside a `lost` and an `orphaned` session in the same listing, so the owner query, the
-outcome, the state distinction and survival across an application restart all hold outside a
-fixture.
+The view now requests the session the owner runs for its pane (`pty.status` reports `paneId` per
+session) and writes the index with it. On stop it detaches and does not close: it did not open the
+session, and `session.close` is how a session ends.
 
-An earlier version of this item named the mirror. That was wrong: the mirror holds every pane and
-renders it. What holds none is the kit.
+Three earlier readings of this item were wrong — the writer was a no-op, the mirror registered no
+pane, the kit held no pane. Each was measured and each was false; the mirror holds every pane and
+the kit sets `operation: ready`, which is the line after the index write.
 
-Red: open a terminal view. The mirror renders it and `plugin.<terminal>.status` reads `panes: []`.
+The index write also reports where a running application can read it. A plugin's console is not
+readable from the command surface, so the failure was unreadable for four diagnoses. The pane
+publishes `data-terminal-index` as `written`, `absent` or `failed`, and `ui.expect` selects on it.
 
-Check: a view the host reports as mounted has a pane in the kit's own map, and a pane that fails to
-open reports why rather than leaving an empty map.
+Red: open a terminal view and read `session.list`. It answers zero while the session runs.
+
+Check: `session.list` names every running session with its view; `[data-terminal-index="written"]`
+matches every mounted terminal pane and `absent` and `failed` match none.
 
 ## 17-4. A plugin's failure is observable from outside the renderer
 
