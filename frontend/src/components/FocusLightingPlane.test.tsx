@@ -149,10 +149,10 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
     expect(layers).toEqual(["left-rail", "left", "right"]);
     expect(plane.querySelector("[data-lighting-content='left']")).not.toBeNull();
   });
-  // A parked pane steps its body box out through an exemption, which the stylesheet places. The
-  // chrome around that box stays under the veil, exactly as it was while the surface was up:
-  // exempting the whole card left the tab bar and the status bar undimmed (measured 2026-09-04).
-  it("cuts an exemption the stylesheet places, and dims every unfocused pane", async () => {
+  // Every pane that is not the focus is dimmed, parked or live. The picture a parked pane draws
+  // stands above this plane at the alpha its surface was declared with, which is where the surface
+  // itself was, so this veil is the one dim either way.
+  it("paints an idle veil over every unfocused pane", async () => {
     await act(async () => {
       root.render(
         <FocusLightingPlane
@@ -160,25 +160,18 @@ describe("FocusLightingPlane — dark by default, lit only at the focus", () => 
           baseAmount={0.5}
           focused={region("right", 50)}
           blocked={[]}
-          exempt={[{
-            // A parked pane's body box. The class holds the geometry, so no second arithmetic.
-            id: "parked-body-left",
-            className: "lighting-body-exempt",
-            style: region("left", 0).style,
-          }]}
+          exempt={[]}
           content={[region("left", 0), region("middle", 25), region("right", 50)]}
         />,
       );
     });
 
     const plane = host.querySelector("[data-node='focus-lighting/space-e']")!;
-    const hole = plane.querySelector<HTMLElement>("[data-lighting-exempt='parked-body-left']");
-    expect(hole, "the parked pane's body box steps out of the veil").not.toBeNull();
-    expect(hole!.className).toBe("lighting-body-exempt");
-    // The chrome around that box keeps its veil, and so does every other unfocused pane.
-    expect(plane.querySelector("[data-lighting-content='left']")).not.toBeNull();
-    const idle = plane.querySelector<HTMLElement>("[data-lighting-content='middle']");
-    expect(idle!.style.opacity).toBe("0.5");
+    for (const id of ["left", "middle"]) {
+      const idle = plane.querySelector<HTMLElement>(`[data-lighting-content='${id}']`);
+      expect(idle, `${id} is dimmed`).not.toBeNull();
+      expect(idle!.style.opacity).toBe("0.5");
+    }
     expect(plane.querySelector("[data-lighting-content='right']")).toBeNull();
   });
 });

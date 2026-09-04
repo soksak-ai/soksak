@@ -11,8 +11,6 @@ export type LightingRegion = {
 export type LightingExemption = {
   id: string;
   style: CSSProperties;
-  /** Geometry the stylesheet owns. The style then holds only the variables that rule reads. */
-  className?: string;
 };
 
 type BlockedLightingRegion = LightingRegion & { amount: number };
@@ -51,9 +49,9 @@ export function FocusLightingPlane({
   };
   const focusedGeometry = focused ? geometryKey(focused.style) : null;
   const blockedGeometries = new Set(blocked.map((region) => geometryKey(region.style)));
-  // Every pane that is not the focus is dimmed. A parked pane steps its body box out through an
-  // exemption, because the picture there draws the amount itself; the chrome around it stays under
-  // this veil, exactly as it was while the surface was up.
+  // Every pane that is not the focus is dimmed. A parked pane is dimmed by this veil too — the
+  // picture it draws stands above the plane, at the alpha its surface was declared with, which is
+  // where the surface itself was.
   const idleContent = content
     .filter((region) => geometryKey(region.style) !== focusedGeometry
       && !blockedGeometries.has(geometryKey(region.style)))
@@ -86,9 +84,7 @@ export function FocusLightingPlane({
     >
       {exempt.map((region) => (
         <div key={`exempt-${region.id}`} data-node={`focus-lighting/${scopeId}/exempt/${region.id}`}
-          className={region.className}
-          data-lighting-exempt={region.id}
-          style={region.className ? region.style : exemptionStyle(region.style)} />
+          data-lighting-exempt={region.id} style={exemptionStyle(region.style)} />
       ))}
       {idleContent.map((region) => (
         <div key={`idle-${region.id}`} className={regionClass(region.moving)}

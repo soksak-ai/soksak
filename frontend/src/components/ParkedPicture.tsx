@@ -19,21 +19,12 @@ export function ParkedPicture({ viewId, dim }: { viewId: string; dim: number }) 
   );
   if (!url) return null;
   // The live pane reads the surface at its declared alpha over the dimmed document — a native
-  // surface is composited above the focus lighting veil, which never reached it. The picture stands
-  // in the document, so it reproduces that composite here: a veil at the same amount beneath it and
-  // the image at the surface's alpha above. The lighting plane exempts a cell that draws this, so
-  // the amount is applied once. Drawn under the plane's veil at full alpha instead, an unfocused
-  // pane read 127 on white where the live one read 191 (measured 2026-09-04).
+  // surface is composited above the focus lighting veil, which never reached it. The picture is
+  // drawn on that same layer (App.css) at that same alpha, so the pane reads the same whether the
+  // surface is up or parked. Drawn under the veil at full alpha instead, an unfocused pane read 127
+  // on white where the live one read 191 (measured 2026-09-04).
   return (
     <>
-      {dim > 0 && (
-        <div
-          className="parked-picture-veil"
-          data-node={`layout/parked-picture-veil/${viewId}`}
-          aria-hidden="true"
-          style={{ opacity: dim }}
-        />
-      )}
       <img
         className="parked-picture"
         data-node={`layout/parked-picture/${viewId}`}

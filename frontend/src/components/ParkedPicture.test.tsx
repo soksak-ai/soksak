@@ -29,22 +29,18 @@ afterEach(() => {
 });
 
 describe("the picture a parked surface leaves", () => {
-  // The live pane reads the surface at its declared alpha over the dimmed document. The picture
-  // reproduces that composite inside the cell: a veil at the same amount beneath it, and the image
-  // at the surface's alpha above. The lighting plane exempts the cell, so the amount is applied
-  // once.
-  it("draws its own veil and the image at the alpha the surface was declared with", () => {
+  // The picture draws above the lighting veil, so the veil is the one dim and the image is drawn at
+  // the alpha its surface was declared with. A veil of its own here would apply the amount twice — the
+  // pane read 96 on white where the live one read 191 (measured 2026-09-04).
+  it("draws the image at the alpha the surface was declared with, and no dim of its own", () => {
     act(() => root.render(<ParkedPicture viewId="v-1" dim={0.5} />));
-    const veil = host.querySelector<HTMLElement>(".parked-picture-veil")!;
     const img = host.querySelector<HTMLImageElement>(".parked-picture")!;
-    expect(veil).not.toBeNull();
-    expect(veil.style.opacity).toBe("0.5");
     expect(img.style.opacity).toBe("0.5");
+    expect(host.querySelector(".parked-picture-veil"), "the veil is the plane's, not the picture's").toBeNull();
   });
 
-  it("draws no veil and an opaque image for a pane nothing dims", () => {
+  it("draws an opaque image for a pane nothing dims", () => {
     act(() => root.render(<ParkedPicture viewId="v-1" dim={0} />));
-    expect(host.querySelector(".parked-picture-veil")).toBeNull();
     expect(host.querySelector<HTMLImageElement>(".parked-picture")!.style.opacity).toBe("1");
   });
 
@@ -52,6 +48,5 @@ describe("the picture a parked surface leaves", () => {
     __resetParkedPicturesForTest();
     act(() => root.render(<ParkedPicture viewId="v-1" dim={0.5} />));
     expect(host.querySelector(".parked-picture")).toBeNull();
-    expect(host.querySelector(".parked-picture-veil")).toBeNull();
   });
 });
