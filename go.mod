@@ -8,7 +8,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f
-	github.com/soksak-ai/soksak-contract-control v0.0.0-20260831165210-51a4b7cbb369
+	github.com/soksak-ai/soksak-contract-control v0.0.0-20260904031849-c35bce2d20d6
 	github.com/soksak-ai/soksak-contract-pty v0.0.0-20260831161848-6fa2f6c277e9
 	github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9
 	github.com/soksak-ai/soksak-service-native-compositor v0.0.1

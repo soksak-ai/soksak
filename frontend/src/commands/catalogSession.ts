@@ -78,15 +78,31 @@ export function registerSessionCatalog(): void {
     description: key("cmd.session.close.desc"),
     triggers: { ko: "세션 종료 기록 제거" },
     params: {
-      session: { type: "string", description: key("cmd.session.close.param.session"), required: true },
+      session: { type: "string", description: key("cmd.session.close.param.session"), required: false },
+      view: { type: "string", description: key("cmd.session.close.param.view"), required: false },
     },
-    returns: "{ session, closed, held } — held states whether the owner was holding it when the close arrived",
-    message: (d) => tmsg("msg.session.close", { session: String(d.session) }),
-    examples: ['session.close \'{"session":"7"}\''],
-    handler: async (p) =>
-      (await invoke("session_close", { session: p.session as string })) as unknown as Record<
-        string,
-        unknown
-      >,
+    returns: "{ session, closed, held } for one session, or { viewId, closed } for a view — held states whether the owner was holding it when the close arrived",
+    message: (d) =>
+      d.viewId === undefined
+        ? tmsg("msg.session.close", { session: String(d.session) })
+        : tmsg("msg.session.closeView", { n: ((d.closed as unknown[]) ?? []).length }),
+    examples: [
+      'session.close \'{"session":"7"}\'',
+      'session.close \'{"view":"tab-aaaaaa"}\'',
+    ],
+    // One of the two is named, never both and never neither. A view is what the person closes and a
+    // session is what the owner ends; the index joins them, so a caller closing a view names it
+    // rather than reading the index and closing each session itself.
+    handler: async (p) => {
+      const answer = (await invoke("session_close", {
+        ...(p.session === undefined ? {} : { session: p.session as string }),
+        ...(p.view === undefined ? {} : { view: p.view as string }),
+      })) as unknown as Record<string, unknown>;
+      // The answer echoes the view it resolved as viewId, the one spelling every command uses for
+      // that axis. session.attach answers the same way.
+      return "view" in answer
+        ? { ...answer, viewId: answer.view as string, view: undefined }
+        : answer;
+    },
   });
 }
