@@ -63,7 +63,7 @@ import {
   strokeDecoration,
 } from "../lib/nativeDecorations";
 import { dividerSurfaceGeometry } from "../lib/dividerSurfaceGeometry";
-import { stageNativeSurfaceGeometry } from "../framework/wails/nativeSurfaces";
+import { releaseNativeSurfaceGeometry, stageNativeSurfaceGeometry } from "../framework/wails/nativeSurfaces";
 import { createDividerResizeTransaction } from "../lib/dividerResizeTransaction";
 import { afterFramePaint } from "../lib/afterFramePaint";
 import { appliedResizeSizes, beginResizeGesture, computedResizeSizes, endResizeGesture, moveResizeGesture } from "../lib/resizeGestureFacts";
@@ -773,11 +773,16 @@ export const GroupArea = memo(function GroupArea({
         const frames = dividerSurfaceGeometry(cont, targetCells);
         if (frames.size > 0) await stageNativeSurfaceGeometry(frames);
       },
-      apply: (px) => commitDomLayout(() => {
-        appliedResizeSizes([px]);
-        resizeGeometryPending.current = true;
-        moveBoundary(projectId, content.id, { axis: d.axis, line: d.line }, { px });
-      }),
+      apply: (px) => {
+        commitDomLayout(() => {
+          appliedResizeSizes([px]);
+          resizeGeometryPending.current = true;
+          moveBoundary(projectId, content.id, { axis: d.axis, line: d.line }, { px });
+        });
+        // The layout the staged rectangles were for is in the document; the surfaces follow the
+        // elements again from here.
+        releaseNativeSurfaceGeometry();
+      },
     });
     const commitResize = rafThrottle((px: number) => resizeTransaction.submit(px));
     const onMove = (ev: Pick<MouseEvent, "clientX" | "clientY">) => {

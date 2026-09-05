@@ -180,6 +180,17 @@ export async function stageNativeSurfaceGeometry(
   return { sequence: receipt.sequence, ids: [...frames.keys()].sort() };
 }
 
+/**
+ * The document has published the layout the staged rectangles were for; the surfaces follow the
+ * elements that declare them again. Called after the DOM commit that consumed a stage, by the
+ * same caller — the observer cannot tell that commit from a measurement, because the element a
+ * plugin lays out inside the pane is its own size (measured 2026-09-05: 160 wide in a pane
+ * staged at 160.26, for the rest of the session).
+ */
+export function releaseNativeSurfaceGeometry(): void {
+  controller?.releaseGeometry();
+}
+
 /** Re-applies the current DOM presentation after a staged transaction is cancelled. */
 export async function restoreNativeSurfacePresentation(): Promise<void> {
   if (!controller || !presentationVisibleFromDOM) return;
