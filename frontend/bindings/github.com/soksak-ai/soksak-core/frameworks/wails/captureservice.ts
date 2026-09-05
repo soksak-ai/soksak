@@ -18,12 +18,25 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as $models from "./models.js";
 
 /**
+ * Burst streams this service's window into request.Dir.
+ * 
+ * Whether the window is ordered front for the span is the caller's, as it is for a single capture
+ * (window_capture_present): an occluded document stops animating, and a burst of a window that is
+ * not moving is a burst of nothing.
+ */
+export function Burst(request: $models.BurstRequest): $CancellablePromise<$models.BurstReport> {
+    return $Call.ByID(625751624, request).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+/**
  * Pixels answers with a base64 PNG instead of touching the disk, for callers
  * that only want to look.
  */
 export function Pixels(rect: $models.Rect): $CancellablePromise<$models.CapturePixels> {
     return $Call.ByID(2535502479, rect).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType1($result);
     });
 }
 
@@ -37,7 +50,7 @@ export function Pixels(rect: $models.Rect): $CancellablePromise<$models.CaptureP
  */
 export function PixelsAt(path: string, rect: $models.Rect): $CancellablePromise<$models.CapturePixels> {
     return $Call.ByID(2134601626, path, rect).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType1($result);
     });
 }
 
@@ -49,7 +62,7 @@ export function PixelsAt(path: string, rect: $models.Rect): $CancellablePromise<
  */
 export function Record(request: $models.RecordRequest): $CancellablePromise<$models.RecordReport> {
     return $Call.ByID(1275283255, request).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType2($result);
     });
 }
 
@@ -61,7 +74,7 @@ export function Record(request: $models.RecordRequest): $CancellablePromise<$mod
  */
 export function Snapshot(path: string): $CancellablePromise<$models.CaptureNote> {
     return $Call.ByID(2881053662, path).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType3($result);
     });
 }
 
@@ -70,11 +83,12 @@ export function Snapshot(path: string): $CancellablePromise<$models.CaptureNote>
  */
 export function SnapshotRegion(path: string, rect: $models.Rect): $CancellablePromise<$models.CaptureNote> {
     return $Call.ByID(608921066, path, rect).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType3($result);
     });
 }
 
 // Private type creation functions
-const $$createType0 = $models.CapturePixels.createFrom;
-const $$createType1 = $models.RecordReport.createFrom;
-const $$createType2 = $models.CaptureNote.createFrom;
+const $$createType0 = $models.BurstReport.createFrom;
+const $$createType1 = $models.CapturePixels.createFrom;
+const $$createType2 = $models.RecordReport.createFrom;
+const $$createType3 = $models.CaptureNote.createFrom;

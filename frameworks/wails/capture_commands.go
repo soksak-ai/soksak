@@ -140,6 +140,51 @@ func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamS
 	})
 
 	registry.MustRegister(control.Command{
+		Name:  "window_burst",
+		Owner: control.OwnerFramework,
+		// The same region axis as a single capture. What differs is the source: a stream that hands
+		// over every frame the compositor produced, not a capture asked for once per frame.
+		Handler: func(args control.Args) (any, error) {
+			dir, err := control.Arg[string](args, "dir")
+			if err != nil {
+				return nil, err
+			}
+			duration, err := control.Arg[float64](args, "durationMs")
+			if err != nil {
+				return nil, err
+			}
+			count, err := control.Arg[float64](args, "frames")
+			if err != nil {
+				return nil, err
+			}
+			interval, err := control.OptionalArg(args, "intervalMs", float64(0))
+			if err != nil {
+				return nil, err
+			}
+			maxBytes, err := control.OptionalArg(args, "maxBytes", float64(0))
+			if err != nil {
+				return nil, err
+			}
+			rect, err := captureRect(args)
+			if err != nil {
+				return nil, err
+			}
+			service, err := target(args)
+			if err != nil {
+				return nil, err
+			}
+			return service.Burst(BurstRequest{
+				Dir:        dir,
+				DurationMs: int(duration),
+				Frames:     int(count),
+				IntervalMs: int(interval),
+				MaxBytes:   int64(maxBytes),
+				Region:     rect,
+			})
+		},
+	})
+
+	registry.MustRegister(control.Command{
 		Name:  "window_record",
 		Owner: control.OwnerFramework,
 		// The same window axis and the same region axis as a single capture, so

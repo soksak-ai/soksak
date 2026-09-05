@@ -1,6 +1,6 @@
 # Window capture
 
-`window.snapshot`, `window.pixels`, and `window.record` use one platform capture backend and one
+`window.snapshot`, `window.pixels`, `window.record`, and `window.burst` use one platform capture backend and one
 shared pixel pipeline. Capture never focuses a window. A platform without a backend fails by name;
 an empty image is never a successful result.
 
@@ -20,6 +20,23 @@ The same HWND boundary reports the document content extent: Windows reads the cl
 `GetClientRect` and converts device pixels to DIPs with `GetDpiForWindow`. A window frame is not a
 content-size fallback because non-client chrome makes it a different rectangle. `ui.verify` treats
 an unavailable content rect as unanswered rather than silently comparing against that frame.
+
+## Bursts
+
+`window.record` takes one capture per frame, and one capture costs about 120ms on macOS: the
+shareable-content query, the screenshot, and the PNG encoding. A change that is over within one
+display frame (16ms) is between two of its frames. Measured 2026-09-05: the blank pane between a
+surface and its picture was in no recording and visible to every eye.
+
+`window.burst` is the platform stream. On macOS a ScreenCaptureKit stream of this process's window
+runs for `durationMs` and every complete frame the compositor produced is copied off the delivery
+queue, encoded on a concurrent queue, and written as `dir/f0000.png ...`. The report carries one
+time per frame in milliseconds from the start of the stream, so the duration of a state is the
+difference between the frames that bracket it. A frame whose content did not change is not
+delivered; a burst of a still window is a short list. The region axis is the same as a single
+capture (`rect`, `node`, `tab`), and the window is ordered front without focus for the span the
+same way. The raw bytes waiting for an encoder are bounded by `maxBytes`; the burst ends early by
+name when they would pass it. A platform without a stream backend refuses by name.
 
 ## Inactive tab targets
 

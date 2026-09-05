@@ -1,6 +1,6 @@
 # 창 캡처
 
-`window.snapshot`, `window.pixels`, `window.record`는 하나의 플랫폼 캡처 backend와 하나의
+`window.snapshot`, `window.pixels`, `window.record`, `window.burst`는 하나의 플랫폼 캡처 backend와 하나의
 공통 pixel pipeline을 사용합니다. 캡처는 창에 focus를 주지 않습니다. backend가 없는
 플랫폼은 명시적으로 실패하며 빈 이미지를 성공으로 처리하지 않습니다.
 
@@ -19,6 +19,22 @@ stride 검증, CSS point에서 pixel로의 crop, 범위 clamp, PNG encoding은 �
 rect를 읽고 `GetDpiForWindow`로 device pixel을 DIP로 변환합니다. Window frame은 non-client
 chrome이 포함된 다른 사각형이므로 content size fallback으로 사용하지 않습니다.
 `ui.verify`는 content rect를 읽지 못하면 frame과 비교한 척하지 않고 unanswered로 판정합니다.
+
+## 버스트
+
+`window.record`는 프레임마다 캡처 하나를 요청하고, macOS에서 캡처 하나는 shareable-content 조회,
+스크린샷, PNG 인코딩을 합쳐 약 120ms가 듭니다. 디스플레이 한 프레임(16ms) 안에 끝나는 변화는
+두 프레임 사이에 빠집니다. 2026-09-05 실측: 서피스와 그 사진 사이의 빈 pane은 어떤 녹화에도
+없었고 눈에는 매번 보였습니다.
+
+`window.burst`는 플랫폼 스트림입니다. macOS에서는 이 프로세스 창의 ScreenCaptureKit 스트림이
+`durationMs` 동안 돌고, compositor가 만든 완료 프레임마다 전달 큐에서 복사해 동시 큐에서
+인코딩한 뒤 `dir/f0000.png ...`로 씁니다. 응답은 프레임마다 스트림 시작 기준 ms 시각을 담으므로
+한 상태의 지속 시간은 그 상태를 감싸는 두 프레임의 차입니다. 내용이 바뀌지 않은 프레임은 오지
+않으며, 정지한 창의 버스트는 짧은 목록입니다. 영역 축은 단일 캡처와 같고(`rect`, `node`,
+`tab`), 창은 같은 방식으로 그 시간 동안 focus 없이 앞으로 올려집니다. 인코딩을 기다리는 원시
+바이트는 `maxBytes`로 묶이며 넘길 프레임에서 이유를 남기고 일찍 끝납니다. 스트림 backend가
+없는 플랫폼은 이름을 대고 거부합니다.
 
 ## 비활성 탭 대상
 

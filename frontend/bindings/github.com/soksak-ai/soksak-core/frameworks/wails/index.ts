@@ -9,6 +9,8 @@ export {
 };
 
 export {
+    BurstReport,
+    BurstRequest,
     CaptureNote,
     CapturePixels,
     RecordReport,

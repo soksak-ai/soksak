@@ -423,6 +423,33 @@ func init() {
 	})
 }
 
+// The refusals a burst answers with: the same bounds a recording states, for the stream.
+
+func init() {
+	i18n.Declare(map[string]i18n.Sentence{
+		"wails.burst.noDir": {
+			EN: "a burst needs a directory to write its frames into",
+			KO: "버스트에는 프레임을 기록할 디렉터리가 필요합니다",
+		},
+		"wails.burst.durationOutOfRange": {
+			EN: "a burst runs 1 through {max}ms; {given}ms is outside that and is not clamped to it",
+			KO: "버스트는 1 에서 {max}ms 까지입니다 — {given}ms 는 그 밖이며 범위로 잘라내지 않습니다",
+		},
+		"wails.burst.framesOutOfRange": {
+			EN: "a burst takes 1 through {max} frames; {given} is outside that and is not clamped to it",
+			KO: "버스트는 1 에서 {max} 프레임까지입니다 — {given} 은(는) 그 밖이며 범위로 잘라내지 않습니다",
+		},
+		"wails.burst.intervalOutOfRange": {
+			EN: "a burst interval is 0 through {max}ms; {given}ms is outside that and is not clamped to it",
+			KO: "버스트 간격은 0 에서 {max}ms 까지입니다 — {given}ms 는 그 밖이며 범위로 잘라내지 않습니다",
+		},
+		"wails.burst.budgetOutOfRange": {
+			EN: "a burst budget is 1 through {max} bytes; {given} is outside that",
+			KO: "버스트 용량 한도는 1 에서 {max} 바이트까지입니다 — {given} 은(는) 그 밖입니다",
+		},
+	})
+}
+
 // The refusals a reading of a recording answers with. A reading is asked for by
 // name and answered by name, so a region with no name and two regions sharing
 // one are both refused before a frame is opened — an answer keyed by position

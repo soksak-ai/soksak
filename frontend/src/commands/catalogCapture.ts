@@ -29,8 +29,15 @@ import {
 } from "./windowRecorder";
 
 import { CAPTURE_CALIBRATION_ID, setCaptureCalibration } from "./captureCalibration";
+
+// The bounds the platform stream states (frameworks/wails/capture_burst.go); a request outside them
+// is refused there too, by name.
+const WINDOW_BURST_MAX_DURATION_MS = 10_000;
+const WINDOW_BURST_MAX_FRAMES = 600;
+const WINDOW_BURST_MAX_INTERVAL_MS = 1_000;
 import { setCaptureMotionAnchors } from "./captureMotionAnchors";
 import { captureWindowPixels } from "./windowCapture";
+import { captureAfterPresentation } from "./capturePresentation";
 import { waitForTabPresentationCommit } from "./waitForDomCommit";
 import { waitLayoutSettled } from "./waitLayoutSettled";
 
@@ -490,6 +497,104 @@ export function registerCaptureCatalog(): void {
         const shot = await captureWindowPixels(rect);
         const pngBase64 = shot.png;
         return { ...(tabId ? { tabId } : {}), note: shot.note, ...(await pixelStats(pngBase64)) };
+      } finally {
+        restore?.();
+      }
+    },
+  });
+
+  // Every frame the compositor produced, at the display's rate. A recording takes one capture per
+  // frame and each costs about 120ms, so a change that is over in one display frame is between two
+  // of its frames — measured 2026-09-05, a pane blank between a surface and its picture was in no
+  // recording and in every eye. The burst is the platform stream; the frames land with their times.
+  register("window.burst", {
+    description: key("cmd.window.burst.desc"),
+    triggers: { ko: "버스트 연속 프레임 깜빡임 한 프레임 디스플레이 속도 스트림" },
+    params: {
+      dir: {
+        type: "string",
+        description: key("cmd.window.burst.param.dir"),
+        required: true,
+      },
+      durationMs: {
+        type: "number",
+        description: key("cmd.window.burst.param.durationMs", { max: WINDOW_BURST_MAX_DURATION_MS }),
+      },
+      frames: {
+        type: "number",
+        description: key("cmd.window.burst.param.frames", { max: WINDOW_BURST_MAX_FRAMES }),
+      },
+      intervalMs: {
+        type: "number",
+        description: key("cmd.window.burst.param.intervalMs", { max: WINDOW_BURST_MAX_INTERVAL_MS }),
+      },
+      maxBytes: {
+        type: "number",
+        description: key("cmd.window.burst.param.maxBytes"),
+      },
+      rect: {
+        type: "json",
+        description: key("cmd.window.snapshot.param.rect"),
+      },
+      node: {
+        type: "string",
+        description: key("cmd.window.snapshot.param.node"),
+      },
+      tab: {
+        type: "string",
+        description: key("cmd.window.snapshot.param.tab"),
+      },
+    },
+    returns: "{ tabId?, dir, frames, w, h, timesMs:number[], stopped? } — timesMs is one entry per frame on disk, ms from the start of the stream",
+    message: (d) => tmsg("msg.window.burst", { n: Number(d.frames) }),
+    errors: ["INVALID_PARAMS", "OFFSCREEN", "TARGET_NOT_FOUND", "NOT_EXPOSED"],
+    examples: [
+      'window.burst \'{"dir":"/tmp/burst"}\'',
+      'window.burst \'{"dir":"/tmp/burst","durationMs":3000,"node":"win/main/proj/p1/chrome/layout/pane/pan-abc"}\'',
+    ],
+    handler: async (p) => {
+      const durationMs = (p.durationMs ?? 2000) as number;
+      const frames = (p.frames ?? WINDOW_BURST_MAX_FRAMES) as number;
+      const intervalMs = (p.intervalMs ?? 0) as number;
+      if (!Number.isSafeInteger(durationMs) || durationMs < 1 || durationMs > WINDOW_BURST_MAX_DURATION_MS) {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: tmsg("msg.window.burst.durationRange", { max: WINDOW_BURST_MAX_DURATION_MS }),
+        };
+      }
+      if (!Number.isSafeInteger(frames) || frames < 1 || frames > WINDOW_BURST_MAX_FRAMES) {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: tmsg("msg.window.record.framesRange", { max: WINDOW_BURST_MAX_FRAMES }),
+        };
+      }
+      if (!Number.isSafeInteger(intervalMs) || intervalMs < 0 || intervalMs > WINDOW_BURST_MAX_INTERVAL_MS) {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: tmsg("msg.window.record.intervalRange", { max: WINDOW_BURST_MAX_INTERVAL_MS }),
+        };
+      }
+      const region = await resolveRegion(p);
+      if (isRefusal(region)) return region;
+      const { rect, tabId, restore } = region;
+      try {
+        const report = await captureAfterPresentation(
+          window,
+          () => invoke<{ ordered: boolean }>("window_capture_present", {}),
+          () => invoke<Record<string, unknown>>("window_burst", {
+            dir: p.dir,
+            durationMs,
+            frames,
+            intervalMs,
+            ...(p.maxBytes === undefined ? {} : { maxBytes: p.maxBytes }),
+            ...(rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {}),
+          }),
+          (presentation) => invoke("window_capture_restore", { ordered: presentation.ordered }).then(() => undefined),
+        );
+        return { ...(tabId ? { tabId } : {}), ...report };
       } finally {
         restore?.();
       }

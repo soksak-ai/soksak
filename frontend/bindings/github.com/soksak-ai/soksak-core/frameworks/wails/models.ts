@@ -6,6 +6,127 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * BurstReport is what a burst left behind.
+ * 
+ * TimesMs is one entry per frame on disk, milliseconds from the start of the stream, so a reader
+ * measures how long a state was on screen from the frames that bracket it. Stopped names why the
+ * burst ended before its duration.
+ */
+export class BurstReport {
+    "dir": string;
+    "frames": number;
+    "w": number;
+    "h": number;
+    "timesMs": number[];
+    "stopped"?: string;
+
+    /** Creates a new BurstReport instance. */
+    constructor($$source: Partial<BurstReport> = {}) {
+        if (!("dir" in $$source)) {
+            this["dir"] = "";
+        }
+        if (!("frames" in $$source)) {
+            this["frames"] = 0;
+        }
+        if (!("w" in $$source)) {
+            this["w"] = 0;
+        }
+        if (!("h" in $$source)) {
+            this["h"] = 0;
+        }
+        if (!("timesMs" in $$source)) {
+            this["timesMs"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new BurstReport instance from a string or object.
+     */
+    static createFrom($$source: any = {}): BurstReport {
+        const $$createField4_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("timesMs" in $$parsedSource) {
+            $$parsedSource["timesMs"] = $$createField4_0($$parsedSource["timesMs"]);
+        }
+        return new BurstReport($$parsedSource as Partial<BurstReport>);
+    }
+}
+
+/**
+ * BurstRequest is one burst.
+ */
+export class BurstRequest {
+    /**
+     * Dir holds the frames, created if it is not there.
+     */
+    "Dir": string;
+
+    /**
+     * DurationMs is how long the stream runs, 1 through burstMaxDurationMs.
+     */
+    "DurationMs": number;
+
+    /**
+     * Frames ends the burst early once this many landed, 1 through burstMaxFrames.
+     */
+    "Frames": number;
+
+    /**
+     * IntervalMs is the least time between two frames, 0 through burstMaxIntervalMs. Zero takes
+     * every frame the display produces.
+     */
+    "IntervalMs": number;
+
+    /**
+     * MaxBytes bounds the raw pixel bytes waiting for an encoder, 0 for the default.
+     */
+    "MaxBytes": number;
+
+    /**
+     * Region is the part of the window each frame holds. The zero value is the whole window.
+     */
+    "Region": Rect;
+
+    /** Creates a new BurstRequest instance. */
+    constructor($$source: Partial<BurstRequest> = {}) {
+        if (!("Dir" in $$source)) {
+            this["Dir"] = "";
+        }
+        if (!("DurationMs" in $$source)) {
+            this["DurationMs"] = 0;
+        }
+        if (!("Frames" in $$source)) {
+            this["Frames"] = 0;
+        }
+        if (!("IntervalMs" in $$source)) {
+            this["IntervalMs"] = 0;
+        }
+        if (!("MaxBytes" in $$source)) {
+            this["MaxBytes"] = 0;
+        }
+        if (!("Region" in $$source)) {
+            this["Region"] = (new Rect());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new BurstRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): BurstRequest {
+        const $$createField5_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("Region" in $$parsedSource) {
+            $$parsedSource["Region"] = $$createField5_0($$parsedSource["Region"]);
+        }
+        return new BurstRequest($$parsedSource as Partial<BurstRequest>);
+    }
+}
+
+/**
  * CaptureNote is what a capture contains, beside the image.
  * 
  * The path is answered rather than assumed, so a caller reads where the file
@@ -67,7 +188,7 @@ export class CapturePixels {
      * Creates a new CapturePixels instance from a string or object.
      */
     static createFrom($$source: any = {}): CapturePixels {
-        const $$createField1_0 = $$createType0;
+        const $$createField1_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("note" in $$parsedSource) {
             $$parsedSource["note"] = $$createField1_0($$parsedSource["note"]);
@@ -298,5 +419,6 @@ export class WindowGone {
 }
 
 // Private type creation functions
-const $$createType0 = CaptureNote.createFrom;
+const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = Rect.createFrom;
+const $$createType2 = CaptureNote.createFrom;

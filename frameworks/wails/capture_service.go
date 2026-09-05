@@ -40,6 +40,8 @@ type CaptureService struct {
 	// rather than of the compositor. It needs no screen-recording grant, and it is what is left
 	// when the window capture is refused for the identity this build runs under.
 	captureDocument func(unsafe.Pointer, Rect) ([]byte, error)
+	// burst streams the window at the display's rate where a platform has a stream backend.
+	burst burstSource
 	// refused remembers that this identity may not read the screen, so the deadline is paid
 	// once rather than per frame. A recording of fourteen frames paid it fourteen times and
 	// outlived the command's own deadline — measured 2026-08-17, 20s for a 350ms recording.
@@ -60,6 +62,7 @@ func NewCaptureService(name string, window func() unsafe.Pointer, presentation P
 		size:            contentSize,
 		capture:         CaptureWindow,
 		captureDocument: CaptureDocument,
+		burst:           platformBurst(),
 	}
 }
 
