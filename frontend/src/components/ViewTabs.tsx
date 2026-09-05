@@ -77,8 +77,15 @@ export const ViewTabs = memo(function ViewTabs({
   // The menu opens under the + button, wherever the request came from — the button itself, or the
   // shortcut, which arrives through addTabIntent because it fires at the window.
   const openAddMenu = useCallback(() => {
-    const r = addBtnRef.current?.getBoundingClientRect();
-    if (r) setMenuPos({ left: r.left, top: r.bottom + 2 });
+    const button = addBtnRef.current;
+    const r = button?.getBoundingClientRect();
+    if (!button || !r) return;
+    // The menu is this pane's: it opens inside the pane's box (ProgramMenu `within`).
+    const pane = button.closest<HTMLElement>('[data-node^="layout/pane/"]')?.getBoundingClientRect();
+    setMenuPos({
+      left: r.left, top: r.bottom + 2,
+      within: pane ? { left: pane.left, right: pane.right } : undefined,
+    });
   }, []);
   const addRequest = useAddTabIntent((s2) => s2.request);
   const clearAddRequest = useAddTabIntent((s2) => s2.clear);
@@ -88,9 +95,9 @@ export const ViewTabs = memo(function ViewTabs({
     openAddMenu();
   }, [addRequest, group.id, clearAddRequest, openAddMenu]);
 
-  const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(
-    null,
-  );
+  const [menuPos, setMenuPos] = useState<
+    { left: number; top: number; within?: { left: number; right: number } } | null
+  >(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
@@ -254,6 +261,7 @@ export const ViewTabs = memo(function ViewTabs({
       {menuPos && (
         <ProgramMenu
           pos={menuPos}
+          within={menuPos.within}
           onPick={async (program: Program) => {
             try {
               await execute("tab.open", { pane: group.id, program }, {});

@@ -119,10 +119,14 @@ function MenuLevel({
 
 export function ProgramMenu({
   pos,
+  within,
   onPick,
   onClose,
 }: {
   pos: { left: number; top: number };
+  /** The pane this menu belongs to, left to right: the body opens inside it, so a neighbour whose
+   *  surface the menu never needs is never put through the swap. */
+  within?: { left: number; right: number };
   onPick: (program: Program) => void;
   onClose: () => void;
 }) {
@@ -207,6 +211,10 @@ export function ProgramMenu({
     const h = el.offsetHeight;
     let left = pos.left;
     let top = pos.top;
+    // Inside its own pane first: opened at the + and wider than what was left of the strip, the
+    // body ran past the pane into the card beside it, whose surface then stepped aside for a menu
+    // that was not over it (measured 2026-09-05).
+    if (within && left + w > within.right) left = Math.max(within.left, within.right - w);
     if (left + w > window.innerWidth - m)
       left = Math.max(m, window.innerWidth - m - w);
     if (top + h > window.innerHeight - m)
@@ -214,7 +222,7 @@ export function ProgramMenu({
     const flip = left + w + 130 > window.innerWidth - m;
     setPlace({ left, top, flip });
     setBody({ left, top, right: left + w, bottom: top + h });
-  }, [pos.left, pos.top, order.length]);
+  }, [pos.left, pos.top, within?.left, within?.right, order.length]);
 
   const root = emptyNode();
   for (const id of order) {

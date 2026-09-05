@@ -87,4 +87,19 @@ describe("the program menu as an overlay", () => {
     });
     expect(useUi.getState().nativeOverlayAreas).toEqual([{ left: 100, top: 50, right: 370, bottom: 88 }]);
   });
+
+  // The menu is its pane's: it opens inside the pane's box, so a neighbour whose surface it never
+  // needs is never put through the swap. Opened at the + and 130 wide, it ran 12px past its pane
+  // into the card beside it (measured 2026-09-05).
+  it("keeps its body inside the pane it belongs to", () => {
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get() { return this.classList.contains("space-tab-menu") ? 130 : 0; } });
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get() { return this.classList.contains("space-tab-menu") ? 38 : 0; } });
+    act(() => {
+      root.render(
+        <ProgramMenu pos={{ left: 100, top: 50 }} within={{ left: 0, right: 220 }} onPick={vi.fn()} onClose={vi.fn()} />,
+      );
+    });
+    expect(useUi.getState().nativeOverlayAreas).toEqual([{ left: 90, top: 50, right: 220, bottom: 88 }]);
+    expect((document.querySelector(".space-tab-menu") as HTMLElement).style.left).toBe("90px");
+  });
 });
