@@ -104,6 +104,8 @@ describe("the + on a pane's tab strip", () => {
     });
     const add = host.querySelector<HTMLButtonElement>(`[data-node="tab/view/${second.id}/add"]`)!;
     expect(add.disabled).toBe(true);
+    // Nothing answers a hover either: no tooltip, and the pointer passes through (App.css).
+    expect(add.title).toBe("");
     act(() => { add.click(); });
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 

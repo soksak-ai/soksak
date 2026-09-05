@@ -1420,9 +1420,10 @@ body,
 .tab-add:hover {
   background: rgba(127, 127, 127, 0.16);
 }
-/* Inert on a pane that is not the active one: it can be pressed on the active pane only. */
+/* Inert on a pane that is not the active one: it can be pressed on the active pane only, and
+   answers no hover — the pointer passes through it. */
 .tab-add:disabled {
-  cursor: default;
+  pointer-events: none;
   opacity: 0.35;
   background: transparent;
 }

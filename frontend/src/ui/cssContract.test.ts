@@ -204,6 +204,12 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     }
   });
 
+  // The + on an idle pane answers neither a click nor a hover (user rule, 2026-09-05).
+  it("the + on an idle pane lets the pointer pass through", () => {
+    const inert = rules().find((rule) => rule.selector.trim() === ".tab-add:disabled");
+    expect(inert?.decls).toMatch(/pointer-events\s*:\s*none/);
+  });
+
   it("workspace and rail are global chrome above the DOM browser content stack", () => {
     expect(workspaceRailStackingViolations(css)).toEqual([]);
   });

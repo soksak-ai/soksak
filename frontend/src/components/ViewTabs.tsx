@@ -224,11 +224,12 @@ export const ViewTabs = memo(function ViewTabs({
             type="button"
             className="icon-btn tab-add"
             data-node={`tab/view/${group.id}/add`}
-            title={t("view.new")}
+            title={active ? t("view.new") : undefined}
             // Pressable on the active pane only, and it changes nothing but the menu: the pane is
             // not activated, and the focus stays where it is. It used to activate the pane it was
             // on (2026-09-04), so pressing it on an idle pane moved the focus and the rail before
-            // any program was chosen.
+            // any program was chosen. On an idle pane nothing answers a hover either: no tooltip,
+            // and the pointer passes through (App.css .tab-add:disabled).
             //
             // The mousedown is kept off the strip's drag machinery, and its default action is
             // refused: a button takes focus when it is clicked, and the terminal under it would
