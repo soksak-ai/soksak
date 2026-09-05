@@ -823,6 +823,7 @@ export const GroupArea = memo(function GroupArea({
                   projectId={projectId}
                   group={group}
                   onTabPointerDown={onTabPointerDown}
+                  active={group.id === content.activePaneId}
                 />
               </div>
             ) : (

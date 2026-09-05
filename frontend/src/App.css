@@ -1420,6 +1420,12 @@ body,
 .tab-add:hover {
   background: rgba(127, 127, 127, 0.16);
 }
+/* Inert on a pane that is not the active one: it can be pressed on the active pane only. */
+.tab-add:disabled {
+  cursor: default;
+  opacity: 0.35;
+  background: transparent;
+}
 
 /* The focus mark has one owner: the state boundary (.pane-focus-boundary, the
    focusIndicator setting). The earlier header inset shadow

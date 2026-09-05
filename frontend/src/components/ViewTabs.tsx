@@ -7,7 +7,6 @@ import {
   type Pane,
 } from "../state/sessions";
 import { useAddTabIntent } from "../state/addTabIntent";
-import { activatePaneIntent } from "../lib/viewActivation";
 import { useCloseConfirm } from "../state/closeConfirm";
 import { getRegisteredView, useViewRegistry } from "../plugins/viewRegistry";
 import { useProgramRegistry } from "../plugins/programRegistry";
@@ -58,10 +57,13 @@ export const ViewTabs = memo(function ViewTabs({
   projectId,
   group,
   onTabPointerDown,
+  active,
 }: {
   projectId: string;
   group: Pane;
   onTabPointerDown: (viewId: string, e: React.MouseEvent) => void;
+  /** Whether this is the space's active pane: the + can be pressed there and nowhere else. */
+  active: boolean;
 }) {
   const t = useT();
   const requestCloseView = useCloseConfirm((s) => s.requestCloseView);
@@ -223,19 +225,20 @@ export const ViewTabs = memo(function ViewTabs({
             className="icon-btn tab-add"
             data-node={`tab/view/${group.id}/add`}
             title={t("view.new")}
-            // The mousedown is kept off the strip's drag machinery, so the click activates this pane
-            // instead. Without that, opening the menu on an unfocused pane left the focus where it
-            // was: the clicked pane stayed dim and another stayed lit.
+            // Pressable on the active pane only, and it changes nothing but the menu: the pane is
+            // not activated, and the focus stays where it is. It used to activate the pane it was
+            // on (2026-09-04), so pressing it on an idle pane moved the focus and the rail before
+            // any program was chosen.
             //
-            // Its default action is refused too. A button takes focus when it is clicked, and the
-            // terminal under it would lose focus and read as inactive — for a menu that changes
-            // nothing but itself.
+            // The mousedown is kept off the strip's drag machinery, and its default action is
+            // refused: a button takes focus when it is clicked, and the terminal under it would
+            // lose focus and read as inactive.
+            disabled={!active}
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
             }}
             onClick={() => {
-              activatePaneIntent(group.id);
               if (menuPos) {
                 setMenuPos(null);
                 return;

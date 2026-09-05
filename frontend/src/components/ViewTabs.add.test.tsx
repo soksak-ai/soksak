@@ -60,7 +60,7 @@ describe("the + on a pane's tab strip", () => {
 
     act(() => {
       root.render(
-        <ViewTabs projectId={workspace.id} group={group} onTabPointerDown={() => {}} />,
+        <ViewTabs projectId={workspace.id} group={group} active onTabPointerDown={() => {}} />,
       );
     });
     const add = host.querySelector<HTMLButtonElement>(`[data-node="tab/view/${group.id}/add"]`)!;
@@ -74,7 +74,7 @@ describe("the + on a pane's tab strip", () => {
     elsewhere.remove();
   });
 
-  it("activates its own pane", async () => {
+  const twoPanes = () => {
     const base = useSessions.getState().workspaces[0];
     const space = base.spaces[0];
     const first = { ...allGroups(space)[0] };
@@ -92,24 +92,39 @@ describe("the + on a pane's tab strip", () => {
     // Activation goes through the pane.activate command; without the catalog it answers
     // REGISTRY_EMPTY and nothing happens.
     startExecutor();
+    return { workspace, first, second };
+  };
 
+  it("is inert on a pane that is not the active one", async () => {
+    const { workspace, first, second } = twoPanes();
     act(() => {
       root.render(
-        <ViewTabs projectId={workspace.id} group={second} onTabPointerDown={() => {}} />,
+        <ViewTabs projectId={workspace.id} group={second} active={false} onTabPointerDown={() => {}} />,
       );
     });
+    const add = host.querySelector<HTMLButtonElement>(`[data-node="tab/view/${second.id}/add"]`)!;
+    expect(add.disabled).toBe(true);
+    act(() => { add.click(); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(document.querySelector(".space-tab-menu"), "no menu opened").toBeNull();
+    expect(useSessions.getState().workspaces[0].spaces[0].activePaneId).toBe(first.id);
+  });
+
+  it("on the active pane opens the menu and changes nothing else", async () => {
+    const { workspace, first } = twoPanes();
+    const before = JSON.stringify(useSessions.getState().workspaces);
     act(() => {
-      host.querySelector<HTMLButtonElement>(`[data-node="tab/view/${second.id}/add"]`)!.click();
+      root.render(
+        <ViewTabs projectId={workspace.id} group={first} active onTabPointerDown={() => {}} />,
+      );
     });
+    const add = host.querySelector<HTMLButtonElement>(`[data-node="tab/view/${first.id}/add"]`)!;
+    expect(add.disabled).toBe(false);
+    act(() => { add.click(); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(
-      useSessions.getState().workspaces[0].spaces[0].activePaneId,
-      "the pane whose + was clicked is the active one",
-    ).toBe(second.id);
+    expect(document.querySelector(".space-tab-menu"), "the menu is the only thing that appears").not.toBeNull();
+    expect(JSON.stringify(useSessions.getState().workspaces)).toBe(before);
   });
 });

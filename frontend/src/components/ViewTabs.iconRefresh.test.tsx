@@ -65,7 +65,7 @@ describe("a tab bar and the view registry", () => {
 
   it("draws the manifest glyph as soon as the view registers, without another render from outside", () => {
     act(() => {
-      root.render(<ViewTabs projectId="wsp-h6jdzb" group={PANE} onTabPointerDown={() => {}} />);
+      root.render(<ViewTabs projectId="wsp-h6jdzb" group={PANE} active onTabPointerDown={() => {}} />);
     });
     // Oracle liveness — a bar that already drew the manifest glyph would prove nothing below.
     expect(drawn()).toBe("fallback");

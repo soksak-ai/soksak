@@ -67,6 +67,7 @@ describe("feature tab maximize", () => {
         <ViewTabs
           projectId={workspace.id}
           group={group}
+          active
           onTabPointerDown={() => {}}
         />,
       );

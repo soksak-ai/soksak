@@ -82,7 +82,7 @@ function render(): void {
   useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
   act(() => {
     root.render(
-      <ViewTabs projectId={workspace.id} group={group} onTabPointerDown={() => {}} />,
+      <ViewTabs projectId={workspace.id} group={group} active onTabPointerDown={() => {}} />,
     );
   });
 }
