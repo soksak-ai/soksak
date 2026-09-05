@@ -10,7 +10,7 @@ import { registerSidecarCatalog } from "./catalogSidecar";
 import { execute, getSpec, unregister } from "./registry";
 import { createEnvironmentEventHandler, setEnvironmentEventHandler } from "../state/environmentEvents";
 
-const REGISTERED = ["sidecar.status", "sidecar.request", "sidecar.install.local.plan", "sidecar.install.local", "sidecar.develop", "sidecar.remove"];
+const REGISTERED = ["sidecar.status", "sidecar.request", "sidecar.install.local.plan", "sidecar.install.local", "sidecar.develop", "sidecar.remove", "sidecar.stop"];
 
 describe("sidecar.status", () => {
   beforeEach(() => invoke.mockReset());
@@ -284,5 +284,31 @@ describe("sidecar.develop / sidecar.remove", () => {
     expect(result).toMatchObject({ ok: false, code: "INTERNAL", data: { detail: expect.stringContaining(hostMessage) } });
     expect(invoke).toHaveBeenCalledWith("sidecar_remove", { id: "soksak-sidecar-pty", expectedRevision: 5 });
     expect(reload).not.toHaveBeenCalled();
+  });
+});
+
+// ENVIRONMENT-AND-INSTALLATION: an installation never stops a running Sidecar; the caller stops it
+// explicitly, then retries the unchanged plan. The host served sidecar_stop and no command reached
+// it — measured 2026-09-05, a newer pty release could not be installed into a running instance.
+describe("sidecar.stop", () => {
+  beforeEach(() => { invoke.mockReset(); registerSidecarCatalog(); });
+  afterEach(() => { for (const name of REGISTERED) unregister(name); });
+
+  it("declares sidecarId and is destructive: the sessions the unit holds end with it", () => {
+    const spec = getSpec("sidecar.stop");
+    expect(spec).toBeDefined();
+    expect(spec!.params.sidecarId.required).toBe(true);
+    expect(spec!.danger).toBe("destructive");
+    expect(spec!.windowScoped).toBe(false);
+  });
+
+  it("stops the named unit through the host and answers that it no longer runs", async () => {
+    invoke.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "sidecar_stop") return { name: "soksak-sidecar-pty", running: false };
+      return null;
+    });
+    const result = await execute("sidecar.stop", { sidecarId: "soksak-sidecar-pty" }, {});
+    expect(result).toMatchObject({ ok: true, data: { id: "soksak-sidecar-pty", running: false } });
+    expect(invoke).toHaveBeenCalledWith("sidecar_stop", { name: "soksak-sidecar-pty" });
   });
 });

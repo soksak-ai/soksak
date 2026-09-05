@@ -131,8 +131,9 @@ not a valid migration path.
 The batch installer reads the public `sidecar_status` immediately before staging. Any selected
 Sidecar present in `open` or `recorded` returns `SIDECAR_IN_USE` with its requested version and the
 running version, process and PID. It never writes a newer environment selection over a running older
-unit and never stops one implicitly. The caller explicitly runs `sidecar_stop`, then retries the
-unchanged plan digest; re-resolving the plan closes the interval between planning and installation.
+unit and never stops one implicitly. The caller explicitly runs `sidecar.stop` (the host's
+`sidecar_stop`), then retries the unchanged plan digest; re-resolving the plan closes the interval
+between planning and installation.
 
 ## Development source
 

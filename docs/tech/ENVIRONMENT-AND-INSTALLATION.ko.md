@@ -118,7 +118,7 @@ stage한 뒤 environment revision을 한 번 commit합니다. root를 하나씩 
 batch installer는 stage 직전에 공개 `sidecar_status`를 읽습니다. 선택된 Sidecar가 `open` 또는 `recorded`에
 있으면 요청 version과 실행 중 version, process, PID를 포함한 `SIDECAR_IN_USE`를 반환합니다. 실행 중인 이전
 unit 위에 새 environment 선택을 기록하지 않고 unit을 암묵적으로 중지하지도 않습니다. 호출자가
-`sidecar_stop`을 명시적으로 실행한 뒤 같은 plan digest로 다시 요청합니다. 설치 시 plan을 다시 해석하므로
+`sidecar.stop`(호스트의 `sidecar_stop`)을 명시적으로 실행한 뒤 같은 plan digest로 다시 요청합니다. 설치 시 plan을 다시 해석하므로
 plan과 설치 사이의 변경도 검사합니다.
 
 ## 개발 소스

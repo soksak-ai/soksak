@@ -124,6 +124,27 @@ export function registerSidecarCatalog(): void {
     },
   });
 
+  register("sidecar.stop", {
+    description: key("cmd.sidecar.stop.desc"),
+    params: {
+      sidecarId: { type: "string", required: true, description: key("cmd.sidecar.stop.param.id") },
+    },
+    windowScoped: false,
+    returns: "{ id, running: false }",
+    message: (data) => tmsg("msg.sidecar.stop", { id: String(data.id) }),
+    // An installation never stops a running unit (ENVIRONMENT-AND-INSTALLATION): the caller stops
+    // it here, explicitly, then retries the unchanged plan. The host refuses an id it does not run
+    // as a thrown host error, returned as INTERNAL with the host message.
+    errors: ["INTERNAL"],
+    examples: [`sidecar.stop '{"sidecarId":"soksak-sidecar-<id>"}'`],
+    danger: "destructive",
+    handler: async (params) => {
+      const id = String(params.sidecarId);
+      const stopped = await invoke<{ name: string; running: boolean }>("sidecar_stop", { name: id });
+      return { id: stopped.name, running: stopped.running };
+    },
+  });
+
   register("sidecar.request", {
     description: key("cmd.sidecar.request.desc"),
     params: {
