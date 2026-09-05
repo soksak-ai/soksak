@@ -133,6 +133,8 @@ export interface NativeDecorationReceipt {
   count: number;
   supported: boolean;
   layer: "native-above-surfaces" | "dom-only" | "not-committed" | "unavailable";
+  /** What the plane holds after this commit: each stroke's id and the path it was given. */
+  applied: { id: string; path: string }[];
 }
 
 export interface AppFramework {

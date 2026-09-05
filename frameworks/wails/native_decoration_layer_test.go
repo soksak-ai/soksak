@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
 // A DOM outline cannot cover an AppKit child surface. The final focus/relation
@@ -79,5 +80,34 @@ func TestNativeDecorationPathRefusesAnythingOutsideTheContract(t *testing.T) {
 		if _, err := parseNativeDecorationPath(path); err == nil {
 			t.Errorf("path %q was accepted", path)
 		}
+	}
+}
+
+// What the native plane draws is the last snapshot it was given, and a reading of the plane has
+// to state it: a stroke standing where the document no longer declares one is invisible to every
+// reading that only counts. Measured 2026-09-05: a pane frame stood 41 points inside the pane
+// after a rail travel, the document declared four strokes at the right places, and the receipt
+// answered count 3.
+func TestDecorationStatusStatesTheAppliedPaths(t *testing.T) {
+	store := newNativeDecorationStore(func(string) unsafe.Pointer { return unsafe.Pointer(&struct{ int }{}) })
+	store.applyFn = func(_ unsafe.Pointer, decorations []preparedNativeDecoration) (bool, int, error) {
+		return true, len(decorations), nil
+	}
+	first := NativeDecoration{ID: "frame/a", Path: "M 0.5 0.5 L 9.5 0.5 Z", StrokeA: 1, StrokeWidth: 1}
+	second := NativeDecoration{ID: "frame/b", Path: "M 20.5 0.5 L 29.5 0.5 Z", StrokeA: 1, StrokeWidth: 1}
+	if _, err := store.Commit("w", []NativeDecoration{first, second}); err != nil {
+		t.Fatal(err)
+	}
+	status := store.Status("w")
+	if len(status.Applied) != 2 || status.Applied[0].ID != "frame/a" || status.Applied[0].Path != first.Path ||
+		status.Applied[1].ID != "frame/b" || status.Applied[1].Path != second.Path {
+		t.Fatalf("applied = %+v, want both strokes with their paths", status.Applied)
+	}
+	if _, err := store.Commit("w", []NativeDecoration{second}); err != nil {
+		t.Fatal(err)
+	}
+	status = store.Status("w")
+	if len(status.Applied) != 1 || status.Applied[0].ID != "frame/b" {
+		t.Fatalf("applied after the second commit = %+v, want only frame/b", status.Applied)
 	}
 }

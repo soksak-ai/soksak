@@ -162,6 +162,8 @@ export function nativeDecorationFacts(): {
   presentationVisible: boolean;
   receipt: NativeDecorationReceipt | null;
   error: string | null;
+  /** A commit is scheduled or crossing the bridge: the plane may not hold the presented set yet. */
+  pending: boolean;
 } {
   const decorations = snapshot();
   return {
@@ -170,6 +172,38 @@ export function nativeDecorationFacts(): {
     presentationVisible: state.presentationVisible,
     receipt: state.lastReceipt,
     error: state.error,
+    pending: state.dirty || state.running || state.scheduled,
+  };
+}
+
+export interface DecorationDrift {
+  /** Applied strokes the document does not present at that path — a stroke standing where nothing
+   *  is declared, or where something else is. */
+  stale: { id: string; presented: string | null; applied: string }[];
+  /** Presented strokes the plane does not hold. */
+  missing: string[];
+}
+
+/**
+ * The plane against the document, stroke by stroke.
+ *
+ * A receipt that only counts cannot tell a stroke standing where the document no longer declares
+ * one. Measured 2026-09-05: a pane frame stood 41 points inside its pane after a rail travel, the
+ * document declared four strokes at the right places, and the receipt answered count 3.
+ */
+export function decorationDrift(
+  presented: readonly Pick<NativeDecoration, "id" | "path">[],
+  applied: readonly { id: string; path: string }[],
+): DecorationDrift {
+  const declared = new Map(presented.map((decoration) => [decoration.id, decoration.path]));
+  const held = new Map(applied.map((decoration) => [decoration.id, decoration.path]));
+  return {
+    stale: applied
+      .filter((decoration) => declared.get(decoration.id) !== decoration.path)
+      .map((decoration) => ({
+        id: decoration.id, presented: declared.get(decoration.id) ?? null, applied: decoration.path,
+      })),
+    missing: presented.filter((decoration) => !held.has(decoration.id)).map((decoration) => decoration.id),
   };
 }
 

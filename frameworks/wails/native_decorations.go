@@ -27,12 +27,29 @@ type NativeDecoration struct {
 	Dash        []float64 `json:"dash"`
 }
 
+// NativeDecorationApplied is one stroke as the native plane holds it: the id and the path it was
+// given. A reading of the plane that only counts cannot tell a stroke standing where the document
+// no longer declares one.
+type NativeDecorationApplied struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
+}
+
 type NativeDecorationReceipt struct {
-	Window    string `json:"window"`
-	Sequence  uint64 `json:"sequence"`
-	Count     int    `json:"count"`
-	Supported bool   `json:"supported"`
-	Layer     string `json:"layer"`
+	Window    string                    `json:"window"`
+	Sequence  uint64                    `json:"sequence"`
+	Count     int                       `json:"count"`
+	Supported bool                      `json:"supported"`
+	Layer     string                    `json:"layer"`
+	Applied   []NativeDecorationApplied `json:"applied"`
+}
+
+func appliedOf(decorations []preparedNativeDecoration) []NativeDecorationApplied {
+	applied := make([]NativeDecorationApplied, 0, len(decorations))
+	for _, decoration := range decorations {
+		applied = append(applied, NativeDecorationApplied{ID: decoration.ID, Path: decoration.Path})
+	}
+	return applied
 }
 
 const (
@@ -169,6 +186,7 @@ type NativeDecorationHost interface {
 type nativeDecorationStore struct {
 	mu       sync.Mutex
 	windows  func(string) unsafe.Pointer
+	applyFn  func(unsafe.Pointer, []preparedNativeDecoration) (bool, int, error)
 	byWindow map[string][]preparedNativeDecoration
 	status   map[string]NativeDecorationReceipt
 }
@@ -176,6 +194,7 @@ type nativeDecorationStore struct {
 func newNativeDecorationStore(windows func(string) unsafe.Pointer) *nativeDecorationStore {
 	return &nativeDecorationStore{
 		windows:  windows,
+		applyFn:  applyNativeDecorations,
 		byWindow: make(map[string][]preparedNativeDecoration),
 		status:   make(map[string]NativeDecorationReceipt),
 	}
@@ -189,7 +208,7 @@ func (store *nativeDecorationStore) apply(window string, decorations []preparedN
 	if handle == nil {
 		return false, 0, i18n.Errorf("wails.decoration.windowUnavailable", map[string]string{"window": window})
 	}
-	return applyNativeDecorations(handle, decorations)
+	return store.applyFn(handle, decorations)
 }
 
 func (store *nativeDecorationStore) Commit(window string, decorations []NativeDecoration) (NativeDecorationReceipt, error) {
@@ -206,7 +225,7 @@ func (store *nativeDecorationStore) Commit(window string, decorations []NativeDe
 	previous := store.status[window]
 	receipt := NativeDecorationReceipt{
 		Window: window, Sequence: previous.Sequence + 1, Count: count,
-		Supported: supported, Layer: "dom-only",
+		Supported: supported, Layer: "dom-only", Applied: appliedOf(prepared),
 	}
 	if supported {
 		receipt.Layer = "native-above-surfaces"

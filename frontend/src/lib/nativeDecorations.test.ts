@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   __resetNativeDecorationsForTest,
   cssColorRGBA,
+  decorationDrift,
   nativeDecorationFacts,
   replaceNativeDecorations,
   setNativeDecorationOverlays,
@@ -137,5 +138,33 @@ describe("native decoration inventory", () => {
     expect(cssColorRGBA("rgba(21, 22, 30, 0.5)")).toEqual({
       r: 21 / 255, g: 22 / 255, b: 30 / 255, a: 0.5,
     });
+  });
+});
+
+// Measured 2026-09-05: a pane frame stood 41 points inside its pane after a rail travel while the
+// document declared every stroke at the right place and the plane's receipt answered a count. A
+// reading of the plane has to name the stroke that stands where nothing is declared.
+describe("decoration drift", () => {
+  it("names the applied strokes the document does not present, and the presented ones not applied", () => {
+    const blue = cssColorRGBA("#5aa2ff")!;
+    const presented = [
+      strokeDecoration("frame/a", "M 507.8 600.5 L 507.8 98.5 Z", blue, 1),
+      strokeDecoration("frame/b", "M 829.6 600.5 L 829.6 98.5 Z", blue, 1),
+      strokeDecoration("focus", "M 507.8 600.5 L 507.8 98.5 Z", blue, 1),
+    ];
+    const applied = [
+      { id: "frame/a", path: "M 548.6 600.5 L 548.6 98.5 Z" },
+      { id: "frame/b", path: "M 829.6 600.5 L 829.6 98.5 Z" },
+      { id: "frame/gone", path: "M 5.5 600.5 L 5.5 98.5 Z" },
+    ];
+    expect(decorationDrift(presented, applied)).toEqual({
+      stale: [
+        { id: "frame/a", presented: "M 507.8 600.5 L 507.8 98.5 Z", applied: "M 548.6 600.5 L 548.6 98.5 Z" },
+        { id: "frame/gone", presented: null, applied: "M 5.5 600.5 L 5.5 98.5 Z" },
+      ],
+      missing: ["focus"],
+    });
+    expect(decorationDrift(presented, presented.map(({ id, path }) => ({ id, path }))))
+      .toEqual({ stale: [], missing: [] });
   });
 });
