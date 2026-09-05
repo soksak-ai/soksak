@@ -40,6 +40,8 @@ import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
 import { dimAmount, dimLevel } from "../lib/dimLevel";
 import { useUi } from "../state/ui";
+import { surfaceLabelOfView } from "../lib/surfaceLabels";
+import { useOverlayCoverReady } from "../state/overlayCoverReady";
 import {
   type Space,
   type DropZone,
@@ -228,7 +230,7 @@ export const GroupArea = memo(function GroupArea({
   // One inventory subscription, not one hook per tab. A successful capture advances the revision;
   // this render then changes the declaration from live to parked. Until publication the surface stays
   // applied, so render cannot hide the surface before capture completes.
-  useSyncExternalStore(onParkedPictureChange, parkedPictureVersion, parkedPictureVersion);
+  const pictureVersion = useSyncExternalStore(onParkedPictureChange, parkedPictureVersion, parkedPictureVersion);
   const t = useT();
   // JS interpolation (FLIP) of command-driven rect changes — on every commit flush compares against the previous rect (layoutRectMotion).
   useRenderCost("render.panes");
@@ -358,6 +360,24 @@ export const GroupArea = memo(function GroupArea({
     ? (cells.find((c) => c.group.tabs.some((v) => v.id === maximizedId)) ?? null)
     : null;
   const displayCells = cells;
+  // A modal held above these panes reads whether the surfaces it covers have parked, so it shows its
+  // card in one frame rather than piece by piece as each parks (lib/useOverlayContentReady). Only a
+  // covered pane whose visible view owns a surface has to park; its picture must be held and on
+  // screen. A pane still capturing (no picture yet) keeps this false, so a late park is waited for.
+  useEffect(() => {
+    const coveredViews = content.panes
+      .filter((g) => coveredPanes.has(g.id))
+      .map((g) => (maxCell ? maximizedId : g.activeTabId))
+      .filter((id): id is string => !!id)
+      .filter((id) => surfaceLabelOfView(id) !== null);
+    const covered = coveredViews.length > 0;
+    const allShown = coveredViews.every(
+      (id) => parkedPicture(id) !== null && parkedPictureShown(id),
+    );
+    useOverlayCoverReady.getState().set(covered, allShown);
+    // pictureVersion changes when a picture is held or shown; that is when this must recompute.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coveredPanes, pictureVersion, content.panes, maximizedId, maxCell]);
   // A pane hidden by the maximize keeps the rect it has on the space's own plane, so nothing
   // reflows when it comes back.
   const hiddenRects = useMemo(

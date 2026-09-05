@@ -44,6 +44,8 @@ import { SettingsModal } from "./components/SettingsModal";
 import { ConfirmCloseModal } from "./components/ConfirmCloseModal";
 import { RemoteConfirmModal } from "./components/RemoteConfirmModal";
 import { RecoverySetupModal } from "./components/RecoverySetupModal";
+import { OverlayMenuSurface } from "./components/OverlayMenuSurface";
+import { useOverlayMenu, OVERLAY_MENU_LABEL } from "./state/overlayMenu";
 import { RecoveryEnterModal } from "./components/RecoveryEnterModal";
 import { wireRemoteConfirm } from "./state/remoteConfirmWire";
 import { installRemoteConfirmDevTrigger } from "./state/remoteConfirmDev";
@@ -1006,6 +1008,28 @@ function App() {
     ),
     [],
   );
+  // The overlay menu's page posts the chosen program back through the surface message channel. It
+  // arrives labelled by the surface, so it is routed to the one overlay menu open.
+  useEffect(
+    () =>
+      safeListen<{ label?: string; message?: string }>("content-view-message", (e) => {
+        if (e.payload?.label === OVERLAY_MENU_LABEL && typeof e.payload.message === "string") {
+          useOverlayMenu.getState().receive(e.payload.message);
+        }
+      }),
+    [],
+  );
+  // A press on any other surface dismisses the overlay menu. A press on the menu itself reports its
+  // own label and is left alone — the menu's page turns that press into a pick over the message
+  // channel, and closing here would race that away.
+  useEffect(
+    () =>
+      safeListen<{ label?: string }>("content-view-activated", (e) => {
+        const label = e.payload?.label;
+        if (label && label !== OVERLAY_MENU_LABEL) useOverlayMenu.getState().close();
+      }),
+    [],
+  );
   // Ghost hold recovery — blocks a lost mouseup from a window-activating click from spreading into a terminal drag selection.
   useEffect(() => startPointerOrderRepair(), []);
   // The platform pointer event is recorded before DOM delivery. During IME
@@ -1466,6 +1490,10 @@ function App() {
       <RemoteConfirmModal />
       <RecoverySetupModal />
       <RecoveryEnterModal />
+      {/* A small popover (the + program menu) as a native webview surface above every terminal:
+          opening it parks nothing and its appearance is one native layer, not a document-picture
+          swap — no flicker. Its page posts the choice back through the surface message channel. */}
+      <OverlayMenuSurface />
 
       {/* Body: in left mode, a vertical workspace rail + the content row. */}
       <div className={`app-body${workspaceTabPosition === "left" ? " with-rail" : ""}`}>

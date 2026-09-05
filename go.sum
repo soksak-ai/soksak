@@ -357,8 +357,8 @@ github.com/soksak-ai/soksak-service-native-compositor v0.0.1 h1:6UeJuJHTv6YuZHaM
 github.com/soksak-ai/soksak-service-native-compositor v0.0.1/go.mod h1:lSCsP95PK8kAU6cXcGODyDyVcffOyyUjVzYPonpSyI8=
 github.com/soksak-ai/soksak-service-terminal-surface v0.0.3 h1:Q/gMT/ZeuQG43mk6wCh2g8aroXVSWAJY9S/EVP1glw0=
 github.com/soksak-ai/soksak-service-terminal-surface v0.0.3/go.mod h1:UWwG7sBFagMmQQyqygY8ZG6l41trfDJa32DTiJ4M0Bo=
-github.com/soksak-ai/soksak-service-webview-surface v0.0.1 h1:+ZNraL5mVBPjXr+MZL5N1y9DWtK4xaKImfxlYDDJwCw=
-github.com/soksak-ai/soksak-service-webview-surface v0.0.1/go.mod h1:m0omiVuoPpddBhtme6ucj3kveCteY63yF5n3l5r5Sr4=
+github.com/soksak-ai/soksak-service-webview-surface v0.0.2 h1:Ic+Ygjc/FaSJAGSTs+7mPPkYfx9cDUb8NzbTduzNKck=
+github.com/soksak-ai/soksak-service-webview-surface v0.0.2/go.mod h1:m0omiVuoPpddBhtme6ucj3kveCteY63yF5n3l5r5Sr4=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260901062801-742c3bb52828 h1:umOGwMNaTU0goh7gCl/aGAmZ7l9dCnp47YLWgWENQkA=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260901062801-742c3bb52828/go.mod h1:IfcO4wTw2RDCPvUz+x92mqUt3J/5lkJe4rn9FiyINFI=
 github.com/spf13/cast v1.10.0 h1:h2x0u2shc1QuLHfxi+cTJvs30+ZAHOGRic8uyGTDWxY=

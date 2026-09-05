@@ -13,6 +13,7 @@ import {
 } from "../state/settings";
 import { useTheme } from "../state/theme";
 import { useOverlayActive } from "../state/ui";
+import { useOverlayContentReady } from "../lib/useOverlayContentReady";
 import { Icon } from "../ui/icons/Icon";
 import { useIconRegistry } from "../ui/icons/registry";
 import { localize, useT } from "../i18n";
@@ -48,6 +49,9 @@ export function SettingsModal({
     .sort((a, b) => localize(a.manifest.name).localeCompare(localize(b.manifest.name)));
   // Overlay registration — blocks mouse pass-through in the browser hole while the modal is open.
   useOverlayActive();
+  // The card is held until the surfaces it covers have parked, so it appears in one frame rather
+  // than piece by piece (measured 2026-09-05, the card revealed right-to-left as terminals parked).
+  const cardReady = useOverlayContentReady(true);
   // Whole-store subscription exception (within the intent of principle 1): this modal renders almost every
   // field of settings and is mounted only while open (App's settingsOpen gate).
   const s = useSettings();
@@ -79,7 +83,7 @@ export function SettingsModal({
         ref={cardRef}
         className="dmodal-card dmodal-settings"
         data-node="settings/card"
-        style={cardStyle}
+        style={{ ...cardStyle, visibility: cardReady ? "visible" : "hidden" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="dmodal-head" data-node="settings/header" onMouseDown={onHeaderDown}>

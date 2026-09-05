@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { execute } from "../commands/registry";
 import { ProgramMenu } from "./ProgramMenu";
+import { programMenuItems } from "../lib/nativeProgramMenu";
+import { useOverlayMenu } from "../state/overlayMenu";
 import {
   viewDisplayTitle,
   type Program,
@@ -80,13 +82,13 @@ export const ViewTabs = memo(function ViewTabs({
     const button = addBtnRef.current;
     const r = button?.getBoundingClientRect();
     if (!button || !r) return;
-    // The menu is this pane's: it opens inside the pane's box (ProgramMenu `within`).
-    const pane = button.closest<HTMLElement>('[data-node^="layout/pane/"]')?.getBoundingClientRect();
-    setMenuPos({
-      left: r.left, top: r.bottom + 2,
-      within: pane ? { left: pane.left, right: pane.right } : undefined,
+    // The menu is a native webview surface above every terminal (state/overlayMenu). Opening it
+    // parks no terminal and adds one native layer, so nothing swaps and nothing flickers. It reports
+    // the chosen program back through the surface message channel, which runs tab.open here.
+    useOverlayMenu.getState().openAt(programMenuItems(), r, (program) => {
+      void execute("tab.open", { pane: group.id, program }, {});
     });
-  }, []);
+  }, [group.id]);
   const addRequest = useAddTabIntent((s2) => s2.request);
   const clearAddRequest = useAddTabIntent((s2) => s2.clear);
   useEffect(() => {
@@ -247,8 +249,11 @@ export const ViewTabs = memo(function ViewTabs({
               e.stopPropagation();
             }}
             onClick={() => {
-              if (menuPos) {
-                setMenuPos(null);
+              // A press outside the menu has already closed it by now (pointerdown fires before
+              // click), so a click on the + always opens. Re-opening a just-closed menu reads as a
+              // toggle: press once to open, press again to close.
+              if (useOverlayMenu.getState().open) {
+                useOverlayMenu.getState().close();
                 return;
               }
               openAddMenu();
