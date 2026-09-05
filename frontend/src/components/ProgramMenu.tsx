@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Program } from "../state/sessions";
 import { useProgramRegistry } from "../plugins/programRegistry";
@@ -46,14 +46,35 @@ function insert(
   insert(node.subs.get(head)!, rest, item);
 }
 
+type Box = { left: number; top: number; right: number; bottom: number };
+
 function MenuLevel({
   node,
   onPick,
+  path,
+  reportCover,
 }: {
   node: MenuNode;
   onPick: (program: Program) => void;
+  /** This level's place in the tree; a submenu's cover is reported under it. */
+  path: string;
+  /** What this level's open submenu covers, or null when none is open. */
+  reportCover: (key: string, box: Box | null) => void;
 }) {
   const [openCategory, setOpenCategory] = useState<string | null>(null);
+  const submenuRef = useRef<HTMLDivElement | null>(null);
+  // Measured before paint on the state edge that opens or closes it: a cover is what is on
+  // screen, never a width reserved for what might open.
+  useLayoutEffect(() => {
+    const el = openCategory ? submenuRef.current : null;
+    if (!el) {
+      reportCover(path, null);
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    reportCover(path, { left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  }, [openCategory, path, reportCover]);
+  useEffect(() => () => reportCover(path, null), [path, reportCover]);
   return (
     <>
       {node.order.map((o) =>
@@ -77,8 +98,17 @@ function MenuLevel({
             <span className="space-tab-menu-caret icon-inline">
               <Icon name="chevron-right" size="sm" />
             </span>
-            <div className="space-tab-submenu" onClick={(event) => event.stopPropagation()}>
-              <MenuLevel node={node.subs.get(o.name)!} onPick={onPick} />
+            <div
+              className="space-tab-submenu"
+              ref={openCategory === o.name ? submenuRef : undefined}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <MenuLevel
+                node={node.subs.get(o.name)!}
+                onPick={onPick}
+                path={`${path}/${o.name}`}
+                reportCover={reportCover}
+              />
             </div>
           </div>
         ),
@@ -111,7 +141,34 @@ export function ProgramMenu({
   // pane parks, comes back and parks again between them. The picture that stands in for a surface
   // is then taken while the surface is off, and the pane shows a picture with nothing in it
   // (measured 2026-09-04).
-  const [covers, setCovers] = useState<{ left: number; top: number; right: number; bottom: number } | null>(null);
+  const [body, setBody] = useState<Box | null>(null);
+  // Each level's open submenu, by its place in the tree. The cover is the body and these, and
+  // nothing reserved for a submenu that is not open: reserving one put a pane to the right, whose
+  // surface the menu never touched, through the swap (measured 2026-09-05).
+  const [submenus, setSubmenus] = useState<ReadonlyMap<string, Box>>(() => new Map());
+  const reportCover = useCallback((key: string, box: Box | null) => {
+    setSubmenus((held) => {
+      const current = held.get(key) ?? null;
+      const same = current === box || (current && box && current.left === box.left
+        && current.top === box.top && current.right === box.right && current.bottom === box.bottom);
+      if (same) return held;
+      const next = new Map(held);
+      if (box) next.set(key, box);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+  const covers = useMemo(() => {
+    if (!body) return null;
+    let box = { ...body };
+    for (const sub of submenus.values()) {
+      box = {
+        left: Math.min(box.left, sub.left), top: Math.min(box.top, sub.top),
+        right: Math.max(box.right, sub.right), bottom: Math.max(box.bottom, sub.bottom),
+      };
+    }
+    return box;
+  }, [body, submenus]);
   useOverlayActive(covers !== null, true, covers);
   // Subscribes to the register/unregister signal — a plugin enable toggle applies to an open menu too.
   useProgramRegistry((s) => s.version);
@@ -156,15 +213,7 @@ export function ProgramMenu({
       top = Math.max(m, window.innerHeight - m - h);
     const flip = left + w + 130 > window.innerWidth - m;
     setPlace({ left, top, flip });
-    // A submenu opens beside the body and is part of what the menu covers. Its width is the same
-    // 130 the flip test uses; taking the body alone would leave a surface over an open submenu.
-    const sub = 130;
-    setCovers({
-      left: flip ? left - sub : left,
-      top,
-      right: flip ? left + w : left + w + sub,
-      bottom: top + h,
-    });
+    setBody({ left, top, right: left + w, bottom: top + h });
   }, [pos.left, pos.top, order.length]);
 
   const root = emptyNode();
@@ -187,7 +236,7 @@ export function ProgramMenu({
       {order.length === 0 ? (
         <div className="space-tab-menu-empty">{t("program.empty")}</div>
       ) : (
-        <MenuLevel node={root} onPick={onPick} />
+        <MenuLevel node={root} onPick={onPick} path="" reportCover={reportCover} />
       )}
     </div>,
     document.body,

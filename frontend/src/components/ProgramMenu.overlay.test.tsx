@@ -53,4 +53,38 @@ describe("the program menu as an overlay", () => {
     expect(pushed[0]).not.toBeNull();
     expect(useUi.getState().nativeOverlayAreas).toHaveLength(1);
   });
+
+  // A cover is what is on screen. The menu reserved a submenu's width beside its body from the
+  // first frame, whether a submenu existed or not, and a pane to the right whose surface the body
+  // never touched stepped aside for it — measured 2026-09-05, a + on one card flashed the card
+  // beside it.
+  it("covers the body alone while no submenu is open, and the submenu once one is", () => {
+    const widths: Record<string, number> = { "space-tab-menu": 130, "space-tab-submenu": 140 };
+    const widthOf = (el: HTMLElement) => widths[[...el.classList].find((c) => c in widths) ?? ""] ?? 0;
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get() { return widthOf(this); } });
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get() { return widthOf(this) ? 38 : 0; } });
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      const w = widthOf(this); const left = this.classList.contains("space-tab-submenu") ? 230 : 100;
+      return { left, top: 50, right: left + w, bottom: 88, width: w, height: 38, x: left, y: 50, toJSON() {} } as DOMRect;
+    };
+    useProgramRegistry.setState({
+      version: 2,
+      programs: {
+        "terminal-vision": { decl: { title: { en: "Vision", ko: "Vision" } } },
+        "browser": { decl: { title: { en: "Browser", ko: "Browser" }, path: { en: "Web", ko: "Web" } } },
+      },
+      order: ["terminal-vision", "browser"],
+    } as never);
+    act(() => {
+      root.render(
+        <ProgramMenu pos={{ left: 100, top: 50 }} onPick={vi.fn()} onClose={vi.fn()} />,
+      );
+    });
+    expect(useUi.getState().nativeOverlayAreas).toEqual([{ left: 100, top: 50, right: 230, bottom: 88 }]);
+
+    act(() => {
+      document.querySelector<HTMLElement>('[data-node="menu/category/Web"]')!.click();
+    });
+    expect(useUi.getState().nativeOverlayAreas).toEqual([{ left: 100, top: 50, right: 370, bottom: 88 }]);
+  });
 });
