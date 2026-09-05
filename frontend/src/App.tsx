@@ -395,14 +395,12 @@ const WorkspacePlane = memo(function WorkspacePlane({
     const railCard = arrangement.display.cards.find((card) => card.id === RAIL_CARD);
     const plane = railPlaneRef.current;
     if (!railCard || !plane) return;
-    const bounds = PLACE_WIDTH_BOUNDS.rail;
     const startX = e.clientX;
     const startRight = arrangement.rail ? arrangement.rail.left + arrangement.rail.width : 0;
     const spaceId = activeContent.id;
+    // The plane holds the rail to the place's width bounds (state/panePlane moveLine).
     const commit = rafThrottle((dx: number) => {
-      const left = arrangement.rail?.left ?? 0;
-      const width = Math.min(bounds.max, Math.max(bounds.min, startRight + dx - left));
-      moveBoundary(workspace.id, spaceId, { axis: "x", line: railCard.c1 }, { px: left + width + planeBox.gap / 2 });
+      moveBoundary(workspace.id, spaceId, { axis: "x", line: railCard.c1 }, { px: startRight + dx + planeBox.gap / 2 });
     });
     const onMove = (event: MouseEvent) => commit(event.clientX - startX);
     const onUp = () => {
@@ -411,9 +409,8 @@ const WorkspacePlane = memo(function WorkspacePlane({
       window.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
       endLayoutMotion("resize");
-      const settled = useSessions.getState().workspaces.find((w) => w.id === workspace.id)
-        ?.spaces.find((c) => c.id === spaceId)?.layout.cards.find((card) => card.id === RAIL_CARD)?.width;
-      if (typeof settled === "number") setPlaceWidth("rail", settled);
+      // The place's width followed the plane at every move (sessions.moveBoundary); the gesture's
+      // end is when it is written down.
       persistPlaceWidth("rail");
     };
     beginLayoutMotion("resize");

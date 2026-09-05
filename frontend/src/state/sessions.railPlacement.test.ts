@@ -22,7 +22,7 @@ function group(id: string, viewId: string): Pane {
   };
 }
 
-const RAIL_W = 100;
+const RAIL_W = 200;
 
 // [left | rail | right], the rail pinned between the two.
 function twoColumnWorkspace(): Workspace {
@@ -74,13 +74,14 @@ describe("a pinned rail stays where it stands", () => {
     useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
     const rail = layoutNow().cards.find((c) => c.id === "rail")!;
 
-    const result = useSessions.getState().moveBoundary(workspace.id, workspace.spaces[0].id, { axis: "x", line: rail.c1 }, { px: 650 });
+    const result = useSessions.getState().moveBoundary(workspace.id, workspace.spaces[0].id, { axis: "x", line: rail.c1 }, { px: 750 });
 
     expect(result).toEqual({ ok: true });
     const rects = rectsOf(layoutNow(), planeBox());
-    expect(rects.get("rail")).toMatchObject({ x: 500, w: 150 });
-    expect(rects.get("g-left")!.w).toBe(500);
-    expect(rects.get("g-right")!.x).toBe(650);
+    expect(rects.get("rail")!.x).toBeCloseTo(500, 6);
+    expect(rects.get("rail")!.w).toBeCloseTo(250, 6);
+    expect(rects.get("g-left")!.w).toBeCloseTo(500, 6);
+    expect(rects.get("g-right")!.x).toBeCloseTo(750, 6);
     expect(railLine(layoutNow())).toBe(1);
   });
 
@@ -116,7 +117,8 @@ describe("a pinned rail stays where it stands", () => {
     const rects = rectsOf(layoutNow(), planeBox());
     expect(railWidth(layoutNow())).toBe(RAIL_W);
     expect(rects.get("rail")).toMatchObject({ x: 0, w: RAIL_W });
-    expect(rects.get("g-right")).toMatchObject({ x: RAIL_W, w: 1000 - RAIL_W });
+    expect(rects.get("g-right")!.x).toBeCloseTo(RAIL_W, 6);
+    expect(rects.get("g-right")!.w).toBeCloseTo(1000 - RAIL_W, 6);
   });
 });
 

@@ -82,16 +82,16 @@ describe("moveBoundary — one line, every row that meets on it", () => {
   it("moves a boundary beside the rail without moving the rail's far edge", () => {
     const workspace = stackedWorkspace();
     const space = workspace.spaces[0];
-    const withRail = { ...workspace, spaces: [{ ...space, layout: standRail(space.layout, planeBox(), 1, 100)! }] };
+    const withRail = { ...workspace, spaces: [{ ...space, layout: standRail(space.layout, planeBox(), 1, 200)! }] };
     useSessions.setState({ workspaces: [withRail], activeId: workspace.id });
     const before = rects();
     const rail = withRail.spaces[0].layout.cards.find((c) => c.id === "rail")!;
 
-    expect(useSessions.getState().moveBoundary(workspace.id, space.id, { axis: "x", line: rail.c1 }, { px: 650 })).toEqual({ ok: true });
+    expect(useSessions.getState().moveBoundary(workspace.id, space.id, { axis: "x", line: rail.c1 }, { px: 750 })).toEqual({ ok: true });
     const after = rects();
-    expect(after.get("rail")!.x).toBe(before.get("rail")!.x);
-    expect(after.get("rail")!.w).toBe(150);
-    expect(after.get("g-tr")!.x).toBe(650);
+    expect(after.get("rail")!.x).toBeCloseTo(before.get("rail")!.x, 6);
+    expect(after.get("rail")!.w).toBeCloseTo(250, 6);
+    expect(after.get("g-tr")!.x).toBeCloseTo(750, 6);
   });
 
   it("answers TARGET_NOT_FOUND for a border, which is no boundary (no change)", () => {

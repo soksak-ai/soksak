@@ -126,7 +126,14 @@ rail 의 어느 쪽 선을 끌든 평면 위의 폭이 바뀌고 (R5) place 의 
 rail 은 자기 폭을 지킨다 — 부팅 시 settle 이 드래그로 399.7 이 된 rail 에 설정값 320 을 다시
 씌운 적이 있다.
 
-검사: `frontend/src/state/sessions.moveBoundary.test.ts`.
+한계는 평면 위에서도 place 의 것이다 (`PLACE_WIDTH_BOUNDS.rail`, 160–640). 평면 자체의 바닥은
+pane 의 것이므로, rail 의 어느 쪽 선이든 rail 이 place 의 한계 안에 남는 만큼만 움직인다
+(`state/panePlane.ts` 의 `moveLine`). 2026-09-05 실측: pane 과 rail 사이 gutter 드래그가 rail 을
+pane 바닥 123 까지 줄였고 그 값이 place 폭에 기록됐다 — rail 의 resizer 와 `sidebar.width` 가
+거부하는 값이다.
+
+검사: `frontend/src/state/sessions.moveBoundary.test.ts`,
+`frontend/src/state/panePlane.test.ts` ("holds the rail to the place's width bounds").
 
 ## R3. 이동은 같은 상자의 평행 이동이다
 

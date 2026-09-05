@@ -140,7 +140,16 @@ the place's width follows in memory, written down when the gesture ends;
 first time; one that stands keeps its width — settling on boot applied the
 setting (320) to a rail the plane held at 399.7 after a drag.
 
-Gate: `frontend/src/state/sessions.moveBoundary.test.ts`.
+The bounds are the place's on the plane too (`PLACE_WIDTH_BOUNDS.rail`, 160 to
+640): the plane's own floor is the pane's, and a boundary on either side of the
+rail moves only as far as leaves the rail within the place's bounds
+(`moveLine` in `state/panePlane.ts`). Measured 2026-09-05: a gutter drag
+between a pane and the rail took the rail to the pane floor, 123, and wrote it
+into the place's width, under what the rail's resizer and `sidebar.width`
+refuse.
+
+Gate: `frontend/src/state/sessions.moveBoundary.test.ts`,
+`frontend/src/state/panePlane.test.ts` ("holds the rail to the place's width bounds").
 
 ## R3. A travel is a translate of the same box
 

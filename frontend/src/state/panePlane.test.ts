@@ -7,11 +7,12 @@ import {
   resizeRail, singlePane, soloPlane, splitPane, standRail, withdrawRail,
   type PlaneBox, type PlaneState,
 } from "./panePlane";
+import { PLACE_WIDTH_BOUNDS } from "./placeWidth";
 
 const box: PlaneBox = { width: 1000, height: 600, gap: 10 };
 
-const rectsOf = (state: PlaneState) =>
-  Object.fromEntries(SplitPane.from(state, { ...box, minSize: MIN_PANE_PX }).rects());
+const rectsOf = (state: PlaneState, on: PlaneBox = box) =>
+  Object.fromEntries(SplitPane.from(state, { ...on, minSize: MIN_PANE_PX }).rects());
 
 
 // a | b over c: the arrangement every test below starts from.
@@ -203,6 +204,35 @@ describe("the rail on the plane", () => {
     expect(railWidth(dragged)).toBeCloseTo(250, 6);
     expect(after.a.w).toBeCloseTo(before.a.w, 6);
     expect(after.b.w).toBeCloseTo(before.b.w - 60, 6);
+  });
+
+  // Measured 2026-09-05: a gutter drag between a pane and the rail took the rail down to the
+  // plane's pane floor (123) and wrote that into the place's width, under the 160 the place is
+  // held to by its own resizer and by sidebar.width. The bounds are the place's, on the plane too.
+  it("holds the rail to the place's width bounds when a boundary beside it is dragged", () => {
+    const standing = standRail(threePanes(), box, 1, 190)!;
+    const rail = standing.cards.find((c) => c.id === RAIL_CARD)!;
+    const before = rectsOf(standing);
+    const right = before.rail.x + before.rail.w + box.gap / 2;
+    const left = before.rail.x - box.gap / 2;
+    // The pane on the left grows over the rail: the rail stops at the place's minimum.
+    const squeezed = moveBoundaryPx(standing, box, "x", rail.c0, left + 100)!;
+    expect(railWidth(squeezed)).toBeCloseTo(PLACE_WIDTH_BOUNDS.rail.min, 6);
+    expect(rectsOf(squeezed).rail.w).toBeCloseTo(PLACE_WIDTH_BOUNDS.rail.min, 6);
+    // Its own grip pulled far right, on a plane wide enough: the rail stops at the place's maximum.
+    const wide = { ...box, width: 2000 };
+    const onWide = rectsOf(standing, wide);
+    const stretched = moveBoundaryPx(
+      standing, wide, "x", rail.c1, onWide.rail.x + onWide.rail.w + wide.gap / 2 + 600,
+    )!;
+    expect(railWidth(stretched)).toBeCloseTo(PLACE_WIDTH_BOUNDS.rail.max, 6);
+    // The pane on the right pushed in from the right, the same floor.
+    const pushed = moveBoundaryPx(standing, box, "x", rail.c1, right - 100)!;
+    expect(railWidth(pushed)).toBeCloseTo(PLACE_WIDTH_BOUNDS.rail.min, 6);
+    // A ratio lands on the same floor as the px it stands for.
+    const [b, a] = boundaryShares(pushed, box, "x", rail.c1);
+    expect(railWidth(moveBoundary(standing, box, "x", rail.c1, b / (b + a) - 0.1)!))
+      .toBeCloseTo(PLACE_WIDTH_BOUNDS.rail.min, 6);
   });
 
   it("takes a new width in place", () => {

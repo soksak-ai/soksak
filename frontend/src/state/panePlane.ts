@@ -18,6 +18,7 @@ import {
   type Divider, type Rect, type Side, type SplitPaneState, type ZoneHit,
 } from "split-pane";
 import { CHROME_BANDS } from "../lib/chromeBands";
+import { PLACE_WIDTH_BOUNDS } from "./placeWidth";
 
 export type PlaneState = SplitPaneState;
 export type { Divider, Rect, Side, ZoneHit };
@@ -143,8 +144,34 @@ export function moveBoundary(
   if (!plane.hasBoundary(axis, line)) return null;
   const lo = plane.boundaryPos(axis, line - 1);
   const hi = plane.boundaryPos(axis, line + 1);
-  plane.moveBoundary(axis, line, lo + (hi - lo) * ratio, false);
+  moveLine(plane, axis, line, lo + (hi - lo) * ratio);
   return plane.toJSON();
+}
+
+/**
+ * One boundary moved, with the rail held to the place's width bounds.
+ *
+ * The plane's floor is the pane's (MIN_PANE_PX). The rail's is the place's: beside a card with a
+ * declared width a drag changes that width (split-pane R5), so a boundary on either side of the
+ * rail travels only as far as leaves the rail within what its own resizer and sidebar.width
+ * allow. Measured 2026-09-05: a gutter drag between a pane and the rail took the rail to 123.
+ */
+function moveLine(plane: SplitPane, axis: "x" | "y", line: number, px: number): void {
+  const rail = axis === "x" ? plane.card(RAIL_CARD) : null;
+  const rect = rail ? plane.rects().get(RAIL_CARD) : undefined;
+  if (rail && rect && (rail.c0 === line || rail.c1 === line)) {
+    const { min, max } = PLACE_WIDTH_BOUNDS.rail;
+    if (rail.c1 === line) {
+      // The right edge moves; the corridor between the rail's edge and the line stays.
+      const inset = plane.boundaryPos("x", line) - (rect.x + rect.w);
+      px = Math.min(rect.x + max + inset, Math.max(rect.x + min + inset, px));
+    } else {
+      const inset = rect.x - plane.boundaryPos("x", line);
+      const right = rect.x + rect.w;
+      px = Math.min(right - min - inset, Math.max(right - max - inset, px));
+    }
+  }
+  plane.moveBoundary(axis, line, px, false);
 }
 
 /** The plane with one boundary centred between its two neighbours. */
@@ -366,6 +393,6 @@ export function moveBoundaryPx(
 ): PlaneState | null {
   const plane = grid(state, box);
   if (!plane.hasBoundary(axis, line)) return null;
-  plane.moveBoundary(axis, line, px, false);
+  moveLine(plane, axis, line, px);
   return plane.toJSON();
 }
