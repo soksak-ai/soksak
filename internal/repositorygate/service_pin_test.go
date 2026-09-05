@@ -43,8 +43,8 @@ func TestNativeSurfaceConsumersUseTheDeclaredCommits(t *testing.T) {
 		!regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(terminalCommit) {
 		t.Fatal("terminal surface selection is not an exact repository commit")
 	}
-	if !regexp.MustCompile(`(?m)^\s*github[.]com/soksak-ai/soksak-service-terminal-surface\s+v0\.0\.2$`).Match(goMod) {
-		t.Fatal("Go terminal surface dependency does not use release v0.0.2")
+	if !regexp.MustCompile(`(?m)^\s*github[.]com/soksak-ai/soksak-service-terminal-surface\s+v0\.0\.3$`).Match(goMod) {
+		t.Fatal("Go terminal surface dependency does not use release v0.0.3")
 	}
 
 	packageBytes, err := os.ReadFile("frontend/package.json")

@@ -351,12 +351,12 @@ github.com/soksak-ai/soksak-contract-pty v0.0.0-20260831161848-6fa2f6c277e9 h1:Q
 github.com/soksak-ai/soksak-contract-pty v0.0.0-20260831161848-6fa2f6c277e9/go.mod h1:u591ly839/wznZbPb/yeWSbSvK22MFujozhchwp0oa4=
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9 h1:pgAA1NyDuK5daROyjR4aG5dPshemXlWu0XvOZkqS9tI=
 github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9/go.mod h1:ytm+dh2ShxYePv/d5xxSH7bDrd+pQzM5e2rGUyXeD9w=
-github.com/soksak-ai/soksak-contract-surface v0.0.0-20260830044243-f3c3b22f7808 h1:eUDfyirMKFatjHsVIx3eg1Lc5ya+t6T25fRMujbPBMY=
-github.com/soksak-ai/soksak-contract-surface v0.0.0-20260830044243-f3c3b22f7808/go.mod h1:wXRo6E+0QlXIKNKVcVjCseH67D27OtG2Zp7M74d0iPo=
+github.com/soksak-ai/soksak-contract-surface v0.0.0-20260904111203-dcccf07fff8c h1:jo8tQsJIYHBWirXf6/FJwmPRbTxJm2xt7a/umxBy/Cw=
+github.com/soksak-ai/soksak-contract-surface v0.0.0-20260904111203-dcccf07fff8c/go.mod h1:wXRo6E+0QlXIKNKVcVjCseH67D27OtG2Zp7M74d0iPo=
 github.com/soksak-ai/soksak-service-native-compositor v0.0.1 h1:6UeJuJHTv6YuZHaMFlhEuRGMf/MvCf0qhKsMyDVc7Ug=
 github.com/soksak-ai/soksak-service-native-compositor v0.0.1/go.mod h1:lSCsP95PK8kAU6cXcGODyDyVcffOyyUjVzYPonpSyI8=
-github.com/soksak-ai/soksak-service-terminal-surface v0.0.2 h1:z77+d0n/Bwiq5JR7P5o25Qv1K9XzZJ5z8Y57nVTlS7Y=
-github.com/soksak-ai/soksak-service-terminal-surface v0.0.2/go.mod h1:eDKLm+1p1XAMVkYi1ojiC6Hh5Za64qJWT+4oTWphMmQ=
+github.com/soksak-ai/soksak-service-terminal-surface v0.0.3 h1:Q/gMT/ZeuQG43mk6wCh2g8aroXVSWAJY9S/EVP1glw0=
+github.com/soksak-ai/soksak-service-terminal-surface v0.0.3/go.mod h1:UWwG7sBFagMmQQyqygY8ZG6l41trfDJa32DTiJ4M0Bo=
 github.com/soksak-ai/soksak-service-webview-surface v0.0.1 h1:+ZNraL5mVBPjXr+MZL5N1y9DWtK4xaKImfxlYDDJwCw=
 github.com/soksak-ai/soksak-service-webview-surface v0.0.1/go.mod h1:m0omiVuoPpddBhtme6ucj3kveCteY63yF5n3l5r5Sr4=
 github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260901062801-742c3bb52828 h1:umOGwMNaTU0goh7gCl/aGAmZ7l9dCnp47YLWgWENQkA=

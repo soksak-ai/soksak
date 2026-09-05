@@ -12,7 +12,7 @@ require (
 	github.com/soksak-ai/soksak-contract-pty v0.0.0-20260831161848-6fa2f6c277e9
 	github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9
 	github.com/soksak-ai/soksak-service-native-compositor v0.0.1
-	github.com/soksak-ai/soksak-service-terminal-surface v0.0.2
+	github.com/soksak-ai/soksak-service-terminal-surface v0.0.3
 	github.com/soksak-ai/soksak-service-webview-surface v0.0.1
 	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260901062801-742c3bb52828
 	github.com/wailsapp/wails/v3 v3.0.0-beta.12
@@ -135,7 +135,7 @@ require (
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
-	github.com/soksak-ai/soksak-contract-surface v0.0.0-20260830044243-f3c3b22f7808 // indirect
+	github.com/soksak-ai/soksak-contract-surface v0.0.0-20260904111203-dcccf07fff8c // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tc-hib/winres v0.3.1 // indirect
