@@ -129,4 +129,31 @@ describe("the + on a pane's tab strip", () => {
     expect(document.querySelector(".space-tab-menu"), "the menu is the only thing that appears").not.toBeNull();
     expect(JSON.stringify(useSessions.getState().workspaces)).toBe(before);
   });
+
+  // The + is a toggle. The menu closes on a pointer outside it, and the + is outside it: a second
+  // press closed the menu on mousedown and opened it again on click — the menu blinked and stayed
+  // open (measured 2026-09-05).
+  it("closes the menu on a second press, and opens nothing in its place", async () => {
+    const { workspace, first } = twoPanes();
+    act(() => {
+      root.render(
+        <ViewTabs projectId={workspace.id} group={first} active onTabPointerDown={() => {}} />,
+      );
+    });
+    const add = host.querySelector<HTMLButtonElement>(`[data-node="tab/view/${first.id}/add"]`)!;
+    // A press is a mousedown and, a frame later, a click: the document renders in between.
+    const press = async () => {
+      act(() => {
+        add.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        add.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      });
+      await act(async () => { await Promise.resolve(); });
+      act(() => { add.click(); });
+      await act(async () => { await Promise.resolve(); });
+    };
+    await press();
+    expect(document.querySelector(".space-tab-menu")).not.toBeNull();
+    await press();
+    expect(document.querySelector(".space-tab-menu"), "the second press closes the menu").toBeNull();
+  });
 });

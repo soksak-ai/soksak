@@ -262,6 +262,7 @@ export const ViewTabs = memo(function ViewTabs({
         <ProgramMenu
           pos={menuPos}
           within={menuPos.within}
+          anchor={addBtnRef.current}
           onPick={async (program: Program) => {
             try {
               await execute("tab.open", { pane: group.id, program }, {});

@@ -120,6 +120,7 @@ function MenuLevel({
 export function ProgramMenu({
   pos,
   within,
+  anchor,
   onPick,
   onClose,
 }: {
@@ -127,6 +128,10 @@ export function ProgramMenu({
   /** The pane this menu belongs to, left to right: the body opens inside it, so a neighbour whose
    *  surface the menu never needs is never put through the swap. */
   within?: { left: number; right: number };
+  /** The control that opened the menu. A pointer on it is not a pointer outside the menu: the
+   *  control toggles the menu itself, and closing here as well made a second press close on
+   *  mousedown and open again on click — the menu blinked and stayed (measured 2026-09-05). */
+  anchor?: HTMLElement | null;
   onPick: (program: Program) => void;
   onClose: () => void;
 }) {
@@ -182,7 +187,9 @@ export function ProgramMenu({
     // Capture phase — close is guaranteed even under another handler's stopPropagation. The click
     // that opened the menu finishes before this effect attaches, so there is no immediate close.
     const onOutsidePointer = (e: Event) => {
-      if (!menuRef.current?.contains(e.target as Node)) onClose();
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target) || anchor?.contains(target)) return;
+      onClose();
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -198,7 +205,7 @@ export function ProgramMenu({
       window.removeEventListener("mousedown", onOutsidePointer, true);
       window.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [onClose]);
+  }, [anchor, onClose]);
 
   // When + is at the right/bottom edge, measure and pull the menu inward so the viewport does not
   // cut it off (useLayoutEffect = before paint, no flicker). If the submenu (opens right) would
