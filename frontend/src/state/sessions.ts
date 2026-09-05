@@ -701,7 +701,9 @@ function settleRail(
   const line = placement.mode === "flow" || current === null
     ? (flowRailLine(space.layout, box, space.activePaneId) ?? current ?? 0)
     : current;
-  const layout = standRail(space.layout, box, line, placeWidth("rail"));
+  // A rail already standing keeps the width it has on the plane; the setting is read when one is
+  // stood for the first time.
+  const layout = standRail(space.layout, box, line, railWidth(space.layout) ?? placeWidth("rail"));
   return layout ? { ...space, layout } : space;
 }
 

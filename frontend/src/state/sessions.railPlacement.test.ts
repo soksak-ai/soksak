@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { projectArrangement, useSessions, type Workspace, type Pane } from "./sessions";
 import { useSectionSets } from "./sectionSets";
-import { railLine, railWidth, rectsOf, standRail } from "./panePlane";
+import { railLine, railWidth, rectsOf, resizeRail, standRail } from "./panePlane";
 import { planeBox, setPlaneBox } from "./planeBox";
 import { setPlaceWidth } from "./placeWidth";
 import { rowPlane } from "../test/planes";
@@ -117,6 +117,22 @@ describe("a pinned rail stays where it stands", () => {
     expect(railWidth(layoutNow())).toBe(RAIL_W);
     expect(rects.get("rail")).toMatchObject({ x: 0, w: RAIL_W });
     expect(rects.get("g-right")).toMatchObject({ x: RAIL_W, w: 1000 - RAIL_W });
+  });
+});
+
+describe("a rail that stands keeps its width", () => {
+  // Measured 2026-09-05 on restart: settling the rail on boot applied the place's width (320) to
+  // a rail the plane held at 399.7 after a drag.
+  it("is settled at the width it has on the plane, not the setting", () => {
+    const workspace = twoColumnWorkspace();
+    const space = workspace.spaces[0];
+    const wide = { ...workspace, railPlacement: { mode: "flow" as const }, spaces: [{ ...space, layout: resizeRail(space.layout, planeBox(), 240) }] };
+    useSessions.setState({ workspaces: [wide], activeId: workspace.id });
+    setPlaceWidth("rail", RAIL_W);
+    expect(useSessions.getState().settleRail(workspace.id)).toEqual({ ok: true });
+    expect(railWidth(layoutNow())).toBe(240);
+    expect(useSessions.getState().setActiveGroup(workspace.id, "g-left")).toEqual({ ok: true });
+    expect(railWidth(layoutNow())).toBe(240);
   });
 });
 
