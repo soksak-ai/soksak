@@ -9,10 +9,6 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/w32"
 )
 
-func applyNativeDecorations(unsafe.Pointer, []preparedNativeDecoration) (bool, int, error) {
-	return false, 0, nil
-}
-
 func orderWindowFrontWithoutKey(window unsafe.Pointer) error {
 	if window == nil {
 		return i18n.Errorf("wails.window.noNativeLifetimeFront", nil)

@@ -8,7 +8,6 @@ package wails
 import (
 	"embed"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -125,13 +124,10 @@ func hostServices(
 	}
 }
 
-// nativePresentationService keeps the provider inventory service name and API,
-// but closes one missing ordering edge: after every native provider has applied
-// its children, Core's pointer-transparent decoration plane is raised last.
+// nativePresentationService keeps the provider inventory service name and API.
 // Embedding preserves every compositor method and its existing binding surface.
 type nativePresentationService struct {
 	*compositor.Service
-	decorations NativeDecorationHost
 }
 
 func (service *nativePresentationService) ServiceName() string {
@@ -142,17 +138,7 @@ func (service *nativePresentationService) ServiceName() string {
 }
 
 func (service *nativePresentationService) Commit(snapshot compositor.Snapshot) (compositor.Receipt, error) {
-	receipt, err := service.Service.Commit(snapshot)
-	if err != nil {
-		return receipt, err
-	}
-	decorations := service.decorations
-	if decorations != nil {
-		if err := decorations.Reapply(snapshot.Window); err != nil {
-			return receipt, fmt.Errorf("native decoration ordering fence: %w", err)
-		}
-	}
-	return receipt, nil
+	return service.Service.Commit(snapshot)
 }
 
 // Explicit delegates keep the generated TypeScript surface auditable against this Go type. Promoted
@@ -277,10 +263,7 @@ func Run(options Options) error {
 	// applied. The service list below registers the same value.
 	terminalBackend := terminalsurface.NewBackend()
 	nativeCompositor := compositor.NewService(nativeWindow, surfaceBackends(webviewBackend, terminalBackend))
-	decorations := newNativeDecorationStore(nativeWindow)
-	nativePresentation := &nativePresentationService{
-		Service: nativeCompositor, decorations: decorations,
-	}
+	nativePresentation := &nativePresentationService{Service: nativeCompositor}
 	// One reader of the last commit, shared by the surface commands and the capture. Two would
 	// answer from two moments, and the capture would draw a page at a rectangle the numbers say it
 	// is not at.
@@ -360,7 +343,6 @@ func Run(options Options) error {
 			options.Bridge.Emit(control.StreamEvent, control.StreamFrame{Stream: stream, Frame: frame})
 		},
 		NativeParent:      func(name string) bool { return nativeWindow(name) != nil },
-		NativeDecorations: decorations,
 		// Quitting is two calls: reap and answer, then quit once the answer has
 		// been delivered. Both halves were declared unserved with the reason
 		// "this build quits without a prepare phase", which was false — the two

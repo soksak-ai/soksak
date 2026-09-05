@@ -8,10 +8,6 @@ import (
 	"github.com/soksak-ai/soksak-core/core/i18n"
 )
 
-func applyNativeDecorations(unsafe.Pointer, []preparedNativeDecoration) (bool, int, error) {
-	return false, 0, nil
-}
-
 // ErrRevealWithoutKeyUnsupported is returned where no focus-free reveal exists.
 //
 // This framework's only reveal takes the keyboard, and there is no portable way

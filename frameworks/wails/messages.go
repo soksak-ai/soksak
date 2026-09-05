@@ -74,62 +74,6 @@ func init() {
 			EN: "IME composition update failed: {reason}",
 			KO: "IME 조합 상태 변경 실패: {reason}",
 		},
-		"wails.decoration.pathCoordinateMissing": {
-			EN: "native decoration path ends before coordinate {index}",
-			KO: "native decoration path가 coordinate {index} 전에 끝났습니다",
-		},
-		"wails.decoration.pathCoordinateInvalid": {
-			EN: "native decoration path coordinate {value} is not finite",
-			KO: "native decoration path coordinate {value}가 유한한 수가 아닙니다",
-		},
-		"wails.decoration.pathEmpty": {
-			EN: "native decoration path is empty",
-			KO: "native decoration path가 비었습니다",
-		},
-		"wails.decoration.pathOperation": {
-			EN: "native decoration path operation {operation} is not M, L, Q or Z",
-			KO: "native decoration path operation {operation}은 M, L, Q, Z 중 하나가 아닙니다",
-		},
-		"wails.decoration.pathStart": {
-			EN: "native decoration path does not begin with M",
-			KO: "native decoration path가 M으로 시작하지 않습니다",
-		},
-		"wails.decoration.idEmpty": {
-			EN: "native decoration id is empty",
-			KO: "native decoration id가 비었습니다",
-		},
-		"wails.decoration.idDuplicate": {
-			EN: "native decoration id {id} is duplicated",
-			KO: "native decoration id {id}가 중복되었습니다",
-		},
-		"wails.decoration.color": {
-			EN: "native decoration {id} has a colour channel outside 0..1",
-			KO: "native decoration {id}의 color channel이 0..1 범위 밖입니다",
-		},
-		"wails.decoration.strokeWidth": {
-			EN: "native decoration {id} has a stroke width outside 0.5..8",
-			KO: "native decoration {id}의 stroke width가 0.5..8 범위 밖입니다",
-		},
-		"wails.decoration.dash": {
-			EN: "native decoration {id} has an invalid dash",
-			KO: "native decoration {id}의 dash가 올바르지 않습니다",
-		},
-		"wails.decoration.hostUnavailable": {
-			EN: "native decoration host is unavailable",
-			KO: "native decoration host를 사용할 수 없습니다",
-		},
-		"wails.decoration.windowUnavailable": {
-			EN: "native decoration window {window} has no native lifetime",
-			KO: "native decoration window {window}에 native lifetime이 없습니다",
-		},
-		"wails.decoration.allocation": {
-			EN: "native decoration memory allocation failed for {kind}",
-			KO: "native decoration {kind} memory allocation에 실패했습니다",
-		},
-		"wails.decoration.nativeRefused": {
-			EN: "native decoration plane refused with status {status}",
-			KO: "native decoration plane이 status {status}로 거부했습니다",
-		},
 		"wails.renderer.needsWindow": {
 			EN: `{command} needs a window: name one of {windows}, or call from a window`,
 			KO: `{command} 은(는) 창이 필요합니다 — {windows} 중 하나를 지정하거나 창 안에서 호출하십시오`,

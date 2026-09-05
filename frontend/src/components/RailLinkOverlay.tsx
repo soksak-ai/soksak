@@ -3,12 +3,6 @@ import type { RailRelationState, Rect } from "../lib/railArrangement";
 import { moduleState } from "../lib/moduleState";
 import { railLinkBoxes, railSeamX } from "../lib/railLinkShape";
 import { useSettings } from "../state/settings";
-import { useTheme } from "../state/theme";
-import {
-  cssColorRGBA,
-  replaceNativeDecorations,
-  strokeDecoration,
-} from "../lib/nativeDecorations";
 
 /**
  * The last measured host size — the seam that keeps a remount from producing a 0 frame.
@@ -44,7 +38,6 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
   railRect,
   targetRect,
   projected = false,
-  nativeVisible = false,
 }: {
   contentId: string;
   /** The public state produced by the arrangement resolver — this component does not re-judge the relation or border branch. */
@@ -59,12 +52,7 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
   targetRect: Rect | null;
   /** Whether this adjacency was formed by focus-near projection (replacement) — the only input for the seam line. */
   projected?: boolean;
-  /** Only the active workspace contributes to the window-owned native plane. */
-  nativeVisible?: boolean;
 }) {
-  const strokeWidth = useTheme((state) => state.spec.relation.strokeWidth);
-  const relationStroke = useTheme((state) => state.spec.relation.stroke);
-  const accent = useTheme((state) => state.colors.acc);
   const railRelation = useSettings((state) => state.railRelation);
   const railFill = useSettings((state) => state.railFill);
   const railSeamStyle = useSettings((state) => state.railSeamStyle);
@@ -158,44 +146,6 @@ export const RailLinkOverlay = memo(function RailLinkOverlay({
   // Card perimeter ownership is structural: .sidebar.rail-* and .pane are the
   // only owners. This relation layer is not another card and must never draw a
   // second rail/pane/union outline. It may publish the projected seam only.
-
-  useLayoutEffect(() => {
-    const owner = `relation/${contentId}`;
-    const host = hostRef.current;
-    const strokeValue = !railPullFocused && railSolidColor
-      ? railSolidColor
-      : relationStroke.includes("var(--acc)")
-        ? accent
-        : relationStroke;
-    const color = cssColorRGBA(strokeValue);
-    const strokeVisible = railRelation === "stroke" || (railRelation === "moment" && flash);
-    if (!nativeVisible || !host || !boxes || !color || !strokeVisible) {
-      replaceNativeDecorations(owner, []);
-      return () => replaceNativeDecorations(owner, []);
-    }
-    const origin = host.getBoundingClientRect();
-    const decorations = [];
-    if (projected && railSeamStyle === "seam") {
-        const seamX = railSeamX(boxes.rail, boxes.panel, gap);
-        const y0 = Math.max(boxes.rail.y, boxes.panel.y);
-        const y1 = Math.min(boxes.rail.y + boxes.rail.height, boxes.panel.y + boxes.panel.height);
-        if (seamX !== null && y1 > y0) {
-          decorations.push(strokeDecoration(
-            `${owner}/seam`,
-            `M ${seamX + origin.left} ${y0 + origin.top} L ${seamX + origin.left} ${y1 + origin.top}`,
-            color,
-            strokeWidth,
-            [4, 4],
-          ));
-    }
-    }
-    replaceNativeDecorations(owner, decorations);
-    return () => replaceNativeDecorations(owner, []);
-  }, [
-    accent, boxes, contentId, flash, gap, nativeVisible, projected,
-    railPullFocused, railRelation, railSeamStyle, railSolidColor, relationStroke,
-    size.height, size.width, strokeWidth,
-  ]);
 
   return (
     <div

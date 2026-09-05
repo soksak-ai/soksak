@@ -233,9 +233,12 @@ The frame is an overlay, so an element that touches an outer edge pays that
 edge's pixel out of its own budget: DOM chrome bands pay it with padding, in
 `card` and `floating`.
 
-A native child webview pays nothing, because of the layer principle below — the
-DOM draws above the webview, so the frame's border is always visible. What
-remains is integer snapping of the hole's rect; a fractional rect is refused.
+The body slot pays the frame's left and right lanes (`--card-border-w`, one
+pixel in `card` and `floating`, none in `flat`), because what is laid out in it
+may be a native child drawn above the document. A child that reached the pane's
+edge covered the frame; drawing the frame a second time above the child left a
+frame standing where the plane had moved on (NATIVE-SURFACES D1b.1). Gate:
+`frontend/src/ui/cssContract.test.ts` ("the body slot pays the frame's lanes").
 
 ## B6. A boundary tool owns no line
 
@@ -288,10 +291,9 @@ owns three facts rather than one:
    the applied pixels. `ParkedPicture` draws those pixels in the still-visible
    DOM slot and releases them only after the live surface is applied again. An inactive
    chain releases both the surface and picture because another view owns those pixels.
-4. **Decoration presentation.** Focus strokes remain declared by the Core owner. A
-   relation overlay may publish only a projected seam; it never publishes a rail,
-   pane, or union perimeter. The card frame is the sole perimeter owner. The final
-   native decoration plane is committed empty while a DOM overlay owns presentation.
+4. **Perimeter ownership.** The card frame is the sole perimeter owner, and the
+   document draws it. A relation overlay may draw only a projected seam; it never
+   draws a rail, pane, or union perimeter.
 
 A frame and focus border receive no pointer input. The divider alone owns resize input
 and layout mutation; a border is only a projection of the panel's committed rectangle.

@@ -157,16 +157,6 @@ export const wailsFramework: AppFramework = {
     await clearNativeSurfaces();
   },
 
-  commitNativeDecorations: async (decorations) => {
-    const { invokeCommand } = await import("./invoke");
-    return invokeCommand("native_decorations_commit", { decorations });
-  },
-
-  nativeDecorationStatus: async () => {
-    const { invokeCommand } = await import("./invoke");
-    return invokeCommand("native_decorations_status");
-  },
-
   setWindowZoom: async (factor) => { WailsWindow.SetZoom(factor); },
 
   invoke: async <T,>(cmd: string, args?: Record<string, unknown>): Promise<T> => {

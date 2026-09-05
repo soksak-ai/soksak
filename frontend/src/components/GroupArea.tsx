@@ -56,12 +56,6 @@ import { usePlaneBox } from "../state/planeBox";
 import { persistPlaceWidth } from "../state/placeWidth";
 import { useShallow } from "zustand/react/shallow";
 import { viewTravelPresentation } from "../lib/viewTravelPresentation";
-import { roundedOrthogonalPath } from "../lib/railLinkShape";
-import {
-  cssColorRGBA,
-  replaceNativeDecorations,
-  strokeDecoration,
-} from "../lib/nativeDecorations";
 import { dividerSurfaceGeometry } from "../lib/dividerSurfaceGeometry";
 import { releaseNativeSurfaceGeometry, stageNativeSurfaceGeometry } from "../framework/wails/nativeSurfaces";
 import { createDividerResizeTransaction } from "../lib/dividerResizeTransaction";
@@ -97,179 +91,34 @@ const DRAG_THRESHOLD = 5; // Movement past this many pixels counts as a drag (ot
 // The plane's corridor (split-pane `gap`) is twice this, and the plane is the host inset by it.
 export const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 6 };
 
-function cornerFocusPath(rect: DOMRect, strokeWidth: number): string {
-  const half = strokeWidth / 2;
-  const left = rect.left + half;
-  const right = rect.right - half;
-  // getBoundingClientRect() is already in viewport coordinates. Header/status
-  // offsets belong to layout projection, not to the measured decoration rect.
-  // Applying them here double-shifts the native corners outside their pane.
-  const top = rect.top + half;
-  const bottom = rect.bottom - half;
-  const arm = 14;
-  return [
-    `M ${left} ${top} L ${left + arm} ${top}`,
-    `M ${right - arm} ${top} L ${right} ${top}`,
-    `M ${left} ${bottom} L ${left + arm} ${bottom}`,
-    `M ${right - arm} ${bottom} L ${right} ${bottom}`,
-    `M ${left} ${top} L ${left} ${top + arm}`,
-    `M ${left} ${bottom - arm} L ${left} ${bottom}`,
-    `M ${right} ${top} L ${right} ${top + arm}`,
-    `M ${right} ${bottom - arm} L ${right} ${bottom}`,
-  ].join(" ");
-}
-
-export function NativeFocusBoundary({
-  owner,
-  node,
-  style,
-  trackRef,
-  active,
-}: {
-  owner: string;
-  node: string;
-  style: CSSProperties;
-  trackRef: (element: HTMLElement | null) => void;
-  active: boolean;
-}) {
-  const elementRef = useRef<HTMLDivElement | null>(null);
-  const focusIndicator = useSettings((state) => state.focusIndicator);
-  const accent = useTheme((state) => state.colors.acc);
-  const attach = useCallback((element: HTMLDivElement | null) => {
-    elementRef.current = element;
-    trackRef(element);
-  }, [trackRef]);
-  const update = useCallback(() => {
-    const element = elementRef.current;
-    const color = cssColorRGBA(accent);
-    if (!active || !element || !color) {
-      replaceNativeDecorations(owner, []);
-      return;
-    }
-    const rect = element.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
-      replaceNativeDecorations(owner, []);
-      return;
-    }
-    const strokeWidth = 1;
-    let path: string;
-    if (focusIndicator === "corners") {
-      path = cornerFocusPath(rect, strokeWidth);
-    } else {
-      const half = strokeWidth / 2;
-      const points = [
-        { x: rect.left + half, y: rect.top + half },
-        { x: rect.right - half, y: rect.top + half },
-        { x: rect.right - half, y: rect.bottom - half },
-        { x: rect.left + half, y: rect.bottom - half },
-      ];
-      const radius = Number.parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0;
-      path = roundedOrthogonalPath(points, radius);
-    }
-    replaceNativeDecorations(owner, [
-      strokeDecoration(`${owner}/stroke`, path, color, strokeWidth),
-    ]);
-  }, [accent, active, focusIndicator, owner]);
-
-  useLayoutEffect(() => {
-    const element = elementRef.current;
-    if (!active || !element) return () => replaceNativeDecorations(owner, []);
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-      replaceNativeDecorations(owner, []);
-    };
-  }, [active, owner, update]);
-
-  // Position-only layout commits do not notify ResizeObserver. Project on every React geometry
-  // commit before paint as well; unchanged snapshots are deduplicated by nativeDecorations.
-  // The observer above remains the event source for external size changes that do not render Core.
-  useLayoutEffect(() => update());
-
-  return (
-    <div
-      ref={attach}
-      className="pane-focus-boundary"
-      data-node={node}
-      data-native-decoration={active ? "focus-boundary" : undefined}
-      style={style}
-    />
-  );
-}
-
 /**
- * Structural pane frame. A DOM border cannot be painted above an opaque native child webview;
- * the visible stroke therefore is emitted on the same native decoration plane as the focus frame.
- * The DOM element remains as the document-side frame for non-native content and as the measured
- * geometry owner, while this component publishes the identical rectangle to the native layer.
+ * The selection mark, on the pane it marks. It is drawn by the document alone: the body slot pays
+ * the frame's lanes (UI-GEOMETRY B5), so nothing laid out in the slot — a native child included —
+ * covers the lane the mark is drawn in.
  */
-export function NativePaneBorder({
-  owner,
+export function FocusBoundary({
   node,
   style,
   trackRef,
-  active,
 }: {
-  owner: string;
   node: string;
   style: CSSProperties;
   trackRef: (element: HTMLElement | null) => void;
-  active: boolean;
 }) {
-  const elementRef = useRef<HTMLDivElement | null>(null);
-  const border = useTheme((state) => state.colors.bd);
-  const attach = useCallback((element: HTMLDivElement | null) => {
-    elementRef.current = element;
-    trackRef(element);
-  }, [trackRef]);
-  const update = useCallback(() => {
-    const element = elementRef.current;
-    const color = cssColorRGBA(border);
-    if (!active || !element || !color) {
-      replaceNativeDecorations(owner, []);
-      return;
-    }
-    const rect = element.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
-      replaceNativeDecorations(owner, []);
-      return;
-    }
-    const strokeWidth = 1;
-    const half = strokeWidth / 2;
-    const points = [
-      { x: rect.left + half, y: rect.top + half },
-      { x: rect.right - half, y: rect.top + half },
-      { x: rect.right - half, y: rect.bottom - half },
-      { x: rect.left + half, y: rect.bottom - half },
-    ];
-    const radius = Number.parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0;
-    replaceNativeDecorations(owner, [
-      strokeDecoration(`${owner}/stroke`, roundedOrthogonalPath(points, radius), color, strokeWidth),
-    ]);
-  }, [active, border, owner]);
+  return <div ref={trackRef} className="pane-focus-boundary" data-node={node} style={style} />;
+}
 
-  useLayoutEffect(() => {
-    const element = elementRef.current;
-    if (!active || !element) return () => replaceNativeDecorations(owner, []);
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-      replaceNativeDecorations(owner, []);
-    };
-  }, [active, owner, update]);
-  useLayoutEffect(() => update());
-
-  return (
-    <div
-      ref={attach}
-      className="pane-border"
-      data-node={node}
-      data-native-decoration={active ? "pane-border" : undefined}
-      style={style}
-    />
-  );
+/** The structural pane frame, drawn by the document alone for the same reason. */
+export function PaneBorder({
+  node,
+  style,
+  trackRef,
+}: {
+  node: string;
+  style: CSSProperties;
+  trackRef: (element: HTMLElement | null) => void;
+}) {
+  return <div ref={trackRef} className="pane-border" data-node={node} style={style} />;
 }
 
 const titleOf = (v: Tab | undefined): string => (v ? viewDisplayTitle(v) : "");
@@ -1032,12 +881,10 @@ export const GroupArea = memo(function GroupArea({
           old frame does not deform and the new one does not arrive early, because there is one frame
           and it moves. ── */}
        {!replaceGeometry && displayCells.map(({ group, rect }) => (
-          <NativePaneBorder
+          <PaneBorder
             key={`frame-${group.id}`}
-            owner={`frame/${projectId}/${content.id}/${group.id}`}
             node={`layout/frame/${group.id}`}
             trackRef={rectMotion.ref}
-            active={surfaceActive && paneStyle !== "flat"}
             style={cellVars(rect, group.id)}
           />
        ))}
@@ -1046,12 +893,10 @@ export const GroupArea = memo(function GroupArea({
       {!replaceGeometry && displayCells
         .filter(({ group }) => group.id === content.activePaneId)
         .map(({ rect }) => (
-          <NativeFocusBoundary
+          <FocusBoundary
             key={`focus-frame-${content.activePaneId}`}
-            owner={`focus/${projectId}/${content.id}`}
             node={`layout/focus-boundary/${content.activePaneId}`}
             trackRef={rectMotion.ref}
-            active={surfaceActive && !traveling && !replaceGeometry}
             style={cellVars(rect, content.activePaneId)}
           />
         ))}

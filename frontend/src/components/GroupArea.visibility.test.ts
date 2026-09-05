@@ -64,15 +64,6 @@ describe("content view effective visibility", () => {
     expect(source).not.toMatch(/className=\{`pane-border\$\{[^\n]*flip-move/);
   });
 
-  it("structural frames have a native stroke so their border can remain above a native surface", () => {
-    const source = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
-    // A DOM z-index cannot overtake an AppKit child webview. The structural frame therefore needs
-    // the same native decoration plane as the focus boundary; keeping only pane-border would hide
-    // the border exactly where the native surface is opaque.
-    expect(source).toContain("NativePaneBorder");
-    expect(source).toContain('data-native-decoration={active ? "pane-border" : undefined}');
-  });
-
   it("a moving pane keeps its chrome identity, and the nativeSurface slot takes no DOM FLIP", () => {
     const group = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
     const app = readFileSync(resolve(import.meta.dirname, "../App.tsx"), "utf8");

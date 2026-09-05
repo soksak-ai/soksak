@@ -19,16 +19,13 @@ layout-card
 └── card-status
 ```
 
-native surface도 같은 카드 rect와 같은 card token을 소비한다. DOM border가
-native surface에 가려지는 경우에만 같은 rect를 native decoration으로 표시한다.
-이는 다른 perimeter 를 만드는 것이 아니라 동일한 perimeter의 표시 매체를 바꾸는
-것이다.
+native surface는 카드의 body slot 안, perimeter 안쪽에 배치된다. slot 이 border 의
+lane 을 지불하므로(UI-GEOMETRY B5) 하나의 perimeter 는 DOM 이 한 번만 그린다.
 
 ## C2. 테마가 카드 모양을 결정한다
 
 테마는 카드의 radius, border token/width, background, shadow를 선언한다.
-DOM과 native decoration은 이 선언을 각각 해석하지 않고 동일한 정규화 결과를
-소비한다. `flat`, `card`, `floating`은 표시 토큰의 차이일 뿐 구조 분기가
+DOM은 이 선언을 곳곳에서 해석하지 않고 동일한 정규화 결과를 소비한다. `flat`, `card`, `floating`은 표시 토큰의 차이일 뿐 구조 분기가
 아니다.
 
 ## C3. rect는 한 번만 계산한다

@@ -35,20 +35,6 @@ describe("a component that draws a modal", () => {
       `${name} draws a modal and does not hold useOverlayActive; a click over a native surface goes through the card`,
     ).toBe(true);
   });
-
-  it("the window presentation gate places every DOM overlay above native decorations", () => {
-    // The native plane is above the document, so what an overlay covers must be withheld from it.
-    // The gate reads the wiring rather than a verbatim line: it is the overlay state that has to
-    // reach the plane, and how it is spelled is the file's own business.
-    const app = readFileSync(join(process.cwd(), "src", "App.tsx"), "utf8");
-    const call = /setNativeDecorationOverlays\(\s*([A-Za-z]+)\s*\)/.exec(app);
-    expect(call, "App does not hand the overlays to the native decoration plane").not.toBeNull();
-    const source = new RegExp(
-      `const ${call![1]} = useUi\\(\\(s\\) => s\\.nativeOverlayAreas\\)`,
-    );
-    expect(app, `${call![1]} is not the overlay areas the ui state holds`).toMatch(source);
-  });
-
 });
 
 describe("settings modal automation boundary", () => {

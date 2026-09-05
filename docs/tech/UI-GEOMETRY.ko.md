@@ -189,9 +189,10 @@ border 선언에 리터럴 색을 쓰면 빌드가 실패합니다. 검사가 �
 frame 은 오버레이이므로, 바깥 변에 닿는 요소는 그 변의 픽셀을 자기 예산에서 지불합니다. DOM chrome
 띠는 `card` 와 `floating` 에서 padding 으로 지불합니다.
 
-네이티브 자식 webview 는 아무것도 지불하지 않습니다. 아래의 레이어 원칙 때문입니다 — DOM 이 webview
-위에 그리므로 frame 의 테두리는 항상 보입니다. 남는 것은 구멍 rect 의 정수 스냅이며, 소수 rect 는
-거부합니다.
+body slot 은 frame 의 왼쪽·오른쪽 lane 을 지불합니다(`--card-border-w`, `card`·`floating` 에서 1px,
+`flat` 에서 0). slot 에 배치되는 것이 문서 위에 그려지는 네이티브 자식일 수 있기 때문입니다. pane 변까지
+닿은 자식은 frame 을 덮었고, 자식 위에 frame 을 한 번 더 그리자 평면이 옮겨 간 뒤에도 그 frame 이 남았습니다
+(NATIVE-SURFACES D1b.1). 검사: `frontend/src/ui/cssContract.test.ts` ("the body slot pays the frame's lanes").
 
 ## B6. 구분선 도구는 선을 소유하지 않는다
 
@@ -235,9 +236,8 @@ resizer 와 드래그 핸들은 폭 0 오버레이입니다. 선은 B2 나 B3 �
 3. **픽셀 연속성.** 오버레이가 실시간 표면을 숨기기 전에 그 백엔드가 적용된 픽셀을 캡처합니다.
    `ParkedPicture` 가 그 픽셀을 아직 보이는 DOM 슬롯에 그리고, 실시간 표면이 다시 적용된 뒤에야
    놓습니다. 비활성 사슬은 다른 view가 픽셀을 소유하므로 표면과 그림을 모두 놓습니다.
-4. **장식 표시.** 포커스 선은 Core 소유자가 계속 선언합니다. 관계 오버레이는 projected seam 만
-   표시할 수 있고, rail·pane·union 외곽선은 표시하지 않습니다. 카드 frame이 외곽선의 유일한 소유자입니다.
-   DOM 오버레이가 표시를 소유하는 동안 마지막 네이티브 장식 평면에는 빈 snapshot을 적용합니다.
+4. **외곽선 소유.** 카드 frame 이 외곽선의 유일한 소유자이고, 문서가 그것을 그립니다. 관계
+   오버레이는 projected seam 만 그릴 수 있고, rail·pane·union 외곽선은 그리지 않습니다.
 
 frame과 focus border는 pointer 입력을 받지 않습니다. resize 입력과 layout 변경은 divider만 소유하고,
 border는 commit된 panel rectangle과 같은 위치에 그려집니다. 위치만 바뀌는 React geometry commit은 paint 전에

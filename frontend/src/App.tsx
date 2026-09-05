@@ -52,7 +52,6 @@ import { NotifyHost } from "./ui/NotifyHost";
 import { MotionDebug } from "./components/MotionDebug";
 import { PluginHeaderActions } from "./ui/PluginHeaderActions";
 import { useUi } from "./state/ui";
-import { setNativeDecorationOverlays } from "./lib/nativeDecorations";
 import { useT } from "./i18n";
 import { useBootPhase } from "./state/bootPhase";
 import {
@@ -587,7 +586,6 @@ const WorkspacePlane = memo(function WorkspacePlane({
                 railRect={arrangement?.rail ?? null}
                 targetRect={effectiveRailRelation.paneRect}
                 projected={arrangement?.swapped ?? false}
-                nativeVisible={isActiveWorkspace}
               />
             ) : undefined
           }
@@ -967,18 +965,6 @@ function App() {
   const contentTabPosition = useSettings((s) => s.contentTabPosition);
   const leftSidebarMode = useSettings((s) => s.leftSidebarMode);
   const rightSidebarMode = useSettings((s) => s.rightSidebarMode);
-
-  // DOM overlays own the final presentation while open. Native child surfaces are hidden by the
-  // selected framework, and the Core decoration plane withholds what the overlays cover. Its
-  // declarations stay intact and the newest snapshot returns on the closing state edge.
-  //
-  // An overlay that names an area withholds only the decorations in it: a dropdown over a corner of
-  // one card is not a reason to take every card border off the screen (measured 2026-09-04). One
-  // that names none covers the window.
-  const nativeOverlayAreas = useUi((s) => s.nativeOverlayAreas);
-  useLayoutEffect(() => {
-    setNativeDecorationOverlays(nativeOverlayAreas);
-  }, [nativeOverlayAreas]);
 
   // The theme system (token slots) is the single source — the theme engine applies CSS variables and structural attributes.
   const effectiveMode = useTheme((s) => s.effectiveMode);

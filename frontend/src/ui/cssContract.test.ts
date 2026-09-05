@@ -178,6 +178,32 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     expect(decls).toMatch(/contain\s*:\s*layout paint style/);
   });
 
+  // UI-GEOMETRY B5: an element that touches the frame's edge pays that edge's pixel out of its own
+  // budget. A native child is laid out in the body slot and drawn above the document, so the slot
+  // pays the frame's left and right lanes — or the child covers the frame and a second frame has to
+  // be drawn above it. Measured 2026-09-05: the second frame, a native stroke plane, stood 41
+  // points inside its pane after a rail travel and stayed there.
+  it("the body slot pays the frame's lanes, so a native child never covers the frame", () => {
+    const body = rules().find((rule) =>
+      rule.selector.split(",").map((one) => one.trim()).includes(".tab-body")
+      && /left\s*:/.test(rule.decls),
+    );
+    expect(body, ".tab-body has no layout rule").toBeDefined();
+    expect(body!.decls).toMatch(/left\s*:\s*calc\(var\(--l\) \+ var\(--pane-inset\) \+ var\(--card-border-w\)\)/);
+    expect(body!.decls).toMatch(/width\s*:\s*calc\(var\(--w\) - var\(--card-border-w\) \* 2\)/);
+    // The frame's width is the pane style's: one pixel where a frame is drawn, none in flat.
+    const frameWidth = (style: string): string | undefined => rules()
+      .find((rule) => rule.selector.trim() === `:root[data-pane-style="${style}"]`)
+      ?.decls.match(/--card-border-w\s*:\s*([^;]+);/)?.[1].trim();
+    expect(frameWidth("card")).toBe("1px");
+    expect(frameWidth("floating")).toBe("1px");
+    expect(frameWidth("flat")).toBe("0px");
+    for (const style of ["card", "floating"]) {
+      const frame = rules().find((rule) => rule.selector.trim() === `:root[data-pane-style="${style}"] .pane-border`);
+      expect(frame?.decls, `${style} frame`).toMatch(/border\s*:\s*var\(--card-border-w\) solid/);
+    }
+  });
+
   it("workspace and rail are global chrome above the DOM browser content stack", () => {
     expect(workspaceRailStackingViolations(css)).toEqual([]);
   });

@@ -19,15 +19,13 @@ layout-card
 └── card-status
 ```
 
-A native surface consumes the same card rect and the same card tokens. The same rect is
-drawn as a native decoration only where a native surface would cover the DOM border.
-That is not a second perimeter — it is the one perimeter drawn in a different medium.
+A native surface is laid out in the card's body slot, inside the perimeter: the slot pays
+the border's lanes (UI-GEOMETRY B5), so the one perimeter is drawn once, by the DOM.
 
 ## C2. The theme settles the card's shape
 
 The theme declares a card's radius, border token and width, background, and shadow. The
-DOM and the native decoration consume one normalised result rather than each reading the
-declaration. `flat`, `card` and `floating` differ in presentation tokens only, never in
+DOM consumes one normalised result rather than reading the declaration in each place. `flat`, `card` and `floating` differ in presentation tokens only, never in
 structure.
 
 ## C3. The rect is calculated once

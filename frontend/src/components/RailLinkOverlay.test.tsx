@@ -5,10 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RailLinkOverlay } from "./RailLinkOverlay";
 import type { RailRelationState } from "../lib/railArrangement";
 import { useSettings } from "../state/settings";
-import {
-  __resetNativeDecorationsForTest,
-  nativeDecorationFacts,
-} from "../lib/nativeDecorations";
 
 vi.mock("../state/theme", () => ({
   useTheme: (select: (state: unknown) => unknown) =>
@@ -50,7 +46,6 @@ const relation = (
 
 describe("RailLinkOverlay — live grid tracking", () => {
   beforeEach(() => {
-    __resetNativeDecorationsForTest();
     observed = undefined;
     hostSize = { width: 1200, height: 800 };
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
@@ -64,7 +59,6 @@ describe("RailLinkOverlay — live grid tracking", () => {
   });
 
   afterEach(() => {
-    __resetNativeDecorationsForTest();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
@@ -133,28 +127,6 @@ describe("RailLinkOverlay — live grid tracking", () => {
     const overlay = host.querySelector<HTMLElement>(".rail-link-overlay");
     expect(overlay?.dataset).toMatchObject({ borderMode: "none", pathCount: "0" });
     expect(overlay?.querySelector("svg")).toBeNull();
-    act(() => root.unmount());
-  });
-
-  it("does not publish a duplicate union perimeter to the native plane", async () => {
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    act(() => root.render(
-      <RailLinkOverlay
-        contentId="spc-aaaaaa"
-        relation={relation()}
-        paneInset={0}
-        gap={0}
-        railRect={{ left: 450, top: 0, width: 300, height: 800 }}
-        targetRect={{ left: 750, top: 0, width: 225, height: 400 }}
-        nativeVisible
-      />,
-    ));
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-
-    const native = nativeDecorationFacts().decorations;
-    expect(native).toHaveLength(0);
     act(() => root.unmount());
   });
 

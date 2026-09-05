@@ -79,9 +79,9 @@ browser를 선택했습니다. `surface.inventory`의 ghosts, unowned, unapplied
 슬롯은 `ui.tree` 로 `contentVisible`, `surfaceVisible`, `visibilityReason` 을 노출하고, `state.health`
 는 입력을 막는 오버레이 개수와 native 차단 개수를 함께 노출합니다.
 
-캡처 합성은 유지된 선언 목록이 아니라 현재 표시 중인 장식 목록을 사용합니다. 선언된 geometry가 native pane을
-가리는 overlay만 native parking을 요청하며, 제한된 메뉴는 요청하지 않습니다. Parking을 요청한 경우에도 surface
-picture가 성공한 뒤에만 native surface와 native decoration을 합성 PNG에서 제외합니다.
+선언된 geometry가 native pane을 가리는 overlay만 native parking을 요청하며, 제한된 메뉴는 요청하지
+않습니다. Parking을 요청한 경우에도 surface picture가 성공한 뒤에만 native surface를 합성 PNG에서
+제외합니다.
 
 WebKit은 document 변경 후 첫 capture-only document snapshot을 변경 전 pixel로 완료할 수 있습니다.
 `window_capture_present`는 document snapshot을 정확히 한 번 완료하고 폐기한 뒤 반환합니다. 다음
@@ -128,46 +128,22 @@ terminal, browser viewport, pane line이 동일한 split 위치에 표시됐습�
 false이면 `layout-rect-skipped(inactive-document)`를 기록하고 commit된 rectangle을 다음 기준값으로 사용합니다.
 현재 window 상태를 직접 사용하며 polling은 사용하지 않습니다.
 
-## D1b.1. Core 장식은 마지막 네이티브 평면이다
+## D1b.1. 네이티브 자식 위에는 아무것도 그리지 않는다 — slot 이 frame 을 지불한다
 
-포커스 표시선은 provider 내용이 아니라 Core chrome입니다. 관계 오버레이는 projected seam 만 표시하며 rail·pane·union
-외곽선은 그리지 않습니다. DOM의 `z-index:7` 또는 `8`로
-그려도 AppKit 자식 위에 놓이지 않습니다. 2026-08-30 연결된 브라우저에서 실측했을 때 자식 위쪽의 선은
-accent 색이었지만 자식 안쪽의 왼쪽·오른쪽·아래쪽 probe는 모두 페이지의 흰색이었습니다. 터미널도 자기의
-어두운 표면으로 같은 실패를 만들었습니다. provider마다 inset을 두면 두 종류가 서로 다르게 실패할 뿐입니다.
+네이티브 자식은 body slot 에 배치되고 문서 위에 그려집니다. frame 과 포커스 표시는 문서가 pane 의
+왼쪽·오른쪽 변 lane 에 그리므로, 위아래 띠가 위·아래 변을 지불하듯 slot 이 그 lane 을 자기 예산에서
+지불합니다(UI-GEOMETRY B5). 그러면 slot 안의 자식은 문서가 그리는 어떤 선도 덮지 않고, Core chrome 을
+네이티브 평면에 그릴 일이 없습니다.
 
-따라서 Core는 입력을 통과시키는 범용 네이티브 장식 평면 하나를 소유합니다. 제한된 절대 경로 어휘 `M`,
-`L`, `Q`, `Z`를 받아 `CAShapeLayer`로 그리며 브라우저와 터미널 종류에 관계없이 같은 경로를 씁니다. ordered
-presentation service는 완전한 surface inventory commit 뒤에 이 지속 평면을 매번 마지막으로 올립니다.
-장식만 바뀌면 이벤트로 합쳐지고 직렬화된 writer가 전체 snapshot 하나를 교체합니다. `surface.decorations`는
-선언과 `layer:native-above-surfaces`를 포함한 네이티브 receipt를 노출합니다. `presentationVisible`은 선언과
-실제 표시를 분리합니다. DOM 오버레이가 열리면 그 상태 edge가 빈 장식 snapshot을 적용하는 동안에도 선언은
-최신 기하를 계속 받으며, 닫는 edge가 가장 최신 snapshot을 복원합니다. 이 규칙은 어느 기능도 provider로
-옮기지 않고 모달을 provider surface와 Core border 모두보다 위에 놓습니다. 타이머와 폴링은 없습니다.
+2026-08-30 연결된 브라우저 실측, slot 이 지불하기 전: 자식이 pane 변까지 닿아 자식 안쪽의 왼쪽·오른쪽·
+아래쪽 probe 가 모두 페이지의 흰색이었습니다. 그때의 답은 두 번째 frame — 모든 자식 위의 `CAShapeLayer`
+평면을 surface commit 마다 다시 올리고 render 마다 채우는 것 — 이었습니다. 2026-09-05 rail 이동 뒤 실측:
+그 평면이 pane 의 frame 을 pane 안쪽 41pt 에 세션이 끝날 때까지 붙잡고 있었고, 문서는 모든 선을 맞는 위치에
+선언하고 있었습니다. 한 선을 두 번 그리면 둘이 어긋나고, 위에 있는 쪽이 이깁니다. 평면은 제거했고
+frame 은 한 매체의 한 선입니다.
 
-이 평면은 입력을 받지 않습니다(`hitTest:`는 `nil`을 반환합니다). divider만 resize 대상과 기하 소유자이고,
-focus border는 그 결과 panel rectangle과 같은 위치에 그려집니다. `ResizeObserver`는 크기만 보고 위치는 보고하지 않으므로,
-위치만 바뀌는 Core render는 paint 전에 rectangle 위치로 다시 그립니다. 외부 크기 변경은 계속 observer event로
-들어옵니다.
-
-capture-only도 하나의 compositor입니다. 문서와 provider 그림으로 창을 재구성한 다음 같은 Core 장식 snapshot을
-마지막에 그립니다. provider loop 전에 그리면 가림 결함이 그대로 재현됐습니다. 변경 뒤 격리 설치 실행에서
-live browser를 지나는 포커스 왼쪽·오른쪽 edge probe는 균일한 `(238,238,238)`에서 accent가 포함된 평균
-약 `(160,163,231)`, 최소 휘도 `0.378`로 바뀌었고 composed note는 장식 두 개를 기록했습니다. rail과 pane의
-rounded union은 바깥쪽 edge 전체에 보였습니다. 브라우저 탭 30프레임 전환도 switch frame 1개, flicker·blank·
-overlap·native mismatch frame 0개로 끝났습니다.
-
-연결된 rail의 유한 resize는 합성 프레임 70개를 기록했습니다. 바깥쪽 왼쪽·오른쪽·위쪽·아래쪽 띠는 모두
-`changedFrames=0`이었고 rail 안쪽 띠도 변경 프레임 0개, 작업 영역 전체는 `nearBlank=0`이었습니다. 같은
-구간의 compositor history는 중간 폭 전체에서 sample 264개와 interactive·settled commit을 모두 보유했고,
-최대 drift 0, failure·unapplied·undeclared·misparented surface 0개를 답했습니다.
-
-같은 평면을 live terminal surface 위에서도 측정했습니다. surface만 있던 RED는 휘도 `0.088`의 균일한
-terminal 바탕이었습니다. Core 선을 마지막에 그린 뒤 왼쪽과 오른쪽 probe는 평균 휘도 `0.354`, 최소
-`0.088`, 최대 `0.616`을 읽었고 위쪽과 아래쪽 edge probe도 같은 범위를 보였습니다. 이전에 균일했던
-아래쪽 띠의 probe도 바탕 평균은 유지하면서 최대 `0.616`을 기록해 선이 남아 있음을 증명했습니다. 서로
-다른 full-surface 색을 둔 terminal 둘의 30프레임 전환은 switch frame 1개, flicker·blank·overlap·native
-mismatch frame 0개로 끝났습니다. non-key capture는 전후 모두 `windowFocused=false`를 유지했습니다.
+관계 오버레이의 projected seam 은 rail 과 pane 사이 복도(split-pane R5)에 그립니다. 두 카드는 서로
+닿지 않으므로 그 아래에 자식이 없습니다.
 
 ## D1c. 표면은 포인터를 보고하고, 코어가 포커스를 옮긴다
 

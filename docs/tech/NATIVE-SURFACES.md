@@ -86,10 +86,9 @@ under a modal and during sidebar motion. Combining the live surface and its pixe
 blank pane. The tab slot exposes `contentVisible`, `surfaceVisible` and `visibilityReason` through
 `ui.tree`; `state.health` exposes both the input-blocking overlay count and the native-occlusion count.
 
-Capture composition uses the presented decoration set, not the retained declaration set. Only an
-overlay whose declared geometry covers native panes requests native parking; bounded menus do not.
-When parking is requested, native surfaces and native decorations are absent from the composed PNG
-only after a successful surface picture is available.
+Only an overlay whose declared geometry covers native panes requests native parking; bounded menus
+do not. When parking is requested, native surfaces are absent from the composed PNG only after a
+successful surface picture is available.
 
 WebKit can complete the first capture-only document snapshot after a document change with pixels from
 before that change. `window_capture_present` completes and discards exactly one document snapshot
@@ -141,52 +140,26 @@ state and native geometry contain the new rectangle. `layoutRectMotion` checks `
 when it creates FLIP. A false result records `layout-rect-skipped(inactive-document)` and keeps the
 committed rectangle as the next baseline. This uses the current window state and does not use polling.
 
-## D1b.1. Core decoration is the final native plane
+## D1b.1. Nothing is drawn above a native child; the slot pays the frame
 
-A focus boundary is Core chrome, not provider content. A relation overlay may draw only a projected seam; it never draws
-the rail, pane, or union perimeter. Drawing a card perimeter at DOM
-`z-index:7` or `8` does not place it over an AppKit child. Measured 2026-08-30 with a linked browser,
-the top segment above the child was accent-coloured while left, right and bottom probes inside the
-child were uniformly the page's white. The terminal produced the same failure with its own dark
-surface. A provider-specific inset would merely make two kinds fail differently.
+A native child is laid out in the body slot and drawn above the document. The
+frame and the focus mark are drawn by the document, in the lanes at the pane's
+left and right edge; so the slot pays those lanes out of its own budget
+(UI-GEOMETRY B5), as the bands above and below it pay the top and bottom. A child
+inside the slot then covers no line the document draws, and no Core chrome is
+drawn in a native plane.
 
-Core therefore owns one generic, pointer-transparent native decoration plane. It accepts the bounded
-absolute path vocabulary `M`, `L`, `Q`, `Z`, paints it with `CAShapeLayer`, and contains no browser or
-terminal branch. The ordered presentation service raises that persistent plane after every complete
-surface inventory commit; decoration-only changes replace one full snapshot through an event-coalesced,
-serial writer. `surface.decorations` exposes the declarations and the native receipt, including
-`layer:native-above-surfaces`. `presentationVisible` separates those declarations from their applied
-presentation. When a DOM overlay opens, its state edge commits an empty decoration snapshot while the
-declarations continue to receive current geometry; the close edge restores the newest snapshot. This
-places the modal above both provider surfaces and Core borders without moving either feature into a
-provider. No timer or polling loop participates.
+Measured 2026-08-30 with a linked browser, before the slot paid: the child
+reached the pane's edge and the left, right and bottom probes inside it were the
+page's white. The answer then was a second frame, a `CAShapeLayer` plane above
+every child, re-raised after every surface commit and fed by every render.
+Measured 2026-09-05 after a rail travel: that plane held a pane's frame 41 points
+inside the pane for the rest of the session, while the document declared every
+stroke at the right place — two drawings of one line disagree, and the one above
+wins. The plane is gone; the frame is one line, in one medium.
 
-The plane receives no input (`hitTest:` returns `nil`). A divider is the sole resize target and geometry
-owner; the focus border is a projection of the resulting panel rectangle. A position-only Core render
-reprojects that rectangle before paint because `ResizeObserver` reports size, not position. External size
-changes still arrive through that observer.
-
-Capture-only is a compositor too. It reconstructs a window from the document and provider pictures,
-then paints the same Core decoration snapshot last. Painting before the provider loop reproduced the
-occlusion exactly. In the isolated installed run after the change, probes through a live browser at the
-focus left and right edges changed from uniform `(238,238,238)` to accent-bearing means near
-`(160,163,231)` with minimum luminance `0.378`; the composed note named two decorations. The rounded
-rail-plus-pane union was visible on all outer edges, and a 30-frame browser-tab switch completed in one
-switch frame with zero flicker, blank, overlap or native-mismatch frames.
-
-The finite linked-rail resize used 70 composed frames. The outer left, right, top and bottom bands each
-had `changedFrames=0`; a band inside the rail also had zero changed frames, and the whole work region
-had `nearBlank=0`. The matching compositor history retained 264 samples, included both interactive and
-settled commits, and reported maximum drift 0 with zero failures, unapplied, undeclared or misparented
-surfaces across every intermediate width.
-
-The same plane was then measured over a live terminal surface. The surface-only RED was uniform terminal
-ground at luminance `0.088`. With the Core stroke last, the left and right probes read mean luminance
-`0.354`, minimum `0.088`, maximum `0.616`; the top and bottom edge probes had the same range. A probe on
-the formerly uniform lower band retained the ground mean but now had maximum `0.616`, proving the stroke
-survived there too. A 30-frame switch between two deliberately different full-surface terminal colours
-completed in one switch frame with zero flicker, blank, overlap or native-mismatch frames. The non-key
-capture remained `windowFocused=false` before and after.
+The relation overlay draws its projected seam in the corridor between the rail
+and the pane (split-pane R5): two cards never touch, so no child is under it.
 
 ## D1c. A surface reports the pointer, and the core moves the focus
 

@@ -7,8 +7,7 @@ import { readAlignment } from "../lib/layoutAlignment";
 import { layoutTrace, startLayoutTrace, whenLayoutTraceEnds } from "../lib/layoutTrace";
 import { presentationNowUnixMs } from "../lib/presentationClock";
 import { nativeTimelineVerdict, type TimelineNativeSample } from "../lib/nativeTimelineVerdict";
-import { invoke, nativeDecorationStatus } from "../framework";
-import { decorationDrift, nativeDecorationFacts } from "../lib/nativeDecorations";
+import { invoke } from "../framework";
 import * as CompositorService from "../../bindings/github.com/soksak-ai/soksak-core/frameworks/wails/nativepresentationservice";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { register } from "./registry";
@@ -22,36 +21,6 @@ export function registerLayoutAlignmentCatalog(): void {
     message: (d) => tmsg("msg.surface.composition", { worst: Number(d.worst ?? 0) }),
     examples: ["surface.composition"],
     handler: () => invoke("surface.composition"),
-  });
-
-  register("surface.decorations", {
-    description: key("cmd.surface.decorations.desc"),
-    triggers: { ko: "네이티브 포커스 관계 보더 최상단 장식" },
-    params: {},
-    returns: "{ window, sequence, count, supported, layer, presentationVisible, pending, error, declarations:[{id,path,strokeWidth,dash}], presented:[id], applied:[{id,path}], stale:[{id,presented,applied}], missing:[id] }",
-    message: (data) => tmsg("msg.surface.decorations", {
-      n: Number(data.count ?? 0), layer: String(data.layer ?? ""),
-    }),
-    examples: ["surface.decorations"],
-    handler: async () => {
-      const facts = nativeDecorationFacts();
-      const status = await nativeDecorationStatus();
-      return {
-        ...status,
-        presentationVisible: facts.presentationVisible,
-        pending: facts.pending,
-        error: facts.error,
-        declarations: facts.decorations.map((decoration) => ({
-          id: decoration.id,
-          path: decoration.path,
-          strokeWidth: decoration.strokeWidth,
-          dash: decoration.dash,
-        })),
-        presented: facts.presentedDecorations.map((decoration) => decoration.id),
-        // The plane against the document, stroke by stroke — what a count cannot tell.
-        ...decorationDrift(facts.presentedDecorations, status.applied ?? []),
-      };
-    },
   });
 
   register("surface.composition.history", {

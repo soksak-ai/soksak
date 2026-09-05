@@ -1082,12 +1082,17 @@ body,
    legitimate. The body area is the cell minus the header minus the status bar. */
 /* The body box is written once. The picture a parked surface leaves takes the same box as a sibling
    of the body — inside it, containment would keep it off the layer its surface was on. */
+/* The slot pays the frame's left and right lanes out of its own budget (UI-GEOMETRY B5), as the
+   bands above and below it pay the top and bottom. What is laid out in the slot may be a native
+   child drawn above the document, and a child that reached the pane's edge covered the frame; the
+   frame was then drawn a second time above it, and that second frame stood where the plane had
+   left it (measured 2026-09-05, 41 points inside its pane after a rail travel). */
 .tab-body,
 .parked-picture {
   position: absolute;
-  left: calc(var(--l) + var(--pane-inset));
+  left: calc(var(--l) + var(--pane-inset) + var(--card-border-w));
   top: calc(var(--t) + var(--pane-inset) + var(--header-h));
-  width: var(--w);
+  width: calc(var(--w) - var(--card-border-w) * 2);
   height: calc(var(--h) - (var(--header-h) + var(--status-h)));
 }
 .tab-body {
@@ -1687,6 +1692,16 @@ body,
    transition on a property that consumes it through calc, and a registered
    variable is not interpolated either (confirmed from ui.trace samples).
    Suppression during a phase and the hole exclusion belong to the same module. */
+/* The frame's width, a pane style token: the frame is drawn at it, and the body slot pays it. */
+:root[data-pane-style="card"] {
+  --card-border-w: 1px;
+}
+:root[data-pane-style="floating"] {
+  --card-border-w: 1px;
+}
+:root[data-pane-style="flat"] {
+  --card-border-w: 0px;
+}
 :root[data-pane-style="card"] .pane,
 :root[data-pane-style="floating"] .pane {
   background: var(--card);
@@ -1806,7 +1821,7 @@ body,
   border-radius: 14px;
 }
 :root[data-pane-style="card"] .pane-border {
-  border: 1px solid var(--bd);
+  border: var(--card-border-w) solid var(--bd);
   border-radius: 11px;
 }
 /* Correction for the frame border overlay: the frame's 1px border (z:5) covers
@@ -1828,7 +1843,7 @@ body,
   padding-bottom: 1px;
 }
 :root[data-pane-style="floating"] .pane-border {
-  border: 1px solid var(--bd);
+  border: var(--card-border-w) solid var(--bd);
   border-radius: 14px;
 }
 /* card and floating: the chrome — title, tabs, status — is transparent so the
