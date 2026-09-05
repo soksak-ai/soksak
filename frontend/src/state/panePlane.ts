@@ -115,13 +115,18 @@ export function boundaryOf(
   return line <= 0 || line >= last ? null : { axis, line };
 }
 
-/** The two slots meeting at a boundary, as shares of their sum. */
+/**
+ * The two slots meeting at a boundary, as shares of their sum — measured in px, where the
+ * boundaries stand. A slot's share of the lines is not its px beside a card with a declared width
+ * (the rail): measured 2026-09-05, a drag of 80px beside the rail landed 26.5px over, because the
+ * ratio the drag committed was read from the lines and applied in px.
+ */
 export function boundaryShares(
-  state: PlaneState, axis: "x" | "y", line: number,
+  state: PlaneState, box: PlaneBox, axis: "x" | "y", line: number,
 ): [number, number] {
-  const lines = axis === "x" ? state.xs : state.ys;
-  const before = lines[line] - lines[line - 1];
-  const after = lines[line + 1] - lines[line];
+  const plane = grid(state, box);
+  const before = plane.boundaryPos(axis, line) - plane.boundaryPos(axis, line - 1);
+  const after = plane.boundaryPos(axis, line + 1) - plane.boundaryPos(axis, line);
   const sum = before + after;
   return sum > 0 ? [before / sum, after / sum] : [0.5, 0.5];
 }

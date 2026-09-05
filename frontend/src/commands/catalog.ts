@@ -2142,7 +2142,7 @@ export function registerCatalog(): void {
       return {
         paneId: loc.pane.id,
         gutter: gutterEcho(after, loc.pane.id, edge),
-        sizes: boundaryShares(after, gutter.axis, gutter.line),
+        sizes: boundaryShares(after, planeBox(), gutter.axis, gutter.line),
       };
     },
   });
@@ -2187,7 +2187,7 @@ export function registerCatalog(): void {
       return {
         paneId: loc.pane.id,
         gutter: gutterEcho(after, loc.pane.id, edge),
-        sizes: boundaryShares(after, gutter.axis, gutter.line),
+        sizes: boundaryShares(after, planeBox(), gutter.axis, gutter.line),
       };
     },
   });

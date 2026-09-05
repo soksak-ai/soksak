@@ -736,7 +736,7 @@ export const GroupArea = memo(function GroupArea({
         const owner = gutterOwnerOf(displayLayout, d.axis, d.line);
         const landed = moveBoundaryPx(displayLayout, planeBoxRef.current, d.axis, d.line, px);
         if (owner && landed) {
-          const [before, after] = boundaryShares(landed, d.axis, d.line);
+          const [before, after] = boundaryShares(landed, planeBoxRef.current, d.axis, d.line);
           void execute(
             "pane.resize",
             { pane: owner.pane, edge: owner.side, ratio: before / (before + after) },

@@ -86,7 +86,7 @@ describe("a boundary named by a pane's edge", () => {
 
   it("moves so the slot before it holds the ratio asked for", () => {
     const state = moveBoundary(threePanes(), box, "x", 1, 0.7)!;
-    const [before, after] = boundaryShares(state, "x", 1);
+    const [before, after] = boundaryShares(state, box, "x", 1);
     expect(before).toBeCloseTo(0.7, 6);
     expect(after).toBeCloseTo(0.3, 6);
   });
@@ -107,12 +107,12 @@ describe("a boundary named by a pane's edge", () => {
     const rects = rectsOf(moved);
     expect(rects.a.w).toBeCloseTo(rects.c.w, 6);
     expect(rects.b.x).toBeCloseTo(rects.d.x, 6);
-    expect(boundaryShares(moved, "x", 1)[0]).toBeCloseTo(0.3, 6);
+    expect(boundaryShares(moved, box, "x", 1)[0]).toBeCloseTo(0.3, 6);
   });
 
   it("centres between its neighbours", () => {
     const moved = moveBoundary(threePanes(), box, "x", 1, 0.7)!;
-    expect(boundaryShares(centerBoundary(moved, box, "x", 1)!, "x", 1)).toEqual([0.5, 0.5]);
+    expect(boundaryShares(centerBoundary(moved, box, "x", 1)!, box, "x", 1)).toEqual([0.5, 0.5]);
   });
 
   it("spaces every boundary on an axis evenly", () => {
@@ -176,6 +176,17 @@ describe("the rail on the plane", () => {
     expect(railLine(at0)).toBe(0);
     expect(rectsOf(at0).rail.x).toBe(0);
     expect(rectsOf(at0).rail.w).toBeCloseTo(190, 6);
+  });
+
+  // The ratio a drag commits reproduces the px it previewed, beside the rail too: shares are read
+  // where the boundaries stand, not from the lines (a declared width is not a share).
+  it("commits beside the rail at the px the drag previewed", () => {
+    const standing = standRail(threePanes(), box, 1, 190)!;
+    const dragged = moveBoundaryPx(standing, box, "x", 1, 380)!;
+    const [before, after] = boundaryShares(dragged, box, "x", 1);
+    const committed = moveBoundary(standing, box, "x", 1, before / (before + after))!;
+    expect(rectsOf(committed).a.w).toBeCloseTo(rectsOf(dragged).a.w, 6);
+    expect(rectsOf(committed).rail.w).toBeCloseTo(rectsOf(dragged).rail.w, 6);
   });
 
   // split-pane R5: beside a card with a declared width, a drag changes that width and the slot on
