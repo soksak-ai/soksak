@@ -293,16 +293,30 @@ SoksakBurst soksakCaptureBurst(void *nsWindow, double x, double y, double w, dou
     }
 
     id config = [[streamConfigurationClass alloc] init];
+    // A configuration key this system's ScreenCaptureKit does not know raises, and an exception
+    // on this queue ends the application: the first burst did, on colorSpaceName. It is answered
+    // as a refusal instead.
+    @try {
     [config setValue:@((size_t)llround(source.size.width * scale)) forKey:@"width"];
     [config setValue:@((size_t)llround(source.size.height * scale)) forKey:@"height"];
     [config setValue:[NSValue valueWithRect:NSRectFromCGRect(source)] forKey:@"sourceRect"];
     [config setValue:@(kCVPixelFormatType_32BGRA) forKey:@"pixelFormat"];
-    [config setValue:(NSString *)kCGColorSpaceSRGB forKey:@"colorSpaceName"];
+    // A CF-typed property is not key-value coding compliant; the setter is called by name.
+    ((void (*)(id, SEL, CFStringRef))objc_msgSend)(
+        config, NSSelectorFromString(@"setColorSpaceName:"), kCGColorSpaceSRGB);
     [config setValue:@NO forKey:@"showsCursor"];
     [config setValue:@8 forKey:@"queueDepth"];
     CMTime least = interval_ms > 0 ? CMTimeMake(interval_ms, 1000) : CMTimeMake(1, 240);
     ((void (*)(id, SEL, CMTime))objc_msgSend)(
         config, NSSelectorFromString(@"setMinimumFrameInterval:"), least);
+    } @catch (NSException *raised) {
+      error = [[NSString stringWithFormat:@"the stream configuration refused a setting: %@",
+                                          raised.reason ?: raised.name] retain];
+      [config release];
+      [filter release];
+      dispatch_semaphore_signal(started);
+      return;
+    }
 
     stream = ((id (*)(id, SEL, id, id, id))objc_msgSend)(
         [streamClass alloc], NSSelectorFromString(@"initWithFilter:configuration:delegate:"),

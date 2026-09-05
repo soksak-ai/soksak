@@ -30,7 +30,7 @@ surface and its picture was in no recording and visible to every eye.
 
 `window.burst` is the platform stream. On macOS a ScreenCaptureKit stream of this process's window
 runs for `durationMs` and every complete frame the compositor produced is copied off the delivery
-queue, encoded on a concurrent queue, and written as `dir/f0000.png ...`. The report carries one
+queue, encoded on a concurrent queue, and written as `dir/f0000.png ...`. The report holds one
 time per frame in milliseconds from the start of the stream, so the duration of a state is the
 difference between the frames that bracket it. A frame whose content did not change is not
 delivered; a burst of a still window is a short list. The region axis is the same as a single
