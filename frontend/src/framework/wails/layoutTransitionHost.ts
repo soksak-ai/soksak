@@ -3,6 +3,7 @@ import type {
   PreparedLayoutTransition,
 } from "../../lib/layoutTransitionHost";
 import {
+  releaseNativeSurfacePresentation,
   restoreNativeSurfacePresentation,
   stageNativeSurfacePresentation,
 } from "./nativeSurfaces";
@@ -37,6 +38,9 @@ export const wailsLayoutTransitionHost: LayoutTransitionHost = {
       start: async () => null,
       commit: async () => {
         closed = true;
+        // The DOM this stage pre-announced is published: the stage ends, and the DOM's own
+        // presentation owns the surfaces from here.
+        releaseNativeSurfacePresentation();
       },
       cancel: () => {
         if (closed) return;

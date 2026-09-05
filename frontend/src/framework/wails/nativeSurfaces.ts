@@ -191,6 +191,16 @@ export function releaseNativeSurfaceGeometry(): void {
   controller?.releaseGeometry();
 }
 
+/**
+ * The document has published the presentation the staged decision was for; the DOM's presentation
+ * owns the surfaces again. Called by the transaction that staged it, on its commit — the observer
+ * cannot tell that commit from a measurement, and a stage that hid a view the DOM then showed
+ * kept it hidden until another stage named it (measured 2026-09-05 at boot).
+ */
+export function releaseNativeSurfacePresentation(): void {
+  controller?.releasePresentation();
+}
+
 /** Re-applies the current DOM presentation after a staged transaction is cancelled. */
 export async function restoreNativeSurfacePresentation(): Promise<void> {
   if (!controller || !presentationVisibleFromDOM) return;

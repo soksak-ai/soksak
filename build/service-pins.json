@@ -1,7 +1,7 @@
 {
   "nativeCompositor": {
     "repository": "https://github.com/soksak-ai/soksak-service-native-compositor",
-    "commit": "8af9ab0eead05525d0492f2706fd8c9368100950"
+    "commit": "31101d7dfff9c98fbf6bfd7c1e32c5fe3e65fa8f"
   },
   "terminalSurface": {
     "repository": "https://github.com/soksak-ai/soksak-service-terminal-surface",

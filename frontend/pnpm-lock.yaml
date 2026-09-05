@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@soksak/soksak-service-native-compositor':
-        specifier: 0.0.4
-        version: 0.0.4
+        specifier: 0.0.5
+        version: 0.0.5
       '@soksak/soksak-spec':
         specifier: 0.0.53
         version: 0.0.53
@@ -523,8 +523,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@soksak/soksak-service-native-compositor@0.0.4':
-    resolution: {integrity: sha512-bVL9ZNGoKjaY93nb7cKyRnmmbVZh3Sr5b3XPK9wtxemmCqvtCQw6A5E/XZWMFl49fmzhyHXcRoDm2VDrCztqHA==}
+  '@soksak/soksak-service-native-compositor@0.0.5':
+    resolution: {integrity: sha512-dRf8Jvpcn3bemowmahzBHzXEze2Lh8fuiPa5O4vu3PLYeGKOU6VLvOG2tvi1evMYj95aHBazB5skRKwjczISdQ==}
     engines: {node: 26.7.0}
 
   '@soksak/soksak-spec@0.0.53':
@@ -1349,7 +1349,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.4':
     optional: true
 
-  '@soksak/soksak-service-native-compositor@0.0.4': {}
+  '@soksak/soksak-service-native-compositor@0.0.5': {}
 
   '@soksak/soksak-spec@0.0.53': {}
 
