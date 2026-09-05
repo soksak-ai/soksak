@@ -156,4 +156,27 @@ describe("the + on a pane's tab strip", () => {
     await press();
     expect(document.querySelector(".space-tab-menu"), "the second press closes the menu").toBeNull();
   });
+
+  it("closes the menu on a press anywhere else", async () => {
+    const { workspace, first } = twoPanes();
+    const elsewhere = document.createElement("button");
+    document.body.append(elsewhere);
+    act(() => {
+      root.render(
+        <ViewTabs projectId={workspace.id} group={first} active onTabPointerDown={() => {}} />,
+      );
+    });
+    const add = host.querySelector<HTMLButtonElement>(`[data-node="tab/view/${first.id}/add"]`)!;
+    act(() => { add.click(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(document.querySelector(".space-tab-menu")).not.toBeNull();
+    act(() => {
+      elsewhere.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true }));
+      elsewhere.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, composed: true }));
+      elsewhere.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(document.querySelector(".space-tab-menu"), "a press elsewhere closes the menu").toBeNull();
+    elsewhere.remove();
+  });
 });

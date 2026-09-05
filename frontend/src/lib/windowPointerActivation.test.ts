@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { WindowPointerActivationCoordinator, type NativePointerEdge } from "./windowPointerActivation";
+import { useUi } from "../state/ui";
 
 const edge = (phase: "down" | "up"): NativePointerEdge => ({
   sequence: 7,
@@ -90,5 +91,23 @@ describe("native pointer activation carrier", () => {
     coordinator.observeNative({ ...edge("down"), phase: "move", x: 80 });
     expect(coordinator.snapshot()).toMatchObject({ phase: "down", sequence: 7 });
     expect(activate).not.toHaveBeenCalled();
+  });
+
+  // A DOM overlay closes on a press outside it, and it hears presses through the document. A press
+  // on a native surface is never delivered to the document: the program menu stayed open over a terminal
+  // that had just been clicked (measured 2026-09-05). A press the document did not deliver is
+  // stated to the ui state, where an overlay reads it as a press outside.
+  it("states a press the document did not deliver, and not one it did", () => {
+    const before = useUi.getState().nativePress;
+    const coordinator = new WindowPointerActivationCoordinator(() => document.body, () => false);
+    coordinator.observeNative(edge("down"));
+    coordinator.observeNative(edge("up"));
+    expect(useUi.getState().nativePress).toBe(before + 1);
+
+    coordinator.observeDom({ phase: "down", x: 40, y: 60, atUnixMs: 2000 });
+    coordinator.observeNative({ ...edge("down"), sequence: 8, atUnixMs: 2000 });
+    coordinator.observeDom({ phase: "up", x: 40, y: 60, atUnixMs: 2015 });
+    coordinator.observeNative({ ...edge("up"), sequence: 8, atUnixMs: 2015 });
+    expect(useUi.getState().nativePress).toBe(before + 1);
   });
 });

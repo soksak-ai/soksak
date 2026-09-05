@@ -1,5 +1,6 @@
 import { listenThisWindow } from "./windowEvents";
 import { activateExposedInputTarget } from "./viewActivation";
+import { useUi } from "../state/ui";
 
 export interface NativePointerEdge {
   sequence: number;
@@ -74,6 +75,8 @@ export class WindowPointerActivationCoordinator {
     const target = pending?.target ?? this.hit(edge.x, edge.y);
     this.last = this.stateOf(edge, target, domDelivered, !domDelivered, false);
     if (!domDelivered) {
+      // The document did not see this press. Every DOM overlay open now is outside it.
+      useUi.getState().noteNativePress();
       const apply = () => {
         const fallbackApplied = this.activate(target);
         if (this.last?.sequence === edge.sequence) {

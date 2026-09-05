@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { Program } from "../state/sessions";
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { programPathSegments } from "../plugins/spec";
-import { useOverlayActive } from "../state/ui";
+import { useOverlayActive, useUi } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { localize, useT } from "../i18n";
 
@@ -125,7 +125,7 @@ export function ProgramMenu({
   onClose,
 }: {
   pos: { left: number; top: number };
-  /** The pane this menu belongs to, left to right: the body opens inside it, so a neighbour whose
+  /** The pane of this menu, left to right: the body opens inside it, so a neighbour whose
    *  surface the menu never needs is never put through the swap. */
   within?: { left: number; right: number };
   /** The control that opened the menu. A pointer on it is not a pointer outside the menu: the
@@ -183,6 +183,15 @@ export function ProgramMenu({
   useProgramRegistry((s) => s.version);
   const { programs, order } = useProgramRegistry.getState();
 
+  // A press on a native surface is never delivered to the document (state/ui nativePress): it is a press
+  // outside this menu, and the menu closes on it as on any other.
+  const nativePress = useUi((s) => s.nativePress);
+  const pressesSeen = useRef(nativePress);
+  useEffect(() => {
+    if (nativePress === pressesSeen.current) return;
+    pressesSeen.current = nativePress;
+    onClose();
+  }, [nativePress, onClose]);
   useEffect(() => {
     // Capture phase — close is guaranteed even under another handler's stopPropagation. The click
     // that opened the menu finishes before this effect attaches, so there is no immediate close.

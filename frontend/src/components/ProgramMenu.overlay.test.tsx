@@ -102,4 +102,16 @@ describe("the program menu as an overlay", () => {
     expect(useUi.getState().nativeOverlayAreas).toEqual([{ left: 90, top: 50, right: 220, bottom: 88 }]);
     expect((document.querySelector(".space-tab-menu") as HTMLElement).style.left).toBe("90px");
   });
+
+  it("closes on a press the document did not deliver", () => {
+    const onClose = vi.fn();
+    act(() => {
+      root.render(
+        <ProgramMenu pos={{ left: 100, top: 50 }} onPick={vi.fn()} onClose={onClose} />,
+      );
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => { useUi.getState().noteNativePress(); });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

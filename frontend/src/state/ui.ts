@@ -53,6 +53,14 @@ interface UiState {
   // no way in is a surface that is gone. It opens from `plugin.manager` and from settings.
   pluginManagerOpen: boolean;
   setPluginManagerOpen: (open: boolean) => void;
+
+  // A press the document did not deliver — one on a native surface, which is composited above the
+  // document and takes the pointer before it. A DOM overlay hears presses through the document, so
+  // it read such a press as no press at all: the program menu stayed open over a terminal that had
+  // just been clicked (measured 2026-09-05). Counted here; an overlay reads a change as a press
+  // outside itself.
+  nativePress: number;
+  noteNativePress: () => void;
 }
 
 // The store is outside the module boundary — a hot swap replacing it makes registration,
@@ -69,6 +77,8 @@ export const useUi = moduleState("state/ui#store", () =>
   setSettingsSection: (s) => set({ settingsSection: s }),
   pluginManagerOpen: false,
   setPluginManagerOpen: (open) => set({ pluginManagerOpen: open }),
+  nativePress: 0,
+  noteNativePress: () => set((s) => ({ nativePress: s.nativePress + 1 })),
   pushOverlay: (nativeOccludes = true, area = null) => set((s) => ({
     overlayCount: s.overlayCount + 1,
     nativeOverlayCount: s.nativeOverlayCount + (nativeOccludes ? 1 : 0),
