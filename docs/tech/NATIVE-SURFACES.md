@@ -64,10 +64,14 @@ Core resolves three different facts. `contentVisible` is the active workspace, s
 it controls the DOM slot and never changes because an overlay or layout motion begins.
 `surfaceVisible` additionally excludes an overlay. Layout motion remains a live compositor
 transaction; hiding every surface during motion produced a blank target that had no pixels to capture.
-Core publishes it as `data-surface-visible` on the host tab ancestor; this field is an observable
-verdict, not a direct writer of the native declaration. Overlay parking has one ordered owner: Core
-keeps the declaration applied, captures the surface, publishes the `ParkedPicture`, and changes the
-declaration to hidden only after publication completes. A failed capture keeps the live declaration
+Core publishes the applied presentation as `data-surface-visible` on the host tab ancestor. The
+compositor folds that attribute into every declaration under it, so the attribute is the hide: it
+states not the resolved `surfaceVisible` but what is applied, and it falls only once the picture is
+on screen. Written from the resolved value, it fell on the render that opened the + menu and the
+pane was white for three frames before the picture was drawn (measured 2026-09-05, `window.burst`,
+709–749ms). Overlay parking has one ordered owner: Core keeps the declaration applied, captures the
+surface, publishes the `ParkedPicture`, waits for the document to draw it, and changes the
+declaration to hidden only then. A failed capture keeps the live declaration
 applied and is reported by `state.health.parking.failures`; it cannot turn failure into a blank pane.
 The picture remains in the same slot until the live surface returns. Neither side rewrites the
 other's declaration.

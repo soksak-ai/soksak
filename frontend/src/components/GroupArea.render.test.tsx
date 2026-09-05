@@ -102,3 +102,57 @@ describe("a space on the plane", () => {
     expect(Number.parseFloat(gutter.style.left) + Number.parseFloat(gutter.style.width)).toBeGreaterThan(495);
   });
 });
+
+describe("what a covered pane declares to the compositor", () => {
+  // A native surface is composited above the document, so an overlay over a pane is shown by taking
+  // the surface off and drawing its picture in its place. The compositor folds `data-surface-visible`
+  // on any ancestor of the declaration, so the tab body's attribute is the hide: it must fall only
+  // once the picture is on screen. Measured 2026-09-05 with window.burst: the attribute fell on the
+  // render that opened the + menu, and the pane was white for three frames (709–749ms) before the
+  // picture was drawn.
+  it("keeps the surface presented until the picture stands in, then hides it", async () => {
+    const { useUi } = await import("../state/ui");
+    const { __resetParkedPicturesForTest, __setParkedPictureForTest, markParkedPictureShown } = await import("../lib/parkedPicture");
+    __resetParkedPicturesForTest();
+    const base = useSessions.getState().workspaces[0];
+    const space: Space = {
+      ...base.spaces[0],
+      panes: [pane("pan-a"), pane("pan-b")],
+      layout: rowPlane(["pan-a", "pan-b"]),
+      activePaneId: "pan-a",
+    };
+    const workspace = { ...base, spaces: [space] };
+    useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
+    const arrangement = parkedArrangement(space);
+    const render = () => root.render(
+      <GroupArea content={space} projectId={workspace.id} arrangement={arrangement} />,
+    );
+    act(render);
+    // The plane's rects, which jsdom does not lay out.
+    const rectOf = (left: number, right: number) => () =>
+      ({ left, top: 0, right, bottom: 600, width: right - left, height: 600, x: left, y: 0, toJSON() {} }) as DOMRect;
+    host.querySelector<HTMLElement>('[data-node="layout/pane/pan-a"]')!.getBoundingClientRect = rectOf(0, 495);
+    host.querySelector<HTMLElement>('[data-node="layout/pane/pan-b"]')!.getBoundingClientRect = rectOf(505, 1000);
+    const presented = (view: string) =>
+      host.querySelector<HTMLElement>(`[data-node="layout/tab/${view}"]`)!.dataset.surfaceVisible;
+
+    // A menu over 200×150 of pane a.
+    act(() => useUi.getState().pushOverlay(true, { left: 100, top: 50, right: 300, bottom: 200 }));
+    expect(presented("pan-a-tab")).toBe("true");
+    expect(presented("pan-b-tab")).toBe("true");
+
+    // The picture is held: still not on screen, still presented.
+    act(() => __setParkedPictureForTest("pan-a-tab", "data:image/png;base64,iVBORw0KGgo="));
+    expect(presented("pan-a-tab")).toBe("true");
+
+    // Drawn: now the surface steps aside.
+    act(() => markParkedPictureShown("pan-a-tab"));
+    expect(presented("pan-a-tab")).toBe("false");
+    expect(presented("pan-b-tab")).toBe("true");
+
+    // The menu closes: the surface is presented again at once; the picture goes when it is back.
+    act(() => useUi.getState().popOverlay(true, { left: 100, top: 50, right: 300, bottom: 200 }));
+    expect(presented("pan-a-tab")).toBe("true");
+    __resetParkedPicturesForTest();
+  });
+});

@@ -58,10 +58,14 @@ workspace 의 어떤 플러그인도 그것을 선언하지 않았고 브라우�
 코어는 서로 다른 사실 셋을 해석합니다. `contentVisible` 은 활성 workspace·space·탭 사슬이며, DOM
 슬롯을 제어하고 오버레이나 레이아웃 움직임이 시작된다고 해서 바뀌지 않습니다. `surfaceVisible` 은 거기에
 더해 오버레이를 제외합니다. 레이아웃 움직임은 live compositor transaction으로 유지합니다. 움직임 동안
-모든 표면을 숨기면 캡처할 픽셀이 없는 대상이 비었습니다. 이 판정은 host tab ancestor의
-`data-surface-visible` 로 공개되지만 native 선언을 직접 쓰는 값은 아닙니다. Overlay parking의 순서
-소유자는 Core 하나입니다. Core는 선언을 적용된 상태로 유지한 채 surface를 캡처하고
-`ParkedPicture`를 게시한 다음, 게시가 완료된 후에만 선언을 숨김으로 바꿉니다. 캡처가 실패하면 live
+모든 표면을 숨기면 캡처할 픽셀이 없는 대상이 비었습니다. 코어는 host tab ancestor의
+`data-surface-visible` 로 적용된 presentation을 공개합니다. compositor는 이 속성을 그 아래 모든
+선언에 접어 넣으므로 이 속성이 곧 숨김입니다. 해석된 `surfaceVisible` 이 아니라 적용된 값을 담고,
+사진이 화면에 그려진 뒤에만 false 가 됩니다. 해석된 값으로 쓰던 때에는 + 메뉴를 여는 렌더에서
+false 가 되어 사진이 그려지기 전 세 프레임 동안 pane이 흰색이었습니다(2026-09-05 `window.burst`
+실측, 709–749ms). Overlay parking의 순서 소유자는 Core 하나입니다. Core는 선언을 적용된 상태로
+유지한 채 surface를 캡처하고 `ParkedPicture`를 게시하고 문서가 그것을 그리기를 기다린 다음에만
+선언을 숨김으로 바꿉니다. 캡처가 실패하면 live
 선언을 계속 적용하고 실패를 `state.health.parking.failures`로 보고합니다. 실패를 빈 pane으로 바꿀 수
 없습니다. Picture는 live surface가 돌아올 때까지 같은 슬롯에 유지됩니다. 어느 쪽도 상대 선언을 다시
 쓰지 않습니다.

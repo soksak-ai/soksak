@@ -928,6 +928,19 @@ export const GroupArea = memo(function GroupArea({
           // cold is empty, so the gate costs 0. The slot div itself always renders (atomic appearance, stable address).
           const hydrated = !coldSet.has(view.id) || contentVisible;
           const presentation = presentationOf(group, view.id);
+          // What is applied to the surface, as distinct from what the pane's visibility resolved to.
+          // The compositor folds `data-surface-visible` on any ancestor of a declaration, so the
+          // attribute below is the hide itself: written from the resolved value, it fell on the render
+          // that opened an overlay and the surface was gone three frames before its picture was drawn
+          // (measured 2026-09-05 with window.burst, 709–749ms). It falls when the picture is on screen.
+          const placement = viewSurfacePlacementForPresentation(
+            visibility,
+            !!maxCell,
+            parkedPicture(view.id) === null
+              ? "none"
+              : parkedPictureShown(view.id) ? "shown" : "held",
+            dimStrengthOf(group.id),
+          );
           return (
             <Fragment key={view.id}>
             {/* What the surface left when it was parked, beside the body and on the layer the
@@ -945,7 +958,7 @@ export const GroupArea = memo(function GroupArea({
               data-workspace-id={projectId}
               data-node={`layout/tab/${view.id}`}
               data-content-visible={String(visibility.contentVisible)}
-              data-surface-visible={String(visibility.surfaceVisible)}
+              data-surface-visible={String(placement.desiredVisible)}
               data-visibility-reason={visibility.reason}
               data-wv-geometry-owner
               // What is inside this box is alive — a terminal, a page. It travels with the layout and
@@ -981,14 +994,7 @@ export const GroupArea = memo(function GroupArea({
                   // The same dim as the cell, from one place. Recombining the reasons here would
                   // make the veil and the surface disagree, and no veil is painted on the
                   // surface at all.
-                  surfacePlacement={viewSurfacePlacementForPresentation(
-                    visibility,
-                    !!maxCell,
-                    parkedPicture(view.id) === null
-                      ? "none"
-                      : parkedPictureShown(view.id) ? "shown" : "held",
-                    dimStrengthOf(group.id),
-                  )}
+                  surfacePlacement={placement}
                   command={view.command ?? null}
                   // B3 restore seam — the observed runtime (cwd, plugin state). A terminal restores the spawn
                   // location, browser-like views restore state (URL etc.). With no observed value it is null (a new view).

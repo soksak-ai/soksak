@@ -93,10 +93,13 @@ describe("content view effective visibility", () => {
     expect(source).toContain("logicalPaneId={group.id}");
   });
 
-  it("exposes the content and native-surface visibility decision on each tab body", () => {
+  it("exposes the content visibility decision and the applied surface presentation on each tab body", () => {
     const source = readFileSync(resolve(import.meta.dirname, "GroupArea.tsx"), "utf8");
     expect(source).toContain('data-content-visible={String(visibility.contentVisible)}');
-    expect(source).toContain('data-surface-visible={String(visibility.surfaceVisible)}');
+    // The compositor folds this attribute, so it is what is applied to the surface — the resolved
+    // value fell on the render that opened an overlay, before the picture was drawn (2026-09-05).
+    expect(source).toContain('data-surface-visible={String(placement.desiredVisible)}');
+    expect(source).not.toContain('data-surface-visible={String(visibility.surfaceVisible)}');
     expect(source).toContain('data-visibility-reason={visibility.reason}');
   });
 
