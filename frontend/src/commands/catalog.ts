@@ -1494,6 +1494,10 @@ export function registerCatalog(): void {
         // One caller, one width, so it is written down here — a drag writes at the end of the
         // gesture instead, because a synchronous disk write per frame stalls it.
         persistPlaceWidth(place);
+        // The rail's width is on every plane it stands on; the place's width is its setting.
+        if (place === "rail") {
+          for (const workspace of S().workspaces) S().setRailWidth(workspace.id, width);
+        }
         // The answer waits for the frame, so a caller reading the screen next reads the new one —
         // and only while the place is standing. A place with no set standing in it is zero wide by
         // rule, so waiting for the element to be this wide waits for something that will never

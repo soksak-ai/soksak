@@ -116,3 +116,23 @@ describe("moveBoundary — one line, every row that meets on it", () => {
     expect(useSessions.getState().workspaces[0]).toBe(before);
   });
 });
+
+describe("the rail's width and the place's width", () => {
+  // Measured 2026-09-05 on restart: a gutter drag beside the rail had shrunk it to 293 on the
+  // plane while the place's width still read 320, and the next boot pushed 320 back onto the
+  // plane. One value: the plane's rail width is the place's width while the rail stands.
+  it("a boundary beside the rail changes the rail's width, and the place's width follows", async () => {
+    const { placeWidth, setPlaceWidth } = await import("./placeWidth");
+    const workspace = stackedWorkspace();
+    const space = workspace.spaces[0];
+    setPlaceWidth("rail", 200);
+    const withRail = { ...workspace, spaces: [{ ...space, layout: standRail(space.layout, planeBox(), 1, 200)! }] };
+    useSessions.setState({ workspaces: [withRail], activeId: workspace.id });
+    const rail = withRail.spaces[0].layout.cards.find((c) => c.id === "rail")!;
+
+    expect(useSessions.getState().moveBoundary(workspace.id, space.id, { axis: "x", line: rail.c1 }, { px: 800 })).toEqual({ ok: true });
+    const after = rects().get("rail")!;
+    expect(after.w).toBe(300);
+    expect(placeWidth("rail")).toBe(300);
+  });
+});

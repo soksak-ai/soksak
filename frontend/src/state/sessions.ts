@@ -27,6 +27,7 @@ import {
   moveBoundaryPx as movePlaneBoundaryPx,
   paneIds,
   railLine,
+  railWidth,
   resizeRail,
   singlePane,
   splitPane as splitPlanePane,
@@ -36,7 +37,7 @@ import {
 } from "./panePlane";
 import { planeBox } from "./planeBox";
 import { findSplitTree, mapLeaves, resizeSplitTree } from "./splitTree";
-import { placeWidth } from "./placeWidth";
+import { placeWidth, setPlaceWidth } from "./placeWidth";
 import {
   type SidebarLayout,
   type SidebarDrop,
@@ -1878,6 +1879,10 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = err("TARGET_NOT_FOUND", tmsg("layout.boundary.notFound", boundary));
         return s;
       }
+      // A boundary beside the rail changes the rail's width (split-pane R5): the place's width
+      // is that width, so it follows. Written to disk at the end of the gesture by the host.
+      const width = railWidth(layout);
+      if (width !== null && width !== railWidth(content.layout)) setPlaceWidth("rail", width);
       r = ok({});
       return {
         workspaces: mapWorkspace(s.workspaces, projectId, (x) =>

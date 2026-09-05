@@ -53,6 +53,7 @@ import { useHydration } from "../state/hydration";
 import type { Arrangement, ArrangementMove, Rect } from "../lib/railArrangement";
 import { moveBoundaryPx, rectsOf, zoneAt, type Divider } from "../state/panePlane";
 import { usePlaneBox } from "../state/planeBox";
+import { persistPlaceWidth } from "../state/placeWidth";
 import { useShallow } from "zustand/react/shallow";
 import { viewTravelPresentation } from "../lib/viewTravelPresentation";
 import { roundedOrthogonalPath } from "../lib/railLinkShape";
@@ -810,6 +811,9 @@ export const GroupArea = memo(function GroupArea({
         ms.resizeDragActive = false;
         // Report the end after the final document commit and native receipt.
         emitResizeGesture(false);
+        // A boundary beside the rail changed its width, and the place's width followed it in
+        // memory (sessions.moveBoundary); the gesture's end is when it is written down.
+        persistPlaceWidth("rail");
       }
     };
     window.addEventListener("mousemove", onMove);

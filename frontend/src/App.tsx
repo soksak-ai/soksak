@@ -252,7 +252,6 @@ const WorkspacePlane = memo(function WorkspacePlane({
   const moveBoundary = useSessions((s) => s.moveBoundary);
   const moveRail = useSessions((s) => s.moveRail);
   const settleRail = useSessions((s) => s.settleRail);
-  const setRailWidth = useSessions((s) => s.setRailWidth);
   const sidebarW = usePlaceWidthValue("rail");
   useRenderCost("render.workspace");
   const railPlaneRef = useRef<HTMLDivElement>(null);
@@ -313,13 +312,12 @@ const WorkspacePlane = memo(function WorkspacePlane({
   const planeBox = usePlaneBox(useShallow((s) => ({ width: s.width, height: s.height, gap: s.gap })));
   // What stands in the rail is decided outside this store (the sets a plugin registers), so the
   // plane follows it from here: the rail is stood or withdrawn on the active space when presence
-  // changes, and drawn at the place's width when that changes.
+  // changes. Its width is the plane's while it stands — a drag on either of its boundaries changes
+  // it there, and the place's width follows (sessions.moveBoundary); the setting is read when the
+  // rail is stood, and sidebar.width writes both.
   useLayoutEffect(() => {
     settleRail(workspace.id);
   }, [railOpen, settleRail, workspace.id, planeBox.width, planeBox.height, planeBox.gap]);
-  useLayoutEffect(() => {
-    setRailWidth(workspace.id, sidebarW);
-  }, [setRailWidth, sidebarW, workspace.id]);
   // The solver solves the arrangement — single truth for station, layout, produced adjacency and move amounts (never recompute).
   // **Subscribe** to the attach mode and pass it down — reading it through getState skips the redraw when the setting changes.
   const railPullFocused = useSettings((s) => s.railPullFocused);
