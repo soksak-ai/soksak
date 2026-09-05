@@ -1163,7 +1163,9 @@ export const GroupArea = memo(function GroupArea({
           moving: flipMoves(lightingFocusCell.group.id),
         } : undefined}
         blocked={blockedLighting}
-        exempt={arrangement.rail ? [railLightingExemption(arrangement.rail, inset)] : []}
+        // A rail drawn 0 wide is a plane not yet measured — the first render, before the layout
+        // effect that measures the box — and lights nothing.
+        exempt={arrangement.rail && arrangement.rail.width > 0 ? [railLightingExemption(arrangement.rail, inset)] : []}
         content={lightingContent}
       />
 

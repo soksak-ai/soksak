@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupArea } from "./GroupArea";
 import { parkedArrangement, useSessions, type Space } from "../state/sessions";
 import { setPlaneBox } from "../state/planeBox";
+import { standRail } from "../state/panePlane";
+import { solveArrangement } from "../lib/railArrangement";
 import { rowPlane } from "../test/planes";
 
 vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
@@ -39,6 +41,33 @@ afterEach(() => {
 });
 
 describe("a space on the plane", () => {
+  // Measured 2026-09-05 on restart: the first render comes before the plane box is measured, so a
+  // plane of 0×0 draws the rail 0 wide, and the lighting exemption refused a width of 0 — the
+  // whole window came up as BOOT_FAILURE in the restoring phase.
+  it("renders before the plane is measured, with a rail on the plane", () => {
+    setPlaneBox({ width: 0, height: 0, gap: 0 });
+    const base = useSessions.getState().workspaces[0];
+    const space: Space = {
+      ...base.spaces[0],
+      panes: [pane("pan-a"), pane("pan-b")],
+      layout: standRail(rowPlane(["pan-a", "pan-b"]), { width: 1000, height: 600, gap: 0 }, 0, 320)!,
+      activePaneId: "pan-a",
+    };
+    const workspace = { ...base, spaces: [space] };
+    useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
+    const arrangement = solveArrangement({
+      layout: space.layout, box: { width: 0, height: 0, gap: 0 }, focusId: "pan-a",
+      placement: { mode: "flow" }, railPresent: true,
+    });
+    expect(arrangement.rail).toMatchObject({ width: 0 });
+
+    act(() => root.render(
+      <GroupArea content={space} projectId={workspace.id} arrangement={arrangement} />,
+    ));
+    expect(host.querySelector(`[data-node="layout/space/${space.id}"]`)).not.toBeNull();
+    expect(host.querySelector("[data-lighting-exempt]")).toBeNull();
+  });
+
   it("draws each pane at the plane's px rect, and renders once for one solution", () => {
     const base = useSessions.getState().workspaces[0];
     const space: Space = {

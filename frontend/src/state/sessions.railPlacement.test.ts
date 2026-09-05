@@ -119,3 +119,20 @@ describe("a pinned rail stays where it stands", () => {
     expect(rects.get("g-right")).toMatchObject({ x: RAIL_W, w: 1000 - RAIL_W });
   });
 });
+
+describe("before the plane is measured", () => {
+  // Measured 2026-09-05: on a 0-wide plane every standing is at px 0, so the line chosen for the
+  // focused pane was the last one, and the rail moved there before the host had measured anything.
+  it("settles nothing — the rail stays where it stands", () => {
+    const workspace = twoColumnWorkspace();
+    useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
+    setPlaneBox({ width: 0, height: 0, gap: 0 });
+    const before = useSessions.getState().workspaces[0].spaces[0].layout;
+    expect(useSessions.getState().setActiveGroup(workspace.id, "g-left")).toEqual({ ok: true });
+    expect(useSessions.getState().workspaces[0].spaces[0].layout).toBe(before);
+    expect(useSessions.getState().settleRail(workspace.id)).toEqual({ ok: true });
+    expect(useSessions.getState().workspaces[0].spaces[0].layout).toBe(before);
+    expect(useSessions.getState().setRailWidth(workspace.id, 200)).toEqual({ ok: true });
+    expect(useSessions.getState().workspaces[0].spaces[0].layout).toBe(before);
+  });
+});

@@ -689,6 +689,9 @@ function settleRail(
   present: boolean,
 ): Space {
   const box = planeBox();
+  // Before the host measured the plane there is no box to lay out in: a line chosen by px on a
+  // 0-wide plane is whichever comes last. The host settles again on its first measurement.
+  if (box.width <= 0 || box.height <= 0) return space;
   if (!present) {
     return hasRail(space.layout) ? { ...space, layout: withdrawRail(space.layout, box) } : space;
   }
@@ -1916,8 +1919,10 @@ export const useSessions = moduleState("state/sessions#store", () =>
       const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       r = ok({});
+      const box = planeBox();
+      if (box.width <= 0 || box.height <= 0 || widthPx <= 0) return s;
       const spaces = t.spaces.map((c) =>
-        hasRail(c.layout) ? { ...c, layout: resizeRail(c.layout, planeBox(), widthPx) } : c);
+        hasRail(c.layout) ? { ...c, layout: resizeRail(c.layout, box, widthPx) } : c);
       if (spaces.every((c, i) => c === t.spaces[i])) return s;
       return { workspaces: mapWorkspace(s.workspaces, projectId, (x) => ({ ...x, spaces })) };
     });
