@@ -95,7 +95,7 @@ describe("a space on the plane", () => {
     expect(a.style.getPropertyValue("--w")).toBe("495px");
     expect(b.style.getPropertyValue("--l")).toBe("505px");
     expect(b.style.getPropertyValue("--h")).toBe("600px");
-    // One divider, where the plane says the boundary is grabbed, named by the pane's edge.
+    // One divider, where the plane puts the grab area, named by the pane's edge.
     const gutter = host.querySelector<HTMLElement>('[data-node="gutter/pan-a/right"]')!;
     expect(gutter).not.toBeNull();
     expect(Number.parseFloat(gutter.style.left)).toBeLessThan(505);

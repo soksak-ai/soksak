@@ -57,6 +57,7 @@ resource 값에만 존재합니다.
 | `NATIVE-SURFACES.md` | Native surface 선언과 적용 검증 |
 | `RESTORE.md` | Restart 후 복원 계약 |
 | `RESTORE.CHANGELOG.md` | 잘못된 record를 보정하지 않는 이유 |
+| `PANE-PLANE.md` | 스페이스마다 평면 하나, split-pane 이 배치: 라이브러리가 대체한 것, 코어가 표현으로 남긴 것, 카드로서의 rail, pane+edge 경계, 저장 형태 |
 | `SIDEBAR.md` | Sidebar, rail, workspace 배치 계약 |
 | `SIDEBAR.CHANGELOG.md` | Surface와 placement를 분리한 이유 |
 | `REPO-LAYOUT.md` | Repository 내부 책임 배치 |

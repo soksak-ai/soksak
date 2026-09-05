@@ -111,6 +111,10 @@ backing store 를 하나 더 보유하게 됩니다.
 
 ## R3. 모든 식별자를 유지한다
 
+2026-09-05 부터 스페이스는 `{groups, plane}` — pane 들과 라이브러리 평면 상태, rail 의 slot 포함 —
+로 저장되고, `layout` 아래 split tree 를 든 레코드는 이름을 대고 거부한다 (PANE-PLANE S). 다른
+모양의 rail placement 는 그 필드만 잃는다.
+
 식별자는 유일하도록 발급하며, 상태를 그것에 매달 수 있도록 유지합니다. 터미널 세션의 키는
 `windowLabel + "|" + paneId` (`soksak-plugin-terminal-xterm`, `command/session.go` — `paneKey`)
 입니다. 새 id 로 돌아온 pane 은 쓰던 shell 에 다시 붙을 수 없습니다. 세션은 여전히 실행 중이고

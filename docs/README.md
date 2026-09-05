@@ -78,6 +78,7 @@ that on the same date and the gate landed against it.
 | [`tech/NATIVE-SURFACES.md`](tech/NATIVE-SURFACES.md) | Content outside the document — the seven-attribute declaration, the label shape, one inventory per window per delivery, and the declared-versus-applied numbers the seam is judged by |
 | [`tech/RESTORE.md`](tech/RESTORE.md) | What is stored, what comes back after a restart, and the one digest the two are compared by |
 | [`tech/RESTORE.CHANGELOG.md`](tech/RESTORE.CHANGELOG.md) | Why restore rejects invalid records instead of repairing them |
+| [`tech/PANE-PLANE.md`](tech/PANE-PLANE.md) | One plane per space, laid out by split-pane: what the library replaced, what the core keeps as a presentation over its state, the rail as a card, boundaries by pane and edge, and the stored shape |
 | [`tech/SIDEBAR.md`](tech/SIDEBAR.md) | The three places a sidebar stands in and the two surfaces a view is drawn on, where the rail stands and what moves when focus does — FLOW and PIN, the travel journal, and the focus lighting read as addresses |
 | [`tech/SIDEBAR.CHANGELOG.md`](tech/SIDEBAR.CHANGELOG.md) | Why plugins declare surfaces while workspaces own placement |
 | [`tech/REPO-LAYOUT.md`](tech/REPO-LAYOUT.md) | Which folder declares what, the workspace and the application tree, two binaries, where a document goes |

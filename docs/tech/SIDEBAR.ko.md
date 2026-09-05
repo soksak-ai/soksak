@@ -72,6 +72,10 @@ plane 이 마운트된 상태를 허용합니다. 해당 workspace 의 `data-reg
 
 ## S1. 계산 하나를 읽으며, 다시 계산하지 않는다
 
+2026-09-05 부터 rail 은 스페이스 평면 위의 카드다 (PANE-PLANE). station 은 그 카드가 선 자리를 px
+로 읽은 값이고, rail 이 설 수 없는 선으로는 옮겨지지 않는다 (split-pane R3). 그 전에는 station 이
+셀 위의 퍼센트였고 clean line 이 아닌 값을 그리면 렌더 중에 던졌다.
+
 `solveArrangement` 는 station, 깨끗한 선들, 셀들, 그리고 포커스된 pane 이 앞으로 전환됐는지를 입력
 하나에서 답합니다. 소비자는 그 답을 읽습니다. 같은 입력에서 그 일부라도 다시 계산하면 답이 둘이 되고,
 둘은 어긋나기 전까지만 일치하며, 그려지는 것은 두 번째입니다.
@@ -82,6 +86,9 @@ plane 이 마운트된 상태를 허용합니다. 해당 workspace 의 `data-reg
 64 → 0 으로 측정했습니다.
 
 ## S2. FLOW 와 PIN
+
+PIN 에는 저장된 station 이 없다. 카드의 slot 이 자리이고, 다른 선으로 옮기려면
+`rail.position {mode: "pin", line}` 이 먼저 옮긴다 (PANE-PLANE R4).
 
 **FLOW** 는 rail 을 포커스된 pane 의 왼쪽 깨끗한 선에 세웁니다. 그 선이 막혀 있으면 그 앞의 가장
 가까운 깨끗한 선에 세웁니다. 포커스가 옮겨가면 rail 이 따라갑니다.

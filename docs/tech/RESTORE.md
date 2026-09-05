@@ -152,6 +152,11 @@ verdict.
 
 Gate: `frontend/src/state/restoreKeepsIds.test.ts`.
 
+Since 2026-09-05 a space is stored as `{groups, plane}` — the panes and the
+library's plane state, the rail's slot included — and a record with a split tree
+under `layout` is refused by name (PANE-PLANE S). A rail placement of another
+shape costs that field only.
+
 ---
 
 # V. Verdict

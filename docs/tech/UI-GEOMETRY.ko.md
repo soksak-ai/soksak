@@ -62,7 +62,9 @@ canonical: ./UI-GEOMETRY.md
 ## R1b. pane inset 은 pane group 의 모든 레이어를 제한한다
 
 사이드바, 콘텐츠 pane, 관계 장식은 동일한 내부 사각형을 사용합니다. host 사각형의 네 변을
-`--pane-inset` 만큼 줄인 영역입니다. 표면은 내부 좌표를 사용하는데 그 표면을 설명하는 장식만 host
+`--pane-inset` 만큼 줄인 영역입니다. 그 내부 사각형이 pane 평면입니다 (PANE-PLANE P2): pane 의
+rect 는 거기서 px 로 읽고, 두 pane 사이 복도는 inset 의 두 배 — 안쪽 변마다 절반씩, 테두리에는
+없음 (split-pane R5) 입니다. 표면은 내부 좌표를 사용하는데 그 표면을 설명하는 장식만 host
 외곽 좌표를 사용해서는 안 됩니다. 그렇게 하면 간격을 가로지르는 무관한 이음매가 생기고 사이드바의 우측
 여백이 사라집니다. 따라서 노출된 관계 geometry 는 inset 원점에서 측정하고 inset 외곽선에서
 끝납니다.

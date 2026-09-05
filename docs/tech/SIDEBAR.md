@@ -78,16 +78,18 @@ workspace reports the filtered section list in `data-region-sections`.
 
 ## S1. One solve is read, never recomputed
 
-`solveArrangement` answers the station, the clean lines, the cells and whether
-the focused pane was switched to the front — all from one input. A consumer
-reads that answer. Recomputing any part of it from the same inputs makes two
-answers that agree until they do not, and the second one is drawn.
+`solveArrangement` answers the station, the lines the rail can stand on, the
+cells and whether the focused pane was exchanged to the front — all read from
+one plane (PANE-PLANE). A consumer reads that answer. Recomputing any part of it
+from the same inputs makes two answers that agree until they do not, and the
+second one is drawn.
 
-The invariant that makes the answer usable: **the station of a solution is
-always a clean line over that solution's cells.** A clean line is a vertical
-line the full height of the space that crosses no pane. Projecting a station
-that is not one throws during render, and a throw during render blanks the whole
-window — measured in the preceding implementation, exposed nodes 64 → 0.
+Since 2026-09-05 the rail is a card on the space's plane, so its station is
+where that card stands, in px, and a line it cannot stand on is not one it can
+be moved to (split-pane R3). Before that the station was a percentage over the
+cells, and projecting one that was not a clean line threw during render — a
+throw that blanked the whole window, measured in the preceding implementation,
+exposed nodes 64 → 0.
 
 ## S2. FLOW and PIN
 
@@ -95,9 +97,11 @@ window — measured in the preceding implementation, exposed nodes 64 → 0.
 is blocked, the nearest clean line in front of it. Focus moves, the rail
 follows.
 
-**PIN** freezes a station. It is snapped to the nearest clean line when set, and
-after that **a focus change moves neither the rail nor a pane.** An unresolved
-focus holds the current position; it is not an instruction to go to 0.
+**PIN** leaves the rail where it stands: **a focus change moves neither the rail
+nor a pane.** There is no stored station any more — the card's slot is the
+place, and `rail.position {mode: "pin", line}` moves it to another standing line
+first (PANE-PLANE R4). An unresolved focus holds the current position; it is not
+an instruction to go to 0.
 
 Measured 2026-08-16: under FLOW, four focus changes across two panes each put
 the station on the focused pane's left clean line, alternating 0 and 50 with

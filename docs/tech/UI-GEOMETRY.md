@@ -78,7 +78,10 @@ theme, because each theme drew it in a different colour.
 ## R1b. Pane inset bounds every layer of a pane group
 
 The sidebar, content panes, and their relation decoration use the same inner
-rectangle: the host rectangle inset by `--pane-inset` on all four sides. A
+rectangle: the host rectangle inset by `--pane-inset` on all four sides. That
+inner rectangle is the pane plane (PANE-PLANE P2): a pane's rect is read from it
+in px, and the corridor between two panes is twice the inset — half on each
+inner edge and nothing at the border (split-pane R5). A
 decoration must not use the host edge while the surfaces it describes use the
 inner edge. Doing so draws an unrelated seam through the gap and makes the
 sidebar's right inset disappear. The exposed relation geometry is therefore
