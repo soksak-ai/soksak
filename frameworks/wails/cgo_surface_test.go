@@ -13,8 +13,9 @@ import (
 // is pure Go, and cgo does only "apply this batch on the main thread and
 // report the frames that resulted". A new entry here needs a stated reason.
 var cgoFiles = map[string]string{
-	"capture_darwin.go": "the ScreenCaptureKit bridge; the capture itself lives in capture_darwin.m",
-	"capture_linux.go":  "the GTK render-node capture bridge; the capture itself lives in capture_linux.c",
+	"capture_burst_darwin.go": "the ScreenCaptureKit frame-stream bridge; capture and timing live in capture_burst_darwin.m",
+	"capture_darwin.go":       "the ScreenCaptureKit bridge; the capture itself lives in capture_darwin.m",
+	"capture_linux.go":        "the GTK render-node capture bridge; the capture itself lives in capture_linux.c",
 	// The framework reveals a window only by making it the key window, and
 	// activates the application only through a call current macOS ignores. Both
 	// are two AppKit lines with no Go equivalent, and both live in
@@ -76,6 +77,7 @@ func TestNativeSourceLivesOutsideTheCgoComment(t *testing.T) {
 	// The header and implementation the preamble includes must exist, or the
 	// rule is satisfied by having no native code rather than by separating it.
 	for _, name := range []string{
+		"capture_burst_darwin.h", "capture_burst_darwin.m",
 		"capture_darwin.h", "capture_darwin.m",
 		"capture_linux.h", "capture_linux.c",
 		"window_native_darwin.h", "window_native_darwin.m",
