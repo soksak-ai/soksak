@@ -33,26 +33,20 @@ vi.mock("./windowRecorder", async (importOriginal) => ({
 vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => setTimeout(() => cb(0), 0));
 
 import { registerCaptureCatalog } from "./catalogCapture";
-import { execute, unregister } from "./registry";
+import { catalogJson, execute, unregister } from "./registry";
+
+let captureCommands: string[] = [];
 
 beforeEach(() => {
   vi.mocked(invoke).mockReset();
+  const existing = new Set(catalogJson().map(({ name }) => name));
   registerCaptureCatalog();
+  captureCommands = catalogJson().map(({ name }) => name).filter((name) => !existing.has(name));
 });
 
 afterEach(() => {
-  for (const name of CAPTURE_COMMANDS) unregister(name);
+  for (const name of captureCommands) unregister(name);
 });
-
-// Every name registerCaptureCatalog puts on the table. Registering twice throws
-// by name, so the table is left as it was found.
-const CAPTURE_COMMANDS = [
-  "window.snapshot",
-  "window.pixels",
-  "window.record",
-  "capture.calibration",
-  "capture.motion-anchors",
-];
 
 it("carries the host's reason when fewer frames landed than were asked for", async () => {
   recordWindowFrames.mockReturnValueOnce(Object.assign(Promise.resolve(0), {
