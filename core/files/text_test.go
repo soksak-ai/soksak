@@ -139,13 +139,21 @@ func TestAStrayNonUTF8ByteWithoutNULStillReads(t *testing.T) {
 	// encoding/json substitutes U+FFFD on the way out. The caller reads the same
 	// answer through one pass instead of two.
 	//
-	// The check is on the character, not on its escape: encoding/json emits U+FFFD as its UTF-8
-	// bytes rather than as \ufffd, and which of the two it writes is the encoder's business.
+	if got.Content != string([]byte{'c', 'a', 'f', 0x80, '\n'}) {
+		t.Errorf("the invalid byte changed before the transport boundary: %q", got.Content)
+	}
+	// Compare the decoded character, independent of the JSON encoder's escape spelling.
 	encoded, err := json.Marshal(got)
 	if err != nil {
 		t.Fatalf("encoding: %v", err)
 	}
-	if !strings.Contains(string(encoded), "\"content\":\"caf\ufffd\\n\"") {
+	var decoded struct {
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("decoding the transport response: %v", err)
+	}
+	if decoded.Content != "caf\ufffd\n" {
 		t.Errorf("the invalid byte did not become U+FFFD at the boundary: %s", encoded)
 	}
 }
