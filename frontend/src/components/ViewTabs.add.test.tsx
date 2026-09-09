@@ -8,6 +8,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ViewTabs } from "./ViewTabs";
+import { OverlayMenuSurface } from "./OverlayMenuSurface";
+import { useOverlayMenu } from "../state/overlayMenu";
 import { allGroups, useSessions } from "../state/sessions";
 import { singlePane } from "../state/panePlane";
 import { columnPlane } from "../test/planes";
@@ -19,8 +21,12 @@ Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, v
 
 let host: HTMLDivElement;
 let root: Root;
+let menuHost: HTMLDivElement;
+let menuRoot: Root;
+const menuSurface = () => document.querySelector<HTMLElement>('[data-native-surface-id="overlay-menu"]');
 
 beforeEach(() => {
+  useOverlayMenu.getState().close();
   useSessions.setState({ workspaces: [], activeId: "" });
   useSessions.getState().bootstrapFirstWorkspace("/test/root");
   useProgramRegistry.setState({
@@ -31,10 +37,16 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  menuHost = document.createElement("div");
+  document.body.append(menuHost);
+  menuRoot = createRoot(menuHost);
+  act(() => menuRoot.render(<OverlayMenuSurface />));
 });
 
 afterEach(() => {
   act(() => root.unmount());
+  act(() => { useOverlayMenu.getState().close(); menuRoot.unmount(); });
+  menuHost.remove();
   host.remove();
 });
 
@@ -109,7 +121,7 @@ describe("the + on a pane's tab strip", () => {
     act(() => { add.click(); });
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-    expect(document.querySelector(".space-tab-menu"), "no menu opened").toBeNull();
+    expect(menuSurface(), "no menu opened").toBeNull();
     expect(useSessions.getState().workspaces[0].spaces[0].activePaneId).toBe(first.id);
   });
 
@@ -126,7 +138,11 @@ describe("the + on a pane's tab strip", () => {
     act(() => { add.click(); });
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-    expect(document.querySelector(".space-tab-menu"), "the menu is the only thing that appears").not.toBeNull();
+    const menu = menuSurface();
+    expect(menu, "the menu is the only thing that appears").not.toBeNull();
+    expect(menu!.dataset.nativeLayer).toBe("1000");
+    const source = JSON.parse(menu!.dataset.nativeSource!);
+    expect(decodeURIComponent(source.url)).toContain("terminal-vision");
     expect(JSON.stringify(useSessions.getState().workspaces)).toBe(before);
   });
 
@@ -152,9 +168,9 @@ describe("the + on a pane's tab strip", () => {
       await act(async () => { await Promise.resolve(); });
     };
     await press();
-    expect(document.querySelector(".space-tab-menu")).not.toBeNull();
+    expect(menuSurface()).not.toBeNull();
     await press();
-    expect(document.querySelector(".space-tab-menu"), "the second press closes the menu").toBeNull();
+    expect(menuSurface(), "the second press closes the menu").toBeNull();
   });
 
   it("closes the menu on a press anywhere else", async () => {
@@ -169,14 +185,15 @@ describe("the + on a pane's tab strip", () => {
     const add = host.querySelector<HTMLButtonElement>(`[data-node="tab/view/${first.id}/add"]`)!;
     act(() => { add.click(); });
     await act(async () => { await Promise.resolve(); });
-    expect(document.querySelector(".space-tab-menu")).not.toBeNull();
+    expect(menuSurface()).not.toBeNull();
     act(() => {
+      elsewhere.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, composed: true }));
       elsewhere.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true }));
       elsewhere.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, composed: true }));
       elsewhere.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
     });
     await act(async () => { await Promise.resolve(); });
-    expect(document.querySelector(".space-tab-menu"), "a press elsewhere closes the menu").toBeNull();
+    expect(menuSurface(), "a press elsewhere closes the menu").toBeNull();
     elsewhere.remove();
   });
 });
