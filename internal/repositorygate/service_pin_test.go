@@ -16,6 +16,7 @@ func TestNativeSurfaceConsumersUseTheDeclaredCommits(t *testing.T) {
 		NativeCompositor struct {
 			Repository string `json:"repository"`
 			Commit     string `json:"commit"`
+			NPMVersion string `json:"npmVersion"`
 		} `json:"nativeCompositor"`
 		TerminalSurface struct {
 			Repository string `json:"repository"`
@@ -58,7 +59,7 @@ func TestNativeSurfaceConsumersUseTheDeclaredCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 	dependency := packageManifest.Dependencies["@soksak/soksak-service-native-compositor"]
-	if dependency != "0.0.5" {
-		t.Fatalf("frontend compositor dependency does not use release 0.0.5: %s", dependency)
+	if !regexp.MustCompile(`^0\.0\.[1-9][0-9]*$`).MatchString(selection.NativeCompositor.NPMVersion) || dependency != selection.NativeCompositor.NPMVersion {
+		t.Fatalf("frontend compositor dependency %q does not match the selected exact release %q", dependency, selection.NativeCompositor.NPMVersion)
 	}
 }

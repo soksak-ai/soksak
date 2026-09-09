@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@soksak/soksak-service-native-compositor':
-        specifier: 0.0.5
-        version: 0.0.5
+        specifier: 0.0.6
+        version: 0.0.6
       '@soksak/soksak-spec':
-        specifier: 0.0.53
-        version: 0.0.53
+        specifier: 0.0.54
+        version: 0.0.54
       '@wailsio/runtime':
         specifier: 3.0.0-beta.12
         version: 3.0.0-beta.12
@@ -523,12 +523,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@soksak/soksak-service-native-compositor@0.0.5':
-    resolution: {integrity: sha512-dRf8Jvpcn3bemowmahzBHzXEze2Lh8fuiPa5O4vu3PLYeGKOU6VLvOG2tvi1evMYj95aHBazB5skRKwjczISdQ==}
+  '@soksak/soksak-service-native-compositor@0.0.6':
+    resolution: {integrity: sha512-SMJPHncinUerFCUW2uLv827PKIagHpDKEcdQtE1II5vRsXujLTn0D5OmK101kvjyzanmu2zIOXeWyLm1byWLcA==}
     engines: {node: 26.7.0}
 
-  '@soksak/soksak-spec@0.0.53':
-    resolution: {integrity: sha512-GFp5xYXMXZypg/e++3vZTXUmPik7sV8sWlD8Zhqk2uXmNkEWU3Yweoez4wxrZjrBeygkBvflCiOOJ+Z7DRTQyQ==}
+  '@soksak/soksak-spec@0.0.54':
+    resolution: {integrity: sha512-IuVgUjk5o6RFALD+WOSB0rwAUY77Pt/6AzZL92Gn8EfApl8K75mt926V0PcsdY+fTIpOSdpmeIxN1JDt5AFHXQ==}
     engines: {node: 26.7.0}
     hasBin: true
 
@@ -1349,9 +1349,9 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.4':
     optional: true
 
-  '@soksak/soksak-service-native-compositor@0.0.5': {}
+  '@soksak/soksak-service-native-compositor@0.0.6': {}
 
-  '@soksak/soksak-spec@0.0.53': {}
+  '@soksak/soksak-spec@0.0.54': {}
 
   '@tabler/icons@3.46.0': {}
 

@@ -8,13 +8,13 @@ require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/soksak-ai/soksak-contract-contentview v0.0.0-20260822033207-5af66117202f
-	github.com/soksak-ai/soksak-contract-control v0.0.0-20260904031849-c35bce2d20d6
+	github.com/soksak-ai/soksak-contract-control v0.0.0-20260904045550-77914939e430
 	github.com/soksak-ai/soksak-contract-pty v0.0.0-20260831161848-6fa2f6c277e9
 	github.com/soksak-ai/soksak-contract-registry v0.0.0-20260823165500-7e783c5774d9
 	github.com/soksak-ai/soksak-service-native-compositor v0.0.1
 	github.com/soksak-ai/soksak-service-terminal-surface v0.0.3
 	github.com/soksak-ai/soksak-service-webview-surface v0.0.2
-	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260901062801-742c3bb52828
+	github.com/soksak-ai/soksak-spec/go/platformspec v0.0.0-20260909095559-b6a6fadddc62
 	github.com/wailsapp/wails/v3 v3.0.0-beta.12
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/mod v0.37.0

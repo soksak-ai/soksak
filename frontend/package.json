@@ -16,8 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@soksak/soksak-service-native-compositor": "0.0.5",
-    "@soksak/soksak-spec": "0.0.53",
+    "@soksak/soksak-service-native-compositor": "0.0.6",
+    "@soksak/soksak-spec": "0.0.54",
     "@wailsio/runtime": "3.0.0-beta.12",
     "pngjs": "^7.0.0",
     "react": "^19.2.8",
